@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on Aug 2018
 
 @author: Sabrina Rossberger, Delmic
@@ -13,20 +13,25 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
-import queue
+import collections
+import functools
+import select
+import threading
 import logging
 import math
+import numbers
+import queue
+import socket
+import time
+import re
+from typing import Tuple, Optional, Dict, Callable
+
+import numpy
 
 from odemis import model, util
 from odemis.model import oneway
-import threading
-import time
-import socket
-import numpy
-import collections
-import numbers
 from odemis.util import to_str_escape
 
 #  0= Boolean: Can have the values true or false. Valid entries are „true“ (true), „false“
@@ -49,9 +54,21 @@ PARAM_TYPE_STRING = 3
 PARAM_TYPE_EXPTIME = 4
 PARAM_TYPE_DISPLAY = 5
 
+DELAY_NAMES = {
+    # Delay A is on the DG645, while the C12270 has "Delay Time". They are mapped to the same VA.
+    "Delay A": "triggerDelay",
+    "Delay Time": "triggerDelay",
+    "Delay B": "delayB",
+    "Delay C": "delayC",
+    "Delay D": "delayD",
+    "Delay E": "delayE",
+    "Delay F": "delayF",
+    "Delay G": "delayG",
+    "Delay H": "delayH",
+}
+
 
 class RemoteExError(IOError):
-
     def __init__(self, errno, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
         desc = self._errordict.get(errno, "Unknown RemoteEx error.")
@@ -62,18 +79,18 @@ class RemoteExError(IOError):
         return self.strerror
 
     _errordict = {
-            0: "Command successfully executed.",
-            1: "Invalid syntax (command must be followed by"
-               "parentheses and must have the correct number"
-               "and type of parameters separated by comma).",
-            2: "Command or Parameters are unknown.",
-            3: "Command currently not possible.",
-            6: "Parameter is missing.",
-            7: "Command cannot be executed.",
-            8: "An error has occurred during execution.",
-            9: "Data cannot be sent by TCP-IP.",
-            10: "Value of a parameter is out of range.",
-        }
+        0: "Command successfully executed",
+        # command must be followed by parentheses and must have the correct number and type of
+        # parameters separated by comma
+        1: "Invalid syntax for command",
+        2: "Command or Parameters are unknown",
+        3: "Command currently not possible",
+        6: "Parameter is missing",
+        7: "Command cannot be executed",
+        8: "An error has occurred during execution",
+        9: "Data cannot be sent by TCP-IP",
+        10: "Value of a parameter is out of range",
+    }
 
 
 class ReadoutCamera(model.DigitalCamera):
@@ -81,11 +98,16 @@ class ReadoutCamera(model.DigitalCamera):
     Represents Hamamatsu readout camera.
     """
 
-    def __init__(self, name, role, parent, spectrograph=None, **kwargs):
+    def __init__(self, name, role, parent,
+                 spectrograph: Optional[model.HwComponent] = None,
+                 **kwargs):
         """ Initializes the Hamamatsu OrcaFlash readout camera.
-        :parameter name: (str) as in Odemis
-        :parameter role: (str) as in Odemis
-        :parameter parent: class streakcamera
+        :param name: (str) as in Odemis
+        :param role: (str) as in Odemis
+        :param parent: class StreakCamera
+        :param spectrograph: should provide .position and getPixelToWavelength() to
+        obtain the wavelength list.
+        :param transp: (int, int) transpose the resolution from the camera to the user (see Detector)
         """
         self.parent = parent
 
@@ -94,45 +116,45 @@ class ReadoutCamera(model.DigitalCamera):
             logging.warning("No spectrograph specified. No wavelength metadata will be attached.")
 
         try:
-            # TODO make nice!
-            self.parent._getReadoutCamInfo = True
             cam_info = parent.CamParamGet("Setup", "CameraInfo")
+            # Should have 1 argument, containing the camera info as multiline string, like this:
+            # "OrcaFlash 4.0 V3\r\nProduct number: C13440-20C\r\nSerial number: 301730\r\nFirmware: 4.20.B\r\nVersion: 4.20.B03-A19-B02-4.02"
+            cam_info = cam_info[0].split("\r\n")
         except IOError:
             logging.exception("Failed to get readout camera info")
             # Might be due to the frame grabber failing to initialise (sometimes happens),
             # or the camera not being turned on.
             raise model.HwError("Failed to find readout camera, check it is powered. If powered, restart the Hamamatsu PC")
 
-        # Only initiliase the component after we are sure not to raise HwError,
+        # Only initialise the component after we are sure not to raise HwError,
         # because HwError tells the back-end it should try again. As this
         # component is a child it doesn't get automatically unregistered from
         # the back-end (Pyro4) on, and next trial would fail.
-        super(ReadoutCamera, self).__init__(name, role, parent=parent, **kwargs)
+        super().__init__(name, role, parent=parent, **kwargs)
 
         try:
             self._hwVersion = cam_info[0] + ", " + cam_info[1] + ", " + cam_info[2]  # needs to be a string
-        except:
-            self._hwVersion = "N.A."
-            logging.debug("Could not get hardware information for streak readout camera.")
+        except Exception:
+            logging.debug("Could not get hardware information for streak readout camera.", exc_info=True)
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         try:
             self._swVersion = cam_info[3] + ", " + cam_info[4]  # needs to be a string
-        except:
-            self._swVersion = "N.A."
-            logging.debug("Could not get software information for streak readout camera.")
+        except Exception:
+            logging.debug("Could not get software information for streak readout camera.", exc_info=True)
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
+        avail_params = parent.CamParamsList("Setup")
         # Set parameters readout camera
-        parent.CamParamSet("Setup", "TimingMode", "Internal timing")  # TODO external check displayed command in GUI
+        if "TimingMode" in avail_params:
+            parent.CamParamSet("Setup", "TimingMode", "Internal timing")  # TODO external check displayed command in GUI
+        if "ShowGainOffset" in avail_params:
+            parent.CamParamSet("Setup", "ShowGainOffset", 'True')
+        # Camera is not synchronized, so we don't need to set the trigger mode
         # parent.CamParamSet("Setup", "TriggerMode", 'Edge trigger')
         # parent.CamParamSet("Setup", "TriggerSource", 'BNC')
         # parent.CamParamSet("Setup", "TriggerPolarity", 'neg.')
         parent.CamParamSet("Setup", "ScanMode", 'Subarray')
-        parent.CamParamSet("Setup", "Binning", '2 x 2')
-        parent.CamParamSet("Setup", "VWidth", '1016')
-        parent.CamParamSet("Setup", "HWidth", '1344')
-        parent.CamParamSet("Setup", "ShowGainOffset", 'True')
 
         # sensor size (resolution)
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
@@ -146,11 +168,15 @@ class ReadoutCamera(model.DigitalCamera):
         # 16-bit
         self._shape = full_res + (2 ** 16,)
 
+        parent.CamParamSet("Setup", "Binning", '2 x 2')  # Recommended binning
         self._binning = self._transposeSizeToUser(self._getBinning())  # used by _setResolution
 
-        # need to be before binning, as it is modified when changing binning
-        self._resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
+        # For now, changing the resolution is not really supported, as the full field of view is always used.
+        # It's just automatically adjusted when changing the binning.
+        self._resolution = int(full_res[0] / self._binning[0]), int(full_res[1] / self._binning[1])
         self.resolution = model.ResolutionVA(self._resolution, ((1, 1), full_res), setter=self._setResolution)
+        parent.CamParamSet("Setup", "HWidth", str(full_res[0]))
+        parent.CamParamSet("Setup", "VWidth", str(full_res[1]))
 
         choices_bin = set(self._transposeSizeToUser(b) for b in self._getReadoutCamBinningChoices())
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -184,15 +210,20 @@ class ReadoutCamera(model.DigitalCamera):
         self.queue_events = collections.deque()
         self._acq_sync_lock = threading.Lock()
 
-        # start thread, which keeps reading the dataport when an image/scaling table has arrived
-        # after commandport thread to be able to set the RingBuffer
-        # AcqLiveMonitor writes images to Ringbuffer, which we can read from
-        # only works if we use "Live" or "SingleLive" mode
-        self.parent.AcqLiveMonitor("RingBuffer", "10")  # Note: need to be handled in case we use other acq modes
-        self.t_image = threading.Thread(target=self._getDataFromBuffer)
-        self.t_image.start()
+        self.t_image = None  # thread for reading images from the RingBuffer
 
         self.data = StreakCameraDataFlow(self._start, self._stop, self._sync)
+
+    def terminate(self):
+        try:
+            self._stop()  # stop any acquisition
+        except Exception:
+            pass
+
+        # terminate image thread
+        if self.t_image and self.t_image.is_alive():
+            self.parent.queue_img.put(None)  # Special message to request end of the thread
+            self.t_image.join(5)
 
     def _updateWavelengthList(self, _=None):
         """
@@ -234,7 +265,7 @@ class ReadoutCamera(model.DigitalCamera):
     def _setBinning(self, value):
         """
         Called when .binning VA is modified. It actually modifies the camera binning.
-        :parameter value: (2-tuple int) binning value to set
+        :param value: (2-tuple int) binning value to set
         :return: current binning value
         """
 
@@ -323,7 +354,7 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Set the camera exposure time.
         Converts the time range in sec into a for RemoteEx readable format.
-        :parameter value: (float) exposure time to be set
+        :param value: (float) exposure time to be set
         :return: (float) current exposure time
         """
         try:
@@ -343,11 +374,35 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Start an acquisition.
         """
+        # restart thread in case it was terminated
+        if not self.t_image or not self.t_image.is_alive():
+            # start thread, which keeps reading the dataport when an image/scaling table has arrived
+            # after commandport thread to be able to set the RingBuffer
+            # AcqLiveMonitor writes images to Ringbuffer, which we can read from
+            # only works if we use "Live" or "SingleLive" mode
+
+            self.parent.AcqLiveMonitor("RingBuffer", nbBuffers=3)
+            self.t_image = threading.Thread(target=self._getDataFromBuffer)
+            self.t_image.start()
+
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
         # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
         if self._sync_event is None:  # do not care about synchronization, start acquire
             self.parent.StartAcquisition("Live")
+
+        # Force trigger rate reading
+        try:
+            # This is a bit of a hack: ideally, we would subscribe to the triggerRate VA.
+            # However, with the hamamatsurx, that would require very frequent polling.
+            # So, instead, we query the device just after starting acquiring. That's the most likely
+            # moment the trigger is useful to read. If it changes during acquisition, it'll still be
+            # updated via polling (every 5s), but that's a very rare case, which typically would
+            # not require good metadata anyway.
+            if self.parent._delaybox:
+                self._metadata[model.MD_TRIGGER_RATE] = self.parent._delaybox.triggerRate.value
+        except Exception:
+            logging.exception("Failed to update trigger rate")
 
     def _stop(self):
         """
@@ -402,19 +457,44 @@ class ReadoutCamera(model.DigitalCamera):
 
     def _mergeMetadata(self, md):
         """
-        Create dict containing all metadata from the children readout camera, streak unit, delay genereator
+        Create dict containing all metadata from the children readout camera, streak unit, delay generator
         and the metadata from the parent streak camera.
         """
-
-        md_devices = [self.parent._streakunit._metadata, self.parent._delaybox._metadata]
-
-        for md_dev in md_devices:
-            for key in md_dev.keys():
-                if key not in md:
-                    md[key] = md_dev[key]
-                elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
-                    md[key] = ", ".join([md[key], md_dev[key]])
+        md_dev = self.parent._streakunit.getMetadata()
+        for key in md_dev.keys():
+            if key not in md:
+                md[key] = md_dev[key]
+            elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
+                md[key] = ", ".join([md[key], md_dev[key]])
         return md
+
+    def _get_time_scale(self) -> numpy.ndarray:
+        """
+        Retrieve the scale value for the time axis of the readout camera.
+        :return: one dimensional array, with one valueper pixel along the Y dimension,
+        corresponding to the time (in s) for the pixels on this line.
+        :raises: TimeoutError if the scaling table could not be retrieved.
+        """
+        logging.debug("Request scaling table for time axis of Hamamatsu streak camera.")
+        # request scaling table
+        scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")
+        scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
+
+        # receive the bytes via the dataport
+        tab = b""
+        try:
+            while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
+                tab += self.parent._dataport.recv(scl_table_size)
+        except socket.timeout as ex:
+            raise TimeoutError(f"Did not receive a scaling table: {ex}")
+        logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
+
+        table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
+        # The prefix unit varies depending on the time range (eg, ns, us), so need scale it, based
+        # on the time range of the streak unit.
+        table *= self.parent._streakunit.timeRangeFactor
+
+        return table
 
     def _getDataFromBuffer(self):
         """
@@ -514,39 +594,16 @@ class ReadoutCamera(model.DigitalCamera):
                               img_num, img_num_actual, image.shape)
 
                 # Get the scaling table to correct the time axis
-                # TODO only request scaling table if corresponding MD not available for this time range
                 if self.parent._streakunit.streakMode.value:
                     # There should be no sync problem, as we only receive images and scaling table via the dataport
-
-                    logging.debug("Request scaling table for time axis of Hamamatsu streak camera.")
                     try:
-                        # request scaling table
-                        scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")
-                        scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
-
-                        # receive the bytes via the dataport
-                        tab = b""
-                        try:
-                            while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
-                                tab += self.parent._dataport.recv(scl_table_size)
-                            table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
-                            table_converted = table * self.parent._streakunit.timeRangeFactor  # convert to sec
-                            self._metadata[model.MD_TIME_LIST] = table_converted
-                        except socket.timeout as msg:
-                            logging.error("Did not receive a scaling table: %s", msg)
-                            continue
-                        logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
+                        # TODO only request scaling table if corresponding MD not available for this time range
+                        self._metadata[model.MD_TIME_LIST] = self._get_time_scale()
                     except Exception:
                         logging.exception("Failed to get scaling table")
                 else:
                     # remove MD_TIME_LIST if not applicable
                     self._metadata.pop(model.MD_TIME_LIST, None)
-
-                # update MD for the current image
-                try:
-                    self.parent._delaybox._updateTriggerRate()
-                except Exception:
-                    logging.exception("Failed to update trigger rate")
 
                 md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
                 self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
@@ -557,19 +614,9 @@ class ReadoutCamera(model.DigitalCamera):
                 is_receiving_image = False
 
         except Exception:
-            logging.exception("Hamamatsu streak camera TCP/IP image thread failed.")
+            logging.exception("Readout camera data thread failed.")
         finally:
-            logging.info("Hamamatsu streak camera TCP/IP image thread ended.")
-
-    def terminate(self):
-        # terminate image thread
-        if self.t_image.is_alive():
-            self.parent.queue_img.put(None)
-            self.t_image.join(5)
-        try:
-            self._stop()  # stop any acquisition
-        except Exception:
-            pass
+            logging.info("Readout camera data thread ended.")
 
 
 class StreakUnit(model.HwComponent):
@@ -577,25 +624,49 @@ class StreakUnit(model.HwComponent):
     Represents the Hamamatsu streak unit.
     """
 
-    def __init__(self, name, role, parent, daemon=None, **kwargs):
-        super(StreakUnit, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
+    def __init__(self, name, role, parent, daemon=None, time_ranges: Optional[Dict[int, float]] = None, **kwargs):
+        """
+        :param time_ranges: actual value for the time ranges, if they are just arbitrary integers (ex, with synchroscan)
+        """
+
+        super().__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
         self.location = "Streakcamera"  # don't change, internally needed by HPDTA/RemoteEx
 
-        self._hwVersion = parent.DevParamGet(self.location, "DeviceName")[0]   # needs to be a string
+        self._hwVersion = parent.DevParamGet(self.location, "DeviceName")[0]  # needs to be a string
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        avail_params = parent.DevParamsList(self.location)
 
-        # Set parameters streak unit
-        parent.DevParamSet(self.location, "Time Range", "1 ns")
+        self._time_ranges = time_ranges or {}
+        if not isinstance(self._time_ranges, dict):
+            raise TypeError(f"time_ranges must be a dictionary int -> float (range ID -> time), but got {type(self._time_ranges)}")
+        for k, t in self._time_ranges.items():
+            if not isinstance(k, int) or not isinstance(t, numbers.Real):
+                raise TypeError(f"time_ranges must be a dictionary int -> float (range ID -> time), but got {k} -> {t}")
+
+        # Set default "good" parameters, which are not controlled/changed afterward.
+        # There are several types of streak unit (eg, single sweep, synchroscan).
+        # Synchroscan:  DevParamsList 'Time Range', 'Mode', 'Gate Mode', 'MCP Gain', 'Delay'
+        # Single Sweep: DevParamsList 'Time Range', 'Mode', 'Gate Mode', 'MCP Gain', 'Shutter', 'Trig. Mode', 'Trigger status', 'Trig. level', 'Trig. slope', 'FocusTimeOver'
+        # In order to support all of them we need to check the available parameters.
         parent.DevParamSet(self.location, "MCP Gain", 0)
         # Switch Mode to "Focus", MCPGain = 0 (implemented in RemoteEx and also here in the driver).
         parent.DevParamSet(self.location, "Mode", "Focus")
         # Resets behavior for a vertical single shot sweep: Automatic reset occurs after each sweep.
-        parent.DevParamSet(self.location, "Trig. Mode", "Cont")
+        if "Trig. Mode" in avail_params:
+            parent.DevParamSet(self.location, "Trig. Mode", "Cont")
         # [Volt] Input and indication of the trigger level for the vertical sweep.
-        parent.DevParamSet(self.location, "Trig. level", 1)  # TODO check what value needed regarding HW
-        parent.DevParamSet(self.location, "Trig. slope", "Rising")
+        if "Trig. level" in avail_params:
+            parent.DevParamSet(self.location, "Trig. level", 1)
+        if "Trig. slope" in avail_params:
+            parent.DevParamSet(self.location, "Trig. slope", "Rising")
+
+        # only add the shutter parameter if it is possible to control the shutter via software
+        if "Shutter" in avail_params:
+            parent.DevParamSet(self.location, "Shutter", "Closed")
+            shutter = self.GetShutter()
+            self.shutter = model.BooleanVA(shutter, setter=self._setShutter)
 
         # parent.DevParamGet(self.location, "Trig. status")  # read only
 
@@ -606,34 +677,139 @@ class StreakUnit(model.HwComponent):
         # Do Reset: Do Reset can be selected when the system is in trigger mode Fired. After selecting Do
         # Reset the trigger status changes to Ready.
 
-        self._metadata[model.MD_STREAK_TIMERANGE] = self.GetTimeRange()
-        self._metadata[model.MD_STREAK_MCPGAIN] = self.GetMCPGain()
-        self._metadata[model.MD_STREAK_MODE] = self.GetStreakMode()
-
         # VAs
         mode = self.GetStreakMode()
         self.streakMode = model.BooleanVA(mode, setter=self._setStreakMode)  # default False see set params above
 
         gain = self.GetMCPGain()
-        range_gain = self._getStreakUnitMCPGainRange()
+        range_gain = self.GetMCPGainRange()
         self.MCPGain = model.IntContinuous(gain, range_gain, setter=self._setMCPGain)
         # Note: MCPGain auto set to 0 is handled by stream not by driver except when changing from
         # "Operate" mode to "Focus" mode
 
-        timeRange = self.GetTimeRange()
-        choices = set(self._getStreakUnitTimeRangeChoices())
-        timeRange = util.find_closest(timeRange, choices)  # make sure value is in choices
-        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange, unit="s")
+        time_range = self.GetTimeRange()
+        choices = set(self.GetTimeRangeChoices())
+        time_range = util.find_closest(time_range, choices)  # make sure value is in choices
+        self.timeRange = model.FloatEnumerated(time_range, choices, setter=self._setTimeRange, unit="s")
 
         # a variable that stores the current timeRange conversion for e.g. the scaling table conversion
         # is set in the setter of the timeRange VA
         self.timeRangeFactor = None
 
-        # read-only VAs TODO: Trig. Mode, Trig. level, Trig. slope?
+        self.MCPGain.subscribe(self._onMCPGain, init=True)
+        self.timeRange.subscribe(self._onTimeRange, init=True)
+        self.streakMode.subscribe(self._onStreakMode, init=True)
+
+        # TODO: Add some read-only VAs for Trig. Mode, Trig. level, Trig. slope?
+
+        # Refresh regularly the values, from the hardware, starting from now
+        self._updateSettings()
+        self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Streak unit settings polling")
+        self._va_poll.start()
+
+    def terminate(self):
+        if self._va_poll.is_alive():
+            self._va_poll.cancel()
+            self._va_poll.join(1)
+
+        # Put device into the safest mode possible
+        self.parent.DevParamSet(self.location, "MCP Gain", 0)
+        self.parent.DevParamSet(self.location, "Mode", "Focus")  # streakMode = False
+        if hasattr(self, "shutter"):
+            self.parent.DevParamSet(self.location, "Shutter", "Closed")
+
+        super().terminate()
+
+    def _onMCPGain(self, value: int) -> None:
+        """
+        Called when the MCP Gain VA changes, to update the metaadata
+        :param value: value to be set
+        """
+        logging.debug("Reporting MCP gain %s for streak unit.", value)
+        self._metadata[model.MD_STREAK_MCPGAIN] = value
+
+    def _onTimeRange(self, value: float) -> None:
+        """
+        Called when the Time Range VA changes, to update the metaadata
+        :param value: value to be set
+        """
+        logging.debug("Reporting time range %s for streak unit.", value)
+        self._metadata[model.MD_STREAK_TIMERANGE] = value
+
+    def _onStreakMode(self, value: bool) -> None:
+        """
+        Called when the Streak Mode VA changes, to update the metaadata
+        :param value: value to be set
+        """
+        logging.debug("Reporting streak mode %s for streak unit.", value)
+        self._metadata[model.MD_STREAK_MODE] = value
+
+    def _updateSettings(self) -> None:
+        """
+        Read all the current streak unit settings from the RemoteEx and reflect them on the VAs
+        """
+        logging.debug("Updating streak unit settings")
+        try:
+            timeRange = self.GetTimeRange()
+            if timeRange != self.timeRange.value:
+                self.timeRange._value = timeRange
+                self.timeRange.notify(timeRange)
+
+            gain = self.GetMCPGain()
+            if gain != self.MCPGain.value:
+                self.MCPGain._value = gain
+                self.MCPGain.notify(gain)
+
+            mode = self.GetStreakMode()
+            if mode != self.streakMode.value:
+                self.streakMode._value = mode
+                self.streakMode.notify(mode)
+
+            # update only if the VA exists
+            if hasattr(self, "shutter"):
+                shutter = self.GetShutter()
+                if shutter != self.shutter.value:
+                    self.shutter._value = shutter
+                    self.shutter.notify(shutter)
+
+        except Exception:
+            logging.exception("Unexpected failure when polling streak unit settings")
+
+    def GetShutter(self) -> bool:
+        """
+        Get the current state from the shutter.
+        :return: True if the shutter is active (closed), False if the shutter is inactive (open)
+        """
+        shutter_raw = self.parent.DevParamGet(self.location, "Shutter")  # returns a list
+        logging.debug("Shutter state is %s.", shutter_raw)
+
+        if shutter_raw[0] == "Closed":
+            shutter = True
+        elif shutter_raw[0] == "Open":
+            shutter = False
+        else:
+            logging.warning("Unexpected shutter mode %s. Assuming it's open.", shutter_raw[0])
+            shutter = False
+
+        return shutter
+
+    def _setShutter(self, value: bool) -> bool:
+        """
+        Updates the shutter state VA.
+        :param value: True if the shutter is active (closed), False if the shutter is inactive (open)
+        :return: shutter state
+        """
+        pos = "Closed" if value else "Open"
+        self.parent.DevParamSet(self.location, "Shutter", pos)
+        logging.debug("Setting shutter to: %s = %s.", pos, value)
+
+        time.sleep(0.15)  # make sure the shutter movement is done
+
+        return value
 
     def GetStreakMode(self):
         """
-        Get the current value from the the streak unit HW.
+        Get the current value from the streak unit HW.
         :return: (bool) current streak mode value
         """
         streakMode_raw = self.parent.DevParamGet(self.location, "Mode")  # returns a list
@@ -650,100 +826,80 @@ class StreakUnit(model.HwComponent):
     def _setStreakMode(self, value):
         """
         Updates the streakMode VA.
-        :parameter value: (bool) value to be set
+        :param value: (bool) value to be set
         :return: (bool) current streak mode
         """
         if not value:
+            # For safety, always set the get to the minimum when not sweeping
             self.MCPGain.value = 0
             self.parent.DevParamSet(self.location, "Mode", "Focus")
         else:
             self.parent.DevParamSet(self.location, "Mode", "Operate")
-        logging.debug("Reporting mode %s for streak unit.", value)
-        self._metadata[model.MD_STREAK_MODE] = value
 
         return value
 
-    def GetMCPGain(self):
+    def GetMCPGain(self) -> int:
         """
-        Get the current value from the the streak unit HW.
-        :return: (int) current MCPGain value
+        Get the current value from the streak unit HW.
+        :return: current MCPGain value
         """
         MCPGain_raw = self.parent.DevParamGet(self.location, "MCP Gain")  # returns a list
         MCPGain = int(MCPGain_raw[0])
 
         return MCPGain
 
-    def _setMCPGain(self, value):
+    def _setMCPGain(self, value: int) -> int:
         """
         Updates the MCPGain VA.
-        :parameter value: (int) value to be set
-        :return: (int) current MCPGain
+        :param value: value to be set
+        :return: current MCPGain
         """
         self.parent.DevParamSet(self.location, "MCP Gain", value)
-        logging.debug("Reporting MCP gain %s for streak unit.", value)
-        self._metadata[model.MD_STREAK_MCPGAIN] = value
 
         return value
 
-    def _getStreakUnitMCPGainRange(self):
+    def GetMCPGainRange(self) -> Tuple[int, int]:
         """
         Get range for streak unit MCP gain.
-        :return: (tuple of int) range for MCP gain values
+        :return: min/max of MCP gain values
         """
         # First 5 values see CamParamInfoEx.
         MCPGainRange_raw = self.parent.DevParamInfoEx(self.location, "MCP Gain")[5:]
-        MCPGainRange = (int(MCPGainRange_raw[0]),
-                        int(MCPGainRange_raw[1]))
+        MCPGainRange = (int(MCPGainRange_raw[0]), int(MCPGainRange_raw[1]))
 
         return MCPGainRange
 
-    def GetTimeRange(self):
-        """
-        Get the current value from the the streak unit HW.
-        :return: (float) current time range value
-        """
-        timeRange = self._getStreakUnitTimeRange()
-
-        return timeRange
-
-    def _setTimeRange(self, value):
+    def _setTimeRange(self, value: float) -> float:
         """
         Updates the timeRange VA.
-        :parameter value: (float) value to be set
-        :return: (float) current time range
+        :param value: value to be set (s)
+        :return: actual time range (s)
         """
-        self._setStreakUnitTimeRange(self.location, value)
-        logging.debug("Reporting time range %s for streak unit.", value)
-        self._metadata[model.MD_STREAK_TIMERANGE] = value
-
-        # set corresponding trigger delay
-        tr2d = self.parent._delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
-        if tr2d:
-            key = util.find_closest(value, tr2d.keys())
-            if util.almost_equal(key, value):
-                self.parent._delaybox.triggerDelay.value = tr2d[key]
-            else:
-                logging.warning("Time range %s is not a key in MD for time range to "
-                                "trigger delay calibration" % value)
-
+        self.SetTimeRange(self.location, value)
         return value
 
-    def _setStreakUnitTimeRange(self, location, time_range):
+    def SetTimeRange(self, location, time_range):
         """
         Sets the time range for the streak unit.
         Converts the value in sec into a for RemoteEx readable format.
-        :parameter location: (str) see DevParamGet
-        :parameter time_range: (float) time range for one sweep in sec
+        :param location: (str) see DevParamGet
+        :param time_range: (float) time range for one sweep in sec
         """
         try:
-            time_range_raw = self.parent.convertTime2Unit(time_range)
+            if self._time_ranges:
+                # Convert from time to time_id
+                time_range_raw = self._time_to_time_id(time_range)
+            else:
+                # Convert from time to string (e.g. "1.0 ns")
+                time_range_raw = self.parent.convertTime2Unit(time_range)
+
             self._setTimeRangeFactor(time_range)
-        except Exception:
-            raise ValueError("Time range of %s sec for one sweep is not supported for streak unit." % time_range)
+        except Exception as ex:
+            raise ValueError("Time range of %s sec is not supported (%s)." % (time_range, ex))
 
         self.parent.DevParamSet(location, "Time Range", time_range_raw)
 
-    def _getStreakUnitTimeRangeChoices(self):
+    def GetTimeRangeChoices(self):
         """
         Get choices for streak unit time range. Values are in order.
         First six values see CamParamInfoEx.
@@ -753,18 +909,27 @@ class StreakUnit(model.HwComponent):
         choices = []
         for choice in choices_raw:
             choice_raw = choice.split(" ")
-            choices.append(self.parent.convertUnit2Time(choice_raw[0], choice_raw[1]))
+            if len(choice_raw) == 1:  # No unit -> typically it's just a number (from 1 to 5)
+                time_id = int(choice_raw[0])
+                t = self._time_id_to_time(time_id)
+            else:
+                t = self.parent.convertUnit2Time(choice_raw[0], choice_raw[1])
+            choices.append(t)
 
         return choices
 
-    def _getStreakUnitTimeRange(self):
+    def GetTimeRange(self) -> float:
         """
         Gets the time range of the streak unit.
         Converts the provided value received from RemoteEx into sec.
         :return: (float) current time range for one sweep in sec
         """
         time_range_raw = self.parent.DevParamGet(self.location, "Time Range")[0].split(" ")
-        time_range = self.parent.convertUnit2Time(time_range_raw[0], time_range_raw[1])
+        if len(time_range_raw) == 1:  # No unit -> typically it's just a number (from 1 to 5)
+            time_id = int(time_range_raw[0])
+            time_range = self._time_id_to_time(time_id)
+        else:
+            time_range = self.parent.convertUnit2Time(time_range_raw[0], time_range_raw[1])
 
         return time_range
 
@@ -773,17 +938,38 @@ class StreakUnit(model.HwComponent):
         Sets the time range factor needed for conversion of RemoteEx values to sec.
         This method maps the values and units obtained from the
         scaling table (correlating of px positions with corresponding time values) to values only.
-        :parameter value: (float) conversion factor
+        :param value: (float) conversion factor
         """
-        if 1e-9 <= value < 1:
+        if 1e-15 <= value < 1:
             self.timeRangeFactor = 10 ** (math.log10(abs(value)) // 3 * 3)
         else:
             raise ValueError("Cannot calculate time range conversion factor. "
                              "Time range of value %s not supported" % value)
 
-    def terminate(self):
-        self.MCPGain.value = 0
-        self.streakMode.value = False
+    def _time_id_to_time(self, time_id: int) -> float:
+        """
+        Convert from an arbitrary time range ID to time (in s), based on the "time_ranges" specified
+        by the user.
+        :param time_id: the time range ID, as used by the streak unit
+        :return: the time in s
+        :raises: KeyError if time_id is not in the known time ranges
+        """
+        try:
+            return self._time_ranges[time_id]
+        except KeyError:
+            raise KeyError(f"Time ID {time_id} is not in time_ranges")
+
+    def _time_to_time_id(self, time_phy: float) -> int:
+        """
+        Convert from time (in s) to an arbitrary time range ID.
+        :param time_phy: time in s
+        :return: the time ID as used by the streak unit
+        :raises: KeyError if time_phy is not in the known time ranges
+        """
+        for tid, t in self._time_ranges.items():
+            if util.almost_equal(t, time_phy):
+                return tid
+        raise KeyError(f"Time {time_phy} s is not in time_ranges")
 
 
 class DelayGenerator(model.HwComponent):
@@ -791,32 +977,84 @@ class DelayGenerator(model.HwComponent):
     Represents the delay generator.
     """
 
-    def __init__(self, name, role, parent, daemon=None, **kwargs):
-        super(DelayGenerator, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
+    def __init__(self, name, role, parent, daemon=None, streak_unit=None, **kwargs):
+        """
+        :param streak_unit: a streak unit Component, which has a timeRange VA. When this VA changes,
+        the trigger delay VA of the delay generator is updated, based on the MD_TIME_RANGE_TO_DELAY
+        metadata.
+        """
+        super().__init__(name, role, parent=parent, daemon=daemon, **kwargs)
 
-        self.parent = parent
+        self._streak_unit = streak_unit
         self.location = "Delaybox"  # don't change, internally needed by HPDTA/RemoteEx
 
         self._hwVersion = parent.DevParamGet(self.location, "DeviceName")[0]   # needs to be a string
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
 
+        avail_params = parent.DevParamsList(self.location)
+
+        # FIXME: on synchroscan unit, the parameters are quite different.
+        # On synchroscan, DevParamsList: 'Delay Time', 'Lock Mode', 'Device Status'
         # Set parameters delay generator
-        parent.DevParamSet(self.location, "Setting", "M1")  # TODO might be enough and don't need the rest...check!!
-        parent.DevParamSet(self.location, "Trig. Mode", "Ext. rising")  # Note: set to "Int." for testing without SEM
-        parent.DevParamSet(self.location, "Repetition Rate", 1000000)  # [0.001, 10000000] # read-only for Ext. rising
-        parent.DevParamSet(self.location, "Delay A", 0)
-        parent.DevParamSet(self.location, "Delay B", 0.00000002)
-        parent.DevParamSet(self.location, "Burst Mode", "Off")
+        if "Setting" in avail_params:
+            parent.DevParamSet(self.location, "Setting", "M1")  # TODO might be enough and don't need the rest...check!!
+        if "Trig. Mode" in avail_params:
+            parent.DevParamSet(self.location, "Trig. Mode", "Ext. rising")  # Note: set to "Int." for testing without SEM
+        # Note: this is legacy code, to maintain the behavior of the old version
+        # A better way would be to use the "properties" in the microscope file, to set the triggerDelay (Delay A)
+        # and delayB values just after initialisation.
+        if "Delay A" in avail_params:
+            parent.DevParamSet(self.location, "Delay A", 0)
+        if "Delay B" in avail_params:
+            parent.DevParamSet(self.location, "Delay B", 0.00000002)
+        if "Burst Mode" in avail_params:
+            parent.DevParamSet(self.location, "Burst Mode", "Off")
 
-        self._metadata[model.MD_TRIGGER_DELAY] = self.GetTriggerDelay()
         # Note: trigger rate (repetition rate) corresponds to the ebeam blanking frequency (read only in RemoteEx)
-        self._metadata[model.MD_TRIGGER_RATE] = int(self.parent.DevParamGet(self.location, "Repetition Rate")[0])
+        if "Repetition Rate" in avail_params:
+            self.triggerRate = model.FloatVA(0, unit="Hz", readonly=True, getter=self.GetTriggerRate)
 
-        triggerDelay = self.GetTriggerDelay()
-        range_trigDelay = self._getTriggerDelayRange()
-        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._setTriggerDelay, unit="s")
+        # VAs
+        self._delay_setters: Dict[str, Callable] = {}  # name of the RemoteEx param -> setter function
 
-        # read only VAs TODO Burst Mode, Setting, Trig. Mode, delay B?
+        for rx_param, va_name in DELAY_NAMES.items():
+            # do not assign VA if RemoteEx param does not exist
+            if rx_param not in avail_params:
+                continue
+
+            delay = self.GetDelayByName(rx_param)
+            range_delay = self.GetDelayRangeByName(rx_param)
+            if not range_delay[0] <= delay <= range_delay[1]:
+                logging.info("Delay %s is not in range %s, clipping it", delay, range_delay)
+                delay = min(max(range_delay[0], delay), range_delay[1])
+
+            # Create a VA, with a corresponding setter function
+            delay_setter = functools.partial(self._setDelayByName, rx_param)
+            self._delay_setters[rx_param] = delay_setter  # keep a ref to the partial so that it's not garbage collected
+            delay_va = model.FloatContinuous(delay, range_delay, setter=delay_setter, unit="s")
+            setattr(self, va_name, delay_va)
+
+        # TODO: on Synchroscan (C12270), the delay generator has a "Lock Mode" parameter.
+        # It could be controlled as a VA phaseLocked. The "Device Status" parameter indicates whether
+        # the phase lock (aka PLL) works or not. If not, the .state VA could be changed accordingly,
+        # and phaseLocked reset to False.
+
+        # Refresh regularly the values, from the hardware, starting from now
+        self._updateSettings()
+        self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Delay generator settings polling")
+        self._va_poll.start()
+
+        if streak_unit:
+            streak_unit.timeRange.subscribe(self._on_time_range)
+
+    def terminate(self):
+        if self._va_poll.is_alive():
+            self._va_poll.cancel()
+            self._va_poll.join(1)
+        if self._streak_unit:
+            self._streak_unit.timeRange.unsubscribe(self._on_time_range)
+            self._streak_unit = None
+        super().terminate()
 
     # override HwComponent.updateMetadata
     def updateMetadata(self, md):
@@ -831,68 +1069,110 @@ class DelayGenerator(model.HwComponent):
                                      "Please check the calibration file for the trigger delay."
                                      % (delay, timeRange, self.triggerDelay.range))
 
-        super(DelayGenerator, self).updateMetadata(md)
+        super().updateMetadata(md)
 
-    def GetTriggerDelay(self):
+    def GetTriggerRate(self) -> float:
         """
-        Get the current value from the the trigger delay HW (RemoteEx: delay A).
+        Get the trigger rate (repetition) rate from the delay generator.
+        The Trigger rate corresponds to the ebeam blanking frequency. As the delay
+        generator is operated "external", the trigger rate is a read-only value.
+        :return: (float) current trigger rate (Hz)
+        """
+        triggerRate_raw = self.parent.DevParamGet(self.location, "Repetition Rate")  # returns a list
+        return float(triggerRate_raw[0])
+
+    def GetDelayByName(self, delay_name: str):
+        """
+        Get the current value from the trigger delay HW (RemoteEx: delay D).
+        :param delay_name: name of the delay e.g. (Delay H)
         :return: (float) current trigger delay value
         """
-        triggerDelay_raw = self.parent.DevParamGet(self.location, "Delay A")  # returns a list
-        triggerDelay = float(triggerDelay_raw[0])
+        delay_raw = self.parent.DevParamGet(self.location, delay_name)  # returns a list
+        delay = float(delay_raw[0])
 
-        return triggerDelay
+        return delay
 
-    def _setTriggerDelay(self, value):
+    def _setDelayByName(self, delay_name: str, value: float):
         """
         Updates the trigger delay VA.
-        :parameter value: (float) value to be set
+        :param delay_name: name of the delay e.g. (Delay A)
+        :param value: value to be set
         :return: (float) current trigger delay value
         """
-        self.parent.DevParamSet(self.location, "Delay A", value)
-        logging.debug("Reporting trigger delay %s for delay generator.", value)
-        self._metadata[model.MD_TRIGGER_DELAY] = value
+        self.parent.DevParamSet(self.location, delay_name, value)
+        return self.GetDelayByName(delay_name)
 
-        return self.GetTriggerDelay()
-
-    def _getTriggerDelayRange(self):
+    def GetDelayRangeByName(self, delay_name: str) -> Tuple[float, float]:
         """
-        Get the range allowed for delay A. RemoteEx provides a negative minimum,
+        Get the range allowed for a delay. RemoteEx provides a negative minimum,
         which is internally set to zero whenever a negative delay is requested.
-        :return: (tuple) the trigger delay range
+        :param delay_name: name of the delay. Ex: "Delay A".
+        :return: the trigger delay min/max (s)
         """
         min_time = 0
-        max_time = float(self.parent.DevParamInfoEx(self.location, "Delay A")[-1])
+        max_time = float(self.parent.DevParamInfoEx(self.location, delay_name)[-1])
         max_time = min(max_time, 10)  # don't report too high range
         range_time = (min_time, max_time)
 
         return range_time
 
-    def _updateTriggerRate(self):
+    def _updateSettings(self) -> None:
         """
-        Get the trigger rate (repetition) rate from the delay generator and updates the MD.
-        The Trigger rate corresponds to the ebeam blanking frequency. As the delay
-        generator is operated "external", the trigger rate is a read-only value.
-        Called whenever an image arrives.
+        Read all the current delay generator settings from the RemoteEx and reflect them on the VAs
         """
-        triggerRate_raw = self.parent.DevParamGet(self.location, "Repetition Rate")  # returns a list
-        triggerRate = float(triggerRate_raw[0])
-        self._metadata[model.MD_TRIGGER_RATE] = triggerRate
+        logging.debug("Updating streak unit settings")
+        try:
+            if hasattr(self, "triggerRate"):
+                # As there is a getter, just reading the VA updates ._value, so need to use the
+                # direct function to check the value has changed, and notify its change.
+                trigger_rate = self.GetTriggerRate()
+                if trigger_rate != self.triggerRate._value:
+                    self.triggerRate._set_value(trigger_rate, force_write=True)
+
+            for rxname in self._delay_setters:
+                vaname = DELAY_NAMES[rxname]
+                va = getattr(self, vaname)
+                rx_val = self.GetDelayByName(rxname)
+                if va._value != rx_val:
+                    va._value = rx_val
+                    va.notify(rx_val)
+
+        except Exception:
+            logging.exception("Unexpected failure when polling delay generator settings")
+
+    def _on_time_range(self, time_range: float):
+        # set corresponding trigger delay
+        tr2d = self._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+        if tr2d:
+            key = util.find_closest(time_range, tr2d.keys())
+            if util.almost_equal(key, time_range):
+                self.triggerDelay.value = tr2d[key]
+            else:
+                logging.warning("Time range %s is not a key in MD for time range to "
+                                "trigger delay calibration" % time_range)
 
 
 class StreakCamera(model.HwComponent):
     """
     Represents Hamamatsu readout camera for the streak unit.
     Client to connect to HPD-TA software via RemoteEx.
+    Note: the RemoteEx software needs to be running on the streak camera computer. Typically, this
+    can be done by placing it in the autostart folder.
     """
 
-    def __init__(self, name, role, port, host, children=None, dependencies=None, daemon=None, **kwargs):
+    def __init__(self, name, role, port: int, host: str, settings_ini: Optional[str] = None,
+                 children=None, dependencies=None, daemon=None, **kwargs):
         """
         Initializes the device.
-        :parameter host: (str) IP-adress or hostname
-        :parameter port: (int) port for sending/receiving commands
+        :param port: port for sending/receiving commands
+        :param host: IP-adress or hostname
+        :param settings_ini: path to the INI file for HPDTA, which defines which hardware is initialized
+        If None, the default INI file is used.
+        :param children: should contain a "streakunit", a "readoutcam" (optional), and a "delaybox" (optional)
+        :param dependencies:
+        * "spectrograph" (optional): for the readout camera, to obtain the wavelength metadata
         """
-        super(StreakCamera, self).__init__(name, role, dependencies=dependencies, daemon=daemon, **kwargs)
+        super().__init__(name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
         port_d = port + 1  # the port number to receive the image data
         self.host = host
@@ -900,9 +1180,6 @@ class StreakCamera(model.HwComponent):
         self.port_d = port_d
 
         self._lock_command = threading.Lock()
-
-        # TODO start RemoteEx via SSH
-        # or TODO autostart of RemoteEx when turning on hamamatsu pc?
 
         # connect to readout camera
         try:
@@ -918,55 +1195,52 @@ class StreakCamera(model.HwComponent):
         self.queue_img = queue.Queue(maxsize=0)
 
         self.should_listen = True  # used in readCommandResponse thread
-        self._getReadoutCamInfo = False  # nasty trick to get cam info
 
         # start thread, which keeps reading the commandport response continuously
         self._start_receiverThread()
 
-        # Note: start HPDTA after initializing queue and command and receiver treads
-        # but before image thread and initializing children!
+        # Note: start HPDTA after initializing queue and command and receiver threads
+        # but before image thread and initializing children.
+        # Note: if already running, it will return ["parameters ignored"] and continue
+        self.AppStart(settings_ini)  # Note: comment out for testing in order to not start a new App
 
-        # TODO check if already running....otherwise start multiple apps
-        # TODO  -> in acquisition mode it looks like it does not start a second app, but also does not report that
-        # TODO -> in processing mode it is possible to start multiple apps....
-        # TODO is there a clever way for checking if app still running? Seems to be no command available to check
-        # TODO appEnd only works for the last opened window
-        # TODO want to check if we want to start app invisible (sVisible = False)
-
-        self.AppStart()  # start HPDTA software  # Note: comment out for testing in order to not start a new App
         try:
+            # If the USB dongle is missing, the software will still run, but not actually control the
+            # hardware, and mostly everything will fail to run. So it's handy to check.
+            license_status = self.AppLicenceGet()
+            if "1" not in license_status[:2]:  # Application key found and/or acquire
+                logging.warning("HPDTA software didn't find the license. Will not be able to control the streak camera.")
+                raise model.HwError("HPDTA software didn't find the license. Check the USB dongle is plugged in.")
+            vinfo = self.AppInfo("Version")
+            self._swVersion = vinfo[0]
+
             children = children or {}
             dependencies = dependencies or {}
-
-            try:
-                ckwargs = children["readoutcam"]
-            except Exception:
-                raise ValueError("Required child readoutcam not provided")
-
-            self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
-                                             daemon=daemon, **ckwargs)
-            self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
             try:
                 ckwargs = children["streakunit"]
             except Exception:
                 raise ValueError("Required child streakunit not provided")
             self._streakunit = StreakUnit(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._streakunit)  # add streakunit to children-VA
-            try:
+
+            if "delaybox" in children.keys():
                 ckwargs = children["delaybox"]
-            except Exception:
-                raise ValueError("Required child delaybox not provided")
-            self._delaybox = DelayGenerator(parent=self, daemon=daemon, **ckwargs)
-            self.children.value.add(self._delaybox)  # add delaybox to children-VA
+                self._delaybox = DelayGenerator(parent=self, daemon=daemon, streak_unit=self._streakunit, **ckwargs)
+                self.children.value.add(self._delaybox)  # add delaybox to children-VA
+            else:
+                self._delaybox = None
+                logging.info("No delaybox provided.")
+
+            if "readoutcam" in children.keys():
+                ckwargs = children["readoutcam"]
+                self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
+                                                 daemon=daemon, **ckwargs)
+                self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
+            else:
+                logging.info("No readout camera provided.")
+
         except Exception:
-            try:
-                # Close back the app, so that we have some chance it can be started
-                # again next on next start attempt.
-                self.AppEnd()
-            except Exception:
-                logging.exception("AppEnd failed")
-            self.should_listen = False  # terminates receiver thread
-            self._closeConnection()
+            self.terminate()
             raise
 
     def _openConnection(self):
@@ -1040,14 +1314,14 @@ class StreakCamera(model.HwComponent):
             self.t_receiver.join(5)
         self._closeConnection()
 
-        super(StreakCamera, self).terminate()
+        super().terminate()
 
     def sendCommand(self, func, *args, **kwargs):
         """
         Sends a command to RemoteEx.
-        :parameter func: (str) command or function, which should be send to RemoteEx
-        :parameter args: (str) optional parameters allowed for function
-        :parameter kwargs: optional arguments not defined in advance
+        :param func: (str) command or function, which should be send to RemoteEx
+        :param args: (str) optional parameters allowed for function
+        :param kwargs: optional arguments not defined in advance
            kwargs timeout: (int) timeout while waiting for command response [sec]
         :return: (list of str) values returned by the function
         :raise:
@@ -1110,9 +1384,10 @@ class StreakCamera(model.HwComponent):
                     logging.debug("Response not about function %s, will wait some more time.", func)
                     continue  # continue listening to receive the correct response for the sent command or timeout
 
-                logging.debug("Interpreted response: %s.", response)
+                logging.debug("Command %s got response: %s, %s.", func, error_code, rargs)
                 if error_code:  # != 0, response corresponds to command, but an error occurred
-                    logging.error(RemoteExError(error_code))
+                    # FIXME: pass the rargs directly to RemoteExError, which can contain extra info
+                    logging.error("Function %s raised: %s, %s", rfunc, RemoteExError(error_code), rargs)
                     raise RemoteExError(error_code)
                 else:  # successfully executed command and return message
                     return rargs
@@ -1125,14 +1400,14 @@ class StreakCamera(model.HwComponent):
         or .queue_img (for messages related to the images).
         """
         try:
-            responses = b""  # received data not yet processed
+            responses = ""  # received data not yet processed
 
             while self.should_listen:
                 try:
                     received = self._commandport.recv(4096)  # buffersize should be small value of power 2 (4096)
                 except socket.timeout:
-                    # when socket timed out (receiving no response)
-                    logging.debug("Timeout on the socket, will wait for more data packets.")
+                    # no data received yet, nothing to worry, just continue
+                    # logging.debug("Timeout on the socket, will wait for more data packets.")
                     continue
                 if not received:
                     # TODO: this seems to get triggered "sometimes", and then
@@ -1144,56 +1419,44 @@ class StreakCamera(model.HwComponent):
                     continue
 
                 logging.debug("Received: '%s'", to_str_escape(received))
-                responses += received
+                responses += received.decode("latin1")
 
-                resp_splitted = responses.split(b"\r")
+                # Sometimes the answer comes in multiple parts, separated by \r\n, but cut on \r.
+                # so need to wait a tiny bit longer (<3ms) to check if the response is continuing.
+                for i in range(100):
+                    time.sleep(3e-3)
+                    readable, _, _ = select.select([self._commandport], [], [], 0)  # wait max 0s.
+                    if not readable:  # No more data available => good to process it
+                        break
+                    try:
+                        received = self._commandport.recv(4096)
+                        logging.debug("Received extra: '%s'", to_str_escape(received))
+                        responses += received.decode("latin1")
+                    except Exception as ex:  # No extra data, that's unexpected, but fine!
+                        logging.debug("No more data available while so was supposed to be there: %s", ex)
+                        break
+                else:
+                    logging.warning("Responses keep coming in, will process the data received so far.")
+
+                # Separate commands on \r... but not \r\n (which is used to separate lines inside a response)
+                # Note: in reality, it's even more muddy, because some error messages may contain raw
+                # data which can have \r inside without any escaping. We could try to detect that the
+                # \r is not followed by a number... but for now we don't care about such error messages,
+                # so just let them be handled later by detecting they are not a normal response.
+                resp_splitted = re.split(r"\r(?!\n)", responses)
                 # split responses, overwrite var responses with the remaining messages (usually empty)
                 resp_splitted, responses = resp_splitted[:-1], resp_splitted[-1]
 
                 for msg in resp_splitted:
-                    msg_splitted = msg.decode("latin1").split(",")
+                    msg_splitted = msg.split(",")
 
                     try:
                         error_code, rfunc, rargs = int(msg_splitted[0]), msg_splitted[1], msg_splitted[2:]
-                    except (TypeError, ValueError, IOError):
-                        logging.warning("Received response, which is not according to the known protocol.")
-                        continue  # return to try-statement and start receiving again
+                    except (TypeError, ValueError, IOError) as ex:
+                        logging.warning("Skipping unexpected response (%s): %s", ex, to_str_escape(msg))
+                        continue
 
-                    if self._getReadoutCamInfo:
-                        # HACK: command CamParamGet("Setup", "CameraInfo") behaves differently than all other commands.
-                        # Use nasty trick to work around for this command.
-                        # This command first receives the first data until \r and then additional information.
-                        # Currently the total information always has 5 lines:
-                        # rargs: 'OrcaFlash 4.0 V3'
-                        # additional_info:
-                        # '\nProduct number: C13440-20C\r\nSerial number: 301730\r\nFirmware: 4.20.B\r\nVersion: 4.20.B03-A19-B02-4.02\r'
-                        # processed output:
-                        # 'OrcaFlash 4.0 V3'
-                        # 'Product number: C13440-20C'
-                        # 'Serial number: 301730'
-                        # 'Firmware: 4.20.B'
-                        # 'Version: 4.20.B03-A19-B02-4.02'
-                        # Note: It is not clear whether rargs might sometimes already contain parts of additional info
-                        additional_info = responses
-                        timeout = 1  # wait for 1sec, if not receiving all additional info in that time: skip it
-                        start = time.time()
-                        while time.time() < start + timeout:
-                            try:
-                                # continue listening as there is additional info coming in
-                                additional_info += self._commandport.recv(4096)   # receive more data
-                            except Exception:
-                                break
-                            logging.debug("Received: '%s'", to_str_escape(additional_info))
-
-                        try:
-                            additional_info = additional_info.decode("latin1").split("\r")
-                            for item in additional_info[:-1]:
-                                msg_splitted.append(item.strip("\n"))
-                            if additional_info[-1]:
-                                logging.warning("Discarding data after CameraInfo '%s'", additional_info[-1])
-                        except Exception:
-                            logging.exception("Failure while decoding readout camera information.")
-                        self._getReadoutCamInfo = False
+                    logging.debug("Interpreted response: %s", msg_splitted)
 
                     if error_code in (4, 5):
                         # A new image is available on the dataport => Send to the special queue
@@ -1212,16 +1475,9 @@ class StreakCamera(model.HwComponent):
     def StartAcquisition(self, AcqMode):
         """
         Start an acquisition.
-        :parameter AcqMode: (str) see AcqStart
+        :param AcqMode: (str) see AcqStart
         """
         # Note: sync acquisition calls directly AcqStart
-
-        # restart thread in case it was terminated
-        if not self._readoutcam.t_image.is_alive():
-            self.AcqLiveMonitor("RingBuffer", nbBuffers=3)
-            self._readoutcam.t_image = threading.Thread(target=self._readoutcam._getDataFromBuffer)
-            self._readoutcam.t_image.start()
-
         try:
             self.AcqStart(AcqMode)
         except RemoteExError as ex:
@@ -1243,7 +1499,9 @@ class StreakCamera(model.HwComponent):
 
     def Appinfo(self):
         """Returns the current application type. Can be executed even if application (HPDTA or HiPic)
-        have not been started yet."""
+        have not been started yet.
+        Not to be confused with "AppInfo"! (upper case "I")
+        """
         return self.sendCommand("Appinfo", "type")
 
     def Stop(self):
@@ -1261,13 +1519,24 @@ class StreakCamera(model.HwComponent):
 
     # === Application commands ========================================================
 
-    def AppStart(self):
-        """Start RemoteEx. Function names and args need to be strings."""
+    def AppStart(self, ini_file: str = None):
+        """
+        Start RemoteEx. If the application is already running, it will not do anything.
+        Blocks until the application is started.
+        :param ini_file: (str) path to the INI file for HPDTA, default is HDPTA8.INI
+        """
+        # The function accepts up to 4 arguments: fVisible, sINIFile, fNoDialogs, iEncoding
         logging.debug("Starting RemoteEx App.")
-        # Note: "1": App starts visible (use 0 for invisible)
-        # returnValue = self.sendCommand("AppStart", "1", "C:\ProgramData\Hamamatsu\HPDTA\HPDTA8.ini")
-        # need ~15 s when starting App -> use larger timeout
-        self.sendCommand("AppStart", timeout=30)
+        if ini_file is None:
+            # need ~15 s when starting App -> use larger timeout
+            self.sendCommand("AppStart", timeout=30)
+        else:
+            # First argument: fVisible: 0 = invisible, 1 = visible (default)
+            # Second argument: ini file (Default is HDPTA8.INI). Warning INI != HWP (although the
+            # HWP file also follows the INI syntax, so it will not complain!). However, the INI file
+            # points towards the hardware profile (HWprofile) file.
+            logging.debug("Starting with ini file: %s", ini_file)
+            self.sendCommand("AppStart", "1", ini_file, timeout=30)
 
     def AppEnd(self):
         """Close RemoteEx."""
@@ -1276,7 +1545,8 @@ class StreakCamera(model.HwComponent):
 
     def AppInfo(self, parameter):
         """Returns information about the application.
-        :parameter parameter: (str) Date, Version, Directory, Title, Titlelong, ProgDataDir.
+        Not to be confused with "Appinfo"! (lower case "i")
+        :param parameter: (str) Date, Version, Directory, Title, Titlelong, ProgDataDir.
         :return (str): message"""
         return self.sendCommand("AppInfo", parameter)
 
@@ -1298,13 +1568,13 @@ class StreakCamera(model.HwComponent):
 
     def MainParamGet(self, parameter):
         """Returns the values of parameters visible in the main window.
-        :parameter parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter, StreakCamera, TimeRange.
+        :param parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter, StreakCamera, TimeRange.
         :returns: Current value of parameter."""
         return self.sendCommand("MainParamGet", parameter)
 
     def MainParamInfo(self, parameter):
         """Returns information about parameters visible in the main window.
-        :parameter parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter,
+        :param parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter,
                                     StreakCamera,TimeRange
         :returns: Label, Current value, Param type (PARAM_TYPE_DISPLAY)
         """
@@ -1313,15 +1583,15 @@ class StreakCamera(model.HwComponent):
     def MainParamInfoEx(self, parameter):
         """Returns information about parameters visible in the main window. Returns more detailed information in
         case of a PARAM_TYPE_LIST than MainParamInfo.
-        :parameter parameter: (str) see _mainParamInfo
+        :param parameter: (str) see _mainParamInfo
         :returns: Label, Current value, Param type (PARAM_TYPE_DISPLAY)"""
         return self.sendCommand("MainParamInfoEx", parameter)
 
-    def MainParamList(self):
+    def MainParamsList(self):
         """Returns a list of all parameters related to main window.
         This command can be used to build up a complete parameter list related to main window at runtime.
         :returns: NumberOfParameters,Parameter1,..., ParameterN"""
-        return self.sendCommand("MainParamList")
+        return self.sendCommand("MainParamsList")
 
     def MainSyncGet(self):
         """Returns the setting of the sync parameter which is available on the HPD-TA main window.
@@ -1336,12 +1606,12 @@ class StreakCamera(model.HwComponent):
 
     def MainSyncSet(self, iSwitch):
         """Allows to switch the sync parameter which is available on the HPD-TA main window.
-        :parameter iSwitch: (int) 0 to switch sync off, 1 to switch sync on."""
+        :param iSwitch: (int) 0 to switch sync off, 1 to switch sync on."""
         self.sendCommand("MainSyncSet", iSwitch)
 
     def GenParamGet(self, parameter):
         """Returns the values of parameters in the general options.
-        :parameter parameter: (str) RestoreWindowPos: Restore window positions
+        :param parameter: (str) RestoreWindowPos: Restore window positions
                     UserFunctions: Call user functions
                     ShowStreakControl: Shows or hides the Streak status/control dialog
                     ShowDelay1Control: Shows or hides the Delay1 status/control dialog
@@ -1351,19 +1621,19 @@ class StreakCamera(model.HwComponent):
 
     def GenParamSet(self, parameter, value):
         """Returns the setting of the sync parameter which is available on the HPD-TA main window.
-        :parameter parameter: (str) RestoreWindowPos: Restore window positions
+        :param parameter: (str) RestoreWindowPos: Restore window positions
                     UserFunctions: Call user functions
                     ShowStreakControl: Shows or hides the Streak status/control dialog
                     ShowDelay1Control: Shows or hides the Delay1 status/control dialog
                     ShowDelay2Control: Shows or hides the Delay2 status/control dialog
                     ShowSpectrControl: Shows or hides the Spectrograph status/control dialog
-        :parameter value: (str) PARAM_TYPE_BOOL."""
+        :param value: (str) PARAM_TYPE_BOOL."""
         value = str(value)
         self.sendCommand("GenParamSet", parameter, value)
 
     def GenParamInfo(self, parameter):
         """Returns information about the specified parameter.
-        :parameter parameter: (str) RestoreWindowPos: Restore window positions
+        :param parameter: (str) RestoreWindowPos: Restore window positions
                     UserFunctions: Call user functions
                     ShowStreakControl: Shows or hides the Streak status/control dialog
                     ShowDelay1Control: Shows or hides the Delay1 status/control dialog
@@ -1381,7 +1651,7 @@ class StreakCamera(model.HwComponent):
     def GenParamInfoEx(self, parameter):
         """Returns the information about the specified parameter. Returns more detailed information
         in case of a PARAM_TYPE_LIST than GenParamInfo.
-        :parameter parameter: (str) see GenParamInfo
+        :param parameter: (str) see GenParamInfo
         :returns: Label, Current value (bool), Param Type (PARAM_TYPE_BOOL)"""
         try:
             label, val, typ = self.sendCommand("GenParamInfoEx", parameter)
@@ -1400,7 +1670,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqStart(self, AcqMode):
         """Start an acquisition.
-        :parameter AcqMode: (str) Live: Live mode
+        :param AcqMode: (str) Live: Live mode
                       SingleLive: Live mode (single exposure)
                       Acquire: Acquire mode
                       AI: Analog integration
@@ -1414,7 +1684,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqStop(self, timeout=1):
         """Stops the currently running acquisition.
-        :parameter timeout: (0.001<= float <=60) The timeout value (in s)
+        :param timeout: (0.001<= float <=60) The timeout value (in s)
         until this command should wait for an acquisition to end.
         :return: (float) timeout (in s)"""
         # Note: RemoteEx needs timeout in ms
@@ -1423,7 +1693,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqParamGet(self, parameter):
         """Returns the values of the acquisition options.
-        :parameter parameter: (str)
+        :param parameter: (str)
             DisplayInterval: Display interval in Live mode
             32BitInAI: Creates 32 bit images in Analog integration mode
             WriteDPCFile: Writes dynamic photon counting file
@@ -1438,13 +1708,13 @@ class StreakCamera(model.HwComponent):
 
     def AcqparameterSet(self, parameter, value):
         """Set the values of the acquisition options.
-        :parameter parameter: (str) see AcqParamGet
-        :parameter value: (str) value to set for parameter"""
+        :param parameter: (str) see AcqParamGet
+        :param value: (str) value to set for parameter"""
         self.sendCommand("AcqParamSet", parameter, value)
 
     def AcqParamInfo(self, parameter):
         """Returns information about the specified parameter.
-        :parameter parameter: (str) see AcqParamGet
+        :param parameter: (str) see AcqParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY
@@ -1455,7 +1725,7 @@ class StreakCamera(model.HwComponent):
         """Returns information about the specified parameter. Returns more detailed information in case of a list
         parameter (Parameter type = 2) than AcqParamInfo. In case of a numeric parameter (Parameter
         type = 1) it additionally returns the step width
-        :parameter parameter: (str) see AcqParamGet
+        :param parameter: (str) see AcqParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY
@@ -1474,7 +1744,7 @@ class StreakCamera(model.HwComponent):
     def AcqLiveMonitor(self, monitorType, nbBuffers=None, *args):
         """Starts a mode which returns information on every new image acquired in live mode.
         Once this command is activated, for every new live image a message is returned.
-        :parameter monitorType: (str)
+        :param monitorType: (str)
             Off: No messages are output. This setting can be used to stop live monitoring.
             Notify: A message is sent with every new live image. No other information is
                     attached. The message can then be used to observe activity or to get
@@ -1492,7 +1762,7 @@ class StreakCamera(model.HwComponent):
             Maximum: Returns the maximum value within the full image or a specified area.
             Profile: Returns a profile extracted within the full image or a specified area in text form.
             PCMode: Photon counting mode
-        :parameter args: (str)
+        :param args: (str)
             NumberOfBuffers (MonitorType=RingBuffer): Specifies the number of buffers allocated inside the RemoteEx.
             FullArea (MonitorType=Average/Minimum/Maximum): The specified calculation algorithm is performed
                         on the full image area.
@@ -1508,7 +1778,7 @@ class StreakCamera(model.HwComponent):
         :return: msg"""
         # TODO check monitorType and then add the correct opt param to the fct call when defined by the caller
         # Note: args can be only one argument
-        if nbBuffers and monitorType == "RingBuffer":
+        if nbBuffers is not None and monitorType == "RingBuffer":
             args = (str(nbBuffers),)
         return self.sendCommand("acqLiveMonitor", monitorType, *args)
 
@@ -1520,7 +1790,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqLiveMonitorTSFormat(self, format):
         """Sets the format of the time stamp.
-        :parameter format: (str) Timestamp (default): In msec from start of pc.
+        :param format: (str) Timestamp (default): In msec from start of pc.
                         DateTime: yyyy/mm:dd-hh-ss
                         Unix or Linux: Seconds and μseconds since 01.01.1970"""
         self.sendCommand("AcqLiveMonitorTSFormat", format)
@@ -1528,7 +1798,7 @@ class StreakCamera(model.HwComponent):
     def AcqAcqMonitor(self, type):
         """Starts a mode which returns information on every new image or part image acquired in
         Acquire/Analog Integration or Photon counting mode (Acquisition monitoring).
-        :parameter type: (str)
+        :param type: (str)
                     Off: No messages are output. This setting can be used to stop acquisition monitoring.
                     EndAcq: For every new part image a message is output. A part is a single image which
                             contributes to a full image. For example in Analog Integration or Photon counting
@@ -1541,13 +1811,13 @@ class StreakCamera(model.HwComponent):
 
     def CamParamGet(self, location, parameter):
         """Returns the values of the camera options.
-        :parameter location: (str)
+        :param location: (str)
                     Setup: Parameters on the options dialog.
                     Live: Parameters on the Live tab of the acquisition dialog.
                     Acquire: Parameters on the Acquire tab of the acquisition dialog.
                     AI: Parameters on the Analog Integration tab of the acquisition dialog.
                     PC: Parameters on the Photon counting tab of the acquisition dialog.
-        :parameter parameter: (str) (Which of these parameters are relevant is dependent on
+        :param parameter: (str) (Which of these parameters are relevant is dependent on
                                 the camera type. Please refer to the camera options dialog)
                     === Setup (options) parameter===  (Settings to be found in "Options" and not GUI
                     TimingMode: Timing mode (Internal / External) # Note: exists for OrcaFlash 4.0
@@ -1721,17 +1991,17 @@ class StreakCamera(model.HwComponent):
 
     def CamParamSet(self, location, parameter, value):
         """Sets the specified parameter of the acquisition options.
-        :parameter location: (str) see CamParamGet
-        :parameter parameter: (str) see CamParamGet
-        :parameter value: (str) value for param"""
+        :param location: (str) see CamParamGet
+        :param parameter: (str) see CamParamGet
+        :param value: (str) value for param"""
         # Note: When using self.acqMode = "SingleLive" parameters regarding the readout camera
         # need to be changed via location = "Live"!!!
         self.sendCommand("CamParamSet", location, parameter, value)
 
     def CamParamInfo(self, location, parameter):
         """Returns information about the specified parameter.
-        :parameter location: (str) see CamParamGet
-        :parameter parameter: (str) see CamParamGet
+        :param location: (str) see CamParamGet
+        :param parameter: (str) see CamParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY"""
@@ -1740,8 +2010,8 @@ class StreakCamera(model.HwComponent):
     def CamParamInfoEx(self, location, parameter):
         """Returns information about the specified parameter.
         Returns more detailed information in case of a list parameter (Parameter type = 2) than CamParamInfo.
-        :parameter location: (str) see CamParamGet
-        :parameter parameter: (str) see CamParamGet
+        :param location: (str) see CamParamGet
+        :param parameter: (str) see CamParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY"""
@@ -1750,7 +2020,7 @@ class StreakCamera(model.HwComponent):
     def CamParamsList(self, location):
         """Returns a list of all camera parameters of the specified location.
         This command can be used to build up a complete parameter list for the corresponding camera at runtime.
-        :parameter location: (str) see CamParamGet
+        :param location: (str) see CamParamGet
         :return: NumberOfParameters,Parameter1,..., ParameterN"""
         return self.sendCommand("CamParamsList", location)
 
@@ -1770,10 +2040,10 @@ class StreakCamera(model.HwComponent):
 
     def DevParamGet(self, location, parameter):
         """Returns the values of the streak camera parameters and the delay generator.
-        :parameter location: (str)
+        :param location: (str)
                 Streakcamera/Streak/TD: streak camera
                 Del/Delay/Delaybox/Del1: delay box 1
-        :parameter parameter: (str) Can be every parameter which appears in the external devices status/control box.
+        :param parameter: (str) Can be every parameter which appears in the external devices status/control box.
                                 The parameter should be written as indicated in the Parameter name field.
                                 This function also allows to get information about the device name, plugin name and
                                 option name of these devices. The following keywords are available:
@@ -1790,9 +2060,9 @@ class StreakCamera(model.HwComponent):
 
     def DevParamSet(self, location, parameter, value):
         """Sets the specified parameter of the acquisition options.
-        :parameter location: (str) see DevParamGet
-        :parameter parameter: (str) see DevParamGet
-        :parameter value: (str) The value has to be written as it appears in the corresponding control."""
+        :param location: (str) see DevParamGet
+        :param parameter: (str) see DevParamGet
+        :param value: (str) The value has to be written as it appears in the corresponding control."""
 
         # convert any input to a string as requested by RemoteEx
         if not isinstance(value, str):
@@ -1813,8 +2083,8 @@ class StreakCamera(model.HwComponent):
 
     def DevParamInfo(self, location, parameter):
         """Return information about the specified parameter.
-        :parameter location: (str) see DevParamGet
-        :parameter parameter: (str) see DevParamGet
+        :param location: (str) see DevParamGet
+        :param parameter: (str) see DevParamGet
         :return: Label, current value, param type, min (numerical only), max (numerical only).
             param type: PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
             Note: In case of a list the number of entries and all list entries are returned in the response of the
@@ -1824,15 +2094,15 @@ class StreakCamera(model.HwComponent):
     def DevParamInfoEx(self, location, parameter):
         """Return information about the specified parameter.
         Returns more detailed information in case of a list parameter (param type=2) than DevParamInfo.
-        :parameter location: (str) see DevParamGet
-        :parameter parameter: (str) see DevParamGet
+        :param location: (str) see DevParamGet
+        :param parameter: (str) see DevParamGet
         :return: Control available, status available, label, current value, param type, number of entries, entries.
             param type: PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST"""
         return self.sendCommand("DevParamInfoEx", location, parameter)
 
     def DevParamsList(self, device):
         """Return list of all parameters of a specified device.
-        :parameter device: (str) see location in DevParamGet
+        :param device: (str) see location in DevParamGet
         :return: number of parameters, parameters"""
         return self.sendCommand("DevParamsList", device)
 
@@ -1840,7 +2110,7 @@ class StreakCamera(model.HwComponent):
 
     def SeqParamGet(self, parameter):
         """Returns the values of the sequence options or parameters.
-        :parameter parameter: (str)
+        :param parameter: (str)
             === From options: ==================
             AutoCorrectAfterSeq: Do auto corrections after sequence
             DisplayImgDuringSequence: Always display image during acquisition
@@ -1883,13 +2153,13 @@ class StreakCamera(model.HwComponent):
 
     def SeqParamSet(self, parameter, value):
         """Sets the specified parameter of the sequence options or parameters.
-        :parameter parameter: (str) see SeqParamGet
-        :parameter value: (str) The value for the sequence option or parameter."""
+        :param parameter: (str) see SeqParamGet
+        :param value: (str) The value for the sequence option or parameter."""
         self.sendCommand("SeqParamSet", parameter, value)
 
     def SeqParamInfo(self, parameter):
         """Return information about the specified parameter.
-        :parameter parameter: (str) see SeqParamGet
+        :param parameter: (str) see SeqParamGet
         :return: label, current value, param type"""
         return self.sendCommand("SeqParamInfo", parameter)
 
@@ -1897,7 +2167,7 @@ class StreakCamera(model.HwComponent):
         """Return information about the specified parameter.
         Returns more detailed information in case of a list parameter (param type=2) than SeqParamInfo.
         In case of a numeric parameter (Parameter type = 1) it additionally returns the step width.
-        :parameter parameter: (str) see SeqParamGet
+        :param parameter: (str) see SeqParamGet
         :return: label, current value, param type"""
         return self.sendCommand("SeqParamInfoEx", parameter)
 
@@ -1911,7 +2181,7 @@ class StreakCamera(model.HwComponent):
         """This command starts a mode which returns information on every new image or part image acquired in Sequence
         mode (Sequence monitoring). Its behavior is similar to AcqLiveMonitor or AcqAcqMonitor, which returns
         information on every new live or acquisition image.
-        :parameter type: (str)
+        :param type: (str)
                 Off: No messages are output. This setting can be used to stop acquisition monitoring.
                 EndAcq: Whenever a complete new image is acquired in sequence mode a message is output.
                 EndPart: For every new part image in sequence mode a message is output. A part is a single
@@ -1945,7 +2215,7 @@ class StreakCamera(model.HwComponent):
 
     def SeqSave(self, imageType, fileName, overwrite=False):
         """Save a sequence.
-        :parameter imageType: (str)
+        :param imageType: (str)
                 IMG: ITEX image
                 TIF: TIFF image
                 TIFF: TIFF image
@@ -1957,17 +2227,17 @@ class StreakCamera(model.HwComponent):
                 display2tif: Display to tiff
                 HIS: HIS sequence (Hamamatsu image sequence)
                 DISPLAY2HIS: HIS sequence (Hamamatsu image sequence) containing only display data (8 bit)
-        :parameter fileName: (str) can be any valid filename. This function can also save images on a network device, so
+        :param fileName: (str) can be any valid filename. This function can also save images on a network device, so
                             it can transfer image data from one computer to another computer.
-        :parameter overwrite: (bool) If this is set to true
+        :param overwrite: (bool) If this is set to true
                             the file is also saved if it exists. If set to false
                             the file is not saved if it already exists and an error is returned."""
         self.sendCommand("SeqSave", imageType, fileName, str(overwrite))
 
     def SeqLoad(self, imageType, fileName):
         """Save a sequence.
-        :parameter imageType: (str) see SeqSave
-        :parameter fileName: (str) see SeqSave"""
+        :param imageType: (str) see SeqSave
+        :param fileName: (str) see SeqSave"""
         self.sendCommand("SeqLoad", imageType, fileName)
 
     def SeqCopyToSeparateImg(self):
@@ -1990,7 +2260,7 @@ class StreakCamera(model.HwComponent):
 
     def ImgParamGet(self, parameter):
         """Returns the values of the image options.
-        :parameter parameter: (str)
+        :param parameter: (str)
             AcquireToSameWindow: Acquire always to the same window
             DefaultZoomFactor: Default zooming factor
             WarnWhenUnsaved: Warn when unsaved images are closed
@@ -2011,8 +2281,8 @@ class StreakCamera(model.HwComponent):
 
     def ImgParamSet(self, parameter, value):
         """Sets the values of the image options.
-        :parameter parameter: (str) see ImgParamGet
-        :parameter value: (str) TODO"""
+        :param parameter: (str) see ImgParamGet
+        :param value: (str) TODO"""
         self.sendCommand("ImgParamSet", parameter, value)
 
     def ImgRingBufferGet(self, type, seqNumber, filename=None):
@@ -2025,11 +2295,11 @@ class StreakCamera(model.HwComponent):
         image in the sequence buffer, the oldest live image is returned together with its sequence number. If
         SeqNumber is higher than the most recent live image in the buffer an error is returned.
         Note: The data is transferred by the second TCP-IP port. If this is not opened an error will be issued.
-        :parameter type: (str)
+        :param type: (str)
             Data: The image raw data (1,2 or 4 BBP)
             Profile: A profile is returned (4 bytes floating point values)
-        :parameter seqNumber: (str) sequence number of the image to return
-        :parameter filename: (str) location to write the data to. Raw data is written to the file without any header.
+        :param seqNumber: (str) sequence number of the image to return
+        :param filename: (str) location to write the data to. Raw data is written to the file without any header.
             If a file name is specified the date is written to this file (same as with ImgDataDump). If no file
             name is written the image data is transferred by the optional second TCP-IP channel. If this channel
             is not available an error is issued.
