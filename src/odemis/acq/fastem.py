@@ -653,9 +653,10 @@ class AcquisitionTask(object):
                 try:
                     new_beam_shift = self.correct_beam_shift()
                     # The difference in x or y should not be larger than 2 micrometers
-                    if any(map(lambda x, y: abs(x - y) > 2e-6, new_beam_shift, prev_beam_shift)):
+                    if any(map(lambda n, p: abs(n - p) > 2e-6, new_beam_shift, prev_beam_shift)):
                         raise ValueError(
-                            "Difference in beam shift is larger than 2 µm, therefore it most likely failed."
+                            f"Difference in beam shift is larger than 2 µm, therefore it most likely failed. "
+                            f"Previous beam shift: {prev_beam_shift}, new beam shift: {new_beam_shift}"
                         )
                     beam_shift_failed = False
                 except Exception:
@@ -929,10 +930,10 @@ class AcquisitionTask(object):
         field_indices = sorted(self._roa.field_indices, key=lambda x: (x[1], x[0]))
 
         beam_shift_indices = []
-        current_row = -1  # Initialize with an invalid row number to handle the first row properly
+        current_row = -1  # Initialize with -1 to handle the first row (row 0) properly
         for idx in field_indices:
             col, row = idx  # field indices are saved (col, row)
-            if row == current_row + 1:
+            if row > current_row:
                 # Always apply beam shift correction at the start of a new row
                 beam_shift_indices.append(idx)
                 current_row = row
