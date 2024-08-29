@@ -26,12 +26,16 @@ from enum import Enum
 from typing import Deque, List, Optional, Tuple, Union
 
 import numpy
-import wx
+import scipy
 from scipy.spatial import cKDTree
+import wx
+from shapely.geometry import Point, Polygon
 
 from odemis import model, util
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay
 
+scipy_version = tuple(map(int, scipy.__version__.split(".")))
+scipy_old_ckdtree = scipy_version < (1, 6, 0)
 # The number of undo actions stored in the stack
 UNDO_STACK_DEPTH = 25
 # Named tuple for elements stored in undo and redo stacks
@@ -265,15 +269,17 @@ class ShapesOverlay(WorldOverlay):
         """
         Find the shape corresponding to the given view position based on proximity.
 
-        It tries to find the shape whose canvas is same as ShapesOverlay's canvas, whose center
-        is closest to the view position and finally checks if the view position is in the proximity
-        of that shape to confirm it.
+        It tries to find the desired shape whose canvas is same as ShapesOverlay's canvas and which is in
+        closest proximity to the view position. In order to achieve this, the algorithm does 2 times sorting
+        and a proximity check. Firstly, 4 shapes are found with its centers closest to the view position.
+        These 4 sorted shapes are checked if they are in close proximity of the view position and further
+        sorted with its exterior closest to the view position.
 
         Note:
-        This method considers only 4 shapes with centers closest to the view position. In general
-        the user should always click as close as possbile to the center of the desired shape. If there
-        are overlapping shapes it is advised to click in an area of the desired shape that is not part
-        of the intersection of overlapping shapes. Given the above note, this heuristic might fail
+        This method considers only 4 shapes with its center and exterior in close proximity to the view
+        position. In general the user should always click as close as possbile to the center of the desired
+        shape. If there are overlapping shapes it is advised to click in an area of the desired shape that is
+        not part of the intersection of overlapping shapes. Given the above note, this heuristic might fail
         in some corner cases.
 
         :param v_pos: The position in view coordinates.
@@ -289,16 +295,35 @@ class ShapesOverlay(WorldOverlay):
 
         if v_centers:
             v_centers_kdtree = cKDTree(v_centers)
+            # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
+            # Ubuntu 20.04: v1.3.3 -> n_jobs
+            # Ubuntu 22.04: v1.8.0 -> workers or n_jobs
+            # Ubuntu 24.04: v1.11.4 -> workers
             # Query the 4 nearest centers to the given view position
-            distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4)
+            if scipy_old_ckdtree:
+                distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4, n_jobs=-1)
+            else:
+                distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4, workers=-1)
+            # Position in physical coordinates because shape points are in physical coordinates
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            pos = Point(p_pos)
+            # List of tuple of shape and the Cartesian distance between shape and the position in physical coordinates
+            candidates: List[Tuple[EditableShape, float]] = []
             for distance, index in zip(distances, indices):
                 # Distances are sorted by nearest first
                 # If a distance is infinite, no need to check further as remaining distances will be infinite
                 if numpy.isinf(distance):
-                    return None
+                    break
                 shape = cnvs_shapes[index]
+                # Proximity check
                 if shape.check_point_proximity(v_pos):
-                    return shape
+                    shape_geometry = Polygon(shape.points.value)
+                    # Distance to the shape's exterior
+                    candidates.append((shape, shape_geometry.exterior.distance(pos)))
+            if candidates:
+                candidates.sort(key=lambda x: x[1])
+                # return the nearest found shape
+                return candidates[0][0]
         return None
 
     def _create_new_shape(self):
@@ -374,6 +399,9 @@ class ShapesOverlay(WorldOverlay):
                     self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
                     self.remove_shape(shape_state.shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:
+                # If the shape has not been created, reset it to start the creation again
+                # useful during polygon creation where a user might want to abort or reset
+                # the polygon creation
                 if not self._selected_shape.is_created.value:
                     self._selected_shape.reset()
                 else:
@@ -397,6 +425,10 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_left_up(evt)
 
+        # Use the ControlDown flag from on_left_down event
+        # any shape creation starts on left down event and subsequently continues to other events
+        # by using the flag from on_left_down event avoid a corner case where the Ctrl key might
+        # be released for any subsequent events
         if self._selected_shape and not self.is_ctrl_down:
             self._selected_shape.on_left_up(evt)
             state = self._selected_shape.get_state()
@@ -422,8 +454,15 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_right_up(evt)
 
-        if self._selected_shape:
+        # Right up is used specifically to finish polygon creation
+        if self._selected_shape and not self._selected_shape.is_created.value:
             self._selected_shape.on_right_up(evt)
+            state = self._selected_shape.get_state()
+            if state:
+                shape_state = ShapeState(self._selected_shape, state, Action.CREATE)
+                if not self._undo_stack or self._undo_stack[-1] != shape_state:
+                    self._undo_stack.append(shape_state)
+                    self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
         else:
             WorldOverlay.on_right_up(self, evt)
 
@@ -431,6 +470,10 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_motion(evt)
 
+        # Use the ControlDown flag from on_left_down event
+        # any shape creation starts on left down event and subsequently continues to other events
+        # by using the flag from on_left_down event avoid a corner case where the Ctrl key might
+        # be released for any subsequent events
         if self._selected_shape and not self.is_ctrl_down:
             self._selected_shape.on_motion(evt)
             if self._shape_to_copy.value:

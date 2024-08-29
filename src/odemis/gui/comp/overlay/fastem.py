@@ -42,6 +42,8 @@ from odemis.gui.model.main_gui_data import (
     Scintillator,
 )
 
+# The CircleScintillator background overlay is drawn by drawing multiple concentric rings of a
+# certain thickness. This number represents the multiple concentric rings.
 NUM_RINGS = 11
 
 
@@ -73,7 +75,6 @@ class FastEMROCOverlay(WorldSelectOverlay):
         """
         if coordinates != UNDEFINED_ROI:
             self.set_physical_sel(coordinates)
-            self._phys_to_view()
             wx.CallAfter(self.cnvs.request_drawing_update)
 
     def on_left_down(self, evt):
@@ -266,7 +267,7 @@ class FastEMScintillatorOverlay(WorldOverlay):
                 if i > 1:
                     ctx.set_line_width(1.1 * ring_thickness)  # Line width for the ring
                 else:
-                    ctx.set_line_width(ring_thickness)  # Line width for the ring
+                    ctx.set_line_width(ring_thickness)  # Line width for the first ring
                 ctx.new_sub_path()  # Start a new path to avoid connecting to previous drawings
                 ctx.arc(b_center_pos[0], b_center_pos[1], outer_radius, 0, 2 * math.pi)
                 ctx.stroke()

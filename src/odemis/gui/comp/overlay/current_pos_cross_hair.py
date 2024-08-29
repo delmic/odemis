@@ -79,7 +79,7 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw a cross hair to the Cairo context"""
-        # Draw the crosshair if overlay is active
+        # The active VA can be used to control drawing of the cross hair
         if self.active.value:
             center = self._get_current_stage_buffer_pos()
             self.crosshair.draw_crosshair(

@@ -59,6 +59,7 @@ TOOL_ELLIPSE = 14  # Create new ellipse or move selected one
 TOOL_POLYGON = 15  # Create new polygon or move selected one
 TOOL_VIEW_LAYOUT = 16  # Set the view layout
 TOOL_CURSOR = 17  # Equivalent to TOOL_NONE, if this tool is selected the tool VA is set to TOOL_NONE
+TOOL_EXPAND = 18  # Expand the view layout
 
 ALL_TOOL_MODES = {
     TOOL_NONE,
@@ -90,3 +91,8 @@ TOOL_AUTO_FOCUS_OFF = False
 Z_ALIGN = "Z alignment"
 SEM_ALIGN = "SEM alignment"
 FLM_ALIGN = "FLM alignment"
+
+# Used for fastem
+CALIBRATION_1 = "Calibration 1"
+CALIBRATION_2 = "Calibration 2"
+CALIBRATION_3 = "Calibration 3"

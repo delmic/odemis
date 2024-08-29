@@ -102,7 +102,7 @@ class DynamicGridCellComboBoxEditor(GridCellEditor):
         Reset the editor control.
         """
         if self._control:
-            self._control.SetValue("None")
+            self._control.SetValue(self.default_choice)
 
     def BeginEdit(self, row, col, grid):
         """
@@ -306,9 +306,7 @@ class GridBase(Grid):
         """
         super().__init__(parent, size=size)
         self.columns: List[Column] = []
-        self.rows: List[Row] = (
-            []
-        )  # Dictionary to classify rows by their "Name" attribute
+        self.rows: List[Row] = []
         self.initialized = False  # Flag to track if grid has been initialized
         self._row_shape_points_sub_callback = {}
         self._row_shape_selected_sub_callback = {}
@@ -322,8 +320,13 @@ class GridBase(Grid):
         row, col = evt.GetRow(), evt.GetCol()
         editor = self.GetCellEditor(row, col)
 
+        # ROAColumnNames.FIELDS's editor_cls is GridCellBoolEditor which is a checkbox
+        # The checking and unchecking behaviour of the checkbox by GridCellBoolEditor is not as expected
+        # Veto the left click event for the checkbox and handle it manually to toggle the checkbox
         if isinstance(editor, GridCellBoolEditor):
             current_value = self.GetCellValue(row, col)
+            # Toggle the checkbox manually
+            # For the GridCellBoolEditor checked value is "1" and unchecked value is ""
             new_value = "1" if current_value == "" else ""
             row_obj = self.rows[row]
             row_obj.on_cell_changing(new_value, row, col, self)
@@ -562,6 +565,7 @@ class GridBase(Grid):
         row = self.rows.pop(index)
         for idx, remaining_row in enumerate(self.rows):
             remaining_row.index = idx
+        row.roa.shape.points.unsubscribe(row.roa.on_points)
         row.roa.shape.points.unsubscribe(self._row_shape_points_sub_callback[row])
         row.roa.shape.selected.unsubscribe(self._row_shape_selected_sub_callback[row])
         row.roa.shape.cnvs.remove_shape(row.roa.shape)

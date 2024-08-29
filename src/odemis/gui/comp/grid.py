@@ -23,11 +23,14 @@
 """
 import logging
 import math
-from typing import Sequence
+from collections import namedtuple
+from typing import Dict, Sequence
 
 import wx
 
-from odemis.gui.util import AttrDict
+from odemis.gui.comp.viewport import ViewPort
+
+GridLayout = namedtuple("GridLayout", ["pos", "size"])
 
 
 class ViewportGrid(wx.Panel):
@@ -46,7 +49,6 @@ class ViewportGrid(wx.Panel):
         self.viewports = None  # Tuple[ViewPort]
         self.visible_viewports = []  # The ViewPorts to be shown, the order matters
 
-        self.grid_layout = None
         # The size of the viewports when they are hidden
         self.hidden_size = (400, 400)
         self.Bind(wx.EVT_SIZE, self._on_size)
@@ -73,8 +75,7 @@ class ViewportGrid(wx.Panel):
         Set the viewports to be shown, in the order given
         (top-left, top-right, bottom-left, bottom-right).
         All other viewports are hidden.
-        :param vis_viewports: the list of Viewports to display. Must be of length compatible with
-        the grid (1, 2, or 4).
+        :param vis_viewports: the list of Viewports to display.
         """
         for vvp in vis_viewports:
             if vvp not in self.viewports:
@@ -94,11 +95,14 @@ class ViewportGrid(wx.Panel):
 
     # #### END Viewport showing and hiding #### #
 
-    def _calculate_grid_layout(self):
-        """Calculate the grid layout based on visible viewports."""
+    def get_visible_viewport_grid_layout(self) -> Dict[ViewPort, GridLayout]:
+        """
+        Calculate the grid layout based on visible viewports.
+
+        :return: Dict where key is the visible viewport and value is its layout.
+        """
+        vvp_grid_layout = {}
         n_visible_vp = len(self.visible_viewports)
-        rows = 0
-        cols = 0
 
         if n_visible_vp:
             # Determine the grid size (rows and columns)
@@ -115,12 +119,14 @@ class ViewportGrid(wx.Panel):
             viewport_width = cs_x // cols
             viewport_height = cs_y // rows
 
-        self.grid_layout = AttrDict(**{
-                f'vp_{i}': AttrDict({
-                    'pos': (col * viewport_width, row * viewport_height),
-                    'size': wx.Size(viewport_width, viewport_height)
-                }) for i, (row, col) in enumerate(((i // cols, i % cols) for i in range(n_visible_vp)))
-            })
+            for i, vvp in enumerate(self.visible_viewports):
+                row = i // cols
+                col = i % cols
+                vvp_grid_layout[vvp] = GridLayout(
+                    (col * viewport_width, row * viewport_height),
+                    wx.Size(viewport_width, viewport_height)
+                )
+        return vvp_grid_layout
 
     def _on_size(self, _):
         """ Grab the child windows and perform layout when the size changes """
@@ -148,28 +154,16 @@ class ViewportGrid(wx.Panel):
         1 - Display the visible viewport 'full screen', completely covering its parent. The other
             viewports are resized to their default hidden size of 400x400 pixels
         2 - Display the visible viewports in a 2*1 vertically stacked grid.
-        4 - Along the 2x2 view.  Their order corresponds to top left, top right, bottom left and bottom right.
+        > 2 - Display the visible viewports in an approximate n*n stacked grid.
         """
-        vvps = self.visible_viewports
-        num_vis_total = len(vvps)
-        self._calculate_grid_layout()
-        gl = self.grid_layout
+        vvp_grid_layout = self.get_visible_viewport_grid_layout()
 
-        if gl:
-            self.hidden_size = gl.vp_0.size
-        # Everything hidden, no layout
-        if num_vis_total == 0:
-            pass
-        # One shown, make the viewport match the size of the parent
-        elif num_vis_total == 1:
-            vvps[0].SetSize(self.ClientSize)
-            vvps[0].SetPosition((0, 0))
-        elif gl:
-            for i, vp in enumerate(vvps):
-                layout_key = f'vp_{i}'
-                layout = getattr(gl, layout_key)
-                vp.SetPosition(layout.pos)
-                vp.SetSize(layout.size)
+        if vvp_grid_layout:
+            self.hidden_size = vvp_grid_layout[self.visible_viewports[0]].size
+
+        for vvp, layout in vvp_grid_layout.items():
+            vvp.SetPosition(layout.pos)
+            vvp.SetSize(layout.size)
 
         # Set the size of the invisible viewport to a relative small value, so we make sure that
         # grabbing the client area for thumbnails will be relatively cheap

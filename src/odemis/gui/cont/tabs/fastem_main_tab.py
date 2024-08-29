@@ -22,11 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
+import logging
+from typing import Any, Optional, Tuple
 
 import wx
 
 import odemis.gui.cont.views as viewcont
-from odemis.acq.stream import EMStream
+from odemis.acq.stream import EMStream, FastEMSEMStream
 from odemis.gui import img, main_xrc
 from odemis.gui.comp.fastem_project_manager_panel import FastEMProjectManagerPanel
 from odemis.gui.comp.fastem_user_settings_panel import FastEMUserSettingsPanel
@@ -39,6 +41,7 @@ from odemis.gui.model import (
     TOOL_ACT_ZOOM_FIT,
     TOOL_CURSOR,
     TOOL_ELLIPSE,
+    TOOL_EXPAND,
     TOOL_NONE,
     TOOL_POLYGON,
     TOOL_RECTANGLE,
@@ -64,7 +67,11 @@ class FastEMMainTab(Tab):
           User settings panel which contains the chamber button, e-beam button
           and scintillation selection panel.
 
-        FastEMOverviewTab
+        FastEMProjectManagerPanel
+          Manages the project manager panel, handling user interactions and
+          managing project-related data and settings.
+
+        FastEMSetupTab
           It contains the calibration buttons and overview acquisition controller.
 
         FastEMAcquisitionTab
@@ -72,7 +79,7 @@ class FastEMMainTab(Tab):
           acquisition (ROAs). These are organized in projects.
 
         TabController
-          Handles FastEMOverviewTab and FastEMAcquisitionTab.
+          Handles FastEMSetupTab and FastEMAcquisitionTab.
 
         """
         tab_data = FastEMMainTabGUIData(main_data)
@@ -85,6 +92,7 @@ class FastEMMainTab(Tab):
             TOOL_POLYGON,
             TOOL_VIEW_LAYOUT,
             TOOL_CURSOR,
+            TOOL_EXPAND,
         }
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
@@ -139,7 +147,6 @@ class FastEMMainTab(Tab):
             main_data,
             self.view_controller,
             tab_data,
-            panel.pnl_vp_grid,
         )
 
         acquisition_panel = main_xrc.xrcpnl_tab_fastem_acqui(panel.pnl_tabs)
@@ -170,7 +177,8 @@ class FastEMMainTab(Tab):
         # Toolbar
         self.tb = panel.toolbar
         self.tb.add_tool(TOOL_CURSOR, self._on_tool_cursor)
-        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self._fit_view_to_content)
+        self.tb.add_tool(TOOL_EXPAND, self._expand_view)
         self.tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_RECTANGLE, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_ELLIPSE, self.tab_data_model.tool)
@@ -178,15 +186,58 @@ class FastEMMainTab(Tab):
         self.tb.add_tool(TOOL_VIEW_LAYOUT, self._on_tool_view_layout)
         self.view_layout_btn = self.tb.get_button(TOOL_VIEW_LAYOUT)
         self.cursor_btn = self.tb.get_button(TOOL_CURSOR)
-        # enable/disable toolbar buttons if acquiring
+        # Subscriptions
         self.tab_data_model.main.is_acquiring.subscribe(self._on_is_acquiring)
         self.tab_data_model.main.current_sample.subscribe(self._on_current_sample)
         self.tab_data_model.main.overview_streams.subscribe(self._on_overview_streams)
         self.tab_data_model.visible_views.subscribe(self._on_visible_views, init=True)
         self.tab_data_model.viewLayout.subscribe(self._on_view_layout, init=True)
         self.tab_data_model.focussedView.subscribe(self._on_focussed_view, init=True)
-        # self.tab_data_model.streams.subscribe(self._on_streams)
         self.tab_data_model.tool.subscribe(self._on_tool, init=True)
+
+    @call_in_wx_main
+    def _fit_view_to_content(self, unused=None):
+        """
+        Adapts the scale (MPP) of the current view to the live view content
+        """
+        # find the viewport corresponding to the current view
+        try:
+            vp = self.view_controller.get_viewport_by_view(self.tab_data_model.focussedView.value)
+            bbox = self._get_live_view_bbox()
+            if bbox is not None:
+                vp.canvas.fit_to_bbox(bbox)
+        except IndexError:
+            logging.error("Failed to find the current viewport")
+        except AttributeError:
+            logging.info("Requested to fit content for a live view not able to")
+
+    def _get_live_view_bbox(self) -> Optional[Tuple[Any, Any, Any, Any]]:
+        """
+        :return: ltrb in m. The physical position (bounding box) of the live view
+        or None if live view is not present.
+        """
+        bbox = None
+        focussed_view = self.tab_data_model.focussedView.value
+        if focussed_view is not None:
+            streams = focussed_view.getStreams()
+            for s in streams:
+                if isinstance(s, FastEMSEMStream):
+                    try:
+                        bbox = s.getBoundingBox()
+                    except ValueError:
+                        break  # Stream has no data (yet)
+                    break
+        return bbox
+
+    def _expand_view(self, unused=None):
+        try:
+            # find the viewport corresponding to the current view
+            vp = self.view_controller.get_viewport_by_view(self.tab_data_model.focussedView.value)
+            vp.canvas.expand_view()
+        except IndexError:
+            logging.warning("Failed to find the current viewport")
+        except AttributeError:
+            logging.info("Requested to expand the view but not able to")
 
     def _on_focussed_view(self, focussed_view):
         for viewport in self.tab_data_model.viewports.value:
@@ -259,6 +310,7 @@ class FastEMMainTab(Tab):
         self.pnl_project_manager.Enable(enable)
         self.btn_pnl_project_manager.Enable(enable)
         self.btn_detach_project_manager.Enable(enable)
+        self.view_layout_btn.Enable(enable)
 
     @call_in_wx_main
     def _on_current_sample(self, sample):
@@ -290,7 +342,7 @@ class FastEMMainTab(Tab):
         self.panel.pnl_vp_grid.visible_viewports = []
         self.view_controller.create_views(viewports=vpv)
         for viewport in self.view_controller.viewports:
-            viewport.canvas.fit_view_to_content()
+            viewport.canvas.expand_view()
 
     def query_terminate(self):
         """
@@ -338,13 +390,11 @@ class FastEMMainTab(Tab):
     @call_in_wx_main
     def _on_is_acquiring(self, mode):
         """
-        Enable or disable the toolbar buttons depending on whether an acquisition
+        Enable or disable the viewport grid panel depending on whether an acquisition
         is already ongoing or not.
-
         :param mode: (bool) whether the system is currently acquiring.
         """
-        self.tab_data_model.tool.value = TOOL_NONE
-        self.tb.enable(not mode)
+        self.panel.pnl_vp_grid.Enable(not mode)
 
     @classmethod
     def get_display_priority(cls, main_data):

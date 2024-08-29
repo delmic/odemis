@@ -31,10 +31,10 @@ from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import (
     SEL_MODE_NONE,
     SEL_MODE_ROTATION,
+    SEL_MODE_EDIT,
     DragMixin,
     Label,
     RectangleEditingMixin,
-    SelectionMixin,
     Vec,
     WorldOverlay,
 )
@@ -68,7 +68,7 @@ class RectangleState:
 
         :param state: The dict containing the class attributes and its values as key value pairs.
                     to_dict() method must have been used previously to create this dict.
-        :param ellipse_overlay: The overlay representing a rectangle.
+        :param rectangle_overlay: (RectangleOverlay) The overlay representing a rectangle.
         :returns: (RectangleState) reconstructed RectangleState class.
         """
         rectangle_state = RectangleState(rectangle_overlay)
@@ -151,7 +151,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             background=None
         )
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """
         Convert the necessary class attributes and its values to a dict.
         This method can be used to gather data for creating a json file.
@@ -209,11 +209,12 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         """
         shape = RectangleOverlay(self.cnvs)
         shape.colour = self.colour
+        shape.name.value = self.name.value
         shape.restore_state(self.get_state())
         shape.is_created.value = True
         return shape
 
-    def move_to(self, pos):
+    def move_to(self, pos: Tuple[float, float]):
         """Move the shape's center to a physical position."""
         current_pos  = self.get_position()
         shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
@@ -240,15 +241,16 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             return RectangleState(self)
         return None
 
-    def restore_state(self, state: RectangleState):
+    def restore_state(self, state: Optional[RectangleState]):
         """Restore the shape to a given state."""
-        self.p_point1 = state.p_point1
-        self.p_point2 = state.p_point2
-        self.p_point3 = state.p_point3
-        self.p_point4 = state.p_point4
-        self._phys_to_view()
-        self._points = self.get_physical_sel()
-        self.points.value = self._points
+        if state is not None:
+            self.p_point1 = state.p_point1
+            self.p_point2 = state.p_point2
+            self.p_point3 = state.p_point3
+            self.p_point4 = state.p_point4
+            self._phys_to_view()
+            self._points = self.get_physical_sel()
+            self.points.value = self._points
 
     def check_point_proximity(self, v_point):
         """
@@ -271,7 +273,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
     def clear_selection(self):
         """ Clear the current selection """
-        SelectionMixin.clear_selection(self)
+        RectangleEditingMixin.clear_selection(self)
         self.p_point1 = None
         self.p_point2 = None
         self.p_point3 = None
@@ -333,11 +335,11 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
     def on_left_down(self, evt):
         """
-        Similar to the same function in SelectionMixin, but only starts a selection, if .coordinates is undefined.
+        Similar to the same function in RectangleEditingMixin, but only starts a selection, if .coordinates is undefined.
         If a rectangle has already been selected for this overlay, any left click outside this reactangle will be ignored.
         """
-        # Start editing / dragging if the overlay is selected
-        if self.selected.value:
+        # Start editing / dragging if the overlay is selected or not created
+        if self.selected.value or not self.is_created.value:
             DragMixin._on_left_down(self, evt)
 
             if self.left_dragging:
@@ -346,7 +348,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                     # Clicked outside selection
                     if (
                         len(self.points.value) == 0
-                    ):  # that's different from SelectionMixin
+                    ):  # that's different from RectangleEditingMixin
                         # Create new selection
                         self.start_selection()
                 elif hover == gui.HOVER_SELECTION:
@@ -373,11 +375,14 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             if self._points:
                 self.is_created.value = True
                 self.selected.value = self.check_point_proximity(evt.Position)
-                if self.selected.value:
+                # While selection mode is SEL_MODE_ROTATION or SEL_MODE_EDIT it can be that the hover
+                # is outside the edge and left up event is called, update the points VA in this
+                # corner case
+                if self.selected.value or self.selection_mode in (SEL_MODE_ROTATION, SEL_MODE_EDIT):
                     self.set_physical_sel(self._points)
                     self.points.value = self._points
 
-        # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
+        # RectangleEditingMixin._on_left_up has some functionality which does not work here, so only call the parts
         # that we need
         self.clear_drag()
         self.selection_mode = SEL_MODE_NONE
@@ -388,7 +393,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if self.selected.value:
-            self._on_motion(evt)  # Call the SelectionMixin motion handler
+            self._on_motion(evt)  # Call the RectangleEditingMixin motion handler
 
             if not self.dragging:
                 if self.hover == gui.HOVER_SELECTION:
@@ -403,7 +408,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                 elif self.hover == gui.HOVER_EDGE:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZING)
                 else:
-                    self.cnvs.reset_dynamic_cursor()
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
             else:
                 self._view_to_phys()
 
@@ -546,8 +551,8 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                     b_start_pos = Vec(self.cnvs.phys_to_buffer(p_start_pos, offset))
                     b_end_pos = Vec(self.cnvs.phys_to_buffer(p_end_pos, offset))
                     rect = (b_start_pos.x,
-                        b_start_pos.y,
-                        b_end_pos.x - b_start_pos.x,
-                        b_end_pos.y - b_start_pos.y)
+                            b_start_pos.y,
+                            b_end_pos.x - b_start_pos.x,
+                            b_end_pos.y - b_start_pos.y)
                     ctx.rectangle(*rect)
                     ctx.stroke()

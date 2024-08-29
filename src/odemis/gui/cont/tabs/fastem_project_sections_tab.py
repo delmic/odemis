@@ -21,17 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import math
 from enum import Enum
+from typing import List, Optional
 
 import wx
-from wx.grid import (
-    EVT_GRID_CELL_CHANGING,
-    GridCellFloatEditor,
-    GridCellNumberEditor,
-)
+from wx.grid import EVT_GRID_CELL_CHANGING, GridCellFloatEditor, GridCellNumberEditor
 
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.fastem import FastEMROA
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.cont.fastem_grid_base import (
     DEFAULT_PARENT,
     EVT_GRID_ROW_CHANGED,
@@ -44,6 +41,7 @@ from odemis.gui.cont.tabs.fastem_project_ribbons_tab import RibbonColumnNames
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
+from odemis.util.filename import make_compliant_string
 
 
 class SectionColumnNames(Enum):
@@ -64,7 +62,7 @@ class SectionRow(Row):
         super().__init__(data, roa, index)
         self.parent_name = model.StringVA(self.data[SectionColumnNames.PARENT.value])
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """
         Converts the SectionRow instance to a dictionary representation.
 
@@ -97,7 +95,7 @@ class SectionRow(Row):
         return section_row
 
     @staticmethod
-    def find_next_slice_index(name, rows):
+    def find_next_slice_index(name: str, rows: List[Row]) -> int:
         """
         Finds the next available index for the given name in the list of rows.
 
@@ -117,7 +115,7 @@ class SectionRow(Row):
         return next_index
 
     @staticmethod
-    def is_unique_name_slice_idx(name, slice_idx, rows):
+    def is_unique_name_slice_idx(name: str, slice_idx: int, rows: List[Row]) -> bool:
         """
         Checks if the given index is unique for the specified name in the list of rows.
 
@@ -149,15 +147,17 @@ class SectionRow(Row):
         self.data[SectionColumnNames.POSY.value] = posy
         self.data[SectionColumnNames.SIZEX.value] = sizex
         self.data[SectionColumnNames.SIZEY.value] = sizey
-        self.data[SectionColumnNames.ROT.value] = int(
+        self.data[SectionColumnNames.ROT.value] = round(
             math.degrees(self.roa.shape.rotation)
         )
 
-    def on_cell_changing(self, new_value: str, row, col, grid):
+    def on_cell_changing(self, new_value: str, row: int, col: int, grid: GridBase) -> str:
         """
         Handles changes in cell values and updates associated data and ROA.
 
-        :param new_value: (str) The new value to set in the cell.
+        :param new_value: (str) The new value to set in the cell. The cell editor
+            class will make sure that a user can only input value in the cell of
+            the correct type.
         :param row: (int) The index of the row being modified.
         :param col: (int) The index of the column being modified.
         :param grid: (GridBase) The grid instance that contains the row.
@@ -167,6 +167,9 @@ class SectionRow(Row):
         rows = grid.rows
         col = grid.columns[col]
         if col.label == SectionColumnNames.NAME.value:
+            value_to_set = make_compliant_string(value_to_set)
+            if not value_to_set:
+                value_to_set = "Section"
             current_slice_idx = self.data[RibbonColumnNames.SLICE_IDX.value]
             if not SectionRow.is_unique_name_slice_idx(
                 value_to_set, current_slice_idx, rows
@@ -196,15 +199,21 @@ class SectionRow(Row):
                 f"{self.data[SectionColumnNames.NAME.value]}_{value_to_set}"
             )
         elif col.label == SectionColumnNames.POSX.value:
-            posy = self.data[SectionColumnNames.POSY.value]
-            self.data[SectionColumnNames.POSX.value] = posx = float(value_to_set)
-            self.roa.shape.move_to((posx, posy))
-            self.roa.shape.cnvs.request_drawing_update()
+            if not value_to_set:
+                value_to_set = str(self.data[SectionColumnNames.POSX.value])
+            else:
+                posy = self.data[SectionColumnNames.POSY.value]
+                self.data[SectionColumnNames.POSX.value] = posx = float(value_to_set)
+                self.roa.shape.move_to((posx, posy))
+                self.roa.shape.cnvs.request_drawing_update()
         elif col.label == SectionColumnNames.POSY.value:
-            posx = self.data[SectionColumnNames.POSX.value]
-            self.data[SectionColumnNames.POSY.value] = posy = float(value_to_set)
-            self.roa.shape.move_to((posx, posy))
-            self.roa.shape.cnvs.request_drawing_update()
+            if not value_to_set:
+                value_to_set = str(self.data[SectionColumnNames.POSY.value])
+            else:
+                posx = self.data[SectionColumnNames.POSX.value]
+                self.data[SectionColumnNames.POSY.value] = posy = float(value_to_set)
+                self.roa.shape.move_to((posx, posy))
+                self.roa.shape.cnvs.request_drawing_update()
         elif col.label == SectionColumnNames.ROT.value:
             self.data[SectionColumnNames.ROT.value] = rot = int(value_to_set)
             self.roa.shape.set_rotation(math.radians(rot))
@@ -300,7 +309,7 @@ class FastEMProjectSectionsTab(Tab):
         evt.Skip()
 
     @call_in_wx_main
-    def _update_parent_col(self, current_value=None, new_value=None):
+    def _update_parent_col(self, current_value: Optional[str] = None, new_value: Optional[str] = None):
         """
         Updates the parent column values in the section grid based on ribbon data.
 
@@ -329,7 +338,6 @@ class FastEMProjectSectionsTab(Tab):
             elif current_parent not in ribbon_info:
                 self.grid.SetCellValue(row_idx, parent_col.index, DEFAULT_PARENT)
                 self.grid.rows[row_idx].parent_name.value = DEFAULT_PARENT
-        # self.grid.ForceRefresh()
 
     def _on_panel_size(self, evt):
         """Adjusts the grid size when the panel size changes."""

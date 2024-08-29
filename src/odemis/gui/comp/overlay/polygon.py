@@ -21,7 +21,7 @@ This file is part of Odemis.
 """
 import logging
 import math
-from typing import Optional
+from typing import Optional, Tuple
 
 import cairo
 import wx
@@ -31,6 +31,7 @@ import odemis.util.units as units
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import (
     SEL_MODE_ROTATION,
+    SEL_MODE_EDIT,
     Label,
     LineEditingMixin,
     Vec,
@@ -61,7 +62,7 @@ class PolygonState:
 
         :param state: The dict containing the class attributes and its values as key value pairs.
                     to_dict() method must have been used previously to create this dict.
-        :param polygon_overlay: The overlay representing a polygon.
+        :param polygon_overlay: (PolygonOverlay) The overlay representing a polygon.
         :returns: (PolygonState) reconstructed PolygonState class.
         """
         polygon_state = PolygonState(polygon_overlay)
@@ -124,7 +125,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         )
         self.v_point.subscribe(self._on_v_point)
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """
         Convert the necessary class attributes and its values to a dict.
         This method can be used to gather data for creating a json file.
@@ -175,6 +176,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         """Reset the shape creation."""
         self.reset_click_mixin()
         self._points.clear()
+        self.is_created.value = False
 
     def copy(self):
         """
@@ -183,11 +185,12 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         """
         shape = PolygonOverlay(self.cnvs)
         shape.colour = self.colour
+        shape.name.value = self.name.value
         shape.restore_state(self.get_state())
         shape.is_created.value = True
         return shape
 
-    def move_to(self, pos):
+    def move_to(self, pos: Tuple[float, float]):
         """Move the shape's center to a physical position."""
         current_pos  = self.get_position()
         shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
@@ -210,14 +213,15 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
             return PolygonState(self)
         return None
 
-    def restore_state(self, state: PolygonState):
+    def restore_state(self, state: Optional[PolygonState]):
         """Restore the shape to a given state."""
-        self._finished = state._finished
-        self._points = state._points
-        # The v_points will be calculated by _phys_to_view()
-        self.v_points = [None] * len(self._points)
-        self._phys_to_view()
-        self.points.value = self._points
+        if state is not None:
+            self._finished = state._finished
+            self._points = state._points
+            # The v_points will be calculated by _phys_to_view()
+            self.v_points = [None] * len(self._points)
+            self._phys_to_view()
+            self.points.value = self._points
 
     def _on_v_point(self, point):
         """Callback for a new value v_point in ClickMixin."""
@@ -258,18 +262,20 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         return True
 
     def on_left_down(self, evt):
-        if self.selected.value:
+        if self.selected.value or not self.is_created.value:
             LineEditingMixin._on_left_down(self, evt)
             self.cnvs.update_drawing()
 
     def on_left_up(self, evt):
+        is_mode_rotation_edit = self.selection_mode in (SEL_MODE_ROTATION, SEL_MODE_EDIT)
         LineEditingMixin._on_left_up(self, evt)
         if self.right_click_finished:
             self._phys_to_view()
             self.selected.value = self.check_point_proximity(evt.Position)
-            # The rotation point is outside the shape and cannot be captured by selection VA
-            # Also update the points VA if the selection mode is SEL_MODE_ROTATION
-            if self.selected.value:
+            # While selection mode is SEL_MODE_ROTATION or SEL_MODE_EDIT it can be that the hover
+            # is outside the edge and left up event is called, update the points VA in this
+            # corner case
+            if self.selected.value or is_mode_rotation_edit:
                 self.points.value = self._points
         self.cnvs.update_drawing()
 
@@ -280,11 +286,11 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
     def on_right_up(self, evt):
         LineEditingMixin._on_right_up(self, evt)
         self._view_to_phys()
-        self.is_created.value = True
         if len(self._points) <= 2:
             logging.warning("Cannot create a polygon for less than 3 points.")
             self.reset()
-            self.is_created.value = False
+        else:
+            self.is_created.value = True
         # Set initial value
         self.points.value = self._points
         self.cnvs.update_drawing()
@@ -300,7 +306,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
                 elif self.hover == gui.HOVER_ROTATION:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_MAGNIFIER)
                 else:
-                    self.cnvs.reset_dynamic_cursor()
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
             else:
                 self._view_to_phys()
             self.cnvs.update_drawing()
@@ -430,8 +436,8 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
                         b_start_pos = Vec(self.cnvs.phys_to_buffer(p_start_pos, offset))
                         b_end_pos = Vec(self.cnvs.phys_to_buffer(p_end_pos, offset))
                         rect = (b_start_pos.x,
-                            b_start_pos.y,
-                            b_end_pos.x - b_start_pos.x,
-                            b_end_pos.y - b_start_pos.y)
+                                b_start_pos.y,
+                                b_end_pos.x - b_start_pos.x,
+                                b_end_pos.y - b_start_pos.y)
                         ctx.rectangle(*rect)
                     ctx.stroke()

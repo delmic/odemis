@@ -22,11 +22,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 from enum import IntEnum
-from typing import Callable
+from typing import Callable, List
 
 import wx
 import wx.lib.newevent
-from wx.lib.agw.customtreectrl import CustomTreeCtrl
+from wx.lib.agw.customtreectrl import CustomTreeCtrl, GenericTreeItem
 
 from odemis.gui import BG_COLOUR_MAIN, FG_COLOUR_DIS, FG_COLOUR_MAIN
 from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT
@@ -51,6 +51,9 @@ class NodeType(IntEnum):
 
 
 TreeNodeChangeEvent, EVT_TREE_NODE_CHANGE = wx.lib.newevent.NewEvent()
+# Define a mapping to determine the sorting precedence of different node types.
+# Lower numerical values indicate higher priority in the sort order:
+TYPE_PRIORITY = {NodeType.RIBBON: 1, NodeType.SECTION: 2, NodeType.ROA: 3}
 
 
 class FastEMTreeNode:
@@ -77,7 +80,7 @@ class FastEMTreeNode:
                 self.parent_name = self.row.parent_name.value
                 self.row.parent_name.subscribe(self._on_parent_name_change)
 
-    def set_on_change_callback(self, callback):
+    def set_on_change_callback(self, callback: Callable):
         """
         Sets the callback function to notify changes.
 
@@ -85,13 +88,13 @@ class FastEMTreeNode:
         """
         self._on_change_callback = callback
 
-    def _on_parent_name_change(self, new_parent_name):
+    def _on_parent_name_change(self, new_parent_name: str):
         """
         Handles changes to the parent name, updating the node's parent and notifying the change.
 
         :param new_parent_name: (str) The new parent name.
         """
-        project_node = self.find_parent_node_by_type(NodeType.PROJECT)
+        project_node = self.project_node()
 
         if self.parent_node:
             # Remove from current parent's children list
@@ -115,11 +118,11 @@ class FastEMTreeNode:
         else:
             raise ValueError(f"Cannot find node with name {new_parent_name}")
 
-    def find_parent_node_by_type(self, node_type):
+    def find_parent_node_by_type(self, node_type: NodeType):
         """
         Finds the closest ancestor node of a specified type.
 
-        :param node_type: (int) The type of the ancestor node to find.
+        :param node_type: (NodeType) The type of the ancestor node to find.
         :return: (FastEMTreeNode) The closest ancestor node of the specified type, or None if not found.
         """
         node = self
@@ -149,7 +152,7 @@ class FastEMTreeNode:
             node = node.parent_node
         return node
 
-    def _on_name_change(self, name):
+    def _on_name_change(self, name: str):
         """
         Handles changes to the node's name, updating the name and notifying the change.
 
@@ -159,7 +162,7 @@ class FastEMTreeNode:
         if self._on_change_callback:
             self._on_change_callback(NodeChangeType.NAME_CHANGE, self)
 
-    def _on_slice_index_change(self, slice_index):
+    def _on_slice_index_change(self, slice_index: int):
         """
         Handles changes to the slice index, updating the node's name and notifying the change.
 
@@ -169,7 +172,7 @@ class FastEMTreeNode:
         if self._on_change_callback:
             self._on_change_callback(NodeChangeType.NAME_CHANGE, self)
 
-    def rename(self, name):
+    def rename(self, name: str):
         """
         Renames the node and notifies the change.
 
@@ -212,11 +215,11 @@ class FastEMTreeNode:
         else:
             raise ValueError("Child not found in the node's children")
 
-    def can_have_child(self, child_type):
+    def can_have_child(self, child_type: NodeType) -> bool:
         """
         Checks if a child of the given type can be added to the current node.
 
-        :param child_type: (int) The type of the child node.
+        :param child_type: (NodeType) The type of the child node.
         :return: (bool) True if the child type can be added, False otherwise.
         """
         if self.type == NodeType.ALL_PROJECTS:
@@ -232,7 +235,7 @@ class FastEMTreeNode:
         else:
             return False
 
-    def find_node(self, name):
+    def find_node(self, name: str):
         """
         Finds a node by its name.
 
@@ -247,7 +250,7 @@ class FastEMTreeNode:
                 return found
         return None
 
-    def delete_node(self, name):
+    def delete_node(self, name: str) -> bool:
         """
         Deletes a node by its name.
 
@@ -274,11 +277,11 @@ class FastEMTreeNode:
                 return True
         return False
 
-    def delete_node_by_shape(self, shape):
+    def delete_node_by_shape(self, shape) -> bool:
         """
         Deletes a node by its shape.
 
-        :param shape: (object) The shape associated with the node to delete.
+        :param shape: (EditableShape) The shape associated with the node to delete.
         :return: (bool) True if the node was successfully deleted, False otherwise.
         """
         for i, child in enumerate(self.children):
@@ -301,7 +304,7 @@ class FastEMTreeNode:
                 return True
         return False
 
-    def get_children_names(self):
+    def get_children_names(self) -> List[str]:
         """
         Gets the names of all child nodes.
 
@@ -309,31 +312,18 @@ class FastEMTreeNode:
         """
         return [child.name for child in self.children]
 
-    def reorder_children(self, new_order):
-        """
-        Reorders children based on a list of new names.
-
-        :param new_order: (list) List of names defining the new order of the children.
-        :raises ValueError: If the new order does not include all current children names.
-        """
-        if set(new_order) != set(self.get_children_names()):
-            raise ValueError("New order must include all current children names")
-
-        # Rearrange children based on new_order
-        self.children.sort(key=lambda x: new_order.index(x.name))
-
-    def get_all_nodes(self):
+    def get_all_nodes(self) -> List:
         """
         Gets a list of all nodes from the current node.
 
-        :return: (list) List of all nodes from the current node.
+        :return: (list) List of all FastEMTreeNode nodes from the current node.
         """
         all_nodes = [self]
         for child in self.children:
             all_nodes.extend(child.get_all_nodes())
         return all_nodes
 
-    def get_depth(self):
+    def get_depth(self) -> int:
         """
         Gets the depth of the node in the tree.
 
@@ -344,7 +334,7 @@ class FastEMTreeNode:
         else:
             return 1 + max(child.get_depth() for child in self.children)
 
-    def is_leaf(self):
+    def is_leaf(self) -> bool:
         """
         Checks if the node is a leaf (i.e., it has no children).
 
@@ -352,12 +342,12 @@ class FastEMTreeNode:
         """
         return not self.children
 
-    def find_nodes_by_type(self, type):
+    def find_nodes_by_type(self, type: NodeType) -> List:
         """
         Finds all nodes of a specific type.
 
-        :param type: (int) The type of nodes to find.
-        :return: (list) List of nodes of the specified type.
+        :param type: (NodeType) The type of nodes to find.
+        :return: (list) List of FastEMTreeNode nodes of the specified type.
         """
         nodes = []
         if self.type == type:
@@ -366,11 +356,11 @@ class FastEMTreeNode:
             nodes.extend(child.find_nodes_by_type(type))
         return nodes
 
-    def print_tree(self, level=0):
+    def print_tree(self, level: int = 0):
         """
         Logs the tree structure starting from the current node.
 
-        :param level: (int, optional) The current depth level in the tree (used for indentation).
+        :param level: (int) The current depth level in the tree (used for indentation).
         """
         indent = " " * level * 2
         logging.info(f"{indent}{self.name} (type: {self.type.name})")
@@ -385,9 +375,8 @@ class FastEMTreeNode:
         """
 
         def get_sort_key(node):
-            type_priority = {NodeType.RIBBON: 1, NodeType.SECTION: 2, NodeType.ROA: 3}
             row_index = node.row.index if node.row else math.inf
-            return (type_priority.get(node.type, 0), row_index, node.name)
+            return (TYPE_PRIORITY.get(node.type, 0), row_index, node.name)
 
         # Sort current node's children
         self.children.sort(key=get_sort_key)
@@ -459,7 +448,7 @@ class NodeWindow(wx.Window):
         checked = self.checkbox.IsChecked()
         self.propagate_checkbox_state(checked)
 
-    def propagate_checkbox_state(self, checked):
+    def propagate_checkbox_state(self, checked: bool):
         """
         Propagates the checkbox state to all child nodes' windows.
 
@@ -470,7 +459,6 @@ class NodeWindow(wx.Window):
                 child_window = self.GetParent().node_window.get(child_node)
                 if child_window:
                     child_window.checkbox.SetValue(checked)
-                    # child_window.update_button_state(checked)
                     child_window.propagate_checkbox_state(checked)
         self.GetParent().trigger_node_change_event(NodeChangeType.CHECKBOX)
 
@@ -479,7 +467,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
     """A custom tree control for displaying and managing a hierarchical structure of nodes."""
 
     def __init__(self, parent):
-        super(FastEMProjectTreeCtrl, self).__init__(
+        super().__init__(
             parent,
             agwStyle=wx.TR_DEFAULT_STYLE
             | wx.TR_HAS_VARIABLE_ROW_HEIGHT
@@ -494,7 +482,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         # Initialize to store node-window mappings
         self.node_window = {}
 
-    def populate_tree_from_root_node(self, root_node):
+    def populate_tree_from_root_node(self, root_node: FastEMTreeNode):
         """
         Populate or update the tree control with nodes starting from the root node.
 
@@ -508,7 +496,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         self._update_or_add_items(root_node, root_item)
         self.ExpandAll()
 
-    def get_all_items(self):
+    def get_all_items(self) -> List[GenericTreeItem]:
         """
         Retrieve all items in the tree control.
 
@@ -528,7 +516,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         root = self.GetRootItem()
         return _get_tree_items(root)
 
-    def _update_or_add_items(self, node, parent_item):
+    def _update_or_add_items(self, node: FastEMTreeNode, parent_item: GenericTreeItem):
         """
         Update or add tree items recursively based on changes in the node.
 
@@ -544,7 +532,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
             # Recurse to add grandchildren
             self._update_or_add_items(child_node, child_item)
 
-    def trigger_node_change_event(self, change_type):
+    def trigger_node_change_event(self, change_type: NodeChangeType):
         """
         Trigger a node change event.
 
@@ -553,7 +541,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         event = TreeNodeChangeEvent(change_type=change_type)
         wx.PostEvent(self, event)
 
-    def _on_tree_node_change(self, change_type, node):
+    def _on_tree_node_change(self, change_type: NodeChangeType, node: FastEMTreeNode):
         """
         Handle changes in the tree node and update the tree control accordingly.
 
@@ -572,7 +560,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
             self._sort_children_recursively(node)
         self.trigger_node_change_event(change_type)
 
-    def _update_node_name(self, node):
+    def _update_node_name(self, node: FastEMTreeNode):
         """
         Update the name of a node in the tree control.
 
@@ -584,7 +572,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
             window.item_label.SetLabel(node.name)
             window.Layout()
 
-    def _add_tree_node(self, node):
+    def _add_tree_node(self, node: FastEMTreeNode):
         """
         Add a new node to the tree control.
 
@@ -598,7 +586,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
             node.set_on_change_callback(self._on_tree_node_change)
             self.Expand(parent_item)
 
-    def _remove_tree_node(self, node):
+    def _remove_tree_node(self, node: FastEMTreeNode):
         """
         Remove a node from the tree control.
 
@@ -609,7 +597,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
             self.Delete(item)
             del self.node_window[node]
 
-    def _reparent_tree_node(self, node):
+    def _reparent_tree_node(self, node: FastEMTreeNode):
         """
         Reparent a node in the tree control.
 
@@ -627,18 +615,22 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         node1 = self.GetPyData(item1)
         node2 = self.GetPyData(item2)
 
-        # Define the custom comparison logic
-        type_priority = {NodeType.RIBBON: 1, NodeType.SECTION: 2, NodeType.ROA: 3}
-
         # Compare by type priority, then row index, then name
-        if type_priority.get(node1.type, 0) != type_priority.get(node2.type, 0):
-            return type_priority.get(node1.type, 0) - type_priority.get(node2.type, 0)
+        # Step 1: Compare by type priority.
+        # Nodes with a higher priority value (lower numerical value) come first.
+        if TYPE_PRIORITY.get(node1.type, 0) != TYPE_PRIORITY.get(node2.type, 0):
+            return TYPE_PRIORITY.get(node1.type, 0) - TYPE_PRIORITY.get(node2.type, 0)
+        # Step 2: If types are the same, compare by row index (if both nodes have a row).
+        # Lower row index comes first.
         elif (node1.row and node2.row) and node1.row.index != node2.row.index:
             return node1.row.index - node2.row.index
+        # Step 3: If types and row indices are the same (or rows are not defined), compare by name.
+        # Use comparison similar to strcmp()
+        # Return -1 if node1.name < node2.name, 1 if node1.name > node2.name, or 0 if they are equal.
         else:
             return (node1.name > node2.name) - (node1.name < node2.name)
 
-    def _sort_children_recursively(self, node):
+    def _sort_children_recursively(self, node: FastEMTreeNode):
         """
         Sort children of a node recursively in the tree control.
 
@@ -656,7 +648,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
                 self._sort_children_recursively(child_node)
                 child, cookie = self.GetNextChild(item, cookie)
 
-    def _find_item_by_node(self, node):
+    def _find_item_by_node(self, node: FastEMTreeNode) -> GenericTreeItem:
         """
         Find the tree item corresponding to a given node.
 
@@ -678,7 +670,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         root_item = self.GetRootItem()
         return traverse(root_item)
 
-    def add_widgets_to_item(self, item, node):
+    def add_widgets_to_item(self, item: GenericTreeItem, node: FastEMTreeNode) -> NodeWindow:
         """
         Add widgets to a tree item based on the associated node.
 
@@ -692,6 +684,7 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         # Set the window as the item window
         self.SetItemWindow(item, window)
 
-        # Store the reference to the window in _windows
+        # Store the reference to the node's window to be later used. For
+        # example it can be used during acquisition to access the window's widgets
         self.node_window[node] = window
         return window

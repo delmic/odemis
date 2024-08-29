@@ -21,20 +21,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import math
 from enum import Enum
+from typing import List
 
 import wx
 from wx.grid import GridCellFloatEditor, GridCellNumberEditor
 
 import odemis.gui.model as guimod
-from odemis.acq.fastem import FastEMROA
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.cont.fastem_grid_base import Column, GridBase, Row
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util import units
+from odemis.util.filename import make_compliant_string
 
 
 class RibbonColumnNames(Enum):
     NAME = "Name"
-    SLICE_IDX = "Slice Index"
+    SLICE_IDX = "Ribbon Index"
     POSX = "Position.X [m]"
     POSY = "Position.Y [m]"
     SIZEX = "Size.X"
@@ -48,7 +50,7 @@ class RibbonRow(Row):
     def __init__(self, data, roa, index=-1):
         super().__init__(data, roa, index)
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """
         Converts the RibbonRow instance to a dictionary format.
 
@@ -81,7 +83,7 @@ class RibbonRow(Row):
         return ribbon_row
 
     @staticmethod
-    def find_next_slice_index(name, rows):
+    def find_next_slice_index(name: str, rows: List[Row]) -> int:
         """
         Finds the next available index for the given name in the list of rows.
 
@@ -101,7 +103,7 @@ class RibbonRow(Row):
         return next_index
 
     @staticmethod
-    def is_unique_name_slice_idx(name, slice_idx, rows):
+    def is_unique_name_slice_idx(name: str, slice_idx: int, rows: List[Row]) -> bool:
         """
         Checks if the given index is unique for the specified name in the list of rows.
 
@@ -133,15 +135,17 @@ class RibbonRow(Row):
         self.data[RibbonColumnNames.POSY.value] = posy
         self.data[RibbonColumnNames.SIZEX.value] = sizex
         self.data[RibbonColumnNames.SIZEY.value] = sizey
-        self.data[RibbonColumnNames.ROT.value] = int(
+        self.data[RibbonColumnNames.ROT.value] = round(
             math.degrees(self.roa.shape.rotation)
         )
 
-    def on_cell_changing(self, new_value, row, col, grid):
+    def on_cell_changing(self, new_value: str, row: int, col: int, grid: GridBase) -> str:
         """
         Handles changes in cell values and updates associated data and ROA.
 
-        :param new_value: (str) The new value to set in the cell.
+        :param new_value: (str) The new value to set in the cell. The cell editor
+            class will make sure that a user can only input value in the cell of
+            the correct type.
         :param row: (int) The index of the row being modified.
         :param col: (int) The index of the column being modified.
         :param grid: (GridBase) The grid instance that contains the row.
@@ -151,6 +155,9 @@ class RibbonRow(Row):
         rows = grid.rows
         col = grid.columns[col]
         if col.label == RibbonColumnNames.NAME.value:
+            value_to_set = make_compliant_string(value_to_set)
+            if not value_to_set:
+                value_to_set = "Ribbon"
             current_slice_idx = self.data[RibbonColumnNames.SLICE_IDX.value]
             if not RibbonRow.is_unique_name_slice_idx(
                 value_to_set, current_slice_idx, rows
@@ -180,15 +187,21 @@ class RibbonRow(Row):
                 f"{self.data[RibbonColumnNames.NAME.value]}_{value_to_set}"
             )
         elif col.label == RibbonColumnNames.POSX.value:
-            posy = self.data[RibbonColumnNames.POSY.value]
-            self.data[RibbonColumnNames.POSX.value] = posx = float(value_to_set)
-            self.roa.shape.move_to((posx, posy))
-            self.roa.shape.cnvs.request_drawing_update()
+            if not value_to_set:
+                value_to_set = str(self.data[RibbonColumnNames.POSX.value])
+            else:
+                posy = self.data[RibbonColumnNames.POSY.value]
+                self.data[RibbonColumnNames.POSX.value] = posx = float(value_to_set)
+                self.roa.shape.move_to((posx, posy))
+                self.roa.shape.cnvs.request_drawing_update()
         elif col.label == RibbonColumnNames.POSY.value:
-            posx = self.data[RibbonColumnNames.POSX.value]
-            self.data[RibbonColumnNames.POSY.value] = posy = float(value_to_set)
-            self.roa.shape.move_to((posx, posy))
-            self.roa.shape.cnvs.request_drawing_update()
+            if not value_to_set:
+                value_to_set = str(self.data[RibbonColumnNames.POSY.value])
+            else:
+                posx = self.data[RibbonColumnNames.POSX.value]
+                self.data[RibbonColumnNames.POSY.value] = posy = float(value_to_set)
+                self.roa.shape.move_to((posx, posy))
+                self.roa.shape.cnvs.request_drawing_update()
         elif col.label == RibbonColumnNames.ROT.value:
             self.data[RibbonColumnNames.ROT.value] = rot = int(value_to_set)
             self.roa.shape.set_rotation(math.radians(rot))

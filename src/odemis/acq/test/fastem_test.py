@@ -38,6 +38,7 @@ from odemis.acq import fastem, stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import SETTINGS_SELECTION
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.model.main_gui_data import FastEMMainGUIData
 from odemis.util import driver, get_polygon_bbox, img, is_point_in_rect, testing
@@ -232,11 +233,11 @@ class TestFastEMROA(unittest.TestCase):
         xmax = res_x * px_size_x * x_fields
         ymax = res_y * px_size_y * y_fields
         coordinates = (0, 0, xmax, ymax)  # in m, don't change
-        polygon = [(0, 0), (ymax - px_size_y, 0), (0, xmax - px_size_x)]
+        polygon = [(0, 0), (0, ymax - px_size_y), (xmax - px_size_x, 0)]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name=roa_name,
@@ -245,11 +246,10 @@ class TestFastEMROA(unittest.TestCase):
         roa.roc_3.value = roc_3
         roa.polygon_shape = Polygon(polygon)
 
-        expected_indices = [(0, 0),
-                            (0, 1), (1, 1),
-                            (0, 2), (1, 2), (2, 2),
-                            (0, 3), (1, 3), (2, 3), (3, 3),
-                            (0, 4), (1, 4), (2, 4), (3, 4)]
+        expected_indices = [(0, 0), (1, 0),
+                            (0, 1), (1, 1), (2, 1),
+                            (0, 2), (1, 2), (2, 2), (3, 2),
+                            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]  # (col, row)
 
         roa.calculate_field_indices()
         self.assertListEqual(expected_indices, roa.field_indices)
@@ -267,22 +267,21 @@ class TestFastEMROA(unittest.TestCase):
         field_size_x = res_x * px_size_x
         field_size_y = res_y * px_size_y
 
-        expected_indices = [(0, 0),
-                            (0, 1), (1, 1),
-                            (0, 2), (1, 2), (2, 2),
-                            (0, 3), (1, 3), (2, 3), (3, 3),
-                            (0, 4), (1, 4), (2, 4), (3, 4)]
+        expected_indices = [(0, 0), (1, 0),
+                            (0, 1), (1, 1), (2, 1),
+                            (0, 2), (1, 2), (2, 2), (3, 2),
+                            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]  # (col, row)
 
         for overlap in (0, 0.0625, 0.2, 0.5, 0.7):
             xmin, ymin = (0, 0)
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
-            polygon = [(ymin, xmin), (ymax - px_size_y, xmin), (ymin, xmax - px_size_x)]
-            roa = fastem.FastEMROA(shape=MockEditableShape(),
-                        main_data=self.main_data,
-                        overlap=overlap,
-                        name=roa_name,
-                        slice_index=0)
+            polygon = [(xmin, ymin), (xmin, ymax - px_size_y), (xmax - px_size_x, ymin)]
+            roa = FastEMROA(shape=MockEditableShape(),
+                            main_data=self.main_data,
+                            overlap=overlap,
+                            name=roa_name,
+                            slice_index=0)
             roa.polygon_shape = Polygon(polygon)
 
             roa.calculate_field_indices()
@@ -313,8 +312,8 @@ class TestFastEMROA(unittest.TestCase):
         # Create xmax and ymax such that they are smaller than the field_size * overlap.
         xmax, ymax = (0.8 * field_size_x * overlap,
                       0.8 * field_size_y * overlap)
-        polygon = [(0, 0), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, 0)]
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        polygon = [(0, 0), (xmax - px_size_x, ymax - px_size_y), (0, ymax - px_size_y)]
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -396,7 +395,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -443,7 +442,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -489,7 +488,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -535,7 +534,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -591,7 +590,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -658,7 +657,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -757,7 +756,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
-            roa = fastem.FastEMROA(shape=MockEditableShape(),
+            roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name=roa_name,
@@ -847,7 +846,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
-            roa = fastem.FastEMROA(shape=MockEditableShape(),
+            roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -934,7 +933,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=overlap,
                         name=roa_name,
@@ -1018,7 +1017,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name=roa_name,
@@ -1078,7 +1077,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name=roa_name,
@@ -1138,7 +1137,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
-            roa = fastem.FastEMROA(shape=MockEditableShape(),
+            roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name=roa_name,
@@ -1173,7 +1172,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name="roa_name",
@@ -1219,7 +1218,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.06,
                         name="roa_name",
@@ -1259,9 +1258,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
     def test_calculate_beam_shift_cor_indices(self):
         """Test calculating where to run the beamshift correction"""
-        roa = fastem.FastEMROA("roa_name", None, None,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap=0.0)
+        roa = FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name="roa_name",
+                        slice_index=0)
         roa.field_indices = [(3, 0), (4, 0),
                              (2, 1), (3, 1), (4, 1), (10, 1),
                              (1, 2), (2, 2), (3, 2), (4, 2),
@@ -1270,7 +1271,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path=None, pre_calibrations=None,
+                                      roa, username="default", path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None,
                                       settings_obs=None, spot_grid_thresh=0.5)
         # When n_beamshifts=1, the beamshift correction should be applied for every field.
@@ -1389,7 +1390,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         points = [(0, 0), (0.000001, 0), (0.000001, 0.000001), (0, 0.000001)]
 
-        roa = fastem.FastEMROA(shape=MockEditableShape(),
+        roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
                         overlap=0.0,
                         name="roa_name",

@@ -30,17 +30,12 @@ from typing import Dict, Optional, Tuple
 from odemis import model
 from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import (
-    CALIBRATION_1,
-    CALIBRATION_2,
-    CALIBRATION_3,
-    FastEMCalibration,
-    FastEMROC,
-)
+from odemis.acq.fastem import FastEMCalibration, FastEMROC
 from odemis.acq.move import MicroscopePostureManager
 from odemis.gui import FG_COLOUR_WARNING, conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
+from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
 from odemis.gui.model._constants import (
     CHAMBER_PUMPING,
     CHAMBER_UNKNOWN,
@@ -614,13 +609,11 @@ class Sample:
         :param position: (float, float) the position of the ROA.
         :return: int the number of the closest scintillator, or None if no scintillator is found.
         """
-        roi_x, roi_y = position
-        mindist = 1  # distances always lower 1
+        mindist = 1  # distances always lower than 1 m
         closest_scintillator = None
 
         for scintillator in self.scintillators.values():
-            sc_x, sc_y = scintillator.shape.position
-            dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
+            dist = math.dist(position, scintillator.shape.position)
             if dist < mindist:
                 mindist = dist
                 closest_scintillator = scintillator
@@ -647,7 +640,6 @@ class FastEMMainGUIData(MainGUIData):
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN]
             calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN,]
-                                    # Calibrations.DARK_OFFSET]
             calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:
@@ -747,6 +739,8 @@ class FastEMMainGUIData(MainGUIData):
         self.user_dwell_time_overview = model.FloatVA()
         # User preferred dwell time for project acquisition
         self.user_dwell_time_acquisition = model.FloatVA()
+        # Indicates the calibration state for Calibration 1
+        self.is_calib_1_done = model.BooleanVA(False)
 
     def _reset_is_aligned(self, _):
         self.is_aligned.value = False

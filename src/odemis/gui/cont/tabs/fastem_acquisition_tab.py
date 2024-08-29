@@ -34,22 +34,7 @@ class FastEMAcquisitionTab(Tab):
 
         During creation, the following controllers are created:
 
-        StreamController
-          Manages the single beam stream.
-
-        CalibrationController
-          Manages the calibration step 1 for all scintillators.
-        CalibrationRegions2Controller
-          Manages the calibration step 2 for dark offset/digital gain correction
-          per scintillator.
-        CalibrationRegions3Controller
-          Manages the calibration step 3 for single field corrections
-          per scintillator.
-
-        SettingsController
-          Manages the dwell time for the acquisition.
-
-        ProjectListController
+        ProjectList
           Manages the projects.
 
         AcquisitionController

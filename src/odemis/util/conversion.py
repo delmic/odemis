@@ -201,7 +201,7 @@ def int32_to_rgba(int32_color: int) -> Tuple[int]:
 
     return r, g, b, a
 
-def frgba_to_hex(frgba):
+def frgba_to_hex(frgba: Tuple[float, float, float, float]) -> str:
     """ Convert a float RGBA value into a Hexadecimal colour representation.
     If the alpha value is 1.0, it will output a 6-character hex (e.g., #RRGGBB).
     Otherwise, it will output an 8-character hex (e.g., #RRGGBBAA).
@@ -210,7 +210,9 @@ def frgba_to_hex(frgba):
     :return: Hexadecimal colour representation as a string
     """
     if len(frgba) != 4:
-        raise ValueError("Illegal FRGBA colour %s" % str(frgba))
+        raise ValueError(
+            f"RGBA {frgba} not accepted, must have length 4 but has length {len(frgba)}"
+        )
 
     r = int(round(frgba[0] * 255))
     g = int(round(frgba[1] * 255))

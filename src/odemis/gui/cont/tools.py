@@ -29,6 +29,7 @@ This module contains classes that allow to create ToolBars for the MicroscopeGUI
 
 """
 import itertools
+from typing import Union
 
 import wx
 
@@ -199,6 +200,11 @@ TOOLS = {
             "btn_cursor",
             "Cursor"
         ),
+    model.TOOL_EXPAND:
+        ActionTool(
+            "btn_expand",
+            "Expand the view"
+        ),
 }
 
 
@@ -345,7 +351,7 @@ class ToolBar(wx.Panel):
     def enable_button(self, tool_id, enable):
         self._buttons[tool_id].Enable(enable)
 
-    def get_button(self, tool_id):
+    def get_button(self, tool_id: int) -> Union[ImageButton, ImageToggleButton]:
         return self._buttons[tool_id]
 
     def enable(self, enabled=True):

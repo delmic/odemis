@@ -672,8 +672,8 @@ class GraphicRadioButton(ImageTextToggleButton):
     def __init__(self, *args, **kwargs):
         self.value = kwargs.pop('value', None)
         if 'label' not in kwargs and self.value:
-            kwargs['label'] = u"%g" % self.value
-        super(GraphicRadioButton, self).__init__(*args, **kwargs)
+            kwargs['label'] = "%g" % self.value
+        super().__init__(*args, **kwargs)
 
     def OnLeftDown(self, event):
         """

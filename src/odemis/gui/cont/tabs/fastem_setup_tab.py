@@ -51,12 +51,10 @@ class FastEMSetupTab(Tab):
         main_data,
         view_controller,
         main_tab_data,
-        pnl_vp_grid,
     ):
         self.tab_data = guimod.FastEMSetupGUIData(main_data)
         self.main_tab_data = main_tab_data
         self.panel = panel
-        self.pnl_vp_grid = pnl_vp_grid
         super().__init__(name, button, panel, main_frame, self.tab_data)
 
         self.active_scintillator_panel = SettingsPanel(
@@ -141,6 +139,7 @@ class FastEMSetupTab(Tab):
             self.tab_data,
             self.main_tab_data,
             panel,
+            view_controller,
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
@@ -173,9 +172,9 @@ class FastEMSetupTab(Tab):
         ctrl = evt.GetEventObject()
         if ctrl is None:
             return
-        value = ctrl.GetValue()
+        value = str(ctrl.GetValue())
         for view in self.main_tab_data.visible_views.value:
-            if view.name.value == str(value):
+            if view.name.value == value:
                 self.main_tab_data.focussedView.value = view
                 return
 
@@ -199,16 +198,19 @@ class FastEMSetupTab(Tab):
             fastem._executor.cancel()
             return
 
+        # Pause the live stream
+        self.tab_data.semStream.is_active.value = False
+        self.tab_data.semStream.should_update.value = False
         # Disable other calibration buttons
         self.btn_sem_autofocus.Enable(False)
         self.btn_autobc.Enable(False)
+        self.calibration_controller.calibration_panel.Enable(False)
         # calibrate
         self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
-        self.tab_data.is_calibrating.value = (
-            True  # make sure the acquire/tab buttons are disabled
-        )
+        # make sure the acquire/tab buttons are disabled
+        self.tab_data.is_calibrating.value = True
         self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
         logging.debug("Starting Optical Autofocus calibration")
         # Start alignment
@@ -234,13 +236,12 @@ class FastEMSetupTab(Tab):
     @call_in_wx_main
     def _on_is_acquiring(self, mode):
         """
-        Enable or disable the button to start a calibration depending on whether
+        Enable or disable relevant wx objects depending on whether
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
         # TODO also include btn_autostigmation once autostigmation is working
         enable = not mode
-        self.pnl_vp_grid.Enable(enable)
         self.active_scintillator_ctrl.Enable(enable)
         self.sem_stream_cont.stream_panel.Enable(enable)
         self._acquisition_controller.overview_acq_panel.Enable(enable)
@@ -275,6 +276,7 @@ class FastEMSetupTab(Tab):
             )
         finally:
             self._update_optical_autofocus_controls()
+            self.calibration_controller.calibration_panel.Enable(True)
 
     @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
     def _update_optical_autofocus_controls(self, button_state=True):

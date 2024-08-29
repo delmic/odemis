@@ -429,8 +429,6 @@ class SettingsPanel(wx.Panel):
                                  wildcard=wildcard,
                                  default_dir=None,
                                  **kwargs)
-                                # FIXME it causes a segfault if btn_label arg is used instead of **kwargs
-                                #  btn_label=btn_label or "Open")
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 

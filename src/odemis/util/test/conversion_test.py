@@ -33,8 +33,8 @@ from odemis.util.conversion import (JsonExtraEncoder, YamlExtraDumper,
                                     convert_to_object, ensure_tuple,
                                     get_img_transformation_matrix,
                                     get_img_transformation_md, get_tile_md_pos,
-                                    reproduce_typed_value,
-                                    rgba_to_int32, int32_to_rgba)
+                                    reproduce_typed_value, rgba_to_int32,
+                                    int32_to_rgba, frgba_to_hex)
 
 
 class TestConversion(unittest.TestCase):
@@ -371,6 +371,27 @@ class TestConversion(unittest.TestCase):
         self.assertEqual(loaded_data["float16"], data["float16"])
         self.assertEqual(loaded_data["float32"], data["float32"])
         self.assertEqual(loaded_data["float64"], data["float64"])
+
+    def test_frgba_to_hex(self):
+        # Test conversion of fully opaque colors.
+        self.assertEqual(frgba_to_hex((1.0, 0.0, 0.0, 1.0)), '#ff0000')  # Red
+        self.assertEqual(frgba_to_hex((0.0, 1.0, 0.0, 1.0)), '#00ff00')  # Green
+        self.assertEqual(frgba_to_hex((0.0, 0.0, 1.0, 1.0)), '#0000ff')  # Blue
+        self.assertEqual(frgba_to_hex((1.0, 1.0, 1.0, 1.0)), '#ffffff')  # White
+        self.assertEqual(frgba_to_hex((0.0, 0.0, 0.0, 1.0)), '#000000')  # Black
+
+        # Test conversion of colors with transparency.
+        self.assertEqual(frgba_to_hex((1.0, 0.0, 0.0, 0.5)), '#ff000080')  # Red with 50% opacity
+        self.assertEqual(frgba_to_hex((0.0, 1.0, 0.0, 0.25)), '#00ff0040')  # Green with 25% opacity
+        self.assertEqual(frgba_to_hex((0.0, 0.0, 1.0, 0.75)), '#0000ffbf')  # Blue with 75% opacity
+        self.assertEqual(frgba_to_hex((0.5, 0.5, 0.5, 0.0)), '#80808000')  # Gray with 0% opacity
+
+        # Test that invalid input length raises a ValueError.
+        with self.assertRaises(ValueError):
+            frgba_to_hex((1.0, 0.0, 0.0))  # Missing alpha
+
+        with self.assertRaises(ValueError):
+            frgba_to_hex((1.0, 0.0, 0.0, 1.0, 0.5))  # Extra value
 
 
     def test_color_conversion(self):
