@@ -1253,6 +1253,26 @@ class TestMirrorDescanner(unittest.TestCase):
         axs.legend(loc="upper left")
         plt.show()
 
+    def test_move_full_range(self):
+        """Test that moving the descanners can move the full range without any errors."""
+        init_dwell_time = self.ebeam_scanner.dwellTime.value
+        init_physical_flyback_time = self.mirror_descanner.physicalFlybackTime.value
+        init_scan_offset = self.mirror_descanner.scanOffset.value
+        init_scan_amplitude = self.mirror_descanner.scanAmplitude.value
+        init_cell_complete_resolution = self.mppc.cellCompleteResolution.value
+
+        t = time.time()
+        self.mirror_descanner.moveFullRange()
+        # expected to take roughly 0.5s, so it should at least take longer than 0.4s
+        self.assertGreater(time.time() - t, 0.4)
+        # verify all values are set back correctly
+        self.assertEqual(init_dwell_time, self.ebeam_scanner.dwellTime.value)
+        self.assertEqual(init_physical_flyback_time, self.mirror_descanner.physicalFlybackTime.value)
+        self.assertEqual(init_scan_offset, self.mirror_descanner.scanOffset.value)
+        self.assertEqual(init_scan_amplitude, self.mirror_descanner.scanAmplitude.value)
+        self.assertEqual(init_cell_complete_resolution, self.mppc.cellCompleteResolution.value)
+
+
 
 class TestMPPC(unittest.TestCase):
 

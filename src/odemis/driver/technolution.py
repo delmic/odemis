@@ -1057,50 +1057,10 @@ class MirrorDescanner(model.Emitter):
     def moveFullRange(self):
         """
         Moves the descanner x and y axes through their full range to minimize wear on the ball bearings,
-        which move only a small amount during acquisition. The movement is sinusoidal to ensure
-        gradual and complete coverage of the range.
+        which move only a small amount during acquisition. The movement is sinusoidal in both x and y to ensure
+        gradual and complete coverage of the range. This process is repeated 10 times to help distribute
+        lubrication and ensure the bearings move sufficiently. The process takes roughly 0.5 second.
         """
-        # Store current parameters to restore them after moving the descanner through the full range
-        init_dwellTime = self.parent._ebeam_scanner.dwellTime.value
-        init_physicalFlybackTime = self.physicalFlybackTime.value
-        init_scanOffset = self.scanOffset.value
-        init_scanAmplitude = self.scanAmplitude.value
-        init_cellCompleteResolution = self.parent._mppc.cellCompleteResolution.value
-
-        # Set dwell time, flyback time, and resolution to maximum values to avoid moving the descanners too fast
-        self.parent._ebeam_scanner.dwellTime.value = self.parent._ebeam_scanner.dwellTime.range[-1]
-        self.physicalFlybackTime.value = self.physicalFlybackTime.range[-1]
-        self.parent._mppc.cellCompleteResolution.value = self.parent._mppc.cellCompleteResolution.range[-1]
-        self.scanOffset.value = (0.0, 0.0)
-        scan_amp_rng = self.scanAmplitude.range
-
-        # Set scan amplitude to cover the entire range
-        self.scanAmplitude.value = (scan_amp_rng[0][0], scan_amp_rng[-1][0])
-        total_line_scan_time = self.parent._mppc.getTotalLineScanTime()
-
-        # Generate descanner setpoints for sinusoidal movement in both x and y directions
-        x_descan_setpoints, y_descan_setpoints = self.getCalibrationSetpoints(
-            total_line_scan_time, sine_in_x=True, sine_in_y=True
-        )
-
-        # Generate scanner setpoints (note required by the ASM API, not needed for moving the descanners)
-        x_scan_setpoints, y_scan_setpoints, scan_calibration_dwell_time_ticks = \
-            self.parent._ebeam_scanner.getCalibrationSetpoints(total_line_scan_time)
-
-        # Prepare calibration data
-        calibration_data = CalibrationLoopParameters(self.rotation.value,
-                                                     0,  # Descan X offset parameter unused.
-                                                     x_descan_setpoints,
-                                                     0,  # Descan Y offset parameter unused.
-                                                     y_descan_setpoints,
-                                                     scan_calibration_dwell_time_ticks,
-                                                     self.parent._ebeam_scanner.rotation.value,
-                                                     self.parent._ebeam_scanner.getTicksScanDelay()[0],
-                                                     0.0,  # Scan X offset parameter unused.
-                                                     x_scan_setpoints,
-                                                     0.0,  # Scan Y offset parameter unused.
-                                                     y_scan_setpoints)
-
         # Check if an acquisition is still in progress
         if not self.parent._mppc.acq_queue.empty():
             logging.error("There is still an unfinished acquisition in progress. "
@@ -1112,21 +1072,65 @@ class MirrorDescanner(model.Emitter):
             # Sending this command without the calibration loop being active might cause errors.
             self.parent.asmApiPostCall("/scan/stop_calibration_loop", 204)
 
-        # Start the calibration loop with the new parameters
-        self.parent._calibrationParameters = calibration_data
-        self.parent.asmApiPostCall("/scan/start_calibration_loop",
-                                   204,
-                                   data=self.parent._calibrationParameters.to_dict())
-        time.sleep(total_line_scan_time * 10)
-        self.parent.asmApiPostCall("/scan/stop_calibration_loop", 204)
+        # Store current parameters to restore them after moving the descanner through the full range
+        init_dwellTime = self.parent._ebeam_scanner.dwellTime.value
+        init_physicalFlybackTime = self.physicalFlybackTime.value
+        init_scanOffset = self.scanOffset.value
+        init_scanAmplitude = self.scanAmplitude.value
+        init_cellCompleteResolution = self.parent._mppc.cellCompleteResolution.value
 
-        # Restore original parameters and clear calibration parameters
-        self.parent._calibrationParameters = None
-        self.parent._ebeam_scanner.dwellTime.value = init_dwellTime
-        self.physicalFlybackTime.value = init_physicalFlybackTime
-        self.scanOffset.value = init_scanOffset
-        self.scanAmplitude.value = init_scanAmplitude
-        self.parent._mppc.cellCompleteResolution.value = init_cellCompleteResolution
+        try:
+            # Set dwell time, flyback time, and resolution to maximum values to avoid moving the descanners too fast
+            self.parent._ebeam_scanner.dwellTime.value = self.parent._ebeam_scanner.dwellTime.range[-1]
+            self.physicalFlybackTime.value = self.physicalFlybackTime.range[-1]
+            self.parent._mppc.cellCompleteResolution.value = self.parent._mppc.cellCompleteResolution.range[-1]
+            self.scanOffset.value = (0.0, 0.0)
+            scan_amp_rng = self.scanAmplitude.range
+
+            # Set scan amplitude to cover the entire range
+            self.scanAmplitude.value = (scan_amp_rng[0][0], scan_amp_rng[-1][0])
+            total_line_scan_time = self.parent._mppc.getTotalLineScanTime()
+
+            # Generate descanner setpoints for sinusoidal movement in both x and y directions
+            x_descan_setpoints, y_descan_setpoints = self.getCalibrationSetpoints(
+                total_line_scan_time, sine_in_x=True, sine_in_y=True
+            )
+
+            # Generate scanner setpoints (note required by the ASM API, not needed for moving the descanners)
+            x_scan_setpoints, y_scan_setpoints, scan_calibration_dwell_time_ticks = \
+                self.parent._ebeam_scanner.getCalibrationSetpoints(total_line_scan_time)
+
+            # Prepare calibration data
+            calibration_data = CalibrationLoopParameters(self.rotation.value,
+                                                         0,  # Descan X offset parameter unused.
+                                                         x_descan_setpoints,
+                                                         0,  # Descan Y offset parameter unused.
+                                                         y_descan_setpoints,
+                                                         scan_calibration_dwell_time_ticks,
+                                                         self.parent._ebeam_scanner.rotation.value,
+                                                         self.parent._ebeam_scanner.getTicksScanDelay()[0],
+                                                         0.0,  # Scan X offset parameter unused.
+                                                         x_scan_setpoints,
+                                                         0.0,  # Scan Y offset parameter unused.
+                                                         y_scan_setpoints)
+
+            # Start the calibration loop with the new parameters
+            self.parent._calibrationParameters = calibration_data
+            self.parent.asmApiPostCall("/scan/start_calibration_loop",
+                                       204,
+                                       data=self.parent._calibrationParameters.to_dict())
+            # The calibration loop continuously runs until it gets stopped,
+            # wait for the scan to be repeated 10 times before stopping.
+            time.sleep(total_line_scan_time * 10)
+            self.parent.asmApiPostCall("/scan/stop_calibration_loop", 204)
+        finally:
+            # Restore original parameters and clear calibration parameters
+            self.parent._calibrationParameters = None
+            self.parent._ebeam_scanner.dwellTime.value = init_dwellTime
+            self.physicalFlybackTime.value = init_physicalFlybackTime
+            self.scanOffset.value = init_scanOffset
+            self.scanAmplitude.value = init_scanAmplitude
+            self.parent._mppc.cellCompleteResolution.value = init_cellCompleteResolution
 
 
 class MPPC(model.Detector):
@@ -1445,8 +1449,7 @@ class MPPC(model.Detector):
         """
         Puts the command 'next' field image scan on the queue with the appropriate field meta data model of the field
         image to be scanned. Can only be executed if it preceded by a 'start' mega field scan command on the queue.
-        The acquisition thread returns the acquired image to the provided notifier function added in the acquisition
-        queue
+        The acquisition thread returns the acquired image to the provided notifier function added in the acquisition queue
         with the "next" command. As notifier function the dataflow.notify is send. The returned image will be
         returned to the dataflow.notify which will provide the new data to all the subscribers of the dataflow.
 
