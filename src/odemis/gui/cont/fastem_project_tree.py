@@ -470,7 +470,6 @@ class NodeWindow(wx.Window):
                 child_window = self.GetParent().node_window.get(child_node)
                 if child_window:
                     child_window.checkbox.SetValue(checked)
-                    # child_window.update_button_state(checked)
                     child_window.propagate_checkbox_state(checked)
         self.GetParent().trigger_node_change_event(NodeChangeType.CHECKBOX)
 

@@ -1314,10 +1314,8 @@ class RectangleEditingMixin(DragMixin):
         """
         target_rotation = target_rotation % (2 * math.pi)
         self._calc_center()
-        dx = self.v_center.x - self.v_point1.x
-        dy = self.v_center.y - self.v_point1.y
-        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
-        diff_angle = (target_rotation - current_rotation) % (2 * math.pi)
+        self._calc_rotation()
+        diff_angle = (target_rotation - self.rotation) % (2 * math.pi)
         self.v_point1 = self.v_point1.rotate(diff_angle, self.v_center)
         self.v_point2 = self.v_point2.rotate(diff_angle, self.v_center)
         self.v_point3 = self.v_point3.rotate(diff_angle, self.v_center)
@@ -1696,11 +1694,8 @@ class LineEditingMixin(ClickMixin, DragMixin):
         """
         target_rotation = target_rotation % (2 * math.pi)
         self._calc_center()
-        v_point_0 = self.v_points[0]
-        dx = self.v_center.x - v_point_0.x
-        dy = self.v_center.y - v_point_0.y
-        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
-        diff_angle = (target_rotation - current_rotation) % (2 * math.pi)
+        self._calc_rotation()
+        diff_angle = (target_rotation - self.rotation) % (2 * math.pi)
         self.rotate_v_points(diff_angle)
         self.rotation = target_rotation
 

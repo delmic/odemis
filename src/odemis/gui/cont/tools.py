@@ -199,6 +199,11 @@ TOOLS = {
             "btn_cursor",
             "Cursor"
         ),
+    model.TOOL_EXPAND:
+        ActionTool(
+            "btn_expand",
+            "Expand the view"
+        ),
 }
 
 

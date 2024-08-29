@@ -47,6 +47,7 @@ from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_EDIT, FG_COLOUR_WARNING
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.fastem_user_settings_panel import (
     DWELL_TIME_ACQUISITION,
     DWELL_TIME_OVERVIEW_IMAGE,
@@ -60,7 +61,7 @@ from odemis.gui.cont.fastem_project_tree import (
     NodeType,
     NodeWindow,
 )
-from odemis.gui.model import STATE_OFF
+from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3, STATE_OFF
 from odemis.gui.util import call_in_wx_main, get_picture_folder, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
@@ -84,16 +85,19 @@ class FastEMOverviewAcquiController(object):
         tab_data,
         main_tab_data,
         tab_panel,
+        view_controller,
     ):
         """
         :param tab_data: the FastEMSetupTab tab data.
         :param main_tab_data: the FastEMMainTab tab data.
         :param tab_panel: (wx.Frame) the frame which contains the viewport.
+        :param view_controller: (ViewPortController) the viewport controller.
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._tab_panel = tab_panel
         self._main_tab_data = main_tab_data
+        self.view_controller = view_controller
 
         # Get the config from hardware
         ebeam_conf = get_hw_config(
@@ -152,6 +156,8 @@ class FastEMOverviewAcquiController(object):
             value=self._main_data_model.ebeam.dwellTime.value,
             conf=dwell_time_conf,
         )
+        # Create OVERVIEW_IMAGES_DIR if it doesn't exist
+        os.makedirs(OVERVIEW_IMAGES_DIR, exist_ok=True)
         _, self._load_overview_img_ctrl = self.overview_acq_panel.add_file_button(
             OVERVIEW_IMAGE,
             value=OVERVIEW_IMAGES_DIR,
@@ -228,6 +234,8 @@ class FastEMOverviewAcquiController(object):
         if view:
             current_sample = self._main_data_model.current_sample.value
             scintillator_num = int(view.name.value)
+            # Reset the file path and update the wildcard
+            self._load_overview_img_ctrl.file_path = OVERVIEW_IMAGES_DIR
             self._load_overview_img_ctrl.wildcard = (
                 f"fastem_{current_sample.type}_{scintillator_num}.ome.tiff"
             )
@@ -245,9 +253,6 @@ class FastEMOverviewAcquiController(object):
 
     def _on_current_sample(self, current_sample):
         self.overview_acq_data.clear()
-        self._load_overview_img_ctrl.wildcard = (
-            f"fastem_{current_sample.type}_*.ome.tiff"
-        )
         for scintillator_num in current_sample.scintillators.keys():
             self.overview_acq_data[scintillator_num] = {}
             self.overview_acq_data[scintillator_num][
@@ -329,8 +334,17 @@ class FastEMOverviewAcquiController(object):
           If None, no icon is shown.
         """
         self.btn_cancel.Hide()
+        self.btn_acquire.Show()
         self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self._dwell_time_ctrl.Enable()
+        self._contrast_ctrl.Enable()
+        self._brightness_ctrl.Enable()
+        self._load_overview_img_ctrl.Enable()
         self._tab_panel.Layout()
+        self.acq_future = None
+        self._fs_connector = None
+        self._main_data_model.is_acquiring.value = False
 
         if text is not None:
             self._set_status_message(text, level)
@@ -345,16 +359,27 @@ class FastEMOverviewAcquiController(object):
         self.bmp_acq_status_warn.Show(level == logging.WARN)
         self._tab_panel.Layout()
 
+    def _expand_view(self):
+        try:
+            # find the viewport corresponding to the current view
+            vp = self.view_controller.get_viewport_by_view(self._main_tab_data.focussedView.value)
+            vp.canvas.expand_view()
+        except IndexError:
+            logging.warning("Failed to find the current viewport")
+        except AttributeError:
+            logging.info("Requested to expand the view but not able to")
+
     # already running in main GUI thread as it receives event from GUI
     def on_acquisition(self, evt):
         """
         Start the acquisition (really)
         """
         self.update_acquisition_time()  # make sure we show the right label if the previous acquisition failed
+        self._expand_view()
         self._main_data_model.is_acquiring.value = True
         self.btn_acquire.Enable(False)
-        self.btn_acquire.Show(False)
-        self.btn_cancel.Enable(True)
+        self.btn_acquire.Hide()
+        self.btn_cancel.Enable()
         self.btn_cancel.Show()
         self.gauge_acq.Show()
         self._dwell_time_ctrl.Enable(False)
@@ -384,19 +409,15 @@ class FastEMOverviewAcquiController(object):
             t = fastem.estimateTiledAcquisitionTime(
                 self._tab_data_model.semStream, self._main_data_model.stage, bbox
             )
-        except Exception:
-            logging.exception("Failed to start overview acquisition")
-        f.add_done_callback(partial(self.on_acquisition_done, num=num))
-        acq_futures[f] = t
-
-        if acq_futures:
+            f.add_done_callback(partial(self.on_acquisition_done, num=num))
+            acq_futures[f] = t
             self.acq_future = model.ProgressiveBatchFuture(acq_futures)
             self.acq_future.add_done_callback(self.full_acquisition_done)
             self._fs_connector = ProgressiveFutureConnector(
                 self.acq_future, self.gauge_acq, self.lbl_acqestimate
             )
-        else:  # In case all acquisitions failed to start
-            self._main_data_model.is_acquiring.value = False
+        except Exception:
+            logging.exception("Failed to start overview acquisition")
             self._reset_acquisition_gui(
                 "Acquisition failed (see log panel).", level=logging.WARNING
             )
@@ -408,9 +429,11 @@ class FastEMOverviewAcquiController(object):
         if not self.acq_future:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
+            self._reset_acquisition_gui()
             return
 
         self.acq_future.cancel()
+        fastem._executor.cancel()
         # all the rest will be handled by on_acquisition_done()
 
     def on_acquisition_done(self, future, num):
@@ -424,10 +447,9 @@ class FastEMOverviewAcquiController(object):
             return
 
         # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
-        # TODO: pick a different name from previous acquisition?
         current_sample = self._main_data_model.current_sample.value
         current_user = self._main_data_model.current_user.value
-        if current_sample and current_user:
+        if current_sample:
             sample_type = current_sample.type
             user_dir = os.path.join(OVERVIEW_IMAGES_DIR, current_user)
             os.makedirs(user_dir, exist_ok=True)
@@ -447,13 +469,6 @@ class FastEMOverviewAcquiController(object):
         Callback called when the acquisition of all selected overview images is finished
         (either successfully or cancelled).
         """
-        self.gauge_acq.Hide()
-        self.btn_acquire.Show(True)
-        self._main_data_model.is_acquiring.value = False
-        self._dwell_time_ctrl.Enable(True)
-        self._contrast_ctrl.Enable(True)
-        self._brightness_ctrl.Enable(True)
-        self._load_overview_img_ctrl.Enable(True)
         try:
             future.result()
             self._reset_acquisition_gui("Acquisition done.")
@@ -463,9 +478,6 @@ class FastEMOverviewAcquiController(object):
             self._reset_acquisition_gui(
                 "Acquisition failed (see log panel).", level=logging.WARNING
             )
-        finally:
-            self.acq_future = None
-            self._fs_connector = None
 
 
 class FastEMAcquiController(object):
@@ -529,20 +541,18 @@ class FastEMAcquiController(object):
 
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
-        self.project_roas: Dict[str, Tuple[fastem.FastEMROA, NodeWindow]] = {}
+        self.project_roas: Dict[str, Tuple[FastEMROA, NodeWindow]] = {}
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
 
     def _on_current_sample(self, current_sample):
         for sample in self._main_data_model.samples.value.values():
             for scinti in sample.scintillators.values():
                 for calib in scinti.calibrations.values():
                     if sample == current_sample:
-                        calib.is_done.subscribe(self._on_va_change, init=True)
-                        if calib.region:
-                            calib.region.coordinates.subscribe(self._on_va_change)
+                        calib.is_done.subscribe(self._on_va_change)
                     else:
                         calib.is_done.unsubscribe(self._on_va_change)
-                        if calib.region:
-                            calib.region.coordinates.unsubscribe(self._on_va_change)
 
     def enable_project_tree_ctrl_checkboxes(self, flag=True):
         items = self.project_tree_ctrl.get_all_items()
@@ -562,15 +572,13 @@ class FastEMAcquiController(object):
                     self.project_roas[node.name] = []
                 elif node.type in (NodeType.SECTION, NodeType.ROA):
                     project_node = node.project_node()
-                    roa  = node.row.roa
+                    roa = node.row.roa
                     if project_node.name not in self.project_roas:
                         self.project_roas[project_node.name] = []
                     self.project_roas[project_node.name].append((roa, window))
                     roa.roc_2.subscribe(self._on_va_change)
                     roa.roc_3.subscribe(self._on_va_change)
-                    roa.shape.points.subscribe(
-                        self._on_update_acquisition_time
-                    )
+                    roa.shape.points.subscribe(self._on_update_acquisition_time)
                     self.roa_count += 1
         self.txt_num_roas.SetValue("%s" % self.roa_count)
         self.check_acquire_button()
@@ -592,7 +600,7 @@ class FastEMAcquiController(object):
         if not self.save_full_cells.value:
             self.btn_acquire.Enable(
                 self._check_calibration_done(
-                    [fastem.CALIBRATION_1, fastem.CALIBRATION_2, fastem.CALIBRATION_3]
+                    [CALIBRATION_1, CALIBRATION_2, CALIBRATION_3]
                 )
                 and self.roa_count
                 and not self._main_data_model.is_acquiring.value
@@ -600,9 +608,7 @@ class FastEMAcquiController(object):
         else:
             # if we are saving the full cell images, it is not necessary to run calibration 3
             self.btn_acquire.Enable(
-                self._check_calibration_done(
-                    [fastem.CALIBRATION_1, fastem.CALIBRATION_2]
-                )
+                self._check_calibration_done([CALIBRATION_1, CALIBRATION_2])
                 and self.roa_count
                 and not self._main_data_model.is_acquiring.value
             )
@@ -613,7 +619,7 @@ class FastEMAcquiController(object):
         if self.roa_count == 0:
             lvl = logging.WARN
             txt = "No region of acquisition selected"
-        elif not self._check_calibration_done([fastem.CALIBRATION_1]):
+        elif not self._check_calibration_done([CALIBRATION_1]):
             lvl = logging.WARN
             txt = "Calibration 1 is not run"
         elif self._get_undefined_calibrations_2():
@@ -651,50 +657,37 @@ class FastEMAcquiController(object):
 
     def _check_calibration_done(self, calibrations: list) -> bool:
         """Check is the list of calibrations are done for all ROAs."""
-        is_calib_1_done = False
-        scintillators = set()
-
-        for roas in self.project_roas.values():
-            for roa_window in roas:
-                roa = roa_window[0]
-                posx, posy = roa.shape.get_position()
-                current_sample = self._main_data_model.current_sample.value
-                scintillator = current_sample.find_closest_scintillator((posx, posy))
-
-                if not scintillator:
-                    logging.warning(
-                        "Could not find closest scintillator for %s.", roa.shape.name.value
-                    )
-                    return False
-
-                if scintillator not in scintillators:
-                    scintillators.add(scintillator)
-                else:
-                    continue
-
-                if fastem.CALIBRATION_1 in calibrations and not is_calib_1_done:
-                    calib_1 = scintillator.calibrations[fastem.CALIBRATION_1]
-                    if calib_1.is_done.value:
-                        is_calib_1_done = True
-
-                if fastem.CALIBRATION_2 in calibrations:
-                    calib_2 = scintillator.calibrations[fastem.CALIBRATION_2]
-                    if not calib_2.is_done.value:
-                        return False
-
-                if fastem.CALIBRATION_3 in calibrations:
-                    calib_3 = scintillator.calibrations[fastem.CALIBRATION_3]
-                    if not calib_3.is_done.value:
-                        return False
-
-        # Check calibration completion based on the requested calibrations
-        if fastem.CALIBRATION_1 in calibrations and not is_calib_1_done:
+        check_calib_1 = CALIBRATION_1 in calibrations
+        check_calib_2 = CALIBRATION_2 in calibrations
+        check_calib_3 = CALIBRATION_3 in calibrations
+        if check_calib_1 and not self._main_data_model.is_calib_1_done.value:
             return False
+
+        if check_calib_2 or check_calib_3:
+            for roas in self.project_roas.values():
+                for roa_window in roas:
+                    roa = roa_window[0]
+
+                    if check_calib_2:
+                        roc_2 = roa.roc_2.value
+                        if (
+                            roc_2.coordinates.value == stream.UNDEFINED_ROI
+                            or not roc_2.parameters
+                        ):
+                            return False
+
+                    if check_calib_3:
+                        roc_3 = roa.roc_3.value
+                        if (
+                            roc_3.coordinates.value == stream.UNDEFINED_ROI
+                            or not roc_3.parameters
+                        ):
+                            return False
         return True
 
     def _get_undefined_calibrations_2(self):
         """
-        returns (list of str): names of ROCs which are undefined
+        returns (list of str): names of calibration 2 ROCs which are undefined
         """
         undefined = set()
         for roas in self.project_roas.values():
@@ -707,7 +700,7 @@ class FastEMAcquiController(object):
 
     def _get_undefined_calibrations_3(self):
         """
-        returns (list of str): names of ROCs which are undefined
+        returns (list of str): names of calibration 3 ROCs which are undefined
         """
         undefined = set()
         for roas in self.project_roas.values():
@@ -735,8 +728,18 @@ class FastEMAcquiController(object):
           If None, no icon is shown.
         """
         self.btn_cancel.Hide()
+        self.btn_acquire.Show()
         self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self.enable_project_tree_ctrl_checkboxes()
         self._tab_panel.Layout()
+        self.acq_future = None
+        self._fs_connector = None
+        self._roa_future_connector.clear()
+        self._set_next_project_dwell_time_sub_callback.clear()
+        self._on_roa_acquisition_done_sub_callback.clear()
+        self._open_folder_sub_callback.clear()
+        self._main_data_model.is_acquiring.value = False
 
         if text is not None:
             self.lbl_acqestimate.SetLabel(text)
@@ -750,9 +753,9 @@ class FastEMAcquiController(object):
         Start the acquisition (really)
         """
         self._main_data_model.is_acquiring.value = True
-        self.btn_acquire.Show(False)
         self.btn_acquire.Enable(False)
-        self.btn_cancel.Enable(True)
+        self.btn_acquire.Hide()
+        self.btn_cancel.Enable()
         self.btn_cancel.Show()
         self.gauge_acq.Show()
         self.enable_project_tree_ctrl_checkboxes(False)
@@ -873,7 +876,10 @@ class FastEMAcquiController(object):
         self._fs_connector = ProgressiveFutureConnector(
             self.acq_future, self.gauge_acq, self.lbl_acqestimate
         )
-        self.acq_future.add_done_callback(self.on_acquisition_done)
+        acquisition_done_callback = partial(
+            self.on_acquisition_done, estimated_time=total_t
+        )
+        self.acq_future.add_done_callback(acquisition_done_callback)
 
     def set_next_project_dwell_time(self, future, next_project_name):
         """
@@ -936,9 +942,7 @@ class FastEMAcquiController(object):
                     target=self._run_open_folder_command, args=(cmd,), daemon=True
                 ).start()
             except Exception:
-                logging.exception(
-                    "Could not open acquisition path %s.", complete_path
-                )
+                logging.exception("Could not open acquisition path %s.", complete_path)
         else:
             logging.warning(
                 "Trying to open %s, but %s not a directory",
@@ -967,6 +971,7 @@ class FastEMAcquiController(object):
         if self.acq_future is None:
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
+            self._reset_acquisition_gui()
             return
 
         self.acq_future.cancel()
@@ -974,44 +979,22 @@ class FastEMAcquiController(object):
         # all the rest will be handled by on_acquisition_done()
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def on_acquisition_done(self, future):
+    def on_acquisition_done(self, future, estimated_time=0):
         """
         Callback called when the acquisition is finished (either successfully or
         cancelled)
         """
-        self.btn_cancel.Hide()
-        self.btn_acquire.Show()
-        self.btn_acquire.Enable()
-        self.gauge_acq.Hide()
-        self.enable_project_tree_ctrl_checkboxes()
-        self._tab_panel.Layout()
-        self._main_data_model.is_acquiring.value = False
-        self.acq_future = None
-        self._fs_connector = None
-        self._roa_future_connector.clear()
-        self._set_next_project_dwell_time_sub_callback.clear()
-        self._on_roa_acquisition_done_sub_callback.clear()
-        self._open_folder_sub_callback.clear()
+        estimated_time = units.readable_time(math.ceil(estimated_time))
         try:
             future.result()
-            # Display acquisition time
-            acq_time = 0
-            for roas in self.project_roas.values():
-                for roa_window in roas:
-                    acq_time += estimate_acquisition_time(
-                        roa_window[0],
-                        [
-                            Calibrations.OPTICAL_AUTOFOCUS,
-                            Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                        ],
-                    )
-            acq_time = math.ceil(acq_time)  # round a bit pessimistic
-            txt = "estimated time is {}."
-            txt = txt.format(units.readable_time(acq_time))
-            self._reset_acquisition_gui(f"Acquisition done, {txt}", level=logging.INFO)
+            self._reset_acquisition_gui(
+                f"Acquisition done, estimated time is {estimated_time}.",
+                level=logging.INFO,
+            )
         except CancelledError:
-            self._reset_acquisition_gui("Acquisition cancelled.")
-            return
+            self._reset_acquisition_gui(
+                f"Acquisition cancelled, estimated time is {estimated_time}."
+            )
         except Exception:
             # leave the gauge, to give a hint on what went wrong.
             logging.exception("Acquisition failed")
@@ -1052,16 +1035,16 @@ class FastEMCalibrationController:
             self._tab_panel.pnl_calib, size=(400, 80)
         )
         self._calib_1_lbl, self._calib_1 = self.calibration_panel.add_run_btn(
-            fastem.CALIBRATION_1
+            CALIBRATION_1
         )
         self._calib_1_lbl.SetToolTip(
             "Optical path and pattern calibrations: Calibrating and "
             "focusing the optical path and the multiprobe pattern. "
             "Calibrating the scanning orientation and distance."
         )
-        self._calib_1.SetName(fastem.CALIBRATION_1)
+        self._calib_1.SetName(CALIBRATION_1)
         self._calib_2_lbl, self._calib_2 = self.calibration_panel.add_run_btn(
-            fastem.CALIBRATION_2
+            CALIBRATION_2
         )
         self._calib_2_lbl.SetToolTip(
             "Dark offset and digital gain calibration (orange square): "
@@ -1070,10 +1053,10 @@ class FastEMCalibrationController:
             " Place the region of calibration (ROC) orange square on empty part of "
             " scintillator without a tissue."
         )
-        self._calib_2.SetName(fastem.CALIBRATION_2)
-        self._calib_2_lbl.SetForegroundColour(FG_COLOUR_WARNING)
+        self._calib_2.SetName(CALIBRATION_2)
+        self._calib_2_lbl.SetForegroundColour(FG_COLOUR_WARNING)  # orange
         self._calib_3_lbl, self._calib_3 = self.calibration_panel.add_run_btn(
-            fastem.CALIBRATION_3
+            CALIBRATION_3
         )
         self._calib_3_lbl.SetToolTip(
             "Cell image calibration (green square): Fine-tuning the cell "
@@ -1082,17 +1065,17 @@ class FastEMCalibrationController:
             "field image. Place the region of calibration (ROC) green square on tissue "
             "of interest."
         )
-        self._calib_3.SetName(fastem.CALIBRATION_3)
-        self._calib_3_lbl.SetForegroundColour("#00ff00")
+        self._calib_3.SetName(CALIBRATION_3)
+        self._calib_3_lbl.SetForegroundColour("#00ff00")  # green
 
         for _, sample in self._main_data_model.samples.value.items():
             for _, scintillator in sample.scintillators.items():
                 for name, calib in scintillator.calibrations.items():
-                    if name == fastem.CALIBRATION_1:
+                    if name == CALIBRATION_1:
                         calib.button = self._calib_1
-                    elif name == fastem.CALIBRATION_2:
+                    elif name == CALIBRATION_2:
                         calib.button = self._calib_2
-                    elif name == fastem.CALIBRATION_3:
+                    elif name == CALIBRATION_3:
                         calib.button = self._calib_3
 
         self._calib_1.Bind(wx.EVT_BUTTON, self.on_calibrate)
@@ -1106,9 +1089,9 @@ class FastEMCalibrationController:
         self._future_connector = None
 
         self._main_tab_data.focussedView.subscribe(self._on_focussed_view)
-        # enable/disable calibration button, panel, overlay if acquiring
+        # enable/disable calibration panel if acquiring
         self._main_data_model.is_acquiring.subscribe(self._on_is_acquiring)
-        # enable/disable calibration button, panel, overlay if calibrating
+        # enable/disable calibration buttons if calibrating
         self._tab_data_model.is_calibrating.subscribe(self._on_is_calibrating)
 
     def _on_focussed_view(self, view):
@@ -1117,16 +1100,13 @@ class FastEMCalibrationController:
         if current_sample and view:
             self._calib_2.Enable(False)
             self._calib_3.Enable(False)
-            for scintillator in current_sample.scintillators.values():
-                calib_1 = scintillator.calibrations[fastem.CALIBRATION_1]
-                if calib_1.is_done.value:
-                    txt.append("1")
-                    self._calib_2.Enable(True)
-                    break
+            if self._main_data_model.is_calib_1_done.value:
+                txt.append("1")
+                self._calib_2.Enable(True)
             scintillator_num = int(view.name.value)
             scintillator = current_sample.scintillators[scintillator_num]
-            calib_2 = scintillator.calibrations[fastem.CALIBRATION_2]
-            calib_3 = scintillator.calibrations[fastem.CALIBRATION_3]
+            calib_2 = scintillator.calibrations[CALIBRATION_2]
+            calib_3 = scintillator.calibrations[CALIBRATION_3]
             if calib_2.is_done.value:
                 txt.append("2")
                 self._calib_3.Enable(True)
@@ -1166,6 +1146,7 @@ class FastEMCalibrationController:
             )
             self.calibration.button.SetLabel("Cancel")  # indicate canceling is possible
             self._calib_gauge.Show()  # show progress bar
+            self._tab_panel.btn_acq.Enable(False)  # overview acq button
 
             self._on_calibration_state()  # update the controls in the panel
 
@@ -1173,7 +1154,7 @@ class FastEMCalibrationController:
 
             # Start alignment
             stage_pos = None
-            if calib_name in [fastem.CALIBRATION_2, fastem.CALIBRATION_3]:
+            if calib_name in [CALIBRATION_2, CALIBRATION_3]:
                 xmin, ymin, xmax, ymax = self.calibration.region.coordinates.value
                 stage_pos = ((xmin + xmax) / 2, (ymin + ymax) / 2)
             f = align.fastem.align(
@@ -1214,19 +1195,35 @@ class FastEMCalibrationController:
 
         try:
             config = future.result()  # wait until the calibration is done
-            self.calibration.is_done.value = True  # allow acquiring ROAs
-            if calib_name in [fastem.CALIBRATION_2, fastem.CALIBRATION_3]:
+            if calib_name == CALIBRATION_1:
+                # is_calib_1_done VA for calibration 1 in the main data model needs to be set first
+                # before is_done VA. is_calib_1_done VA is helpful because Calibration 1 is not
+                # scintillator specific
+                self._main_data_model.is_calib_1_done.value = True
+            self.calibration.is_done.value = True
+            if calib_name in [CALIBRATION_2, CALIBRATION_3]:
                 self.calibration.region.parameters.update(config)
+            # Update calibration text based on the focussed view
             focussed_view = self._main_tab_data.focussedView.value
             self._on_focussed_view(focussed_view)
         except CancelledError:
-            self.calibration.is_done.value = False  # don't enable ROA acquisition
+            if calib_name == CALIBRATION_1:
+                # is_calib_1_done VA for calibration 1 in the main data model needs to be set first
+                # before is_done VA. is_calib_1_done VA is helpful because Calibration 1 is not
+                # scintillator specific
+                self._main_data_model.is_calib_1_done.value = False
+            self.calibration.is_done.value = False
             logging.debug("Calibration step %s cancelled.", self.calibration.name.value)
             self._update_calibration_text(
                 f"{calib_name} cancelled"
             )  # update label to indicate cancelling
         except Exception as ex:
-            self.calibration.is_done.value = False  # don't enable ROA acquisition
+            if calib_name == CALIBRATION_1:
+                # is_calib_1_done VA for calibration 1 in the main data model needs to be set first
+                # before is_done VA. is_calib_1_done VA is helpful because Calibration 1 is not
+                # scintillator specific
+                self._main_data_model.is_calib_1_done.value = False
+            self.calibration.is_done.value = False
             logging.exception(
                 "Calibration step %s failed with exception: %s.",
                 self.calibration.name.value,
@@ -1235,6 +1232,12 @@ class FastEMCalibrationController:
             self._update_calibration_text(f"{calib_name} failed")
         finally:
             self._tab_data_model.is_calibrating.value = False
+            self._tab_panel.btn_acq.Enable(
+                True
+                if self._tab_data_model.is_optical_autofocus_done.value
+                and self._main_tab_data.focussedView.value
+                else False
+            )
 
     @call_in_wx_main
     def _on_calibration_state(self, _=None):
@@ -1268,61 +1271,64 @@ class FastEMCalibrationController:
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_calibrating(self, mode):
         """
-        Enable or disable the calibration button, panel and overlay depending on whether
+        Enable or disable the calibration buttons, depending on whether
         a calibration is already ongoing or not.
         :param mode: (bool) Whether the system is currently calibrating or not calibrating.
         """
         if self.calibration:
             calib_name = self.calibration.name.value
-            # calibration finished
+            # system is currently not calibrating
             if not mode:
                 is_done = self.calibration.is_done.value
                 current_sample = self._main_data_model.current_sample.value
                 focussed_view = self._main_tab_data.focussedView.value
                 scintillator_num = int(focussed_view.name.value)
                 scintillator = current_sample.scintillators[scintillator_num]
-                calib_3 = scintillator.calibrations[fastem.CALIBRATION_3]
-            if calib_name == fastem.CALIBRATION_1:
-                # calibration started
+                calib_3 = scintillator.calibrations[CALIBRATION_3]
+            if calib_name == CALIBRATION_1:
+                # system is currently calibrating
                 if mode:
                     self._calib_2.Enable(False)
                     self._calib_3.Enable(False)
-                # calibration finished
+                # system is currently not calibrating
                 else:
+                    # calibration successful
                     if is_done:
                         self._calib_2.Enable(True)
+                    # calibration not successful
                     else:
                         for scintillator in current_sample.scintillators.values():
-                            calib_1 = scintillator.calibrations[fastem.CALIBRATION_1]
-                            calib_2 = scintillator.calibrations[fastem.CALIBRATION_2]
-                            calib_3 = scintillator.calibrations[fastem.CALIBRATION_3]
+                            calib_1 = scintillator.calibrations[CALIBRATION_1]
+                            calib_2 = scintillator.calibrations[CALIBRATION_2]
+                            calib_3 = scintillator.calibrations[CALIBRATION_3]
                             calib_1.is_done.value = False
                             calib_2.is_done.value = False
                             calib_3.is_done.value = False
-            elif calib_name == fastem.CALIBRATION_2:
-                # calibration started
+            elif calib_name == CALIBRATION_2:
+                # system is currently calibrating
                 if mode:
                     self._calib_1.Enable(False)
                     self._calib_3.Enable(False)
-                # calibration finished
+                # system is currently not calibrating
                 else:
+                    # calibration successful
                     if is_done:
                         self._calib_1.Enable(True)
                         self._calib_3.Enable(True)
+                    # calibration not successful
                     else:
                         self._calib_1.Enable(True)
                         calib_3.is_done.value = False
-            elif calib_name == fastem.CALIBRATION_3:
+            elif calib_name == CALIBRATION_3:
                 self._calib_1.Enable(not mode)
                 self._calib_2.Enable(not mode)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):
         """
-        Enable or disable the calibration button, panel and overlay depending on whether
-        a acquisition is already ongoing or not.
+        Enable or disable the calibration panel depending on whether an acquisition
+        is already ongoing or not.
+
         :param mode: (bool) Whether the system is currently acquiring or not acquiring.
         """
-        self._calib_1.Enable(not mode)
-        self._calib_2.Enable(not mode)
-        self._calib_3.Enable(not mode)
+        self.calibration_panel.Enable(not mode)

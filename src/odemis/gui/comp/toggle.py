@@ -56,7 +56,16 @@ class GraphicalToggleButtonControl(wx.Panel):
         self.UpdateLayout()
 
     def UpdateLayout(self):
-        """Update the sizer as per the layout."""
+        """
+        Update the layout and the sizer.
+
+        This function handles the layout creation based on 2 attributes namely create_grid
+        and grid_layout. Grid creation can be enabled by using create_grid flag. If the grid
+        creation is disabled the buttons will be added to the sizer horizontally or vertically
+        as per the orientation. If the grid creation is enabled and grid layout has been
+        provided, arrange the buttons as per the grid layout otherwise automatically arrange
+        the buttons and add them to the sizer.
+        """
         self.SetValue([])
         self.buttons.clear()
         self._sizer.Clear(delete_windows=True)

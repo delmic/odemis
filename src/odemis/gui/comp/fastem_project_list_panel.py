@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-:author: Rinze de Laat <laat@delmic.com>
-:copyright: © 2012-2021 Rinze de Laat, Philip Winkler, Delmic
+:author: Nandish Patel
+:copyright: © 2024 Nandish Patel, Delmic
 
 This file is part of Odemis.
 
@@ -16,10 +16,8 @@ This file is part of Odemis.
     You should have received a copy of the GNU General Public License along with Odemis. If not,
     see http://www.gnu.org/licenses/.
 
-This module contains classes needed to construct stream panels.
-
-Stream panels are custom, specialized controls that allow the user to view and manipulate various
-data streams coming from the microscope.
+This module contains class needed to construct Fast-EM project list panel. The panel contains the
+project tree control for acquisition.
 
 """
 import wx

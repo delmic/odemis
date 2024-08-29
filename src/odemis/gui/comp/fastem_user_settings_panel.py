@@ -32,10 +32,11 @@ from odemis.gui.cont.microscope import FastEMStateController
 from odemis.gui.model import VIEW_LAYOUT_DYNAMIC, VIEW_LAYOUT_ONE
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.conversion import sample_positions_to_layout
-from odemis.util import read_json, write_json
+from odemis.util.dataio import read_json, write_json
+from odemis.util.filename import make_compliant_string
 
 # Default entry value
-DEFAULT_USER = "default"
+DEFAULT_USER = "fastem-user"
 # Entries
 USER_PROFILE = "User profile"
 CURRENT = "Current"
@@ -43,7 +44,7 @@ VOLTAGE = "Voltage"
 OVERVOLTAGE = "Overvoltage"
 DWELL_TIME_OVERVIEW_IMAGE = "Dwell time (overview image)"
 DWELL_TIME_ACQUISITION = "Dwell time (acquisition)"
-SCINTILLATOR_HOLDER = "Scintillator holder"
+SAMPLE_CARRIER = "Sample carrier"
 SELECTED_SCINTILLATORS = "Selected scintillators"
 USER_NOTE = "User note"
 # Control config for the entries
@@ -57,7 +58,7 @@ CONTROL_CONFIG = {
         "style": wx.CB_READONLY,
     },
     VOLTAGE: {
-        "labels": ["2.5 kV", "4 kV", " 5 kV", "10 kV"],
+        "labels": ["2.5 kV", "4 kV", "5 kV", "10 kV"],
         "choices": [2500, 4000, 5000, 10000],
         "style": wx.CB_READONLY,
     },
@@ -67,7 +68,7 @@ CONTROL_CONFIG = {
     },
     DWELL_TIME_OVERVIEW_IMAGE: {},
     DWELL_TIME_ACQUISITION: {},
-    SCINTILLATOR_HOLDER: {
+    SAMPLE_CARRIER: {
         "style": wx.CB_READONLY,
     },
     SELECTED_SCINTILLATORS: {
@@ -103,6 +104,7 @@ class FastEMUserSettingsPanel(object):
         self.user_note_timer = None
         self.user_note_ctrl = None
         self.user_profile_ctrl = None
+        self.sample_carrier_ctrl = None
         self.user_profile_add_button_ctrl = None
         self.user_profile_delete_button_ctrl = None
 
@@ -147,11 +149,14 @@ class FastEMUserSettingsPanel(object):
         if self.user_profile_data is None:
             # Create the json file and write the data for the default user
             # user_profile_data is Dict[str, Dict[str, Any]]
-            # Example {"default": {"Current": "1 nA", "Voltage": "5 kV"}}
+            # Example {"fastem-user": {"Current": "1 nA", "Voltage": "5 kV"}}
             self.user_profile_data = {}
             self.user_profile_data[DEFAULT_USER] = default_profile_data
             self.write_user_profile_data()
         else:
+            if DEFAULT_USER not in self.user_profile_data:
+                self.user_profile_data[DEFAULT_USER] = default_profile_data
+                self.write_user_profile_data()
             for user, data in self.user_profile_data.items():
                 default_data = default_profile_data.copy()
                 default_data.update(data)
@@ -193,7 +198,7 @@ class FastEMUserSettingsPanel(object):
         CONTROL_CONFIG[OVERVOLTAGE].update(overvoltage_conf)
         CONTROL_CONFIG[DWELL_TIME_OVERVIEW_IMAGE].update(dwell_time_overview_conf)
         CONTROL_CONFIG[DWELL_TIME_ACQUISITION].update(dwell_time_acq_conf)
-        CONTROL_CONFIG[SCINTILLATOR_HOLDER].update(
+        CONTROL_CONFIG[SAMPLE_CARRIER].update(
             {"choices": list(self.main_data.samples.value.keys())}
         )
         if self.user_profile_data:
@@ -222,15 +227,69 @@ class FastEMUserSettingsPanel(object):
     def write_user_profile_data(self):
         write_json(self.user_profile_config_path, self.user_profile_data)
 
-    def get_entry_control_values(self) -> Dict[str, Any]:
-        """Get the current entry control values."""
+    def get_ctrl_values(self) -> Dict[str, Any]:
+        """Get the current entries control values."""
         return {
             entry: self.user_settings_panel.FindWindowByName(entry).GetValue()
             for entry in self.user_profile_data[DEFAULT_USER].keys()
         }
 
-    def set_entry_control_values(self):
-        """Set the entry control values for the current user."""
+    def _set_voltage_ctrl_value(self, ctrl, value: str) -> bool:
+        idx = CONTROL_CONFIG[VOLTAGE]["labels"].index(value)
+        voltage = CONTROL_CONFIG[VOLTAGE]["choices"][idx]
+        if self.main_data.ebeam.accelVoltage.value != voltage:
+            dlg = wx.MessageDialog(
+                ctrl,
+                "Do you want to change the Voltage value? "
+                "If Yes, the system needs to be re-calibrated.",
+                "Confirm",
+                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
+            )
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result == wx.ID_YES:
+                self.user_profile_data[self.main_data.current_user.value][
+                    VOLTAGE
+                ] = value
+                self.main_data.ebeam.accelVoltage.value = voltage
+            else:
+                voltage = self.main_data.ebeam.accelVoltage.value
+                idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(voltage)
+                value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
+                self.user_profile_data[self.main_data.current_user.value][
+                    VOLTAGE
+                ] = value
+                ctrl.SetValue(value)
+            return True
+        return False
+
+    def _set_overvoltage_ctrl_value(self, ctrl, value: float) -> bool:
+        if self.main_data.mppc.overVoltage.value != value:
+            dlg = wx.MessageDialog(
+                ctrl,
+                "Do you want to change the Overvoltage value? "
+                "If Yes, the system needs to be re-calibrated.",
+                "Confirm",
+                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
+            )
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result == wx.ID_YES:
+                self.user_profile_data[self.main_data.current_user.value][
+                    OVERVOLTAGE
+                ] = value
+                self.main_data.mppc.overVoltage.value = value
+            else:
+                value = self.main_data.mppc.overVoltage.value
+                self.user_profile_data[self.main_data.current_user.value][
+                    OVERVOLTAGE
+                ] = value
+                ctrl.SetValue(value)
+            return True
+        return False
+
+    def set_ctrl_values(self):
+        """Set the entries control values for the current user."""
         for entry in self.user_profile_data[DEFAULT_USER].keys():
             ctrl = self.user_settings_panel.FindWindowByName(entry)
             if ctrl:
@@ -241,214 +300,177 @@ class FastEMUserSettingsPanel(object):
                 elif entry == DWELL_TIME_ACQUISITION:
                     self.main_data.user_dwell_time_acquisition.value = float(value)
                 elif entry == OVERVOLTAGE:
-                    if self.main_data.mppc.overVoltage.value != float(value):
-                        dlg = wx.MessageDialog(
-                            ctrl,
-                            "Do you want to change the Overvoltage value? "
-                            "If yes, the system needs to be re-calibrated.",
-                            "Confirm",
-                            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
-                        )
-                        result = dlg.ShowModal()
-                        dlg.Destroy()
-                        if result == wx.ID_YES:
-                            self.main_data.mppc.overVoltage.value = float(value)
-                        else:
-                            value = self.main_data.mppc.overVoltage.value
-                            self.user_profile_data[self.main_data.current_user.value][
-                                entry
-                            ] = value
-                            ctrl.SetValue(value)
+                    self._set_overvoltage_ctrl_value(ctrl, float(value))
                 elif entry == VOLTAGE:
-                    idx = CONTROL_CONFIG[VOLTAGE]["labels"].index(value)
-                    voltage = CONTROL_CONFIG[VOLTAGE]["choices"][idx]
-                    if self.main_data.ebeam.accelVoltage.value != voltage:
-                        dlg = wx.MessageDialog(
-                            ctrl,
-                            "Do you want to change the Voltage value? "
-                            "If Yes, the system needs to be re-calibrated.",
-                            "Confirm",
-                            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
-                        )
-                        result = dlg.ShowModal()
-                        dlg.Destroy()
-                        if result == wx.ID_YES:
-                            self.main_data.ebeam.accelVoltage.value = voltage
-                        else:
-                            voltage = self.main_data.ebeam.accelVoltage.value
-                            idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(voltage)
-                            value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
-                            self.user_profile_data[self.main_data.current_user.value][
-                                entry
-                            ] = value
-                            ctrl.SetValue(value)
+                    self._set_voltage_ctrl_value(ctrl, value)
 
-    def on_control_event(self, evt):
+    def on_evt_text_enter_user_profile_ctrl(self, evt):
         ctrl = evt.GetEventObject()
         if not ctrl:
             return
-        update_data = False
-        entry = ctrl.GetName()
 
-        if evt.GetEventType() == wx.EVT_SET_FOCUS.typeId:
-            self.original_user = ctrl.GetValue().strip().lower()
-        elif evt.GetEventType() == wx.EVT_TEXT_ENTER.typeId:
-            if entry == USER_PROFILE:
-                value = ctrl.GetValue().strip().lower()
-                if value and self.original_user:
-                    if (
-                        self.original_user != DEFAULT_USER
-                        and self.original_user in ctrl.GetStrings()
-                    ):
-                        if value not in ctrl.GetStrings():
-                            idx = ctrl.FindString(self.original_user)
-                            ctrl.SetString(idx, value)
-                            self.main_data.current_user.value = value
-                            del self.user_profile_data[self.original_user]
-                            self.user_profile_data[value] = (
-                                self.get_entry_control_values()
-                            )
-                            self.original_user = value
-                            update_data = True
-                        else:
-                            ctrl.SetValue(value)
-                            self.main_data.current_user.value = value
-                            self.set_entry_control_values()
-                            self.original_user = value
-                    else:
-                        ctrl.SetValue(DEFAULT_USER)
-                else:
-                    ctrl.SetValue(DEFAULT_USER)
-                    self.main_data.current_user.value = DEFAULT_USER
-                    self.set_entry_control_values()
-            elif entry == OVERVOLTAGE:
-                # Call on_text_enter explicitly as it is not binded
-                ctrl.on_text_enter(evt)
-                value = ctrl.GetValue()
-                if self.main_data.mppc.overVoltage.value != value:
-                    dlg = wx.MessageDialog(
-                        ctrl,
-                        "Do you want to change the Overvoltage value? "
-                        "If Yes, the system needs to be re-calibrated.",
-                        "Confirm",
-                        wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
-                    )
-                    result = dlg.ShowModal()
-                    dlg.Destroy()
-                    if result == wx.ID_YES:
-                        self.user_profile_data[self.main_data.current_user.value][
-                            entry
-                        ] = value
-                        self.main_data.mppc.overVoltage.value = value
-                    else:
-                        value = self.main_data.mppc.overVoltage.value
-                        self.user_profile_data[self.main_data.current_user.value][
-                            entry
-                        ] = value
-                        ctrl.SetValue(value)
-                    update_data = True
-        elif evt.GetEventType() == wx.EVT_COMBOBOX.typeId:
-            value = ctrl.GetValue()
-            if entry == USER_PROFILE:
-                if value != self.main_data.current_user.value:
+        value = ctrl.GetValue().strip().lower()
+        value = make_compliant_string(value)
+        if value and self.original_user:
+            if (
+                self.original_user != DEFAULT_USER
+                and self.original_user in ctrl.GetStrings()
+            ):
+                if value not in ctrl.GetStrings():
+                    idx = ctrl.FindString(self.original_user)
+                    ctrl.SetString(idx, value)
                     self.main_data.current_user.value = value
-                    self.set_entry_control_values()
-                    update_data = True
-            elif entry == SCINTILLATOR_HOLDER:
-                current_sample = self.main_data.current_sample.value
-                if (current_sample and current_sample.type != value) or (
-                    current_sample is None
-                ):
-                    self.main_data.current_sample.value = self.main_data.samples.value[
-                        value
-                    ]
-                    self._update_selected_scintillators_layout()
-                    self.scintillator_holder_ctrl.Enable(False)
-            elif entry in [VOLTAGE, CURRENT]:
-                if entry == VOLTAGE:
-                    if self.main_data.ebeam.accelVoltage.value != ctrl.GetClientData(
-                        ctrl.GetSelection()
-                    ):
-                        dlg = wx.MessageDialog(
-                            ctrl,
-                            "Do you want to change the Voltage value? "
-                            "If Yes, the system needs to be re-calibrated.",
-                            "Confirm",
-                            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
-                        )
-                        result = dlg.ShowModal()
-                        dlg.Destroy()
-                        if result == wx.ID_YES:
-                            self.user_profile_data[self.main_data.current_user.value][
-                                entry
-                            ] = value
-                            self.main_data.ebeam.accelVoltage.value = (
-                                ctrl.GetClientData(ctrl.GetSelection())
-                            )
-                        else:
-                            voltage = self.main_data.ebeam.accelVoltage.value
-                            idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(voltage)
-                            value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
-                            self.user_profile_data[self.main_data.current_user.value][
-                                entry
-                            ] = value
-                            ctrl.SetValue(value)
-                        update_data = True
-        elif evt.GetEventType() == wx.EVT_SLIDER.typeId:
-            value = ctrl.GetValue()
-            self.user_profile_data[self.main_data.current_user.value][entry] = value
-            if entry == DWELL_TIME_OVERVIEW_IMAGE:
-                self.main_data.user_dwell_time_overview.value = float(value)
-            elif entry == DWELL_TIME_ACQUISITION:
-                self.main_data.user_dwell_time_acquisition.value = float(value)
-            update_data = True
-        elif evt.GetEventType() == wx.EVT_BUTTON.typeId:
-            visible_views_num = self.selected_scintillators.GetValue()
-            visible_views = []
-            for view in self.tab_data.views.value:
-                if int(view.name.value) in visible_views_num:
-                    visible_views.append(view)
-            self.tab_data.visible_views.value = visible_views
-            if len(visible_views) == 1:
-                self.tab_data.viewLayout.value = VIEW_LAYOUT_ONE
-            elif len(visible_views) > 1:
-                self.tab_data.viewLayout.value = VIEW_LAYOUT_DYNAMIC
-        elif evt.GetEventType() == wx.EVT_TEXT.typeId:
-            if self.user_note_timer.IsRunning():
-                self.user_note_timer.Stop()
-            self.user_note_timer.Start(1000)
-            evt.Skip()
-        elif evt.GetEventType() == wx.EVT_TIMER.typeId:
-            info = self.user_note_ctrl.GetValue()
-            self.main_data.mppc.updateMetadata({model.MD_USER_NOTE: info})
-            self.user_note_timer.Stop()
+                    del self.user_profile_data[self.original_user]
+                    self.user_profile_data[value] = self.get_ctrl_values()
+                    self.original_user = value
+                    self.write_user_profile_data()
+                else:
+                    ctrl.SetValue(value)
+                    self.main_data.current_user.value = value
+                    self.set_ctrl_values()
+                    self.original_user = value
+            else:
+                ctrl.SetValue(DEFAULT_USER)
+        else:
+            ctrl.SetValue(DEFAULT_USER)
+            self.main_data.current_user.value = DEFAULT_USER
+            self.set_ctrl_values()
 
-        if update_data:
+    def on_evt_set_focus_user_profile_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        self.original_user = ctrl.GetValue().strip().lower()
+
+    def on_evt_combobox_user_profile_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        if value != self.main_data.current_user.value:
+            self.main_data.current_user.value = value
+            self.set_ctrl_values()
             self.write_user_profile_data()
 
-    def on_user_profile_add_button_ctrl(self, evt):
+    def on_evt_text_enter_overvoltage_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        # Call on_text_enter explicitly as it is not binded
+        ctrl.on_text_enter(evt)
+        value = ctrl.GetValue()
+        is_set = self._set_overvoltage_ctrl_value(ctrl, float(value))
+        if is_set:
+            self.write_user_profile_data()
+
+    def on_evt_combobox_voltage_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        is_set = self._set_voltage_ctrl_value(ctrl, value)
+        if is_set:
+            self.write_user_profile_data()
+
+    def on_evt_combobox_sample_carrier_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        current_sample = self.main_data.current_sample.value
+        if (current_sample and current_sample.type != value) or (
+            current_sample is None
+        ):
+            self.main_data.current_sample.value = self.main_data.samples.value[value]
+            self._update_selected_scintillators_layout()
+            self.sample_carrier_ctrl.Enable(False)
+
+    def on_evt_slider_dwell_time_overview_image_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        self.user_profile_data[self.main_data.current_user.value][
+            DWELL_TIME_OVERVIEW_IMAGE
+        ] = value
+        self.main_data.user_dwell_time_overview.value = float(value)
+        self.write_user_profile_data()
+
+    def on_evt_slider_dwell_time_acquisition_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        self.user_profile_data[self.main_data.current_user.value][
+            DWELL_TIME_OVERVIEW_IMAGE
+        ] = value
+        self.main_data.user_dwell_time_acquisition.value = float(value)
+        self.write_user_profile_data()
+
+    def on_evt_button_selected_scintillators_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        visible_views_num = self.selected_scintillators.GetValue()
+        visible_views = []
+        for view in self.tab_data.views.value:
+            if int(view.name.value) in visible_views_num:
+                visible_views.append(view)
+        self.tab_data.visible_views.value = visible_views
+        if len(visible_views) == 1:
+            self.tab_data.viewLayout.value = VIEW_LAYOUT_ONE
+        elif len(visible_views) > 1:
+            self.tab_data.viewLayout.value = VIEW_LAYOUT_DYNAMIC
+
+    def on_evt_text_user_note_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        if self.user_note_timer.IsRunning():
+            self.user_note_timer.Stop()
+        self.user_note_timer.Start(1000)
+        evt.Skip()
+
+    def on_evt_timer_user_note_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        info = self.user_note_ctrl.GetValue()
+        self.main_data.mppc.updateMetadata({model.MD_USER_NOTE: info})
+        self.user_note_timer.Stop()
+
+    def on_evt_add_button_user_profile_ctrl(self, evt):
         value = wx.GetTextFromUser(
             "Enter new user:", parent=self.user_profile_add_button_ctrl
         )
         value = value.strip().lower()
+        value = make_compliant_string(value)
         ctrl = self.user_profile_ctrl
         if value:
+            self.main_data.current_user.value = value
             if value not in ctrl.GetStrings():
                 ctrl.Append(value)
-                self.user_profile_data[value] = self.get_entry_control_values()
+                self.user_profile_data[value] = self.get_ctrl_values()
             elif value != self.main_data.current_user.value:
-                self.main_data.current_user.value = value
-                self.set_entry_control_values()
-            else:
-                self.main_data.current_user.value = value
+                self.set_ctrl_values()
             ctrl.SetValue(value)
             self.write_user_profile_data()
         else:
             ctrl.SetValue(DEFAULT_USER)
             self.main_data.current_user.value = DEFAULT_USER
-            self.set_entry_control_values()
+            self.set_ctrl_values()
 
-    def on_user_profile_delete_button_ctrl(self, evt):
+    def on_evt_delete_button_user_profile_ctrl(self, evt):
         ctrl = self.user_profile_ctrl
         value = ctrl.GetValue()
         if value == DEFAULT_USER:
@@ -459,114 +481,124 @@ class FastEMUserSettingsPanel(object):
             # Set back the user profile to default user on delete
             ctrl.SetValue(DEFAULT_USER)
             self.main_data.current_user.value = DEFAULT_USER
-            self.set_entry_control_values()
+            self.set_ctrl_values()
             self.write_user_profile_data()
 
-    def _bind_user_profile_control_events(self, ctrl, entry):
-        if entry == USER_PROFILE:
-            ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_control_event)
-            ctrl.Bind(wx.EVT_SET_FOCUS, self.on_control_event)
-            self.user_profile_add_button_ctrl.Bind(
-                wx.EVT_BUTTON, self.on_user_profile_add_button_ctrl
-            )
-            self.user_profile_delete_button_ctrl.Bind(
-                wx.EVT_BUTTON, self.on_user_profile_delete_button_ctrl
-            )
-        if entry in [USER_PROFILE, CURRENT, VOLTAGE, SCINTILLATOR_HOLDER]:
-            ctrl.Bind(wx.EVT_COMBOBOX, self.on_control_event)
-        if entry in [DWELL_TIME_OVERVIEW_IMAGE, DWELL_TIME_ACQUISITION]:
-            ctrl.Bind(wx.EVT_SLIDER, self.on_control_event)
-        if entry == OVERVOLTAGE:
-            ctrl.Unbind(wx.EVT_TEXT_ENTER, handler=ctrl.on_text_enter)
-            ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_control_event)
-        if entry == SELECTED_SCINTILLATORS:
-            ctrl.Bind(wx.EVT_BUTTON, self.on_control_event)
-        if entry == USER_NOTE:
-            ctrl.Bind(wx.EVT_TEXT, self.on_control_event)
-            ctrl.Bind(wx.EVT_TIMER, self.on_control_event)
+    def _create_user_profile_ctrl_entry(self):
+        value = DEFAULT_USER
+        _, ctrl = self.user_settings_panel.add_combobox_with_buttons_control(
+            USER_PROFILE, value=value, conf=CONTROL_CONFIG[USER_PROFILE]
+        )
+        self.user_profile_add_button_ctrl = ctrl.add_btn
+        self.user_profile_delete_button_ctrl = ctrl.delete_btn
+        self.user_profile_ctrl = ctrl
+        ctrl.SetName(USER_PROFILE)
+        ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_evt_text_enter_user_profile_ctrl)
+        ctrl.Bind(wx.EVT_SET_FOCUS, self.on_evt_set_focus_user_profile_ctrl)
+        self.user_profile_add_button_ctrl.Bind(
+            wx.EVT_BUTTON, self.on_evt_add_button_user_profile_ctrl
+        )
+        self.user_profile_delete_button_ctrl.Bind(
+            wx.EVT_BUTTON, self.on_evt_delete_button_user_profile_ctrl
+        )
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_combobox_user_profile_ctrl)
 
-    def _create_user_profile_control_entries(self):
-        # TODO uncomment the VOLTAGE entry when the development is finished
-        # to support its value changes
-        control_definitions = [
-            (USER_PROFILE, CONTROL_CONFIG[USER_PROFILE]),
-            # (CURRENT, CONTROL_CONFIG[CURRENT]),
-            (VOLTAGE, CONTROL_CONFIG[VOLTAGE]),
-            (OVERVOLTAGE, CONTROL_CONFIG[OVERVOLTAGE]),
-            (DWELL_TIME_OVERVIEW_IMAGE, CONTROL_CONFIG[DWELL_TIME_OVERVIEW_IMAGE]),
-            (DWELL_TIME_ACQUISITION, CONTROL_CONFIG[DWELL_TIME_ACQUISITION]),
-            (SCINTILLATOR_HOLDER, CONTROL_CONFIG[SCINTILLATOR_HOLDER]),
-            (SELECTED_SCINTILLATORS, CONTROL_CONFIG[SELECTED_SCINTILLATORS]),
-            (USER_NOTE, CONTROL_CONFIG[USER_NOTE]),
+    def _create_voltage_ctrl_entry(self):
+        voltage = self.main_data.ebeam.accelVoltage.value
+        idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(voltage)
+        value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
+        _, ctrl = self.user_settings_panel.add_combobox_control(
+            VOLTAGE, value=value, conf=CONTROL_CONFIG[VOLTAGE]
+        )
+        ctrl.SetName(VOLTAGE)
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_combobox_voltage_ctrl)
+
+    def _create_overvoltage_ctrl_entry(self):
+        _, ctrl = self.user_settings_panel.add_float_field(
+            OVERVOLTAGE,
+            value=self.main_data.mppc.overVoltage.value,
+            conf=CONTROL_CONFIG[OVERVOLTAGE],
+        )
+        ctrl.SetName(OVERVOLTAGE)
+        # Unbind _NumberTextCtrl on_text_enter first to make use of on_evt_text_enter_overvoltage_ctrl
+        # on_evt_text_enter_overvoltage_ctrl first calls on_text_enter and then does additional things
+        ctrl.Unbind(wx.EVT_TEXT_ENTER, handler=ctrl.on_text_enter)
+        ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_evt_text_enter_overvoltage_ctrl)
+
+    def _create_dwell_time_overview_ctrl_entry(self):
+        value = self.user_profile_data[self.main_data.current_user.value][
+            DWELL_TIME_OVERVIEW_IMAGE
         ]
+        lbl, ctrl = self.user_settings_panel.add_float_slider(
+            DWELL_TIME_OVERVIEW_IMAGE,
+            value=value,
+            conf=CONTROL_CONFIG[DWELL_TIME_OVERVIEW_IMAGE],
+        )
+        # Wrap the label text because its too long
+        lbl.Wrap(100)
+        self.main_data.user_dwell_time_overview.value = float(value)
+        ctrl.SetName(DWELL_TIME_OVERVIEW_IMAGE)
+        ctrl.Bind(wx.EVT_SLIDER, self.on_evt_slider_dwell_time_overview_image_ctrl)
 
-        for entry, conf in control_definitions:
-            if entry == OVERVOLTAGE:
-                _, ctrl = self.user_settings_panel.add_float_field(
-                    entry,
-                    value=self.main_data.mppc.overVoltage.value,
-                    conf=conf,
-                )
-            elif entry in [DWELL_TIME_OVERVIEW_IMAGE, DWELL_TIME_ACQUISITION]:
-                value = self.user_profile_data[self.main_data.current_user.value][entry]
-                lbl, ctrl = self.user_settings_panel.add_float_slider(
-                    entry,
-                    value=value,
-                    conf=conf,
-                )
-                # Wrap the label text because its too long
-                lbl.Wrap(100)
-                if entry == DWELL_TIME_OVERVIEW_IMAGE:
-                    self.main_data.user_dwell_time_overview.value = float(value)
-                elif entry == DWELL_TIME_ACQUISITION:
-                    self.main_data.user_dwell_time_acquisition.value = float(value)
-            elif entry in [USER_PROFILE, CURRENT, VOLTAGE, SCINTILLATOR_HOLDER]:
-                if entry == USER_PROFILE:
-                    value = DEFAULT_USER
-                    _, ctrl = (
-                        self.user_settings_panel.add_combobox_with_buttons_control(
-                            entry, value=value, conf=conf
-                        )
-                    )
-                    self.user_profile_add_button_ctrl = ctrl.add_btn
-                    self.user_profile_delete_button_ctrl = ctrl.delete_btn
-                    self.user_profile_ctrl = ctrl
-                else:
-                    if entry == SCINTILLATOR_HOLDER:
-                        self.user_settings_panel.add_divider()
-                        value = None
-                    elif entry == VOLTAGE:
-                        voltage = self.main_data.ebeam.accelVoltage.value
-                        idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(voltage)
-                        value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
-                    else:
-                        value = self.user_profile_data[
-                            self.main_data.current_user.value
-                        ][entry]
-                    _, ctrl = self.user_settings_panel.add_combobox_control(
-                        entry, value=value, conf=conf
-                    )
-                    if entry == SCINTILLATOR_HOLDER:
-                        self.scintillator_holder_ctrl = ctrl
-            elif entry == USER_NOTE:
-                self.user_settings_panel.add_divider()
-                _, ctrl = self.user_settings_panel.add_text_field(
-                    entry, value="Acquisition details: ", multiline=True
-                )
-                ctrl.MinSize = (-1, 60)
-                self.user_note_ctrl = ctrl
-                self.user_note_timer = wx.Timer(ctrl)
-            elif entry == SELECTED_SCINTILLATORS:
-                self.user_settings_panel.add_divider()
-                lbl, ctrl = self.user_settings_panel.add_toggle_control(
-                    entry, values=conf["choices"], conf=conf
-                )
-                self.selected_scintillators = ctrl
-                # Wrap the label text because its too long
-                lbl.Wrap(100)
+    def _create_dwell_time_acquisition_ctrl_entry(self):
+        value = self.user_profile_data[self.main_data.current_user.value][
+            DWELL_TIME_ACQUISITION
+        ]
+        lbl, ctrl = self.user_settings_panel.add_float_slider(
+            DWELL_TIME_ACQUISITION,
+            value=value,
+            conf=CONTROL_CONFIG[DWELL_TIME_ACQUISITION],
+        )
+        # Wrap the label text because its too long
+        lbl.Wrap(100)
+        self.main_data.user_dwell_time_acquisition.value = float(value)
+        ctrl.SetName(DWELL_TIME_ACQUISITION)
+        ctrl.Bind(wx.EVT_SLIDER, self.on_evt_slider_dwell_time_acquisition_ctrl)
 
-            ctrl.SetName(entry)
-            self._bind_user_profile_control_events(ctrl, entry)
+    def _create_sample_carrier_ctrl_entry(self):
+        _, ctrl = self.user_settings_panel.add_combobox_control(
+            SAMPLE_CARRIER, value=None, conf=CONTROL_CONFIG[SAMPLE_CARRIER]
+        )
+        self.sample_carrier_ctrl = ctrl
+        ctrl.SetName(SAMPLE_CARRIER)
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_combobox_sample_carrier_ctrl)
+
+    def _create_selected_scintillators_ctrl_entry(self):
+        lbl, ctrl = self.user_settings_panel.add_toggle_control(
+            SELECTED_SCINTILLATORS,
+            values=CONTROL_CONFIG[SELECTED_SCINTILLATORS]["choices"],
+            conf=CONTROL_CONFIG[SELECTED_SCINTILLATORS],
+        )
+        self.selected_scintillators = ctrl
+        # Wrap the label text because its too long
+        lbl.Wrap(100)
+        ctrl.SetName(SELECTED_SCINTILLATORS)
+        ctrl.Bind(wx.EVT_BUTTON, self.on_evt_button_selected_scintillators_ctrl)
+
+    def _create_user_note_ctrl_entry(self):
+        _, ctrl = self.user_settings_panel.add_text_field(
+            USER_NOTE, value="Acquisition details: ", multiline=True
+        )
+        ctrl.MinSize = (-1, 60)
+        self.user_note_ctrl = ctrl
+        self.user_note_timer = wx.Timer(ctrl)
+        ctrl.SetName(USER_NOTE)
+        ctrl.Bind(wx.EVT_TEXT, self.on_evt_text_user_note_ctrl)
+        ctrl.Bind(wx.EVT_TIMER, self.on_evt_timer_user_note_ctrl)
+
+    def _create_ctrl_entries(self):
+        # Create entries in the correct order
+        self._create_user_profile_ctrl_entry()
+        self._create_voltage_ctrl_entry()
+        self._create_overvoltage_ctrl_entry()
+        self._create_dwell_time_overview_ctrl_entry()
+        self._create_dwell_time_acquisition_ctrl_entry()
+        self.user_settings_panel.add_divider()
+        self._create_sample_carrier_ctrl_entry()
+        self.user_settings_panel.add_divider()
+        self._create_selected_scintillators_ctrl_entry()
+        self.user_settings_panel.add_divider()
+        self._create_user_note_ctrl_entry()
 
     def _setup_user_settings_panel(self):
         self.user_settings_panel = SettingsPanel(
@@ -574,5 +606,5 @@ class FastEMUserSettingsPanel(object):
         )
 
         # Create the user profile control entries
-        self._create_user_profile_control_entries()
+        self._create_ctrl_entries()
         self.user_settings_panel.Layout()

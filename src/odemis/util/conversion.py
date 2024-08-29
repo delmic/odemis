@@ -174,7 +174,9 @@ def frgba_to_hex(frgba):
     :return: Hexadecimal colour representation as a string
     """
     if len(frgba) != 4:
-        raise ValueError("Illegal FRGBA colour %s" % str(frgba))
+        raise ValueError(
+            f"RGBA {frgba} not accepted, must have length 4 but has length {len(frgba)}"
+        )
 
     r = int(round(frgba[0] * 255))
     g = int(round(frgba[1] * 255))

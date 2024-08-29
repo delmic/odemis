@@ -287,12 +287,14 @@ class CalibrationTask(object):
             raise
         except Exception as ex:
             logging.error("Calibration failed: %s", ex, exc_info=True)
-            if hasattr(ex, "image_path"):
-                if ex.image_path and os.path.isdir(ex.image_path):
-                    try:
-                        subprocess.Popen(['xdg-open', ex.image_path])
-                    except Exception:
-                        logging.exception("Could not open %s.", ex.image_path)
+            # While running a calibration certain exception can be raised which contains the image path
+            # The image path has the calibration plots or images to understand the failure
+            # The code below opens a window of the image path and is non-blocking
+            if hasattr(ex, "image_path") and ex.image_path and os.path.isdir(ex.image_path):
+                try:
+                    subprocess.Popen(['xdg-open', ex.image_path])
+                except Exception:
+                    logging.exception("Could not open %s.", ex.image_path)
             raise
         finally:
             # Remove references to the calibrations once all calibrations are finished/cancelled.

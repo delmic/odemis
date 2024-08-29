@@ -6,13 +6,14 @@ How to install Odemis
 You need Ubuntu 16.04 (x86 - 32/64 bits).
 The dependencies can be found in the file debian/control. Basically, they can be
 installed with:
-sudo apt-get install python-pil python-yaml python-serial python-zmq \
-python-concurrent.futures python-scipy python-decorator cgroup-bin \
-python-libtiff python-comedilib python-h5py libtiff5-dev python-future \
-python-pkg-resources python-netifaces python-cairo python-numpy python-scipy \
-python-decorator python-xdg python-suds python-matplotlib python-opencv \
-python-wxgtk4.0 python-serial python-evdev python-notify2 python-psutil \
-graphicsmagick cgroup-bin python2-pyro4 authbind python-setuptools cython
+sudo apt-get install python3-pil python3-yaml python3-serial python3-zmq \
+python3-concurrent.futures python3-scipy python3-decorator cgroup-bin \
+python3-libtiff python3-comedilib python3-h5py libtiff5-dev python3-future \
+python3-pkg-resources python3-netifaces python3-cairo python3-numpy python3-scipy \
+python3-decorator python3-xdg python3-suds python3-matplotlib python3-opencv \
+python3-wxgtk4.0 python3-serial python3-evdev python3-notify2 python3-psutil \
+graphicsmagick cgroup-bin python3-pyro4 authbind python3-setuptools cython3 \
+python3-shapely
 
 Some of these packages need newer version than what is available in the default
 Ubuntu repository. They can be found on Delmic's PPA, or it's possible to

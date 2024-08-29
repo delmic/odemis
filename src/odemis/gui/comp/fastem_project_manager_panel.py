@@ -25,12 +25,13 @@ import math
 import random
 from colorsys import hls_to_rgb, rgb_to_hls
 from functools import partial
-from typing import Union
+from typing import List, Tuple, Union
 
 import wx
 
-from odemis.acq.fastem import FastEMROA
 from odemis.gui import SELECTION_COLOUR, img
+from odemis.gui.comp import popup
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT
@@ -52,23 +53,23 @@ from odemis.gui.cont.tabs.fastem_project_sections_tab import (
 )
 from odemis.gui.cont.tabs.fastem_project_settings_tab import FastEMProjectSettingsTab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
-from odemis.gui.model import TOOL_ELLIPSE, TOOL_POLYGON, TOOL_RECTANGLE
+from odemis.gui.model import TOOL_ELLIPSE, TOOL_NONE, TOOL_POLYGON, TOOL_RECTANGLE
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
 from odemis.util.conversion import hex_to_frgba, hex_to_rgb
-from odemis.util.filename import make_unique_name
+from odemis.util.filename import make_compliant_string, make_unique_name
 
 FASTEM_PROJECT_COLOURS = [
-    "#0000ff",
-    "#00ffff",
-    "#ffff00",
-    "#ff00ff",
-    "#ff00bf",
-    "#ff0000",
+    "#0000ff",  # Blue
+    "#00ffff",  # Cyan
+    "#ffff00",  # Yellow
+    "#ff00ff",  # Magenta
+    "#ff00bf",  # Rose
+    "#ff0000",  # Red
 ]
 
 
-def rgb_to_hex(rgb_color):
+def rgb_to_hex(rgb_color: Tuple[float, float, float]) -> str:
     """
     Converts an RGB color to its hexadecimal string representation.
 
@@ -81,7 +82,7 @@ def rgb_to_hex(rgb_color):
     )
 
 
-def generate_unique_color(existing_colors):
+def generate_unique_color(existing_colors: List[str]) -> str:
     """
     Generates a unique color that does not clash with existing colors.
 
@@ -103,8 +104,7 @@ def generate_unique_color(existing_colors):
             for existing in existing_hls_colors
         )
 
-    unique_color_found = False
-    while not unique_color_found:
+    while True:
         new_hue = random.random()  # Random hue value between 0 and 1
         new_lightness = random.uniform(
             0.3, 0.7
@@ -118,7 +118,6 @@ def generate_unique_color(existing_colors):
             new_saturation,
         )  # Fixed lightness and saturation
         if is_unique(new_color_hls):
-            unique_color_found = True
             new_color_rgb = hls_to_rgb(*new_color_hls)
             new_color_hex = rgb_to_hex(new_color_rgb)
             return new_color_hex
@@ -160,32 +159,60 @@ class ProjectManagerImportExport:
         Exports the current sample's project data to a JSON file.
 
         :param filepath: (str) The path to the file where data will be exported.
+        :raises Exception: If an error occurs during the export process.
         """
-        if not filepath.endswith(".json"):
-            filepath += ".json"
-        data = self._collect_project_data()
-        with open(filepath, "w") as file:
-            json.dump(data, file, indent=4)
-        wx.MessageBox(
-            f"Projects successfully exported for sample type {self.project_manager.main_data.current_sample.value.type}!",
-            "Export",
-            wx.OK | wx.ICON_INFORMATION,
-        )
+        try:
+            if not filepath.endswith(".json"):
+                filepath += ".json"
+            data = self._collect_project_data()
+            with open(filepath, "w") as file:
+                json.dump(data, file, indent=4)
+            popup.show_message(
+                wx.GetApp().main_frame,
+                title="Export",
+                message=f"Projects successfully exported for sample type {self.project_manager.main_data.current_sample.value.type}!",
+                timeout=10.0,
+                level=logging.INFO,
+            )
+        except Exception as ex:
+            logging.exception(
+                "Failure exporting Projects for %s",
+                self.project_manager.main_data.current_sample.value.type,
+            )
+            wx.MessageBox(
+                f"Exporting Projects data to {filepath} failed, raised exception {ex}.",
+                "Error",
+                wx.OK | wx.ICON_ERROR,
+            )
 
     def import_from_file(self, filepath):
         """
         Imports a sample's project data from a JSON file.
 
         :param filepath: (str) The path to the file from which data will be imported.
+        :raises Exception: If an error occurs during the import process.
         """
-        with open(filepath, "r") as file:
-            data = json.load(file)
-        self._apply_project_data(data)
-        wx.MessageBox(
-            f"Projects successfully imported for sample type {self.project_manager.main_data.current_sample.value.type}!",
-            "Import",
-            wx.OK | wx.ICON_INFORMATION,
-        )
+        try:
+            with open(filepath, "r") as file:
+                data = json.load(file)
+            self._apply_project_data(data)
+            popup.show_message(
+                wx.GetApp().main_frame,
+                title="Import",
+                message=f"Projects successfully imported for sample type {self.project_manager.main_data.current_sample.value.type}!",
+                timeout=10.0,
+                level=logging.INFO,
+            )
+        except Exception as ex:
+            logging.exception(
+                "Failure importing Projects for %s",
+                self.project_manager.main_data.current_sample.value.type,
+            )
+            wx.MessageBox(
+                f"Importing Projects from {filepath} failed, raised exception {ex}.",
+                "Error",
+                wx.OK | wx.ICON_ERROR,
+            )
 
     def _collect_project_data(self):
         """
@@ -454,6 +481,9 @@ class FastEMProjectManagerPanel:
             main_frame,
             self.main_data,
         )
+        # TODO Remove the below line once automatic section detection and ROA
+        # propagation has been implemented
+        self.project_ribbons_tab.button.Hide()
 
         project_sections_panel = wx.Panel(
             panel.pnl_project_tabs,
@@ -468,6 +498,9 @@ class FastEMProjectManagerPanel:
             self.main_data,
             self.project_ribbons_tab.grid,
         )
+        # TODO Remove the below line once automatic section detection and ROA
+        # propagation has been implemented
+        self.project_sections_tab.button.Hide()
 
         project_roas_panel = wx.Panel(
             panel.pnl_project_tabs,
@@ -508,26 +541,28 @@ class FastEMProjectManagerPanel:
         self._shape_points_sub_callback = {}
 
         detach_btn.SetToolTip(
-            "Detach the project manager panel. Close the detached panel to re-attach to the main frame."
+            "Detach the project manager panel. Close the detached panel to re-attach to the main window."
         )
         detach_btn.Bind(wx.EVT_BUTTON, self._on_detach_button)
         panel.btn_move_up.SetToolTip(
-            "Move selected row/s up. Row/s can be selected pressing Ctrl + clicking the row label."
+            "Move selected row(s) up. Multiple rows can be selected pressing Ctrl + clicking the row label."
         )
         panel.btn_move_up.Bind(wx.EVT_BUTTON, self._on_move_up)
         panel.btn_move_down.SetToolTip(
-            "Move selected row/s down. Row/s can be selected pressing Ctrl + clicking the row label."
+            "Move selected row(s) down. Multiple rows can be selected pressing Ctrl + clicking the row label."
         )
         panel.btn_move_down.Bind(wx.EVT_BUTTON, self._on_move_down)
         panel.btn_delete.SetToolTip(
-            "Delete selected row/s. Row/s can be selected pressing Ctrl + clicking the row label."
+            "Delete selected row(s). Multiple rows can be selected pressing Ctrl + clicking the row label."
         )
         panel.btn_delete.Bind(wx.EVT_BUTTON, self._on_delete)
         panel.btn_export.SetToolTip(
-            "Export the current sample's projects data to a JSON file."
+            "Export the scintillator holders projects data to a JSON file."
         )
         panel.btn_export.Bind(wx.EVT_BUTTON, self._on_btn_export)
-        panel.btn_import.SetToolTip("Import a sample's projects data from a JSON file.")
+        panel.btn_import.SetToolTip(
+            "Import a scintillator holders projects data from a JSON file."
+        )
         panel.btn_import.Bind(wx.EVT_BUTTON, self._on_btn_import)
         tab_data.active_project_tab.subscribe(self._on_active_project_tab, init=True)
         tab_data.shapes.subscribe(self._on_shapes, init=True)
@@ -542,12 +577,13 @@ class FastEMProjectManagerPanel:
         :param is_acquiring: (bool) Flag indicating if acquisition is in progress.
         """
         self.panel.Enable(not is_acquiring)
+        self.toolbar.enable(not is_acquiring)
+        enable = self.tab_data.active_project_tab.value != self.project_settings_tab
+        self._enable_tools(enable)
 
     def _on_btn_export(self, _):
         """
         Handles the export button click event to export current sample's projects data to a JSON file.
-
-        :raises Exception: If an error occurs during the export process.
         """
         filepath = self.import_export_manager.get_filepath_from_filedialog(
             message="Export Projects data to a JSON file",
@@ -557,24 +593,11 @@ class FastEMProjectManagerPanel:
         if not filepath:
             return
 
-        try:
-            self.import_export_manager.export_to_file(filepath)
-        except Exception as ex:
-            logging.exception(
-                "Failure exporting Projects for %s",
-                self.main_data.current_sample.value.type,
-            )
-            wx.MessageBox(
-                f"Exporting Projects data to {filepath} failed, raised exception {ex}.",
-                "Error",
-                wx.OK | wx.ICON_ERROR,
-            )
+        self.import_export_manager.export_to_file(filepath)
 
     def _on_btn_import(self, _):
         """
         Handles the import button click event to import a sample's projects data from a JSON file.
-
-        :raises Exception: If an error occurs during the import process.
         """
         filepath = self.import_export_manager.get_filepath_from_filedialog(
             message="Import Projects from a JSON file",
@@ -585,20 +608,8 @@ class FastEMProjectManagerPanel:
             return
 
         self.is_import_btn_pressed = True
-        try:
-            self.import_export_manager.import_from_file(filepath)
-        except Exception as ex:
-            logging.exception(
-                "Failure importing Projects for %s",
-                self.main_data.current_sample.value.type,
-            )
-            wx.MessageBox(
-                f"Importing Projects from {filepath} failed, raised exception {ex}.",
-                "Error",
-                wx.OK | wx.ICON_ERROR,
-            )
-        finally:
-            self.is_import_btn_pressed = False
+        self.import_export_manager.import_from_file(filepath)
+        self.is_import_btn_pressed = False
 
     def _on_move_up(self, evt):
         """Moves selected row/s up in the grid."""
@@ -658,7 +669,6 @@ class FastEMProjectManagerPanel:
                 row_obj = self.project_roas_tab.grid.rows[row]
                 project_node.delete_node_by_shape(row_obj.roa.shape)
             self.project_roas_tab.grid.delete_rows(rows)
-        self.tab_data.projects_tree.print_tree()
 
     def _enable_tools(self, enable):
         """
@@ -669,6 +679,12 @@ class FastEMProjectManagerPanel:
         self.toolbar.enable_button(TOOL_RECTANGLE, enable)
         self.toolbar.enable_button(TOOL_ELLIPSE, enable)
         self.toolbar.enable_button(TOOL_POLYGON, enable)
+        if not enable and self.tab_data.tool.value in (
+            TOOL_RECTANGLE,
+            TOOL_ELLIPSE,
+            TOOL_POLYGON,
+        ):
+            self.tab_data.tool.value = TOOL_NONE
 
     def _on_current_project(self, project):
         """
@@ -700,6 +716,7 @@ class FastEMProjectManagerPanel:
             if shape in self._shape_points_sub_callback:
                 del self._shape_points_sub_callback[shape]
         else:
+            shape_name = shape.name.value
             posx, posy = shape.get_position()
             sizex, sizey = shape.get_size()
             sizex = units.readable_str(sizex, unit="m", sig=3)
@@ -710,7 +727,10 @@ class FastEMProjectManagerPanel:
                 self.tab_data.current_project.value
             )
             if self.tab_data.active_project_tab.value == self.project_ribbons_tab:
-                ribbon_name = "Ribbon"
+                if shape_name:
+                    ribbon_name = shape_name.rsplit("_", 1)[0]
+                else:
+                    ribbon_name = "Ribbon"
                 ribbon_slice_index = 0
                 if not RibbonRow.is_unique_name_slice_idx(
                     ribbon_name, ribbon_slice_index, self.project_ribbons_tab.grid.rows
@@ -736,7 +756,10 @@ class FastEMProjectManagerPanel:
                     FastEMTreeNode(shape.name.value, NodeType.RIBBON, row)
                 )
             elif self.tab_data.active_project_tab.value == self.project_sections_tab:
-                section_name = "Section"
+                if shape_name:
+                    section_name = shape_name.rsplit("_", 1)[0]
+                else:
+                    section_name = "Section"
                 section_slice_index = 0
                 if not SectionRow.is_unique_name_slice_idx(
                     section_name,
@@ -766,7 +789,10 @@ class FastEMProjectManagerPanel:
                     FastEMTreeNode(shape.name.value, NodeType.SECTION, row)
                 )
             elif self.tab_data.active_project_tab.value == self.project_roas_tab:
-                roa_name = "ROA"
+                if shape_name:
+                    roa_name = shape_name.rsplit("_", 1)[0]
+                else:
+                    roa_name = "ROA"
                 roa_slice_index = 0
                 if not SectionRow.is_unique_name_slice_idx(
                     roa_name, roa_slice_index, self.project_roas_tab.grid.rows
@@ -796,7 +822,7 @@ class FastEMProjectManagerPanel:
                 )
 
     def _on_shapes(self, shapes):
-        """Handles updates to the shapes in the project, managing additions and deletions."""
+        """Callback on shapes VA change, managing additions and deletions of shapes in a project."""
         # Convert lists to sets
         new_shapes = set(shapes.copy())
 
@@ -811,7 +837,8 @@ class FastEMProjectManagerPanel:
         if len(added_shape) == 1:
             shape = added_shape.pop()
             logging.debug("Shape creation in progress.")
-            # If shape has been named already, it means that import button was pressed
+            # If shape has been named already
+            # it means undo, redo or copy operation is ongoing in ShapesOverlay
             if shape.name.value:
                 self._on_shape_points(shape.points.value, shape)
             else:
@@ -820,7 +847,7 @@ class FastEMProjectManagerPanel:
                 shape.points.subscribe(sub_callback)
         if len(removed_shape) == 1:
             shape = removed_shape.pop()
-            # Handle wx.WXK_DELETE pressed in ShapesOverlay
+            # Handle wx.WXK_DELETE pressed, undo or redo in ShapesOverlay
             if not self.is_active_project_delete_button_pressed:
                 logging.debug("Shape deletion in progress.")
                 self.tab_data.projects_tree.delete_node_by_shape(shape)
@@ -892,6 +919,7 @@ class FastEMProjectManagerPanel:
             ),
         )
         value = value.strip()
+        value = make_compliant_string(value)
         ctrl = self.active_project_ctrl
         if value:
             if value not in ctrl.GetStrings():
@@ -900,6 +928,12 @@ class FastEMProjectManagerPanel:
                     FastEMTreeNode(value, NodeType.PROJECT)
                 )
                 self.update_project_shape_colour(value)
+            else:
+                wx.MessageBox(
+                    f"{value} exists in Active project list, switching to {value}.",
+                    "Info",
+                    wx.OK | wx.ICON_INFORMATION,
+                )
             ctrl.SetValue(value)
             self.update_grid_for_project(value)
             self.tab_data.current_project.value = value
@@ -943,6 +977,7 @@ class FastEMProjectManagerPanel:
         elif evt.GetEventType() == wx.EVT_TEXT_ENTER.typeId:
             if ctrl.GetStrings():
                 value = ctrl.GetValue().strip()
+                value = make_compliant_string(value)
                 if self.original_project and self.original_project in ctrl.GetStrings():
                     if value and value not in ctrl.GetStrings():
                         idx = ctrl.FindString(self.original_project)

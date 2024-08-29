@@ -23,15 +23,11 @@ import math
 from enum import Enum
 
 import wx
-from wx.grid import (
-    EVT_GRID_CELL_CHANGING,
-    GridCellFloatEditor,
-    GridCellNumberEditor,
-)
+from wx.grid import EVT_GRID_CELL_CHANGING, GridCellFloatEditor, GridCellNumberEditor
 
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.fastem import FastEMROA
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.cont.fastem_grid_base import (
     DEFAULT_PARENT,
     EVT_GRID_ROW_CHANGED,
@@ -44,6 +40,7 @@ from odemis.gui.cont.tabs.fastem_project_ribbons_tab import RibbonColumnNames
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
+from odemis.util.filename import make_compliant_string
 
 
 class SectionColumnNames(Enum):
@@ -167,6 +164,9 @@ class SectionRow(Row):
         rows = grid.rows
         col = grid.columns[col]
         if col.label == SectionColumnNames.NAME.value:
+            value_to_set = make_compliant_string(value_to_set)
+            if not value_to_set:
+                value_to_set = "Section"
             current_slice_idx = self.data[RibbonColumnNames.SLICE_IDX.value]
             if not SectionRow.is_unique_name_slice_idx(
                 value_to_set, current_slice_idx, rows
@@ -329,7 +329,6 @@ class FastEMProjectSectionsTab(Tab):
             elif current_parent not in ribbon_info:
                 self.grid.SetCellValue(row_idx, parent_col.index, DEFAULT_PARENT)
                 self.grid.rows[row_idx].parent_name.value = DEFAULT_PARENT
-        # self.grid.ForceRefresh()
 
     def _on_panel_size(self, evt):
         """Adjusts the grid size when the panel size changes."""

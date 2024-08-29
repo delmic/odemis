@@ -32,7 +32,7 @@ from wx.grid import (
 
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.fastem import FastEMROA
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.cont.fastem_grid_base import (
     DEFAULT_PARENT,
     EVT_GRID_ROW_CHANGED,
@@ -45,6 +45,7 @@ from odemis.gui.cont.tabs.fastem_project_sections_tab import SectionColumnNames
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
+from odemis.util.filename import make_compliant_string
 
 
 class ROAColumnNames(Enum):
@@ -60,7 +61,7 @@ class ROAColumnNames(Enum):
 
 
 class ROARow(Row):
-    """Class representing a row in the ROA (Region of Interest) grid."""
+    """Class representing a row in the ROA (Region of Acquisition) grid."""
 
     def __init__(self, data, roa, index=-1):
         super().__init__(data, roa, index)
@@ -96,6 +97,10 @@ class ROARow(Row):
         roa = FastEMROA.from_dict(roa["roa"], tab_data)
         roa_row = ROARow(data, roa, index)
         roa_row.parent_name.value = parent_name
+        if roa_row.data[ROAColumnNames.FIELDS.value] == "1":
+            roa_row.roa.calculate_grid_rects()
+            roa_row.roa.shape.grid_rects = roa_row.roa.field_rects
+            roa_row.roa.shape.fill_grid.value = True
         return roa_row
 
     @staticmethod
@@ -137,18 +142,31 @@ class ROARow(Row):
         return True
 
     @staticmethod
-    def set_grid_fill(flag: bool, col, grid):
+    def unfill_shapes_grid(col, grid):
         """
-        Sets the grid fill flag for all rows in the grid.
+        Sets the fill_grid flag for all rows shapes to False if it was previously True.
 
-        :param flag: (bool) Whether to fill the grid or not.
         :param col: (Column) The column that is affected.
         :param grid: (GridBase) The grid instance that contains the rows.
         """
         for row in grid.rows:
-            row.data[ROAColumnNames.FIELDS.value] = "1" if flag else ""
-            grid.SetCellValue(row.index, col.index, "1" if flag else "")
-            row.roa.shape.fill_grid.value = flag
+            if row.roa.shape.fill_grid.value:
+                row.data[ROAColumnNames.FIELDS.value] = ""
+                grid.SetCellValue(row.index, col.index, "")
+                row.roa.shape.fill_grid.value = False
+
+    @call_in_wx_main
+    def update_shape_grid_rects(self, update: bool = True):
+        """
+        Update the ROA shape's (EditableShape) grid rectangles.
+
+        :param update: Flag which states if the shape's grid rectangles need to be updated or not.
+        """
+        if update:
+            self.roa.calculate_grid_rects()
+            self.roa.shape.grid_rects = self.roa.field_rects
+        self.roa.shape.fill_grid.value = update
+        self.roa.shape.cnvs.request_drawing_update()
 
     def update_data(self):
         """
@@ -156,7 +174,7 @@ class ROARow(Row):
 
         This method updates the position, size, rotation, and field data in the row
         based on the shape associated with the ROA. If the fields value is "1", it
-        clears the fill grid flag and refreshes the drawing.
+        recalculates the grid rectangles and refreshes the drawing.
         """
         posx, posy = self.roa.shape.get_position()
         sizex, sizey = self.roa.shape.get_size()
@@ -168,10 +186,7 @@ class ROARow(Row):
         self.data[ROAColumnNames.SIZEY.value] = sizey
         self.data[ROAColumnNames.ROT.value] = int(math.degrees(self.roa.shape.rotation))
         if self.data[ROAColumnNames.FIELDS.value] == "1":
-            self.data[ROAColumnNames.FIELDS.value] = ""
-            self.roa.shape.fill_grid.value = False
-            self.roa.shape.cnvs.request_drawing_update()
-            self.roa.shape.cnvs.Refresh()
+            self.update_shape_grid_rects()
 
     def on_cell_changing(self, new_value, row, col, grid):
         """
@@ -187,6 +202,9 @@ class ROARow(Row):
         rows = grid.rows
         col = grid.columns[col]
         if col.label == ROAColumnNames.NAME.value:
+            value_to_set = make_compliant_string(value_to_set)
+            if not value_to_set:
+                value_to_set = "ROA"
             current_slice_idx = self.data[ROAColumnNames.SLICE_IDX.value]
             if not ROARow.is_unique_name_slice_idx(
                 value_to_set, current_slice_idx, rows
@@ -233,16 +251,11 @@ class ROARow(Row):
             self.data[ROAColumnNames.PARENT.value] = value_to_set
             self.parent_name.value = value_to_set
         elif col.label == ROAColumnNames.FIELDS.value:
-            ROARow.set_grid_fill(False, col, grid)
             self.data[ROAColumnNames.FIELDS.value] = value_to_set
-            if value_to_set == "1":
-                self.roa.calculate_grid_rects()
-                self.roa.shape.grid_rects = self.roa.field_rects
-                self.roa.shape.fill_grid.value = True
-                self.roa.shape.cnvs.request_drawing_update()
-            else:
-                self.roa.shape.fill_grid.value = False
-                self.roa.shape.cnvs.request_drawing_update()
+            # Allow only one row shape's grid to be drawn to reduce the overhead
+            # if the size of the shape is large
+            ROARow.unfill_shapes_grid(col, grid)
+            self.update_shape_grid_rects(update=value_to_set == "1")
         return value_to_set
 
 

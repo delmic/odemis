@@ -26,15 +26,16 @@ import wx
 from wx.grid import GridCellFloatEditor, GridCellNumberEditor
 
 import odemis.gui.model as guimod
-from odemis.acq.fastem import FastEMROA
+from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.cont.fastem_grid_base import Column, GridBase, Row
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util import units
+from odemis.util.filename import make_compliant_string
 
 
 class RibbonColumnNames(Enum):
     NAME = "Name"
-    SLICE_IDX = "Slice Index"
+    SLICE_IDX = "Ribbon Index"
     POSX = "Position.X [m]"
     POSY = "Position.Y [m]"
     SIZEX = "Size.X"
@@ -151,6 +152,9 @@ class RibbonRow(Row):
         rows = grid.rows
         col = grid.columns[col]
         if col.label == RibbonColumnNames.NAME.value:
+            value_to_set = make_compliant_string(value_to_set)
+            if not value_to_set:
+                value_to_set = "Ribbon"
             current_slice_idx = self.data[RibbonColumnNames.SLICE_IDX.value]
             if not RibbonRow.is_unique_name_slice_idx(
                 value_to_set, current_slice_idx, rows
