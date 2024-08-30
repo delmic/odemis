@@ -23,16 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 import re
+import socket
 import threading
 import time
-import socket
+from typing import List, Tuple, Dict, Optional
 
 from odemis import model
 from odemis.model import HwError
-from odemis.util import to_str_escape, RepeatingTimer
-from typing import List, Tuple, Dict, Optional
+from odemis.util import to_str_escape
 
-POLL_INTERVAL = 5  # s, how often to read the settings again
 
 FREQUENCY_MIN = 1e-6  # Hz. Based on user manual
 FREQUENCY_MAX = 100e6  # Hz. Based on user manual
@@ -59,6 +58,14 @@ class TrueFormError(OSError):
 
 
 class TrueForm(model.Emitter):
+    """
+    Control the Keysight 33600 series Arbitrary Waveform Generator to generate square waveforms
+    with the desired period, duty cycle, and delay.
+    When the power is "on" the waveform is active, and the device panel locked. When the power is
+    "off", the output is disabled, or a constant voltage is applied (according to the off_voltage).
+    In this mode, the device panel is unlocked, and the user can change the settings manually.
+    Setting the power back to "on" sets back the device to the last settings defined by the VAs.
+    """
     def __init__(self, name, role, address,
                  channel: int,
                  limits: List[Tuple[float, float]],
@@ -149,21 +156,11 @@ class TrueForm(model.Emitter):
         self._set_period(period)
         self._set_delay(delay)
 
-        # The device has a front panel which the user can use to manual change the settings.
-        # Normally, it'll show a warning that the "instrument in remote [control]", but it's
-        # still possible to change them. In case this happens, don't ignore them, and just update
-        # the VAs. The drawback of the regular polling is that it automatically sets back the device
-        # into "remote" mode, so it's really hard to change the settings manually.
-        self._poll_timer = RepeatingTimer(POLL_INTERVAL, self._update_settings, "Keysight settings update")
-        self._poll_timer.start()
-
     def terminate(self):
         if self._accesser:
             self._set_power(False)
             self._accesser.close()
             self._accesser = None
-
-        self._poll_timer.cancel()
 
         super().terminate()
 
@@ -260,6 +257,25 @@ class TrueForm(model.Emitter):
             self._sendCommand(b"OUTP%d ON" % c)
         else:
             self._sendCommand(b"OUTP%d OFF" % c)
+        self._checkError()
+
+    def requestLock(self) -> bool:
+        """
+        Request the lock of the device.
+        During that time, the front panel is locked, and the device is in remote mode, only via
+        ethernet. Use releaseLock() to release the lock.
+        Multiple locks can be acquired successively (from the same interface). In this case it must
+        be released the same amount of times.
+        :return: True if the lock acquisition was successful.
+        """
+        response = self._sendQuery(b"syst:lock:req?")
+        return response == "1"
+
+    def releaseLock(self):
+        """
+        Release the lock of the device. See requestLock() for acquiring a lock.
+        """
+        self._sendCommand(b"syst:lock:rel")
         self._checkError()
 
     def getOutput(self, c: int) -> bool:
@@ -494,6 +510,11 @@ class TrueForm(model.Emitter):
             self.setOutput(self._channel, True)
             for c in self._tracking.keys():
                 self.setOutput(c, True)
+
+            if not self.requestLock():
+                # It's not a big deal if we can't lock the device. At worse the user might
+                # be able to change the settings manually, which might be a little confusing.
+                logging.warning("Failed to lock the device front panel")
         else:  # Off
             # Either disable the output (if off_voltage is None), or set a DC voltage
             # Note: when power is off, the sync is still sent.
@@ -504,37 +525,12 @@ class TrueForm(model.Emitter):
                     # Note: in DC mode, some settings cannot be changed (like the phase & duty cycle).
                     # Also, tracking doesn't work in DC mode, so should be re-enabled when powered on.
                     self.applyDC(c + 1, volt)
+            try:
+                self.releaseLock()
+            except TrueFormError as ex:
+                logging.warning("Failed to release the lock: %s", ex)
 
         return p
-
-    def _update_settings(self):
-        """
-        Update the settings of the device.
-        Called by the repeating timer.
-        """
-        try:
-            f = self.getFrequency(self._channel)  # Device always returns f > 0
-            p = 1 / f
-            if p != self.period.value:
-                self.period._set_value(p)  # Avoid the setter
-
-            # Duty cycle
-            dc = self.getDutyCycle(self._channel) / 100
-            if dc != self.dutyCycle.value:
-                self.dutyCycle._set_value(dc)
-
-            # Delay
-            act_phase = self.getPhase(self._channel)
-            d = self.period.value * act_phase / 360
-            if d != self.delay.value:
-                self.delay._set_value(d)
-
-            # Power
-            pw = self.getOutput(self._channel)
-            if pw != self.power.value:
-                self.power._set_value(pw)
-        except Exception:
-            logging.exception("Failed to update the settings")
 
 
 class IPBusAccesser(object):
@@ -640,6 +636,7 @@ class Keysight33622ASimulator:
         self._output_buf = b""  # what the commands sends back to the "host computer"
         self._input_buf = b""  # what we receive from the "host computer"
         self._error = 0  # 0 = no error
+        self._lock_cnt = 0  # increase when lock is requested, decrease when released
 
         self._output_states = {1: OutputStates(), 2: OutputStates()}
 
@@ -690,6 +687,13 @@ class Keysight33622ASimulator:
                 err_msg = b"Error"
             self._sendAnswer(b"%+d,\"%s\"" % (self._error, err_msg))
             self._error = 0  # reset
+        elif msg == "syst:lock:req?":
+            self._lock_cnt += 1
+            self._sendAnswer(b"1")  # Always report success
+            logging.debug("Lock count = %d", self._lock_cnt)  #DEBUG
+        elif msg == "syst:lock:rel":
+            self._lock_cnt = max(0, self._lock_cnt - 1)  # don't go below 0
+            logging.debug("Lock count = %d", self._lock_cnt)  #DEBUG
         elif re.match(r"sour[1-2]:freq ", msg):
             channel = int(msg[4])
             frequency = float(msg.split()[1])
