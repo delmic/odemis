@@ -316,7 +316,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
     ROTATION_AXES = {'rx', 'rz'}
     @classmethod
     def setUpClass(cls):
-        testing.start_backend(cls.MIC_CONFIG)
+        # testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
 
@@ -617,7 +617,7 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
                                                                    "the FM imaging grid 1 area.")
 
 
-SEM_FIB_COINCIDENCE = True
+SEM_FIB_COINCIDENCE = False
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
@@ -637,7 +637,7 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
             start_tilt = numpy.radians(0)  # TODO change depending on the current tilt of the starting position
             step = numpy.radians(1)
             end_tilt = numpy.radians(10)
-            for t in numpy.arange(start_tilt + step, end_tilt, step):
+            for t in numpy.linspace(start_tilt + step, end_tilt, 10):
                 pos = self.stage.position.value  # current sem stage position
                 stage_md = self.stage.getMetadata()
                 transformed_pos = pos.copy()
