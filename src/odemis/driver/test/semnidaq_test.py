@@ -21,6 +21,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+from unittest import skip
+
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
@@ -623,6 +625,17 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
+        # Error PDI
+        dt = 0.11870046
+        self.scanner.dwellTime.value = dt  # s
+        self.scanner.scale.value = 8, 8
+        self.scanner.resolution.value = (16, 8)
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.sed.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+
         # Slightly different settings
         self.scanner.dwellTime.value = 2.1234e-6  # s
         self.scanner.scale.value = (4, 5)
@@ -656,10 +669,22 @@ class TestAnalogSEM(unittest.TestCase):
             self.assertIn(model.MD_DWELL_TIME, da.metadata)
             self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
+
     def test_acquisition_counter(self):
         self.scanner.dwellTime.value = 10e-06  # s
         self.scanner.scale.value = 8, 8
         self.scanner.resolution.value = (512, 384)  # px
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.counter.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(da.metadata[model.MD_INTEGRATION_COUNT], 1)
+
+        # Small acquisition, which fits in less than a standard buffer size
+        self.scanner.dwellTime.value = 1e-06  # s
+        self.scanner.scale.value = 8, 8
+        self.scanner.resolution.value = (1, 384)  # px
         exp_shape, exp_pxs, _ = self.compute_expected_metadata()
         da = self.counter.data.get()
         self.assertEqual(da.shape, exp_shape)
@@ -1057,12 +1082,55 @@ class TestAnalogSEM(unittest.TestCase):
         self.sed.data.subscribe(self.receive_image)
         self.counter.data.subscribe(self.receive_image2)
 
+        # Shouldn't be acquiring yet, as the trigger hasn't been sent
+        logging.debug("Waiting to be certain the acquisition hasn't started yet...")
+        time.sleep(1 * (2 + exp_duration * 1.1))
+        self.assertEqual(self.left2, 1)
+
+        # start acquiring one image
+        self.sed.softwareTrigger.notify()
+
+        # wait enough for the 2 acquisitions
+        time.sleep(1 * (2 + exp_duration * 1.1))  # 2s per image should be more than enough in any case
+
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.left2, 0)
+
+        # wait for last acq
+        self.acq_done.wait(2 + exp_duration * 1.1)
+
+        # remove synchronisation, should do nothing as they are stopped
+        self.sed.data.synchronizedOn(None)
+
+    @skip("Too long (~ 1h20)")
+    def test_sync_long(self):
+        """
+        Acquire one long acquisition, in synchronized mode (ie, one frame at a time)
+        """
+        # The NI DAQmx has a limit for the number of sample of 8 * 1024**3 (~8 billion).
+        # This could be reached with a very long acquisition, on the AI task, as it uses the
+        # maximum sampling rate. At a sampling rate of 0.5µs, this is reached when the acquisition
+        # lasts ~1h10 min. This is normally correctly handled, but this test checks it.
+        self.scanner.dwellTime.value = 0.1  # s
+        self.scanner.scale.value = 1, 1
+        self.scanner.resolution.value = (192, 30)
+        exp_shape, exp_pxs1, exp_duration = self.compute_expected_metadata()
+
+        # set softwareTrigger on the first detector to be subscribed
+        self.sed.data.synchronizedOn(self.sed.softwareTrigger)
+
+        self.left = 1
+        self.left2 = 1
+        self.expected_shape = exp_shape
+        self.sed.data.subscribe(self.receive_image)
+        self.counter.data.subscribe(self.receive_image2)
+
         # start acquiring one image
         self.sed.softwareTrigger.notify()
         self.counter.softwareTrigger.notify()
 
-        # wait enough for the 2 acquisitions
-        time.sleep(1 * (2 + exp_duration * 1.1))  # 2s per image should be more than enough in any case
+        # wait enough for the acquisition of 1 frame
+        time.sleep(1 * (2 + exp_duration * 1.1))
 
         self.assertEqual(self.left, 0)
         self.assertEqual(self.left2, 0)
