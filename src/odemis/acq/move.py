@@ -1070,23 +1070,21 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         b_z = (pos["z"] - z_ct)*math.cos(rx_sem)
         b_y = calibrated_values["b_y"]
 
-        if self.tescan_modified == True:
-            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
+        if self.tescan_modified:
+            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+            # at the SEM position stage tilt
             sem_reference_pos_x = x_0
-            # sem_reference_pos_y = y_0 - b_0 * math.tan(rx_sem)
-            # sem_reference_pos_z = b_0 * (1/math.cos(rx_sem) - 1)
             sem_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
             sem_reference_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
 
             # Calculate the equivalent coordinates of the calibrated position, at the FM position
             fm_reference_pos_x = x_0 + calibrated_values["dx"]
-            # fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_0 * math.tan(rx_fm)
-            # fm_reference_pos_z = b_0 * (1/math.cos(rx_fm) - 1)
             fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_y * (1 - 1 / math.cos(rx_fm)) - b_z * math.tan(rx_fm)
             fm_reference_pos_z = 0 - b_y * math.tan(rx_fm) - b_z * (1 - 1 / math.cos(rx_fm))
 
         else:
-            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
+            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+            # at the SEM position stage tilt
             b_0 = b_z
             sem_reference_pos_x = x_0
             sem_reference_pos_y = y_0 - b_0 * math.tan(rx_sem)

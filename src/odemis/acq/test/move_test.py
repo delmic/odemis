@@ -617,12 +617,61 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
                                                                    "the FM imaging grid 1 area.")
 
 
+SEM_FIB_COINCIDENCE = True
+
+
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
     """
     Test the MeteorPostureManager functions for Tescan 1
     """
     MIC_CONFIG = METEOR_TESCAN1_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
+
+    def test_at_different_tilts(self):
+        """Test the stage position robustness with changing tilts. In SEM when feature is at the coincidence
+        point of SEM and FIB, applying different tilts should keep the same feature of interest at the
+        coincidence point"""
+        # Make sure the current stage position is at the coincidence point between SEM and FIB
+        # before running this test case
+        if SEM_FIB_COINCIDENCE:
+            start_tilt = numpy.radians(0)  # TODO change depending on the current tilt of the starting position
+            step = numpy.radians(1)
+            end_tilt = numpy.radians(10)
+            for t in numpy.arange(start_tilt + step, end_tilt, step):
+                pos = self.stage.position.value  # current sem stage position
+                stage_md = self.stage.getMetadata()
+                transformed_pos = pos.copy()
+
+                # Call out calibrated values and stage tilt and rotation angles
+                calibrated_values = stage_md[model.MD_CALIB]
+                # Define values that are used more than once
+                x_0 = calibrated_values["x_0"]
+                y_0 = calibrated_values["y_0"]
+                z_ct = calibrated_values["z_ct"]
+                b_z = (pos["z"] - z_ct) * math.cos(t)
+                b_y = calibrated_values["b_y"]
+
+                # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
+                sem_reference_pos_x = x_0
+                sem_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(t)) - b_z * math.tan(t)
+                sem_reference_pos_z = 0 - b_y * math.tan(t) - b_z * (1 - 1 / math.cos(t))
+
+                # Calculate the equivalent coordinates of the calibrated position, at the FM position
+                old_sem_pos_x = x_0
+                old_sem_pos_y = y_0 - b_y * (1 - 1 / math.cos(t - step)) - b_z * math.tan(t - step)
+                old_sem_pos_z = 0 - b_y * math.tan(t - step) - b_z * (1 - 1 / math.cos(t - step))
+
+                transformed_pos["x"] = sem_reference_pos_x + (old_sem_pos_x - pos["x"])
+                transformed_pos["y"] = sem_reference_pos_y + (old_sem_pos_y - pos["y"])
+                transformed_pos["z"] = sem_reference_pos_z + (pos["z"] - old_sem_pos_z)
+
+                # Update the angles to the FM position angles
+                sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+                sem_pos_active["rx"] = t
+                transformed_pos.update(sem_pos_active)
+                logging.debug(f"For new tilt {t}, moving stage to {transformed_pos}")
+                self.stage.moveAbs(transformed_pos)
+                time.sleep(1)
 
     def test_tilt_offset_correction(self):
         # TODO change the difference value to relax or tighten it
