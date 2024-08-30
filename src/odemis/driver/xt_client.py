@@ -2322,8 +2322,7 @@ class Stage(model.Actuator):
                     # if there is some change w.r.t starting position, proceed to check the target position
 
                     # TODO Check all axes and confirm it works on the hardware
-                    # if not isNearPosition(current_pos=current_pos, target_position=orig_pos, axes=set(orig_pos.keys()),
-                    #                       atol_linear=50e-9, atol_rotation=numpy.radians(0.05)):
+                    # if all(current_pos[a] != op for a, op in orig_pos.items()):
                     #     axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
                     #                                   axes=set(orig_pos.keys()), atol_linear=1e-6,
                     #                                   atol_rotation=numpy.radians(6))
