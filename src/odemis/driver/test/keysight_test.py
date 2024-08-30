@@ -104,7 +104,6 @@ class TestKeysight(unittest.TestCase):
         self.dev.period.value = 1e-4
         self.assertAlmostEqual(self.dev.period.value, 1e-4)
         self.dev.period.value = 25e-7
-        time.sleep(5)  # Wait sufficiently long for the settings to be updated
         self.assertAlmostEqual(self.dev.period.value, 25e-7)
 
         # Check non "round" frequency values
@@ -152,8 +151,6 @@ class TestKeysight(unittest.TestCase):
         time.sleep(0.01)
         self.dev.power.value = True
         self.assertEqual(self.dev.power.value, True)
-
-        time.sleep(6)
         self.assertAlmostEqual(self.dev.period.value, 25e-9)
 
 if __name__ == "__main__":
