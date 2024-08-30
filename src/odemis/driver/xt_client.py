@@ -380,21 +380,20 @@ class SEM(model.HwComponent):
     def set_raw_coordinate_system(self, raw_coordinates: bool = True):
         """
         Read raw z coordinate or linked z coordinate when requesting stage coordinates
-        :param raw_coordinates: (bool) If True, request raw z stage coordinates, otherwise request linked Z coordiantes
+        :param raw_coordinates: (bool) If True, request raw z stage coordinates, otherwise request linked Z coordinates
         """
-        try:
-            with self._proxy_access:
-                self.server._pyroClaimOwnership()
-                self.server.set_raw_coordinate_system(raw_coordinates)
-        except OSError:
-            if raw_coordinates:
-                raise NotImplementedError("Ensure the version of Delmic XT Adapter is >= 1.12.0")
-            # Do not raise an error if non-raw coordinates are requested, because non-raw is the default in old
-            # versions of the xtadapter
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_raw_coordinate_system(raw_coordinates)
 
-    def get_raw_stage_position(self):
-        """Read the stage position in raw coordinate system"""
-        pass
+    def get_raw_coordinate_system(self):
+        """
+        Get raw coordinates system of the stage
+        :return: (bool) True if stage is read in raw coordinates, otherwise, False
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_raw_coordinate_system()
 
     def stage_is_moving(self) -> bool:
         """
@@ -2222,10 +2221,10 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
 
-    def _switch_coordinate_system(self, raw_coordinates) -> None:
+    def _switch_coordinate_system(self, raw_coordinates: bool) -> None:
         """Calculate the offset in linear stage axes x and y when the stage coordinates are read in raw coordinates such
          that it is equal to x and y when stage coordinates are read in linked coordinates.
-         :param raw_coordinates: (bool) True if stage coordinates are read in raw system else False
+         :param raw_coordinates: True if stage coordinates are read in raw system else False
          """
         if raw_coordinates:
             self.parent.set_raw_coordinate_system(False)
@@ -2243,7 +2242,13 @@ class Stage(model.Actuator):
                           f"system for raw stage coordinates: {pos}, non-raw stage coordinates: {pos_linked}")
         else:
             # Make sure the system is read in the linked coordinate system
-            self.parent.set_raw_coordinate_system(False)
+            try:
+                self.parent.set_raw_coordinate_system(False)
+            except OSError as error_msg:
+                logging.warning("Delmic XT Adapter >= 1.12.0 is required to set the raw coordinate system. "
+                                "Failed to call the raw coordinate system for the stage: %s", error_msg)
+                # Do not raise an error if non-raw coordinates are requested, because non-raw is the default in old
+                # versions of the xtadapter
 
     def _updatePosition(self) -> None:
         """
