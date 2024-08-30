@@ -435,6 +435,16 @@ class TrueForm(model.Emitter):
         Called by the repeating timer.
         """
         try:
+            # Don't update the settings if the power is off, so that no remote connection happens,
+            # and the user can still change the settings manually. (Because the device automatically
+            # locks the front panel when in remote mode)
+            # TODO: does it even make sense? If the user cannot change the settings, then the settings
+            # should not change without us knowing. On the other hand, if we don't regularly check
+            # the values, then the device is easy to unlock, and so the user might be able to change
+            # them while the power is on. => find a way to leave the device unlocked? GTL? *GTL? SYSTEM:LOCAL? DISPLAY:ON?
+            if not self.power.value:
+                return
+
             f = self.getFrequency(self._channel)  # Device always returns f > 0
             p = 1 / f
             if p != self.period.value:
@@ -450,11 +460,6 @@ class TrueForm(model.Emitter):
             d = self.period.value * act_phase / 360
             if d != self.delay.value:
                 self.delay._set_value(d)
-
-            # Power
-            pw = self.getOutput(self._channel)
-            if pw != self.power.value:
-                self.power._set_value(pw)
         except Exception:
             logging.exception("Failed to update the settings")
 
