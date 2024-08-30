@@ -2225,6 +2225,8 @@ class Stage(model.Actuator):
     def _moveTo(self, future: futures.Future, pos: Dict[str, float], rel: bool = False, timeout: float = 60) -> None:
         with future._moving_lock:
             try:
+                WAIT_DURATION = 20e-03  # s
+
                 if future._must_stop.is_set():
                     raise CancelledError()
                 if rel:
@@ -2265,7 +2267,7 @@ class Stage(model.Actuator):
                         break
 
                     # Wait for a little while so that we do not keep using the CPU all the time.
-                    time.sleep(20e-3)
+                    time.sleep(WAIT_DURATION)
                     moving = self.parent.stage_is_moving()
                     if not moving:
                         # Be a little careful, because sometimes, half-way through a move
@@ -2274,7 +2276,7 @@ class Stage(model.Actuator):
                         self._updatePosition()
                         logging.debug("Confirming the stage really stopped")
 
-                        time.sleep(20e-3)
+                        time.sleep(WAIT_DURATION)
                         moving = self.parent.stage_is_moving()
                         if moving:
                             logging.warning("Stage reported stopped but moving again, will wait longer")
@@ -2287,37 +2289,50 @@ class Stage(model.Actuator):
                 if future._must_stop.is_set():
                     raise CancelledError()
 
-                # TODO: extend the behavior if rotation, tilt axes also need to be checked.
-                # So far checking the above is not required, as we have observed reporting stage position only in x/y
-                # being compromised. The issue with case western system was that the stage metadata was not
-                # updated in timely manner during the overview acquisition in FM mode (during which rotation, tilt are
-                # not changed), resulting in misplaced tiles in the image display. Even when the stage has physically
-                # moved to the target position but took time in updating its actual position through metadata
-                # The issue is resolved by checking if only x and y stage metadata reports the target position properly
+                # The stage is not moving anymore, however in some rare cases, the server still reports the old
+                # position for a short while (typically < 1s). This can cause all sorts of confusion in the calling
+                # code, as it would seem that the move didn't have any effect, and later on, after the position
+                # is eventually updated that the stage has moved unexpectedly. So, wait until the reported position is
+                # (1) not identical to the starting position and (2) not too far from the target position.
 
                 # The stage is not moving anymore, but we still want to wait until the position has been updated
                 # TODO: base the timeout on the stage movement time estimation (est. *10)
                 timeout = 10  # s
                 expected_end_time = time.time() + timeout  # s
                 check_pos = True
-                wait_duration = 20e-03  # s
 
-                # If rotation and tilt are there in target position, skip checking the metadata
+                # TODO: Include rotation and tilt to check stage movement to target position. Test it on a hardware.
+                # The below check to skip the check on stage movement to target position if it includes r ot t
+                # is temporary. It will be removed once the behavior is extended to all the axes and confirmed to work
+                # on a hardware.
                 if 'r' in pos or 't' in pos:
-                    logging.debug("Position requested to move to includes t (rx/tilt) or r (rz/rotation). "
+                    logging.debug("Position requested to move includes t (rx/tilt) or r (rz/rotation). "
                                   "Reported position accuracy is not checked.")
                     check_pos = False
 
                 # Get the target position in absolute coordinates
-                if not rel:
-                    target_pos = pos
-                else:
+                if rel:
                     target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
+                else:
+                    target_pos = pos
 
                 while check_pos:
                     current_pos = self.parent.get_stage_position()
                     # Every axis requested to move should have moved (compared to the position before starting)
                     # if there is some change w.r.t starting position, proceed to check the target position
+
+                    # TODO Check all axes and confirm it works on the hardware
+                    # if not isNearPosition(current_pos=current_pos, target_position=orig_pos, axes=set(orig_pos.keys()),
+                    #                       atol_linear=50e-9, atol_rotation=numpy.radians(0.05)):
+                    #     axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
+                    #                                   axes=set(orig_pos.keys()), atol_linear=1e-6,
+                    #                                   atol_rotation=numpy.radians(6))
+                    #     if axes_updated:
+                    #         logging.debug("Position has updated fully: from %s -> %s", orig_pos,
+                    #                       current_pos)
+                    #         break
+
+                    # TODO Remove the check only on x any y
                     if all(current_pos[a] != op for a, op in orig_pos.items()):
                         # For x, y, and z, be extra picky and wait until they are "almost" at the target
                         # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
@@ -2336,7 +2351,10 @@ class Stage(model.Actuator):
                                         "Giving up waiting", current_pos, timeout, target_pos)
                         break
 
-                    time.sleep(wait_duration)
+                    if future._must_stop.is_set():
+                        raise CancelledError()
+
+                    time.sleep(WAIT_DURATION)
 
             except Exception:
                 if future._must_stop.is_set():
