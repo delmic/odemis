@@ -308,7 +308,7 @@
                   </object>
                   <object class="sizeritem">
                     <object class="wxCheckBox" name="autofocus_chkbox">
-                      <label>Run autofocus</label>
+                      <label>Run AutoFocus</label>
                       <fg>#E5E5E5</fg>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -316,6 +316,42 @@
                     </object>
                     <flag>wxLEFT</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <orient>wxHORIZONTAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="focus_points_dist_lbl">
+                          <label>Distance between Focus Points</label>
+                          <fg>#DDDDDD</fg>
+                          <font>
+                            <size>9</size>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatCtrl" name="focus_points_dist_ctrl">
+                          <size>-1,15</size>
+                          <unit>m</unit>
+                          <accuracy>4</accuracy>
+                          <font>
+                            <size>9</size>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
                   </object>
                 </object>
                 <size>400,-1</size>
