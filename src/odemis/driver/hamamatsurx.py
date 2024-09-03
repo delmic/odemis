@@ -489,10 +489,10 @@ class ReadoutCamera(model.DigitalCamera):
             raise TimeoutError(f"Did not receive a scaling table: {ex}")
         logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
 
-        table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
+        table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to (read-only) array
         # The prefix unit varies depending on the time range (eg, ns, us), so need scale it, based
         # on the time range of the streak unit.
-        table *= self.parent._streakunit.timeRangeFactor
+        table = table * self.parent._streakunit.timeRangeFactor
 
         return table
 
