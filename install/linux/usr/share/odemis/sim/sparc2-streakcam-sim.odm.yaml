@@ -160,6 +160,7 @@
         channel: 1,
         limits: [[-4.0, 4.0], [-5.0, 5.0]],  # min/max (in V)
         tracking: {2: "INV"},
+        off_voltage: [0.0, null],  # V, null = "output disabled"
     },
     affects: ["SEM E-beam", "Streak Readout CCD"],
 }
