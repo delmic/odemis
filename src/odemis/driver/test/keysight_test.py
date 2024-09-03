@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 
-from odemis import util
 from odemis.driver import keysight
 import os
 import time
@@ -44,6 +43,7 @@ CONFIG_AWG = {
     "channel": 1,
     "tracking": {2: "INV"},
     "limits": [[-4.0, 4.0], [-5.0, 5.0]],
+    "off_voltage": [0.0, None],
 }
 
 # arguments used for the creation of basic components
@@ -79,6 +79,20 @@ class TestKeysight(unittest.TestCase):
 
         with self.assertRaises(IndexError):
             self.dev.dutyCycle.value = 0.15
+
+        # Change the duty cycle while the power is off: it shouldn't have effect immediately, but
+        # it should be applied when the power is turned on.
+        prev_dev_duty_cycle = self.dev.getDutyCycle(1)  # low-level value (not the same unit)
+        self.dev.power.value = False
+        self.dev.dutyCycle.value = 0.5
+        self.assertEqual(self.dev.dutyCycle.value, 0.5)
+        dev_duty_cycle = self.dev.getDutyCycle(1)
+        self.assertEqual(prev_dev_duty_cycle, dev_duty_cycle)
+        # Turn on => the new duty cycle should be applied
+        self.dev.power.value = True
+        self.assertEqual(self.dev.dutyCycle.value, 0.5)
+        dev_duty_cycle = self.dev.getDutyCycle(1)
+        self.assertNotEqual(prev_dev_duty_cycle, dev_duty_cycle)
 
     def test_period(self):
         """
@@ -139,6 +153,8 @@ class TestKeysight(unittest.TestCase):
         self.dev.power.value = True
         self.assertEqual(self.dev.power.value, True)
 
+        time.sleep(6)
+        self.assertAlmostEqual(self.dev.period.value, 25e-9)
 
 if __name__ == "__main__":
     unittest.main()
