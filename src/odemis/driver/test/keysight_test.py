@@ -44,6 +44,7 @@ CONFIG_AWG = {
     "channel": 1,
     "tracking": {2: "INV"},
     "limits": [[-4.0, 4.0], [-5.0, 5.0]],
+    "off_voltage": [0.0, None],
 }
 
 # arguments used for the creation of basic components
@@ -139,6 +140,8 @@ class TestKeysight(unittest.TestCase):
         self.dev.power.value = True
         self.assertEqual(self.dev.power.value, True)
 
+        time.sleep(6)
+        self.assertAlmostEqual(self.dev.period.value, 25e-9)
 
 if __name__ == "__main__":
     unittest.main()

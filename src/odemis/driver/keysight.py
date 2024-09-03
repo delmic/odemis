@@ -30,13 +30,17 @@ import socket
 from odemis import model
 from odemis.model import HwError
 from odemis.util import to_str_escape, RepeatingTimer
-from typing import List, Tuple, Dict
-
+from typing import List, Tuple, Dict, Optional
 
 POLL_INTERVAL = 5  # s, how often to read the settings again
 
 FREQUENCY_MIN = 1e-6  # Hz. Based on user manual
 FREQUENCY_MAX = 100e6  # Hz. Based on user manual
+
+# The voltage range actually depends on the impedance (configured with the OUTPUT:LOAD command).
+# These are the very maximum values. But at the default 50 Ω, the range is actually -5 to +5 V.
+VOLT_MIN = -10.0  # V
+VOLT_MAX = 10.0  # V
 
 CHANNEL_NUMBERS = {1, 2}  # The 335xx and 336xx always have just 2 channels
 
@@ -58,16 +62,19 @@ class TrueForm(model.Emitter):
     def __init__(self, name, role, address,
                  channel: int,
                  limits: List[Tuple[float, float]],
-                 tracking: Dict[int, str] = None,
+                 off_voltage: Optional[List[Optional[float]]] = None,
+                 tracking: Optional[Dict[int, str]] = None,
                  **kwargs):
         """ Initializes the Keysight 33600 series Arbitrary Waveform Generator.
         :param name: (str) as in Odemis
         :param role: (str) as in Odemis
         :param address: "fake" (to start the simulator) or an IP address
-        :param channel: Channel which generate the waveform
+        :param channel: Channel which generates the waveform
+        :param limits: min/max V for each channel.
+        :param off_voltage: Voltage (in V) to set when the .power is set to False (aka OFF), for
+        each channel. If None, the channel will be explictly disabled (non terminated output).
         :param tracking: channel which will track the standard channel -> tracking mode (ON, INV).
         For instance {2: "INV"} means that channel 2 is the same as channel 1, but with inverted polarity.
-        :param limits: min/max V for each channel.
         """
         super().__init__(name, role, **kwargs)
 
@@ -85,37 +92,37 @@ class TrueForm(model.Emitter):
         else:
             logging.warning("Error queue is not empty, will continue anyway")
 
-        if channel not in CHANNEL_NUMBERS:
-            raise ValueError(f"Channel must be within {CHANNEL_NUMBERS}, got {channel}")
-        self._channel = channel
-        self.setWaveform(self._channel, "SQU")
-
-        # Reset the output and tracking
-        for c in CHANNEL_NUMBERS:
-            self.setOutput(c, False)
-            self.setTracking(c, "OFF")
-
         self._limits = limits
-        for c, lim in enumerate(self._limits):
-            if lim is None:
+        if len(self._limits) > max(CHANNEL_NUMBERS):
+            raise ValueError(f"limit must have at most {max(CHANNEL_NUMBERS)} values")
+        for lim in self._limits:
+            if not (VOLT_MIN <= lim[0] <= lim[1] <= VOLT_MAX):
+                raise ValueError(f"limits must be ordered and within {VOLT_MIN} and {VOLT_MAX}, got {limits}")
+
+        if channel > len(self._limits):
+            raise ValueError(f"Channel {channel} not defined in limits")
+        self._channel = channel
+
+        self._off_voltage = off_voltage or [None] * len(self._limits)
+        if len(self._off_voltage) != len(self._limits):
+            raise ValueError("off_voltage must have the same length as the limits")
+        for volt in self._off_voltage:
+            if volt is None:
                 continue
-            self.setVoltageMin(c + 1, lim[0])
-            self.setVoltageMax(c + 1, lim[1])
+            elif not (VOLT_MIN <= volt <= VOLT_MAX):
+                raise ValueError(f"Off voltage must be within {VOLT_MIN} and {VOLT_MAX}, got {volt}")
 
         self._tracking = tracking or {}
         for c, t in self._tracking.items():
             # On the device, the channel number means that the given channel will be tracked by
             # *the other* channel (as there only 2 channels anyway). So invert the channel ID.
-            if c not in CHANNEL_NUMBERS:
-                raise ValueError(f"Tracking channel must be withing {CHANNEL_NUMBERS}, got {c}")
+            if c > len(self._limits):
+                raise ValueError(f"Tracking channel {c} not defined in limits")
             if t not in {"ON", "INV"}:
                 raise ValueError(f"Incorrect tracking mode: {t} given")
-            other_c = 3 - c
-            self.setTracking(other_c, t)
 
-        power = False
-        self.power = model.BooleanVA(power, setter=self._set_power)
-        self._set_power(power)
+        self.power = model.BooleanVA(False, setter=self._set_power)
+        self._set_power(False)
 
         # That defines how long the square wave is high, and how long it's low
         duty_cycle = 0.5  # default is 50-50
@@ -370,7 +377,18 @@ class TrueForm(model.Emitter):
         if f.upper() not in {"SIN", "SQU", "RAMP", "PULS"}:
             raise ValueError("Incorrect waveform: %s given" % (f,))
 
-        self._sendCommand(b"sour%d:appl:%s" % (c, f.encode("ascii")))
+        #self._sendCommand(b"sour%d:appl:%s" % (c, f.encode("ascii")))
+        # TODO: what is the advantage of apply without parameters? it resets to default values?
+        self._sendCommand(b"sour%d:func %s" % (c, f.encode("ascii")))
+        self._checkError()
+
+    def applyDC(self, c: int, volt: float):
+        """
+        Set the output to a constant (DC) voltage. Automatically turns on the output.
+        c (1 or 2): the channel to set
+        volt: the DC voltage to apply (in V)
+        """
+        self._sendCommand(b"sour%d:appl:dc DEF,DEF,%.6f" % (c, volt))
         self._checkError()
 
     def _set_period(self, p: float) -> float:
@@ -398,12 +416,18 @@ class TrueForm(model.Emitter):
         if not (-self.period.value <= d <= self.period.value):
             raise ValueError("Delay must be < period (%s), got %s" % (self.period.value, d))
 
+        if not self.power.value:
+            return d
+
         self.setPhase(self._channel, d)
         act_phase = self.getPhase(self._channel)
         act_d = self.period.value * act_phase / 360
         return act_d
 
     def _set_duty_cycle(self, dc: float) -> float:
+        if not self.power.value:
+            return dc
+
         duty_cycle = dc * 100
         exp = None
         try:
@@ -420,14 +444,38 @@ class TrueForm(model.Emitter):
         return act_dc
 
     def _set_power(self, p: bool) -> bool:
-        # Note: when power is off, the sync is still sent, but not waveform signal is put back to 0V.
-        self.setOutput(self._channel, p)
+        if p:
+            for c, lim in enumerate(self._limits):
+                self.setVoltageMin(c + 1, lim[0])
+                self.setVoltageMax(c + 1, lim[1])
 
-        for c in self._tracking.keys():
-            self.setOutput(c, p)
+            self.setWaveform(self._channel, "SQU")
+            for c, t in self._tracking.items():
+                other_c = 3 - c
+                self.setTracking(other_c, t)
 
-        act_p = self.getOutput(self._channel)
-        return act_p
+            # Force an update of the settings which cannot be changed while powered off
+            # TODO: only do so if the function is still set in DC? If it was manually changed,
+            # and the function is "Square", read them from the device?
+            self.dutyCycle.value = self.dutyCycle.value
+            self.period.value = self.period.value  # also updates .delay, in a safe way
+
+            # Ends by enabling the output
+            self.setOutput(self._channel, True)
+            for c in self._tracking.keys():
+                self.setOutput(c, True)
+        else:  # Off
+            # Either disable the output (if off_voltage is None), or set a DC voltage
+            # Note: when power is off, the sync is still sent.
+            for c, volt in enumerate(self._off_voltage):
+                if volt is None:
+                    self.setOutput(c + 1, False)
+                else:
+                    # Note: in DC mode, some settings cannot be changed (like the phase & duty cycle).
+                    # Also, tracking doesn't work in DC mode, so should be re-enabled when powered on.
+                    self.applyDC(c + 1, volt)
+
+        return p
 
     def _update_settings(self):
         """
@@ -438,10 +486,13 @@ class TrueForm(model.Emitter):
             # Don't update the settings if the power is off, so that no remote connection happens,
             # and the user can still change the settings manually. (Because the device automatically
             # locks the front panel when in remote mode)
+
             # TODO: does it even make sense? If the user cannot change the settings, then the settings
             # should not change without us knowing. On the other hand, if we don't regularly check
             # the values, then the device is easy to unlock, and so the user might be able to change
             # them while the power is on. => find a way to leave the device unlocked? GTL? *GTL? SYSTEM:LOCAL? DISPLAY:ON?
+            # Nothing works, but DISPLAY ON... but not sure it does what is expected
+
             if not self.power.value:
                 return
 
@@ -538,7 +589,7 @@ class OutputStates:
     def __init__(self,
                  output: str = "off",
                  tracking: str = "off",
-                 voltage_low: float = -1.0, voltage_high: float = 1.0,
+                 voltage_amp: float = 2.0, voltage_offset: float = 0,
                  voltage_limit_low: float = -10.0, voltage_limit_high: float = 10.0,
                  waveform: str = "sin",
                  frequency: float = 1e6,
@@ -546,8 +597,8 @@ class OutputStates:
                  phase: float = 0.0):
         self.output = output
         self.tracking = tracking
-        self.voltage_low = voltage_low
-        self.voltage_high = voltage_high
+        self.voltage_amp = voltage_amp
+        self.voltage_offset = voltage_offset
         self.voltage_limit_low = voltage_limit_low
         self.voltage_limit_high = voltage_limit_high
         self.waveform = waveform
@@ -603,6 +654,8 @@ class Keysight33622ASimulator:
         logging.debug("SIM: parsing '%s'", to_str_escape(msg))
         msg = msg.decode("latin1").lower().strip()  # remove leading and trailing whitespace
 
+        # TODO: generic regex to catch all acceptable command as "lvl1:lvl2:...(?) param,param,param..."
+
         if msg == "*idn?":
             self._sendAnswer(b"Delmic,33622A,AB12345678,A.02.03-3.15-03-64-02")
         elif msg == "*esr?":
@@ -625,9 +678,31 @@ class Keysight33622ASimulator:
         elif re.match(r"sour[1-2]:freq?", msg):
             channel = int(msg[4])
             self._sendAnswer(b"%+.15E" % (self._output_states[channel].frequency,))
-        elif re.match(r"sour[1-2]:appl:(sin|squ|ramp|puls)", msg):
+        elif re.match(r"sour[1-2]:appl:(sin|squ|ramp|puls|dc)", msg):
+            cmd, *params = msg.split(" ")
+            channel = int(cmd[4])
+            waveform = cmd.split(":")[2]
+            if params:
+                params = params[0].split(",")
+            cstate = self._output_states[channel]
+            cstate.waveform = waveform
+            # TODO: provide default parameters?
+            # For DC, frequency and amplitude *must* be DEF, and don't change the previous values
+            if len(params) >= 1:  # frequency
+                if params[0] != "def":
+                    frequency = float(params[0])
+                    cstate.frequency = frequency
+            if len(params) >= 2:  # amplitude
+                if params[1] != "def":
+                    amp = float(params[1])
+                    cstate.voltage_amp = amp
+            if len(params) >= 3:  # offset
+                offset = float(params[2])
+                cstate.voltage_offset = offset
+        elif re.match(r"sour[1-2]:func (sin|squ|ramp|puls|dc)$", msg):
             channel = int(msg[4])
-            waveform = msg.split(":")[2]
+            cmd, waveform = msg.split(" ")
+            channel = int(cmd[4])
             self._output_states[channel].waveform = waveform
         elif re.match(r"sour[1-2]:trac ", msg):
             channel = int(msg[4])
@@ -636,19 +711,22 @@ class Keysight33622ASimulator:
         elif re.match(r"sour[1-2]:volt:low ", msg):
             channel = int(msg[4])
             voltage_low = float(msg.split()[1])
-            self._output_states[channel].voltage_low = voltage_low
+            cstate = self._output_states[channel]
+            voltage_high = cstate.voltage_offset + cstate.voltage_amp / 2
+            cstate.voltage_amp = voltage_high - voltage_low
+            cstate.voltage_offset = (voltage_high + voltage_low) / 2
         elif re.match(r"sour[1-2]:volt:high ", msg):
             channel = int(msg[4])
             voltage_high = float(msg.split()[1])
-            self._output_states[channel].voltage_high = voltage_high
+            cstate = self._output_states[channel]
+            voltage_low = cstate.voltage_offset - cstate.voltage_amp / 2
+            cstate.voltage_amp = voltage_high - voltage_low
+            cstate.voltage_offset = (voltage_high + voltage_low) / 2
         elif re.match(r"sour[1-2]:volt:offs ", msg):
             channel = int(msg[4])
             voltage_offset = float(msg.split()[1])
             # Sets the average, by keeping the amplitude constant
-            c = self._output_states[channel]
-            vpp = c.voltage_high - c.voltage_low
-            c.voltage_low = voltage_offset - vpp / 2
-            c.voltage_high = voltage_offset + vpp / 2
+            self._output_states[channel].voltage_offset = voltage_offset
         elif re.match(r"sour[1-2]:volt:lim:high ", msg):
             channel = int(msg[4])
             voltage_lim_min = float(msg.split()[1])
