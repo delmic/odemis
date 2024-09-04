@@ -469,10 +469,10 @@ class Sparc2AlignTab(Tab):
                 hw_conf = get_hw_config(comp, main_data.hw_settings_config)
                 streak.add_axis_entry(axisname, comp, hw_conf.get(axisname))
 
-            # usually we only supported one dedicated internal spectrograph which the streak cam could connect to
-            # from now on we also want to support external spectrographs with the streak cam connected
-            spect = main_data.spectrograph
-            if main_data.streak_ccd.name in main_data.spectrograph_ded.affects.value:
+            # Find the spectrograph on which the streak cam is connected.
+            spect = main_data.spectrograph  # default
+            spect_ded = main_data.spectrograph_ded
+            if spect_ded and main_data.streak_ccd.name in spect_ded.affects.value:
                 spect = main_data.spectrograph_ded
                 self.panel.cmb_focus_detectors_ext.Append(main_data.streak_ccd.name)
 
