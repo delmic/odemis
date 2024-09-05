@@ -2407,7 +2407,6 @@ class Scanner(model.Emitter):
         range_dwell = (min_dt, 1000)  # s
         self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
-        self.dwellTime.subscribe(self._on_setting_changed)
 
         # Cached data for the waveforms
         self._prev_settings = [None, None, None, None, None]  # resolution, scale, translation, margin, ao_osr
@@ -2535,13 +2534,19 @@ class Scanner(model.Emitter):
         pxs_scaled = (pxs[0] * scale[0], pxs[1] * scale[1])
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
-    def _setDwellTime(self, value):
+    def _setDwellTime(self, value: float) -> float:
+        prev_dt = self.dwellTime.value
         # If multiple acquisitions are started, a different dwell time might be
         # selected during the acquisition, compared to what is defined here.
         nrchans = max(1, len(self.parent._acquirer.active_detectors))
-        return self._updateDwellTime(value, nrchans)
+        dt = self._updateDwellTime(value, nrchans)
 
-    def _updateDwellTime(self, dt, nrchans):
+        if dt != prev_dt:  # Avoid a call if the new dwell time is the same as before
+            self.parent._acquirer.update_settings_on_next_frame()
+
+        return dt
+
+    def _updateDwellTime(self, dt: float, nrchans: int) -> float:
         dt, self._ao_osr, self._ai_osr = self.parent.find_best_dwell_time(dt, nrchans)
         self._nrchans = nrchans
         return dt
@@ -2711,6 +2716,8 @@ class Scanner(model.Emitter):
             prev_dt = self.dwellTime.value
             dt = self._updateDwellTime(prev_dt, nrchans)
             if dt != prev_dt:
+                # Skip the setter, to avoid requesting "setting update" on the acquirer, as it will
+                # already have the latest settings.
                 self.dwellTime._value = dt
                 self.dwellTime.notify(dt)
             if nrchans != self._nrchans:
