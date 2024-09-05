@@ -115,6 +115,7 @@ CONFIG_SEM = {
     "name": "sem",
     "role": "sem",
     "device": "Dev1",
+    "multi_detector_min_period": 1e-6,  # s, smaller is "harder" for the hardware
     "children": {
         "scanner": CONFIG_SCANNER,
         "detector0": CONFIG_SED,
@@ -155,8 +156,8 @@ class TestAnalogSEM(unittest.TestCase):
     def setUp(self) -> None:
         # Start with basic good default values
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]  # s
-        self.scanner.scale.value = (8, 8)  # => res is max
-        self.scanner.resolution.value = self.scanner.resolution.range[1]  # max res, limited to the scale (so, max / 4)
+        self.scanner.scale.value = (8, 8)  # => res is 8x8 smaller than max res
+        self.scanner.resolution.value = self.scanner.resolution.range[1]  # max res, limited to the scale (so, max / 8)
 
         # for receive_image()
         self.expected_shape = tuple(self.scanner.resolution.value[::-1])
@@ -984,7 +985,8 @@ class TestAnalogSEM(unittest.TestCase):
         """
         # Pick a very small dwell time, which is not possible with 2 detectors, so it will have to
         # increase at the moment the acquisition starts
-        orig_dwell_time = self.scanner.dwellTime.value
+        self.scanner.scale.value = (16, 16)
+        self.scanner.dwellTime.value = 10e-6 # s
         exp_shape, exp_pxs1, exp_duration = self.compute_expected_metadata()
         number = 3 * 4  # Counts for all the detectors
 
@@ -994,9 +996,21 @@ class TestAnalogSEM(unittest.TestCase):
         self.cld.data.subscribe(self.receive_image)
         self.bsd.data.subscribe(self.receive_image)
 
-        time.sleep(number * (exp_duration + 0.1))
+        try:
+            # acq_done should be set by the 12th frame, which should correspond to the last detector of the 3.
+            if not self.acq_done.wait(number * (exp_duration + 0.1)):
+                self.fail("Acquisition not completed within time")
+        finally:
+            # Unsubscribe from the other 2 detectors (but as we don't know which one was last, just
+            # unsubscribe from all)
+            self.sed.data.unsubscribe(self.receive_image)
+            self.cld.data.unsubscribe(self.receive_image)
+            self.bsd.data.unsubscribe(self.receive_image)
+
+        time.sleep(1)  # make sure all the images are received
 
         self.assertLessEqual(self.left, 0)
+        logging.debug("Received %d images", len(self.acq_dates))
 
     def test_sync_flow(self):
         """
@@ -1071,6 +1085,7 @@ class TestAnalogSEM(unittest.TestCase):
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
+            logging.debug("Stopping acquisition of %s after receiving all expected DataArrays", dataflow)
             self.acq_done.set()
 
     def receive_image2(self, dataflow, image):

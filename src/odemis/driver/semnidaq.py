@@ -137,7 +137,8 @@ class AnalogSEM(model.HwComponent):
         :param device: name of the NI DAQ device (ex: "Dev1"). (Can be looked up via the `nilsdev` command).
         :param multi_detector_min_period: minimum sampling period (in s) for acquisition when multiple
         detectors are acquiring. Increasing it can reduce the cross-talk. Default is the minimum period
-        of the DAQ board. It's typically in the order of 1µs.
+        of the DAQ board. It's typically in the order of 1µs. The value is for 2 channels, and automatically
+        adjusted for more channels.
         :raise:
             Exception if the device cannot be opened.
         """
@@ -178,14 +179,16 @@ class AnalogSEM(model.HwComponent):
         except OSError as ex:
             logging.warning("Failed to increase scheduling priority: %s. Might cause frame drops.", ex)
 
+        hw_min_period = 1 / self._nidev.ai_max_multi_chan_rate
         if multi_detector_min_period is None:
             # Use the very minimum period of the board if not specified
             # Note that it may still give warnings
-            self._multi_detector_min_period = 1 / self._nidev.ai_max_multi_chan_rate
+            self._multi_detector_min_period = hw_min_period
         elif not isinstance(multi_detector_min_period, (float, int)):
             raise ValueError(f"multi_detector_min_period must be a number, but is {type(multi_detector_min_period)}")
-        elif not 0 <= multi_detector_min_period <= 1e-3:
-            raise ValueError(f"multi_detector_min_period must be between 0 and 1e-3, but is {multi_detector_min_period}")
+        elif not hw_min_period <= multi_detector_min_period <= 1e-3:
+            raise ValueError(f"multi_detector_min_period must be between {hw_min_period} and 1e-3 s, "
+                             f"but is {multi_detector_min_period} s")
         else:
             self._multi_detector_min_period = multi_detector_min_period
 
@@ -237,7 +240,8 @@ class AnalogSEM(model.HwComponent):
     def _check_nidaqmx() -> None:
         """
         Check that the nidaqmx installation is working.
-        In particular, it can detect if the NIDAQmx library is not compatible with the kernel drivers.
+        In particular, it can detect if the NIDAQmx library is not compatible with the kernel drivers
+        (for instance, because it has just been updated, and a reboot is required)
         :raises:
             HwError: if the installation has some issue
         """
@@ -303,9 +307,14 @@ class AnalogSEM(model.HwComponent):
         elif n_ai == 1:
             min_ai_period = 1 / self._nidev.ai_max_single_chan_rate
         else:
-            # TODO: Automatically find good values. Maybe we could automatically compute it
-            # based on the voltages? Or just give up, and expect the installation engineer to find the
-            # good values for the system?
+            # It's little unclear. The documentation says to multiply the min period (1 µs) by the number of
+            # channels. But experimentally, it seems that the period given is accepted for 2 channels.
+            # For 3 channels, ~1.4µs is required, and for 4 channels, ~1.8µs is required.
+            # => So assume the min period is for 2 channels, and increases linearly.
+            # BUT there is more to it: there can be cross-talk between the channels. The shorter the
+            # period, the stronger the cross-talk. It also depends on the voltage range, and whether
+            # the channels use the same range. So, we give up on trying to get the right value, and
+            # just expect the user (aka system engineer) to specify it via multi_detector_min_period.
             # See specification for the "settling time for multichannels"
             # It depends on the voltage range, and how much precision is required.
             # For the 6361 (and 6251):
@@ -313,7 +322,7 @@ class AnalogSEM(model.HwComponent):
             # For <= 0.2V, 4 least significant bits (LSB), 2µs is enough
             # For >= 1V, 1 least significant bits (LSB), 1.5µs is enough
             # For <= 0.2V, 1 least significant bits (LSB), 8µs is enough
-            min_ai_period = self._multi_detector_min_period
+            min_ai_period = (self._multi_detector_min_period / 2) * n_ai
 
         # TODO: also modify the AI tasks so that they all use the same voltage range? This minimizes
         # the settle time between samples. Or let the user decide in the configuration file (but
