@@ -1141,6 +1141,45 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         # set back initial value
         self.mppc.dataContent.value = data_content
 
+    def test_calculate_beam_shift_cor_indices(self):
+        """Test calculating where to run the beamshift correction"""
+        roa = fastem.FastEMROA("roa_name", None, None,
+                               self.asm, self.multibeam, self.descanner,
+                               self.mppc, overlap=0.0)
+        roa.field_indices = [(3, 0), (4, 0),
+                             (2, 1), (3, 1), (4, 1), (10, 1),
+                             (1, 2), (2, 2), (3, 2), (4, 2),
+                             (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.scan_stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
+                                      roa, path=None, pre_calibrations=None,
+                                      save_full_cells=False, future=None,
+                                      settings_obs=None, spot_grid_thresh=0.5)
+        # When n_beamshifts=1, the beamshift correction should be applied for every field.
+        # Therefore, the calculated indices should match the original field indices.
+        beam_shift_indices = task._calculate_beam_shift_cor_indices(n_beam_shifts=1)
+        self.assertEqual(beam_shift_indices, roa.field_indices)
+
+        # When n_beamshifts=3, the beamshift correction should be applied every 3 sections.
+        # If the 3rd section is not present in the fields to be acquired, select the next available field in the row.
+        expected_field_indices = [(3, 0),
+                                  (2, 1), (10, 1),
+                                  (1, 2), (4, 2),
+                                  (0, 3), (3, 3)]
+        beam_shift_indices = task._calculate_beam_shift_cor_indices(n_beam_shifts=3)
+        self.assertEqual(beam_shift_indices, expected_field_indices)
+
+        # When n_beamshifts=5, the beamshift correction should be applied every 5 sections.
+        # If the 5th section is not present in the fields to be acquired, select the next available field in the row.
+        expected_field_indices = [(3, 0),
+                                  (2, 1), (10, 1),
+                                  (1, 2),
+                                  (0, 3)]
+        beam_shift_indices = task._calculate_beam_shift_cor_indices(n_beam_shifts=5)
+        self.assertEqual(beam_shift_indices, expected_field_indices)
+
 
 class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
     """Test the methods of fastem.AcquisitionTask without a backend and with mocked components."""
