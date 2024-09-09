@@ -1,5 +1,5 @@
 # Configuration to simulate a SPARC system with only a spectrometer.
-SimSPARC: {
+"SPARC Spectrometer": {
     class: Microscope,
     role: sparc,
     emitters: ["SEM E-beam"],

@@ -1,5 +1,6 @@
-# Configuration for a simulated SPARC v2 system with a free-space-laser tunnel (FSLT)
-SPARC2-FSLT-SIM: {
+# Configuration for a simulated SPARC v2 system with a TTMM (tip-tilt mirror module) + FSLT (Free space light tunnel)
+# to connect a second spectrograph
+"SPARCv2 2 spectrographs + light tunnel": {
     class: Microscope,
     role: sparc2,
 }

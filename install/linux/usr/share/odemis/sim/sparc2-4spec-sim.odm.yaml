@@ -2,7 +2,7 @@
 # * One "integrated" spectrograph, with 2 cameras
 # * One "external" spectograph, connected via optical fiber, with 2 cameras
 
-SPARC2-4Spec: {
+"SPARCv2 4 Cameras": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",

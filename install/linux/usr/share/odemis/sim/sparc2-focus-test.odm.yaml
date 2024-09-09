@@ -1,5 +1,5 @@
 # Configuration for a simulated SPARC v2 system with focus simulated on AR cam
-SPARC2: {
+"SPARCv2 focus testing": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",

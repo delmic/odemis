@@ -1,5 +1,5 @@
 # Configuration for the SPARC v2 system with the 2nd spectrometer (connected via optical fiber from the plate 2)
-SPARC2: {
+"SPARCv2 2 spectrographs": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector","Calibration Light", "Integrated Spectrograph",
