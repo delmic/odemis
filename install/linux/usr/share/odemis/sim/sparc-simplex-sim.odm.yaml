@@ -1,5 +1,5 @@
 # Configuration for the SPARC 'simplex': no alignment in software
-SPARC-Lund-sim: {
+"SPARC Simplex": {
     class: Microscope,
     role: sparc-simplex,  # same as sparc, but no alignment supported in GUI
     children: ["SEM E-beam", "SEM Detector", "Spectrometer", "Spectrograph focus",

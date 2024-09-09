@@ -9,7 +9,7 @@
 # TeamViewer to make the desired changes if you do not want to take that
 # responsibility yourself.
 
-METEOR: {
+"METEOR Tescan1": {
     class: Microscope,
     role: meteor,
     children: [

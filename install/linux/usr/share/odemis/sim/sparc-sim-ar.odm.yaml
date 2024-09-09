@@ -1,5 +1,5 @@
 # Configuration to simulate a SPARC system with only the AR camera.
-SimSPARCAR: {
+"SPARC AR Camera": {
     class: Microscope,
     role: sparc,
     emitters: ["EBeam ExtXY", "AR Lens"],
