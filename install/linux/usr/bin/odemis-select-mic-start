@@ -10,23 +10,86 @@ Using this class microscope names are extracted and placed in a list.
 This list is presented to the user in the form of a (zenity) selection dialog window.
 After selection of the microscope configuration the right (yaml) file will be used to start Odemis.
 '
-# extract the arguments which were used to start this script
-args=( "$@" )
+# Default values for options
+select_version=false
+target_files=()
 
-for arg in "${args[@]}"; do
-    if test "$arg" == "--help"; then
-        # Display help on the argument usage
-        echo
-        echo "Syntax: odemis-select-mic-start [target_files]"
-        echo "arguments:"
-        echo "target_files      A selection of configuration files from a specific location."
-        echo "                  (e.g. /usr/share/odemis/sim/*meteor-main*.yaml)."
-        exit 0
-    fi
+# Function to display help information
+display_help() {
+    echo
+    echo "Syntax: odemis-select-mic-start [options] [target_files]"
+    echo "Options:"
+    echo "  --help                  Display this help message."
+    echo "  --select-version        Show prompt for selection of Odemis version."
+    echo "  target_files            A selection of configuration files from a specific location."
+    echo "                         (e.g. /usr/share/odemis/sim/*meteor-main*.yaml)."
+    exit 0
+}
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help)
+            display_help
+            exit 0
+            ;;
+        --select-version)
+            select_version=true
+            ;;
+        --*)
+            echo "Warning: Unkown option: $1, ignoring."
+            display_help
+            ;;
+        *)
+            if [ -z "$1" ]; then
+                echo "Error: No valid target files provided"
+                display_help
+                exit 1
+            fi
+            target_files+=("$1")
+            ;;
+    esac
+    shift
 done
 
 odemis-cli --check
 status=$?
+
+if [ "$select_version" = true ]; then
+    # Navigate to odemis repository
+    REPO_PATH="$HOME/development/odemis"
+    if [[ ! -d $REPO_PATH ]]; then
+        echo "ERROR: Odemis development folder cannot be found on the system ($REPO_PATH)."
+        exit 1
+    fi
+    cd "$REPO_PATH" || exit
+
+    # Prompt for selecting branch
+    user_choice=$(zenity --list --title="Select Odemis Version" \
+        --text="Please select which Odemis version to use:" \
+        --radiolist \
+        --column "Select" --column "Version" \
+        FALSE "Latest Development Changes" \
+        FALSE "Latest Release" \
+        TRUE "Current Branch" \
+        --width=400 --height=250)
+
+    if [ "$user_choice" == "Latest Development Changes" ]; then
+        git fetch origin
+        git checkout master
+        git pull origin master
+    elif [ "$user_choice" == "Latest Release" ]; then
+        latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+        git fetch origin
+        git checkout "$latest_tag"
+        git pull origin "$latest_tag"
+    elif [ "$user_choice" == "Current Branch" ]; then
+        :  # Leave current branch as is
+    else
+        zenity --error --text="No valid selection made. Exiting."
+        exit 1
+    fi
+fi
 
 # check if the backend is already running or starting up
 if [ $status == 0 ] || [ $status == 3 ] ; then
@@ -56,15 +119,27 @@ mkdir $HOME/.local/share/odemis/log 2>/dev/null
 parse_logfile=$HOME/.local/share/odemis/log/odemis-select-mic-start-parse.log
 > $parse_logfile
 
-for fn in "${args[@]}"; do
-    # add a new header to the logfile
-    printf "$(date) Parsing file: $fn\n" >> $parse_logfile
-    # extract the microscope name by using this small Python script
-    mic_name="$(python3 -c "import sys; import yaml; from odemis.odemisd import modelgen; \
-        f = open('$fn'); \
-        d = yaml.load(f, modelgen.SafeLoader); \
-        print(next(n for n, d in d.items() if d.get('class') == 'Microscope'))" 2>>$parse_logfile)"
-    mic_list+=("$fn")
+process_file() {
+    local fn="$1"
+
+    # Add a new header to the logfile
+    printf "$(date) Parsing file: $fn\n" >> "$parse_logfile"
+
+    # Extract the microscope name and role using a small Python script
+mic_name=$(python3 <<EOF 2>>"$parse_logfile"
+import sys
+import yaml
+from odemis.odemisd import modelgen
+
+f = open('$fn')
+d = yaml.load(f, modelgen.SafeLoader)
+mic_name = next(n for n, d in d.items() if d.get('class') == 'Microscope')
+print(mic_name)
+EOF
+    )
+
+    mic_list+=("$fn")  # The dialog has a hidden column, which is the filepath
+
     if test "$mic_name" == ""; then
         # save the file name in the error list
         error_filenames+=("$(basename ${fn})")
@@ -72,10 +147,38 @@ for fn in "${args[@]}"; do
         # add a newline to the logfile
         echo "" >> $parse_logfile
     fi
+
     mic_list+=("$mic_name")
+}
+
+total_files=${#target_files[@]}
+current_file=0
+
+# Processing a large selection of microscope files can take quite a while,
+# so giving visual feedback of the progress gives the user clarity
+# that the script is still running. Using file descriptor so we are
+# still able to append to mic_list.
+exec 3> >(zenity --progress \
+           --title="Progress" \
+           --text="Analysing microscope configurations..." \
+           --percentage=0 \
+           --auto-close \
+           --auto-kill)
+
+
+for fn in "${target_files[@]}"; do
+    process_file "$fn"
+    current_file=$((current_file + 1))
+    # Calculate the progress percentage
+    progress=$((current_file * 100 / total_files))
+    # Update the progress bar
+    echo "$progress" >&3
 done
 
-# prompt the user with a list of microscope configurations to choose from
+# Close the file descriptor
+exec 3>&-
+
+# Prompt the user with a list of microscope configurations to choose from
 selection="$(zenity --list --title="Odemis configuration starter" \
     --list --text "Please select a configuration to start:" \
     --column "" --column "" "${mic_list[@]}" --hide-header \
@@ -85,7 +188,7 @@ selection="$(zenity --list --title="Odemis configuration starter" \
 # if one of the microscope names is selected which also contains an error, show the log file and stop the script
 for efn in "${error_filenames[@]}"; do
     if test "$efn" == "$(basename ${selection})"; then
-        gedit $parse_logfile   
+        gedit $parse_logfile
         exit
     fi
 done
