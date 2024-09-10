@@ -31,11 +31,11 @@ from concurrent import futures
 from concurrent.futures import CancelledError
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
+import Pyro5.api
 import msgpack_numpy
 import notify2
 import numpy
 import pkg_resources
-import Pyro5.api
 from Pyro5.errors import CommunicationError
 
 from odemis import model
@@ -359,6 +359,7 @@ class SEM(model.HwComponent):
                     update.show()
                 else:
                     logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
+
         except Exception:
             logging.warning("Failure during transfer latest xtadapter package (non critical)", exc_info=True)
 
@@ -376,6 +377,24 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.move_stage(position, rel)
+
+    def set_raw_coordinate_system(self, raw_coordinates: bool = True):
+        """
+        Read raw z coordinate or linked z coordinate when requesting stage coordinates
+        :param raw_coordinates: (bool) If True, request raw z stage coordinates, otherwise request linked Z coordinates
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_raw_coordinate_system(raw_coordinates)
+
+    def get_raw_coordinate_system(self):
+        """
+        Get raw coordinates system of the stage
+        :return: (bool) True if stage is read in raw coordinates, otherwise, False
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_raw_coordinate_system()
 
     def stage_is_moving(self) -> bool:
         """
@@ -2148,7 +2167,23 @@ class Stage(model.Actuator):
     moving the TFS stage and updating the position.
     """
 
-    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, **kwargs) -> None:
+    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, raw_coordinates: bool = False,
+                 **kwargs) -> None:
+        """
+        :param rng: The range of stage axes in which linear axes x,y and z are in "meters" and rotational axes are
+         in "radians"
+        :param raw_coordinates: True, if stage is read in raw coordinates i.e. the z is the distance of the stage from
+         chamber floor. When False, z is the stage distance from the SEM pole piece. x and y should not theoretically
+         change. In practice offset correction in x and y is applied to keep these axes same across both the coordinate
+         systems.
+        """
+        self._raw_coordinates = raw_coordinates
+        # When raw coordinate system is selected, in theory just z should change
+        # but in practice x and y change by a fixed offset. When raw coordinate system is used,
+        # offset correction is applied (in the later part of init)
+        # such that all axes apart from z, have same values
+        self._raw_offset = {"x": 0, "y": 0}
+
         if rng is None:
             rng = {}
         stage_info = parent.stage_info()
@@ -2180,9 +2215,41 @@ class Stage(model.Actuator):
                                                 readonly=True)
         self._updatePosition()
 
+        # update the offset if raw stage coordinates are read
+        self._switch_coordinate_system(raw_coordinates)
+
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
+
+    def _switch_coordinate_system(self, raw_coordinates: bool) -> None:
+        """Calculate the offset in linear stage axes x and y when the stage coordinates are read in raw coordinates such
+         that it is equal to x and y when stage coordinates are read in linked coordinates.
+         :param raw_coordinates: True if stage coordinates are read in raw system else False
+         """
+        if raw_coordinates:
+            self.parent.set_raw_coordinate_system(False)
+            pos_linked = self._getPosition()
+            self.parent.set_raw_coordinate_system(True)
+            pos = self._getPosition()
+            for axis in self._raw_offset.keys():
+                self._raw_offset[axis] = pos_linked[axis] - pos[axis]
+            # the offset should only be in linear axes, it is not expected in rotational axes
+            if not all(pos[axis] == pos_linked[axis] for axis in ["rx", "rz"]):
+                logging.warning(
+                    "During offset estimation in linear axes in raw coordinate system in x and y, unexpected offset is "
+                    "found in rotation axes")
+            logging.debug(f"The offset values in x and y are {self._raw_offset} when stage is in the raw coordinate "
+                          f"system for raw stage coordinates: {pos}, non-raw stage coordinates: {pos_linked}")
+        else:
+            # Make sure the system is read in the linked coordinate system
+            try:
+                self.parent.set_raw_coordinate_system(False)
+            except OSError as error_msg:
+                logging.warning("Delmic XT Adapter >= 1.12.0 is required to set the raw coordinate system. "
+                                "Failed to call the raw coordinate system for the stage: %s", error_msg)
+                # Do not raise an error if non-raw coordinates are requested, because non-raw is the default in old
+                # versions of the xtadapter
 
     def _updatePosition(self) -> None:
         """
@@ -2190,6 +2257,11 @@ class Stage(model.Actuator):
         """
         old_pos = self.position.value
         pos = self._getPosition()
+        if self._raw_coordinates:
+            # correct for the offset such that the stage coordinates displayed in
+            # TFS software is the same as Odemis
+            pos["x"] += self._raw_offset["x"]
+            pos["y"] += self._raw_offset["y"]
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -2238,6 +2310,13 @@ class Stage(model.Actuator):
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
+
+                # Correct for offset compensation in absolute movements
+                if self._raw_coordinates and not rel:
+                    if "x" in pos.keys():
+                        pos["x"] -= self._raw_offset["x"]
+                    if "y" in pos.keys():
+                        pos["y"] -= self._raw_offset["y"]
 
                 orig_pos = self.parent.get_stage_position()
 

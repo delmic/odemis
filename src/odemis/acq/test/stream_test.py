@@ -47,7 +47,7 @@ from odemis.model import MD_POL_NONE, MD_POL_HORIZONTAL, MD_POL_VERTICAL, \
     MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow, TINT_FIT_TO_RGB
 from odemis.util import testing, conversion, img, spectrum, find_closest
 
-logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
@@ -3146,17 +3146,21 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
         # Now, proper acquisition
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        mcs.tint.value = (255, 0, 0)  # Red colour
         mcs_two.roi.value = (0, 0.2, 0.3, 0.6)
+        mcs_two.tint.value = (0, 255, 0)  # Green colour
 
-        # dwell time of sems shouldn't matter
-        mcs.emtDwellTime.value = 1e-6  # s
-        mcs_two.emtDwellTime.value = 1e-6  # s
+        # On the simulator, 3µs is the minimum dwell time that is accepted with 3 detectors
+        # (dwell time of sems shouldn't matter)
+        mcs.emtDwellTime.value = 3e-6  # s
+        mcs_two.emtDwellTime.value = 3e-6  # s
 
         mcs.repetition.value = (500, 700)
         mcs_two.repetition.value = (500, 700)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
 
         # Start acquisition
+        logging.debug("Estimating %g s", sms.estimateAcquisitionTime())
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
         start = time.time()
         f = sms.acquire()
@@ -3182,13 +3186,13 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
         numpy.testing.assert_allclose(cl_two_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_two_md[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(cl_md[model.MD_USER_TINT], (255, 0, 0))  # from .tint
+        self.assertEqual(cl_two_md[model.MD_USER_TINT], (0, 255, 0))  # from .tint
         self.assertEqual(mcs.axisFilter.value, self.filter.position.value["band"])
 
         # Now same thing but with more pixels and drift correction
         mcs.roi.value = (0.3, 0.1, 1.0, 0.8)
-        mcs.tint.value = (255, 0, 0)  # Red colour
         mcs_two.roi.value = (0.3, 0.1, 1.0, 0.8)
-        mcs_two.tint.value = (0, 255, 0)  # Green colour
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)

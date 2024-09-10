@@ -6,3 +6,4 @@ Exec=odemis-sudo-gedit /etc/odemis.conf
 Type=Application
 StartupNotify=true
 Icon=accessories-text-editor
+Categories=System;

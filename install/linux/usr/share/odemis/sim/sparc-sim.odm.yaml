@@ -1,5 +1,5 @@
 # Configuration to simulate a SPARC system without having any hardware.
-SimSPARC: {
+"SPARC SimSEM": {
     class: Microscope,
     role: sparc,
     emitters: ["SEM E-beam", "Focus Lens", "Optical Emission Filter"],

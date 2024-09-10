@@ -1,7 +1,7 @@
 # For now, this is esssentially just a FM microscope, as the FIB part is handled
 # separately by the SEM
 
-METEOR-Sim: {
+"METEOR TFSv1": {
     class: Microscope,
     role: meteor,
     children: [

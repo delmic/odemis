@@ -560,7 +560,7 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         :param n: (0<=int) The detector/stream index.
         :param data: (DataArray) The data as received from the detector, from _onData(),
                      and with MD_POS updated to the current position of the e-beam.
-        :param i: (int, int) The iteration number in X, Y.
+        :param i: (int, int) The iteration number (Y, X)
         :returns: (value) The value as needed by _assembleFinalData.
         """
         if n != self._ccd_idx:

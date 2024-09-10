@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, ubuntu-22.04]
+        os: [ubuntu-20.04, ubuntu-22.04, ubuntu-24.04]
 
     steps:
     - uses: actions/checkout@v4
@@ -153,6 +153,12 @@ jobs:
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/acq/test/feature_test.py --verbose
+
+    - name: Run tests from odemis.acq.leech
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/acq/test/leech_test.py --verbose
 
     - name: Run tests from odemis.gui.conf
       if: ${{ !cancelled() }}

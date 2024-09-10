@@ -255,8 +255,10 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop(0.1)
 
         # A scroll bars should not appear yet
-        self.assertEqual(appfpb.has_vert_scrollbar(), False)
-        self.assertEqual(appfpb.has_horz_scrollbar(), False)
+        false_pos_warn = ("This might be a false positive. "
+                          "Run test module stand-alone to verify")
+        self.assertEqual(appfpb.has_vert_scrollbar(), False, false_pos_warn)
+        self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
         for i in range(16):
             new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL %d" % i))

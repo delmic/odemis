@@ -1,5 +1,5 @@
 # Configuration for a simulated SPARC v2 system with a free-space-laser module (FSLM)
-SPARC2-FSLM: {
+"SPARCv2 FSLM": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",

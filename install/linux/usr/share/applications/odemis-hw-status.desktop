@@ -5,3 +5,4 @@ Exec=odemis-hw-status
 Terminal=false
 Type=Application
 Icon=system-run
+Categories=System;

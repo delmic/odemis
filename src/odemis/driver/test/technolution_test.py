@@ -1151,18 +1151,18 @@ class TestMirrorDescanner(unittest.TestCase):
     def test_plot_getAcqSetpoints(self):
         """Plot the acquisition descan setpoint profiles."""
         self.ebeam_scanner.dwellTime.value = 5e-6  # Increase dwell time to see steps in the profile better
-        self.mirror_descanner.physicalFlybackTime.value = 25e-4  # Increase to see its effect in the profile better
+        self.mirror_descanner.physicalFlybackTime.value = 10e-4  # Increase to see its effect in the profile better
 
         x_descan_setpoints = self.mirror_descanner.getXAcqSetpoints()
         y_descan_setpoints = self.mirror_descanner.getYAcqSetpoints()
 
         fig, axs = plt.subplots(2)
         fig.tight_layout(pad=3.0)  # add some space between subplots so that the axes labels are not hidden
-        axs[0].plot(x_descan_setpoints, "xb", markersize=0.5,
+        axs[0].plot(x_descan_setpoints, "x", color="C0", markersize=1,
                     label="x descan setpoints (scanning of one row within a cell image)")
         axs[0].set_xlabel("overscanned cell image row plus flyback [us]")
         axs[0].set_ylabel("x setpoints [bits]")
-        axs[1].plot(y_descan_setpoints[::], "or", markersize=0.5,
+        axs[1].plot(y_descan_setpoints[::], "o", color="C1", markersize=1,
                     label="y descan setpoints (scanning of one column within a cell image)")
         axs[1].set_xlabel("overscanned cell image column [px]")
         axs[1].set_ylabel("y setpoints [bits]")
@@ -1229,13 +1229,11 @@ class TestMirrorDescanner(unittest.TestCase):
         x descanner: sine
         y descanner: flat line
         """
-        self.ebeam_scanner.dwellTime.value = 5e-6
+        self.ebeam_scanner.dwellTime.value = 4e-5
         self.mirror_descanner.scanOffset.value = (0.1, 0.0)  # center of the sine on x; y flat line
-        self.mirror_descanner.scanAmplitude.value = (0.5, 0.0)  # amplitude of the sine on x; y flat line
-
+        self.mirror_descanner.scanAmplitude.value = (0.5, 0.5)  # amplitude of the sine on x; y flat line
         # Total line scan time is equal to period of the calibration signal, the frequency is the inverse
         total_line_scan_time = self.mppc.getTotalLineScanTime()
-        # TODO Do we need the flyback included for calibration of the scan delay?
 
         x_descan_setpoints, y_descan_setpoints = self.mirror_descanner.getCalibrationSetpoints(total_line_scan_time)
 
@@ -1245,15 +1243,35 @@ class TestMirrorDescanner(unittest.TestCase):
         timestamps_descanner = numpy.arange(0, total_line_scan_time, self.mirror_descanner.clockPeriod.value)
 
         fig, axs = plt.subplots(1)
-        axs.plot(timestamps_descanner, x_descan_setpoints, "ro", markersize=0.5,
+        axs.plot(timestamps_descanner, x_descan_setpoints, "o", markersize=1,
                  label="Descanner x setpoints")
-        axs.plot(timestamps_descanner, y_descan_setpoints, "bo", markersize=0.5,
+        axs.plot(timestamps_descanner, y_descan_setpoints, "o", markersize=1,
                  label="Descanner y setpoints")
         axs.set_xlabel("scanning time [sec]")
         axs.set_ylabel("setpoints [bits]")
 
         axs.legend(loc="upper left")
         plt.show()
+
+    def test_move_full_range(self):
+        """Test that moving the descanners can move the full range without any errors."""
+        init_dwell_time = self.ebeam_scanner.dwellTime.value
+        init_physical_flyback_time = self.mirror_descanner.physicalFlybackTime.value
+        init_scan_offset = self.mirror_descanner.scanOffset.value
+        init_scan_amplitude = self.mirror_descanner.scanAmplitude.value
+        init_cell_complete_resolution = self.mppc.cellCompleteResolution.value
+
+        t = time.time()
+        self.mirror_descanner.moveFullRange()
+        # expected to take roughly 0.5s, so it should at least take longer than 0.4s
+        self.assertGreater(time.time() - t, 0.4)
+        # verify all values are set back correctly
+        self.assertEqual(init_dwell_time, self.ebeam_scanner.dwellTime.value)
+        self.assertEqual(init_physical_flyback_time, self.mirror_descanner.physicalFlybackTime.value)
+        self.assertEqual(init_scan_offset, self.mirror_descanner.scanOffset.value)
+        self.assertEqual(init_scan_amplitude, self.mirror_descanner.scanAmplitude.value)
+        self.assertEqual(init_cell_complete_resolution, self.mppc.cellCompleteResolution.value)
+
 
 
 class TestMPPC(unittest.TestCase):

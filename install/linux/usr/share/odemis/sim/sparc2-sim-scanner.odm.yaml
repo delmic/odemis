@@ -1,6 +1,6 @@
 # Configuration for a simulated SPARC v2 system using a composited scanner and
 # a scan stage
-SPARC2: {
+"SPARCv2 E-beam API": {
     class: Microscope,
     role: sparc2,
     children: ["SEM Detector", "Calibration Light",

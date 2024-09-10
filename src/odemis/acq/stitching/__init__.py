@@ -18,7 +18,7 @@ from odemis.acq.stitching._constants import REGISTER_GLOBAL_SHIFT, REGISTER_SHIF
     REGISTER_IDENTITY, WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
 from odemis.acq.stitching._tiledacq import (acquireTiledArea, acquireOverview, estimateOverviewTime,
                                             estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory,
-                                            FocusingMethod, get_tiled_areas, get_zstack_levels)
+                                            FocusingMethod, get_zstack_levels, get_tiled_bboxes, get_stream_based_bbox)
 from odemis.acq.stitching._registrar import *
 from odemis.acq.stitching._weaver import *
 from odemis.acq.stitching._simple import register, weave
