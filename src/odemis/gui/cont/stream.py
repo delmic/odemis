@@ -198,6 +198,17 @@ class StreamController(object):
             self.stream.zIndex.subscribe(self._on_z_index)
             self.tab_data_model.zPos.subscribe(self._on_z_pos, init=True)
 
+        if hasattr(stream, "zIndex") and hasattr(stream, "max_projection"):
+            self.zindex_se = None
+            for se in self.entries:
+                if se.vigilattr is self.stream.zIndex:
+                    self._zindex_se = se
+                    break
+
+            if self.zindex_se is None:
+                logging.warning("Stream has zIndex but no corresponding stream entry found.")
+            self.stream.max_projection.subscribe(self._on_max_projection)
+
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
@@ -522,6 +533,12 @@ class StreamController(object):
         self.stream.zIndex.value = self.stream.zIndex.clip(val)
 
         self.stream.zIndex.subscribe(self._on_z_index)
+
+    @call_in_wx_main
+    def _on_max_projection(self, val):
+        """Disable/enable the z-index control based on the max_projection setting"""
+        if self._zindex_se is not None:
+            self._zindex_se.value_ctrl.Enable(not val)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

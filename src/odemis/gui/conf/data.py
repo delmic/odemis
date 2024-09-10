@@ -1020,6 +1020,11 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Z Index",
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
+            ("max_projection", {
+                "label": "Max projection",
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "tooltip": "Merge all z-levels into a single image using Maximum Intensity Projection (MIP).",
+            }),
         )),
     stream.StaticSEMStream:
         OrderedDict((
