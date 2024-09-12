@@ -43,6 +43,7 @@ from odemis import util
 from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
                           DataArray, HwError, ProgressiveFuture,
                           StringEnumerated, isasync)
+from odemis.util.driver import isNearPosition
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -2296,6 +2297,8 @@ class Stage(model.Actuator):
     def _moveTo(self, future: futures.Future, pos: Dict[str, float], rel: bool = False, timeout: float = 60) -> None:
         with future._moving_lock:
             try:
+                WAIT_DURATION = 20e-03  # s
+
                 if future._must_stop.is_set():
                     raise CancelledError()
                 if rel:
@@ -2314,8 +2317,14 @@ class Stage(model.Actuator):
                         pos["x"] -= self._raw_offset["x"]
                     if "y" in pos.keys():
                         pos["y"] -= self._raw_offset["y"]
+
+                orig_pos = self.parent.get_stage_position()
+
                 self.parent.move_stage(pos, rel=rel)
                 time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
+
+                # Drop axes from the original position, which are not important because they have not moved
+                orig_pos = {a: orig_pos[a] for a, nv in pos.items() if nv != orig_pos[a]}
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2337,7 +2346,7 @@ class Stage(model.Actuator):
                         break
 
                     # Wait for a little while so that we do not keep using the CPU all the time.
-                    time.sleep(20e-3)
+                    time.sleep(WAIT_DURATION)
                     moving = self.parent.stage_is_moving()
                     if not moving:
                         # Be a little careful, because sometimes, half-way through a move
@@ -2346,7 +2355,7 @@ class Stage(model.Actuator):
                         self._updatePosition()
                         logging.debug("Confirming the stage really stopped")
 
-                        time.sleep(20e-3)
+                        time.sleep(WAIT_DURATION)
                         moving = self.parent.stage_is_moving()
                         if moving:
                             logging.warning("Stage reported stopped but moving again, will wait longer")
@@ -2358,6 +2367,75 @@ class Stage(model.Actuator):
                 # know the user that the move is not complete.
                 if future._must_stop.is_set():
                     raise CancelledError()
+
+                # The stage is not moving anymore, however in some rare cases, the server still reports the old
+                # position for a short while (typically < 1s). This can cause all sorts of confusion in the calling
+                # code, as it would seem that the move didn't have any effect, and later on, after the position
+                # is eventually updated that the stage has moved unexpectedly. So, wait until the reported position is
+                # (1) not identical to the starting position and (2) not too far from the target position.
+
+                # The stage is not moving anymore, but we still want to wait until the position has been updated
+                # TODO: base the timeout on the stage movement time estimation (est. *10)
+                timeout = 10  # s
+                expected_end_time = time.time() + timeout  # s
+                check_pos = True
+
+                # TODO: Include rotation and tilt to check stage movement to target position. Test it on a hardware.
+                # The below check to skip the check on stage movement to target position if it includes r ot t
+                # is temporary. It will be removed once the behavior is extended to all the axes and confirmed to work
+                # on a hardware.
+                if 'r' in pos or 't' in pos:
+                    logging.debug("Position requested to move includes t (rx/tilt) or r (rz/rotation). "
+                                  "Reported position accuracy is not checked.")
+                    check_pos = False
+
+                # Get the target position in absolute coordinates
+                if rel:
+                    target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
+                else:
+                    target_pos = pos
+
+                while check_pos:
+                    current_pos = self.parent.get_stage_position()
+                    # Every axis requested to move should have moved (compared to the position before starting)
+                    # if there is some change w.r.t starting position, proceed to check the target position
+
+                    # TODO Check all axes and confirm it works on the hardware
+                    # if all(current_pos[a] != op for a, op in orig_pos.items()):
+                    #     axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
+                    #                                   axes=set(orig_pos.keys()), atol_linear=1e-6,
+                    #                                   atol_rotation=numpy.radians(6))
+                    #     if axes_updated:
+                    #         logging.debug("Position has updated fully: from %s -> %s", orig_pos,
+                    #                       current_pos)
+                    #         break
+
+                    # TODO Remove the check only on x any y
+                    # Note that we don't use almost_equal() on the floats, because all we care about is whether
+                    # the position has changed. Even a very tiny change is a sign we've receive a position update.
+                    if all(current_pos[a] != op for a, op in orig_pos.items()):
+                        # For x, y, and z, be extra picky and wait until they are "almost" at the target
+                        # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
+                        # Therefore, it is not important to check z
+                        # check for x and y axes as they move repeatedly in overview acquisitions
+                        axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
+                                                          axes={"x", "y"}, atol_linear=1e-6)
+
+                        if axes_updated:
+                            logging.debug("Position has updated fully: from %s -> %s", orig_pos,
+                                          current_pos)
+                            break
+
+                    if time.time() > expected_end_time:
+                        logging.warning("Stage position after move + %s s is moved to %s instead of target pos: %s. "
+                                        "Giving up waiting", current_pos, timeout, target_pos)
+                        break
+
+                    if future._must_stop.is_set():
+                        raise CancelledError()
+
+                    time.sleep(WAIT_DURATION)
+
             except Exception:
                 if future._must_stop.is_set():
                     raise CancelledError()
