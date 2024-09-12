@@ -2411,6 +2411,8 @@ class Stage(model.Actuator):
                     #         break
 
                     # TODO Remove the check only on x any y
+                    # Note that we don't use almost_equal() on the floats, because all we care about is whether
+                    # the position has changed. Even a very tiny change is a sign we've receive a position update.
                     if all(current_pos[a] != op for a, op in orig_pos.items()):
                         # For x, y, and z, be extra picky and wait until they are "almost" at the target
                         # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
