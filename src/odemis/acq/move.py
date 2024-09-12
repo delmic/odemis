@@ -39,7 +39,7 @@ from odemis.util.driver import ATOL_ROTATION_POS, isNearPosition, isInRange
 MAX_SUBMOVE_DURATION = 90  # s
 
 UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, \
-    FM_IMAGING, GRID_1, GRID_2, THREE_BEAMS = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    FM_IMAGING, GRID_1, GRID_2, THREE_BEAMS, FIB_IMAGING = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
 POSITION_NAMES = {
     UNKNOWN: "UNKNOWN",
     LOADING: "LOADING",
@@ -52,7 +52,8 @@ POSITION_NAMES = {
     FM_IMAGING: "FM IMAGING",
     GRID_1: "GRID 1",
     GRID_2: "GRID 2",
-    THREE_BEAMS: "THREE BEAMS"
+    THREE_BEAMS: "THREE BEAMS",
+    FIB_IMAGING: "FIB IMAGING"
 }
 
 RTOL_PROGRESS = 0.3
@@ -65,6 +66,9 @@ SAFETY_MARGIN_3DOF = 200e-6  # m
 # these should only be used for TFS1MeteorPostureManager _transformFromSEMToMeteor / _transformFromMeteorToSEM
 ATOL_ROTATION_TRANSFORM = 0.04   # rad ~2.5 deg
 ATOL_LINEAR_TRANSFORM = 5e-6    # 5 um
+
+# default calibration values for TFS_1
+MD_TRANSLATION_COR = (50e-3, 0)  # m
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -272,6 +276,19 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.required_keys = {
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
             model.MD_SAMPLE_CENTERS}
+        # required keys for advanced movement features, eventually consolidate into standard required_keys
+        self.adv_move_required_keys = {model.MD_FAV_FIB_POS_ACTIVE,
+                                       model.MD_FAV_MILL_POS_ACTIVE,
+                                       model.MD_POS_TRANS_COR}
+        self._flag_advanced_movement: bool = False
+
+    def _enable_advanced_movement(self):
+        """Enable advanced movement features if the required metadata is present"""
+        try:
+            self.check_stage_metadata(required_keys=self.adv_move_required_keys)
+            self._flag_advanced_movement = True
+        except ValueError as e:
+            logging.warning(f"Advanced movement features are not available due to missing metadata: {e}")
 
     def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
         """
@@ -284,6 +301,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE]
         stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE]
+        mill_fav_pos = stage_md.get(model.MD_FAV_MILL_POS_ACTIVE, {}) # optional metadata, may not be present
+        fib_fav_pos = stage_md.get(model.MD_FAV_FIB_POS_ACTIVE, {})   # optional metadata, may not be present
         if pos is None:
             pos = self.stage.position.value
         # Check the stage is near the loading position
@@ -292,6 +311,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         if isInRange(pos, stage_fm_imaging_rng, self.linear_axes):
             return FM_IMAGING
         if isInRange(pos, stage_sem_imaging_rng, self.linear_axes):
+            if self._flag_advanced_movement:
+                if isNearPosition(pos, fib_fav_pos, {"rz"}):
+                    return FIB_IMAGING
+                if isNearPosition(pos, mill_fav_pos, self.rotational_axes):
+                    return MILLING
             return SEM_IMAGING
         # None of the above -> unknown position
         return UNKNOWN
@@ -342,6 +366,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.check_stage_metadata(required_keys=self.required_keys)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
+        self._enable_advanced_movement()
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -353,43 +378,72 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         current_position = self.getCurrentPostureLabel()
         end_pos = None
-
         # Note: all grid positions need to have rx, rz axes to be able to transform
         # this is not the case by default, and needs to be added in the metadata
 
+
+        # get stage
+        if target_pos_lbl in [GRID_1, GRID_2] or current_position == LOADING:
+
+            if current_position == LOADING and target_pos_lbl not in [GRID_1, GRID_2]:
+                # if we are at loading, assume grid 1 if not specified
+                stage_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]   # 3d (special case)
+                stage_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])                 # 5d (should use the loading position 5d?)
+            else:
+                stage_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[target_pos_lbl]]   # 3d
+        else:
+            stage_pos = self.stage.position.value
+
         if target_pos_lbl == LOADING:
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
-        elif current_position in [LOADING, SEM_IMAGING]:
-            if target_pos_lbl in [SEM_IMAGING, GRID_1]:
-                # if at loading, and sem is pressed, choose grid1 by default
-                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-                sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-                end_pos = sem_grid1_pos
-            elif target_pos_lbl == GRID_2:
-                sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-                sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-                end_pos = sem_grid2_pos
-            elif target_pos_lbl == FM_IMAGING:
-                if current_position == LOADING:
-                    # if at loading and fm is pressed, choose grid1 by default
-                    sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-                    sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-                    fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
-                elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
-                end_pos = fm_target_pos
-        elif current_position == FM_IMAGING:
-            if target_pos_lbl == GRID_1:
-                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-                sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-                end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
-            elif target_pos_lbl == GRID_2:
-                sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-                sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-                end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
-            elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+        elif current_position in [LOADING, SEM_IMAGING, MILLING]:
 
+            if target_pos_lbl in [GRID_1, GRID_2]: # swap grids only at same orientation
+                if current_position in [LOADING, SEM_IMAGING]: # sem is the 'default' orientation after loading
+                    stage_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+                    end_pos = stage_pos
+                if current_position == MILLING:
+                    stage_pos.update(stage_md[model.MD_FAV_MILL_POS_ACTIVE])
+                    end_pos = stage_pos
+
+            elif target_pos_lbl == MILLING:
+                stage_pos.update(stage_md[model.MD_FAV_MILL_POS_ACTIVE])
+                end_pos = stage_pos
+            elif target_pos_lbl == SEM_IMAGING:
+                stage_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+                end_pos = stage_pos
+
+            # QUESTION: Does rotating the stage change the orientation of the grid in x, y, z?
+            # I dont think so for the specimen coordinate system, but what about raw stage coordinates?
+
+            elif target_pos_lbl == FM_IMAGING:
+                end_pos = self._transformFromSEMToMeteor(stage_pos)
+            elif target_pos_lbl == FIB_IMAGING:
+                end_pos = self._transformfromSEMToFIB(stage_pos)
+
+        elif current_position == FIB_IMAGING:
+            if target_pos_lbl in [SEM_IMAGING, MILLING]:
+                end_pos = self._transformfromFIBToSEM(self.stage.position.value,
+                                                      perpendicular=bool(target_pos_lbl == SEM_IMAGING))
+            elif target_pos_lbl == FM_IMAGING:
+                end_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+
+            elif target_pos_lbl in [GRID_1, GRID_2]:
+                stage_pos.update(stage_md[model.MD_FAV_FIB_POS_ACTIVE])
+                end_pos = stage_pos
+
+        elif current_position == FM_IMAGING:
+            if target_pos_lbl in [GRID_1, GRID_2]: # swap grids only
+                stage_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+                end_pos = self._transformFromSEMToMeteor(stage_pos)
+
+            elif target_pos_lbl in [MILLING, SEM_IMAGING, FIB_IMAGING]: # move from flm -> sem/fib/milling
+                sem = target_pos_lbl in [MILLING, SEM_IMAGING]  # sem orientation
+                perpendicular = target_pos_lbl == SEM_IMAGING   # perpendicular orientation for SEM
+                end_pos = self._transformFromMeteorToSEM(
+                    pos=self.stage.position.value,
+                    sem=sem, perpendicular=perpendicular
+                )
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
@@ -409,7 +463,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
         grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-        if current_pos_label == SEM_IMAGING:
+        if current_pos_label in [SEM_IMAGING, FIB_IMAGING, MILLING]:
             distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
             distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
             return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1
@@ -445,6 +499,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
+        trans_cor = stage_md[model.MD_POS_TRANS_COR]
         fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
 
         # check if the stage positions have rz axes
@@ -465,8 +520,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
             transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
         else:
-            transformed_pos["x"] = pos["x"] + pos_cor[0]
-            transformed_pos["y"] = pos["y"] + pos_cor[1]
+            transformed_pos["x"] = pos["x"] + trans_cor[0]
+            transformed_pos["y"] = pos["y"] + trans_cor[1]
 
         transformed_pos.update(fm_pos_active)
 
@@ -483,7 +538,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     # The rotation angles are 180 degree around rz axis, and a rotation angle
     # around rx axis which should also be calibrated at the beginning of the run.
     # The rx angle is actually the same as the milling angle.
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transformFromMeteorToSEM(self, pos: Dict[str, float], sem: bool = True, perpendicular: bool = False) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
@@ -493,7 +548,13 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
-        sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        trans_cor = stage_md[model.MD_POS_TRANS_COR]
+        if sem and perpendicular:
+            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        elif sem:
+            sem_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+        else:
+            sem_pos_active = stage_md[model.MD_FAV_FIB_POS_ACTIVE]
 
         # check if the stage positions have rz axes
         if not ("rz" in pos and"rz" in sem_pos_active):
@@ -513,8 +574,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
             transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
         else:
-            transformed_pos["x"] = pos["x"] - pos_cor[0]
-            transformed_pos["y"] = pos["y"] - pos_cor[1]
+            transformed_pos["x"] = pos["x"] - trans_cor[0]
+            transformed_pos["y"] = pos["y"] - trans_cor[1]
 
         transformed_pos.update(sem_pos_active)
 
@@ -523,6 +584,34 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             # only log warning, because transforms are used to get current position too
             logging.warning(f"Transformed position {transformed_pos} is outside SEM imaging range")
 
+        return transformed_pos
+
+    def _transformfromSEMToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the SEM imaging area to the FIB imaging area.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed stage position.
+        """
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        sem_pos_active = stage_md[model.MD_FAV_FIB_POS_ACTIVE]
+        transformed_pos.update(sem_pos_active)
+        return transformed_pos
+
+    def _transformfromFIBToSEM(self, pos: Dict[str, float], perpendicular: bool = False) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the FIB imaging area to the SEM imaging area.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed stage position.
+        """
+
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        if perpendicular:
+            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        else:
+            sem_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+        transformed_pos.update(sem_pos_active)
         return transformed_pos
 
     def _doCryoSwitchSamplePosition(self, future, target):
@@ -576,12 +665,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING, FIB_IMAGING, MILLING):
                 # save rotation and tilt in SEM before switching to FM imaging
                 # to restore rotation and tilt while switching back from FM -> SEM
-                if current_label == SEM_IMAGING and target == FM_IMAGING:
+                if current_label == MILLING and target == FM_IMAGING:
                     current_value = self.stage.position.value
-                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                    self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': current_value['rx'],
                                                                              'rz': current_value['rz']}})
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):

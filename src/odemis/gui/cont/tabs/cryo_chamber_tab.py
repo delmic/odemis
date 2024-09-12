@@ -33,6 +33,7 @@ import wx
 from odemis.gui import conf
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog, LoadProjectFileDialog
+from odemis.gui.comp.positions import EditMeteorPositionsDialog
 from odemis.model import InstantaneousFuture
 from odemis.util.filename import guess_pattern, create_projectname
 
@@ -40,8 +41,8 @@ from odemis import model
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.feature import load_project_data
-from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
-    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS
+from odemis.acq.move import (GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
+    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, FIB_IMAGING, MeteorTFS1PostureManager)
 from odemis.acq.stream import StaticStream
 from odemis.gui.comp.buttons import BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS, BTN_TOGGLE_COMPLETE
 from odemis.gui.cont.tabs.tab import Tab
@@ -165,8 +166,18 @@ class CryoChamberTab(Tab):
 
             # the meteor buttons
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                                  GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
+                                GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+
+            # additional positions for tfs1
+            if isinstance(self.posture_manager, MeteorTFS1PostureManager):
+                self.position_btns.update({
+                        FIB_IMAGING: self.panel.btn_switch_fib_imaging, MILLING: self.panel.btn_switch_milling,
+                    }
+                )
+                self.btn_edit_meteor_positions = self.panel.btn_edit_meteor_positions
+                self.btn_edit_meteor_positions.Bind(wx.EVT_BUTTON, self._edit_meteor_positions)
+                self.btn_edit_meteor_positions.Show()
 
             # show load project button
             self.btn_load_project.Show()
@@ -193,6 +204,7 @@ class CryoChamberTab(Tab):
         for btn in self.position_btns.values():
             btn.Show()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+        self._enable_advanced_movement_btns()
 
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
@@ -219,6 +231,22 @@ class CryoChamberTab(Tab):
             self._vac_sample_target_tmp = VigilantAttributeConnector(main_data.sample_thermostat.targetTemperature,
                                                                      self.panel.ctrl_sample_target_tmp,
                                                                      events=wx.EVT_COMMAND_ENTER)
+
+    def _enable_advanced_movement_btns(self):
+        """Enable the advanced movement buttons based on the posture manager flag"""
+        if self._role != 'meteor':
+            return
+
+        adv_movement_enabled = self.posture_manager._flag_advanced_movement
+        # disable adv movement buttons (fib, milling, edit)
+        self.position_btns[FIB_IMAGING].Enable(adv_movement_enabled)
+        self.position_btns[MILLING].Enable(adv_movement_enabled)
+        self.btn_edit_meteor_positions.Enable(adv_movement_enabled)
+        # set the tooltips explaining why the buttons are disabled
+        if not adv_movement_enabled:
+            self.position_btns[FIB_IMAGING].SetToolTip("FIB position is not available in the current configuration. Please update the stage metadata configuration file.")
+            self.position_btns[MILLING].SetToolTip("Milling position is not available in the current configuration. Please update the stage metadata configuration file.")
+            self.btn_edit_meteor_positions.SetToolTip("Please update the stage metadata configuration file to edit advanced movement positions.")
 
     def _get_overview_view(self):
         overview_view = next(
@@ -585,6 +613,9 @@ class CryoChamberTab(Tab):
             btn = self.position_btns.get(current_position)
             self._toggle_switch_buttons(btn)
 
+            # enable advanced movement buttons based on the posture manager flag
+            self._enable_advanced_movement_btns()
+
             # It's a common mistake that the stage.POS_ACTIVE_RANGE is incorrect.
             # If so, the sample moving will be very odd, as the move is clipped to
             # the range. So as soon as we reach FM_IMAGING, we check that at the
@@ -682,6 +713,21 @@ class CryoChamberTab(Tab):
         self._move_future.add_done_callback(self._on_move_done)
         self._show_warning_msg(None)
         self.panel.btn_cancel.Enable()
+
+    def _edit_meteor_positions(self, evt):
+        """Open a dialog for editing meteor stage positions and metadata"""
+
+        stage_md = self._stage.getMetadata()
+        dialog = EditMeteorPositionsDialog(self.main_frame, stage_md)
+        # dialog.SetSize(size=(400, 400))
+        dialog.Center()
+
+        _ = dialog.ShowModal()
+        if dialog._update_pressed:
+            self._stage.updateMetadata(dialog.stage_md)
+            logging.debug(f"Updated stage metadata: {self._stage.getMetadata()}")
+
+        dialog.Destroy()
 
     def _on_switch_btn(self, evt):
         """
@@ -783,8 +829,9 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_position in [FM_IMAGING, SEM_IMAGING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING]
+                # TODO: there is better logic for this
+                self._target_position in [FM_IMAGING, SEM_IMAGING, FIB_IMAGING, MILLING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, FIB_IMAGING, MILLING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None

@@ -31,7 +31,7 @@ from odemis import util
 from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
                              LOADING, ALIGNMENT, COATING, MILLING, LOADING_PATH,
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
-                             SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, ROT_DIST_SCALING_FACTOR,
+                             SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, FIB_IMAGING, ROT_DIST_SCALING_FACTOR,
                              ATOL_LINEAR_TRANSFORM, ATOL_ROTATION_TRANSFORM,
                              MimasPostureManager, MeteorPostureManager, EnzelPostureManager)
 from odemis.acq.move import MicroscopePostureManager
@@ -469,6 +469,21 @@ class TestMeteorTFS1Move(unittest.TestCase):
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
+    def test_moving_to_milling_after_loading(self):
+        # move the stage to the loading position
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to grid2
+        f = self.posture_manager.cryoSwitchSamplePosition(MILLING)
+        f.result()
+        position_label = self.posture_manager.getCurrentPostureLabel()
+        grid_label = self.posture_manager.getCurrentGridLabel()
+        self.assertEqual(position_label, MILLING)
+        self.assertEqual(grid_label, GRID_1)
+        mill_angles = self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], mill_angles[axis], places=4)
+
     def test_moving_from_sem_to_fm(self):
         # move to loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -487,6 +502,83 @@ class TestMeteorTFS1Move(unittest.TestCase):
         fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
+
+    def test_moving_from_sem_to_fib(self):
+        # move to loading position
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(FIB_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FIB_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        fib_angles = self.stage.getMetadata()[model.MD_FAV_FIB_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fib_angles[axis], places=4)
+
+    def test_moving_from_fib_to_sem(self):
+        # move to loading position
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(FIB_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FIB_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
+
+    def test_moving_between_positions(self):
+        """test moving between all combinations of positions"""
+        # current, target, expected position
+        positions = [
+            [SEM_IMAGING,   MILLING,        model.MD_FAV_MILL_POS_ACTIVE],
+            [SEM_IMAGING,   FIB_IMAGING,    model.MD_FAV_FIB_POS_ACTIVE],
+            [SEM_IMAGING,   FM_IMAGING,     model.MD_FAV_FM_POS_ACTIVE],
+            [MILLING,       SEM_IMAGING,    model.MD_FAV_SEM_POS_ACTIVE],
+            [MILLING,       FIB_IMAGING,    model.MD_FAV_FIB_POS_ACTIVE],
+            [MILLING,       FM_IMAGING,     model.MD_FAV_FM_POS_ACTIVE],
+            [FIB_IMAGING,   SEM_IMAGING,    model.MD_FAV_SEM_POS_ACTIVE],
+            [FIB_IMAGING,   MILLING,        model.MD_FAV_MILL_POS_ACTIVE],
+            [FIB_IMAGING,   FM_IMAGING,     model.MD_FAV_FM_POS_ACTIVE],
+            [FM_IMAGING,    SEM_IMAGING,    model.MD_FAV_SEM_POS_ACTIVE],
+            [FM_IMAGING,    MILLING,        model.MD_FAV_MILL_POS_ACTIVE],
+            [FM_IMAGING,    FIB_IMAGING,    model.MD_FAV_FIB_POS_ACTIVE],
+        ]
+
+        for current, target, expected in positions:
+            # move to loading position
+            try:
+                f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+                f.result()
+            except ValueError as e:
+                # expected error as not every position can reach loading safely
+                logging.warning(f"Failed to move to loading position from {POSITION_NAMES[current]} position. error: {e}")
+            # move the stage to the current position
+            f = self.posture_manager.cryoSwitchSamplePosition(current)
+            f.result()
+            # move to the target position
+            f = self.posture_manager.cryoSwitchSamplePosition(target)
+            f.result()
+            current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+            self.assertEqual(target, current_imaging_mode)
+            # check the values of tilt and rotation
+            angles = self.stage.getMetadata()[expected]
+            for axis in self.ROTATION_AXES:
+                self.assertAlmostEqual(self.stage.position.value[axis], angles[axis], places=4)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
