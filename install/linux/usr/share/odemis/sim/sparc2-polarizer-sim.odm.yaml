@@ -1,5 +1,5 @@
 # Configuration for a simulated SPARCv2 system with polarization analyzer
-SPARC2: {
+"SPARCv2 polarizer": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",

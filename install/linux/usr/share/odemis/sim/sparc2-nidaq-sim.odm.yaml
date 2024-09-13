@@ -1,5 +1,5 @@
-# Configuration for a simulated SPARC v2 system
-SPARC2: {
+# Configuration for a simulated SPARC v2 system, using the NIDAQmx simulator for the DAQ board
+"SPARCv2 NIDAQmx": {
     class: Microscope,
     role: sparc2,
 }
@@ -44,7 +44,10 @@ SPARC2: {
 }
 
 # Can simulate a SEM connected to a DAQ board by using the simulated NI card.
-# Need to install it with:
+# The main steps required to install the driver are:
+# sudo apt install ni-ubuntu2204-drivers-stream.deb
+# sudo apt install ni-daqmx
+# sudo pip3 install nidaqmx
 # nidaqmxconfig --import ni-pci6361-sim.nce --replace
 "SEM Scan Interface": {
     class: semnidaq.AnalogSEM,

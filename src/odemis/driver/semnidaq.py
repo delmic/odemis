@@ -78,7 +78,7 @@ from collections.abc import Iterable
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Set, Union, Callable
 
-import nidaqmx  # Tested with 0.9.0-dev (August 2023), modified to accept
+import nidaqmx  # Tested with v1.0.0 (August 2024), with numpy version requirement lowered
 import numpy
 from nidaqmx.constants import (AcquisitionType, DigitalWidthUnits,
                                LineGrouping, TerminalConfiguration,
@@ -137,7 +137,8 @@ class AnalogSEM(model.HwComponent):
         :param device: name of the NI DAQ device (ex: "Dev1"). (Can be looked up via the `nilsdev` command).
         :param multi_detector_min_period: minimum sampling period (in s) for acquisition when multiple
         detectors are acquiring. Increasing it can reduce the cross-talk. Default is the minimum period
-        of the DAQ board. It's typically in the order of 1µs.
+        of the DAQ board. It's typically in the order of 1µs. The value is for 2 channels, and automatically
+        adjusted for more channels.
         :raise:
             Exception if the device cannot be opened.
         """
@@ -178,14 +179,16 @@ class AnalogSEM(model.HwComponent):
         except OSError as ex:
             logging.warning("Failed to increase scheduling priority: %s. Might cause frame drops.", ex)
 
+        hw_min_period = 1 / self._nidev.ai_max_multi_chan_rate
         if multi_detector_min_period is None:
             # Use the very minimum period of the board if not specified
             # Note that it may still give warnings
-            self._multi_detector_min_period = 1 / self._nidev.ai_max_multi_chan_rate
+            self._multi_detector_min_period = hw_min_period
         elif not isinstance(multi_detector_min_period, (float, int)):
             raise ValueError(f"multi_detector_min_period must be a number, but is {type(multi_detector_min_period)}")
-        elif not 0 <= multi_detector_min_period <= 1e-3:
-            raise ValueError(f"multi_detector_min_period must be between 0 and 1e-3, but is {multi_detector_min_period}")
+        elif not hw_min_period <= multi_detector_min_period <= 1e-3:
+            raise ValueError(f"multi_detector_min_period must be between {hw_min_period} and 1e-3 s, "
+                             f"but is {multi_detector_min_period} s")
         else:
             self._multi_detector_min_period = multi_detector_min_period
 
@@ -237,7 +240,8 @@ class AnalogSEM(model.HwComponent):
     def _check_nidaqmx() -> None:
         """
         Check that the nidaqmx installation is working.
-        In particular, it can detect if the NIDAQmx library is not compatible with the kernel drivers.
+        In particular, it can detect if the NIDAQmx library is not compatible with the kernel drivers
+        (for instance, because it has just been updated, and a reboot is required)
         :raises:
             HwError: if the installation has some issue
         """
@@ -303,9 +307,14 @@ class AnalogSEM(model.HwComponent):
         elif n_ai == 1:
             min_ai_period = 1 / self._nidev.ai_max_single_chan_rate
         else:
-            # TODO: Automatically find good values. Maybe we could automatically compute it
-            # based on the voltages? Or just give up, and expect the installation engineer to find the
-            # good values for the system?
+            # It's little unclear. The documentation says to multiply the min period (1 µs) by the number of
+            # channels. But experimentally, it seems that the period given is accepted for 2 channels.
+            # For 3 channels, ~1.4µs is required, and for 4 channels, ~1.8µs is required.
+            # => So assume the min period is for 2 channels, and increases linearly.
+            # BUT there is more to it: there can be cross-talk between the channels. The shorter the
+            # period, the stronger the cross-talk. It also depends on the voltage range, and whether
+            # the channels use the same range. So, we give up on trying to get the right value, and
+            # just expect the user (aka system engineer) to specify it via multi_detector_min_period.
             # See specification for the "settling time for multichannels"
             # It depends on the voltage range, and how much precision is required.
             # For the 6361 (and 6251):
@@ -313,7 +322,7 @@ class AnalogSEM(model.HwComponent):
             # For <= 0.2V, 4 least significant bits (LSB), 2µs is enough
             # For >= 1V, 1 least significant bits (LSB), 1.5µs is enough
             # For <= 0.2V, 1 least significant bits (LSB), 8µs is enough
-            min_ai_period = self._multi_detector_min_period
+            min_ai_period = (self._multi_detector_min_period / 2) * n_ai
 
         # TODO: also modify the AI tasks so that they all use the same voltage range? This minimizes
         # the settle time between samples. Or let the user decide in the configuration file (but
@@ -579,6 +588,9 @@ class AcquisitionSettings:
             self.do_samples_n = 0
         self.ai_sample_rate = ai_osr / dwell_time  # Hz
         self.ai_samples_n = positions_n * ai_osr
+        # CI is same as AO (except that in FINITE mode, AO has to do one extra sample)
+        self.ci_sample_rate = ao_osr / dwell_time  # Hz
+        self.ci_samples_n = positions_n * ao_osr
 
 
 class Acquirer:
@@ -1174,6 +1186,7 @@ class Acquirer:
         # start due to not having enough memory)
         self._ao_data = scan_array
         self._ao_data_next_sample = 0  # position of the next sample to write to the board (updated by _write_ao_data())
+
         self._do_data = ttl_array
         self._do_data_next_sample = 0  # position of the next sample to write to the board (updated by _write_do_data())
 
@@ -1183,10 +1196,20 @@ class Acquirer:
                       ai_buffer_n, ai_buffer_n / acq_settings.ai_sample_rate,
                       acq_settings.ai_samples_n / ai_buffer_n)
 
+        ao_samples_n = acq_settings.ao_samples_n
+        if not continuous and counting_dets:
+            # The CI tasks' clock rely on the AO clock. On finite acquisition, we need an extra tick
+            # for ending the last sample. So we just duplicate the last AO sample.
+            ao_samples_n += 1
+            acq_settings.ao_samples_n += 1
+            logging.debug("Extending AO samples to %s for CI", ao_samples_n)
+            self._ao_data = numpy.append(self._ao_data, self._ao_data[:,-1:], axis=1)
+
         # The AO buffer size must be at least of len 2. So if there is just one
         # point, we duplicate it, to make the NI DAQ happy. (It's the same behaviour
         # as anyway the task is continuously repeating)
-        ao_samples_n = acq_settings.ao_samples_n
+        # Note: we don't have the issue with the DO buffer, because for each pixels, it contains two
+        # samples, so it's at least length 2.
         if ao_samples_n == 1:
             logging.debug("Duplicating AO buffer as it has size 1")
             ao_samples_n = 2
@@ -1536,16 +1559,17 @@ class Acquirer:
         ci_buffer_n = ci_buffer.shape[0]  # not duplicated per detector, so just 1 dim
 
         # Estimate how many samples we can expect to be available, and read by chunks of buffer size
+        # (typically, 0 or 1 buffer)
         if ai_acquired_n < acq_settings.ai_samples_n:
             ci_samples_done_n = int(ai_acquired_n * n_ci_samples_per_ai_sample)  # theoretical & pessimistic number
             ci_to_read_n = ci_samples_done_n - ci_acquired_n
             ci_to_read_n = (ci_to_read_n // ci_buffer_n) * ci_buffer_n  # round down to buffer size
             ci_samples_goal_n = ci_acquired_n + ci_to_read_n
         else:  # It's the end => read the rest
-            ci_samples_goal_n = acq_settings.ao_samples_n
+            ci_samples_goal_n = acq_settings.ci_samples_n
 
         while ci_acquired_n < ci_samples_goal_n:
-            samples_left_n = acq_settings.ao_samples_n - ci_acquired_n
+            samples_left_n = acq_settings.ci_samples_n - ci_acquired_n
             samples_to_acquire = min(samples_left_n, ci_buffer_n)
             logging.debug("Going to read CI buffer of %s samples", samples_to_acquire)
             for c, ci_reader in enumerate(ci_readers):
@@ -1588,13 +1612,12 @@ class Acquirer:
         :param do_task: The DO task object.
         :param ai_task: The AI task object.
         :param ci_tasks: The list of counter input tasks.
-        :param ao_buffer_n: The number of samples for AO.
+        :param ao_buffer_n: The number of samples for AO (also used for CI, which uses double the value).
         :param do_buffer_n: The number of samples for DO.
         :param ai_buffer_n: The number of samples for AI.
         :raises:
-            IOError: If the actual AI sample rate is not equal to the expected AI sample rate.
-            IOError: If the actual AO sample rate is not equal to the expected AO sample rate.
-            IOError: If the actual DO sample rate is not equal to the expected DO sample rate.
+            IOError: If the actual sample rate of a task, as accepted by the hardware is not equal
+            to the expected sample rate.
         """
         # CI use the same buffer size as AO, but it seems that to read it reliably, we need to
         # ask for extra room (which is automatically done on AI)
@@ -1602,19 +1625,31 @@ class Acquirer:
 
         if acq_settings.continuous:
             sample_mode = AcquisitionType.CONTINUOUS
+            ai_sample_mode = sample_mode
             # Buffer size is a hint to "guide the internal buffer size" indicating how much data
-            # will be read each time. It seems that internally the buffer is 8x bigger.
+            # will be read each time. For AI, it seems that internally the buffer is 8x bigger.
             ai_samples_n = ai_buffer_n
-            ao_samples_n = ao_buffer_n
             ci_samples_n = ci_buffer_n
+            ao_samples_n = ao_buffer_n
             do_samples_n = do_buffer_n
         else:
             sample_mode = AcquisitionType.FINITE
-            # Hardware wants at least 2 samples. If it's less than that, ask 2, and we'll read just 1
-            ai_samples_n = max(2, acq_settings.ai_samples_n)  # To indicate when it will finish
+            # Hardware wants at least 2 samples. If it's less than that, ask 2, and we'll stop before the end.
             ao_samples_n = max(2, acq_settings.ao_samples_n)
-            ci_samples_n = ao_samples_n
             do_samples_n = max(2, acq_settings.do_samples_n)
+            ci_samples_n = max(2, acq_settings.ci_samples_n)
+            if ai_buffer_n >= acq_settings.ai_samples_n:
+                # If buffer is big enough to contain all the samples, it's a sign that it's going to
+                # be a small & short acquisition => need to stop automatically, otherwise the SDK complains
+                # we don't read fast enough
+                ai_sample_mode = AcquisitionType.FINITE
+                ai_samples_n = max(2, acq_settings.ai_samples_n)
+            else:
+                # AI always runs are (almost) the maximum sample rate, so it can be a very large number
+                # of samples for large acquisition, larger than what is supported by the SDK.
+                # So run the AI continuously, which is fine as it'll just read a few samples extra at the end.
+                ai_sample_mode = AcquisitionType.CONTINUOUS
+                ai_samples_n = ai_buffer_n
 
         # See list of terminals for the options of source
         # https://www.ni.com/docs/en-US/bundle/ni-daqmx/page/mxcncpts/termnames.html
@@ -1624,7 +1659,7 @@ class Acquirer:
             ai_task.timing.cfg_samp_clk_timing(
                 rate=acq_settings.ai_sample_rate,
                 source="OnboardClock",
-                sample_mode=sample_mode,
+                sample_mode=ai_sample_mode,
                 samps_per_chan=ai_samples_n
             )
             ai_task.in_stream.input_buf_size = ai_buffer_n
@@ -1697,18 +1732,22 @@ class Acquirer:
 
         # Configure counter task(s)
         for ci_task in ci_tasks:
+            # Note: the hardware doesn't support as a clock source the base clock. So we use the AO
+            # clock, which is the same sample rate. However, in finite mode, that means the AO tasks
+            # has to do 1 extra sample, to send the clock tick for the end of the CI task.
             ci_task.timing.cfg_samp_clk_timing(acq_settings.ao_sample_rate,
-                                               source=ao_task.timing.samp_clk_term,
+                                               source=ao_task.timing.samp_clk_term,  # Cannot be onboard clock
                                                active_edge=Edge.RISING,
                                                sample_mode=sample_mode,
                                                samps_per_chan=ci_samples_n,
                                                )
 
             ci_task.in_stream.input_buf_size = ci_buffer_n
+
             # For counter *input*, it's not the "start trigger" which is used, but the "arm start trigger".
             ci_task.triggers.arm_start_trigger.trig_type = TriggerType.DIGITAL_EDGE
             ci_task.triggers.arm_start_trigger.dig_edge_edge = Edge.RISING
-            ci_task.triggers.arm_start_trigger.dig_edge_src = ao_task.timing.samp_clk_term
+            ci_task.triggers.arm_start_trigger.dig_edge_src = ai_task.timing.samp_clk_term
 
         if acq_settings.do_samples_n:
             do_task.triggers.start_trigger.delay = 2  # 2 ticks is minimum
@@ -2398,7 +2437,6 @@ class Scanner(model.Emitter):
         range_dwell = (min_dt, 1000)  # s
         self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
-        self.dwellTime.subscribe(self._on_setting_changed)
 
         # Cached data for the waveforms
         self._prev_settings = [None, None, None, None, None]  # resolution, scale, translation, margin, ao_osr
@@ -2526,13 +2564,19 @@ class Scanner(model.Emitter):
         pxs_scaled = (pxs[0] * scale[0], pxs[1] * scale[1])
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
-    def _setDwellTime(self, value):
+    def _setDwellTime(self, value: float) -> float:
+        prev_dt = self.dwellTime.value
         # If multiple acquisitions are started, a different dwell time might be
         # selected during the acquisition, compared to what is defined here.
         nrchans = max(1, len(self.parent._acquirer.active_detectors))
-        return self._updateDwellTime(value, nrchans)
+        dt = self._updateDwellTime(value, nrchans)
 
-    def _updateDwellTime(self, dt, nrchans):
+        if dt != prev_dt:  # Avoid a call if the new dwell time is the same as before
+            self.parent._acquirer.update_settings_on_next_frame()
+
+        return dt
+
+    def _updateDwellTime(self, dt: float, nrchans: int) -> float:
         dt, self._ao_osr, self._ai_osr = self.parent.find_best_dwell_time(dt, nrchans)
         self._nrchans = nrchans
         return dt
@@ -2702,6 +2746,8 @@ class Scanner(model.Emitter):
             prev_dt = self.dwellTime.value
             dt = self._updateDwellTime(prev_dt, nrchans)
             if dt != prev_dt:
+                # Skip the setter, to avoid requesting "setting update" on the acquirer, as it will
+                # already have the latest settings.
                 self.dwellTime._value = dt
                 self.dwellTime.notify(dt)
             if nrchans != self._nrchans:

@@ -1,6 +1,6 @@
 # Configuration for a simulated SPARC v2 system with a single CCD used for AR
 # and spectrometry.
-SPARC2: {
+"SPARCv2 1 camera": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",

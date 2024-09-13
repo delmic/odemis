@@ -4,3 +4,4 @@ Comment=Edit current Odemis microscope file as root
 Exec=odemis-edit-mic
 Type=Application
 Icon=applications-engineering
+Categories=System;

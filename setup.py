@@ -64,6 +64,7 @@ if sys.platform.startswith('linux'):
                   ('/lib/udev/rules.d', glob.glob('install/linux/lib/udev/rules.d/*.rules')),
                   ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.odm.yaml')),
                   ('share/odemis/sim', glob.glob('install/linux/usr/share/odemis/sim/*.odm.yaml')),
+                  ('share/odemis/sim', glob.glob('install/linux/usr/share/odemis/sim/*.desktop')),
                   ('share/odemis/examples', glob.glob('install/linux/usr/share/odemis/examples/*.odm.yaml')),
                   ('share/odemis/hwtest', glob.glob('install/linux/usr/share/odemis/hwtest/*.odm.yaml')),
                   # The key(s) for the bug reporter

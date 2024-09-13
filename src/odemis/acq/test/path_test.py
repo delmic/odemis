@@ -1350,19 +1350,23 @@ class Sparc2TunnelLensAlignerTestCase(unittest.TestCase):
         assert_pos_as_in_mode(self, self.slit, "ar")
         assert_pos_as_in_mode(self, self.spectrograph, "ar")
 
-        # before switching 'accidentally' turn on the brightlight of the tunnel
-        self.brightlight_ext.power.value = [10]
         self.optmngr.setPath("tunnel-lens-align").result()
 
-        # assert the external calibration light is off
-        self.assertEqual(self.brightlight_ext.power.value, [0])
         # assert that the specified actuators were moved according to mode given
-        self.assertEqual(self.spectrograph_ext.position.value["grating"], 2)
+        self.assertEqual(self.spectrograph_ext.position.value["grating"], 2)  # mirror
         self.assertEqual(self.spectrograph_ext.position.value["wavelength"], 0.0)
         self.assertEqual(self.spectrograph_ext.position.value["slit-in"], self.spectrograph_ext.axes["slit-in"].range[1])
-        assert_pos_as_in_mode(self, self.spec_selector, "tunnel-lens-align")
         assert_pos_as_in_mode(self, self.spec_ded_aligner, "tunnel-lens-align")
-        assert_pos_as_in_mode(self, self.spec_ded_det_selector, "tunnel-lens-align")
+
+        # Test the spec-focus-ext
+        # first move to a different grating and wavelength, to make it harder
+        self.spectrograph_ext.moveAbsSync({"grating": 1, "wavelength": 500e-9})
+
+        self.optmngr.setPath("spec-focus-ext").result()
+        # assert that the specified actuators were moved according to mode given
+        self.assertEqual(self.spectrograph_ext.position.value["grating"], 1)  # grating should not be changed
+        self.assertEqual(self.spectrograph_ext.position.value["wavelength"], 0.0)
+        self.assertEqual(self.spectrograph_ext.position.value["slit-in"], self.spectrograph_ext.axes["slit-in"].range[0])
 
 
 class SecomPathTestCase(unittest.TestCase):

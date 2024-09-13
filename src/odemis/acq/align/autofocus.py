@@ -24,6 +24,8 @@ from collections.abc import Iterable
 from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 import logging
+from typing import Tuple, Optional, List
+
 import numpy
 from odemis import model
 from odemis.acq.align import light
@@ -559,8 +561,11 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         Run AutoFocusSpectrometer
         Acquire one last image
         Turn off the light
-    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
-    opm: OpticalPathManager
+    align_mode (str): The optical path mode for which the spectrograph focus should be optimized.
+    This automatically defines the spectrograph to use and the detectors.
+    Possible values are: "spec-focus", "spec-focus-ext", "streak-focus", "streak-focus-ext", and
+    "spec-fiber-focus".
+    opm (OpticalPathManager): the optical path manager to move the actuators to the correct positions.
     streams: list of streams. The first stream is used for displaying the last
        image with the slit closed.
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
@@ -569,34 +574,10 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
             CancelledError if cancelled
             LookupError if procedure failed
     """
-    focuser = None
-    if align_mode == "spec-focus":
-        focuser = model.getComponent(role='focus')
-    elif align_mode == "spec-focus-ext":
-        focuser = model.getComponent(role='spec-ded-focus')
-    elif align_mode == "spec-fiber-focus":
-        # The "right" focuser is the one which affects the same detectors as the fiber-aligner
-        aligner = model.getComponent(role='fiber-aligner')
-        aligner_affected = aligner.affects.value  # List of component names
-        for f in ("spec-ded-focus", "focus"):
-            try:
-                focus = model.getComponent(role=f)
-            except LookupError:
-                logging.debug("No focus component %s found", f)
-                continue
-            focuser_affected = focus.affects.value
-            # Does the focus affects _at least_ one component also affected by the fiber-aligner?
-            if set(focuser_affected) & set(aligner_affected):
-                focuser = focus
-                break
-    else:
-        raise ValueError("Unknown align_mode %s" % (align_mode,))
-
-    if focuser is None:
-        raise LookupError("Failed to find the focuser for align mode %s" % (align_mode,))
-
     if streams is None:
         streams = []
+
+    focuser = _findSparc2Focuser(align_mode)
 
     for s in streams:
         if s.focuser is None:
@@ -606,7 +587,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
 
     # Get all the detectors, spectrograph and selectors affected by the focuser
     try:
-        spgr, dets, selector = _getSpectrometerFocusingComponents(focuser)  # type: (object, List[Any], Optional[Any])
+        spgr, dets, selector, bl = _getSpectrometerFocusingComponents(focuser)
     except LookupError as ex:
         # TODO: just run the standard autofocus procedure instead?
         raise LookupError("Failed to focus in mode %s: %s" % (align_mode, ex))
@@ -640,7 +621,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     f._running_subf = model.InstantaneousFuture()
 
     # Run in separate thread
-    executeAsyncTask(f, _DoSparc2AutoFocus, args=(f, streams, align_mode, opm, dets, spgr, selector, focuser, start_autofocus))
+    executeAsyncTask(f, _DoSparc2AutoFocus, args=(f, streams, align_mode, opm, dets, spgr, selector, bl, focuser, start_autofocus))
     return f
 
 
@@ -655,46 +636,58 @@ def _cancelSparc2ManualFocus(future):
     return True
 
 
-def Sparc2ManualFocus(opm, bl, align_mode, toggled=True):
+def Sparc2ManualFocus(opm, align_mode, toggled=True):
     """
     Provides the ability to check the progress of the Sparc2 manual focus
     procedure in a Future or even cancel it.
     :param opm: OpticalPathManager object
-    :param bl: bright light object
     :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
     :param mf_toggled (bool): Toggle the manual focus button on/off
     :return (ProgressiveFuture -> for the _DoSparc2ManualFocus function)
     """
+    focuser = _findSparc2Focuser(align_mode)
+
+    # Find all the hardware affected by the focuser... although we only care about the brightlight
+    try:
+        spgr, _, _, bl = _getSpectrometerFocusingComponents(focuser)
+    except LookupError as ex:
+        logging.warning("Failed to find all the components for focusing mode %s, will just use the brightlight: %s", align_mode, ex)
+        # It's correct most of the time
+        bl = model.getComponent(role="brightlight")
+
     est_start = time.time() + 0.1
     manual_focus_loading_time = 10  # Rough estimation of the slit movement
     f = model.ProgressiveFuture(start=est_start, end=est_start + manual_focus_loading_time)
     # The only goal for using a canceller is to make the progress bar stop
     # as soon as it's cancelled.
     f.task_canceller = _cancelSparc2ManualFocus
-    executeAsyncTask(f, _DoSparc2ManualFocus, args=(opm, bl, align_mode, toggled))
+    executeAsyncTask(f, _DoSparc2ManualFocus, args=(opm, spgr, bl, align_mode, toggled))
     return f
 
 
-def _DoSparc2ManualFocus(opm, bl, align_mode, toggled=True):
+def _DoSparc2ManualFocus(opm, spgr: model.Actuator, bl: model.Emitter, align_mode: str, toggled: bool = True):
     """
     The actual implementation of the manual focus procedure, run asynchronously
     When the manual focus button is toggled:
             - Turn on the light
             - Change the optical path (closing the slit)
-    :param future: the future object that is used to represent the task
     :param opm: OpticalPathManager object
+    :param spgr: spectrograph
     :param bl: brightlight object
     :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
-    :param mf_toggled (bool): Toggle the manual focus button on/off
+    :param toggled (bool): Toggle the manual focus button on/off
     """
-    # First close slit, then switch on calibration light
-    # Go to the special focus mode (=> close the slit)
-    f = opm.setPath(align_mode)
-    bl.power.value = bl.power.range[(1 * toggled)]  # When mf_toggled = False 1 will be 0
-    f.result()
+    if toggled:
+        # Go to the special focus mode (=> close the slit)
+        f = opm.setPath(align_mode)
+        bl.power.value = bl.power.range[1]
+        f.result()
+    else:
+        # Don't change the optical path (to the previous position), this it's up to the caller
+        bl.power.value = bl.power.range[0]
 
 
-def GetSpectrometerFocusingDetectors(focuser):
+def GetSpectrometerFocusingDetectors(focuser: model.Actuator) -> List[model.Detector]:
     """
     Public wrapper around _getSpectrometerFocusingComponents to return detectors only
     :param focuser: (Actuator) the focuser that will be used to change focus
@@ -713,19 +706,51 @@ def GetSpectrometerFocusingDetectors(focuser):
     return dets
 
 
-def _getSpectrometerFocusingComponents(focuser):
+def _findSparc2Focuser(align_mode: str) -> model.Actuator:
+    """
+    Find the correct focus actuator for the given alignment mode, based on the microscope model.
+    :param align_mode: see Sparc2AutoFocus
+    :return: the focuser
+    :raise: LookupError if the focuser cannot be found
+    """
+    if align_mode == "spec-focus":
+        focuser = model.getComponent(role='focus')
+    elif align_mode == "spec-focus-ext":
+        focuser = model.getComponent(role='spec-ded-focus')
+    elif align_mode == "streak-focus":
+        focuser = model.getComponent(role='focus')
+    elif align_mode == "streak-focus-ext":
+        focuser = model.getComponent(role='spec-ded-focus')
+    elif align_mode == "spec-fiber-focus":
+        # The "right" focuser is the one which affects the same detectors as the fiber-aligner
+        aligner = model.getComponent(role='fiber-aligner')
+        aligner_affected = aligner.affects.value  # List of component names
+        focuser = _findSameAffects(("spec-ded-focus", "focus"), aligner_affected)
+    else:
+        raise ValueError("Unknown align_mode %s" % (align_mode,))
+
+    if focuser is None:
+        raise LookupError("Failed to find the focuser for align mode %s" % (align_mode,))
+
+    return focuser
+
+
+def _getSpectrometerFocusingComponents(focuser: model.Actuator) -> Tuple[
+        model.Actuator, List[model.Detector], Optional[model.Actuator],
+        model.Emitter
+    ]:
     """
     Finds the different components needed to run auto-focusing with the
     given focuser.
-    focuser (Actuator): the focuser that will be used to change focus
+    :param focuser: the focuser that will be used to change focus
     return:
         * spectrograph (Actuator): component to move the grating and wavelength
         * detectors (list of Detectors): the detectors attached on the
           spectrograph, which can be used for focusing
         * selector (Actuator or None): the component to switch detectors
+        * brightlight (Emitter): the light source to be turned on during focusing
     raise LookupError: if not all the components could be found
     """
-
     dets = GetSpectrometerFocusingDetectors(focuser)
     if not dets:
         raise LookupError("Failed to find any detector for the spectrometer focusing")
@@ -735,41 +760,46 @@ def _getSpectrometerFocusingComponents(focuser):
     # => Use alphabetical order of the roles
     dets.sort(key=lambda c: c.role)
 
+    det_names = [d.name for d in dets]
+
     # Get the spectrograph and selector based on the fact they affect the
     # same detectors.
-    spgr = _findSameAffects(["spectrograph", "spectrograph-dedicated"], dets)
+    spgr = _findSameAffects(("spectrograph", "spectrograph-dedicated"), det_names)
 
     # Only need the selector if there are several detectors
     if len(dets) <= 1:
         selector = None  # we can keep it simple
     else:
-        selector = _findSameAffects(["spec-det-selector", "spec-ded-det-selector"], dets)
+        selector = _findSameAffects(("spec-det-selector", "spec-ded-det-selector"), det_names)
 
-    return spgr, dets, selector
+    bl = _findSameAffects(("brightlight", "brightlight-ext"), [det_names[0]])
+
+    return spgr, dets, selector, bl
 
 
-def _findSameAffects(roles, affected):
+def _findSameAffects(roles: List[str], affected: List[str]) -> model.Component:
     """
-    Find a component that affects all the given components
-    comps (list of str): set of component's roles in which to look for the "affecter"
-    affected (list of Component): set of affected components
-    return (Component): the first component that affects all the affected
-    raise LookupError: if no component found
+    Find a component that affects *all* the given components
+    :param roles: list of component's roles in which to look for the "affecter". The first one that
+    matches will be returned. It's allowed to pass a role which is not present in the model.
+    :param affected: the name of the affected components
+    :return: the first component that affects all the affected
+    :raise: LookupError, if no component found
     """
-    naffected = set(c.name for c in affected)
+    affected = frozenset(affected)
     for r in roles:
         try:
             c = model.getComponent(role=r)
         except LookupError:
             logging.debug("No component with role %s found", r)
             continue
-        if naffected <= set(c.affects.value):
+        if affected <= set(c.affects.value):
             return c
     else:
-        raise LookupError("Failed to find a component that affects all %s" % (naffected,))
+        raise LookupError(f"Failed to find a component within {roles} that affects all {affected}")
 
 
-def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, focuser, start_autofocus=True):
+def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, bl, focuser, start_autofocus=True):
     """
         cf Sparc2AutoFocus
         return dict((grating, detector) -> focus pos)
@@ -788,16 +818,10 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             raise CancelledError()
 
         logging.debug("Turning on the light")
-        if align_mode == "spec-focus-ext":
-            try:
-                bl = model.getComponent(role="brightlight-ext")
-            except KeyError:
-                raise KeyError("No light component found with role brightlight-ext")
-        else:
-            try:
-                bl = model.getComponent(role="brightlight")
-            except KeyError:
-                raise KeyError("No light component found with role brightlight")
+
+        # Make sure it's in 0th order (ie, show the image as-is). This also ensures the spectrograph
+        # is done with any previous actions.
+        spgr.moveAbsSync({"wavelength": 0})
 
         _playStream(dets[0], streams)
         future._running_subf = light.turnOnLight(bl, dets[0])

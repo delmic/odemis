@@ -1,5 +1,5 @@
 # Configuration for a simulated SPARC v2 system with a FPLM (Fiber-coupled PhotoLuminescence Module)
-SPARC2-FPLM: {
+"SPARCv2 FPLM": {
     class: Microscope,
     role: sparc2,
 }
