@@ -773,6 +773,29 @@ class ConvertStage(model.Actuator):
         vpos_dep = self._convertPosTodep(vpos, absolute=absolute)
         return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1]}
 
+    def to_dependant_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Convert position dict from original axes to dependant axes with all axis values
+        :param pos: position dict with all axis values (x, y) in the original axes
+        :return: position dict with all axis values (x, y) in the dependant axes
+        """
+        vpos = self._get_pos_vector(pos, absolute=True)
+        # remap vpos x, y -> stage y, z
+        vpos = {"x": pos["x"], "y": vpos["y"], "z": vpos["z"]} # stage-fm
+
+        return vpos
+
+    def from_dependent_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Convert position dict from dependant axes to original axes with all axis values
+        :param pos: position dict with all axis values (x, y, z) in the dependent axes
+        :return: position dict with all axis values (x, y, z) in the original axes
+        """
+        # Convert position dict from dependant axes to original axes
+        vpos = self._convertPosFromdep([pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
+        # remap vpos x, y -> stage y, z
+        vpos = {"x": pos["x"], "y": vpos[0], "z": vpos[1]}
+
+        return vpos
+
     @isasync
     def moveRel(self, shift, **kwargs):
         """

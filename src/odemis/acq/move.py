@@ -264,6 +264,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         # Load components
         self.stage = model.getComponent(role='stage-bare')
         self.focus = model.getComponent(role='focus')
+        self.convert_stage = model.getComponent(name="Linked YZ")
         # set linear axes and rotational axes used
         self.axes = self.stage.axes
         self.linear_axes = set(key for key in self.axes.keys() if key in {'x', 'y', 'z', 'm'})
@@ -333,6 +334,13 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         pass
 
+    def transform_stage_position_to_bare(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform a stage (fm) position to the stage bare position"""
+        return self.convert_stage.to_dependent_position(pos)
+
+    def transform_stage_position_from_bare(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform a stage bare position to the stage (fm) position"""
+        return self.convert_stage.from_dependent_position(pos)
 
 class MeteorTFS1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
