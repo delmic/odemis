@@ -719,7 +719,6 @@ class CryoChamberTab(Tab):
 
         stage_md = self._stage.getMetadata()
         dialog = EditMeteorPositionsDialog(self.main_frame, stage_md)
-        # dialog.SetSize(size=(400, 400))
         dialog.Center()
 
         _ = dialog.ShowModal()

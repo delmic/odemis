@@ -75,13 +75,13 @@
         # Mirroring values between SEM - METEOR
         POS_COR: [0.02447, -0.000017],  # [m] rotation correction (x, y) (sem <-> meteor)
         POS_TRANS_COR: [48.8e-3, 0],    # [m] translation correction (x, y) (fib <-> meteor), standard value is x=48.8mm
-        SAMPLE_PRE_TILT: 0.61,          # [rad] pre-tilt angle for the sample holder, standard value is 35°
+        SAMPLE_PRE_TILT: 0.6109,          # [rad] pre-tilt angle for the sample holder, standard value is 35°
         # Active tilting (rx) & rotation (rz) angles positions when switching between SEM & FM, in radians.
         # Note: these values are calibrated at installation time.
         FAV_FM_POS_ACTIVE: {"rx": 0.2968  , "rz":  3.1415}, # 17° - 180°, FM position (perpendicular to the fm)
         FAV_FIB_POS_ACTIVE: {"rx": 0.2968, "rz": 3.1415},   # 17° - 180°, FIB position (perpendicular to the fib)
-        FAV_SEM_POS_ACTIVE: {"rx": 0.61, "rz": 0},          # 35° - 0° sem position (perpendicular to the sem)
-        FAV_MILL_POS_ACTIVE: {"rx": 0.24, "rz": 0},         # 14° - 0° milling position (oblique angle to fib)
+        FAV_SEM_POS_ACTIVE: {"rx": 0.6109, "rz": 0},          # 35° - 0° sem position (perpendicular to the sem)
+        FAV_MILL_POS_ACTIVE: {"rx": 0.2444, "rz": 0},         # 14° - 0° milling position (oblique angle to fib)
     },
 }
 
@@ -93,7 +93,7 @@
     },
     init: {
       axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
-      rotation: -0.61, # rad , -35°
+      rotation: -0.6109, # rad , -35°
     },
 }
 

@@ -473,7 +473,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
         # move the stage to the loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result()
-        # move the stage to grid2
+        # move the stage to milling position (grid 1 default)
         f = self.posture_manager.cryoSwitchSamplePosition(MILLING)
         f.result()
         position_label = self.posture_manager.getCurrentPostureLabel()
@@ -526,12 +526,12 @@ class TestMeteorTFS1Move(unittest.TestCase):
         # move to loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result()
-        # move the stage to the sem imaging area
+        # move the stage to the fib imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(FIB_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FIB_IMAGING, current_imaging_mode)
-        # move to the fm imaging area
+        # move to the sem imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
