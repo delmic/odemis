@@ -27,7 +27,7 @@ import threading
 from abc import abstractmethod
 from concurrent.futures import CancelledError
 from concurrent.futures._base import CANCELLED, RUNNING, FINISHED
-from typing import Dict, Union
+from typing import Dict, Union, Optional
 
 import numpy
 import scipy
@@ -95,7 +95,7 @@ class MicroscopePostureManager:
         pass
 
     @abstractmethod
-    def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
+    def getCurrentPostureLabel(self, pos: Optional[Dict[str, float]] = None) -> int:
         """
         Determine where lies the current stage position
         :param pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses the
@@ -104,11 +104,13 @@ class MicroscopePostureManager:
         """
         pass
 
-    def cryoSwitchSamplePosition(self, target: int):
+    def cryoSwitchSamplePosition(self, target: int, pos: Optional[Dict[str, float]] = None) -> model.CancellableFuture:
         """
         Provide the ability to switch between different positions, without bumping into anything.
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
            ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
+        :param pos: (dict str->float) the target stage position. If None, it uses the current position of the stage or
+            the position defined in metadata, depending on the type of move and the target.
         :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control raising the
         ValueError exception
         """
@@ -118,11 +120,11 @@ class MicroscopePostureManager:
         f._task_lock = threading.Lock()
         f._running_subf = model.InstantaneousFuture()
         # Run in separate thread
-        executeAsyncTask(f, self._doCryoSwitchSamplePosition, args=(f, target))
+        executeAsyncTask(f, self._doCryoSwitchSamplePosition, args=(f, target, pos))
         return f
 
     @abstractmethod
-    def _doCryoSwitchSamplePosition(self, future, target_pos: int):
+    def _doCryoSwitchSamplePosition(self, future, target_pos: int, pos: Optional[Dict[str, float]] = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
@@ -273,7 +275,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
             model.MD_SAMPLE_CENTERS}
 
-    def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
+    def getCurrentPostureLabel(self, pos: Optional[Dict[str, float]] = None) -> int:
         """
         Detects the current stage position of meteor
         :param pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses the
@@ -296,10 +298,11 @@ class MeteorPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def getTargetPosition(self, target_pos_lbl: int, pos: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        pos (dict str->float): the current stage position. If None, it uses the current position of the stage.
         :return: (dict str->float) the target position of the stage
         :raises ValueError: if the target position is not supported
         """
@@ -343,16 +346,19 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def getTargetPosition(self, target_pos_lbl: int, pos: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        :param pos: (dict str->float) the current stage position. If None, it uses the current position of the stage.
         :return: (dict str->float) the end position of the stage
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
         current_position = self.getCurrentPostureLabel()
         end_pos = None
+        if pos is None:
+            pos = self.stage.position.value
 
         # Note: all grid positions need to have rx, rz axes to be able to transform
         # this is not the case by default, and needs to be added in the metadata
@@ -376,7 +382,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
                     fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
                 elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+                    fm_target_pos = self._transformFromSEMToMeteor(pos)
                 end_pos = fm_target_pos
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
@@ -388,7 +394,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
                 end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
             elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+                end_pos = self._transformFromMeteorToSEM(pos)
 
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
@@ -525,11 +531,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target, pos: Optional[Dict[str, float]] = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, SEM_IMAGING, FM_IMAGING.
+        :param pos: (dict str->float) the current stage position. If None, it uses the current position of the stage.
         """
         try:
             try:
@@ -555,7 +562,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            target_pos = self.getTargetPosition(target, pos=pos)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -639,16 +646,19 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             missing_keys = required_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def getTargetPosition(self, target_pos_lbl: int, pos: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        :param pos: (dict str->float) the current stage position. If None, it uses the current position of the stage.
         :return: (dict str->float) the end position of the stage
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
         current_position = self.getCurrentPostureLabel()
         end_pos = None
+        if pos is None:
+            pos = self.stage.position.value
 
         if target_pos_lbl == LOADING:
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
@@ -669,7 +679,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                     sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
                     fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
                 elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+                    fm_target_pos = self._transformFromSEMToMeteor(pos)
                 end_pos = fm_target_pos
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
@@ -681,7 +691,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
                 end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
             elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+                end_pos = self._transformFromMeteorToSEM(pos)
 
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
@@ -823,7 +833,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Return transformed_pos (containing the new x, y, m, rx, rm coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target, pos: Optional[Dict[str, float]] = None):
         try:
             try:
                 target_name = POSITION_NAMES[target]
@@ -850,7 +860,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            target_pos = self.getTargetPosition(target, pos=pos)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -959,16 +969,19 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             missing_keys = required_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def getTargetPosition(self, target_pos_lbl: int, pos: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        :param pos: (dict str->float) the current stage position. If None, it uses the current position of the stage.
         :return: (dict str->float) the end position of the stage
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
         current_position = self.getCurrentPostureLabel()
         end_pos = None
+        if pos is None:
+            pos = self.stage.position.value
 
         if target_pos_lbl == LOADING:
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
@@ -989,7 +1002,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
                     fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
                 elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+                    fm_target_pos = self._transformFromSEMToMeteor(pos)
                 end_pos = fm_target_pos
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
@@ -1001,7 +1014,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
                 end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
             elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+                end_pos = self._transformFromMeteorToSEM(pos)
 
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
@@ -1142,7 +1155,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # Return transformed_pos (containing the new x, y, z, rx, rz coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target, pos: Optional[Dict[str, float]] = None):
         try:
             try:
                 target_name = POSITION_NAMES[target]
@@ -1169,7 +1182,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            target_pos = self.getTargetPosition(target, pos=pos)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -1355,11 +1368,12 @@ class MimasPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target, pos: Optional[Dict[str, float]] = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, MILLING, COATING, FM_IMAGING.
+        :param pos: (dict str->float) the target stage position. If None, it uses the current position of the stage.
         """
         try:
             try:
@@ -1583,12 +1597,13 @@ class EnzelPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target, pos: Optional[Dict[str, float]] = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
          ALIGNMENT, COATING, MILLING, SEM_IMAGING, FM_IMAGING.
+        :param pos: (dict str->float) the target stage position. If None, it uses the current position of the stage.
         """
         try:
             try:
