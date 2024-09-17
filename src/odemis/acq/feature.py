@@ -2,8 +2,17 @@ import glob
 import json
 import logging
 import os
+from typing import List
+
+import yaml
 
 from odemis import model
+from odemis.acq.move import (
+    FM_IMAGING,
+    POSITION_NAMES,
+    SEM_IMAGING,
+    MicroscopePostureManager,
+)
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The current state of the feature
@@ -119,3 +128,60 @@ def load_project_data(path: str) -> dict:
             f.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
 
     return {"overviews": overview_data, "features": features}
+
+
+def import_features_from_autolamella(path: str) -> List[CryoFeature]:
+    """Import feature positions from an autolamella experiment
+    :param path (str): path to the autolamella experiment directory
+    :return (List[CryoFeature]): list of CryoFeature
+    """
+
+    with open(os.path.join(path, "experiment.yaml"), "r") as f:
+        data = yaml.load(f, Loader=yaml.FullLoader)
+
+    # get the relevant components
+    linked_yz_stage = model.getComponent(name="Linked YZ")
+    pm = MicroscopePostureManager(model.getMicroscope())
+
+    cryo_features = []
+    for lamella in data["positions"]:
+
+        # get the position
+        pos = lamella["state"]["microscope_state"]["stage_position"]
+        name = pos["name"]
+
+        # remap r->rz, t->rx
+        pos["rx"] = pos.pop("t")
+        pos["rz"] = pos.pop("r")
+
+        # apply raw coordinate system offset (x, y only)
+        if hasattr(pm.stage, "_raw_offset"):
+            pos["x"] += pm.stage._raw_offset["x"]
+            pos["y"] += pm.stage._raw_offset["y"]
+
+        label = pm.getCurrentPostureLabel(pos=pos)
+        logging.info(f"Feature: {name}, pos: {pos}, Posture: {POSITION_NAMES[label]}") # stage-bare
+
+        # NOTE: for now, we should check this is in SEM Imaging and skip if not for safety
+        if label != SEM_IMAGING:
+            logging.warning(f"Cryo feature {name} is not in SEM Imaging posture, skipping.")
+            continue
+
+        # convert to FM imaging position
+        fm_pos = pm._transformFromSEMToMeteor(pos) # stage-bare
+        # fm_pos = pm.getTargetPosition(pos=pos, target_pos_lbl=FM_IMAGING) # TODO: migrate once meteor-1205 is merged
+
+        # convert to stage-fm using linked_yz_stage
+        vpos = linked_yz_stage._convertPosFromdep([fm_pos["y"], fm_pos["z"]])
+        # remap vpos x, y -> stage y, z
+        vpos = {"x": fm_pos["x"], "y": vpos[0], "z": vpos[1]} # stage-fm
+        logging.debug(f"feature {name} stage-fm: {vpos}, stage-bare: {fm_pos}")
+        # vpos = pm.transform_stage_position_from_bare(fm_pos) # TODO: migrate to this once meteor-1204 is merged
+
+        # create feature
+        # TODO: we need to handle this better, the focus may be anywhere? maybe use the active position?
+        focus_pos = model.getComponent(role="focus").position.value
+        cryo_feat = CryoFeature(name=name, x=vpos["x"], y=vpos["y"], z=focus_pos["z"]) # TODO migrate to stage_pos, focus_pos once meteor-1186 is merged
+        cryo_features.append(cryo_feat)
+
+    return cryo_features

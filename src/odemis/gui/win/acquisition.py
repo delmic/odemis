@@ -27,7 +27,7 @@ import math
 import os.path
 from builtins import str
 from concurrent.futures._base import CancelledError
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import odemis.gui.model as guimodel
 import wx
@@ -1390,15 +1390,16 @@ def ShowChamberFileDialog(parent, projectname):
     fn = dialog.GetFilename()
     return os.path.join(path, fn)
 
-def LoadProjectFileDialog(parent, projectname):
+def LoadProjectFileDialog(parent: wx.Frame, projectname: str, message: str = "Choose a project directory to load") -> Optional[str]:
     """
-    parent (wxframe): parent window
-    projectname (string): project name to propose by default
-    return (string or none): the project directory name to load (or the none if the user cancelled)
+    :param parent (wx.Frame): parent window
+    :param projectname (string): project name to propose by default
+    :param message (string): message to display in the dialog
+    :return (string or none): the project directory name to load (or the none if the user cancelled)
     """
     # current project name
     dialog = wx.DirDialog(parent,
-                           message="Choose a project directory to load",
+                           message=message,
                            defaultPath=projectname,
                            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
                            )
