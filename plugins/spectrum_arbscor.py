@@ -142,6 +142,16 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
     call a different function that one of the two examples).
     """
 
+    # overrides SEMCCDStream method, to disable hardware sync
+    def _supports_hw_sync(self) -> bool:
+        # arbitrary scan order does not support hardware sync (at least for now)
+        return False
+
+    # overrides SEMCCDStream method, to disable scan stage acquisition
+    def _runAcquisitionScanStage(self, future):
+        # This could be implemented, by overriding _getScanStagePositions(), but that's not yet done
+        raise NotImplementedError("Arbitrary scan order does not support scan stage acquisition")
+
     def _get_scan_order(self, rep: Tuple[int, int]) -> List[Tuple[int, int]]:
         """
         Computes the arbitrary scan order
