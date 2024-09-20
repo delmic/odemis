@@ -1,5 +1,5 @@
 # Configuration for the SPARC v2 system
-SPARC2-TC-Fiber: {
+"SPARCv2 Time-correlator HH400": {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",

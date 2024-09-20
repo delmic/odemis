@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 import re
+import threading
 import time
 import socket
 
@@ -124,7 +125,7 @@ class TrueForm(model.Emitter):
 
         period = 25e-9  # s, the standard value that is used in the first system. = 40 MHz
         self.period = model.FloatContinuous(period, range=(1 / FREQUENCY_MAX, 1 / FREQUENCY_MIN),
-                                            setter=self._set_period, unit="Hz")
+                                            setter=self._set_period, unit="s")
         # What we call the "delay" is called the "phase". That's because the phase shifts the
         # beginning of the waveform, while the "sync" signal stays the same, so this causes a delay
         # between the sync signal and the beginning of the waveform. The maximum delay is the period.
@@ -201,7 +202,18 @@ class TrueForm(model.Emitter):
         """
         Check if there is an error on the device
         """
-        errno, strerror = self.getSystemError()
+        # Also take the opportunity to detect errors in the communication, and possibly reading old
+        # messages
+        for i in range(5):
+            try:
+                errno, strerror = self.getSystemError()
+                break
+            except OSError:
+                logging.warning("Failed to get the system error")
+                continue
+        else:
+            raise OSError("Failed to get the system error")
+
         if errno != 0:
             raise TrueFormError(errno, strerror)
 
@@ -222,8 +234,11 @@ class TrueForm(model.Emitter):
         # Return something like: -113,"Undefined header"
         # or +0,"No error"
         ans = self._sendQuery(b"SYST:ERR?")
-        errno, msg = ans.split(",", 1)
-        return int(errno), msg.strip('"')
+        try:
+            errno, msg = ans.split(",", 1)
+            return int(errno), msg.strip('"')
+        except (ValueError, TypeError):
+            raise OSError(f"Invalid error message: {ans}")
 
     def setOutput(self, c: int, p: bool):
         """
@@ -419,26 +434,29 @@ class TrueForm(model.Emitter):
         Update the settings of the device.
         Called by the repeating timer.
         """
-        f = self.getFrequency(self._channel)  # Device always returns f > 0
-        p = 1 / f
-        if p != self.period.value:
-            self.period._set_value(p)  # Avoid the setter
+        try:
+            f = self.getFrequency(self._channel)  # Device always returns f > 0
+            p = 1 / f
+            if p != self.period.value:
+                self.period._set_value(p)  # Avoid the setter
 
-        # Duty cycle
-        dc = self.getDutyCycle(self._channel) / 100
-        if dc != self.dutyCycle.value:
-            self.dutyCycle._set_value(dc)
+            # Duty cycle
+            dc = self.getDutyCycle(self._channel) / 100
+            if dc != self.dutyCycle.value:
+                self.dutyCycle._set_value(dc)
 
-        # Delay
-        act_phase = self.getPhase(self._channel)
-        d = self.period.value * act_phase / 360
-        if d != self.delay.value:
-            self.delay._set_value(d)
+            # Delay
+            act_phase = self.getPhase(self._channel)
+            d = self.period.value * act_phase / 360
+            if d != self.delay.value:
+                self.delay._set_value(d)
 
-        # Power
-        pw = self.getOutput(self._channel)
-        if pw != self.power.value:
-            self.power._set_value(pw)
+            # Power
+            pw = self.getOutput(self._channel)
+            if pw != self.power.value:
+                self.power._set_value(pw)
+        except Exception:
+            logging.exception("Failed to update the settings")
 
 
 class IPBusAccesser(object):
@@ -458,6 +476,7 @@ class IPBusAccesser(object):
         self._tcp_port = tcp_port
         self._ip_addr = ip_addr
         self._tcp_timeout = float(tcp_timeout)
+        self._access = threading.RLock()  # Lock to ensure only one query/response at a time
 
         if ip_addr == "fake":
             self._tcp_sock = Keysight33622ASimulator()
@@ -478,15 +497,16 @@ class IPBusAccesser(object):
             self._tcp_sock = None
 
     def sendQuery(self, query_str: bytes) -> str:
-        # Send the given query to the instrument and read the response.
+        # Send the given query to the instrument and read the response
         query_str += b'\n'
-        logging.debug("Sending query '%s'", to_str_escape(query_str))
-        self._tcp_sock.sendall(query_str)
-        resp = self.readResp()
+        with self._access:
+            logging.debug("Sending query '%s'", to_str_escape(query_str))
+            self._tcp_sock.sendall(query_str)
+            resp = self.readResp()
         return resp
 
     def readResp(self) -> str:
-        # Read response from the instrument.
+        # Read response from the instrument
         ans = b''
         while ans[-1:] != b'\n':
             char = self._tcp_sock.recv(1)
@@ -501,8 +521,9 @@ class IPBusAccesser(object):
     def sendCmd(self, cmd: bytes):
         # Send the given command to the instrument.
         cmd += b'\n'
-        logging.debug("Sending command '%s'", to_str_escape(cmd))
-        self._tcp_sock.sendall(cmd)  # send command
+        with self._access:
+            logging.debug("Sending command '%s'", to_str_escape(cmd))
+            self._tcp_sock.sendall(cmd)  # send command
 
 
 class OutputStates:
@@ -574,7 +595,7 @@ class Keysight33622ASimulator:
         msg (str): the message to parse
         return None: self._output_buf is updated if necessary
         """
-        logging.debug("SIM: parsing %s", to_str_escape(msg))
+        logging.debug("SIM: parsing '%s'", to_str_escape(msg))
         msg = msg.decode("latin1").lower().strip()  # remove leading and trailing whitespace
 
         if msg == "*idn?":
@@ -637,7 +658,7 @@ class Keysight33622ASimulator:
             # The device only accepts values between 0.01 and 99.99, but to simulate more limited
             # range when the frequency is high, we use 20-80%.
             if duty_cycle < 20 or duty_cycle > 80:
-                logging.warning("The duy cycle value is out of bounds: %s given", duty_cycle)
+                logging.warning("The duty cycle value is out of bounds: %s given", duty_cycle)
                 self._error = -222  # Out of range
                 duty_cycle = min(max(20, duty_cycle), 80)
             self._output_states[channel].duty_cycle = duty_cycle

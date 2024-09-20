@@ -2,7 +2,7 @@
 # 1. Vis-NIR
 # 2. Fiber module (to time correlator)
 
-SPARC2-VisNIR-TR: {
+"SPARCv2 Time-correlator PH300": {
     class: Microscope,
     role: sparc2,
 }

@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import math
 import os
 import time
 import unittest
@@ -31,7 +32,9 @@ from odemis.acq import stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
     WEAVER_MEAN, acquireTiledArea, FocusingMethod
-from odemis.acq.stitching._tiledacq import TiledAcquisitionTask, get_fov, get_tiled_areas, get_zstack_levels, compute_area_size, clip_tiling_area_to_range, SAMPLE_USABLE_BBOX_TEM_GRID
+
+from odemis.acq.stitching._tiledacq import (TiledAcquisitionTask, get_fov, get_zstack_levels, clip_tiling_bbox_to_range,
+                                            get_stream_based_bbox, get_tiled_bboxes, get_fov_based_bbox)
 from odemis.util import testing, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
@@ -581,7 +584,8 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         focus_active_pos = self.focus.getMetadata()[model.MD_FAV_POS_ACTIVE]
         self.focus.moveAbsSync(focus_active_pos)
 
-    def test_get_tiled_areas(self):
+
+    def test_get_stream_based_bbox(self):
         # test when inside range, not whole grid
         pos = {"x": 0, "y": 0}
         streams = [self.fm_streams[0]]
@@ -589,56 +593,61 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
         nx, ny = 5, 5
         overlap = 0.1
-        areas = get_tiled_areas(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap,
-                                 whole_grid=False)
+
+        bbox = get_stream_based_bbox(
+            pos=pos,
+            streams=streams,
+            tiles_nx=nx,
+            tiles_ny=ny,
+            tiling_rng=rng,
+            overlap=overlap,
+        )
 
         w = nx * fov[0] * (1 - overlap)
         h = ny * fov[1] * (1 - overlap)
-        numpy.testing.assert_array_almost_equal(areas[0], [-w/2, -h/2, w/2, h/2])
+        numpy.testing.assert_array_almost_equal(bbox, [-w/2, -h/2, w/2, h/2])
 
         # test when outside range
         pos = {"x": 0.2, "y": 0.2}
-        area = get_tiled_areas(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap,
-                                 whole_grid=False)
-        self.assertEqual(area, [])
+        bbox = get_stream_based_bbox(
+            pos=pos,
+            streams=streams,
+            tiles_nx=nx,
+            tiles_ny=ny,
+            tiling_rng=rng,
+            overlap=overlap,
+        )
+        self.assertEqual(bbox, None)
 
+    def test_get_tiled_bboxes(self):
         # test whole grid
         selected_grids = ["GRID 1", "GRID 2"]
         sample_centers_raw = self.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]
-        sample_centers = {n: (v["x"], v["y"]) for n, v in sample_centers_raw.items()}
+        sample_centers = [(v["x"], v["y"]) for v in sample_centers_raw.values()]
+
+        SAMPLE_RADIUS_TEM_GRID = 1.25e-3
+        hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
+        SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)
         rel_bbox = SAMPLE_USABLE_BBOX_TEM_GRID
-        areas = get_tiled_areas(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap,
-                                 whole_grid=True,
-                                 sample_centers=sample_centers,
-                                 rel_bbox=rel_bbox,
-                                 selected_grids=selected_grids,
+
+        areas = get_tiled_bboxes(
+            rel_bbox=rel_bbox,
+            sample_centers=sample_centers,
         )
 
         computed_areas = []
-        for name, center in sample_centers.items():
+        for center in sample_centers:
 
             computed_areas.append(
                 (center[0] + rel_bbox[0],
                  center[1] + rel_bbox[1],
                  center[0] + rel_bbox[2],
                  center[1] + rel_bbox[3])
-        )
+            )
         self.assertEqual(len(areas), len(selected_grids))
         numpy.testing.assert_array_almost_equal(areas, computed_areas)
 
-    def test_compute_area_size(self):
+    def test_get_fov_based_bbox(self):
 
         # test when inside range
         pos = {"x": 0, "y": 0}
@@ -647,42 +656,80 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
         nx, ny = 5, 5
         overlap = 0.1
-        area = compute_area_size(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap)
+
+        bbox = get_fov_based_bbox(
+            pos=pos,
+            fov=fov,
+            tiles_nx=nx,
+            tiles_ny=ny,
+            tiling_rng=rng,
+            overlap=overlap
+        )
 
         w = nx * fov[0] * (1 - overlap)
         h = ny * fov[1] * (1 - overlap)
-        numpy.testing.assert_array_almost_equal(area, [-w/2, -h/2, w/2, h/2])
+        numpy.testing.assert_array_almost_equal(bbox, [-w/2, -h/2, w/2, h/2])
 
         # test when outside range
         pos = {"x": 0.2, "y": 0.2}
-        area = compute_area_size(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap)
-        self.assertEqual(area, None)
+        bbox = get_fov_based_bbox(
+            pos=pos,
+            fov=fov,
+            tiles_nx=nx,
+            tiles_ny=ny,
+            tiling_rng=rng,
+            overlap=overlap
+        )
+        self.assertEqual(bbox, None)
 
+        # test various horizontal and vertical repeats
+        pos = {"x": 0.0, "y": 0.0}
+        fov = (0.00017, 0.00017)  # Mock fov to be uniform
+        overlap = 0  # Set to zero, to make non-square comparison easier
+        test_repeat_cases = [
+            # Square case
+            {"nx": 5, "ny": 5},
+            # Non-square cases
+            {"nx": 5, "ny": 3},
+            {"nx": 5, "ny": 2},
+            {"nx": 5, "ny": 1}
+        ]
 
-    def test_clip_tiling_area_to_range(self):
+        for test_repeat_case in test_repeat_cases:
+            bbox = get_fov_based_bbox(
+                pos=pos,
+                fov=fov,
+                tiles_nx=test_repeat_case["nx"],
+                tiles_ny=test_repeat_case["ny"],
+                tiling_rng=rng,
+                overlap=overlap
+            )
+            x_size = bbox[2] - bbox[0]
+            y_size = bbox[3] - bbox[1]
+            # If we divide the size of the resulting bounding box by the repeat count,
+            # an identical size is expected
+            self.assertEqual(
+                x_size / test_repeat_case["nx"],
+                y_size / test_repeat_case["ny"],
+                test_repeat_case
+            )
+
+    def test_clip_tiling_bbox_to_range(self):
         # test area when inside range
         pos = {"x": 0, "y": 0}
         tiling_range = {"x": (-100, 100), "y": (-100, 100)}
         w, h = 50, 50
-        area = clip_tiling_area_to_range(w=w, h=h, pos=pos, tiling_rng=tiling_range)
+        area = clip_tiling_bbox_to_range(w=w, h=h, pos=pos, tiling_rng=tiling_range)
         numpy.testing.assert_array_almost_equal(area, [-25, -25, 25, 25])
 
         # test area when cliping to range
         pos = {"x": 0, "y": 0}
-        area = clip_tiling_area_to_range(w=500, h=500, pos=pos, tiling_rng=tiling_range)
+        area = clip_tiling_bbox_to_range(w=500, h=500, pos=pos, tiling_rng=tiling_range)
         numpy.testing.assert_array_almost_equal(area, [-100, -100, 100, 100])
 
         # test when outside of range
         pos = {"x": 500, "y": 500}
-        area = clip_tiling_area_to_range(w=100, h=100, pos=pos, tiling_rng=tiling_range)
+        area = clip_tiling_bbox_to_range(w=100, h=100, pos=pos, tiling_rng=tiling_range)
         self.assertEqual(area, None)
 
     def test_get_zstack_levels(self):
@@ -715,7 +762,8 @@ class TiledAcqUtilTestCase(unittest.TestCase):
 
         # shift z levels when outside focus range
         focuser.moveAbs({"z": frange[0]}).result() # move to the minimum position
-        zlevels = get_zstack_levels(zsteps=10, zstep_size=10e-6 / 5, rel=False, focuser=focuser)
+
+        zlevels = get_zstack_levels(zsteps=10, zstep_size=2e-6, rel=False, focuser=focuser)
         self.assertAlmostEqual(zlevels[0], frange[0]) # minimum z level should be at minimum position
 
 if __name__ == '__main__':

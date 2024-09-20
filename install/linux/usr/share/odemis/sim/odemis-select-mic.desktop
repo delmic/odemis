@@ -1,0 +1,14 @@
+# Special Odemis icon with an alternative Executor giving the option to
+# select a microscope file before starting Odemis.
+# Install with:
+# sudo desktop-file-install /usr/share/odemis/sim/odemis-select-mic.desktop
+# It should place the file in /usr/share/applications/, and update the Ubuntu menu.
+[Desktop Entry]
+Name=Odemis Microscope Simulator
+Comment=Open odemis with a microscope selector
+Keywords=Odemis;simulator;microscope;select
+Exec=bash -c "odemis-select-mic-start /usr/share/odemis/sim/*.odm.yaml --select-version"
+Type=Application
+StartupNotify=true
+Icon=odemis
+Categories=System;

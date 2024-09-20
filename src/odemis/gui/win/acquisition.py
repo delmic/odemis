@@ -56,8 +56,10 @@ from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
-from odemis.acq.stitching import get_tiled_areas, get_zstack_levels
 
+from odemis.acq.stitching import (get_tiled_bboxes,
+                                  get_stream_based_bbox,
+                                  get_zstack_levels)
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
@@ -659,6 +661,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
         self.fibsem_mode = isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
 
+
         # hide optical settings / stream panel when in fibsem mode
         self.fp_settings_secom_optical.Show(not self.fibsem_mode)
         self.pnl_opt_streams.Show(not self.fibsem_mode)
@@ -698,17 +701,17 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._autofocus_roi_vac = VigilantAttributeConnector(
             self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
-        # Slightly change the interface if multiple grids available (sample centers).
-        # For now this only works on the MIMAS. So in total we have this whole display:
-        # * zstack steps
-        # * step size
+        # Change the interface depending on the component being used for imaging, and
+        # whether we have sample centers or not
+        # * zstack steps (if not fibsem acquisition)
+        # * step size (if not fibsem acquisition)
         # [] whole grid acquisition (if sample centers)
         # * tile nb x
         # * tile nb y
         # * selected grid area (if sample centers)
         # * grid selection panel (if sample centers) -> uses a placeholder panel
         # * Total area
-        # [] autofocus (if not sample centers)
+        # * autofocus
 
         if self._main_data_model.sample_centers:
             self.autofocus_chkbox.Show()
@@ -794,8 +797,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 self.stage = self._main_data_model.stage_bare
                 self.focuser = self._main_data_model.ebeam_focus
                 self.detector = self._main_data_model.sed
-                self.settings_obs = None
-                range_md = model.MD_SEM_IMAGING_RANGE
+
+                self.settings_obs = self._main_data_model.settings_obs
+                imaging_range = model.MD_SEM_IMAGING_RANGE
 
                 # In FIBSEM mode, we don't have autofocus because of how the overview code currently works
                 self.autofocus_chkbox.Hide()
@@ -806,7 +810,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 self.focuser = self._main_data_model.focus
                 self.detector = self._main_data_model.ccd
                 self.settings_obs = self._main_data_model.settings_obs
-                range_md = model.MD_POS_ACTIVE_RANGE
+                imaging_range = model.MD_POS_ACTIVE_RANGE
+
 
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
             # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
@@ -816,11 +821,11 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             }
 
             stage_md = self.stage.getMetadata()
-            if range_md in stage_md:
-                self._tiling_rng.update(stage_md[range_md])
+            if imaging_range in stage_md:
+                self._tiling_rng.update(stage_md[imaging_range])
         except (KeyError, IndexError):
-            raise ValueError(f"Failed to find stage {range_md} with x and y range")
-
+            raise ValueError(f"Failed to find stage {imaging_range} with x and y range")
+            
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
         for s in streams:
@@ -907,18 +912,37 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         of all areas to acquire.
         """
 
-        areas = get_tiled_areas(
-            pos=self.stage.position.value,
-            streams=self.get_acq_streams(),
-            tiles_nx=self.tiles_nx.value,
-            tiles_ny=self.tiles_ny.value,
-            overlap=self.overlap,
-            tiling_rng=self._tiling_rng,
-            selected_grids=self._selected_grids,
-            sample_centers=self._main_data_model.sample_centers,
-            rel_bbox=self._main_data_model.sample_rel_bbox,
-            whole_grid=self.whole_grid_chkbox.Value,
-        )
+        if not self.whole_grid_chkbox.Value:
+            area = get_stream_based_bbox(
+                        pos=self.stage.position.value,
+                        streams=self.get_acq_streams(),
+                        tiles_nx=self.tiles_nx.value,
+                        tiles_ny=self.tiles_ny.value,
+                        overlap=self.overlap,
+                        tiling_rng=self._tiling_rng,
+            )
+            # Cast to list, to have a consistent format with the alternative path
+            areas = [area] if area is not None else []
+        else:
+            if not self._main_data_model.sample_centers:
+                raise NotImplementedError(
+                    "If using the whole grid method, sample centers should be defined."
+                )
+
+            if not hasattr(self._main_data_model, "sample_rel_bbox"):
+                raise NotImplementedError(
+                    "The current data model does not have a relative bounding box defined",
+                    "If a heuristic bounding box is desired, it can be implemented in ",
+                    "a specific MainGUIData model."
+                )
+
+            sample_centers = [pos for name, pos in self._main_data_model.sample_centers.items()
+                if name in self._selected_grids]
+
+            areas = get_tiled_bboxes(
+                sample_centers=sample_centers,
+                rel_bbox=self._main_data_model.sample_rel_bbox,
+            )
 
         return areas
 

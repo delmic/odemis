@@ -429,12 +429,12 @@ class AcquisitionServer(model.HwComponent):
 
         total_line_scan_time = self._mppc.getTotalLineScanTime()
 
-        # get the scanner setpoints
-        x_descan_setpoints, y_descan_setpoints = self._mirror_descanner.getCalibrationSetpoints(total_line_scan_time)
-
         # get the descanner setpoints
+        x_descan_setpoints, y_descan_setpoints = descanner.getCalibrationSetpoints(total_line_scan_time)
+
+        # get the scanner setpoints
         x_scan_setpoints, y_scan_setpoints, scan_calibration_dwell_time_ticks = \
-            self._ebeam_scanner.getCalibrationSetpoints(total_line_scan_time)
+            scanner.getCalibrationSetpoints(total_line_scan_time)
 
         calibration_data = CalibrationLoopParameters(descanner.rotation.value,
                                                      0,  # Descan X offset parameter unused.
@@ -987,17 +987,25 @@ class MirrorDescanner(model.Emitter):
 
         return setpoints.tolist()
 
-    def getCalibrationSetpoints(self, total_line_scan_time):
+    def getCalibrationSetpoints(self, total_line_scan_time, sine_in_x=True, sine_in_y=False):
         """
         Calculate the setpoints for the descanner during calibration mode. The setpoints resemble a sine shape
-        in x and a flat line at zero in y.
+        on one axis and a flat line on the other or a sine in both directions.
 
         :param total_line_scan_time: (float) Total line scanning time in seconds including
-                                     overscanned pixels and flyback time. TODO do we need the flyback?
+                                     overscanned pixels and flyback time.
+        :param sine_in_x: (bool) If True, the setpoints in the x-direction will follow a sine wave.
+                                 if False, the setpoints in the x-direction will be a flat line.
+        :param sine_in_y: (bool) If True, the setpoints in the y-direction will follow a sine wave.
+                                 if False, the setpoints in the y-direction will be a flat line.
         :return:
                 x_setpoints (list of ints): The calibration setpoints in x direction in bits.
                 y_setpoints (list of ints): The calibration setpoints in y direction in bits.
         """
+        if not sine_in_x and not sine_in_y:
+            raise ValueError("Calibration set points require a sine wave in either the x or y axis, or both, "
+                             "not in neither direction.")
+
         # The calibration frequency is the inverse of the total line scan time.
         calibration_frequency = 1 / total_line_scan_time  # [1/sec]
 
@@ -1011,13 +1019,15 @@ class MirrorDescanner(model.Emitter):
 
         # convert offset and amplitude from [a.u.] to [bits]
         sine_offset = convertRange(self.scanOffset.value,
-                                   numpy.array(self.scanOffset.range)[:, 1], I16_SYM_RANGE)  # [bits]
+                                   numpy.array(self.scanOffset.range)[:, 1],
+                                   I16_SYM_RANGE)  # [bits]
         sine_amplitude = convertRange(self.scanAmplitude.value,
-                                      numpy.array(self.scanAmplitude.range)[:, 1], I16_SYM_RANGE)  # [bits]
+                                      numpy.array(self.scanAmplitude.range)[:, 1],
+                                      I16_SYM_RANGE)  # [bits]
 
         timestamps_setpoints = numpy.linspace(0, total_line_scan_time, number_setpoints)  # [sec]
-        # setpoints in x direction resemble a sine
-        # Note: There is not necessarily a setpoint at the max/min amplitude of the sine.
+        # Note: Due to the discrete nature of setpoints, there is not necessarily a setpoint
+        # exactly at the max/min amplitude of the sine.
         #
         # *               *  *
         #   *           *      *
@@ -1025,11 +1035,10 @@ class MirrorDescanner(model.Emitter):
         #     *      *           *
         #       *  *
         #
-        x_setpoints = sine_offset[0] + sine_amplitude[0] * \
-                      numpy.sin(2 * math.pi * calibration_frequency * timestamps_setpoints)  # [bits+bits*sec/sec=bits]
-
-        # setpoints in y direction are constant (=0)
-        y_setpoints = 0 * timestamps_setpoints  # [bits]
+        constant_setpoints = 0 * timestamps_setpoints  # a flat line [bits]
+        sine_wave = numpy.sin(2 * math.pi * calibration_frequency * timestamps_setpoints)  # [bits+bits*sec/sec=bits]
+        x_setpoints = sine_offset[0] + sine_amplitude[0] * sine_wave if sine_in_x else constant_setpoints
+        y_setpoints = sine_offset[1] + sine_amplitude[1] * sine_wave if sine_in_y else constant_setpoints
 
         # Setpoints need to be integers when send to the ASM. First round down found setpoints to next integer
         # then convert to int type.
@@ -1039,11 +1048,89 @@ class MirrorDescanner(model.Emitter):
         y_setpoints = numpy.floor(y_setpoints).astype(int)  # [bits]
 
         # mapping from a.u. to bits is symmetrically around 0, whereas the range in bits that is accepted by the ASM is
-        # not symetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
+        # not symmetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
         x_setpoints = numpy.minimum(x_setpoints, I16_SYM_RANGE[1] - 1)
         y_setpoints = numpy.minimum(y_setpoints, I16_SYM_RANGE[1] - 1)
 
         return x_setpoints.tolist(), y_setpoints.tolist()
+
+    def moveFullRange(self):
+        """
+        Moves the descanner x and y axes through their full range to minimize wear on the ball bearings,
+        which move only a small amount during acquisition. The movement is sinusoidal in both x and y to ensure
+        gradual and complete coverage of the range. This process is repeated 10 times to help distribute
+        lubrication and ensure the bearings move sufficiently. The process takes roughly 0.5 second.
+        """
+        # Check if an acquisition is still in progress
+        if not self.parent._mppc.acq_queue.empty():
+            logging.error("There is still an unfinished acquisition in progress. "
+                          "Calibration mode cannot be started yet.")
+            return
+
+        # Stop the calibration loop if it's already running to restart it with new parameters
+        if self.parent.calibrationMode.value:
+            # Sending this command without the calibration loop being active might cause errors.
+            self.parent.asmApiPostCall("/scan/stop_calibration_loop", 204)
+
+        # Store current parameters to restore them after moving the descanner through the full range
+        init_dwellTime = self.parent._ebeam_scanner.dwellTime.value
+        init_physicalFlybackTime = self.physicalFlybackTime.value
+        init_scanOffset = self.scanOffset.value
+        init_scanAmplitude = self.scanAmplitude.value
+        init_cellCompleteResolution = self.parent._mppc.cellCompleteResolution.value
+
+        try:
+            # Set dwell time, flyback time, and resolution to maximum values to avoid moving the descanners too fast
+            self.parent._ebeam_scanner.dwellTime.value = self.parent._ebeam_scanner.dwellTime.range[-1]
+            self.physicalFlybackTime.value = self.physicalFlybackTime.range[-1]
+            self.parent._mppc.cellCompleteResolution.value = self.parent._mppc.cellCompleteResolution.range[-1]
+            self.scanOffset.value = (0.0, 0.0)
+            scan_amp_rng = self.scanAmplitude.range
+
+            # Set scan amplitude to cover the entire range
+            self.scanAmplitude.value = (scan_amp_rng[0][0], scan_amp_rng[-1][0])
+            total_line_scan_time = self.parent._mppc.getTotalLineScanTime()
+
+            # Generate descanner setpoints for sinusoidal movement in both x and y directions
+            x_descan_setpoints, y_descan_setpoints = self.getCalibrationSetpoints(
+                total_line_scan_time, sine_in_x=True, sine_in_y=True
+            )
+
+            # Generate scanner setpoints (note required by the ASM API, not needed for moving the descanners)
+            x_scan_setpoints, y_scan_setpoints, scan_calibration_dwell_time_ticks = \
+                self.parent._ebeam_scanner.getCalibrationSetpoints(total_line_scan_time)
+
+            # Prepare calibration data
+            calibration_data = CalibrationLoopParameters(self.rotation.value,
+                                                         0,  # Descan X offset parameter unused.
+                                                         x_descan_setpoints,
+                                                         0,  # Descan Y offset parameter unused.
+                                                         y_descan_setpoints,
+                                                         scan_calibration_dwell_time_ticks,
+                                                         self.parent._ebeam_scanner.rotation.value,
+                                                         self.parent._ebeam_scanner.getTicksScanDelay()[0],
+                                                         0.0,  # Scan X offset parameter unused.
+                                                         x_scan_setpoints,
+                                                         0.0,  # Scan Y offset parameter unused.
+                                                         y_scan_setpoints)
+
+            # Start the calibration loop with the new parameters
+            self.parent._calibrationParameters = calibration_data
+            self.parent.asmApiPostCall("/scan/start_calibration_loop",
+                                       204,
+                                       data=self.parent._calibrationParameters.to_dict())
+            # The calibration loop continuously runs until it gets stopped,
+            # wait for the scan to be repeated 10 times before stopping.
+            time.sleep(total_line_scan_time * 10)
+            self.parent.asmApiPostCall("/scan/stop_calibration_loop", 204)
+        finally:
+            # Restore original parameters and clear calibration parameters
+            self.parent._calibrationParameters = None
+            self.parent._ebeam_scanner.dwellTime.value = init_dwellTime
+            self.physicalFlybackTime.value = init_physicalFlybackTime
+            self.scanOffset.value = init_scanOffset
+            self.scanAmplitude.value = init_scanAmplitude
+            self.parent._mppc.cellCompleteResolution.value = init_cellCompleteResolution
 
 
 class MPPC(model.Detector):

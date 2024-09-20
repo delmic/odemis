@@ -4,7 +4,7 @@
 # * Analog CL PMT
 # * Spectrometer CCD
 # * Monochromator counting PMT
-SPARC-MONASH: {
+"SPARC 2 PMTs": {
     class: Microscope,
     role: sparc,
     children: ["SEM E-beam", "Focus Lens", "Optical Emission Filter",

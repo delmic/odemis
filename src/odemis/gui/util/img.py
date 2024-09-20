@@ -1055,7 +1055,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
                   value_step, value_space, tick_spacing)
 
     # Find the smallest value multiple of value_step, which is within the range
-    first_val = math.ceil(min_val / value_step) * value_step
+    first_val = max(min_val, math.ceil(min_val / value_step) * value_step)  # Clamp to min_val for floating point errors
     # logging.debug("Setting first tick at value %s", first_val)
 
     tick_values = [min_val] if min_val == 0 else []

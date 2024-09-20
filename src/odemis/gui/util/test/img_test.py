@@ -124,6 +124,7 @@ class TestCalculateTicks(unittest.TestCase):
     def test_simple(self):
         # Various "simple" inputs which should return a couple of ticks with a value to pixel ratio > 0
         ranges = [(100, 1000), (0, 9500), (1e-3, 8e-3), (-5, 6), (-2, -1000)]
+        ranges += [(400e-9 + 5e-23, 500e-9)]  # floating point error would causes first tick < range[0]
 
         csize = (500, 600)
         for rng in ranges:

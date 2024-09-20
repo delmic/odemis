@@ -33,7 +33,7 @@ from abc import ABCMeta, abstractmethod
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 from functools import partial
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import numpy
 
@@ -619,8 +619,8 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         n (0<=int): the detector/stream index
         data (DataArray): the data as received from the detector, from
           _onData(), and with MD_POS updated to the current position of the e-beam.
-        i (int, int): iteration number in X, Y
-        return (value): value as needed by _onCompletedData
+        i (int, int): pixel index of the first (top-left) pixel (Y, X)
+        return (value): value as needed by _onCompletedData/_assembleLiveData
         """
         # Update metadata based on user settings
         s = self._streams[n]
@@ -1487,6 +1487,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     logging.debug("Got SEM data from %s", s)
                     s._dataflow.unsubscribe(sub)
 
+                    sem_data = self._preprocessData(i, sem_data, (0, 0))
                     self._assembleLiveData2D(i, sem_data, (0, 0), pos_lt, rep, 0)
 
                 # TODO: if there is some missing data, we could guess which pixel is missing, based on the timestamp.
@@ -1829,7 +1830,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
         Acquires the image from the detector.
         :param n (int): Number of points (pixel/ebeam positions) acquired so far.
-        :param px_idx (int, int): Current scanning position of ebeam.
+        :param px_idx (int, int): Current scanning position of ebeam (Y, X)
         :param img_time (0<float): Expected time spend for one image.
         :param sem_time (0<float): Expected time spend for all sub-pixel.
                (=img_time if not fuzzing, and < img_time if fuzzing)
@@ -1921,9 +1922,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             if self._acq_state == CANCELLED:
                 raise CancelledError()
 
-            ccd_data = self._acq_data[self._ccd_idx][-1]
-            self._acq_data[-1][-1] = self._preprocessData(self._ccd_idx, ccd_data, px_idx)
-            logging.debug("Processed CCD data %d = %s", n, px_idx)
+            for i, das in enumerate(self._acq_data):
+                das[-1] = self._preprocessData(i, das[-1], px_idx)
+            logging.debug("Pre-processed data %d = %s", n, px_idx)
 
             self._updateProgress(future, time.time() - start, n + 1, tot_num, extra_time)
 
@@ -2153,8 +2154,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
                         logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
 
-                    ccd_data = self._acq_data[-1][-1]
-                    self._acq_data[-1][-1] = self._preprocessData(len(self._streams), ccd_data, px_idx)
+                    for i, das in enumerate(self._acq_data):
+                        das[-1] = self._preprocessData(i, das[-1], px_idx)
                     logging.debug("Processed CCD data %d = %s", n, px_idx)
 
                     n += 1
@@ -2324,6 +2325,37 @@ class SEMMDStream(MultipleDetectorStream):
         self._emitter.scale.value = cscale
         return self._dwellTime.value
 
+    def _get_next_rectangle(self, rep: Tuple[int, int], acq_num: int, px_time: float,
+                            leech_np: List[Optional[int]]) -> Tuple[int, int]:
+        """
+        Get the next rectangle to scan, based on the leeches and the live update period.
+        :param rep: total number of pixels to scan (y, x)
+        :param acq_num: number of pixels scanned so far
+        :param px_time: time to acquire one pixel
+        :param leech_np: number of pixels to scan before the next run of each leech.
+        If None, the leech doesn't need to run.
+        :return: shape in pixels of the rectangle to scan (y, x)
+        """
+        tot_num = rep[0] * rep[1]
+        # When is the next (ie, soonest) leech?
+        npixels2scan = min([np for np in leech_np if np is not None] + [tot_num - acq_num])
+        n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), acq_num, npixels2scan)
+
+        # If it's too long, relative to the live update period, then cut in roughly equal parts
+        live_period_px = int(self._live_update_period // px_time + 1)
+        if npixels2scan > live_period_px * 1.5:
+            nb_cuts = round(npixels2scan / live_period_px)
+            # Only scan rectangular blocks of pixels which start at the beginning of a row
+            assert n_y >= 1 and n_x >= 1
+            if n_y == 1:  # n_y == 1 -> 1 line, or less -> cut in sub lines
+                n_x = max(1, n_x // nb_cuts)
+            else:  # n_y > 1 -> large blocks -> just cut in sub lines
+                n_y = max(1, n_y // nb_cuts)
+            logging.debug("Live period should be in %d pixels, rounding to %d parts of %d x %d pixels",
+                          live_period_px, nb_cuts, n_y, n_x)
+
+        return n_y, n_x
+
     def _runAcquisition(self, future):
         """
         Acquires images from the multiple detectors via software synchronisation.
@@ -2335,6 +2367,9 @@ class SEMMDStream(MultipleDetectorStream):
         """
         try:
             self._acq_done.clear()
+            # TODO: the real dwell time used depends on how many detectors are used, and so it can
+            # only be known once we start acquiring. One way would be to set a synchronization, and
+            # then subscribe all the detectors, and finally check the dwell time.
             px_time = self._adjustHardwareSettings()
             if self._emitter.dwellTime.value != px_time:
                 raise IOError("Expected hw dt = %f but got %f" % (px_time, self._emitter.dwellTime.value))
@@ -2361,13 +2396,8 @@ class SEMMDStream(MultipleDetectorStream):
             # number of spots scanned so far
             spots_sum = 0
             while spots_sum < tot_num:
-                # Acquire the maximum amount of pixels until next leech
-                npixels2scan = min([np for np in leech_np if np is not None] +
-                                         [tot_num - spots_sum] + [int(self._live_update_period // px_time + 1)]) # max, in case of no leech
-
-                # Only scan rectangular blocks of pixels which start at the beginning of a row
-                n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), spots_sum, npixels2scan)
-
+                # Acquire the maximum amount of pixels until next leech, and less than the live period
+                n_y, n_x = self._get_next_rectangle(rep, spots_sum, px_time, leech_np)
                 npixels2scan = n_x * n_y
 
                 px_idx = (spots_sum // rep[0], spots_sum % rep[0]) #current pixel index
@@ -2438,7 +2468,9 @@ class SEMMDStream(MultipleDetectorStream):
                     if i >= 1 and len(das[-1]) == 0:
                         # It's OK to not receive data on the first detector (SEM).
                         # It happens for instance with the Monochromator.
-                        raise IOError("No data received for stream %s" % (self._streams[i].name.value))
+                        raise IOError("No data received for stream %s" % (self._streams[i].name.value,))
+
+                    das[-1] = self._preprocessData(i, das[-1], px_idx)
                     self._assembleLiveData2D(i, das[-1], px_idx, px_pos, rep, 0)
 
                 self._shouldUpdateImage()
@@ -2506,7 +2538,7 @@ class SEMMDStream(MultipleDetectorStream):
 
         except Exception as exp:
             if not isinstance(exp, CancelledError):
-                logging.exception("Software sync acquisition of multiple detectors failed")
+                logging.exception("Scanner sync acquisition of multiple detectors failed")
 
             # make sure it's all stopped
             for s, sub in zip(self._streams, self._subscribers):
