@@ -41,7 +41,7 @@ class DelayConnector(model.HwComponent):
         * streak-unit (optional): a component with a .timeRange, to be updated when the triggerDelay is changed
         according to the MD_TIME_RANGE_TO_DELAY metadata.
         """
-        super().__init__(name, role, **kwargs)
+        super().__init__(name, role, dependencies=dependencies, **kwargs)
 
         dependencies = dependencies or {}
         try:
@@ -56,7 +56,7 @@ class DelayConnector(model.HwComponent):
             self.triggerRate = model.FloatVA(0, unit="Hz", readonly=True)
             self._trigger.period.subscribe(self._on_trigger_period, init=True)
             if model.hasVA(self._trigger, "power"):
-                self._trigger.power.subscribe(self._on_trigger_period)
+                self._trigger.power.subscribe(self._on_trigger_power)
 
         if "streak-unit" in dependencies:
             self._streak_unit = dependencies["streak-unit"]
