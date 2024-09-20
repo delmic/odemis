@@ -3676,7 +3676,7 @@ class MCS2(model.Actuator):
                         self._checkMoveAbs(deactive_pos)
                         self._doMoveAbs(future, self._applyInversion(deactive_pos))
 
-                self._waitEndMove(future, moving_channels, time.time() + 100)
+                    self._waitEndMove(future, moving_channels, time.time() + 100)
 
             except CancelledError:
                 # FIXME: if the referencing is stopped, the device refuses to
