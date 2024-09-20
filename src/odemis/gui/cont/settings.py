@@ -25,13 +25,19 @@ user interface.
 
 """
 
-from abc import ABCMeta
-from collections.abc import Iterable
 import locale
 import logging
+import os
+import time
+from abc import ABCMeta
+from collections.abc import Iterable
+
+import wx
+
+import odemis.dataio
+import odemis.gui.conf as guiconf
 from odemis import model, util
 from odemis.acq import calibration
-import odemis.dataio
 from odemis.gui import img
 from odemis.gui.comp import hist
 from odemis.gui.comp.buttons import ImageTextToggleButton
@@ -41,15 +47,10 @@ from odemis.gui.conf.data import HIDDEN_VAS, get_hw_config
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
 from odemis.gui.cont.stream import StreamController
-from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
+from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM, MicroscopyGUIData
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, get_picture_folder
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
-import os
-import time
-import wx
-
-import odemis.gui.conf as guiconf
 
 
 class SettingsController(metaclass=ABCMeta):
@@ -798,6 +799,22 @@ class AnalysisSettingsController(SettingsBarController):
         self.tab_panel.Layout()
 
 
+class EBeamBlankerSettingsController(SettingsBarController):
+    """
+    A whole "bar" just for the ebeam (fast) blanker settings.
+    Used by the SPARC acquisition tab, and the SPARC (steak) alignment tab.
+    If the ebeam blanker is not present, the bar is hidden.
+    """
+
+    def __init__(self, tab_panel: wx.Panel, tab_data: MicroscopyGUIData):
+        super().__init__(tab_data)
+        main_data = tab_data.main
+        if main_data.ebeam_blanker:
+            tab_panel.fp_settings_ebeam_blanker.Show()  # Hidden by default, as this is a rare configuration
+            self._settings_ctrl = SettingsController(tab_panel.fp_settings_ebeam_blanker, "")
+            self.add_hw_component(main_data.ebeam_blanker, self._settings_ctrl)
+
+
 class SparcAlignSettingsController(SettingsBarController):
 
     def __init__(self, tab_panel, tab_data):
@@ -902,7 +919,11 @@ class StreakCamAlignSettingsController(SettingsBarController):
                                                   conf={"control_type": odemis.gui.CONTROL_FLT,
                                                         "label": "Trigger delay",
                                                         "tooltip": "Change the trigger delay value to "
-                                                                   "center the image."},
+                                                                   "center the image.",
+                                                        # Force the minimum step, otherwise it defaults to a
+                                                        # "huge" value, as the range is very large.
+                                                        "key_step_min": 1e-12,  # 1 ps
+                                                        },
                                                   change_callback=self._onUpdateTriggerDelayMD)
 
         entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)

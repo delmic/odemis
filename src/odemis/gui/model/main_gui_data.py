@@ -99,6 +99,7 @@ class MainGUIData(object):
         "pinhole": "pinhole",
         "stigmator": "stigmator",
         "ebeam-focus": "ebeam_focus",
+        "ebeam-blanker": "ebeam_blanker",
         "overview-focus": "overview_focus",
         "mirror": "mirror",
         "mirror-xy": "mirror_xy",
@@ -182,6 +183,7 @@ class MainGUIData(object):
         self.lens = None  # Optical lens for SECOM/focus lens for the SPARC
         self.ebeam = None
         self.ebeam_focus = None  # change the e-beam focus
+        self.ebeam_blanker = None  # for advanced blanker control (eg, pulsed)
         self.sed = None  # secondary electron detector
         self.bsd = None  # backscattered electron detector
         self.ebic = None  # electron beam-induced current detector
