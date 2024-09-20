@@ -2084,7 +2084,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         self._ov_view.addStream(stream)
         sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
                                    view=self._ov_view)
-
+        sc.stream_panel.show_remove_btn(True)
         return sc
 
     def showFeatureStream(self, stream) -> StreamController:
