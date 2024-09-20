@@ -39,7 +39,7 @@ from odemis.gui.util.img import calculate_ticks, guess_sig_num_rng, find_first_l
 from odemis.model import (MD_AT_AR, MD_AT_CL, MD_AT_EK, MD_AT_EM, MD_AT_FLUO,
                           MD_AT_HISTORY, MD_AT_OVV_FULL, MD_AT_OVV_TILES,
                           MD_AT_SLIT, MD_AT_SPECTRUM, MD_AT_TEMPORAL,
-                          MD_AT_TEMPSPECTRUM, MD_AT_FIB)
+                          MD_AT_TEMPSPECTRUM, MD_AT_FIB, MD_AT_EBIC)
 import wx
 
 import odemis.util.units as units
@@ -68,6 +68,7 @@ class InfoLegend(wx.Panel):
             MD_AT_TEMPSPECTRUM: img.getBitmap("icon/ico_blending_spec.png"),
             MD_AT_EK: img.getBitmap("icon/ico_blending_ek.png"),
             MD_AT_EM: img.getBitmap("icon/ico_blending_sem.png"),
+            MD_AT_EBIC: img.getBitmap("icon/ico_blending_ebic.png"),
             MD_AT_FIB: img.getBitmap("icon/ico_blending_fib.png"),
             MD_AT_OVV_TILES: img.getBitmap("icon/ico_blending_map.png"),
             MD_AT_OVV_FULL: img.getBitmap("icon/ico_blending_navcam.png"),
