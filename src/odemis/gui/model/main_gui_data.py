@@ -250,10 +250,11 @@ class MainGUIData(object):
             for c in components:
                 if c.role is None:
                     continue
+
+                comps_with_role.append(c)
                 try:
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
-                    comps_with_role.append(c)
                 except KeyError:
                     pass
 
