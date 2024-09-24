@@ -2120,5 +2120,31 @@ class TestFloodFill(unittest.TestCase):
         filled_array = img.apply_flood_fill(a, (2, 2))
         numpy.testing.assert_array_equal(expected_array, filled_array)
 
+class TestImageProjection(unittest.TestCase):
+
+    def test_max_intensity_projection(self):
+        """Test the max intensity projection"""
+        a = numpy.zeros((5, 10, 10), dtype=int)
+        a[0, 0, 0] = 1
+        a[1, 2, 2] = 2
+        a[2, 4, 4] = 3
+        a[3, 6, 6] = 4
+        a[4, 8, 8] = 5
+        da = model.DataArray(list(a), {model.MD_DIMS: 'ZYX'})
+
+        expected_array = numpy.zeros((10, 10), dtype=int)
+        expected_array[0, 0] = 1
+        expected_array[2, 2] = 2
+        expected_array[4, 4] = 3
+        expected_array[6, 6] = 4
+        expected_array[8, 8] = 5
+        eda = model.DataArray(expected_array, {model.MD_DIMS: 'YX'})
+
+        projection = img.max_intensity_projection(da, axis=0)
+
+        numpy.testing.assert_array_equal(eda, projection)
+        self.assertEqual(eda.dtype, projection.dtype)
+        self.assertEqual(projection.metadata[model.MD_DIMS], 'YX')
+
 if __name__ == "__main__":
     unittest.main()

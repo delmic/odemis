@@ -830,6 +830,10 @@ class RGBSpatialProjection(RGBProjection):
             self.zIndex = stream.zIndex
             self.zIndex.subscribe(self._onZIndex)
 
+        if model.hasVA(stream, "max_projection"):
+            self.max_projection = stream.max_projection
+            self.max_projection.subscribe(self._on_max_projection)
+
         if stream.raw and isinstance(stream.raw[0], model.DataArrayShadow):
             # The raw tiles corresponding to the .image, updated whenever .image is updated
             self._raw = (())  # 2D tuple of DataArrays
@@ -922,6 +926,9 @@ class RGBSpatialProjection(RGBProjection):
             return raw[0][pixel_pos[1], pixel_pos[0]]
 
     def _onZIndex(self, value):
+        self._shouldUpdateImage()
+
+    def _on_max_projection(self, value):
         self._shouldUpdateImage()
 
     def getBoundingBox(self):
@@ -1045,8 +1052,11 @@ class RGBSpatialProjection(RGBProjection):
             tile.metadata[model.MD_DIMS] = "YXC"  # RGB format
             return tile
         elif dims in ("ZYX",) and model.hasVA(self.stream, "zIndex"):
-            tile = img.getYXFromZYX(tile, self.stream.zIndex.value)
-            tile.metadata[model.MD_DIMS] = "ZYX"
+            if model.hasVA(self.stream, "max_projection") and self.stream.max_projection.value:
+                tile = img.max_intensity_projection(tile, axis=0)
+            else:
+                tile = img.getYXFromZYX(tile, self.stream.zIndex.value)
+                tile.metadata[model.MD_DIMS] = "ZYX"
         else:
             tile = img.ensure2DImage(tile)
 

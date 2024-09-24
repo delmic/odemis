@@ -216,6 +216,11 @@ class Static2DStream(StaticStream):
             self.zIndex = model.IntContinuous(0, (0, raw[0].shape[0] - 1))
             self.zIndex.subscribe(self._on_zIndex)
 
+            # option to see all z-levels at the same time using a maximum intensity projection (MIP)
+            # TODO: add support for other types of projections (max, min, avg, sum, ...)
+            self.max_projection = model.BooleanVA(False)
+            self.max_projection.subscribe(self._on_max_projection)
+
         # Copy back the metadata
         raw[0].metadata = metadata
 
@@ -244,12 +249,19 @@ class Static2DStream(StaticStream):
     def _on_zIndex(self, val):
         self._shouldUpdateHistogram()
 
+    def _on_max_projection(self, _):
+        self._shouldUpdateHistogram()
+
     def _updateHistogram(self, data=None):
         if data is None and model.hasVA(self, "zIndex"):
             data = self.raw[0]
             dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+
             if dims == "ZYX" and data.ndim == 3:
-                data = img.getYXFromZYX(data, self.zIndex.value)  # Remove extra dimensions (of length 1)
+                if hasattr(self, "max_projection") and self.max_projection.value:
+                    data = img.max_intensity_projection(data, axis=0)
+                else:
+                    data = img.getYXFromZYX(data, self.zIndex.value)  # Remove extra dimensions (of length 1)
         super(Static2DStream, self)._updateHistogram(data)
 
     def _onTint(self, tint):
