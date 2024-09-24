@@ -1,5 +1,7 @@
-# Configuration for a simulated SPARC v2 system with a FPLM (Fiber-coupled PhotoLuminescence Module)
-"SPARCv2 FPLM": {
+# Configuration for a simulated SPARC v2 system with a EBIC detector which must
+# be independently configured (instead of it being a simple detector on by the
+# SEM scan board)
+"SPARC2 Independent EBIC": {
     class: Microscope,
     role: sparc2,
 }
@@ -9,7 +11,7 @@
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 "Power Control Unit": {
@@ -17,29 +19,22 @@
     role: "power-control",
     init: {
         port: "/dev/fake", # for simulator
-        pin_map: {
-            "Calibration Light": 0,
-            "Camera": 4,
-            "Spectral Camera": 5,
-            "Spectrograph": 6,
-            "Optical Actuators": 2
-        },
+        pin_map: {"Calibration Light": 0,
+                  "CL PMT control unit": 3,
+                  "VisNIR Camera": 4,
+                  "Spectrograph": 6,
+                  "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
-            "Calibration Light": 0, # To turn on/off the light, it's immediate
-            "Camera": 1,
-            "Spectral Camera": 1,
-            "Spectrograph": 3,
+            "Calibration Light": 3, # s, the light takes some time to actually turn on
+            "CL PMT control unit": 0,
+            "VisNIR Camera": 1,
+            "Spectrograph": 1,
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
-            "Camera": True,
-            "Spectral Camera": True,
+            "VisNIR Camera": True,
             "Spectrograph": True,
             "Optical Actuators": True
-        },
-        termination: { # Which component to power off (or on) at the end
-            "Calibration Light": False, # make sure it's turned off
-            "Spectrograph": False,
         },
     }
 }
@@ -56,6 +51,7 @@
     children: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
+       detector1: "CL PMT",
     }
 }
 
@@ -64,31 +60,24 @@
 # Y -> AO 1
 # Ground -> AO GND
 "SEM E-beam": {
-    # Internal child of SEM Scan Interface, so no class
+    # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
         channels: [1, 0],
         limits: [[0, 5], [0, 5]],  # V
         park: [0, 0], # V
         settle_time: 5.e-6, # s
-        scan_active_delay: 0.5, # s
         hfw_nomag: 0.25, # m
-        # output ports -> True (high when scanning) or False (high when parked)
-        # + property name + True (high when set to True) or False (high when set to False)
-        scanning_ttl: {
-            4: True,
-            2: [True, "external"],
-            3: [False, "blanker", True]
-        },
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer Vis-NIR", "Spectrometer IR", "Camera", "Spectral Camera", "EBIC"]
+    affects: ["SEM Detector", "VisNIR Camera", "EBIC"] # affects the CCD in case of cathodoluminescence
 }
 
+# Must be connected on AI 0/AI GND
 "SEM Detector": { # aka ETD
     # Internal child of SEM Scan Interface, so no class
     role: se-detector,
@@ -98,59 +87,70 @@
     },
 }
 
+# CL PMT: composed of the control unit + the PMT output connected to the DAQ board
+
+# Must be connected on AI 1/AI GND
+"CL PMT": { # the raw detector of the PMT
+    # Internal child of SEM Scan Interface, so no class
+    role: null,
+    init: {
+        channel: 1, # 0-> sawtooth waves, 1-> square waves
+        limits: [3, 0], # V, with contrast reversed
+    },
+}
+
+"CL PMT control unit": {
+    class: pmtctrl.PMTControl,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake", # for simulator
+        prot_time: 0.0002,  # s
+        prot_curr: 50.e-6,  # A
+    }
+}
+
+"CL Detector": {
+    class: pmtctrl.PMT,
+    role: cl-detector,
+    init: {
+        settle_time: 0.1, # s, time to wait before detector is ready
+    },
+    dependencies: {
+       "detector": "CL PMT",
+       "pmt-control": "CL PMT control unit",
+    },
+}
+
 # A detector which is independent from the DAQ board. Though in reality, it's
 # synchronized on the newPixel TTL signal of the DAQ board scanner.
 "EBIC": {
     class: simsem.IndependentDetector,
     role: ebic-detector,
     init: {
+        continuous: False,  # simulate detector that must be re-armed after every frame
 #        image: "",
     },
 }
 
+# In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer
-"Camera": {
+"VisNIR Camera": {
     class: andorcam2.AndorCam2,
     role: ccd,
     power_supplier: "Power Control Unit",
     init: {
-      device: "fake",
-      image: "sparc-ar.h5", # only for simulator
-      transp: [1, -2],
+       device: "fake",
+       image: "sparc-ar-mirror-align.h5", # only for simulator
     },
 }
 
-"Spectrometer Vis-NIR": {
-    class: spectrometer.CompositedSpectrometer,
-    role: spectrometer-integrated,
-    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
-    init: {
-        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
-    },
-}
-
-# On some configuration, there is a dedicated camera for the acquisition of the
-# spectra, otherwise 'Camera' is used.
-"Spectral Camera": {
-    class: andorcam2.AndorCam2,
-    role: sp-ccd,
-    power_supplier: "Power Control Unit",
-    init: {
-        device: "fake",
-        transp: [-1, 2], # if mirrored on X axis
-        image: "sparc-spec-sim.h5", # only for simulator
-    },
-    properties: {
-        targetTemperature: -60, # °C
-    },
-}
-
-"Spectrometer IR": {
+"VisNIR Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
-    properties: {
-        binning: [4, 100],
+    dependencies: {detector: "VisNIR Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
     },
 }
 
@@ -166,12 +166,13 @@
             1: [320.e-9, 400.e-9], # pos -> m,m
             2: [500.e-9, 550.e-9],
             3: [400.e-9, 450.e-9],
-            4: [450.e-9, 500.e-9],
+            4: "polariser",
             6: "pass-through"
         },
-        fstepsize: 10.9e-6, # m, size of one focus step
+        fstepsize: 10.9e-6, # m, size of one focus step (very roughly)
+        rng: {"focus": [10.9e-6, 4.9e-3]},  # the hardware has an issue, and cannot go further than 4.9mm (instead of the standard 6.5 mm)
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 "Spectrograph focus": {
@@ -181,7 +182,7 @@
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
@@ -192,11 +193,11 @@
     init: {
         axis_name: "flip-out",
         positions: {
-            0: ["Camera", "Spectrometer Vis-NIR"],
-            1.5707963267948966: ["Spectral Camera", "Spectrometer IR"],
+            0: [],
+            1.5707963267948966: ["VisNIR Camera", "VisNIR Spectrometer"],
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -207,7 +208,7 @@
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 "Optical Path Properties": {
@@ -215,7 +216,7 @@
     role: lens,
     # Standard mirror config
     init: {
-       mag: 0.31, # ratio
+       mag: 0.34, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
@@ -223,12 +224,9 @@
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
-       rotation: 0, # rad, 0° rotation between optical axis and SEM Y axis
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    persistent: {
-        properties: [polePosition],
-    },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -239,16 +237,12 @@
     init: {
         port: "/dev/fake6",
         address: null,
-        axes: ["l1", "l2", "inz", "inx", "slit"],
-        # These values only need to be roughly correct
-        ustepsize: [25.1e-9, 25.1e-9, 5.86e-9, 25.1e-9, 5.e-9], # m/µstep
-        unit: ["m", "m", "m", "m", "m"],
-        rng: [[0, 100.e-3], [-1.e-3, 100.e-3], [-10.e-3, 2.e-3], [0, 18.e-3], [0, 2.e-3]],
+        axes: ["l1", "l2", "cl-sel", "fw", "slit"],
+        # These values are adapted to make the simulator roughly the same speed
+        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0, "inx": 4, "inz": 4},
-        inverted: ["l2", "inz"],
-        # +inx should move the same direction as +l1 and +l2: towards the back
-        # +inz should go further away from the light source
+        refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
+        inverted: ["l2"],
     },
 }
 
@@ -265,26 +259,22 @@
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.0045} # m
     },
-    affects: ["Lens2 Switch"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 # The second lens of Plate 1, either to working or parking position
 "Lens2 Switch": {
-    class: actuator.MultiplexActuator,
+    class: actuator.FixedPositionsActuator,
     role: "lens-switch",
     dependencies: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "l2"},
-        ref_on_init: ["x"],
+        axis_name: "l2",
+        positions: {
+            4.e-3: "on",
+            0.002: "off", # completely out of the path
+        },
     },
-    metadata: {
-        # Position away
-        FAV_POS_DEACTIVE: {"x": -0.02}, # m
-        # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": -4.0e-3}, # m
-        POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
-    },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -296,25 +286,44 @@
         axis_name: "slit",
         positions: {
             0: "on", # fully opened
-            0.0012: "off", # opening based on the small slit
+            -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["VisNIR Camera", "VisNIR Spectrometer"],
 }
 
-"In-Light Aligner": {
-    class: actuator.MultiplexActuator,
-    role: "light-aligner",
-    dependencies: {"x": "Optical Actuators", "z": "Optical Actuators"},
+# Mirror in Plate 2, selects between spectrometer and cl-detector
+"CL Selector": {
+    class: actuator.FixedPositionsActuator,
+    role: "cl-det-selector",
+    dependencies: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "inx", "z": "inz"},
-        ref_on_init: ["x", "z"],
+        axis_name: "cl-sel",
+        positions: {
+            0.003: ["CL Detector"],
+            0.01: ["Spec CCD Flipper"]
         },
-    metadata: {
-        # Default position of the mirror and the focus (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 2.0e-3, "z": 1.0e-3}, # m
     },
-    affects: ["Mirror Actuators", "Spec CCD Flipper"],  # Affects the parabolic mirror, to indicate it's a PL module
+    affects: ["VisNIR Camera", "VisNIR Spectrometer", "CL Detector"],
+}
+
+"CL Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: "cl-filter",
+    dependencies: {"band": "Optical Actuators"},
+    init: {
+        axis_name: "fw",
+        # It supports up to 8 filters
+        positions: {
+            # pos (rad) -> m,m
+            0: [420.e-9, 460.e-9],        # 1
+            0.785398: [500.e-9, 550.e-9], # 2
+            1.570796: "polariser",        # 3
+            3.9269908: "pass-through",    # 6
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    affects: ["CL Detector"],
 }
 
 # Controller for moving the 'Redux' stage
@@ -327,16 +336,12 @@
         address: null,
         axes: ["s", "l"],
         ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
-        rng: [[-1.1e-3, 1.1e-3], [0, 51.e-3]],  # m, min/max
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 48.e-3, "s": 1.e-3},  # m, m
-    },
-    persistent: {
-        metadata: [FAV_POS_ACTIVE],
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
     },
 }
 
@@ -348,7 +353,8 @@
     dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
-        rotation: -1.0471975511965976, # rad (= 60°)
+        rotation: -1.0471975511965976, # rad (= -60°)
+        # Note: if you want to use absolute moves, add a "translation" too
     },
 }
 

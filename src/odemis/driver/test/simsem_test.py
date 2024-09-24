@@ -518,5 +518,109 @@ class TestSEMDrift(TestSEM):
         testing.assert_array_not_equal(im_no_shift, im_big_shift)
 
 
+class TestIndependentDetector(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.det = simsem.IndependentDetector("EBIC", "ebic-detector",
+                                             image="simsem-fake-output.h5",
+                                             continuous=False)
+
+    def setUp(self):
+        # for receive_image()
+        self.left = 0
+        self.size = []  # expected size of the images to be received
+        self.acq_dates = []  # floats containing the MD_ACQ_DATE
+        self.acq_done = threading.Event()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.det.terminate()
+
+    def compute_expected_duration(self):
+        dwell = self.det.dwellTime.value
+        size = self.det.resolution.value
+        dur = size[0] * size[1] * dwell
+        logging.debug("expecting a %s s acquisition", dur)
+
+        return dur
+
+    def test_dwell_time(self):
+        # Dwell time should accept anything, but round down to the closest multiple of 100ns.
+        self.det.dwellTime.value = self.det.dwellTime.range[0]
+        self.assertAlmostEqual(self.det.dwellTime.value, self.det.dwellTime.range[0], delta=0.1e-9)
+
+        self.det.dwellTime.value = 10e-6
+        self.assertEqual(self.det.dwellTime.value, 10e-6)
+
+        self.det.dwellTime.value = 1.16e-6
+        self.assertAlmostEqual(self.det.dwellTime.value, 1.1e-6, delta=0.1e-9)
+
+    def test_acquisition(self):
+        for res, dt in [((200, 100), 10e-6),
+                        ((1, 1), 0.1),
+                        (self.det.resolution.range[1], 0.1e-6),
+                        ]:
+            self.det.resolution.value = res
+            self.det.dwellTime.value = dt
+            expected_duration = self.compute_expected_duration()
+
+            start = time.time()
+            img = self.det.data.get()
+            duration = time.time() - start
+
+            self.assertEqual(img.shape[::-1], res)
+            self.assertGreaterEqual(duration, expected_duration,
+                                    "Error execution took %f s, less than acquisition time %d." % (duration, expected_duration))
+            self.assertEqual(img.metadata[model.MD_DWELL_TIME], self.det.dwellTime.value)
+            self.assertIn(model.MD_ACQ_DATE, img.metadata)
+
+    def test_non_continuous_acquisition(self):
+        """
+        Check that "continuous" acquisition only sends 1 image, as continuous mode is disabled
+        """
+        self.det.resolution.value = (200, 100)
+        self.det.dwellTime.value = 1e-6
+        expected_duration = self.compute_expected_duration()
+        self.size = self.det.resolution.value
+
+        self.left = 3  # we only expect 1, but expect for more to detect the continuous mode
+
+        self.det.data.subscribe(self.receive_image)
+
+        # wait for 3 images, and actually expect it timeout
+        self.acq_done.wait(3 * (1 + expected_duration * 1.1))
+        self.det.data.unsubscribe(self.receive_image)
+
+        # We should have received only one image, so acquisition not done
+        self.assertFalse(self.acq_done.is_set())
+        self.assertEqual(self.left, 2)
+
+        # Reacquire, also should provide just one image
+        self.left = 3  # we only expect 1, but expect for more to detect the continuous mode
+
+        self.det.data.subscribe(self.receive_image)
+
+        # wait for 3 images, and actually expect it timeout
+        self.acq_done.wait(3 * (1 + expected_duration * 1.1))
+        self.det.data.unsubscribe(self.receive_image)
+
+        # We should have received only one image, so acquisition not done
+        self.assertFalse(self.acq_done.is_set())
+        self.assertEqual(self.left, 2)
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_non_continuous_acquisition()
+        """
+        self.assertEqual(image.shape, self.size[::-1])
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates.append(image.metadata[model.MD_ACQ_DATE])
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+            self.acq_done.set()
+
+
 if __name__ == "__main__":
     unittest.main()

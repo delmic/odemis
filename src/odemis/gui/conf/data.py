@@ -518,10 +518,30 @@ HW_SETTINGS_CONFIG = {
             }),
         )),
     "cl-detector": {
-            "gain": {
-                "accuracy": 3,
-            },
+        "gain": {
+            "accuracy": 3,
         },
+    },
+    "ebic-detector": {
+        "numberOfChannels": {
+            "label": "Number of channels",
+            "control_type": odemis.gui.CONTROL_COMBO,
+        },
+        "spp": {
+            "label": "Samples per pixel",
+            "control_type": odemis.gui.CONTROL_RADIO,
+            "tooltip": "Number of samples per pixel",
+        },
+        # For the "independent" detector type (otherwise, these VA's don't exists, so that has no effect)
+        "resolution": {
+            # It should not be changed directtly, but via the emitter
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "dwellTime": {
+            # It should not be changed directly, but via the emitter
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+    },
     r"photo-detector.*":
         OrderedDict((
             ("gain", {
