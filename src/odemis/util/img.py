@@ -1273,3 +1273,19 @@ def apply_flood_fill(input_array, start):
             stack.append((row, col + 1))  # East
 
     return input_array
+
+def max_intensity_projection(data: model.DataArray, axis: int = 0) -> model.DataArray:
+    """Maximum intensity projection of a 3D image along a given axis.
+    :param data: (DataArray) 3D image data (assumed to be ZYX)
+    :param axis: (int) axis along which to project the image. Default is 0 (Z-axis)
+    :return: (DataArray) 2D image data (YX) with the maximum intensity projection
+    """
+    if data.ndim != 3:
+        raise ValueError(f"Data must be 3D, but got {data.ndim} dimensions.")
+    if axis not in (0, 1, 2):
+        raise ValueError(f"Invalid axis {axis}. Must be 0, 1, or 2.")
+
+    proj = numpy.max(data, axis=axis)
+    md = data.metadata.copy()
+    md[model.MD_DIMS] = "YX"
+    return model.DataArray(proj, md)

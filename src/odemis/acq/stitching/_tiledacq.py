@@ -576,8 +576,8 @@ class TiledAcquisitionTask(object):
             self._save_tiles(ix, iy, fm_cube, stream_cube_id=self._streams.index(stream))
 
         if self._focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION:
-            # Compress the cube into a single image (using maximum intensity projection)
-            mip_image = numpy.amax(fm_cube, axis=0)
+            # Compress the cube into a single image along z-axis (using maximum intensity projection)
+            mip_image = img.max_intensity_projection(fm_cube, axis=0)
             if self._future._task_state == CANCELLED:
                 raise CancelledError()
             logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
