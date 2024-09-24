@@ -5866,6 +5866,59 @@ class StaticStreamsTestCase(unittest.TestCase):
         new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
         self.assertRaises(ValueError, strUpd.update, new_da)
 
+    def test_pixel_coordinates(self):
+        """Test getPixelCoordinates and getRawValue"""
+        md = {
+            model.MD_DESCRIPTION: "green dye",
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+            model.MD_POS: (1e-3, -30e-3),  # m
+            model.MD_ROTATION: 0,  # rad
+            model.MD_SHEAR: 0,
+            model.MD_EXP_TIME: 1,  # s
+            model.MD_IN_WL: (600e-9, 620e-9),  # m
+            model.MD_OUT_WL: (620e-9, 650e-9),  # m
+            model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
+        }
+
+        # Image with even numbers on Y, and odd numbers on X, to test different cases
+        res = (1025, 512)
+        da = model.DataArray(numpy.zeros(res[::-1], dtype=numpy.uint16), md)
+        da[12] = 2 ** 11  # whole line
+        da[15] = 2 ** 10  # whole line
+
+        fls = stream.StaticFluoStream(md[model.MD_DESCRIPTION], da)
+        pj = stream.RGBSpatialProjection(fls)
+
+        # getRawValue() is straightforward to test
+        self.assertEqual(fls.getRawValue((0, 0)), 0)
+        self.assertEqual(fls.getRawValue((4, 12)), 2 ** 11)
+        self.assertEqual(fls.getRawValue((100, 15)), 2 ** 10)
+
+        # Compute the coordinates of the center pixel, slightly to the left (as on Y, the
+        # center is precisely between 2 pixels)
+        center = md[model.MD_POS]
+        pxs = md[model.MD_PIXEL_SIZE]
+        center_top_phys = (center[0], center[1] + pxs[1] / 2)  # X, Y
+        center_top_px = ((res[0] - 1) // 2, res[1] // 2 - 1)  # X, Y
+        self.assertEqual(fls.getPixelCoordinates(center_top_phys), center_top_px)
+        self.assertEqual(pj.getPixelCoordinates(center_top_phys), center_top_px)
+
+        # Center of the top-left pixel
+        left_top_phys = (center[0] - ((res[0] - 1) / 2) * pxs[0],
+                         center[1] + ((res[1] - 1) / 2) * pxs[1])
+        left_top_px = (0, 0)
+        self.assertEqual(fls.getPixelCoordinates(left_top_phys), left_top_px)
+        self.assertEqual(pj.getPixelCoordinates(left_top_phys), left_top_px)
+
+        # Just slightly outside the top-left pixel => should return None
+        out_x_phys = left_top_phys[0] - pxs[0], left_top_phys[1]
+        self.assertEqual(fls.getPixelCoordinates(out_x_phys), None)
+        self.assertEqual(pj.getPixelCoordinates(out_x_phys), None)
+
+        out_y_phys = left_top_phys[0] - pxs[0], left_top_phys[1]
+        self.assertEqual(fls.getPixelCoordinates(out_y_phys), None)
+        self.assertEqual(pj.getPixelCoordinates(out_y_phys), None)
+
 
 def roi_to_phys(repst):
     """

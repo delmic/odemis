@@ -235,6 +235,29 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "ebeam-blanker":
+        OrderedDict((
+            ("period", {
+                "tooltip": "Duration of a blanking cycle.",
+                "range": (1e-16, 1),
+                "scale": "log",
+                "type": "float",
+                "accuracy": 3,
+                "event": wx.EVT_SCROLL_CHANGED,
+            }),
+            ("power", {
+                "label": "Blanking",
+                "tooltip": "Checked means the e-beam blanker is active (the e-beam is pulsed). \n"
+                           "Unchecked means the e-beam is constantly active.",
+            }),
+            ("dutyCycle", {
+                "tooltip": "Ratio of the forward sweep duration over the total blanking cycle.",
+                "event": wx.EVT_SCROLL_CHANGED,
+            }),
+            ("delay", {  # Should be shown on a separate component (ex: streak-delay)
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
     "laser-mirror":
         OrderedDict((
             ("dwellTime", {

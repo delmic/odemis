@@ -15,13 +15,20 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from collections.abc import Iterable
 import functools
 import gc
 import logging
 import math
 import numbers
+import threading
+import time
+import weakref
+from collections.abc import Iterable
+from typing import Tuple, Optional
+
+import matplotlib
 import numpy
+
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase,
@@ -31,11 +38,6 @@ from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_POL_EY, MD_POL_EZ, MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N,
                           MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS)
 from odemis.util import img
-import threading
-import time
-import weakref
-import matplotlib
-
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
@@ -1277,14 +1279,11 @@ class Stream(object):
 
         self._shouldUpdateImage()
 
-    def getPixelCoordinates(self, p_pos):
+    def getPixelCoordinates(self, p_pos: Tuple[float, float]) -> Optional[Tuple[int, int]]:
         """
         Translate physical coordinates into data pixel coordinates
-        Args:
-            p_pos(tuple float, float): the position in physical coordinates
-
-        Returns(tuple int, int or None): the position in pixel coordinates or None if it's outside of the image
-
+        :param p_pos: the position in physical coordinates (m)
+        :returns: the position in pixel coordinates or None if it's outside of the image
         """
         if not self.raw:
             raise LookupError("Stream has no data")
@@ -1301,8 +1300,10 @@ class Stream(object):
         matrix = alt_transformation_matrix_from_implicit(pxs, rotation, -shear, "RSL")
         tform = AffineTransform(matrix, translation)
         pixel_pos_c = tform.inverse().apply(p_pos)
-        # a "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
-        pixel_pos = int(pixel_pos_c[0] + size[0] / 2), - int(pixel_pos_c[1] - size[1] / 2)
+        # MD_POS is the center of the image, so subtract half of the size to convert to pixel-coordinates
+        # A "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
+        pixel_pos = (int(math.floor(pixel_pos_c[0] + size[0] / 2)),
+                     int(math.floor(- (pixel_pos_c[1] - size[1] / 2))))
         if 0 <= pixel_pos[0] < size[0] and 0 <= pixel_pos[1] < size[1]:
             return pixel_pos
         else:

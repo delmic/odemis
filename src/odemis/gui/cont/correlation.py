@@ -99,7 +99,7 @@ class CorrelationController(object):
         self._tab_data_model.streams.subscribe(self._update_correlation_cmb, init=True)
         if not self._main_data_model.is_viewer:
             # localisation tab doesn't exist in viewer
-            self._tab_data_model.streams.subscribe(self.add_to_localization_tab, init=False)
+            self._tab_data_model.streams.subscribe(self.update_localization_tab_streams, init=False)
 
         # connect the correlation streams to the tab data
         self._panel.cmb_correlation_stream.Bind(wx.EVT_COMBOBOX, self._on_selected_stream_change)
@@ -231,15 +231,37 @@ class CorrelationController(object):
             sc = self._tab.streambar_controller.addStream(s, add_to_view=True, play=False)
             sc.stream_panel.show_remove_btn(True)
 
-    def add_to_localization_tab(self, streams: list) -> None:
+    def update_localization_tab_streams(self, streams: list) -> None:
         """add streams to the localization tab
         :param streams: (list[StaticStream]) the streams to add"""
-        # NOTE: we only add streams if they are not already in the localization tab
-        # we will not remove streams from the localization tab from outside it,
-        # as the user may still want to localize them,
-        # even if they have been removed from another tab, e.g. 'correlation'
         if self.localization_tab is None:
             self.localization_tab: LocalizationTab  = self._main_data_model.getTabByName("cryosecom-localization")
+
+        # TODO: extend this to support non-overviews
+        # remove streams from localization tab when they are deleted from correlation tab
+        current_streams = len(streams)
+        localization_streams = len(self.localization_tab.tab_data_model.overviewStreams.value)
+        if current_streams < localization_streams:
+            # remove streams from localization tab
+            logging.debug("Attempting to remove streams from localization tab")
+            for s in self.localization_tab.tab_data_model.overviewStreams.value:
+                if s not in streams:
+                    logging.debug(f"Removing stream from other tabs: {s.name.value}")
+                    # remove from model
+                    self.localization_tab.tab_data_model.overviewStreams.value.remove(s)
+                    self.localization_tab.tab_data_model.streams.value.remove(s)
+
+                    # remove from overview view
+                    self.localization_tab._acquired_stream_controller._ov_view.removeStream(s)
+                    update_image_in_views(s, self.localization_tab.tab_data_model.views.value)
+                    logging.debug(f"Stream removed from localization tab: {s.name.value}")
+
+                    # remove from chamber tab
+                    chamber_tab = self._main_data_model.getTabByName("cryosecom_chamber")
+                    chamber_tab.remove_overview_streams([s])
+                    logging.debug(f"Stream removed from chamber tab: {s.name.value}")
+
+                    return
 
         logging.debug(f"Adding {len(streams)} streams to localization tab {streams}")
         for s in streams:
@@ -369,7 +391,7 @@ class CorrelationController(object):
 
         # update the localization tab
         if not self._main_data_model.is_viewer:
-            self.update_localization_tab(s)
+            self.update_localization_tab_streams_metadata(s)
 
     def fit_correlation_views_to_content(self, force: bool = False) -> None:
         # TODO: be more selective about which viewports to fit
@@ -383,7 +405,8 @@ class CorrelationController(object):
             self._panel.vp_correlation_bl.canvas.fit_view_to_content()
             self._panel.vp_correlation_br.canvas.fit_view_to_content()
 
-    def update_localization_tab(self, s: StaticStream) -> None:
+    def update_localization_tab_streams_metadata(self, s: StaticStream) -> None:
+        """update the metadata of the stream in the localization tab"""
         # TODO: change this to callback?
         # also update the localization tab
         if s in self.localization_tab.tab_data_model.streams.value:

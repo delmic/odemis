@@ -967,7 +967,8 @@ def estimateOverviewTime(*args, **kwargs):
 
 
 def acquireOverview(streams, stage, areas, focus, detector, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
-                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE, use_autofocus: bool = False):
+                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
+                    use_autofocus: bool = False, focus_points_dist: float = MAX_DISTANCE_FOCUS_POINTS):
     """
     Start autofocus and tiled acquisition tasks for each area in the list of area which is
     given by the input argument areas.
@@ -997,7 +998,7 @@ def acquireOverview(streams, stage, areas, focus, detector, overlap=0.2, setting
     future = model.ProgressiveFuture()
     task = AcquireOverviewTask(streams, stage, areas, focus, detector, future, overlap, settings_obs,
                                log_path, zlevels,
-                               registrar, weaver, focusing_method, use_autofocus)
+                               registrar, weaver, focusing_method, use_autofocus, focus_points_dist)
     future.task_canceller = task.cancel  # let the future cancel the task
 
     future.set_progress(end=task.estimate_time() + time.time())
@@ -1015,7 +1016,8 @@ class AcquireOverviewTask(object):
     def __init__(self, streams, stage, areas, focus, detector, future=None,
                  overlap=0.2, settings_obs=None, log_path=None,
                  zlevels=None, registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN,
-                 focusing_method=FocusingMethod.NONE, use_autofocus: bool = False):
+                 focusing_method=FocusingMethod.NONE, use_autofocus: bool = False,
+                 focus_points_dist: float = MAX_DISTANCE_FOCUS_POINTS):
         # site and feature means the same
         self._stage = stage
         self._future = future
@@ -1042,7 +1044,7 @@ class AcquireOverviewTask(object):
         self._focus_points = []  # list of focus points per each area in areas
         self._total_nb_focus_points = 0
         for area in areas:
-            focus_points = generate_triangulation_points(MAX_DISTANCE_FOCUS_POINTS, area)
+            focus_points = generate_triangulation_points(focus_points_dist, area)
             self._total_nb_focus_points += len(focus_points)
             self._focus_points.append(focus_points)
         self._overlap = overlap

@@ -47,6 +47,7 @@ from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
+from odemis.gui.cont.settings import EBeamBlankerSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
 from odemis.gui.cont.tabs.tab import Tab
@@ -172,6 +173,9 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_ek.view.show_pixelvalue.value = False
         self.panel.vp_align_streak.view.show_pixelvalue.value = True
         self.panel.vp_align_lens_ext.view.show_pixelvalue.value = False
+
+        # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
+        self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
 
         # The streams:
         # * Alignment/AR CCD (ccd): Used to show CL spot during the alignment

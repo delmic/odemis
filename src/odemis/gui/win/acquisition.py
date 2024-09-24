@@ -34,7 +34,10 @@ import wx
 from odemis import dataio, gui, model
 from odemis.acq import acqmng, path, stitching, stream
 from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
-                                  FocusingMethod, acquireOverview)
+                                  FocusingMethod, acquireOverview,
+                                  get_tiled_bboxes, get_stream_based_bbox,
+                                  get_zstack_levels)
+from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
                                OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
@@ -55,9 +58,6 @@ from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
-from odemis.acq.stitching import (get_tiled_bboxes,
-                                  get_stream_based_bbox,
-                                  get_zstack_levels)
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -785,6 +785,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
+        # range for the autofocus (in m)
+        # default min/max range to 50 µm (half a grid square) to 1 mm (half a grid)
+        # this range should cover all cases for different magnifications (e.g. 20x, 50x, 100x)
+        self.focus_points_dist_ctrl.SetValueRange(50e-6, 1000e-6)
+        self.focus_points_dist_ctrl.SetValue(MAX_DISTANCE_FOCUS_POINTS)
+
         # Set parameters for tiled acq
         # High overlap percentage is not required as the stitching is based only on stage position,
         # independent of the image content. It just needs to be big enough to make sure that even with some stage
@@ -1004,6 +1010,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             area_size_str = util.readable_str(area_size, unit="m", sig=3)
             self.area_size_txt.SetLabel(area_size_str)
 
+            # limit focus point dist based on area size
+            max_range = 0
+            for area in areas:
+                max_range = max(max_range, area[2] - area[0], area[3] - area[1])
+            self.focus_points_dist_ctrl.SetValueRange(50e-6, max_range)
+
         self.update_acquisition_time()
 
     def on_streams_changed(self, _=None):
@@ -1191,7 +1203,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
+        # autofocus parameters
         use_autofocus = self.autofocus_roi_ckbox.value
+        focus_points_dist = self.focus_points_dist_ctrl.GetValue()  # in m
+        logging.debug(f"Using autofocus: {use_autofocus} at distance: {focus_points_dist}")
 
         # autofocus needs relative zlevels, as they will be used relative to the focus points found
         zlevels = self._get_zstack_levels(rel=use_autofocus)
@@ -1210,6 +1225,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             zlevels=zlevels,
             focusing_method=focus_mtd,
             use_autofocus=use_autofocus,
+            focus_points_dist=focus_points_dist,
         )
 
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
