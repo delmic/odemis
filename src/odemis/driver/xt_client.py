@@ -2245,7 +2245,7 @@ class Stage(model.Actuator):
             # Make sure the system is read in the linked coordinate system
             try:
                 self.parent.set_raw_coordinate_system(False)
-            except OSError as error_msg:
+            except (AttributeError, OSError) as error_msg:
                 logging.warning("Delmic XT Adapter >= 1.12.0 is required to set the raw coordinate system. "
                                 "Failed to call the raw coordinate system for the stage: %s", error_msg)
                 # Do not raise an error if non-raw coordinates are requested, because non-raw is the default in old
