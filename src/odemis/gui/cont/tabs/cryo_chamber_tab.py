@@ -42,7 +42,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.feature import load_project_data
 from odemis.acq.move import (GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
-    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, FIB_IMAGING, MeteorTFS1PostureManager)
+    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, FIB_IMAGING, MeteorTFS1PostureManager, MicroscopePostureManager)
 from odemis.acq.stream import StaticStream
 from odemis.gui.comp.buttons import BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS, BTN_TOGGLE_COMPLETE
 from odemis.gui.cont.tabs.tab import Tab
@@ -63,7 +63,7 @@ class CryoChamberTab(Tab):
         self.set_label("CHAMBER")
 
         # Controls the stage movement based on the imaging mode
-        self.posture_manager = main_data.posture_manager
+        self.posture_manager: MicroscopePostureManager = main_data.posture_manager
 
         # future to handle the move
         self._move_future = InstantaneousFuture()
@@ -237,7 +237,7 @@ class CryoChamberTab(Tab):
         if self._role != 'meteor':
             return
 
-        adv_movement_enabled = self.posture_manager._flag_advanced_movement
+        adv_movement_enabled = self.posture_manager.has_advanced_movement
         # disable adv movement buttons (fib, milling, edit)
         self.position_btns[FIB_IMAGING].Enable(adv_movement_enabled)
         self.position_btns[MILLING].Enable(adv_movement_enabled)
@@ -721,7 +721,7 @@ class CryoChamberTab(Tab):
         dialog = EditMeteorPositionsDialog(self.main_frame, stage_md)
         dialog.Center()
 
-        _ = dialog.ShowModal()
+        dialog.ShowModal()
         if dialog._update_pressed:
             self._stage.updateMetadata(dialog.stage_md)
             logging.debug(f"Updated stage metadata: {self._stage.getMetadata()}")

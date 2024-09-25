@@ -67,8 +67,6 @@ SAFETY_MARGIN_3DOF = 200e-6  # m
 ATOL_ROTATION_TRANSFORM = 0.04   # rad ~2.5 deg
 ATOL_LINEAR_TRANSFORM = 5e-6    # 5 um
 
-# default calibration values for TFS_1
-MD_TRANSLATION_COR = (50e-3, 0)  # m
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -280,13 +278,13 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.adv_move_required_keys = {model.MD_FAV_FIB_POS_ACTIVE,
                                        model.MD_FAV_MILL_POS_ACTIVE,
                                        model.MD_POS_TRANS_COR}
-        self._flag_advanced_movement: bool = False
+        self.has_advanced_movement: bool = False
 
-    def _enable_advanced_movement(self):
+    def _initialize_advanced_movement(self):
         """Enable advanced movement features if the required metadata is present"""
         try:
             self.check_stage_metadata(required_keys=self.adv_move_required_keys)
-            self._flag_advanced_movement = True
+            self.has_advanced_movement = True
         except ValueError as e:
             logging.warning(f"Advanced movement features are not available due to missing metadata: {e}")
 
@@ -311,7 +309,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         if isInRange(pos, stage_fm_imaging_rng, self.linear_axes):
             return FM_IMAGING
         if isInRange(pos, stage_sem_imaging_rng, self.linear_axes):
-            if self._flag_advanced_movement:
+            if self.has_advanced_movement:
                 if isNearPosition(pos, fib_fav_pos, {"rz"}):
                     return FIB_IMAGING
                 if isNearPosition(pos, mill_fav_pos, self.rotational_axes):
@@ -366,13 +364,13 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.check_stage_metadata(required_keys=self.required_keys)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
-        self._enable_advanced_movement()
+        self._initialize_advanced_movement()
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
-        :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
-        :return: (dict str->float) the end position of the stage
+        :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FIB_IMAGING, MILLING, FM_IMAGING, GRID_1 or GRID_2)
+        :return: (dict str->float) the end position of the stage (stage-bare coordinates)
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
@@ -381,14 +379,16 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         # Note: all grid positions need to have rx, rz axes to be able to transform
         # this is not the case by default, and needs to be added in the metadata
 
+        if target_pos_lbl in [MILLING, FIB_IMAGING] and not self.has_advanced_movement:
+            raise ValueError(f"Advanced movement features are not available for target position {POSITION_NAMES[target_pos_lbl]}")
 
-        # get stage
+        # get the initial stage position to transform
         if target_pos_lbl in [GRID_1, GRID_2] or current_position == LOADING:
 
             if current_position == LOADING and target_pos_lbl not in [GRID_1, GRID_2]:
                 # if we are at loading, assume grid 1 if not specified
-                stage_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]   # 3d (special case)
-                stage_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])                 # 5d (should use the loading position 5d?)
+                stage_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]   # x,y,z in SEM_IMAGING posture.
+                stage_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])                 # rx, rz of SEM_IMAGING posture.
             else:
                 stage_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[target_pos_lbl]]   # 3d
         else:
@@ -444,6 +444,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     pos=self.stage.position.value,
                     sem=sem, perpendicular=perpendicular
                 )
+
+        # if the target position is not found, raise an error
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
@@ -499,7 +501,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
-        trans_cor = stage_md[model.MD_POS_TRANS_COR]
+        trans_cor = stage_md.get(model.MD_POS_TRANS_COR, None)
         fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
 
         # check if the stage positions have rz axes
@@ -548,7 +550,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
-        trans_cor = stage_md[model.MD_POS_TRANS_COR]
+        trans_cor = stage_md.get(model.MD_POS_TRANS_COR, None)
         if sem and perpendicular:
             sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
         elif sem:
