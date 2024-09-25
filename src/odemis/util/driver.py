@@ -28,6 +28,7 @@ import threading
 import time
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
+from typing import Dict, List
 
 from Pyro4.errors import CommunicationError
 
@@ -254,6 +255,38 @@ def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATI
     if model.hasVA(actuator, "speed"):
         speed = actuator.speed.value.get(axis, DEFAULT_SPEED)
     return estimateMoveDuration(distance, speed, accel)
+
+
+def estimate_stage_movement_time(stage: model.Actuator, start_pos: Dict[str, float],
+                                 end_pos: Dict[str, float], axes: List[str],
+                                 independent_axes: bool = False) -> float:
+    """
+    Estimate the time taken by the stage to move from start to end position across a series of axes.
+    :param stage: the actuated stage to move
+    :param start_pos: the start position of the stage
+    :param end_pos: the end position of the stage
+    :param axes: the axes to move
+    :param independent_axes: if True, axes are moved independently, otherwise axes are moved sequentially
+    :return: the estimated time (seconds) taken to move the stage
+    """
+    # check stage has all axes
+    for axis in axes:
+        if axis not in stage.axes:
+            raise KeyError(f"Axis {axis} not found in stage {stage.name}")
+
+    # get accumulator function, based on wheter the axes move together, or sequentially
+    acc_func = max if independent_axes else sum
+
+    # get distance for each axes, and time for each axes movement
+    dist = {axis: abs(end_pos[axis] - start_pos[axis]) for axis in axes}
+    dist_time = [guessActuatorMoveDuration(stage, axis, dist[axis]) for axis in axes]
+
+    # accumulate the total time
+    estimated_time = acc_func(dist_time)
+
+    logging.debug(f"distance: {dist}, time: {dist_time}, acc_func: {acc_func}, estimated_time: {estimated_time}")
+
+    return estimated_time
 
 
 class ProgressiveMove(model.ProgressiveFuture):

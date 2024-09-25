@@ -805,6 +805,24 @@
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                               <border>10</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_acquire_features">
+                                <height>48</height>
+                                <face_colour>def</face_colour>
+                                <label>ACQUIRE AT FEATURES</label>
+                                <font>
+                                  <size>14</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
                             <orient>wxVERTICAL</orient>
                           </object>
                           <size>400,-1</size>
