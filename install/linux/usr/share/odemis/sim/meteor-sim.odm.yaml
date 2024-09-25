@@ -78,7 +78,7 @@
         SAMPLE_PRE_TILT: 0.6109,          # [rad] pre-tilt angle for the sample holder, standard value is 35°
         # Active tilting (rx) & rotation (rz) angles positions when switching between SEM & FM, in radians.
         # Note: these values are calibrated at installation time.
-        FAV_FM_POS_ACTIVE: {"rx": 0.2968  , "rz":  3.1415}, # 17° - 180°, FM position (perpendicular to the fm)
+        FAV_FM_POS_ACTIVE: {"rx": 0.2968, "rz":  3.1415}, # 17° - 180°, FM position (perpendicular to the fm)
         FAV_FIB_POS_ACTIVE: {"rx": 0.2968, "rz": 3.1415},   # 17° - 180°, FIB position (perpendicular to the fib)
         FAV_SEM_POS_ACTIVE: {"rx": 0.6109, "rz": 0},          # 35° - 0° sem position (perpendicular to the sem)
         FAV_MILL_POS_ACTIVE: {"rx": 0.2444, "rz": 0},         # 14° - 0° milling position (oblique angle to fib)
