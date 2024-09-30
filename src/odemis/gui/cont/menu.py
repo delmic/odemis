@@ -165,8 +165,17 @@ class MenuController(object):
 
     def on_stop_axes(self, evt):
         if self._main_data:
-            popup.show_message(self._main_frame, "Stopping motion on every axes", timeout=1)
             self._main_data.stopMotion()
+            self._main_data.protect_detectors()
+
+            # For each tab, let them know that hardware protection was triggered
+            # That allows to reset the settings of some streams, for instance
+            for tab in self._main_data.tab.choices:
+                tab.on_hardware_protect()
+
+            popup.show_message(self._main_frame, "Hardware protection activated",
+                               message="Stopped actuator motion and protected detectors on user request.",
+                               level=logging.WARNING)
         else:
             evt.Skip()
 

@@ -47,7 +47,7 @@
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
-          <label>Stop all Axes</label>
+          <label>Emergency hardware protection</label>
           <accel>Pause</accel>
           <XRCED>
             <assign_var>1</assign_var>
