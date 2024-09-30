@@ -1890,6 +1890,9 @@ class SparcStreamsController(StreamBarController):
             detvas=detvas,
             streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
         self._set_default_spectrum_axes(ts_stream)
+        # For safety, always start with the shutter closed.
+        if model.hasVA(ts_stream, "detShutter"):
+            ts_stream.detShutter.value = True
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream

@@ -24,6 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
+import logging
+
 import wx
 
 from odemis import model
@@ -38,6 +40,7 @@ from odemis.acq.stream import SpectrumStream, TemporalSpectrumStream, \
     EMStream, \
     AngularSpectrumStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
     ScannedTemporalSettingsStream
+from odemis.gui.comp import popup
 from odemis.gui.comp.viewport import MicroscopeViewport, \
     PlotViewport, TemporalSpectrumViewport
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
@@ -243,6 +246,9 @@ class SparcAcquisitionTab(Tab):
 
         # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
         self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
+
+        if main_data.ebeam_blanker and main_data.streak_unit:
+            main_data.ebeam_blanker.power.subscribe(self._on_ebeam_blanker)
 
         # Create Stream Bar Controller
         self._stream_controller = SparcStreamsController(
@@ -478,6 +484,51 @@ class SparcAcquisitionTab(Tab):
                 sems.leeches.remove(dc)
             except ValueError:
                 pass  # It was already not there
+
+    @call_in_wx_main
+    def _on_ebeam_blanker(self, blanked: bool) -> None:
+        """
+        Callback when the e-beam blanker is activated/deactivated. Used to protect the streak-cam
+        as a lot more light could be emitted when unblanking the e-beam.
+        :param blanked: True if the e-beam is (pulsed-)blanked, False if e-beam is active.
+        """
+        # Protect the streakcam in case the ebeam goes from blanked to unblanked, as suddenly a lot of light might be emitted
+        if blanked:  # just changed to blanked => no danger
+            return
+        if not self.IsShown():
+            return
+
+        # Reset all the temporal spectrum stream settings to avoid hardware damage is playing, or
+        # playing later
+        streams_changed = False
+        for s in self.tab_data_model.streams.value:
+            if isinstance(s, TemporalSpectrumStream):
+                if hasattr(s, "detMCPGain") and s.detMCPGain.value != 0:
+                    s.detMCPGain.value = 0
+                    streams_changed = True
+                if hasattr(s, "detShutter") and not s.detShutter.value:
+                    s.detShutter.value = True
+                    streams_changed = True
+
+        if streams_changed:
+            popup.show_message(self.main_frame, "Streak camera protection",
+                               message = "Temporal Spectrum stream settings were reset due to e-beam unblanking.",
+                               level = logging.WARNING)
+
+    @call_in_wx_main
+    def on_hardware_protect(self) -> None:
+        """
+        Called when the detector protection is activated (eg, by pressing the "Pause" button)
+        """
+        # In practice, for now the only thing which is done by the MainGUIData is to protect the
+        # streakcam, if there is one.
+        # In addition to that we also pause the stream. This has two advantages:
+        # * Some of the (other) detectors might also get protected when the acquisition is paused
+        # * The TemporalSpectrumSettingsStream MCPGain and shutter values are not updated from the
+        #   hardware state, so it's clearer to retain the value set by the user, but force them to
+        #   play the stream again to set them again.
+        if self.IsShown():
+            self._stream_controller.pauseStreams()
 
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
