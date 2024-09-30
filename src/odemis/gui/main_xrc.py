@@ -109,7 +109,6 @@ class xrcfr_overview_acq(wx.Dialog):
         self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
-        self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.zstack_steps_label = xrc.XRCCTRL(self, "zstack_steps_label")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
@@ -1666,18 +1665,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_opt_streams">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <nocaption>1</nocaption>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_secom_streams">
