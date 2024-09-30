@@ -660,9 +660,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
         self.fibsem_mode = False # isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
 
-        # hide optical settings / stream panel when in fibsem mode
+        # hide optical settings when in fibsem mode
         self.fp_settings_secom_optical.Show(not self.fibsem_mode)
-        self.pnl_opt_streams.Show(not self.fibsem_mode)
 
         self.filename = create_filename(save_dir, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
