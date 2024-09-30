@@ -31,6 +31,9 @@ from wx.adv import NotificationMessage
 @call_in_wx_main
 def show_message(parent, title, message=None, timeout=3.0, level=logging.INFO):
     """ Show a small message popup for a short time
+    Note: on Ubuntu 22.04, the info level is shown only in the notification bar.
+    The warning level is shown in a popup window for a short while, and the error level
+    is shown in a popup window until the user closes it. The timeout has no effect.
 
     :param parent: (wxWindow or None)
     :param title: (str) The title of the message
@@ -49,3 +52,5 @@ def show_message(parent, title, message=None, timeout=3.0, level=logging.INFO):
 
     m = NotificationMessage(title, message, parent=parent, flags=flags)
     m.Show(int(timeout))
+
+    logging.debug("Notification: %s. %s", title, message or "")
