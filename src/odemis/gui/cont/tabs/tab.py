@@ -245,6 +245,12 @@ class Tab(object):
             self.button.highlight(on)
             self.highlighted = on
 
+    def on_hardware_protect(self) -> None:
+        """
+        Called when the detector protection is activated (eg, by pressing the "Pause" button)
+        """
+        pass
+
     @classmethod
     def get_display_priority(cls, main_data):
         """
