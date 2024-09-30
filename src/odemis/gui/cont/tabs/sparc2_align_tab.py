@@ -449,9 +449,9 @@ class Sparc2AlignTab(Tab):
                                 "Calibration trigger delay for streak camera",
                                 main_data.streak_ccd,
                                 main_data.streak_ccd.data,
-                                main_data.streak_unit,
-                                main_data.streak_delay,
                                 emitter=None,
+                                streak_unit=main_data.streak_unit,
+                                streak_delay=main_data.streak_delay,
                                 detvas=get_local_vas(main_data.streak_ccd, main_data.hw_settings_config),
                                 streak_unit_vas=streak_unit_vas,
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there

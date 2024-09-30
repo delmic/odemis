@@ -1206,16 +1206,20 @@ class FluoStream(CameraStream):
 
 
 class StreakCamStream(CameraStream):
+    """
+    Live Camera stream, with additional protections for the streak camera.
+    Essentially the same as TemporalSpectrumSettingsStream, but with only the live option.
+    """
 
-    def __init__(self, name, detector, dataflow,
+    def __init__(self, name, detector, dataflow, emitter,
                  streak_unit, streak_delay, streak_unit_vas,
-                 emitter, emtvas=None, **kwargs):
+                 emtvas=None, **kwargs):
 
         # We use emission directly to control the emitter
         if emtvas and "emission" in emtvas:
             raise ValueError("emission VA cannot be made local")
 
-        super(StreakCamStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
+        super().__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
         self._active = False  # variable keep track if stream is active/inactive
 
@@ -1226,7 +1230,7 @@ class StreakCamStream(CameraStream):
         self.streak_unit = streak_unit
         self.streak_delay = streak_delay
 
-        # whenever .streakMode changes
+        # Whenever .streakMode is disabled:
         # -> set .MCPGain = 0 and update .MCPGain.range
         # This is important for HW safety reasons to not destroy the streak unit,
         # when changing on of the VA while using a high MCPGain.
@@ -1234,13 +1238,13 @@ class StreakCamStream(CameraStream):
         # is limited to values <= current value to also prevent HW damage
         # when starting to play the stream again.
         try:
-            self.detStreakMode.subscribe(self._OnStreakSettings)
-            self.detMCPGain.subscribe(self._OnMCPGain)
+            self.detStreakMode.subscribe(self._on_streak_mode)
+            self.detMCPGain.subscribe(self._on_mcp_gain)
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
 
     def _find_metadata(self, md):
-        md = super(LiveStream, self)._find_metadata(md)
+        md = super()._find_metadata(md)
         if model.MD_TIME_LIST in self.raw[0].metadata:
             md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
         if model.MD_WL_LIST in self.raw[0].metadata:
@@ -1249,7 +1253,13 @@ class StreakCamStream(CameraStream):
 
     # Override Stream._is_active_setter() in _base.py
     def _is_active_setter(self, active):
-        self._active = super(StreakCamStream, self)._is_active_setter(active)
+        """
+        Called when stream is activated/played. Adapts the MCPGain VA range depending
+        on whether the stream is active or not.
+        :param active: (boolean) True if stream is playing.
+        :returns: (boolean) If stream is playing or not.
+        """
+        self._active = super()._is_active_setter(active)
 
         if self.is_active.value != self._active:  # changing from previous value?
             if self._active:
@@ -1259,6 +1269,9 @@ class StreakCamStream(CameraStream):
                 # Set HW MCPGain VA = 0, but keep GUI VA = previous value
                 try:
                     self.streak_unit.MCPGain.value = 0
+                    # TODO: also close the shutter when not playing? Is it good for the shutter to be repeatedly opened/closed?
+                    if model.hasVA(self.streak_unit, "shutter"):
+                        self.streak_unit.shutter.value = True
                 except Exception:
                     # Can happen if the hardware is not responding. In such case,
                     # let's still pause the stream.
@@ -1268,18 +1281,29 @@ class StreakCamStream(CameraStream):
                 self.detMCPGain.range = (0, self.detMCPGain.value)
         return self._active
 
-    def _OnStreakSettings(self, value):
-        """Callback, which sets MCPGain GUI VA = 0,
-        if .streakMode VA has changed."""
+    def _protect_detector(self) -> None:
+        """
+        Protect the streak camera by setting the MCPGain to 0 and activating the shutter.
+        """
         self.detMCPGain.value = 0  # set GUI VA 0
-        self._OnMCPGain(value)  # update the .MCPGain VA
+        if hasattr(self, "detShutter"):
+            self.detShutter.value = True
 
-    def _OnMCPGain(self, _=None):
-        """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
+    def _on_streak_mode(self, streak: bool) -> None:
+        """
+        Callback, to protect the camera if the streak mode is disabled (ie: all light on a single horizontal line)
+        """
+        if not streak:
+            self._protect_detector()
+
+    def _on_mcp_gain(self, gain: float) -> None:
+        """
+        Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
         only values <= current value are allowed.
-        If stream is active the full range is available."""
+        If stream is active the full range is available.
+        """
         if not self._active:
-            self.detMCPGain.range = (0, self.detMCPGain.value)
+            self.detMCPGain.range = (0, gain)
 
 
 class ScannerSettingsStream(Stream):
