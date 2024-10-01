@@ -232,8 +232,8 @@ class SEM(model.HwComponent):
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
             logging.debug(
-                f"Successfully connected to xtadapter with software version {self._swVersion} and hardware"
-                f"version {self._hwVersion}")
+                f"Successfully connected to xtadapter with software version {self._swVersion} and "
+                f"hardware version {self._hwVersion}")
         except CommunicationError as err:
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
@@ -2245,7 +2245,7 @@ class Stage(model.Actuator):
             # Make sure the system is read in the linked coordinate system
             try:
                 self.parent.set_raw_coordinate_system(False)
-            except OSError as error_msg:
+            except (AttributeError, OSError) as error_msg:
                 logging.warning("Delmic XT Adapter >= 1.12.0 is required to set the raw coordinate system. "
                                 "Failed to call the raw coordinate system for the stage: %s", error_msg)
                 # Do not raise an error if non-raw coordinates are requested, because non-raw is the default in old
@@ -2278,7 +2278,7 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
-    def _getPosition(self) -> None:
+    def _getPosition(self) -> Dict[str, float]:
         """Get position and translate the axes names to be Odemis compatible."""
         pos = self.parent.get_stage_position()
         pos["rx"] = pos.pop("t")
@@ -2360,7 +2360,7 @@ class Stage(model.Actuator):
                         if moving:
                             logging.warning("Stage reported stopped but moving again, will wait longer")
                 else:
-                    logging.debug("Stage move completed")
+                    logging.debug("Stage move reported completed")
 
                 # If it was cancelled, Abort() has stopped the stage before, and
                 # we still have waited until the stage stopped moving. Now let
@@ -2418,17 +2418,27 @@ class Stage(model.Actuator):
                         # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
                         # Therefore, it is not important to check z
                         # check for x and y axes as they move repeatedly in overview acquisitions
-                        axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
-                                                          axes={"x", "y"}, atol_linear=1e-6)
+                        axes_to_check = {"x", "y"}.intersection(target_pos.keys())
+                        if axes_to_check:
+                            axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
+                                                          axes=axes_to_check, atol_linear=1e-6)
+                        else:
+                            axes_updated = True  # No axis to check => move is done
 
                         if axes_updated:
                             logging.debug("Position has updated fully: from %s -> %s", orig_pos,
                                           current_pos)
                             break
+                        else:
+                            logging.debug("Waiting a little longer as position has not updated fully: %s != %s",
+                                          current_pos, target_pos)
+                    else:
+                        logging.debug("Waiting for position to update: %s == %s (for some axes)",
+                                      orig_pos, current_pos)
 
                     if time.time() > expected_end_time:
-                        logging.warning("Stage position after move + %s s is moved to %s instead of target pos: %s. "
-                                        "Giving up waiting", current_pos, timeout, target_pos)
+                        logging.warning("Stage position after move + %s s is %s instead of target pos: %s. "
+                                        "Giving up waiting.", timeout, current_pos, target_pos)
                         break
 
                     if future._must_stop.is_set():
