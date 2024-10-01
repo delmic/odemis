@@ -232,16 +232,12 @@ class ReadoutCamera(model.DigitalCamera):
         delay genereator and the metadata from the parent streak camera.
         :return: merged metadata
         """
-
-        md_devices = [self.parent._streakunit._metadata, self.parent._delaybox._metadata]
-
-        for md_dev in md_devices:
-            for key in md_dev.keys():
-                if key not in md:
-                    md[key] = md_dev[key]
-                elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
-                    md[key] = md[key] + ", " + md_dev[key]
-
+        md_dev = self.parent._streakunit.getMetadata()
+        for key in md_dev.keys():
+            if key not in md:
+                md[key] = md_dev[key]
+            elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
+                md[key] = ", ".join([md[key], md_dev[key]])
         return md
 
     def terminate(self):
@@ -415,17 +411,6 @@ class StreakUnit(model.HwComponent):
         """
         logging.debug("Reporting time range %s for streak unit.", value)
         self._metadata[model.MD_STREAK_TIMERANGE] = value
-
-        # set corresponding trigger delay
-        tr2d = self.parent._delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
-        if tr2d:
-            key = util.find_closest(value, tr2d.keys())
-            if util.almost_equal(key, value):
-                self.parent._delaybox.triggerDelay.value = tr2d[key]
-            else:
-                logging.warning("Time range %s is not a key in MD for time range to "
-                                "trigger delay calibration" % value)
-
         return value
 
     def terminate(self):
