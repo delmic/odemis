@@ -71,7 +71,7 @@ METEOR: {
         # These values are based on the expectation from the CAD model. Recalibrate for each system:
         SAMPLE_CENTERS: {"GRID 1": {'x': -4.1502e-3, 'y': 0.43465e-3, 'z': 29.765e-3}, "GRID 2": {'x': -0.15903e-3, 'y': 0.29642e-3, 'z': 29.765e-3}},
         # Calibrated values used for the SEM/FM switching behaviour
-        CALIB: { "x_0": -8.7e-6  , "y_0": 3.45e-5 , "z_ct": 6.e-3 , "dx": -40.189e-3  , "dy": 0.057e-3, "version": "tescan_1" },
+        CALIB: { "x_0": -8.7e-6  , "y_0": 3.45e-5 , "z_ct": 6.e-3 , "dx": -40.189e-3  , "dy": 0.057e-3, "b_y": -0.297e-3, "version": "tescan_1" },
         # Active tilting (T/rx) & rotation (R/rz) angles positions when switching between SEM & FM.
         # Calibrate for each system, and make sure the difference in rz between FM and SEM is exactly 180Â°
         # The values are in radians. Please also update the values in degrees as written in the comments.
@@ -117,8 +117,8 @@ METEOR: {
     class: omicronxx.HubxX,
     role: light,
     init: {
-        # port: "/dev/fakehub", # Simulator
-        port: "/dev/ttyFTDI*",
+        port: "/dev/fakehub", # Simulator
+        # port: "/dev/ttyFTDI*",
     },
     affects: ["Camera"],
 }
@@ -144,7 +144,7 @@ METEOR: {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {
-        device: 0,  # if a real camera is plugged in, it's usually 0
+        device: "fake",  # if a real camera is plugged in, it's usually 0
         # TODO: adjust the axes so that they match the SEM orientation (with scan rotation = 0)
         transp: [2, 1], # To swap/invert axes -> check during installation
         # TODO: adjust the cropping (use multiple of 4, for a better handling of the binning)
@@ -168,11 +168,11 @@ METEOR: {
     class: tmcm.TMCLController,
     role: null,
     init: {
-        port: "/dev/ttyTMCM*",
-        address: 7,  # TMCM-6110
+        # port: "/dev/ttyTMCM*",
+        # address: 7,  # TMCM-6110
         # address: 17,  # TMCM-1211
-        # port: "/dev/fake", # Simulator
-        # address: null, # Simulator
+        port: "/dev/fake", # Simulator
+        address: null, # Simulator
         param_file: "/usr/share/odemis/meteor-tmcm6110-filterwheel.tmcm.tsv",
         axes: ["fw"],
         ustepsize: [1.227184e-6], # [rad/Âµstep]
