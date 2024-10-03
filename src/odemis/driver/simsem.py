@@ -559,7 +559,7 @@ class IndependentDetector(model.Detector):
         :param name: Standard parameter for the Component.
         :param role: Standard parameter for the Component.
         :param image: path to a file to use as fake image (relative to the directory of this class)
-        :param one_shot: if True, the detector will keep acquiring images until the .data DataFlow
+        :param continuous: if True, the detector will keep acquiring images until the .data DataFlow
         is unsubscribed from, which is the standard behaviour. Otherwise, it will stop after one image,
         which is more common behaviour for independent detectors.
         """
