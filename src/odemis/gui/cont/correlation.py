@@ -25,32 +25,37 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import copy
 import logging
 import math
+from typing import List
+
 import wx
+
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
+
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.stream import RGBStream, StaticStream, StaticFluoStream, StaticSEMStream
-from odemis.gui.util import call_in_wx_main
+from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
+from odemis.gui.util import call_in_wx_main
+
 
 # TODO: move to more approprate location
-def update_image_in_views(s: StaticStream, views: list) -> None:
-    """Force update the static stream in the selected views
+def update_image_in_views(s: StaticStream, views: List[guimod.StreamView]) -> None:
+    """Force update the static stream in the selected views (forces image update)
     :param s: (StaticStream) the static stream to update
-    :param views: (list[View]) the list of views to update"""
-    v: guimod.View
+    :param views: (list[StreamView]) the list of views to update"""
+    v: guimod.StreamView
     for v in views:
         for sp in v.stream_tree.getProjections():  # stream or projection
-            if isinstance(sp, acqstream.DataProjection):
-                st = sp.stream
-            else:
-                st = sp
+            st = sp.stream if isinstance(sp, acqstream.DataProjection) else sp
+
+            # only update the selected stream
             if st is s:
-                sp._shouldUpdateImage()
+                sp.force_image_update()
+
 
 def convert_rgb_to_sem(rgb_stream: RGBStream) -> StaticSEMStream:
     """Convert an RGB stream to a SEM stream
@@ -77,6 +82,7 @@ def convert_rgb_to_sem(rgb_stream: RGBStream) -> StaticSEMStream:
     sem_stream.raw[0].metadata[model.MD_DIMS] = "YX"
 
     return sem_stream
+
 
 class CorrelationController(object):
 

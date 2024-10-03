@@ -221,6 +221,17 @@ class RGBProjection(DataProjection):
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
+    def force_image_update(self):
+        """Forces the image to be recomputed entirely, and invalidates the cache for tiled images"""
+
+        if hasattr(self, "_projectedTilesCache") and hasattr(self, "_rawTilesCache"):
+            # invalidate the raw and projectted tiles cache
+            self._projectedTilesCache = {}
+            self._rawTilesCache = {}
+            self._shouldUpdateImageEntirely()
+        else:
+            self._shouldUpdateImage()
+
 
 class ARProjection(RGBProjection):
     """
@@ -934,13 +945,11 @@ class RGBSpatialProjection(RGBProjection):
     def getBoundingBox(self):
         '''
         Get the bounding box of the whole image, whether it`s tiled or not.
+        Since the image can now be updated, the bounding box can change
+        so we need to get it from the stream directly.
         return (tuple of floats(minx, miny, maxx, maxy)): Tuple with the bounding box
         '''
-        if hasattr(self, 'rect'):
-            rng = self.rect.range
-            return rng[0][0], rng[0][1], rng[1][0], rng[1][1]
-        else:
-            return self.stream.getBoundingBox(self.image.value)
+        return self.stream.getBoundingBox()
 
     def _zFromMpp(self):
         """

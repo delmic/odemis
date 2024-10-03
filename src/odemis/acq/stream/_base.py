@@ -1100,8 +1100,8 @@ class Stream(object):
         return (DataArray): The merged image
         """
         # calculates the size of the merged image
-        width_zoomed = das.shape[1] / (2 ** z)
-        height_zoomed = das.shape[0] / (2 ** z)
+        width_zoomed = int(das.shape[1] / (2 ** z))
+        height_zoomed = int(das.shape[0] / (2 ** z))
         # calculates the number of tiles on both axes
         num_tiles_x = int(math.ceil(width_zoomed / das.tile_shape[1]))
         num_tiles_y = int(math.ceil(height_zoomed / das.tile_shape[0]))
@@ -1352,3 +1352,7 @@ class Stream(object):
         A list of metadata dicts is returned.
         """
         return [None if data is None else data.metadata for data in self.raw]
+
+    def force_image_update(self):
+        """Force the stream image to be updated"""
+        self._shouldUpdateImage()
