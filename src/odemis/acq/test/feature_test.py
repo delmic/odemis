@@ -5,9 +5,13 @@ import json
 import logging
 import unittest
 
-from odemis.acq.feature import CryoFeature, FeaturesDecoder, get_features_dict, save_features, \
-    read_features
-from odemis.model import ListVA
+from odemis.acq.feature import (
+    CryoFeature,
+    FeaturesDecoder,
+    get_features_dict,
+    read_features,
+    save_features,
+)
 
 logging.getLogger().setLevel(logging.DEBUG)
 

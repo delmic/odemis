@@ -30,11 +30,19 @@ from unittest.mock import Mock
 
 import odemis
 from odemis import model
+from odemis.driver.simulated import GenericComponent
 from odemis.util import testing
-from odemis.util.driver import (DEFAULT_SPEED, ProgressiveMove,
-                                estimateMoveDuration, get_linux_version,
-                                getSerialDriver, guessActuatorMoveDuration,
-                                readMemoryUsage, speedUpPyroConnect)
+from odemis.util.driver import (
+    DEFAULT_SPEED,
+    ProgressiveMove,
+    estimate_stage_movement_time,
+    estimateMoveDuration,
+    get_linux_version,
+    getSerialDriver,
+    guessActuatorMoveDuration,
+    readMemoryUsage,
+    speedUpPyroConnect,
+)
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -175,6 +183,53 @@ class TestDriver(unittest.TestCase):
         speed = DEFAULT_SPEED
         t_exp = estimateMoveDuration(distance, speed, accel)
         self.assertEqual(t_actual, t_exp)
+
+    def test_estimate_stage_movement_time(self):
+        """Test estimate_stage_movement_time takes the correct input and returns a correct estimation."""
+        stage = GenericComponent(
+            name="stage",
+            role="stage",
+            axes={
+                "x": {"range": (-20e-3, 20e-3), "unit": "m"},
+                "y": {"range": (-20e-3, 20e-3), "unit": "m"},
+                "z": {"range": (-20e-3, 20e-3), "unit": "m"},
+            },
+        )
+        stage.speed.value = {"x": DEFAULT_SPEED, "y": DEFAULT_SPEED, "z": DEFAULT_SPEED}
+
+        start_pos = {"x": 0, "y": 0, "z": 0}
+        end_pos = {"x": 10e-3, "y": 9e-3, "z": 11e-3}
+        axes = ["x", "y", "z"]
+
+        # calculate the total distance and the maximum distance
+        total_distance = sum([abs(end_pos[axis] - start_pos[axis]) for axis in axes])
+        max_distance = max([abs(end_pos[axis] - start_pos[axis]) for axis in axes])
+
+        # sequential movements (total time is the sum of the individual times)
+        est_time = estimate_stage_movement_time(
+            stage,
+            start_pos=start_pos,
+            end_pos=end_pos,
+            axes=axes,
+            independent_axes=False,
+        )
+        self.assertAlmostEqual(est_time, total_distance / DEFAULT_SPEED, delta=0.1)
+
+        # independent movements (total time is the maximum of the individual times)
+        est_time = estimate_stage_movement_time(
+            stage,
+            start_pos=start_pos,
+            end_pos=end_pos,
+            axes=axes,
+            independent_axes=True,
+        )
+        self.assertAlmostEqual(est_time, max_distance / DEFAULT_SPEED, delta=0.1)
+
+        # raise error if requested axis is not in the stage
+        with self.assertRaises(KeyError):
+            estimate_stage_movement_time(
+                stage, start_pos=start_pos, end_pos=end_pos, axes=["a"]
+            )
 
 
 class TestProgressiveMove(unittest.TestCase):
