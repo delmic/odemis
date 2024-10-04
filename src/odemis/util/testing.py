@@ -76,7 +76,8 @@ def start_backend(config):
     if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
         current_model = model.getMicroscope().model
         try:
-            req_model = modelgen.Instantiator(open(config)).ast
+            with open(config) as f:
+                req_model = modelgen.Instantiator(f).ast
         except Exception as exp:
             raise ValueError(exp)
         if current_model == req_model:
