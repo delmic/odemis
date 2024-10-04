@@ -39,7 +39,7 @@ from odemis.util.filename import guess_pattern, create_projectname
 from odemis import model
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
-from odemis.acq.feature import load_project_data
+from odemis.acq.feature import load_project_data, import_features_from_autolamella
 from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
     FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS
 from odemis.acq.stream import StaticStream
@@ -89,6 +89,11 @@ class CryoChamberTab(Tab):
         self.btn_load_project.Bind(wx.EVT_BUTTON, self._load_project_data)
         self.txt_projectpath = self.panel.txt_projectpath
         self.btn_load_project.Hide()
+
+        # enable autolamella import for meteor
+        main_frame.Bind(wx.EVT_MENU, self._import_features_from_autolamella, id=main_frame.menu_item_import_from_autolamella.GetId())
+        if self._role == 'meteor':
+            main_frame.menu_item_import_from_autolamella.Enable(True)
 
         # Create new project directory on starting the GUI
         self._create_new_dir()
@@ -442,6 +447,24 @@ class CryoChamberTab(Tab):
         logging.debug(f"{len(localization_tab.tab_data_model.streams.value)} streams loaded.")
 
         return
+
+    def _import_features_from_autolamella(self, _):
+        """Import features from autolamella experiment."""
+
+        # select an autolamella directory to load
+        path = LoadProjectFileDialog(parent=self.panel,
+                                     projectname=self.conf.pj_last_path,
+                                     message="Select AutoLamella Project Directory to load")
+
+        if path is None: # Cancelled
+            return
+
+        # load features from autolamella experiment
+        cryo_features = import_features_from_autolamella(path)
+
+        # add the features to the current features list
+        logging.info(f"Imported {len(cryo_features)} features from autolamella experiment.")
+        self.tab_data_model.main.features.value.extend(cryo_features)
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):
