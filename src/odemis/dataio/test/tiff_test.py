@@ -2730,13 +2730,93 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(value, data.content[0].metadata[key])
 
 
-# Not used anymore
-# def rational2float(rational):
-#     """
-#     Converts a rational number (from libtiff) to a float
-#     rational (numpy array of shape 1 with numer and denom fields): num,denom
-#     """
-#     return rational["numer"][0] / rational["denom"][0]
+    def test_save_ome_2016_metadata(self):
+        """Test save OME 2016 metadata in OME-TIFF file"""
+
+        # create some metadata
+        timestamp = time.time()
+        mds = [{
+            model.MD_ACQ_DATE: timestamp,
+            model.MD_DESCRIPTION: "test-ome-compatability",
+            model.MD_POS: (0.5e-3, 0.25e-3, 1.65e-3),
+            model.MD_PIXEL_SIZE: (77.4e-9, 77.4e-9, 200e-9),
+            model.MD_ROTATION: 0, 
+            model.MD_SHEAR: 0,
+            model.MD_IN_WL: (490e-9, 510e-9),
+            model.MD_OUT_WL: (697e-9, 698e-9),
+            model.MD_USER_TINT: (255, 0, 0), # red tint
+            model.MD_EXP_TIME: 0.1,
+            model.MD_DIMS: 'CTZYX',
+        },
+        {
+            model.MD_ACQ_DATE: timestamp,
+            model.MD_DESCRIPTION: "test-ome-compatability",
+            model.MD_POS: (0.5e-3, 0.25e-3, 1.65e-3),
+            model.MD_PIXEL_SIZE: (77.4e-9, 77.4e-9, 200e-9),
+            model.MD_ROTATION: 0, 
+            model.MD_SHEAR: 0,
+            model.MD_IN_WL: (390e-9, 410e-9),
+            model.MD_OUT_WL: (431e-9, 433e-9),
+            model.MD_USER_TINT: (0, 0, 255), # blue tint
+            model.MD_EXP_TIME: 0.1,
+            model.MD_DIMS: 'CTZYX',
+        }]
+
+        # create 5D (CTZYX) data
+        nt, nc, nz, ny, nx = 1, 2, 10, 1024, 1024
+        image_data = [model.DataArray(numpy.zeros((1, nt, nz, ny, nx), dtype=numpy.uint16), 
+                                      metadata=mds[i]) for i in range(nc)]
+
+        # export
+        BASE_FILENAME = "test-ome-compat-image.ome.tiff"
+        OME_FILENAME = BASE_FILENAME.replace(".ome.tiff", "-2016-06.ome.tiff")
+
+        # remove files if they exist
+        os.remove(BASE_FILENAME) if os.path.exists(BASE_FILENAME) else None
+        os.remove(OME_FILENAME) if os.path.exists(OME_FILENAME) else None
+
+        # export without compat, only results in previous OME-TIFF format
+        tiff.export(BASE_FILENAME, image_data)
+
+        self.assertTrue(os.path.exists(BASE_FILENAME))
+        self.assertFalse(os.path.exists(OME_FILENAME))
+
+        # remove base file
+        os.remove(BASE_FILENAME)
+
+        # export with ome compat, both files should be saved
+        tiff.export(BASE_FILENAME, image_data, ome_compat=True)
+
+        # check both files are created
+        self.assertTrue(os.path.exists(BASE_FILENAME))
+        self.assertTrue(os.path.exists(OME_FILENAME))
+
+        # check data
+        data = tiff.open_data(OME_FILENAME)
+        
+        assert len(data.content) == nc
+        for i, dat in enumerate(data.content):
+            assert dat.shape == (1, nt, nz, ny, nx)
+            assert dat.dtype == numpy.uint16
+            
+            # check metadata
+            md = mds[i]
+            for key in md.keys():
+                self.assertIn(key, dat.metadata)
+
+            for key, value in md.items():
+
+                if isinstance(value, (tuple, list)): # array equal
+                    numpy.testing.assert_array_equal(value, dat.metadata[key])
+                elif isinstance(value, float):
+                    self.assertAlmostEqual(value, dat.metadata[key])
+                else:
+                    self.assertEqual(value, dat.metadata[key])
+
+        # remove files
+        os.remove(BASE_FILENAME)
+        os.remove(OME_FILENAME)
+    
 
 if __name__ == "__main__":
     unittest.main()

@@ -2060,7 +2060,15 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
         f.write_tiles(subim, TILE_SIZE, TILE_SIZE, compression, write_rgb)
 
 
-def export(filename: str, data: List[model.DataArray], thumbnail: Optional[model.DataArray] = None, compressed: bool = True, multiple_files: bool = False, pyramid: bool = False, ome_compat: bool = False):
+def export(
+    filename: str,
+    data: List[model.DataArray],
+    thumbnail: Optional[model.DataArray] = None,
+    compressed: bool = True,
+    multiple_files: bool = False,
+    pyramid: bool = False,
+    ome_compat: bool = False,
+):
     '''
     Write a TIFF file with the given image and metadata
     filename (unicode): filename of the file to create (including path)
@@ -3328,7 +3336,10 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
 def reformat_ome_metadata(image_data: List[model.DataArray],
                           filename: str,
                           ) -> None:
-    """Open an odemis image and reformat the metadata to OME-XML format (2016-06) and save a new file"""
+    """Save an odemis image with OME-XML format (2016-06)
+    :param image_data: (list of DataArray) image data
+    :param filename: (str) filename to save the image
+    """
 
     import tifffile as tff
     from ome_types import to_xml
@@ -3528,6 +3539,9 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
     # Convert OME object to XML string
     ome_xml = to_xml(ome)
 
+    # from pprint import pprint
+    # pprint(ome_xml)
+
     # Save the image with OME-XML metadata
     with tff.TiffWriter(filename, bigtiff=True) as tif:
         for t in range(size_t):
@@ -3554,6 +3568,8 @@ def open_data_ome_tiff(path: str) -> List[model.DataArray]:
 
         # validate OME-XML metadata
         ome_xml = tif.pages[0].tags["ImageDescription"].value
+        # from pprint import pprint 
+        # pprint(ome_xml)
         if not tff.OmeXml.validate(ome_xml):
             raise ValueError("Invalid OME-XML metadata")
 
