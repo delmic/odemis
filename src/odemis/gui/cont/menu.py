@@ -136,7 +136,7 @@ class MenuController(object):
         if main_data.role == "meteor":
             main_frame.Bind(wx.EVT_MENU, self._on_ome_compat, id=main_frame.menu_item_dev_ome_compat.GetId())
             main_frame.menu_item_dev_ome_compat.Enable(True)
-            main_frame.menu_item_dev_ome_compat.Check(tiff.GLOBAL_OME_COMPAT_MODE)
+            main_frame.menu_item_dev_ome_compat.Check(main_data.ome_compat)
 
         # TODO: make it work on Windows too
         # /Help/Report a problem...
@@ -469,10 +469,13 @@ class MenuController(object):
         InspectionTool().Show()
 
     def _on_ome_compat(self, evt: wx.CommandEvent):
-        tiff.GLOBAL_OME_COMPAT_MODE = bool(evt.IsChecked())
-        logging.warning(f"OME Compatibility: {tiff.GLOBAL_OME_COMPAT_MODE}")
-        # TODO: write the new value to the config file, rather than global
-        # use the config file to set the initial value
+        self._main_data.ome_compat = bool(evt.IsChecked())
+
+        # write the new value to the config file
+        conf = odemis.gui.conf.get_acqui_conf()
+        conf.export_ome_compat = self._main_data.ome_compat
+        
+        logging.info(f"OME-2016 Compatibility Export: {self._main_data.ome_compat}")
 
     # def on_htmldoc(self, evt):
     #     """ Launch Python's SimpleHTTPServer in a separate process and have it

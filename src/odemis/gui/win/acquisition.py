@@ -1284,13 +1284,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Now store the data (as pyramidal data), and open it again (but now it's
         # backed with the persistent storage.
+        ome_compat = self._main_data_model.ome_compat
         try:
             exporter = dataio.find_fittest_converter(self.filename)
             if exporter.CAN_SAVE_PYRAMID:
-                exporter.export(self.filename, data, pyramid=True)
+                exporter.export(self.filename, data, pyramid=True, ome_compat=ome_compat)
             else:
                 logging.warning("File format doesn't support saving image in pyramidal form")
-                exporter.export(self.filename)
+                exporter.export(self.filename, ome_compat=ome_compat)
             self.data = exporter.open_data(self.filename).content
         except Exception:
             # We cannot do much: just warn the user and pretend it was cancelled

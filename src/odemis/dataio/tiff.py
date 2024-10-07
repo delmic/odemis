@@ -27,13 +27,12 @@ import math
 import operator
 import os
 import re
-import sys
 import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import libtiff.libtiff_ctypes as T  # for the constant names
 import numpy
@@ -109,8 +108,6 @@ T.tifftags[TIFFTAG_TESCAN_MD] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d:
 # T.suppress_errors() # deliberately commented out
 T.suppress_warnings()
 
-# enable ome (2016-06) compatible mode
-GLOBAL_OME_COMPAT_MODE: bool = False
 
 def _convertToTiffTag(metadata):
     """
@@ -2063,7 +2060,7 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
         f.write_tiles(subim, TILE_SIZE, TILE_SIZE, compression, write_rgb)
 
 
-def export(filename, data, thumbnail=None, compressed=True, multiple_files=False, pyramid=False):
+def export(filename: str, data: List[model.DataArray], thumbnail: Optional[model.DataArray] = None, compressed: bool = True, multiple_files: bool = False, pyramid: bool = False, ome_compat: bool = False):
     '''
     Write a TIFF file with the given image and metadata
     filename (unicode): filename of the file to create (including path)
@@ -2080,9 +2077,11 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
     compressed (boolean): whether the file is compressed or not.
     multiple_files (boolean): whether the data is distributed across multiple
       files or not.
+    pyramid: whether to export data as pyramid
+    ome_compat: whether to export the file in OME-2016 format (in addition to standard metadata)
     '''
 
-    if GLOBAL_OME_COMPAT_MODE:
+    if ome_compat:
         try:
             new_fn = filename.replace(".ome.tiff", "-2016-06.ome.tiff")
             reformat_ome_metadata(image_data=data, filename=new_fn)

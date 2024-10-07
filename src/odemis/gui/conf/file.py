@@ -254,6 +254,8 @@ class AcquisitionConfig(Config):
         # Cannot save the format, as it depends on the type, but at least remember
         # whether it was "raw" (= post-processing) or not.
         self.default.set("export", "raw", "False")
+        # export as OME-2016 compatible images (meteor only)
+        self.default.set("export", "ome_compat", "True")
 
         # Define the default settings for the project parameters
         self.default.add_section("project")
@@ -311,6 +313,15 @@ class AcquisitionConfig(Config):
     def export_raw(self, value):
         strval = "True" if value else "False"
         self.set("export", "raw", strval)
+
+    @property
+    def export_ome_compat(self):
+        return self.get("export", "ome_compat").lower() == "true"
+
+    @export_ome_compat.setter
+    def export_ome_compat(self, value):
+        strval = "True" if value else "False"
+        self.set("export", "ome_compat", strval)
 
     @property
     def fn_ptn(self):

@@ -20,6 +20,7 @@ from odemis.acq.acqmng import (
 from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
 from odemis.acq.stream import Stream
 from odemis.dataio import find_fittest_converter
+from odemis.gui.conf import get_acqui_conf
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
 from odemis.util.driver import estimate_stage_movement_time
@@ -415,10 +416,11 @@ class CryoFeatureAcquisitionTask(object):
         Called to export the acquired data.
         data: the returned data/images from the future
         """
+        ome_compat = get_acqui_conf().export_ome_compat
 
         filename = add_feature_info_to_filename(feature, self.filename)
 
-        self.exporter.export(filename, data)
+        self.exporter.export(filename, data, ome_compat=ome_compat)
         logging.info("Acquisition saved as file '%s'.", filename)
 
 

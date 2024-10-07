@@ -373,10 +373,11 @@ class CryoAcquiController(object):
         """
         filename = self._filename.value
         if data:
+            ome_compat = self._tab_data.main.ome_compat
             filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
                                                  filename=filename)
             exporter = dataio.get_converter(self._config.last_format)
-            exporter.export(filename, data, thumb_nail)
+            exporter.export(filename, data, thumb_nail, ome_compat=ome_compat)
             logging.info(u"Acquisition saved as file '%s'.", filename)
             # update the filename
             self._filename.value = create_filename(
