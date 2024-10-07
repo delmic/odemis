@@ -474,7 +474,7 @@ class MenuController(object):
         # write the new value to the config file
         conf = odemis.gui.conf.get_acqui_conf()
         conf.export_ome_compat = self._main_data.ome_compat
-        
+
         logging.info(f"OME-2016 Compatibility Export: {self._main_data.ome_compat}")
 
     # def on_htmldoc(self, evt):
