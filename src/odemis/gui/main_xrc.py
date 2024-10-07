@@ -763,6 +763,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
         self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
+        self.chk_use_autofocus_acquire_features = xrc.XRCCTRL(self, "chk_use_autofocus_acquire_features")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
         self.btn_mill_active_features = xrc.XRCCTRL(self, "btn_mill_active_features")
         self.txt_milling_est_time = xrc.XRCCTRL(self, "txt_milling_est_time")
@@ -9287,6 +9288,19 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               </object>
                               <option>0</option>
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
+                                <label>Use AutoFocus</label>
+                                <fg>#E5E5E5</fg>
+                                <checked>0</checked>
+                                <flag>wxVERTICAL</flag>
+                                <border>10</border>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
                               <border>10</border>
                             </object>
                             <orient>wxVERTICAL</orient>

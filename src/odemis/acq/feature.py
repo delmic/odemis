@@ -17,10 +17,13 @@ from odemis.acq.acqmng import (
     estimateTime,
     estimateZStackAcquisitionTime,
 )
+from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
+from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream
 from odemis.dataio import find_fittest_converter
 from odemis.util import dataio, executeAsyncTask
+from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
 from odemis.util.driver import estimate_stage_movement_time
 from odemis.util.filename import create_filename
@@ -169,7 +172,7 @@ class MoveError(Exception):
 
 
 # Time to wait for the stage to settle after moving
-STAGE_WAIT_TIME = 3 # seconds
+STAGE_WAIT_TIME = 1.5   # seconds
 OBJECTIVE_WAIT_TIME = 2 # seconds
 
 
@@ -184,16 +187,22 @@ class CryoFeatureAcquisitionTask(object):
         focus: model.Actuator,
         streams: List[Stream],
         filename: str,
-        zlevels: Dict[Stream, float] = {},
+        zparams: Dict[str, float] = {},
         settings_obs: SettingsObserver = None,
+        use_autofocus: bool = True,
+        autofocus_conf_level: float = 0.8,
     ):
         self.features = features
         self.stage = stage
         self.focus = focus
         self.streams = streams
-        self.zlevels = zlevels
+        self.zparams = zparams
         self.filename = filename
         self._settings_obs = settings_obs
+
+        # autofocus settings
+        self.use_autofocus = use_autofocus
+        self.autofocus_conf_level = autofocus_conf_level
 
         # Find the fittest converter for the given filename
         self.exporter = find_fittest_converter(filename)
@@ -230,13 +239,32 @@ class CryoFeatureAcquisitionTask(object):
         """
         data = []
         try:
-            # check if cancellation happened while the acquiring future is working
+            # check if cancellation happened while the acquiring future is working (before autofocus)
             with self._future._task_lock:
                 if self._future._task_state == CANCELLED:
                     raise CancelledError()
-                if self.zlevels:
+
+                if self.use_autofocus:
+                    self._run_autofocus(site)
+
+            # check if cancellation happened while the acquiring future is working (before acquisition)
+            with self._future._task_lock:
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
+
+                if self.zparams:
+                    # recalculate the zlevels based on the zparms
+                    # we need the zmin, zmax, zstep, and the new focus position
+                    zmin, zmax, zstep = self.zparams["zmin"], self.zparams["zmax"], self.zparams["zstep"]
+                    levels = generate_zlevels(focuser=self.focus, zrange=(zmin, zmax), zstep=zstep)
+
+                    # Only use zstack for the optical streams (not SEM), as that's the ones
+                    # the user is interested in on the METEOR/ENZEL.
+                    zlevels = {s: levels for s in self.streams}
+                    logging.warning(f"The zlevels for feature {site.name.value} are {zlevels}")
+
                     self._future.running_subf = acquireZStack(
-                        self.streams, self.zlevels, self._settings_obs
+                        self.streams, zlevels, self._settings_obs
                     )
                 else:  # no zstack
                     self._future.running_subf = acquire(
@@ -266,6 +294,42 @@ class CryoFeatureAcquisitionTask(object):
         new_streams = dataio.data_to_static_streams(data)
         site.streams.value.extend(new_streams)
         logging.info(f"The acquisition of {self.streams} for {site.name.value} is done")
+
+    def _run_autofocus(self, site: CryoFeature) -> None:
+        """Run the autofocus for the given feature."""
+
+        # TODO: allow the user to select the autofocus stream, rather than just using the first one
+
+        try:
+            # run the autofocus at the current position
+            logging.debug(f"running autofocus at {site.name.value} at focus: {self.focus.position.value}, req conf: {self.autofocus_conf_level}")
+            rel_rng = SAFE_REL_RANGE_DEFAULT
+            focus_rng = (self.focus.position.value["z"] + rel_rng[0], self.focus.position.value["z"] + rel_rng[1])
+            self._future._running_subf = AutoFocus(detector=self.streams[0].detector,
+                                                        emt=None,
+                                                        focus=self.focus,
+                                                        rng_focus=focus_rng)
+
+            # note: the auto focus moves the objective to the best position
+            foc_pos, foc_lev, conf = self._future._running_subf.result(timeout=900)
+            if conf >= self.autofocus_conf_level:
+
+                # update the feature focus position
+                pos = site.pos.value
+                site.pos.value = (pos[0], pos[1], foc_pos)  # NOTE: tuples cant do assignment so we need to replace the whole tuple
+                logging.debug(f"auto focus succeeded at {site.name.value} with conf:{conf}. new focus position: {foc_pos}")
+            else:
+                # if the confidence is low, restore the previous focus position
+                self._move_focus(site, {"z": site.pos.value[2]})
+                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.pos.value[2]}")
+
+        except TimeoutError as e:
+            logging.debug(f"Timed out during autofocus at {site.name.value}. {e}")
+            self._future._running_subf.cancel()
+
+            # restore the previous focus position
+            self._move_focus(site, {"z": site.pos.value[2]})
+            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.pos.value[2]}")
 
     def _move_to_site(self, site: CryoFeature):
         """
@@ -302,6 +366,10 @@ class CryoFeatureAcquisitionTask(object):
         logging.debug(
             "For feature %s moving the objective to %s m", site.name.value, focus_pos
         )
+        self._move_focus(site, focus_pos)
+
+    def _move_focus(self, site: CryoFeature, focus_pos: Dict[str, float]) -> None:
+        """Move the focus to the given position."""
         self._future.running_subf = self.focus.moveAbs(focus_pos)
 
         # objective move shouldn't take longer than 2 seconds
@@ -314,14 +382,30 @@ class CryoFeatureAcquisitionTask(object):
                 f"Failed to move the objective for feature {site.name.value} within {t} s"
             )
 
+    def _generate_zlevels(self, zmin: float, zmax: float, zstep: float) -> Dict[Stream, List[float]]:
+        """Generate the zlevels for the zstack acquisition in the required format."""
+        # calculate the zlevels for the zstack acquisition
+        levels = generate_zlevels(self.focus, (zmin, zmax), zstep)
+        zlevels = {s: levels for s in self.streams}
+        logging.debug(f"Generated zlevels for the zstack acquisition: {zlevels}")
+        return zlevels
+
     def estimate_acquisition_time(self) -> float:
-        """Estimate the acquisition time for the acquisition task."""
-        if self.zlevels:
-            acq_time = estimateZStackAcquisitionTime(self.streams, self.zlevels)
+        """Estimate the acquisition time for the acquisition task, including autofocus."""
+
+        autofocus_time = 0
+        if self.use_autofocus:
+            autofocus_time = estimateAutoFocusTime(self.streams[0].detector, None, steps=20)
+
+        if self.zparams:
+            zlevels = self._generate_zlevels(zmin=self.zparams["zmin"],
+                                             zmax=self.zparams["zmax"],
+                                             zstep=self.zparams["zstep"])
+            acq_time = estimateZStackAcquisitionTime(self.streams, zlevels)
         else:  # no zstack
             acq_time = estimateTime(self.streams)
-        logging.debug(f"Estimated total acquisition time {acq_time}s")
-        return acq_time
+        logging.debug(f"Estimated total acquisition time {acq_time}s, autofocus time {autofocus_time}s")
+        return acq_time + autofocus_time
 
     def estimate_movement_time(self) -> float:
         """Estimate the movement time for the acquisition task."""
@@ -367,7 +451,7 @@ class CryoFeatureAcquisitionTask(object):
         """Run the acquisition task."""
         exp = None
         self._future._task_state = RUNNING
-        self._future.set_progress(end=time.time() + self.estimate_total_time() + 2)
+        self._future.set_progress(end=time.time() + self.estimate_total_time() + 2) # +2 for pessimistic margin
         try:
             with self._future._task_lock:
                 if self._future._task_state == CANCELLED:
@@ -428,8 +512,9 @@ def acquire_at_features(
     focus: model.Actuator,
     streams: List[Stream],
     filename: str,
-    zlevels: Dict[Stream, float] = {},
+    zparams: Dict[str, float] = {},
     settings_obs: SettingsObserver = None,
+    use_autofocus: bool = False,
 ) -> futures.Future:
     """
     Acquire data at the given features.
@@ -438,7 +523,7 @@ def acquire_at_features(
     :param focus: The focuser to move to the features.
     :param streams: The streams to acquire data from.
     :param filename: The filename to save the acquired data to.
-    :param zlevels: The z-levels to acquire data at for each stream.
+    :param zparams: The z-levels parameters to acquire data at for each stream.
     :param settings_obs: The settings observer to use for the acquisition.
     :return: The future of the acquisition task.
     """
@@ -451,8 +536,9 @@ def acquire_at_features(
         focus=focus,
         streams=streams,
         filename=filename,
-        zlevels=zlevels,
+        zparams=zparams,
         settings_obs=settings_obs,
+        use_autofocus=use_autofocus,
     )
 
     # Assign the cancellation function to the future
