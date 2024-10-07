@@ -229,6 +229,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.menu_item_dev_ome_compat = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_dev_ome_compat"))
         self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
@@ -2556,6 +2557,14 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <label>Show log panel</label>
             <accel>Ctrl+D</accel>
             <checkable>1</checkable>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="wxMenuItem" name="menu_item_dev_ome_compat">
+            <label>Enable OME Compatibility</label>
+            <checkable>1</checkable>
+            <enabled>0</enabled>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

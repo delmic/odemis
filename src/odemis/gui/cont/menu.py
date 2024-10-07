@@ -22,6 +22,7 @@ see http://www.gnu.org/licenses/.
 import logging
 from odemis import model, gui
 from odemis.acq import stream
+from odemis.dataio import tiff
 from odemis.gui import DYE_LICENCE
 from odemis.gui.comp import popup
 import odemis.gui.conf
@@ -130,6 +131,12 @@ class MenuController(object):
         # /Help/Development/Debug
         main_frame.Bind(wx.EVT_MENU, self._on_debug_menu, id=main_frame.menu_item_debug.GetId())
         main_data.debug.subscribe(self._on_debug_va, init=True)
+
+        # /Help/Development/OME Compatibility
+        if main_data.role == "meteor":
+            main_frame.Bind(wx.EVT_MENU, self._on_ome_compat, id=main_frame.menu_item_dev_ome_compat.GetId())
+            main_frame.menu_item_dev_ome_compat.Enable(True)
+            main_frame.menu_item_dev_ome_compat.Check(tiff.GLOBAL_OME_COMPAT_MODE)
 
         # TODO: make it work on Windows too
         # /Help/Report a problem...
@@ -460,6 +467,12 @@ class MenuController(object):
     def _on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
+
+    def _on_ome_compat(self, evt: wx.CommandEvent):
+        tiff.GLOBAL_OME_COMPAT_MODE = bool(evt.IsChecked())
+        logging.warning(f"OME Compatibility: {tiff.GLOBAL_OME_COMPAT_MODE}")
+        # TODO: write the new value to the config file, rather than global
+        # use the config file to set the initial value
 
     # def on_htmldoc(self, evt):
     #     """ Launch Python's SimpleHTTPServer in a separate process and have it

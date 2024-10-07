@@ -183,6 +183,14 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="wxMenuItem" name="menu_item_dev_ome_compat">
+            <label>Enable OME Compatibility</label>
+            <checkable>1</checkable>
+            <enabled>0</enabled>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
         </object>
         <object class="wxMenuItem" name="menu_item_bugreport">
           <label>Report a problem...</label>
