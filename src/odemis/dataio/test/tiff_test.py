@@ -2740,7 +2740,7 @@ class TestTiffIO(unittest.TestCase):
             model.MD_DESCRIPTION: "test-ome-compatability",
             model.MD_POS: (0.5e-3, 0.25e-3, 1.65e-3),
             model.MD_PIXEL_SIZE: (77.4e-9, 77.4e-9, 200e-9),
-            model.MD_ROTATION: 0, 
+            model.MD_ROTATION: 0,
             model.MD_SHEAR: 0,
             model.MD_IN_WL: (490e-9, 510e-9),
             model.MD_OUT_WL: (697e-9, 698e-9),
@@ -2753,7 +2753,7 @@ class TestTiffIO(unittest.TestCase):
             model.MD_DESCRIPTION: "test-ome-compatability",
             model.MD_POS: (0.5e-3, 0.25e-3, 1.65e-3),
             model.MD_PIXEL_SIZE: (77.4e-9, 77.4e-9, 200e-9),
-            model.MD_ROTATION: 0, 
+            model.MD_ROTATION: 0,
             model.MD_SHEAR: 0,
             model.MD_IN_WL: (390e-9, 410e-9),
             model.MD_OUT_WL: (431e-9, 433e-9),
@@ -2764,7 +2764,7 @@ class TestTiffIO(unittest.TestCase):
 
         # create 5D (CTZYX) data
         nt, nc, nz, ny, nx = 1, 2, 10, 1024, 1024
-        image_data = [model.DataArray(numpy.zeros((1, nt, nz, ny, nx), dtype=numpy.uint16), 
+        image_data = [model.DataArray(numpy.zeros((1, nt, nz, ny, nx), dtype=numpy.uint16),
                                       metadata=mds[i]) for i in range(nc)]
 
         # export
@@ -2793,12 +2793,12 @@ class TestTiffIO(unittest.TestCase):
 
         # check data
         data = tiff.open_data(OME_FILENAME)
-        
+
         assert len(data.content) == nc
         for i, dat in enumerate(data.content):
             assert dat.shape == (1, nt, nz, ny, nx)
             assert dat.dtype == numpy.uint16
-            
+
             # check metadata
             md = mds[i]
             for key in md.keys():
@@ -2816,7 +2816,9 @@ class TestTiffIO(unittest.TestCase):
         # remove files
         os.remove(BASE_FILENAME)
         os.remove(OME_FILENAME)
-    
+
+        # TODO: 3D case
+        # TODO: 2D case
 
 if __name__ == "__main__":
     unittest.main()
