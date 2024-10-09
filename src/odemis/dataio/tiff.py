@@ -42,7 +42,7 @@ import odemis
 from odemis import model, util
 from odemis.model import AcquisitionData, DataArrayShadow
 from odemis.util import fluo, img, spectrum, units
-from odemis.util.conversion import JsonExtraEncoder, get_tile_md_pos
+from odemis.util.conversion import JsonExtraEncoder, get_tile_md_pos, rgba_to_signed_int32, int32_to_rgba
 
 #pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
@@ -345,7 +345,7 @@ def _indent(elem, level=0):
             elem.tail = i
 
 
-_ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2012-06"
+_ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2016-06"
 
 
 def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids=None):
@@ -436,16 +436,16 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     # much better ignoring it completely
     if multiple_files:
         root = ET.Element('OME', attrib={
-                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2016-06",
                 "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
                 "UUID": "%s" % uuids[findex],
-                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd",
                 })
     else:
         root = ET.Element('OME', attrib={
-                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2016-06",
                 "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
-                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd",
                 })
     com_txt = ("Warning: this comment is an OME-XML metadata block, which "
                "contains crucial dimensional parameters and other important "
@@ -490,15 +490,15 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
                                 "ID": "Detector:%d" % did,
                                 "Model": da0.metadata[model.MD_HW_NAME]})
 
-        if (model.MD_LIGHT_POWER in da0.metadata or
-            model.MD_EBEAM_CURRENT in da0.metadata or
-            model.MD_EBEAM_CURRENT_TIME in da0.metadata
-           ):
-            obj = ET.SubElement(instr, "LightSource",
-                                attrib={"ID": "LightSource:%d" % did})
-            if model.MD_LIGHT_POWER in da0.metadata:
-                pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
-                obj.attrib["Power"] = "%.15f" % pwr
+        # if (model.MD_LIGHT_POWER in da0.metadata or
+        #     model.MD_EBEAM_CURRENT in da0.metadata or
+        #     model.MD_EBEAM_CURRENT_TIME in da0.metadata
+        #    ):
+        #     obj = ET.SubElement(instr, "LightEmittingDiode",
+        #                         attrib={"ID": "LightSource:%d" % did})
+        #     if model.MD_LIGHT_POWER in da0.metadata:
+        #         pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
+        #         obj.attrib["Power"] = "%.15f" % pwr
 
         if model.MD_LENS_MAG in da0.metadata:
             mag = da0.metadata[model.MD_LENS_MAG]
@@ -623,7 +623,7 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
-        extrase = ime.find("ExtraSettings")
+        extrase = ime.find("ExtraSettings") # TODO: handle this case as structured annotations
         try:
             md[model.MD_EXTRA_SETTINGS] = json.loads(extrase.text)
         except (AttributeError, KeyError, ValueError):
@@ -726,8 +726,13 @@ def _updateMDFromOME(root, das):
 
             try:
                 hex_str = che.attrib["Color"] # hex string
-                hex_str = hex_str[-8:] # almost copy of conversion.hex_to_rgb
-                tint = tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4, 6])
+                try:
+                    # try to cast as int -> its uint32 stored, otherwise its hex str
+                    color_int = int(hex_str)
+                    tint = int32_to_rgba(color_int)
+                except Exception:
+                    hex_str = hex_str[-8:] # almost copy of conversion.hex_to_rgb
+                    tint = tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4, 6])
                 mdc[model.MD_USER_TINT] = tint[:3] # only RGB
             except (KeyError, ValueError):
                 pass
@@ -1345,29 +1350,30 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                             attrib={"ID": "Detector:%d" % ifd,
                                     "Offset": "%.15f" % globalMD[model.MD_BASELINE]})
 
-    if model.MD_ROTATION in globalMD or model.MD_SHEAR in globalMD:
-        # globalMD.get(model.MD_ROTATION, 0)
-        rot = globalMD.get(model.MD_ROTATION, 0)
-        sinr, cosr = math.sin(rot), math.cos(rot)
-        she = globalMD.get(model.MD_SHEAR, 0)
-        # Note: Transform was suggested in 2013 (and mistakenly shown as official
-        # for a short while) but it's just our extention.
-        # It was suggested to use a special key/value pair in MapAnnotation instead.
-        trane = ET.SubElement(ime, "Transform")
-        trans_mat = [[cosr + sinr * she, sinr, 0],
-                     [-sinr + cosr * she, cosr, 0]]
-        for i in range(2):
-            for j in range(3):
-                trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
+    # if model.MD_ROTATION in globalMD or model.MD_SHEAR in globalMD:
+    #     # globalMD.get(model.MD_ROTATION, 0)
+    #     rot = globalMD.get(model.MD_ROTATION, 0)
+    #     sinr, cosr = math.sin(rot), math.cos(rot)
+    #     she = globalMD.get(model.MD_SHEAR, 0)
+    #     # Note: Transform was suggested in 2013 (and mistakenly shown as official
+    #     # for a short while) but it's just our extention.
+    #     # It was suggested to use a special key/value pair in MapAnnotation instead.
+    #     trane = ET.SubElement(ime, "Transform")
+    #     trans_mat = [[cosr + sinr * she, sinr, 0],
+    #                  [-sinr + cosr * she, cosr, 0]]
+    #     for i in range(2):
+    #         for j in range(3):
+    #             trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
 
-    if model.MD_EXTRA_SETTINGS in globalMD:
-        sett = globalMD[model.MD_EXTRA_SETTINGS]
-        extrase = ET.SubElement(ime, "ExtraSettings")
-        try:
-            extrase.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
-        except Exception as ex:
-            logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
-            extrase.text = ''
+    # if model.MD_EXTRA_SETTINGS in globalMD:
+    #     sett = globalMD[model.MD_EXTRA_SETTINGS]
+    #     extrase = ET.SubElement(ime, "ExtraSettings")
+    #     try:
+    #         extrase.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
+    #     except Exception as ex:
+    #         logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
+    #         extrase.text = ''
+    # TODO: save extrasettings as structured annotations
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
@@ -1513,10 +1519,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 # colour is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
                 if isinstance(tint, tuple):
-                    if len(tint) == 3:
-                        tint = tuple(tint) + (255,)  # need alpha channel
-                    hex_str = "".join("%.2x" % c for c in tint)  # copy of conversion.rgb_to_hex()
-                    chan.attrib["Color"] = "#%s" % hex_str
+                    # if len(tint) == 3:
+                        # tint = tuple(tint) + (255,)  # need alpha channel
+                    # hex_str = "".join("%.2x" % c for c in tint)  # copy of conversion.rgb_to_hex()
+                    # from ome_types.model import Color
+                    # color = Color(tint)
+                    # chan.attrib["Color"] = str(color.as_int32()) # "-1" #"#%s" % hex_str # TODO: encode color as float (hardcoded as white atm)
+                    chan.attrib["Color"] = str(rgba_to_signed_int32(tint))
 
             # Add info on detector
             attrib = {}
@@ -1541,20 +1550,20 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             if model.MD_EBEAM_CURRENT in da.metadata:
                 attrib["Current"] = "%.15f" % da.metadata[model.MD_EBEAM_CURRENT]  # A
 
-            cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
-            if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
-                attrib["ID"] = "LightSource:%d" % ifd
-                ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
-                # This is a non-standard metadata, it defines the emitter, which
-                # OME considers to always be a LightSource (although in this case it's
-                # an e-beam). To associate time -> current, we use a series of elements
-                # "Current" with an attribute date (same format as AcquisitionDate),
-                # and the current in A as the value.
-                if cot:
-                    for t, cur in cot:
-                        st = datetime.utcfromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S.%f")
-                        cote = ET.SubElement(ds, "Current", attrib={"Time": st})
-                        cote.text = "%.18f" % cur
+            # cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
+            # if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
+            #     attrib["ID"] = "LightSource:%d" % ifd
+            #     ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
+            #     # This is a non-standard metadata, it defines the emitter, which
+            #     # OME considers to always be a LightSource (although in this case it's
+            #     # an e-beam). To associate time -> current, we use a series of elements
+            #     # "Current" with an attribute date (same format as AcquisitionDate),
+            #     # and the current in A as the value.
+            #     if cot:
+            #         for t, cur in cot:
+            #             st = datetime.utcfromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S.%f")
+            #             cote = ET.SubElement(ds, "Current", attrib={"Time": st})
+            #             cote.text = "%.18f" % cur
 
             subid += 1
 
@@ -1904,7 +1913,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     # Write the OME metadata + ImageJ metadata on the first image (only)
     # If thumbnail is present, the tiff file is not compatible with ImageJ
     if ometxt:
-        f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
+        # f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
+        f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
 
     for fifd, das in sorted_groups:
         if len(das) == 0:
@@ -3340,7 +3350,7 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
     :param image_data: (list of DataArray) image data
     :param filename: (str) filename to save the image
     """
-
+    # TODO: instrument, experiment etc metadata
     import tifffile as tff
     from ome_types import to_xml
     from ome_types.model import (
@@ -3358,8 +3368,15 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
         TiffData,
         UnitsLength,
         Color,
+        Instrument, LightSource, LightEmittingDiode
     )
     from ome_types.model.simple_types import PixelType
+
+    instrument = Instrument(
+        id="Instrument:0",
+        light_source=LightEmittingDiode(id="LightSource:0", power=140.0, power_unit="mW"),
+    )
+
 
     # get the image dimensions
     size_c = len(image_data)
@@ -3399,6 +3416,7 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
 
         channel_md.append(
             {
+            "name": d.metadata.get(model.MD_DESCRIPTION, "Channel"),
             "emission": ewl, "excitation": xwl,
             "user_tint": d.metadata.get(model.MD_USER_TINT, (255, 255, 255))
             }
@@ -3464,7 +3482,7 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
         channels.append(
             Channel(
                 id=f"Channel:0:{nc}",
-                name = name,
+                name =channel_md[nc]["name"],
                 illumination_type="Epifluorescence",
                 acquisition_mode="WideField",
                 contrast_method="Fluorescence",
