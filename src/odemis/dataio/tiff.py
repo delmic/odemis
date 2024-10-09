@@ -470,6 +470,9 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     groups = _findImageGroups(images)
 
     # Detectors, Objectives & LightSource: one per group of data with same metadata
+    light_sources = []
+    detectors = []
+    objectives = []
     for ifd, g in groups.items():
         did = ifd # our convention: ID is the first IFD
         da0 = g[0]
@@ -495,25 +498,28 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             # MD_LIGHT_POWER only -> LED
             # MD_EBEAM_CURRENT or MD_EBEAM_CURRENT_TIME -> ElectronBeam?
 
-            obj = ET.SubElement(instr, "LightEmittingDiode",
+            obj = ET.Element("LightEmittingDiode",
                                 attrib={"ID": "LightSource:%d" % did})
             if model.MD_LIGHT_POWER in da0.metadata:
                 pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
                 obj.attrib["Power"] = "%.15f" % pwr
                 obj.attrib["PowerUnit"] = "mW"
+            light_sources.append(obj)
 
         if model.MD_HW_NAME in da0.metadata:
-            obj = ET.SubElement(instr, "Detector", attrib={
+            obj = ET.Element("Detector", attrib={
                                 "ID": "Detector:%d" % did,
                                 "Model": da0.metadata[model.MD_HW_NAME]})
+            detectors.append(obj)
 
         if model.MD_LENS_MAG in da0.metadata:
             mag = da0.metadata[model.MD_LENS_MAG]
-            obj = ET.SubElement(instr, "Objective", attrib={
+            obj = ET.Element( "Objective", attrib={
                                 "ID": "Objective:%d" % did,
                                 "CalibratedMagnification": "%.15f" % mag})
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
+            objectives.append(obj)
 
         # Make sure all string metadata values are unicode strings (not bytes),
         # otherwise serialization will fail later on
@@ -526,20 +532,30 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
                         logging.warning("Failed to decode value of metadata '%s'.", key)
                         da.metadata[key] = ''
 
+    # add the instrument elements in the correct order
+    instr.extend(light_sources + detectors + objectives)
     # TODO: filters (with TransmittanceRange)
 
     rois = {} # dict str->ET.Element (ROI ID -> ROI XML element)
     fname_index = 0
+    map_annos = []
     for ifd, g in groups.items():
         if multiple_files:
             # Remove path from filename
             path, bname = os.path.split(fname)
             tokens = bname.rsplit(STIFF_SPLIT, 1)
             part_fname = tokens[0] + "." + str(fname_index) + "." + tokens[1]
-            _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
+            ma = _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
             fname_index += 1
         else:
-            _addImageElement(root, g, ifd, rois)
+            ma = _addImageElement(root, g, ifd, rois)
+
+        if ma is not None:
+            map_annos.append(ma)
+
+    # Create the StructuredAnnotations element as a sub-element of root
+    sa = ET.SubElement(root, "StructuredAnnotations")
+    sa.extend(map_annos)
 
     # ROIs have to come _after_ images, so add them only now
     root.extend(list(rois.values()))
@@ -585,7 +601,7 @@ def _updateMDFromOME(root, das):
     # images found in the files that are already accessed
     ifd_offset = 0
 
-    for ime in root.findall("Image"):
+    for idnum, ime in enumerate(root.findall("Image")):
         md = {}
         try:
             md[model.MD_DESCRIPTION] = ime.attrib["Name"]
@@ -664,20 +680,18 @@ def _updateMDFromOME(root, das):
         # if not we should store as MapAnnotation:X
         sa = root.find("StructuredAnnotations")
         try:
-            mapa = sa.find("MapAnnotation")
-
+            mapa = sa.find(f".//MapAnnotation[@ID='Annotation:{idnum}']")
             # read extrasettings from root.structuredannotation.mapannotation:0
             extrasettings = mapa.find(".//M[@K='ExtraSettings']")
-            md_ex = json.loads(extrasettings.text)
+            md[model.MD_EXTRA_SETTINGS] = json.loads(extrasettings.text)
 
-            # read rotation, shear from extrasettings
-            if model.MD_ROTATION in md_ex:
-                md[model.MD_ROTATION] = md_ex[model.MD_ROTATION]
-                del md_ex[model.MD_ROTATION]
-            if model.MD_SHEAR in md_ex:
-                md[model.MD_SHEAR] = md_ex[model.MD_SHEAR]
-                del md_ex[model.MD_SHEAR]
-            md[model.MD_EXTRA_SETTINGS] = md_ex
+            rotation = mapa.find(".//M[@K='Rotation']")
+            if rotation is not None:
+                md[model.MD_ROTATION] = float(rotation.text)
+
+            shear = mapa.find(".//M[@K='Shear']")
+            if shear is not None:
+                md[model.MD_SHEAR] = float(shear.text)
 
         except (AttributeError, KeyError, ValueError):
             pass
@@ -920,7 +934,7 @@ def _updateMDFromOME(root, das):
                 # MD_POS is already updated, but if a Z position is also present,
                 # we should add it as well. If not, this part will trigger a KeyError
                 psz = float(ple.attrib["PositionZ"])
-                mdp[model.MD_POS] = (psx, psy, psz)
+                mdp[model.MD_POS] = (psx, psy, psz)  # TODO: get the updated pos z
             except (KeyError, ValueError):
                 pass
 
@@ -1384,21 +1398,17 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
     # store the rotation, shear and extra settings in the StructuredAnnotations
     # as they are non-standard metadata
-    if model.MD_EXTRA_SETTINGS in globalMD:
-        sett = globalMD[model.MD_EXTRA_SETTINGS]
+    map_annotation = None
+    if (model.MD_EXTRA_SETTINGS in globalMD or
+        model.MD_ROTATION in globalMD or
+        model.MD_SHEAR in globalMD):
 
-        # add rotation and shear to the metadata
-        if model.MD_ROTATION in globalMD:
-            sett[model.MD_ROTATION] = globalMD[model.MD_ROTATION]
-        if model.MD_SHEAR in globalMD:
-            sett[model.MD_SHEAR] = globalMD[model.MD_SHEAR]
-
-        # Create the StructuredAnnotations element as a sub-element of root
-        structured_annotations = ET.SubElement(root, "StructuredAnnotations")
+        # get the extra settings from the global metadata
+        sett = globalMD.get(model.MD_EXTRA_SETTINGS, {})
 
         # Create the MapAnnotation element
-        map_annotation = ET.SubElement(structured_annotations, "MapAnnotation")
-        map_annotation.set("ID", "Annotation:0")
+        map_annotation = ET.Element("MapAnnotation")
+        map_annotation.set("ID", "Annotation:%d" % idnum)
 
         # Create the Value element
         value = ET.SubElement(map_annotation, "Value")
@@ -1413,6 +1423,14 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         except Exception as ex:
             logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
             m.text = ''
+
+        # Create the M element
+        if model.MD_ROTATION in globalMD:
+            m = ET.SubElement(value, "M", attrib={"K": model.MD_ROTATION})
+            m.text = "%.15f" % globalMD[model.MD_ROTATION]
+        if model.MD_SHEAR in globalMD:
+            m = ET.SubElement(value, "M", attrib={"K": model.MD_SHEAR})
+            m.text = "%.15f" % globalMD[model.MD_SHEAR]
 
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.
@@ -1564,7 +1582,6 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 if isinstance(tint, tuple):
                     if len(tint) == 4:
                         tint = tint[:3]
-
                     chan.attrib["Color"] = str(rgba_to_signed_int32(tint))
 
             # Add info on detector
@@ -1654,6 +1671,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     # Plane Element
     subid = 0
     for index in numpy.ndindex(*rep_hdim):
+
+        # centre z -/+ pixelsize * zstep
+
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
                                "TheC": "%d" % index[hdims.index("C")],
@@ -1665,22 +1685,19 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         # each C. However, that's not the point of this field, and it's pretty
         # much never useful to know the slightly different acquisition dates for
         # each C.
-        # We now just store TIME_OFFSET + PIXEL_DUR info
-        # TODO in future only use TIME_LIST
-        if model.MD_PIXEL_DUR in da.metadata:
-            t = index[hdims.index("T")]
-            deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
-            plane.attrib["DeltaT"] = "%.15f" % deltat
         if time_list is not None:
             plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
             plane.attrib["ExposureTime"] = "%.15f" % exp
+            plane.attrib["ExposureTimeUnit"] = "s"
+
         elif model.MD_DWELL_TIME in da.metadata:
             # save it as is (it's the time each pixel receives "energy")
             exp = da.metadata[model.MD_DWELL_TIME]
             plane.attrib["ExposureTime"] = "%.15f" % exp
+            plane.attrib["ExposureTimeUnit"] = "s"
 
         # integration count: number of samples/images per px (ebeam) position
         if model.MD_INTEGRATION_COUNT in da.metadata:
@@ -1774,6 +1791,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         if model.MD_TRIGGER_RATE in globalMD:
             streakCamData.attrib["TriggerRate"] = "%f" % globalMD[model.MD_TRIGGER_RATE]
 
+    return map_annotation
 
 def _createPointROI(rois, name, p, shp_attrib=None):
     """
