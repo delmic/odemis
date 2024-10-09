@@ -172,7 +172,7 @@ def estimateMoveDuration(distance, speed, accel):
         return t1 + t2
 
 
-def isNearPosition(current_pos, target_position, axes,
+def isNearPosition(current_pos, target_position, axes, rot_axes: set = None,
                    atol_linear: float = None,
                    atol_rotation: float = None):
     """
@@ -180,6 +180,8 @@ def isNearPosition(current_pos, target_position, axes,
     :param current_pos: (dict) current position dict (axis -> value)
     :param target_position: (dict) target position dict (axis -> value)
     :param axes: (set) axes to compare values
+    :param rot_axes: (set) rotational axes in the given set of axes. If not provided, axes with prefix "r" are
+        considered as rotational axes (optional)
     :param atol_linear (float) tolerance for linear axes (optional)
     :param atol_rotation (float) tolerance for rotation axes (optional)
     :return: True if the axis is near position, False otherwise
@@ -195,8 +197,10 @@ def isNearPosition(current_pos, target_position, axes,
     if atol_rotation is None:
         atol_rotation = ATOL_ROTATION_POS
 
-    rot_axes = {axis for axis in axes if axis[0] == 'r'}
+    if not rot_axes:
+        rot_axes = {axis for axis in axes if axis[0] == 'r'}
     linear_axes = {axis for axis in axes if axis not in rot_axes}
+
     for axis in axes:
         current_value = current_pos[axis]
         target_value = target_position[axis]
