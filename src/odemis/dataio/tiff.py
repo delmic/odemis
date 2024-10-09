@@ -2088,6 +2088,8 @@ def export(
     pyramid: whether to export data as pyramid
     ome_compat: whether to export the file in OME-2016 format (in addition to standard metadata)
     '''
+    if not isinstance(data, list):
+        data = [data]
 
     if ome_compat:
         try:
@@ -2096,9 +2098,6 @@ def export(
             logging.debug(f"Reformatted OME metadata saved as {new_fn}")
         except Exception as e:
             logging.error(f"Failed to reformat OME metadata: {e}")
-
-    if not isinstance(data, list):
-        data = [data]
 
     if multiple_files:
         if thumbnail is not None:
@@ -3335,6 +3334,7 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
 
 def reformat_ome_metadata(image_data: List[model.DataArray],
                           filename: str,
+                          pyramid: bool = False,
                           ) -> None:
     """Save an odemis image with OME-XML format (2016-06)
     :param image_data: (list of DataArray) image data
@@ -3403,7 +3403,7 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
             "user_tint": d.metadata.get(model.MD_USER_TINT, (255, 255, 255))
             }
         )
-
+    print(channel_md)
     # store image data as contig numpy array
     data = numpy.zeros((size_c, size_t, size_z, size_y, size_x), dtype=d0.dtype)
 
@@ -3531,7 +3531,7 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
     map_annotations = []
     for c in range(size_c):
         map_annotations.append(MapAnnotation(id=f"Annotation:{c}",
-                                             value={"metadata": json.dumps(image_data[c].metadata)}))
+                                             value={"odemis_metadata": json.dumps(image_data[c].metadata)}))
     ome.structured_annotations = StructuredAnnotations(map_annotations=map_annotations)
 
     # note: we can also store plane specific metadata (e.g. correction factors) as structured annotations
@@ -3543,14 +3543,56 @@ def reformat_ome_metadata(image_data: List[model.DataArray],
     # pprint(ome_xml)
 
     # Save the image with OME-XML metadata
-    with tff.TiffWriter(filename, bigtiff=True) as tif:
-        for t in range(size_t):
-            for c in range(size_c):
-                for z in range(size_z):
-                    tif.write(data[c, t, z], contiguous=True, metadata={'axes': 'YX'})
-        tif.overwrite_description(ome_xml)
+    if pyramid:
+        write_ome_pyramid(image_data, filename, ome_xml)
+    else:
+        with tff.TiffWriter(filename, bigtiff=True) as tif:
+            for t in range(size_t):
+                for c in range(size_c):
+                    for z in range(size_z):
+                        tif.write(data[c, t, z], contiguous=True, metadata={'axes': 'YX'})
+            tif.overwrite_description(ome_xml) 
+            # TODO: cant use contiguous=True with OME-XML and compression
 
     logging.info(f"Image saved to {filename} with OME-XML 2016 metadata.")
+
+
+def write_ome_pyramid(image_data: List[model.DataArray], filename: str, ome_xml : str) -> None:
+    import tifffile as tff
+    np = numpy
+        
+    from odemis.util.img import rescale_hq
+    ov_data = image_data[0]
+    pyramid_shapes = _generate_pyramid_shapes(ov_data)
+
+    pyramid_images = [ov_data]
+    for resized_shape in pyramid_shapes:
+        subim = rescale_hq(ov_data, resized_shape)
+        print(subim.shape)
+        pyramid_images.append(subim)
+
+    with tff.TiffWriter(filename, bigtiff=True) as tif:
+        for i, img in enumerate(pyramid_images):
+            extra_tags = []
+            
+            # Ensure the image is in the correct shape (TZCYX)
+            if img.ndim == 2:
+                img = img[np.newaxis, np.newaxis, np.newaxis, :, :]
+            elif img.ndim == 3:
+                img = img[np.newaxis, np.newaxis, :, :, :]
+            subifds = [0] * len(pyramid_images) if i == 0 else None
+            print(subifds)
+            tif.write(
+                img,
+                subifds=subifds,
+                subfiletype=0 if i == 0 else 1,
+                tile=(TILE_SIZE, TILE_SIZE),
+                metadata={},
+                extratags=extra_tags,
+                compression='lzw'  # Add LZW compression
+            )
+        tif.overwrite_description(ome_xml)
+
 
 def open_data_ome_tiff(path: str) -> List[model.DataArray]:
     """Open an OME-TIFF file and return the image data as a list of DataArray objects with metadata
@@ -3582,7 +3624,7 @@ def open_data_ome_tiff(path: str) -> List[model.DataArray]:
     mds = [] # metadata for each odemis image
     mp_annos = ome.structured_annotations.map_annotations
     for mp_anno in mp_annos:
-        mds.append(json.loads(to_dict(mp_anno.value)["metadata"]))
+        mds.append(json.loads(to_dict(mp_anno.value)["odemis_metadata"]))
 
     logging.info(f"array shape: {arr.shape}, dims: {mds[0][model.MD_DIMS]}")
 
@@ -3619,3 +3661,40 @@ def open_data_ome_tiff(path: str) -> List[model.DataArray]:
         image_data.append(model.DataArray(d, md))
 
     return image_data
+
+# TODO: remove once METEOR-1210 is merged
+from typing import List, Tuple
+def apply_zoom_on_image_coordinates(rect: List[int], z:int) -> List[int]:
+    """
+    Given a rectangle in image pixel coordinates (at zoom level == 0),
+    apply the zoom level to make the pixel size 2^z times larger.
+    This is used for pyramidal data (DataArrayShadow) to calculate tile indices at a given zoom level.
+    :param rect: (list of int) the rectangle in image pixel coordinates (xmin, ymin, xmax, ymax)
+    :param z: (int) the zoom level
+    :return: (list of int) the rectangle in image pixel coordinates at the given zoom level
+    """
+    return [px // (2 ** z) for px in rect]
+
+def _generate_pyramid_shapes(data: model.DataArray) -> List[Tuple[int]]:
+    """Generate a list of pyramid shapes for the given data array.
+    The pyramid shapes are calculated by applying the zoom level to the YX dimensions of the data array until
+    the YX dimensions are less than tile shape (256).
+    :param data: (DataArray) the data array
+    :return: (list of tuple of int) the pyramid shapes"""
+
+    # get the shape and dimensions
+    shape = data.shape
+    dims = data.metadata[model.MD_DIMS]
+    
+    # get YX dimensions (only they are resized for the pyramid)
+    yx_dims = [shape[dims.index("Y")], shape[dims.index("X")]]
+
+    # generate pyramid shapes until the YX dimensions are less than the tile size
+    z = 0
+    pyramid_shapes = []
+    while shape[dims.index("X")] >= TILE_SIZE and shape[dims.index("Y")] >= TILE_SIZE:
+        z += 1
+        shape = apply_zoom_on_image_coordinates(yx_dims, z)
+        pyramid_shapes.append(tuple(shape))
+
+    return pyramid_shapes
