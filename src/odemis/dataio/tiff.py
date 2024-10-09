@@ -622,8 +622,9 @@ def _updateMDFromOME(root, das):
             md[model.MD_LENS_MAG] = float(mag)
         except (AttributeError, KeyError, ValueError):
             pass
-
-        extrase = ime.find("ExtraSettings") # TODO: handle this case as structured annotations
+        
+        # maintain ExtraSettings and Transform direct reads for legacy support
+        extrase = ime.find("ExtraSettings")
         try:
             md[model.MD_EXTRA_SETTINGS] = json.loads(extrase.text)
         except (AttributeError, KeyError, ValueError):
@@ -651,6 +652,27 @@ def _updateMDFromOME(root, das):
                     md[model.MD_SHEAR] = shear
             except (AttributeError, KeyError, ValueError):
                 pass
+
+        # QUERY: the extrasettings and rotation/shear are the same for all the images, if not we should store as MapAnnotation:X
+        sa = root.find("StructuredAnnotations")
+        try:
+            mapa = sa.find("MapAnnotation")
+
+            # read extrasettings from root.structuredannotation.mapannotation:0
+            extrasettings = mapa.find(".//M[@K='ExtraSettings']")
+            md_ex = json.loads(extrasettings.text)
+
+            # read rotation, shear from extrasettings
+            if model.MD_ROTATION in md_ex:
+                md[model.MD_ROTATION] = md_ex[model.MD_ROTATION]
+                del md_ex[model.MD_ROTATION]
+            if model.MD_SHEAR in md_ex:
+                md[model.MD_SHEAR] = md_ex[model.MD_SHEAR]
+                del md_ex[model.MD_SHEAR]
+            md[model.MD_EXTRA_SETTINGS] = md_ex
+
+        except (AttributeError, KeyError, ValueError):
+            pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
 
@@ -1365,15 +1387,37 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     #         for j in range(3):
     #             trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
 
-    # if model.MD_EXTRA_SETTINGS in globalMD:
-    #     sett = globalMD[model.MD_EXTRA_SETTINGS]
-    #     extrase = ET.SubElement(ime, "ExtraSettings")
-    #     try:
-    #         extrase.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
-    #     except Exception as ex:
-    #         logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
-    #         extrase.text = ''
-    # TODO: save extrasettings as structured annotations
+    # store the rotation, shear and extra settings in the StructuredAnnotations
+    if model.MD_EXTRA_SETTINGS in globalMD:
+        sett = globalMD[model.MD_EXTRA_SETTINGS]
+
+        # add rotation and shear to the metadata
+        if model.MD_ROTATION in globalMD:
+            sett[model.MD_ROTATION] = globalMD[model.MD_ROTATION]
+        if model.MD_SHEAR in globalMD:
+            sett[model.MD_SHEAR] = globalMD[model.MD_SHEAR]
+
+        # Create the StructuredAnnotations element as a sub-element of root
+        structured_annotations = ET.SubElement(root, "StructuredAnnotations")
+
+        # Create the MapAnnotation element
+        map_annotation = ET.SubElement(structured_annotations, "MapAnnotation")
+        map_annotation.set("ID", "Annotation:0")
+
+        # Create the Value element
+        value = ET.SubElement(map_annotation, "Value")
+
+        # Create the M element
+        m = ET.SubElement(value, "M")
+        m.set("K", "ExtraSettings")
+
+        # Set the text of the M element to the JSON string
+        try:
+            m.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
+        except Exception as ex:
+            logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
+            m.text = ''
+
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
@@ -1519,12 +1563,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 # colour is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
                 if isinstance(tint, tuple):
-                    # if len(tint) == 3:
-                        # tint = tuple(tint) + (255,)  # need alpha channel
-                    # hex_str = "".join("%.2x" % c for c in tint)  # copy of conversion.rgb_to_hex()
-                    # from ome_types.model import Color
-                    # color = Color(tint)
-                    # chan.attrib["Color"] = str(color.as_int32()) # "-1" #"#%s" % hex_str # TODO: encode color as float (hardcoded as white atm)
+                    if len(tint) == 4:
+                        tint = tint[:3]
+
                     chan.attrib["Color"] = str(rgba_to_signed_int32(tint))
 
             # Add info on detector
@@ -1549,6 +1590,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             attrib = {}
             if model.MD_EBEAM_CURRENT in da.metadata:
                 attrib["Current"] = "%.15f" % da.metadata[model.MD_EBEAM_CURRENT]  # A
+
+
+            # TODO: non-standard metadata, treat it differently for different detectors
 
             # cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
             # if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
