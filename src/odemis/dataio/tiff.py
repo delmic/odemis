@@ -490,11 +490,17 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             model.MD_EBEAM_CURRENT in da0.metadata or
             model.MD_EBEAM_CURRENT_TIME in da0.metadata
            ):
+            
+            # change the type of this light source, depending on metadata?
+            # MD_LIGHT_POWER only -> LED
+            # MD_EBEAM_CURRENT or MD_EBEAM_CURRENT_TIME -> ElectronBeam? 
+
             obj = ET.SubElement(instr, "LightEmittingDiode",
                                 attrib={"ID": "LightSource:%d" % did})
             if model.MD_LIGHT_POWER in da0.metadata:
                 pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
                 obj.attrib["Power"] = "%.15f" % pwr
+                obj.attrib["PowerUnit"] = "mW"
         
         if model.MD_HW_NAME in da0.metadata:
             obj = ET.SubElement(instr, "Detector", attrib={
@@ -1453,8 +1459,11 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
+        pixels.attrib["PhysicalSizeXUnit"] = "µm"
+        pixels.attrib["PhysicalSizeYUnit"] = "µm"
         if len(pxs) == 3:
             pixels.attrib["PhysicalSizeZ"] = "%.15f" % (pxs[2] * 1e6)
+            pixels.attrib["PhysicalSizeZUnit"] = "µm"
 
     # Note: TimeIncrement can be used to replace DeltaT if the duration is always
     # the same (which it is), but it also means it starts at 0, which is not
@@ -1682,9 +1691,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             pos = da.metadata[model.MD_POS]
             plane.attrib["PositionX"] = "%.15f" % pos[0] # any unit is allowed => m
             plane.attrib["PositionY"] = "%.15f" % pos[1]
+            plane.attrib["PositionXUnit"] = "m"
+            plane.attrib["PositionYUnit"] = "m"
 
             if len(pos) == 3:
-                plane.attrib["PositionZ"] = "%.15f" % pos[2]
+                # TODO: this is wrong for z-stacks, only uses initial z-pos, needs to be fixed outside of here
+                plane.attrib["PositionZ"] = "%.15f" % pos[2] 
+                plane.attrib["PositionZUnit"] = "m"
 
         subid += 1
 
