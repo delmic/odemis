@@ -28,8 +28,15 @@ odemis --check
 status=$?
 
 if [ $status = 0 ] || [ $status = 3 ] ; then  # Running or starting
-    select_args="--role $role"
-    # For safety, close the shutter of the streak cam (in case it's not already closed)
+    # Check the back-end has the component
+    if odemis list-prop "$role" --machine > /dev/null; then
+        select_args="--role $role"
+    else
+        echo "Back-end running but component $role not available so will attempt direct connection"
+        select_args="--serial $serial_num"
+    fi
+
+    # For safety, if possible, close the shutter of the streak cam (in case it's not already closed)
     odemis --set-attr streak-unit shutter True
 else
     select_args="--serial $serial_num"
