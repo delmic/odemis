@@ -717,7 +717,13 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
 
         # start with the metadata from the first point
         md = data_list[0].metadata.copy()
-        center, pxs = self._get_center_pxs(rep, (1, 1), data_list[0])
+        center_0 = md[MD_POS]
+        pxs = self._getPixelSize()
+        shape_tl = data_list[0].shape
+        dpxs = md[MD_PIXEL_SIZE]
+        center_tl = (center_0[0] - (dpxs[0] * (shape_tl[-1] - 1)) / 2,
+                     center_0[1] + (dpxs[1] * (shape_tl[-2] - 1)) / 2)
+        center, pxs = self._get_center_pxs(rep, (1, 1), pxs, center_tl)
         md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
 
@@ -774,7 +780,11 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
 
         # start with the metadata from the first point
         md = data_list[0].metadata.copy()
-        center, pxs = self._get_center_pxs(rep, (T, S), data_list[0])
+        center_tl = md[MD_POS]
+        pxs = md[MD_PIXEL_SIZE]
+        shape_tl = (S, T)
+        size_tl = (pxs[0] * shape_tl[0], pxs[1] * shape_tl[1])
+        center, pxs = self._get_center_pxs(rep, shape_tl, size_tl, center_tl)
         md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
 
