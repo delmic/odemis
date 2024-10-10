@@ -160,8 +160,12 @@ class ReadoutCamera(model.DigitalCamera):
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
         # However, only a smaller subarea is used for operating the streak system.
         # x (lambda): horizontal, y (time): vertical
+        parent.CamParamSet("Setup", "Binning", '1 x 1')  # Force binning to 1x1 to read the maximum resolution
         full_res = self._transposeSizeToUser((int(parent.CamParamGet("Setup", "HWidth")[0]),
                                               int(parent.CamParamGet("Setup", "VWidth")[0])))
+        # We never change the offset, but it's handy to log them, in case of issue with the settings
+        logging.debug("Readout camera offset: %s, %s",
+                      parent.CamParamGet("Setup", "HOffs")[0], parent.CamParamGet("Setup", "VOffs")[0])
         self._metadata[model.MD_SENSOR_SIZE] = full_res
         self._metadata[model.MD_DIMS] = "TC"
 
@@ -175,8 +179,6 @@ class ReadoutCamera(model.DigitalCamera):
         # It's just automatically adjusted when changing the binning.
         self._resolution = int(full_res[0] / self._binning[0]), int(full_res[1] / self._binning[1])
         self.resolution = model.ResolutionVA(self._resolution, ((1, 1), full_res), setter=self._setResolution)
-        parent.CamParamSet("Setup", "HWidth", str(full_res[0]))
-        parent.CamParamSet("Setup", "VWidth", str(full_res[1]))
 
         choices_bin = set(self._transposeSizeToUser(b) for b in self._getReadoutCamBinningChoices())
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -307,16 +309,20 @@ class ReadoutCamera(model.DigitalCamera):
         So far the full field of view is always used. Therefore, resolution only changes with binning.
         :return: current resolution value
         """
-        # Note: we can keep it simple as long as we do not provide to change the sensor size yet...
-        resolution = self._shape[:2]
-        new_res = (int(resolution[0] // self._binning[0]),
-                   int(resolution[1] // self._binning[1]))  # floor division
+        # HPDTA seems to use this computation:
+        # max_res = self.resolution.range[1]
+        # new_res = (int(max_res[0] // self._binning[0]),
+        #            int(max_res[1] // self._binning[1]))  # floor division
 
-        self._resolution = new_res
+        # Just accept whatever HPDTA computed
+        res = self._transposeSizeToUser((int(self.parent.CamParamGet("Setup", "HWidth")[0]),
+                                         int(self.parent.CamParamGet("Setup", "VWidth")[0])))
+
+        self._resolution = res
         if self._spectrograph:
-            self._updateWavelengthList()  # update WavelengthList when changing binning
+            self._updateWavelengthList()  # WavelengthList has to be the same length as the resolution
 
-        return new_res
+        return res
 
     def _getCamExpTimeRange(self):
         """
