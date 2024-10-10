@@ -897,6 +897,7 @@ def _updateMDFromOME(root, das):
 
         # Plane (= one per high dim -> IFD)
         deltats = {}  # T -> DeltaT
+        z_positions = [] # the Z positions
         for ple in pxe.findall("Plane"):
             mdp = {}
             pos = []
@@ -934,7 +935,8 @@ def _updateMDFromOME(root, das):
                 # MD_POS is already updated, but if a Z position is also present,
                 # we should add it as well. If not, this part will trigger a KeyError
                 psz = float(ple.attrib["PositionZ"])
-                mdp[model.MD_POS] = (psx, psy, psz)  # TODO: get the updated pos z
+                mdp[model.MD_POS] = (psx, psy, psz)
+                z_positions.append(psz)
             except (KeyError, ValueError):
                 pass
 
@@ -949,6 +951,14 @@ def _updateMDFromOME(root, das):
             if da is None:
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
+
+        # update the metadata to overwrite the Z position .
+        # the ome stores the Z position in the metadata of each plane
+        # but odemis MD_POS is the centre of the image
+        if z_positions:
+            for da in das:
+                pos = da.metadata[model.MD_POS]
+                da.metadata[model.MD_POS] = pos[0], pos[1], numpy.median(z_positions)
 
         # Update metadata of each da, so that they will be merged
         if deltats:
@@ -1670,9 +1680,22 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
     # Plane Element
     subid = 0
-    for index in numpy.ndindex(*rep_hdim):
 
+    # get the actual z positions (MD_POS is the center of the image)
+    pos = da.metadata.get(model.MD_POS, (0, 0))
+    if len(pos) == 3:
+        nz = rep_hdim[hdims.index("Z")]
+        pixelsize = da.metadata[model.MD_PIXEL_SIZE]
+        center_pos_z = pos[2]
+        zstep = pixelsize[2]
+
+        # calculate the actual pos of the z planes
         # centre z -/+ pixelsize * zstep
+        z_positions = numpy.linspace(center_pos_z - (nz - 1) * zstep / 2,
+                               center_pos_z + (nz - 1) * zstep / 2,
+                               nz)
+
+    for index in numpy.ndindex(*rep_hdim):
 
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
@@ -1715,8 +1738,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             plane.attrib["PositionYUnit"] = "m"
 
             if len(pos) == 3:
-                # TODO: this is wrong for z-stacks, only uses initial z-pos, needs to be fixed outside of here
-                plane.attrib["PositionZ"] = "%.15f" % pos[2]
+                plane.attrib["PositionZ"] = "%.15f" % z_positions[index[hdims.index("Z")]] # the actual z position
                 plane.attrib["PositionZUnit"] = "m"
 
         subid += 1
