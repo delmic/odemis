@@ -227,6 +227,8 @@ class ReadoutCamera(model.DigitalCamera):
             self.parent.queue_img.put(None)  # Special message to request end of the thread
             self.t_image.join(5)
 
+        super().terminate()
+
     def _updateWavelengthList(self, _=None):
         """
         Updates the wavelength list MD based on the current spectrograph position.
@@ -1157,6 +1159,9 @@ class DelayGenerator(model.HwComponent):
                 logging.warning("Time range %s is not a key in MD for time range to "
                                 "trigger delay calibration" % time_range)
 
+# Just keep enough log messages to be able to detect the previous command error or warning
+LOG_QUEUE_MAX_SIZE = 16  # max number of log messages to keep in the queue
+
 
 class StreakCamera(model.HwComponent):
     """
@@ -1196,9 +1201,10 @@ class StreakCamera(model.HwComponent):
             raise
 
         # collect responses (error_code = 0-3,6-10) from commandport
-        self.queue_command_responses = queue.Queue(maxsize=0)
-        # save messages (error_code = 4,5) from commandport
-        self.queue_img = queue.Queue(maxsize=0)
+        self.queue_command_responses = queue.Queue(maxsize=0)  # List[str]
+        # log messages (error_code = 4,5) from commandport
+        self.queue_img = queue.Queue(maxsize=0)  # str, messages indicating a new image is ready
+        self.queue_log = []  # List[str], to hold the latest log messages (error codes 4 & 5)
 
         self.should_listen = True  # used in readCommandResponse thread
 
@@ -1211,6 +1217,13 @@ class StreakCamera(model.HwComponent):
         self.AppStart(settings_ini)  # Note: comment out for testing in order to not start a new App
 
         try:
+            # Detect when a device is not turned on, or the wrong sweep unit is selected.
+            # Typically, that leads to an error such as:
+            # "4,HExternalDevices: Communication error. Device: C16910 Parameter: Time Range"
+            for msg in self.queue_log:
+                if len(msg) > 1 and msg[0] == "4" and "communication error" in msg[1].lower():
+                    raise model.HwError(f"{msg[1]}. Check the right hardware is connected.")
+
             # If the USB dongle is missing, the software will still run, but not actually control the
             # hardware, and mostly everything will fail to run. So it's handy to check.
             license_status = self.AppLicenceGet()
@@ -1468,8 +1481,10 @@ class StreakCamera(model.HwComponent):
                         # A new image is available on the dataport => Send to the special queue
                         if error_code == 4 and rfunc == "Livemonitor":
                             self.queue_img.put(rargs)
-                        # Note: all other messages with error_code 4 or 5 are currently discarded
-                        # as not of interest for now
+                        else:
+                            self.queue_log.append(msg_splitted)
+                            if len(self.queue_log) > LOG_QUEUE_MAX_SIZE:
+                                self.queue_log.pop(0)
                     else:  # send response including error_code to queue
                         self.queue_command_responses.put(msg_splitted)
 
