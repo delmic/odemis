@@ -221,7 +221,7 @@ class SECOMTestCase(unittest.TestCase):
         """
         Check if extra metadata are saved
         """
-        settings_obs = SettingsObserver(model.getComponents())
+        settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
         self.ccd.binning.value = (1, 1)  # make sure we don't save the right metadata by accident
         detvas = {'exposureTime', 'binning', 'gain'}
         s1 = stream.FluoStream("fluo2", self.ccd, self.ccd.data,
@@ -300,19 +300,9 @@ class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC_CONFIG)
 
         # Find CCD & SEM components
         cls.microscope = model.getMicroscope()
@@ -324,21 +314,11 @@ class SPARCTestCase(unittest.TestCase):
         cls.spec_det_sel = model.getComponent(role="spec-det-selector")
         cls.ar_spec_sel = model.getComponent(role="ar-spec-selector")
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
     def test_metadata(self):
         """
         Check if extra metadata are saved
         """
-        settings_obs = SettingsObserver(model.getComponents())
+        settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
 
         detvas = {"binning", "exposureTime"}
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -363,6 +343,8 @@ class SPARCTestCase(unittest.TestCase):
 
         spec1_data = data[0][1]
         spec2_data = data[0][3]
+        self.assertEqual(spec1_data.metadata[model.MD_EXTRA_SETTINGS]["Microscope"]['Model'],
+                         ("sparc", None))
         self.assertEqual(spec1_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['binning'],
                          [(2, specs.detBinning.value[1]), 'px'])
         self.assertEqual(spec2_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['binning'],
@@ -851,7 +833,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertGreaterEqual(self._nb_updates, 2)
 
     def test_settings_observer_metadata_with_zstack(self):
-        settings_observer = SettingsObserver(model.getComponents())
+        settings_observer = SettingsObserver(model.getMicroscope(), model.getComponents())
         vas = {"exposureTime"}
         s1 = stream.FluoStream(
             "FM", self.ccd, self.ccd.data, self.light, self.light_filter, detvas=vas, focuser=self.fm_focuser)

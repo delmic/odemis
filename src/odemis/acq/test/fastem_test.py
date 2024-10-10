@@ -1069,7 +1069,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         original_md = self.mppc.getMetadata().get(model.MD_EXTRA_SETTINGS, "")
 
         # Create the settings observer to store the settings on the metadata
-        settings_obs = SettingsObserver(model.getComponents())
+        settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
         roa = fastem.FastEMROA("roa_name", None, None,
@@ -1104,7 +1104,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         self.mppc.dataContent.value = "full"
 
         # Create the settings observer to store the settings on the metadata
-        settings_obs = SettingsObserver(model.getComponents())
+        settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
 
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
@@ -1260,9 +1260,6 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
 
     def test_save_full_cells(self):
         """Test saving fields with cell images of 900x900 px instead of 800x800 px"""
-        # Create the settings observer to store the settings on the metadata
-        settings_obs = SettingsObserver({})
-
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -1280,7 +1277,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
-                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
+                                      settings_obs=None, spot_grid_thresh=0.5)
 
         # image_received should be called as a side effect of calling data.next, this signals that the data is received
         def _image_received(*args, **kwargs):
@@ -1299,7 +1296,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
-                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
+                                      settings_obs=None, spot_grid_thresh=0.5)
 
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (7200, 7200))
