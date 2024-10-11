@@ -3301,6 +3301,9 @@ class SPARC2HwSyncTestCase(unittest.TestCase):
                                               detvas={"exposureTime"})
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
+        # Warning: this test cases relies on the andorcam2 simulator, which simulates HW trigger
+        # by assuming the trigger is immediately received.
+
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
@@ -3345,8 +3348,8 @@ class SPARC2HwSyncTestCase(unittest.TestCase):
         self.assertEqual(sp_dims, "CTZYX")
 
         # Short acquisition (< 0.1s)
-        specs.detExposureTime.value = 0.01  # s
-        specs.repetition.value = (25, 60)
+        specs.detExposureTime.value = 0.05  # s
+        specs.repetition.value = (17, 20)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
