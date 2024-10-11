@@ -33,7 +33,7 @@ from abc import ABCMeta, abstractmethod
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 from functools import partial
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Any, Dict
 
 import numpy
 
@@ -193,6 +193,9 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         self._acq_data = [[] for _ in streams] # latest acquired data
         self._live_data = [[] for _ in streams] # all acquired data in live format, reshaped to the final shape by _assembleFinalData
         self._acq_min_date = None  # minimum acquisition time for the data to be acceptable
+
+        # original values of the hardware VAs to be restored after acquisition
+        self._orig_hw_values: Dict[model.VigilantAttribute, Any] = {}  # VA -> original value
 
         # Special subscriber function for each stream dataflow
         self._subscribers = []  # to keep a ref
@@ -422,6 +425,17 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         return (float): estimated time per pixel.
         """
         pass
+
+    def _restoreHardwareSettings(self) -> None:
+        """
+        Restore the VAs of the hardware to their original values before the acquisition started
+        """
+        for va, value in self._orig_hw_values.items():
+            try:
+                va.value = value
+            except Exception:
+                logging.exception("Failed to restore VA %s to %s", va, value)
+
 
     def _getPixelSize(self):
         """
@@ -1062,8 +1076,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._trigger = self._ccd.softwareTrigger
         self._ccd_idx = len(self._streams) - 1  # optical detector is always last in streams
 
-        self._hw_settings_orig = {}  # str -> value, original HW settings
-
     def _supports_hw_sync(self):
         """
         :returns (bool): True if hardware synchronised acquisition is supported.
@@ -1282,7 +1294,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         if model.hasVA(self._ccd, "dropOldFrames"):
             # Make sure to keep all frames
-            self._hw_settings_orig["dropOldFrames"] = self._ccd.dropOldFrames.value
+            self._orig_hw_values[self._ccd.dropOldFrames] = self._ccd.dropOldFrames.value
             self._ccd.dropOldFrames.value = False
 
         # TODO: must force the shutter to be opened (at least, the andorcam2 driver is not compatible with
@@ -1327,12 +1339,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # and it will need to update the ebeam setting block per block (of variable size)
 
         return frame_duration_safe, integration_count
-
-    def _restoreHardwareSettingsHwSync(self):
-
-        if model.hasVA(self._ccd, "dropOldFrames"):
-            # Make sure to keep all frames
-            self._ccd.dropOldFrames.value = self._hw_settings_orig["dropOldFrames"]
 
     def _runAcquisitionHwSyncEbeam(self, future) -> List[model.DataArray]:
         """
@@ -1559,7 +1565,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             self._acq_done.set()
 
-            self._restoreHardwareSettingsHwSync()
+            self._restoreHardwareSettings()
             # Only after this flag, as it's used by the im_thread too
             self._live_data = [[] for _ in self._streams]
             self._streams[0].raw = []
@@ -2339,6 +2345,14 @@ class SEMMDStream(MultipleDetectorStream):
                                     det.name, dt, det.dwellTime.value)
 
         self._emitter.scale.value = cscale
+
+        if model.hasVA(self._emitter, "external") and self._emitter.external.value is None:
+            # When the e-beam is set to automatic external mode, it would switch on/off for every
+            # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
+            # "external" while the acquisition is running.
+            self._orig_hw_values[self._emitter.external] = self._emitter.external.value
+            self._emitter.external.value = True
+
         return dt
 
     def _get_next_rectangle(self, rep: Tuple[int, int], acq_num: int, px_time: float,
@@ -2586,6 +2600,7 @@ class SEMMDStream(MultipleDetectorStream):
             self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             for s in self._streams:
                 s._unlinkHwVAs()
+            self._restoreHardwareSettings()
             self._acq_data = [[] for _ in self._streams]  # regain a bit of memory
             self._live_data = [[] for _ in self._streams]
             self._streams[0].raw = []
