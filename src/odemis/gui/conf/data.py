@@ -994,6 +994,9 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Det. slit",
                 "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
             }),
+            ("filter", {  # filter.band axis
+                "choices": util.format_band_choices,
+            }),
         )),
     stream.ARSettingsStream:
         OrderedDict((
