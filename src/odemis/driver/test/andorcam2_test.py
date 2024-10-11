@@ -234,7 +234,7 @@ class TestAndorCam2HwTrigger(unittest.TestCase):
         # a trigger just after waiting for the data. So the behaviour is actually
         # the same as no trigger.
         self.camera.data.synchronizedOn(self.camera.hardwareTrigger)
-        time.sleep(1)  # a couple of hw triggers coming in
+        time.sleep(3)  # a couple of hw triggers coming in
         self.assertGreater(len(self.rcv_dates), 1)
 
         self.camera.data.unsubscribe(self.receive_image)
