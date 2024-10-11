@@ -876,23 +876,27 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
                 # make the full MCPGain range available when stream is active
                 self.detMCPGain.range = self.streak_unit.MCPGain.range
             else:
-                # Set HW MCPGain VA = 0, but keep GUI VA = previous value
-                try:
-                    self.streak_unit.MCPGain.value = 0
-                    # TODO: Is it good for the shutter to be repeatedly opened/closed whenever playing/stopping?
-                    if model.hasVA(self.streak_unit, "shutter"):
-                        self.streak_unit.shutter.value = True
-                except Exception:
-                    # Can happen if the hardware is not responding. In such case,
-                    # let's still pause the stream.
-                    logging.exception("Failed to reset the streak unit MCP Gain")
-
+                self._suspend()
                 # only allow values <= current MCPGain value for HW safety reasons when stream inactive
                 self.detMCPGain.range = (0, self.detMCPGain.value)
-                # TODO: also prevent the shutter from from closed -> open when not playing?
+                # TODO: also prevent the shutter from being closed -> open when not playing?
                 # It's actually harder to do that the gain, because it's a boolean... so for now we don't do that.
 
         return self._active
+
+    def _suspend(self):
+        """
+        Called at the end of the acquisition, to ensure the detector is protected.
+        """
+        # Set HW MCPGain VA = 0, but keep GUI VA = previous value
+        try:
+            self.streak_unit.MCPGain.value = 0
+            if model.hasVA(self.streak_unit, "shutter"):
+                self.streak_unit.shutter.value = True
+        except Exception:
+            # Can happen if the hardware is not responding. In such case,
+            # let's still pause the stream.
+            logging.exception("Failed to protect the streakcam")
 
     def _protect_detector(self) -> None:
         """

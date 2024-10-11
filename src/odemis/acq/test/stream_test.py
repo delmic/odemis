@@ -2891,13 +2891,16 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
                                                         self.ebeam, self.streak_unit, self.streak_delay,
                                                         detvas={"exposureTime", "readoutRate", "binning", "resolution"},
-                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
 
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
-
         streaks.detExposureTime.value = 0.01  # 10ms
+        # Disable the protections
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
+
         # # TODO use fixed repetition value -> set ROI?
         streaks.repetition.value = (10, 5)
         num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
@@ -2918,6 +2921,10 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+
+        # Confirm protections are applied on the hardware
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+        self.assertTrue(self.streak_unit.shutter.value)
 
         # check if number of images in the received data (sem image + temporal spectrum images) is the same as
         # number of images stored in raw

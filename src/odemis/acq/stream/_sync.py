@@ -3007,6 +3007,20 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     Data format: SEM (2D=XY) + TemporalSpectrum(4D=CT1YX).
     """
 
+    def _runAcquisition(self, future):
+        """
+        Acquires images from multiple detectors via software synchronisation.
+        Select whether the ebeam is moved for scanning or the sample stage.
+        :param future: Current future running for the whole acquisition.
+        """
+        try:
+            das = super()._runAcquisition(future)
+        finally:
+            # Make sure the streak-cam is protected
+            self._sccd._suspend()
+
+        return das
+
     def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
         """
         :param n: (int) number of the current stream
