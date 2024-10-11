@@ -1434,9 +1434,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                                (px_idx[1] + 1) * tile_size[0] - 1,
                                                (px_idx[0] + 1) * tile_size[1] - 1)
 
-                    # Reset (CCD) live image
-                    self._sccd.raw = []
-
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
@@ -1708,7 +1705,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # Reset live image, to be sure that if there is an
                     # integrationTime, the new images are not mixed with the one
                     # from the previous pixel (= ebeam pos).
-                    self._sccd.raw = []
+                    if integration_count > 1:
+                        self._sccd.raw = []
 
                     px_pos = (pos_lt[0] + px_idx[1] * self._pxs[0],
                               pos_lt[1] - px_idx[0] * self._pxs[1])  # Y is inverted
