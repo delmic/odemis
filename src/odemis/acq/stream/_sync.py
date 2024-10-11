@@ -1417,7 +1417,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 self._ccd_df.subscribe(self._hwsync_subscribers[self._ccd_idx])
                 # Wait for the CCD to be ready. Typically, it's much less than 1s, but as it's done
                 # just once per acquisition, it's not a big deal to take a bit of margin.
-                time.sleep(1.0)  # s, TODO: how to know the CCD is ready?
+                time.sleep(2.0)  # s
+                # TODO: how to know the CCD is ready? Typically, the driver knows when the device
+                # is ready, but it doesn't currently have a way to pass back this information.
+                # Have a dedicate Event for this? Or just test it by regularly sending hardware
+                # triggers until a frame is received (if the frame duration is not too long)?
 
                 # Start SEM acquisition (for "all" other detectors than the CCD)
                 for s, sub in zip(self._streams[:-1], self._hwsync_subscribers[:-1]):
