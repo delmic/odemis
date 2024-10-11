@@ -3960,6 +3960,9 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         time.sleep(4)
         ebics.is_active.value = False
 
+        # Wait for the stream image projection to be complete
+        time.sleep(0.2)
+
         nb_images = len(self._images)
         self.assertGreater(nb_images, 1, "Not several EBIC images received after 4s")
         self.assertIsInstance(self._images[0], model.DataArray)

@@ -1481,6 +1481,7 @@ class IndependentEBICStream(FastScanningDetector):
 
         self._emitter_dataflow = emt_dataflow
         self._latest_emitter_md = {}  # the metadata of the emitter, to be copied onto the detector data
+        self._acq_start_lock = threading.Lock()  # To be taken when starting/stopping acquisition
 
         # The "independent" detector is independent if it has dwellTime and resolution
         assert model.hasVA(detector, "dwellTime")
@@ -1542,13 +1543,14 @@ class IndependentEBICStream(FastScanningDetector):
         This is to force the detectors to start a new acquisition, synchronized with the scanner.
         """
         try:
-            if self.is_active.value:
-                logging.debug("Will stop and restart the acquisition")
-                self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
-                self._dataflow.unsubscribe(self._onNewData)
+            with self._acq_start_lock:
+                if self.is_active.value:
+                    logging.debug("Will stop and restart the acquisition")
+                    self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
+                    self._dataflow.unsubscribe(self._onNewData)
 
-                self._dataflow.subscribe(self._onNewData)
-                self._emitter_dataflow.subscribe(self._onNewEmitterData)
+                    self._dataflow.subscribe(self._onNewData)
+                    self._emitter_dataflow.subscribe(self._onNewEmitterData)
         except Exception:
             logging.exception("Failed to restart the acquisition")
 
@@ -1561,10 +1563,11 @@ class IndependentEBICStream(FastScanningDetector):
             self._onDwellTime(self._emitter.dwellTime.value)
             self._onResolution(self._emitter.resolution.value)
 
-        super()._onActive(active)
-        # If active -> calls _startAcquisition()
-        if not active:
-            self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
+        with self._acq_start_lock:
+            super()._onActive(active)
+            # If active -> calls _startAcquisition()
+            if not active:
+                self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
 
     def _startAcquisition(self, future=None):
         """
@@ -1573,8 +1576,7 @@ class IndependentEBICStream(FastScanningDetector):
         # First start the independent detector "as usual"... and it'll be waiting for the emitter
         super()._startAcquisition(future)
 
-        # logging
-        # Then start the emitter
+        # ...then start the emitter
         self._emitter_dataflow.subscribe(self._onNewEmitterData)
 
     def _onDwellTime(self, value: float):
