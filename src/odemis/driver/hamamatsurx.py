@@ -495,12 +495,15 @@ class ReadoutCamera(model.DigitalCamera):
                 tab += self.parent._dataport.recv(scl_table_size)
         except socket.timeout as ex:
             raise TimeoutError(f"Did not receive a scaling table: {ex}")
-        logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
 
         table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to (read-only) array
+        # No way to read the unit prefix, so need to "guess" it
+        t_factor = self.parent._streakunit.get_time_scale_factor()
+        logging.debug("Received scaling table for time axis from %s to %s * %s s.",
+                      table[0], table[-1], t_factor)
         # The prefix unit varies depending on the time range (eg, ns, us), so need scale it, based
         # on the time range of the streak unit.
-        table = table * self.parent._streakunit.timeRangeFactor
+        table = table * t_factor
 
         return table
 
@@ -700,10 +703,6 @@ class StreakUnit(model.HwComponent):
         time_range = util.find_closest(time_range, choices)  # make sure value is in choices
         self.timeRange = model.FloatEnumerated(time_range, choices, setter=self._setTimeRange, unit="s")
 
-        # a variable that stores the current timeRange conversion for e.g. the scaling table conversion
-        # is set in the setter of the timeRange VA
-        self.timeRangeFactor = None
-
         self.MCPGain.subscribe(self._onMCPGain, init=True)
         self.timeRange.subscribe(self._onTimeRange, init=True)
         self.streakMode.subscribe(self._onStreakMode, init=True)
@@ -900,8 +899,6 @@ class StreakUnit(model.HwComponent):
             else:
                 # Convert from time to string (e.g. "1.0 ns")
                 time_range_raw = self.parent.convertTime2Unit(time_range)
-
-            self._setTimeRangeFactor(time_range)
         except Exception as ex:
             raise ValueError("Time range of %s sec is not supported (%s)." % (time_range, ex))
 
@@ -941,18 +938,25 @@ class StreakUnit(model.HwComponent):
 
         return time_range
 
-    def _setTimeRangeFactor(self, value):
+    def get_time_scale_factor(self) -> float:
         """
-        Sets the time range factor needed for conversion of RemoteEx values to sec.
-        This method maps the values and units obtained from the
-        scaling table (correlating of px positions with corresponding time values) to values only.
-        :param value: (float) conversion factor
+        Guess the factor used in the time scale metadata, to convert the values to seconds.
+        Typically, the time range is in the order of ns, us, ms. This depends on the time range.
+        :return:
         """
-        if 1e-15 <= value < 1:
-            self.timeRangeFactor = 10 ** (math.log10(abs(value)) // 3 * 3)
+        # When the synchroscan sweep unit is used, the time range is just an integer, and the time
+        # scale seems to always be in ps.
+        if self._time_ranges:
+            return 1e-12
+
+        # The values are expressed with the same prefix as the time range
+        tr = self.timeRange.value
+        if 1e-15 <= tr < 1:
+            return 10 ** ((math.log10(abs(tr)) // 3) * 3)
         else:
-            raise ValueError("Cannot calculate time range conversion factor. "
-                             "Time range of value %s not supported" % value)
+            # Let's not completely fail, and instead assume it's an index number (int), so in ps.
+            logging.warning("Unexpected time range of %s s, will guess time scale is in ps", tr)
+            return 1e-12
 
     def _time_id_to_time(self, time_id: int) -> float:
         """
@@ -2394,7 +2398,7 @@ class StreakCamera(model.HwComponent):
             conversion = 10 ** (magnitude * -3)
             unit_index = int(abs(magnitude))
             value_raw = str(int(round(value * conversion))) + " " + units[unit_index]
-        elif 1 <= value <= 10:  # Note values > 10s are caught by VA as not in range of VA
+        elif 1 <= value:  # typically: values for the exposure time
             value_raw = "%.3f s" % (value,)  # only used for exposure time -> can be float
         else:
             raise ValueError("Unit conversion for value %s not supported" % value)
