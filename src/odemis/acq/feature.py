@@ -51,6 +51,7 @@ class CryoFeature(object):
         self.stage_pos = model.VigilantAttribute(stage_pos, unit="m") # stage-bare
         self.focus_pos = model.VigilantAttribute(focus_pos, unit="m")
         self.posture = model.StringVA(posture)
+        self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
@@ -69,7 +70,8 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
                         'status': feature.status.value,
                         'stage_pos': feature.stage_pos.value,
                         'focus_pos': feature.focus_pos.value,
-                        'posture': feature.posture.value}
+                        'posture': feature.posture.value,
+                        'posture_positions': feature.posture_positions}
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -88,11 +90,13 @@ class FeaturesDecoder(json.JSONDecoder):
             stage_pos = obj['stage_pos']
             focus_pos = obj['focus_pos']
             posture = obj['posture']
+            posture_positions = obj.get('posture_positions', {})
             feature = CryoFeature(name=obj['name'],
                                   stage_pos=stage_pos,
                                   focus_pos=focus_pos,
                                   posture=posture)
             feature.status.value = obj['status']
+            feature.posture_positions = posture_positions
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
