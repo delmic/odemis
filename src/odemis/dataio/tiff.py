@@ -810,7 +810,7 @@ def _updateMDFromOME(root, das):
             ls_settings = che.find("LightSourceSettings")
             if ls_settings is not None:
                 try:
-                    # previous metadata versions used LightSource to store the LightSourceSettings, 
+                    # previous metadata versions used LightSource to store the LightSourceSettings,
                     # but for full compatibility we need to specify the specific source as LightEmittingDiode,
                     # we check both to maintain backwards compatibility.
                     ls = _findElementByID(root, ls_settings.attrib["ID"], "LightSource")
@@ -1995,13 +1995,13 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
 
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
-    
+
     imagej_compat = False # TODO: add a format to enable/disable ImageJ compatibility
     if imagej_compat:
         # Extract ImageJ compatible Image description based on the first group dimension
         imagej_description = extract_imagej_metadata(sorted_groups[0][1])
         # TODO: add imagej_description to the image description instead of ometxt
-        
+
     # Write the OME metadata in the first image
     if ometxt:
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)

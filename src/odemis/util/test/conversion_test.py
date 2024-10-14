@@ -33,7 +33,7 @@ from odemis.util.conversion import (JsonExtraEncoder, YamlExtraDumper,
                                     convert_to_object, ensure_tuple,
                                     get_img_transformation_matrix,
                                     get_img_transformation_md, get_tile_md_pos,
-                                    reproduce_typed_value, 
+                                    reproduce_typed_value,
                                     rgba_to_int32, int32_to_rgba)
 
 
@@ -389,7 +389,7 @@ class TestConversion(unittest.TestCase):
         rgba = (255, 0, 0, 255)
         int32 = rgba_to_int32(rgba)
         self.assertEqual(int32, -16776961)
-        
+
         # roundtrip rgba -> int32 -> rgba
         rgba = (255, 128, 0, 255)
         int32 = rgba_to_int32(rgba)
