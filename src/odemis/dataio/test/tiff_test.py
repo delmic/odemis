@@ -1891,11 +1891,6 @@ class TestTiffIO(unittest.TestCase):
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
 
-            # only MD_TIME_LIST is read back (MD_PIXEL_DUR, MD_TIME_LIST deprecated)
-            # if model.MD_PIXEL_DUR in md and model.MD_TIME_OFFSET in md:
-                # self.assertIn(model.MD_TIME_LIST, im.metadata)
-                # self.assertEqual(len(im.metadata[model.MD_TIME_LIST]), rdata[i].shape[1])
-
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)
         self.assertEqual(len(rthumbs), 1)

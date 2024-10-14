@@ -23,6 +23,7 @@ import logging
 import math
 import re
 from collections.abc import Iterable
+from typing import Tuple
 
 import cv2
 import numpy
@@ -165,15 +166,17 @@ def hex_to_frgba(hex_str, af=1.0):
     return rgba_to_frgba(hex_to_rgba(hex_str, int(af * 255)))
 
 # from claude / ome_types
-def rgba_to_signed_int32(rgb, a: int = 255):
+def rgba_to_int32(rgba: Tuple[int]) -> int:
     """Convert an RGBA tuple to a signed 32-bit integer representation.
-    :param rgb: A tuple of values (Red, Green, Blue)
-    :param a: The alpha value in the range 0-255 (default 255)"""
-    r, g, b = rgb
+    :param rgb: A tuple of values (Red, Green, Blue, Alpha)
+    :return: A signed 32-bit integer representation of the color with alpha"""
+    if len(rgba) != 4:
+        raise ValueError(f"Illegal RGBA colour {rgba}")
+    r, g, b, a = rgba
     v = r << 24 | g << 16 | b << 8 | a
     return v if v < 2**31 else v - 2**32
 
-def int32_to_rgba(int32_color):
+def int32_to_rgba(int32_color: int) -> Tuple[int]:
     """
     Convert a signed 32-bit integer representation back to an RGBA tuple.
 
@@ -181,6 +184,12 @@ def int32_to_rgba(int32_color):
     :return: A tuple of four values (Red, Green, Blue),
              where RGB are integers in the range 0-255 and Alpha is a float in the range 0-1
     """
+    if not isinstance(int32_color, int):
+        raise TypeError(f"Value {int32_color} is not an integer")
+    # check if the value is a signed 32-bit integer
+    if not -2**31 <= int32_color < 2**31:
+        raise ValueError(f"Value {int32_color} is not a signed 32-bit integer")
+
     # Convert to unsigned if negative
     if int32_color < 0:
         int32_color += 2**32
@@ -188,7 +197,7 @@ def int32_to_rgba(int32_color):
     r = (int32_color >> 24) & 255
     g = (int32_color >> 16) & 255
     b = (int32_color >> 8) & 255
-    a = (int32_color & 255) / 255.0  # Convert alpha to 0-1 range
+    a = (int32_color & 255)
 
     return r, g, b, a
 

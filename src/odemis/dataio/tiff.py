@@ -27,6 +27,7 @@ import math
 import operator
 import os
 import re
+import statistics
 import threading
 import time
 import uuid
@@ -42,7 +43,7 @@ import odemis
 from odemis import model, util
 from odemis.model import AcquisitionData, DataArrayShadow
 from odemis.util import fluo, img, spectrum, units
-from odemis.util.conversion import JsonExtraEncoder, get_tile_md_pos, rgba_to_signed_int32, int32_to_rgba
+from odemis.util.conversion import JsonExtraEncoder, get_tile_md_pos, rgba_to_int32, int32_to_rgba
 
 #pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
@@ -809,6 +810,9 @@ def _updateMDFromOME(root, das):
             ls_settings = che.find("LightSourceSettings")
             if ls_settings is not None:
                 try:
+                    # previous metadata versions used LightSource to store the LightSourceSettings, 
+                    # but for full compatibility we need to specify the specific source as LightEmittingDiode,
+                    # we check both to maintain backwards compatibility.
                     ls = _findElementByID(root, ls_settings.attrib["ID"], "LightSource")
                     if ls is None:
                          ls = _findElementByID(root, ls_settings.attrib["ID"], "LightEmittingDiode")
@@ -958,7 +962,7 @@ def _updateMDFromOME(root, das):
         if z_positions:
             for da in das:
                 pos = da.metadata[model.MD_POS]
-                da.metadata[model.MD_POS] = pos[0], pos[1], numpy.median(z_positions)
+                da.metadata[model.MD_POS] = pos[0], pos[1], statistics.median(z_positions)
 
         # Update metadata of each da, so that they will be merged
         if deltats:
@@ -1590,9 +1594,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 # colour is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
                 if isinstance(tint, tuple):
-                    if len(tint) == 4:
-                        tint = tint[:3]
-                    chan.attrib["Color"] = str(rgba_to_signed_int32(tint))
+                    if len(tint) == 3:
+                        tint = tint, 255 # add alpha
+                    chan.attrib["Color"] = str(rgba_to_int32(tint))
 
             # Add info on detector
             attrib = {}
@@ -1683,9 +1687,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
     # get the actual z positions (MD_POS is the center of the image)
     pos = da.metadata.get(model.MD_POS, (0, 0))
-    if len(pos) == 3:
+    pixelsize = da.metadata[model.MD_PIXEL_SIZE]
+    if len(pos) == 3 and len(pixelsize) == 3:
         nz = rep_hdim[hdims.index("Z")]
-        pixelsize = da.metadata[model.MD_PIXEL_SIZE]
         center_pos_z = pos[2]
         zstep = pixelsize[2]
 
@@ -1696,7 +1700,6 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                                nz)
 
     for index in numpy.ndindex(*rep_hdim):
-
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
                                "TheC": "%d" % index[hdims.index("C")],
@@ -1983,8 +1986,6 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     groups = _findImageGroups(ldata)
 
     sorted_groups = sorted(groups.items(), key=operator.itemgetter(0))
-    # Extract ImageJ compatible Image description based on the first group dimension
-    imagej_description = extract_imagej_metadata(sorted_groups[0][1])
 
     if multiple_files:
         groups = _findImageGroups(alldata)
@@ -1994,11 +1995,15 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
 
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
-
-    # Write the OME metadata + ImageJ metadata on the first image (only)
-    # If thumbnail is present, the tiff file is not compatible with ImageJ
+    
+    imagej_compat = False # TODO: add a format to enable/disable ImageJ compatibility
+    if imagej_compat:
+        # Extract ImageJ compatible Image description based on the first group dimension
+        imagej_description = extract_imagej_metadata(sorted_groups[0][1])
+        # TODO: add imagej_description to the image description instead of ometxt
+        
+    # Write the OME metadata in the first image
     if ometxt:
-        # f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
 
     for fifd, das in sorted_groups:
