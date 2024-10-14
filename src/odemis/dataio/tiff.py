@@ -514,7 +514,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 
         if model.MD_LENS_MAG in da0.metadata:
             mag = da0.metadata[model.MD_LENS_MAG]
-            obj = ET.Element( "Objective", attrib={
+            obj = ET.Element("Objective", attrib={
                                 "ID": "Objective:%d" % did,
                                 "CalibratedMagnification": "%.15f" % mag})
             if model.MD_LENS_NAME in da0.metadata:
