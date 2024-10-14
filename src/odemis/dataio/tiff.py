@@ -1595,27 +1595,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 tint = da.metadata[model.MD_USER_TINT]
                 if isinstance(tint, tuple):
                     if len(tint) == 3:
-                        tint = tint, 255 # add alpha
+                        tint = *tint, 255 # add alpha
                     chan.attrib["Color"] = str(rgba_to_int32(tint))
 
-            # Add info on detector
-            attrib = {}
-            if model.MD_BINNING in da.metadata:
-                attrib["Binning"] = "%dx%d" % da.metadata[model.MD_BINNING]
-            if model.MD_GAIN in da.metadata:
-                attrib["Gain"] = "%.15f" % da.metadata[model.MD_GAIN]
-            if model.MD_READOUT_TIME in da.metadata:
-                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
-                attrib["ReadOutRate"] = "%.15f" % ror
-            if model.MD_EBEAM_VOLTAGE in da.metadata:
-                # Schema only mentions PMT, but we use it for the e-beam too
-                attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_VOLTAGE] # V
-
-            if attrib:
-                # detector of the group has the same id as first IFD of the group
-                attrib["ID"] = "Detector:%d" % ifd
-                ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
-
+            # light source must be before detector...
             # Add info on the light source: same structure as Detector
             attrib = {}
             if model.MD_EBEAM_CURRENT in da.metadata:
@@ -1636,6 +1619,24 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                         st = datetime.utcfromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S.%f")
                         cote = ET.SubElement(ds, "Current", attrib={"Time": st})
                         cote.text = "%.18f" % cur
+
+            # Add info on detector
+            attrib = {}
+            if model.MD_BINNING in da.metadata:
+                attrib["Binning"] = "%dx%d" % da.metadata[model.MD_BINNING]
+            if model.MD_GAIN in da.metadata:
+                attrib["Gain"] = "%.15f" % da.metadata[model.MD_GAIN]
+            if model.MD_READOUT_TIME in da.metadata:
+                ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
+                attrib["ReadOutRate"] = "%.15f" % ror
+            if model.MD_EBEAM_VOLTAGE in da.metadata:
+                # Schema only mentions PMT, but we use it for the e-beam too
+                attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_VOLTAGE] # V
+
+            if attrib:
+                # detector of the group has the same id as first IFD of the group
+                attrib["ID"] = "Detector:%d" % ifd
+                ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
 
             subid += 1
 
@@ -1687,7 +1688,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
     # get the actual z positions (MD_POS is the center of the image)
     pos = da.metadata.get(model.MD_POS, (0, 0))
-    pixelsize = da.metadata[model.MD_PIXEL_SIZE]
+    pixelsize = da.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
     if len(pos) == 3 and len(pixelsize) == 3:
         nz = rep_hdim[hdims.index("Z")]
         center_pos_z = pos[2]
