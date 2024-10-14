@@ -810,9 +810,9 @@ def _updateMDFromOME(root, das):
             if ls_settings is not None:
                 try:
                     ls = _findElementByID(root, ls_settings.attrib["ID"], "LightSource")
+                    if ls is None:
+                         ls = _findElementByID(root, ls_settings.attrib["ID"], "LightEmittingDiode")
                     try:
-                        if ls is None:
-                            ls = _findElementByID(root, ls_settings.attrib["ID"], "LightEmittingDiode")
                         pwr = float(ls.attrib["Power"]) * 1e-3  # mW -> W
                         mdc[model.MD_LIGHT_POWER] = pwr
                     except (KeyError, ValueError):
