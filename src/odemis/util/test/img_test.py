@@ -33,7 +33,7 @@ from odemis import model
 from odemis.dataio import tiff
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import img, get_best_dtype_for_acc, testing
-from odemis.util.img import Bin, mean_within_circle
+from odemis.util.img import Bin, mean_within_circle, apply_zoom_on_image_coordinates, get_tile_indices
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -2145,6 +2145,61 @@ class TestImageProjection(unittest.TestCase):
         numpy.testing.assert_array_equal(eda, projection)
         self.assertEqual(eda.dtype, projection.dtype)
         self.assertEqual(projection.metadata[model.MD_DIMS], 'YX')
+
+    def test_get_tile_indicies(self):
+        """Test calculating the tile indices for a given image rectangle"""
+        # return all tiles
+        rect = (0, 0, 512, 512)
+        tile_shape = (256, 256)
+        expected = (0, 0, 1, 1)
+        self.assertEqual(get_tile_indices(rect, tile_shape), expected)
+
+        # return all tiles
+        rect = (100, 100, 700, 700)
+        expected = (0, 0, 2, 2)
+        self.assertEqual(get_tile_indices(rect, tile_shape), expected)
+
+        # return at least one tile
+        rect = (0, 0, 100, 100)
+        expected = (0, 0, 0, 0)
+        self.assertEqual(get_tile_indices(rect, tile_shape), expected)
+
+        # return middle tiles
+        rect = (300, 300, 700, 700)
+        expected = (1, 1, 2, 2)
+        self.assertEqual(get_tile_indices(rect, tile_shape), expected)
+
+        # previously failing case: METEOR-1210, handled in apply_zoom_on_image_coordinates
+        rect = (0, 0, 256.065, 223)
+        expected =  (0, 0, 0, 0)
+        with self.assertRaises(ValueError):
+            get_tile_indices(rect, tile_shape)
+
+    def test_apply_zoom_to_image_coordinates(self):
+        """Test applying zoom to image coordinates"""
+        # no zoom
+        rect = [0, 0, 1000, 1000]
+        z = 0
+        expected = [0, 0, 1000, 1000]
+        self.assertEqual(apply_zoom_on_image_coordinates(rect, z), expected)
+
+        # zoom level 1
+        rect = [0, 0, 1000, 1000]
+        z = 1
+        expected = [0, 0, 500, 500]
+        self.assertEqual(apply_zoom_on_image_coordinates(rect, z), expected)
+
+        # return sub-rect of the original rect
+        rect = [100, 200, 900, 1000]
+        z = 2
+        expected = [25, 50, 225, 250]
+        self.assertEqual(apply_zoom_on_image_coordinates(rect, z), expected)
+
+        # previously failing case: METEOR-1210
+        rect = (0, 0, 8194, 7143)
+        z = 5
+        expected = [0, 0, 256, 223]
+        self.assertEqual(apply_zoom_on_image_coordinates(rect, z), expected)
 
 if __name__ == "__main__":
     unittest.main()

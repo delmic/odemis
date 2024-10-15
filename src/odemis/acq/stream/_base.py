@@ -214,7 +214,7 @@ class Stream(object):
         # And the histogram of both images will probably be a bit different also.
         if raw and isinstance(raw[0], model.DataArrayShadow):
             # if the image is pyramidal, use the smaller image
-            drange_raw = self._getMergedRawImage(raw[0], raw[0].maxzoom)
+            drange_raw = img.get_merged_raw_image(raw[0], raw[0].maxzoom)
         else:
             drange_raw = None
 
@@ -840,7 +840,7 @@ class Stream(object):
                 data = self.raw[0]
                 if isinstance(data, model.DataArrayShadow):
                     # if the image is pyramidal, use the smaller image
-                    data = self._getMergedRawImage(data, data.maxzoom)
+                    data = img.get_merged_raw_image(data, data.maxzoom)
 
             # 2 types of drange management:
             # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
@@ -1092,29 +1092,6 @@ class Stream(object):
 
         gc.collect()
 
-    def _getMergedRawImage(self, das, z):
-        """
-        Returns the entire raw data of DataArrayShadow at a given zoom level
-        das (DataArrayShadow): shadow of the raw data
-        z (int): Zoom level index
-        return (DataArray): The merged image
-        """
-        # calculates the size of the merged image
-        width_zoomed = das.shape[1] / (2 ** z)
-        height_zoomed = das.shape[0] / (2 ** z)
-        # calculates the number of tiles on both axes
-        num_tiles_x = int(math.ceil(width_zoomed / das.tile_shape[1]))
-        num_tiles_y = int(math.ceil(height_zoomed / das.tile_shape[0]))
-
-        tiles = []
-        for x in range(num_tiles_x):
-            tiles_column = []
-            for y in range(num_tiles_y):
-                tile = das.getTile(x, y, z)
-                tiles_column.append(tile)
-            tiles.append(tiles_column)
-
-        return img.mergeTiles(tiles)
 
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
@@ -1233,7 +1210,7 @@ class Stream(object):
             data = self.raw[0]
             if isinstance(data, model.DataArrayShadow):
                 # Pyramidal => use the smallest version
-                data = self._getMergedRawImage(data, data.maxzoom)
+                data = img.get_merged_raw_image(data, data.maxzoom)
 
             # We only do background subtraction when automatically selecting raw
             bkg = self.background.value
@@ -1352,3 +1329,7 @@ class Stream(object):
         A list of metadata dicts is returned.
         """
         return [None if data is None else data.metadata for data in self.raw]
+
+    def force_image_update(self):
+        """Force the stream image to be updated"""
+        self._shouldUpdateImage()

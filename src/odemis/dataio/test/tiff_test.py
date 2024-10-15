@@ -21,25 +21,28 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
-from PIL import Image
-import libtiff
+import json
 import logging
-import numpy
-from odemis import model
-import odemis
-from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS
-from odemis.dataio import tiff
-from odemis.util import img
 import os
 import re
 import time
 import unittest
-from unittest.case import skip
-import json
-from datetime import datetime
-
-import libtiff.libtiff_ctypes as T # for the constant names
 import xml.etree.ElementTree as ET
+from datetime import datetime
+from unittest.case import skip
+
+import libtiff
+import libtiff.libtiff_ctypes as T  # for the constant names
+import numpy
+import odemis
+from odemis import model
+from odemis.acq.stream import POL_POSITIONS, POL_POSITIONS_RESULTS
+from odemis.acq.stream._projection import RGBSpatialProjection
+from odemis.dataio import tiff
+from odemis.dataio.tiff import export
+from odemis.util import img
+from odemis.util.dataio import data_to_static_streams, open_acquisition
+from PIL import Image
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -2729,6 +2732,77 @@ class TestTiffIO(unittest.TestCase):
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
 
+PYRAMID_FILENAME = "test-pyramid.ome.tiff"
+class TestTileRead(unittest.TestCase):
+
+    def tearDown(self):
+        # clean up
+        try:
+            os.remove(PYRAMID_FILENAME)
+        except Exception:
+            pass
+
+    def test_tiled_read_and_projection(self):
+        """Test the tiled read functions"""
+
+        # storing full metadata for completeness
+        md = {
+            model.MD_PIXEL_SIZE: (7.738095238095199e-08, 7.738095238095199e-08),
+            model.MD_POS: (0.051781573195293, -0.007091270569792),
+            model.MD_ACQ_DATE: 1727296375,
+            model.MD_ROTATION: 6.1837053071795856,
+            model.MD_SHEAR: -4.3021142204224836e-16,
+            model.MD_DIMS: "YX",
+        }
+
+        # create a dummy overview pyramid with the same problematic shape
+        das = model.DataArray(
+            numpy.zeros((8194, 7143), dtype=numpy.uint16), metadata=md
+        )
+
+        # export the dummy overview pyramid
+        export(PYRAMID_FILENAME, das, pyramid=True)
+
+        # open the pyramid and create a projection
+        data = open_acquisition(PYRAMID_FILENAME)
+        stream = data_to_static_streams(data)[0]
+        proj = RGBSpatialProjection(stream)
+
+        # simulate 'moving' the stream
+        initial_rect = proj.rect.value
+        move = (25e-3, 10e-3)
+        stream.raw[0].metadata[model.MD_POS_COR] = move
+        proj.force_image_update()
+
+        # the expected rect is the initial rect minus the move
+        expected_rect = [initial_rect[0] - move[0],
+                        initial_rect[1] - move[1],
+                        initial_rect[2] - move[0],
+                        initial_rect[3] - move[1]]
+
+        # check the rect is as expected
+        numpy.testing.assert_array_almost_equal(proj.rect.value, expected_rect, decimal=6)
+
+        # check the tiles are read correctly
+        das = stream.raw[0]
+        image_rect = [
+            0,
+            0,
+            das.shape[1],
+            das.shape[0],
+        ]  # [xmin, ymin, xmax, ymax]
+        try:
+            for z in range(0, das.maxzoom + 1):
+                zoom_rect = img.apply_zoom_on_image_coordinates(image_rect, z)
+                xmin, ymin, xmax, ymax = img.get_tile_indices(zoom_rect, das.tile_shape)
+
+                # assert reading tiles doesn't raise an error
+                for x in range(xmin, xmax):
+                    for y in range(ymin, ymax):
+                        raw_tile = stream.raw[0].getTile(x, y, z)
+                        # logging.debug(f"Tile {x}, {y}, {z} shape: {raw_tile.shape}")
+        except Exception as e:
+            self.fail(f"Error reading tiles: {e}")
 
 # Not used anymore
 # def rational2float(rational):
