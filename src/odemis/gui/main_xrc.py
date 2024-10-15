@@ -2424,7 +2424,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
-          <label>Stop all Axes</label>
+          <label>Emergency hardware protection</label>
           <accel>Pause</accel>
           <XRCED>
             <assign_var>1</assign_var>

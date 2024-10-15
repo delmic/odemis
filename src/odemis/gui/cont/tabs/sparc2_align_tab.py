@@ -43,6 +43,7 @@ import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.gui.comp import popup
 from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
@@ -444,23 +445,26 @@ class Sparc2AlignTab(Tab):
             # Don't show the time range, as it's done by the StreakCamAlignSettingsController
             streak_unit_vas = (get_local_vas(main_data.streak_unit, main_data.hw_settings_config)
                                -{"timeRange"})
-            tsStream = acqstream.StreakCamStream(
+            ts_stream = acqstream.StreakCamStream(
                                 "Calibration trigger delay for streak camera",
                                 main_data.streak_ccd,
                                 main_data.streak_ccd.data,
-                                main_data.streak_unit,
-                                main_data.streak_delay,
                                 emitter=None,
+                                streak_unit=main_data.streak_unit,
+                                streak_delay=main_data.streak_delay,
                                 detvas=get_local_vas(main_data.streak_ccd, main_data.hw_settings_config),
                                 streak_unit_vas=streak_unit_vas,
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                          model.MD_ROTATION: 0},  # Force the CCD as-is
                                 )
 
-            self._setFullFoV(tsStream, (2, 2))
-            self._ts_stream = tsStream
+            self._setFullFoV(ts_stream, (2, 2))
+            self._ts_stream = ts_stream
 
-            streak = self._stream_controller.addStream(tsStream,
+            if main_data.ebeam_blanker:
+                main_data.ebeam_blanker.power.subscribe(self._on_ebeam_blanker)
+
+            streak = self._stream_controller.addStream(ts_stream,
                              add_to_view=self.panel.vp_align_streak.view)
             streak.stream_panel.flatten()  # No need for the stream name
 
@@ -488,7 +492,7 @@ class Sparc2AlignTab(Tab):
 
             # To activate the SEM spot when the camera plays
             # (ebeam centered in image)
-            tsStream.should_update.subscribe(self._on_ccd_stream_play)
+            ts_stream.should_update.subscribe(self._on_ccd_stream_play)
 
         if "ek-align" in tab_data.align_mode.choices:
             detvas = get_local_vas(main_data.ccd, main_data.hw_settings_config)
@@ -1059,6 +1063,11 @@ class Sparc2AlignTab(Tab):
                 self._ts_stream.should_update.value = True
                 self._ts_stream.auto_bc.value = False  # default manual brightness/contrast
                 self._ts_stream.intensityRange.value = self._ts_stream.intensityRange.clip((100, 1000))  # default range
+                # Reset settings, for safety of the streak-unit
+                self._ts_stream.detMCPGain.value = 0
+                if hasattr(self._ts_stream, "detShutter"):
+                    self._ts_stream.detShutter.value = True
+
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(False)
@@ -2010,6 +2019,47 @@ class Sparc2AlignTab(Tab):
             fib_fav_pos["y"] = pos["y"]
             logging.debug("Updating the active fiber Y position to %s", fib_fav_pos)
             fiba.updateMetadata({model.MD_FAV_POS_ACTIVE: fib_fav_pos})
+
+    @call_in_wx_main
+    def _on_ebeam_blanker(self, blanked: bool) -> None:
+        """
+        Callback when the e-beam blanker is activated/deactivated. Used to protect the streak-cam
+        as a lot more light could be emitted when unblanking the e-beam.
+        :param blanked: True if the e-beam is (pulsed-)blanked, False if e-beam is active.
+        """
+        # Protect the streakcam in case the ebeam goes from blanked to unblanked, as suddenly a lot of light might be emitted
+        if blanked:  # just changed to blanked => no danger
+            return
+        if not self.IsShown():
+            return
+
+        # Reset settings, for safety of the streak-unit
+        protected = False
+        if self.tab_data_model.align_mode.value == "streak-align" and self._ts_stream:
+            if hasattr(self._ts_stream, "detMCPGain") and self._ts_stream.detMCPGain.value != 0:
+                self._ts_stream.detMCPGain.value = 0
+                protected = True
+            if hasattr(self._ts_stream, "detShutter") and not self._ts_stream.detShutter.value:
+                self._ts_stream.detShutter.value = True
+                protected = True
+
+        if protected:
+            popup.show_message(self.main_frame, "Streak camera protection",
+                               message="Streak camera settings were reset due to e-beam unblanking.",
+                               level=logging.WARNING)
+
+    def on_hardware_protect(self) -> None:
+        """
+        Called when the detector protection is activated (eg, by pressing the "Pause" button)
+        """
+        # In practice, for now the only thing which is done by the MainGUIData is to also reset the
+        # settings of the streak stream, mainly to make sure that the widgets are synchronized with
+        # the hardware state.
+        if self.tab_data_model.align_mode.value == "streak-align" and self._ts_stream:
+            # Reset settings, for safety of the streak-unit
+            self._ts_stream.detMCPGain.value = 0
+            if hasattr(self._ts_stream, "detShutter"):
+                self._ts_stream.detShutter.value = True
 
     def Show(self, show=True):
         Tab.Show(self, show=show)

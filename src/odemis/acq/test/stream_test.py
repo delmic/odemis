@@ -2465,7 +2465,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
                                                         self.ebeam, self.streak_unit, self.streak_delay,
                                                         detvas={"exposureTime", "readoutRate", "binning", "resolution"},
-                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
 
         self._image = None
         streaks.image.subscribe(self._on_image)
@@ -2486,6 +2486,13 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # activate/play stream, optical path should be corrected immediately (no need to wait)
         streaks.is_active.value = True
 
+        # Disable the protections
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
+        # Confirm they actually are applied on the hardware
+        self.assertEqual(self.streak_unit.MCPGain.value, 10)
+        self.assertFalse(self.streak_unit.shutter.value)
+
         time.sleep(2)
         streaks.is_active.value = False
 
@@ -2504,7 +2511,84 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertIn(model.MD_TIME_LIST, streaks.raw[0].metadata)
         self.assertIn(model.MD_WL_LIST, streaks.raw[0].metadata)
 
+        # Check the streak-cam protection is activated: MCPGain = 0 and shutter active
+        self.assertTrue(self.streak_unit.shutter.value)
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+
         streaks.image.unsubscribe(self._on_image)
+
+    def test_streakcam_stream(self):
+        """Test playing StreakCamStream and check shape and MD for image received are correct."""
+
+        # Create the settings stream
+        streaks = stream.StreakCamStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                         self.ebeam, self.streak_unit, self.streak_delay,
+                                         detvas={"exposureTime", "readoutRate", "binning", "resolution"},
+                                         streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
+
+        self._image = None
+        streaks.image.subscribe(self._on_image)
+
+        # set GUI VAs
+        streaks.detExposureTime.value = 0.2  # s
+        streaks.detBinning.value = (2, 2)
+        streaks.detStreakMode.value = True
+        streaks.detTimeRange.value = find_closest(0.000000005, self.streak_unit.timeRange.choices)
+        streaks.detMCPGain.value = 0  # Note: cannot set any other value here as stream is inactive
+
+        # update stream (live)
+        streaks.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        streaks.is_active.value = True
+
+        # Disable the protections
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
+        # Confirm they actually are applied on the hardware
+        self.assertEqual(self.streak_unit.MCPGain.value, 10)
+        self.assertFalse(self.streak_unit.shutter.value)
+
+        # Disable the streak mode => it should trigger the protection
+        streaks.detStreakMode.value = False
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+        self.assertTrue(self.streak_unit.shutter.value)
+
+        # Re-enable the settings: it should be allowed
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
+        # Confirm they actually are applied on the hardware
+        self.assertEqual(self.streak_unit.MCPGain.value, 10)
+        self.assertFalse(self.streak_unit.shutter.value)
+
+        # Re-enable the streak mode: it should not change the settings (because this way is safe)
+        streaks.detStreakMode.value = True
+        self.assertEqual(self.streak_unit.MCPGain.value, 10)
+        self.assertFalse(self.streak_unit.shutter.value)
+
+        time.sleep(2)
+        streaks.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No temporal spectrum received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        # .image should be a 2D temporal spectrum
+        self.assertEqual(self._image.shape[1::-1], streaks.detResolution.value)
+        # check if metadata is correctly stored
+        md = self._image.metadata
+        self.assertIn(model.MD_WL_LIST, md)
+        self.assertIn(model.MD_TIME_LIST, md)
+
+        # check raw image is a DataArray with right shape and MD
+        self.assertIsInstance(streaks.raw[0], model.DataArray)
+        self.assertEqual(streaks.raw[0].shape[1::-1], streaks.detResolution.value)
+        self.assertIn(model.MD_TIME_LIST, streaks.raw[0].metadata)
+        self.assertIn(model.MD_WL_LIST, streaks.raw[0].metadata)
+
+        # Check the streak-cam protection is activated: MCPGain = 0 and shutter active
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+        self.assertTrue(self.streak_unit.shutter.value)
+
+        streaks.image.unsubscribe(self._on_image)
+
 
     def _on_image(self, im):
         self._image = im
@@ -2627,12 +2711,14 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertNotEqual(streaks.detExposureTime.value, self.streak_ccd.exposureTime.value)
         self.assertNotEqual(streaks.detBinning.value, self.streak_ccd.binning.value)  # TODO check with real HW
 
-        # change .streakMode and/or .timeRange GUI VAs -> MCPGain GUI VA should be 0
+        # Change the settings VA, while not playing -> no effect on the hardware
         streaks.detStreakMode.value = True
+        self.assertNotEqual(streaks.detStreakMode.value, self.streak_unit.streakMode.value)
+
+        # change .streakMode from True to False -> MCPGain GUI VA should be 0
+        streaks.detStreakMode.value = False
         time.sleep(0.1)
         self.assertEqual(streaks.detMCPGain.value, 0)  # GUI VA should be 0 after changing .streakMode
-        # check GUI VA do not show same values as HW VAs
-        self.assertNotEqual(streaks.detStreakMode.value, self.streak_unit.streakMode.value)
         # value > current MCPGain GUI value while stream is not active shouldn't be possible
         # also checks if .MCPGain.range has been updated
         with self.assertRaises(IndexError):
@@ -2805,13 +2891,16 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
                                                         self.ebeam, self.streak_unit, self.streak_delay,
                                                         detvas={"exposureTime", "readoutRate", "binning", "resolution"},
-                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
 
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
-
         streaks.detExposureTime.value = 0.01  # 10ms
+        # Disable the protections
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
+
         # # TODO use fixed repetition value -> set ROI?
         streaks.repetition.value = (10, 5)
         num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
@@ -2832,6 +2921,10 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+
+        # Confirm protections are applied on the hardware
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+        self.assertTrue(self.streak_unit.shutter.value)
 
         # check if number of images in the received data (sem image + temporal spectrum images) is the same as
         # number of images stored in raw

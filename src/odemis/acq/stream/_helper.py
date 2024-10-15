@@ -803,8 +803,13 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
 class TemporalSpectrumSettingsStream(CCDSettingsStream):
     """
-    An streak camera stream, for a set of points (on the SEM).
+    A streak camera stream, for a set of points (on the SEM).
     The live view is just the raw readout camera image.
+    It has a few protections as the detector is very sensitive (to light):
+    * When active, disabling the streak mode, or setting the center wavelength to 0nm will reset the
+       MCPGain and activate the shutter.
+    * It's not possible to increase the MCPGain while the stream is paused.
+    * The MCPGain of the hardware is also always set to 0 when not playing.
     """
     def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay,
                  streak_unit_vas, **kwargs):
@@ -812,7 +817,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
 
-        super(TemporalSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)  # init of CCDSettingsStream
+        super().__init__(name, detector, dataflow, emitter, **kwargs)  # init of CCDSettingsStream
 
         self._active = False  # variable keep track if stream is active/inactive
 
@@ -826,7 +831,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas)
         self._det_vas.update(streak_unit_vas)
 
-        # whenever .streakMode changes
+        # Whenever .streakMode is disabled, or center wavelength is set to 0nm:
         # -> set .MCPGain = 0 and update .MCPGain.range
         # This is important for HW safety reasons to not destroy the streak unit,
         # when changing on of the VA while using a high MCPGain.
@@ -834,10 +839,14 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         # is limited to values <= current value to also prevent HW damage
         # when starting to play the stream again.
         try:
-            self.detStreakMode.subscribe(self._OnStreakSettings)
-            self.detMCPGain.subscribe(self._OnMCPGain)
+            self.detStreakMode.subscribe(self._on_streak_mode)
+            self.detMCPGain.subscribe(self._on_mcp_gain)
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
+        try:
+            self.axisWavelength.subscribe(self._on_center_wavelength)
+        except AttributeError:
+            logging.info("No axis wavelength provided for stream %s, will not protect on wavelength change", name)
 
     # Override Stream.__find_metadata() in _base.py
     def _find_metadata(self, md):
@@ -845,7 +854,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         Find the useful metadata for a 2D spatial projection from the metadata of a raw image.
         :returns: (dict) Metadata dictionary (MD_* -> value).
         """
-        simple_md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
+        simple_md = super()._find_metadata(md)
         if model.MD_TIME_LIST in md:
             simple_md[model.MD_TIME_LIST] = md[model.MD_TIME_LIST]
         if model.MD_WL_LIST in md:
@@ -860,41 +869,67 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         :param active: (boolean) True if stream is playing.
         :returns: (boolean) If stream is playing or not.
         """
-        self._active = super(TemporalSpectrumSettingsStream, self)._is_active_setter(active)
+        self._active = super()._is_active_setter(active)
 
         if self.is_active.value != self._active:  # changing from previous value?
             if self._active:
                 # make the full MCPGain range available when stream is active
                 self.detMCPGain.range = self.streak_unit.MCPGain.range
             else:
-                # Set HW MCPGain VA = 0, but keep GUI VA = previous value
-                try:
-                    self.streak_unit.MCPGain.value = 0
-                except Exception:
-                    # Can happen if the hardware is not responding. In such case,
-                    # let's still pause the stream.
-                    logging.exception("Failed to reset the streak unit MCP Gain")
-
+                self._suspend()
                 # only allow values <= current MCPGain value for HW safety reasons when stream inactive
                 self.detMCPGain.range = (0, self.detMCPGain.value)
+                # TODO: also prevent the shutter from being closed -> open when not playing?
+                # It's actually harder to do that the gain, because it's a boolean... so for now we don't do that.
+
         return self._active
 
-    def _OnStreakSettings(self, value):
+    def _suspend(self):
         """
-        Callback, which sets MCPGain GUI VA = 0,
-        if .streakMode VA has changed.
+        Called at the end of the acquisition, to ensure the detector is protected.
+        """
+        # Set HW MCPGain VA = 0, but keep GUI VA = previous value
+        try:
+            self.streak_unit.MCPGain.value = 0
+            if model.hasVA(self.streak_unit, "shutter"):
+                self.streak_unit.shutter.value = True
+        except Exception:
+            # Can happen if the hardware is not responding. In such case,
+            # let's still pause the stream.
+            logging.exception("Failed to protect the streakcam")
+
+    def _protect_detector(self) -> None:
+        """
+        Protect the streak camera by setting the MCPGain to 0 and activating the shutter.
         """
         self.detMCPGain.value = 0  # set GUI VA 0
-        self._OnMCPGain(value)  # update the .MCPGain VA
+        if hasattr(self, "detShutter"):
+            self.detShutter.value = True
 
-    def _OnMCPGain(self, _=None):
+    def _on_streak_mode(self, streak: bool) -> None:
+        """
+        Callback, to protect the camera if the streak mode is disabled (ie: all light on a single horizontal line)
+        """
+        if not streak:
+            self._protect_detector()
+
+    def _on_mcp_gain(self, gain: float) -> None:
         """
         Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
         only values <= current value are allowed.
         If stream is active the full range is available.
         """
         if not self._active:
-            self.detMCPGain.range = (0, self.detMCPGain.value)
+            self.detMCPGain.range = (0, gain)
+
+    def _on_center_wavelength(self, wl: float) -> None:
+        """
+        Callback, called when axisWavelength is changed, to automatically protect the camera if the
+        wavelength is set to 0nm (mirror mode), because all the light will be on a vertical line.
+        """
+        # If going from a spectrum mode to 0th order (mirror) mode, protect the streak camera
+        if wl < 10e-9:  # 0th order
+            self._protect_detector()
 
 
 class MonochromatorSettingsStream(RepetitionStream):

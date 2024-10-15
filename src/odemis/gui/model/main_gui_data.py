@@ -396,6 +396,31 @@ class MainGUIData(object):
         # Indicate whether the gui is loaded as viewer
         self.is_viewer = self.microscope is None
 
+    def protect_detectors(self):
+        """
+        Put all the potentially damageable detectors to a safe mode.
+        """
+        if self.streak_unit:
+            # Note that in the SPARC acquisition tab, pausing the TemporalSpectrumSettingsStream
+            # should have the same effect. However, in case an acquisition is running, or another
+            # tab is active, the safest option is to directly set the streak camera to a safe state.
+            try:
+                if model.hasVA(self.streak_unit, "MCPGain"):
+                    self.streak_unit.MCPGain.value = 0
+            except Exception:
+                logging.exception("Failed to reset the streak-unit MCPGain")
+
+            try:
+                if model.hasVA(self.streak_unit, "shutter"):
+                    self.streak_unit.shutter.value = True
+            except Exception:
+                logging.exception("Failed to activate the streak-unit shutter")
+
+            logging.info("Set streak-unit to a safe state")
+
+        # TODO: add more detectors here
+        # Example time-correlator shutter
+
     def stopMotion(self):
         """
         Stops immediately every axis
