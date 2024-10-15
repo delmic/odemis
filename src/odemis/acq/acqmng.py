@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
 # Everything related to high-level image acquisition on the microscope.
 
 
@@ -28,7 +27,9 @@ from collections import OrderedDict
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
 import logging
+import os
 import threading
+from typing import Set
 
 from odemis import model
 from odemis.acq import _futures
@@ -698,13 +699,22 @@ class SettingsObserver(object):
     at the end of an acquisition.
     """
 
-    def __init__(self, components):
+    def __init__(self, microscope: model.HwComponent, components: Set[model.HwComponent]):
         """
-        components (set of HwComponents): component which should be observed
+        microscope: the "root" component
+        components: components which should be observed
         """
         self._all_settings = {}
         self._components = components  # keep a reference to the components, so they are not garbage collected
         self._va_updaters = []  # keep a reference to the subscribers so they are not garbage collected
+
+        # Store very generic (and static) information about the whole microscope
+        self._all_settings["Microscope"] = {
+            "Manufacturer": ("Delmic", None),  #  None == No unit
+            "Name": (microscope.name, None),
+            "Model": (microscope.role, None),
+            "Serial number": (os.uname().nodename, None),
+        }
 
         for comp in components:
             self._all_settings[comp.name] = {}

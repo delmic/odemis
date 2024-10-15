@@ -264,7 +264,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
        Test the whole procedure (acquire compressed zstack + stitch) of acquireTiledArea function
        """
         # With fm streams
-        settings_obs = SettingsObserver([self.stage])
+        settings_obs = SettingsObserver(self.microscope, [self.stage])
         fm_fov = compute_camera_fov(self.ccd)
         # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
         area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 2)  # left, top, right, bottom
@@ -288,7 +288,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         Test the whole procedure (acquire + stitch) of acquireTiledArea function
         """
         # With fm streams
-        settings_obs = SettingsObserver([self.stage])
+        settings_obs = SettingsObserver(self.microscope, [self.stage])
 
         fm_fov = compute_camera_fov(self.ccd)
         # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
@@ -443,7 +443,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         Test the focusing methods ALWAYS
         """
-        settings_obs = SettingsObserver([self.stage])
+        settings_obs = SettingsObserver(self.microscope, [self.stage])
         self._focuser_pos = []  # List of focuser positions
         # Note: we assume it doesn't randomly changes if not explicitly moving,
         # which is normally correct on the simulator.

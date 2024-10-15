@@ -250,10 +250,11 @@ class MainGUIData(object):
             for c in components:
                 if c.role is None:
                     continue
+
+                comps_with_role.append(c)
                 try:
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
-                    comps_with_role.append(c)
                 except KeyError:
                     pass
 
@@ -348,7 +349,7 @@ class MainGUIData(object):
                 self.currentFeature = model.VigilantAttribute(None)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
-            self.settings_obs = acqmng.SettingsObserver(comps_with_role)
+            self.settings_obs = acqmng.SettingsObserver(microscope, comps_with_role)
 
             # There are two kinds of SEM (drivers): the one that are able to
             # control the magnification, and the one that cannot. The former ones
