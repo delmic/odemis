@@ -33,8 +33,7 @@ from odemis.model import DataArray
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import get_best_dtype_for_acc, transform
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
-from typing import Tuple
-
+from typing import Tuple, List, Union
 import matplotlib.colors as colors
 from matplotlib import cm
 
@@ -1289,3 +1288,62 @@ def max_intensity_projection(data: model.DataArray, axis: int = 0) -> model.Data
     md = data.metadata.copy()
     md[model.MD_DIMS] = "YX"
     return model.DataArray(proj, md)
+
+
+def get_merged_raw_image(das: model.DataArrayShadow, z: int) -> model.DataArray:
+    """
+    Returns the entire raw data of DataArrayShadow at a given zoom level
+    :param das: shadow of the raw data
+    :param z: Zoom level index
+    :return: The merged image
+    """
+    # get the full sized image rect (pixel dimensions)
+    image_rect = (0, 0, das.shape[1], das.shape[0])  # xmin, ymin, xmax, ymax
+
+    # get the zoomed rect (pixel dimensions)
+    zoom_rect = apply_zoom_on_image_coordinates(image_rect, z)
+
+    # get the tile indexes
+    x1, y1, x2, y2 = get_tile_indices(zoom_rect, das.tile_shape)
+
+    tiles = []
+    for x in range(x1, x2 + 1):
+        tiles_column = []
+        for y in range(y1, y2 + 1):
+            tile = das.getTile(x, y, z)
+            tiles_column.append(tile)
+        tiles.append(tiles_column)
+
+    return mergeTiles(tiles)
+
+
+def get_tile_indices(rect: Tuple[int], tile_shape: Tuple[int]) -> Tuple[int, int, int, int]:
+    """Calculate the tile indices for the given rect and tile shape
+    :param rect: the pixel coordinates to fetch the image
+    :param tile_shape: the shape of the tiles
+    :return: the range of indices (start_x, start_y, end_x, end_y) of the tiles"""
+
+    # check if all values are are integers
+    if not all(isinstance(val, int) for val in rect):
+        raise ValueError("All values in the rect must be integers.")
+
+    xmin, ymin, xmax, ymax = rect
+    tile_height, tile_width = tile_shape
+    start_tile_x = math.floor(xmin / tile_width)
+    start_tile_y = math.floor(ymin / tile_height)
+    end_tile_x = math.ceil(xmax / tile_width) - 1
+    end_tile_y = math.ceil(ymax / tile_height) - 1
+
+    return start_tile_x, start_tile_y, end_tile_x, end_tile_y
+
+
+def apply_zoom_on_image_coordinates(rect: List[int], z:int) -> List[int]:
+    """
+    Given a rectangle in image pixel coordinates (at zoom level == 0),
+    apply the zoom level to make the pixel size 2^z times larger.
+    This is used for pyramidal data (DataArrayShadow) to calculate tile indices at a given zoom level.
+    :param rect: (list of int) the rectangle in image pixel coordinates (xmin, ymin, xmax, ymax)
+    :param z: (int) the zoom level
+    :return: (list of int) the rectangle in image pixel coordinates at the given zoom level
+    """
+    return [px // (2 ** z) for px in rect]

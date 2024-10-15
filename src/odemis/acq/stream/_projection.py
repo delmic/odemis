@@ -28,6 +28,7 @@ import math
 import gc
 import numpy
 
+from typing import Tuple, Dict
 from odemis.acq.stream import POL_POSITIONS
 from odemis.model import TINT_FIT_TO_RGB
 
@@ -221,6 +222,15 @@ class RGBProjection(DataProjection):
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
+    def force_image_update(self):
+        """Forces the image to be recomputed entirely, and invalidates the cache for tiled images"""
+
+        if hasattr(self, "_projectedTilesCache") and hasattr(self, "_rawTilesCache"):
+            # invalidate the raw and projected tiles cache
+            self._projectedTilesCache = {}
+            self._rawTilesCache = {}
+            self._update_rect()  # re-compute the image rect
+        self._shouldUpdateImage()
 
 class ARProjection(RGBProjection):
     """
@@ -849,6 +859,7 @@ class RGBSpatialProjection(RGBProjection):
             minx, miny, maxx, maxy = full_rect
             rect_range = ((minx, miny, minx, miny), (maxx, maxy, maxx, maxy))
             self.rect = model.TupleContinuous(full_rect, rect_range)
+            self.rect.clip_on_range = True
             self.mpp.subscribe(self._onMpp)
             self.rect.subscribe(self._onRect)
             # initialize the projected tiles cache
@@ -859,6 +870,15 @@ class RGBSpatialProjection(RGBProjection):
             self._projectedTilesInvalid = True
 
         self._shouldUpdateImage()
+
+    def _update_rect(self):
+        """Update the rect VA based on the full image bounding box"""
+        full_rect = self.stream.getBoundingBox()
+        minx, miny, maxx, maxy = full_rect
+        self.rect.unsubscribe(self._onRect)
+        self.rect.range = ((minx, miny, minx, miny), (maxx, maxy, maxx, maxy))
+        self.rect.value = full_rect
+        self.rect.subscribe(self._onRect)
 
     def _onMpp(self, mpp):
         self._shouldUpdateImage()
@@ -958,7 +978,8 @@ class RGBSpatialProjection(RGBProjection):
         return (tuple containing x1, y1, x2, y2): Rect on pixel coordinates where x1 < x2 and y1 < y2
         """
         das = self.stream.raw[0]
-        md = das.metadata
+        md = das.metadata.copy()
+        img.mergeMetadata(md)  # apply the corrections
         ps = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
         pos = md.get(model.MD_POS, (0, 0))
         # Removes the center coordinates of the image. After that, rect will be centered on 0, 0
@@ -985,7 +1006,14 @@ class RGBSpatialProjection(RGBProjection):
             int(round(rect[1] / (-ps[1]) + img_shape[1] / 2)) - 1,
         )
 
-    def _getTile(self, x, y, z, prev_raw_cache, prev_proj_cache):
+    def _getTile(
+        self,
+        x: int,
+        y: int,
+        z: int,
+        prev_raw_cache: Dict[str, model.DataArray],
+        prev_proj_cache: Dict[str, model.DataArray],
+    ) -> Tuple[model.DataArray, model.DataArray]:
         """
         Get a tile from a DataArrayShadow. Uses cache.
         The cache for projected tiles and the cache for raw tiles has always the same tiles
@@ -1083,11 +1111,19 @@ class RGBSpatialProjection(RGBProjection):
         need_recompute = True
         while need_recompute:
             z = self._zFromMpp()
-            rect = self._rectWorldToPixel(self.rect.value)
-            # convert the rect coords to tile indexes
-            rect = [l / (2 ** z) for l in rect]
-            rect = [int(math.floor(l / das.tile_shape[0])) for l in rect]
-            x1, y1, x2, y2 = rect
+
+            # calculate the image pixels inside the view (rect)
+            view_rect = self._rectWorldToPixel(self.rect.value)
+
+            # convert the view rect coords to tile indexes
+            zoom_rect = img.apply_zoom_on_image_coordinates(view_rect, z)
+            # get the tile indexes
+            x1, y1, x2, y2 = img.get_tile_indices(zoom_rect, das.tile_shape)
+
+            # for debugging (cache value to check it changes)
+            rect = self.rect.value
+            rect_x, rect_y = rect[2] - rect[0], rect[3] - rect[1]
+
             # the 4 lines below avoids that lots of old tiles
             # stays in instance caches
             prev_raw_cache.update(self._rawTilesCache)
@@ -1130,6 +1166,9 @@ class RGBSpatialProjection(RGBProjection):
             except NeedRecomputeException:
                 # image changed
                 need_recompute = True
+
+        logging.debug(f"{self.stream.name.value} (rect size: {rect_x*1e3:.4f} x {rect_y*1e3:.4f} mm)")
+        logging.debug(f"read {x2-x1} x {y2-y1} tiles at zoom: {z}, mpp: {self.mpp.value} m/px")
 
         return tuple(raw_tiles), tuple(projected_tiles)
 
