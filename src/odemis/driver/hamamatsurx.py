@@ -160,8 +160,12 @@ class ReadoutCamera(model.DigitalCamera):
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
         # However, only a smaller subarea is used for operating the streak system.
         # x (lambda): horizontal, y (time): vertical
+        parent.CamParamSet("Setup", "Binning", '1 x 1')  # Force binning to 1x1 to read the maximum resolution
         full_res = self._transposeSizeToUser((int(parent.CamParamGet("Setup", "HWidth")[0]),
                                               int(parent.CamParamGet("Setup", "VWidth")[0])))
+        # We never change the offset, but it's handy to log them, in case of issue with the settings
+        logging.debug("Readout camera offset: %s, %s",
+                      parent.CamParamGet("Setup", "HOffs")[0], parent.CamParamGet("Setup", "VOffs")[0])
         self._metadata[model.MD_SENSOR_SIZE] = full_res
         self._metadata[model.MD_DIMS] = "TC"
 
@@ -175,8 +179,6 @@ class ReadoutCamera(model.DigitalCamera):
         # It's just automatically adjusted when changing the binning.
         self._resolution = int(full_res[0] / self._binning[0]), int(full_res[1] / self._binning[1])
         self.resolution = model.ResolutionVA(self._resolution, ((1, 1), full_res), setter=self._setResolution)
-        parent.CamParamSet("Setup", "HWidth", str(full_res[0]))
-        parent.CamParamSet("Setup", "VWidth", str(full_res[1]))
 
         choices_bin = set(self._transposeSizeToUser(b) for b in self._getReadoutCamBinningChoices())
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -224,6 +226,8 @@ class ReadoutCamera(model.DigitalCamera):
         if self.t_image and self.t_image.is_alive():
             self.parent.queue_img.put(None)  # Special message to request end of the thread
             self.t_image.join(5)
+
+        super().terminate()
 
     def _updateWavelengthList(self, _=None):
         """
@@ -307,16 +311,20 @@ class ReadoutCamera(model.DigitalCamera):
         So far the full field of view is always used. Therefore, resolution only changes with binning.
         :return: current resolution value
         """
-        # Note: we can keep it simple as long as we do not provide to change the sensor size yet...
-        resolution = self._shape[:2]
-        new_res = (int(resolution[0] // self._binning[0]),
-                   int(resolution[1] // self._binning[1]))  # floor division
+        # HPDTA seems to use this computation:
+        # max_res = self.resolution.range[1]
+        # new_res = (int(max_res[0] // self._binning[0]),
+        #            int(max_res[1] // self._binning[1]))  # floor division
 
-        self._resolution = new_res
+        # Just accept whatever HPDTA computed
+        res = self._transposeSizeToUser((int(self.parent.CamParamGet("Setup", "HWidth")[0]),
+                                         int(self.parent.CamParamGet("Setup", "VWidth")[0])))
+
+        self._resolution = res
         if self._spectrograph:
-            self._updateWavelengthList()  # update WavelengthList when changing binning
+            self._updateWavelengthList()  # WavelengthList has to be the same length as the resolution
 
-        return new_res
+        return res
 
     def _getCamExpTimeRange(self):
         """
@@ -487,12 +495,15 @@ class ReadoutCamera(model.DigitalCamera):
                 tab += self.parent._dataport.recv(scl_table_size)
         except socket.timeout as ex:
             raise TimeoutError(f"Did not receive a scaling table: {ex}")
-        logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
 
         table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to (read-only) array
+        # No way to read the unit prefix, so need to "guess" it
+        t_factor = self.parent._streakunit.get_time_scale_factor()
+        logging.debug("Received scaling table for time axis from %s to %s * %s s.",
+                      table[0], table[-1], t_factor)
         # The prefix unit varies depending on the time range (eg, ns, us), so need scale it, based
         # on the time range of the streak unit.
-        table = table * self.parent._streakunit.timeRangeFactor
+        table = table * t_factor
 
         return table
 
@@ -692,10 +703,6 @@ class StreakUnit(model.HwComponent):
         time_range = util.find_closest(time_range, choices)  # make sure value is in choices
         self.timeRange = model.FloatEnumerated(time_range, choices, setter=self._setTimeRange, unit="s")
 
-        # a variable that stores the current timeRange conversion for e.g. the scaling table conversion
-        # is set in the setter of the timeRange VA
-        self.timeRangeFactor = None
-
         self.MCPGain.subscribe(self._onMCPGain, init=True)
         self.timeRange.subscribe(self._onTimeRange, init=True)
         self.streakMode.subscribe(self._onStreakMode, init=True)
@@ -892,8 +899,6 @@ class StreakUnit(model.HwComponent):
             else:
                 # Convert from time to string (e.g. "1.0 ns")
                 time_range_raw = self.parent.convertTime2Unit(time_range)
-
-            self._setTimeRangeFactor(time_range)
         except Exception as ex:
             raise ValueError("Time range of %s sec is not supported (%s)." % (time_range, ex))
 
@@ -933,18 +938,25 @@ class StreakUnit(model.HwComponent):
 
         return time_range
 
-    def _setTimeRangeFactor(self, value):
+    def get_time_scale_factor(self) -> float:
         """
-        Sets the time range factor needed for conversion of RemoteEx values to sec.
-        This method maps the values and units obtained from the
-        scaling table (correlating of px positions with corresponding time values) to values only.
-        :param value: (float) conversion factor
+        Guess the factor used in the time scale metadata, to convert the values to seconds.
+        Typically, the time range is in the order of ns, us, ms. This depends on the time range.
+        :return:
         """
-        if 1e-15 <= value < 1:
-            self.timeRangeFactor = 10 ** (math.log10(abs(value)) // 3 * 3)
+        # When the synchroscan sweep unit is used, the time range is just an integer, and the time
+        # scale seems to always be in ps.
+        if self._time_ranges:
+            return 1e-12
+
+        # The values are expressed with the same prefix as the time range
+        tr = self.timeRange.value
+        if 1e-15 <= tr < 1:
+            return 10 ** ((math.log10(abs(tr)) // 3) * 3)
         else:
-            raise ValueError("Cannot calculate time range conversion factor. "
-                             "Time range of value %s not supported" % value)
+            # Let's not completely fail, and instead assume it's an index number (int), so in ps.
+            logging.warning("Unexpected time range of %s s, will guess time scale is in ps", tr)
+            return 1e-12
 
     def _time_id_to_time(self, time_id: int) -> float:
         """
@@ -1151,6 +1163,9 @@ class DelayGenerator(model.HwComponent):
                 logging.warning("Time range %s is not a key in MD for time range to "
                                 "trigger delay calibration" % time_range)
 
+# Just keep enough log messages to be able to detect the previous command error or warning
+LOG_QUEUE_MAX_SIZE = 16  # max number of log messages to keep in the queue
+
 
 class StreakCamera(model.HwComponent):
     """
@@ -1190,9 +1205,10 @@ class StreakCamera(model.HwComponent):
             raise
 
         # collect responses (error_code = 0-3,6-10) from commandport
-        self.queue_command_responses = queue.Queue(maxsize=0)
-        # save messages (error_code = 4,5) from commandport
-        self.queue_img = queue.Queue(maxsize=0)
+        self.queue_command_responses = queue.Queue(maxsize=0)  # List[str]
+        # log messages (error_code = 4,5) from commandport
+        self.queue_img = queue.Queue(maxsize=0)  # str, messages indicating a new image is ready
+        self.queue_log = []  # List[str], to hold the latest log messages (error codes 4 & 5)
 
         self.should_listen = True  # used in readCommandResponse thread
 
@@ -1205,6 +1221,13 @@ class StreakCamera(model.HwComponent):
         self.AppStart(settings_ini)  # Note: comment out for testing in order to not start a new App
 
         try:
+            # Detect when a device is not turned on, or the wrong sweep unit is selected.
+            # Typically, that leads to an error such as:
+            # "4,HExternalDevices: Communication error. Device: C16910 Parameter: Time Range"
+            for msg in self.queue_log:
+                if len(msg) > 1 and msg[0] == "4" and "communication error" in msg[1].lower():
+                    raise model.HwError(f"{msg[1]}. Check the right hardware is connected.")
+
             # If the USB dongle is missing, the software will still run, but not actually control the
             # hardware, and mostly everything will fail to run. So it's handy to check.
             license_status = self.AppLicenceGet()
@@ -1462,8 +1485,10 @@ class StreakCamera(model.HwComponent):
                         # A new image is available on the dataport => Send to the special queue
                         if error_code == 4 and rfunc == "Livemonitor":
                             self.queue_img.put(rargs)
-                        # Note: all other messages with error_code 4 or 5 are currently discarded
-                        # as not of interest for now
+                        else:
+                            self.queue_log.append(msg_splitted)
+                            if len(self.queue_log) > LOG_QUEUE_MAX_SIZE:
+                                self.queue_log.pop(0)
                     else:  # send response including error_code to queue
                         self.queue_command_responses.put(msg_splitted)
 
@@ -2373,7 +2398,7 @@ class StreakCamera(model.HwComponent):
             conversion = 10 ** (magnitude * -3)
             unit_index = int(abs(magnitude))
             value_raw = str(int(round(value * conversion))) + " " + units[unit_index]
-        elif 1 <= value <= 10:  # Note values > 10s are caught by VA as not in range of VA
+        elif 1 <= value:  # typically: values for the exposure time
             value_raw = "%.3f s" % (value,)  # only used for exposure time -> can be float
         else:
             raise ValueError("Unit conversion for value %s not supported" % value)
