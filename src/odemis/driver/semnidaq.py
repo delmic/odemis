@@ -1245,7 +1245,9 @@ class Acquirer:
             else:
                 self._do_task = None
 
+            has_event_registration = False
             if ao_buffer_n < ao_samples_n:
+                has_event_registration = True
                 # Note: it seems the event doesn't always actually gets triggered. The number of
                 # events matter. At least, if it's less than 2048, it doesn't seem to work on the
                 # 6361. Maybe also need to have it a multiple of the board buffer size?
@@ -1302,10 +1304,19 @@ class Acquirer:
                 else:  # Too fast for single frame? There is not much hope.
                     raise
             finally:
-                ao_task.stop()
-                ao_task.register_every_n_samples_transferred_from_buffer_event(0, None)
-                do_task.stop()
-                do_task.register_every_n_samples_transferred_from_buffer_event(0, None)
+                try:
+                    ao_task.stop()
+                    if has_event_registration:
+                        ao_task.register_every_n_samples_transferred_from_buffer_event(0, None)
+                except Exception:
+                    logging.exception("Failed to stop AO task")
+                try:
+                    if acq_settings.do_samples_n:
+                        do_task.stop()
+                        if has_event_registration:
+                            do_task.register_every_n_samples_transferred_from_buffer_event(0, None)
+                except Exception:
+                    logging.exception("Failed to stop DO task")
                 ai_task.stop()
                 for ci_task in ci_tasks:
                     ci_task.stop()
