@@ -2507,6 +2507,15 @@ class Scanner(model.Emitter):
             # It's OK, the task is just going to do nothing... should just not write to it.
             return
 
+        # This creates a task that expects one single uint32 "bitmask" per sample containing the state
+        # of each line per bit. So line 4 corresponds to bit 4 (from 0), and its state s
+        # (0 = low, 1 = high) is defined as "s<<4". The lines which are not specified are not modified
+        # by the bitmask (so another task can control them). There is one uint32 per port. As nidaqmx only
+        # supports writing 32 bits at once, you cannot have multiple ports together.
+        # Note that every call to this function adds a separate bitmask. So if you call it twice the
+        # task will expect two uint32 per sample.
+        # BUT if there is a single port with a single line, then the task will expect a single boolean.
+        # Note: it doesn't seem to work properly to mix single line and multiple lines in the same task.
         do_task.do_channels.add_do_chan(
             self._fast_do_names,
             line_grouping=LineGrouping.CHAN_FOR_ALL_LINES,  # data array should be of shape (samples,)
@@ -2926,23 +2935,31 @@ class Scanner(model.Emitter):
             # It's OK, the task is just going to do nothing... should just not write to it.
             return None
 
+        # If the task has a single line, then nidaqmx expects a single boolean per sample!
+        # Note that in memory, a boolean is an uint8, but only containing either 0 or 1.
+        if len(self._pixel_ttl) + len(self._line_ttl) + len(self._frame_ttl) == 1:
+            dtype = numpy.bool_  # Need to use numpy bool for correct bitwise operations (instead of "bool")
+        else:
+            dtype = numpy.uint32
+
         # Y dim is as expected, X dim is twice longer, to have the rate twice higher
         # than the dwell time, with half of the dwell time the pixel signal high
         # and half of the pixel signal the dwell time low. That's the slowest rate
         # that allows to distinguish each pixel.
         full_shape = (res[1], 2 * (res[0] + margin), dup)
-        ttl_signal = numpy.zeros(full_shape, dtype=numpy.uint32, order='C')
+
+        ttl_signal = numpy.zeros(full_shape, dtype=dtype, order='C')
 
         # Pixel: everything after the margin, is filled with alternating high/low
         for c in self._pixel_ttl:
-            pixel_bit = numpy.uint32(1 << c)
+            pixel_bit = dtype(1 << c)
             ttl_signal[:, margin * 2::2, 0] |= pixel_bit
 
         # Line: everything after the margin is the line
         # Special array view, with dup to as first dim, to tell numpy everything needs to be copied
         ttl_signal_dup = numpy.moveaxis(ttl_signal, 2, 0)
         for c in self._line_ttl:
-            line_bit = numpy.uint32(1 << c)
+            line_bit = dtype(1 << c)
             ttl_signal_dup[:, :, margin * 2:] |= line_bit
             # Special case when there is no margin: make it low as the end of the line, to get a transition
             # TODO: if there is really some hardware that rely on the precise timing for line and frame
@@ -2954,7 +2971,7 @@ class Scanner(model.Emitter):
 
         # Frame: almost everywhere high, except for the margin of the first line
         for c in self._frame_ttl:
-            frame_bit = numpy.uint32(1 << c)
+            frame_bit = dtype(1 << c)
             frame_signal = ttl_signal_dup.reshape(dup, res[1] * 2 * (res[0] + margin))
             frame_signal[:, margin * 2:] |= frame_bit
             # Special case when there is no margin: make it low as the end of the frame, to get a transition
@@ -2973,8 +2990,13 @@ class Scanner(model.Emitter):
             # It's OK, the task is just going to do nothing... should just not write to it.
             return None
 
+        if len(self._pixel_ttl) + len(self._line_ttl) + len(self._frame_ttl) == 1:
+            dtype = numpy.bool_
+        else:
+            dtype = numpy.uint32
+
         # Everything is off => all bits are 0 => 0.
-        return numpy.zeros(1, dtype=numpy.uint32)
+        return numpy.zeros(1, dtype=dtype)
 
 
 class AnalogDetector(model.Detector):
