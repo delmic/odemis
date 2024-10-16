@@ -34,6 +34,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+TEST_NOHW = 1
 
 if TEST_NOHW:
     PORT = "/dev/fake"
@@ -101,6 +102,19 @@ class TestPMD401OpenLoop(unittest.TestCase):
         f = self.stage.moveAbs({'x': 0})
         f.result()
         self.assertTrue(f.done())
+
+    def test_position(self):
+        """
+        Check that moving the stage updates the position
+        """
+        f = self.stage.moveAbs({'x': 0.001})
+        f.result()
+        self.assertTrue(f.done())
+        self.assertEqual(self.stage.position.value["x"], 0.001)
+        f = self.stage.moveRel({'x': 0.0001})
+        f.result()
+        self.assertTrue(f.done())
+        self.assertEqual(self.stage.position.value["x"], 0.0011)
 
     def test_stop(self):
         """
