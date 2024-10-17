@@ -3571,7 +3571,7 @@ class SampleStage(model.Actuator):
         model.Actuator.__init__(self, name, role, dependencies=dependencies, 
                                 axes=copy.deepcopy(self._dependency.axes), **kwargs)
 
-
+        # posture manager, to convert the positions
         self.pm: MicroscopePostureManager = MicroscopePostureManager(model.getMicroscope())
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
@@ -3580,23 +3580,20 @@ class SampleStage(model.Actuator):
         # it's just a conversion from the dep's position
         self._dependency.position.subscribe(self._updatePosition, init=True)
 
-        # if model.hasVA(self._dependency, "referenced"):
-        #     # Technically, in case there is a rotation the axes are not matching the
-        #     # dep's ones... however, it's still useful, and if both axes are referenced
-        #     # it means it's all referenced. So we keep with the "simple" mapping
-        #     # which doesn't take the rotation into account.
-        #     self.referenced = model.VigilantAttribute({}, readonly=True)
-        #     self._dependency.referenced.subscribe(self._updateReferenced, init=True)
+        if model.hasVA(self._dependency, "referenced"):
+            self.referenced = model.VigilantAttribute({}, readonly=True)
+            self._dependency.referenced.subscribe(self._updateReferenced, init=True)
 
-        # if model.hasVA(self._dependency, "speed"):
-        #     speed_axes = set(self._dependency.speed.value.keys())
-        #     if set(axes) <= speed_axes:
-        #         # TODO: also support write if the dependency supports write
-        #         self.speed = model.VigilantAttribute({}, readonly=True)
-        #         self._dependency.speed.subscribe(self._updateSpeed, init=True)
-        #     else:
-        #         logging.info("Axes %s of dependency are missing from .speed, so not providing it",
-        #                      set(axes) - speed_axes)
+        if model.hasVA(self._dependency, "speed"):
+            speed_axes = set(self._dependency.speed.value.keys())
+            if set(self.axes) <= speed_axes:
+                self.speed = model.VigilantAttribute({}, readonly=True)
+                self._dependency.speed.subscribe(self._updateSpeed, init=True)
+            else:
+                logging.info("Axes %s of dependency are missing from .speed, so not providing it",
+                             set(self.axes) - speed_axes)
+
+        # TODO: correctly modify the reference, speed and axes range attributes
 
     # def _updateAxesRange(self):
     #     """
@@ -3626,32 +3623,22 @@ class SampleStage(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._set_value(pos, force_write=True)
 
-    # def _updateSpeed(self, dep_speed):
-    #     """
-    #     update the speed VA based on the dependency's speed
-    #     """
-    #     # Convert the same way as position, but without origin
-    #     dep_vec_speed = [dep_speed[self._axes_dep["x"]],
-    #                      dep_speed[self._axes_dep["y"]]]
-    #     vec_speed = self._convertPosFromdep(dep_vec_speed, absolute=False)
-    #     self.speed._set_value({"x": abs(vec_speed[0]), "y": abs(vec_speed[1])}, force_write=True)
+    def _updateSpeed(self, dep_speed):
+        """
+        update the speed VA based on the dependency's speed
+        """
+        # stage_speed = self.pm.to_sample_stage_from_stage_movement(dep_speed)
+        self.speed._set_value(dep_speed, force_write=True)
 
-    # def updateMetadata(self, md):
-    #     self._metadata.update(md)
-    #     self._updateConversion()
-    #     self._updatePosition(self._dependency.position.value)
-    #     if hasattr(self, "speed"):
-    #         self._updateSpeed(self._dependency.speed.value)
+    def _updateReferenced(self, dep_refd):
+        """
+        update the referenced VA
+        """
+        refd = {
+            ax: dep_refd[ad] for ax, ad in self.axes.items() if ad in dep_refd
+        }
 
-    # def _updateReferenced(self, dep_refd):
-    #     """
-    #     update the referenced VA
-    #     """
-    #     refd = {
-    #         ax: dep_refd[ad] for ax, ad in self._axes_dep.items() if ad in dep_refd
-    #     }
-
-    #     self.referenced._set_value(refd, force_write=True)
+        self.referenced._set_value(refd, force_write=True)
 
     @isasync
     def moveRel(self, shift: Dict[str, float], **kwargs):
