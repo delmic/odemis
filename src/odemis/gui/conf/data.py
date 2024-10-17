@@ -527,11 +527,6 @@ HW_SETTINGS_CONFIG = {
             "label": "Number of channels",
             "control_type": odemis.gui.CONTROL_COMBO,
         },
-        "spp": {
-            "label": "Samples per pixel",
-            "control_type": odemis.gui.CONTROL_RADIO,
-            "tooltip": "Number of samples per pixel",
-        },
         # For the "independent" detector type (otherwise, these VA's don't exist, so that has no effect)
         "resolution": {
             # It should not be changed directly, but via the emitter
