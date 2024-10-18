@@ -90,8 +90,11 @@ class CryoChamberTab(Tab):
         self.txt_projectpath = self.panel.txt_projectpath
         self.btn_load_project.Hide()
 
-        # Create new project directory on starting the GUI
-        self._create_new_dir()
+        # flag to indicate whether the user has successfully created or
+        # loaded a project when first opening the gui. other actions are blocked,
+        # via a dialog, until a project is created or loaded.
+        self._is_initial_project_ready: bool = False
+
         self._cancel = False
 
         self._current_position = UNKNOWN  # position of the sample (regularly updated)
@@ -255,20 +258,22 @@ class CryoChamberTab(Tab):
         except AttributeError:  # No overview view
             pass
 
-    def _on_change_project_folder(self, evt):
+    def _on_change_project_folder(self, evt) -> bool:
         """
         Shows a dialog to change the path and name of the project directory.
-        returns nothing, but updates .conf and project path text control
+        Updates .conf and project path text control when a new project is created.
+        :return: True if the project was successfully created, False otherwise
         """
-        # TODO: do not warn if there is no data (eg, at init)
-        box = wx.MessageDialog(self.main_frame,
-                               "This will clear the current project data from Odemis",
-                               caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        # do not warn if there is no data (eg, at init)
+        if self._is_initial_project_ready:
+            box = wx.MessageDialog(self.main_frame,
+                                "This will clear the current project data from Odemis",
+                                caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
 
-        box.SetYesNoLabels("&Reset Project", "&Cancel")
-        ans = box.ShowModal()  # Waits for the window to be closed
-        if ans == wx.ID_NO:
-            return
+            box.SetYesNoLabels("&Reset Project", "&Cancel")
+            ans = box.ShowModal()  # Waits for the window to be closed
+            if ans == wx.ID_NO:
+                return False
 
         prev_dir = self.conf.pj_last_path
 
@@ -277,7 +282,7 @@ class CryoChamberTab(Tab):
         np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
         new_dir = ShowChamberFileDialog(self.panel, np)
         if new_dir is None: # Cancelled
-            return
+            return False
 
         logging.debug("Selected project folder %s", new_dir)
 
@@ -295,31 +300,35 @@ class CryoChamberTab(Tab):
                                    style=wx.OK | wx.ICON_WARNING)
             dlg.ShowModal()
             dlg.Destroy()
-            return
+            return False
 
-        # Reset project, clear the data
-        self._reset_project_data()
+        # only reset and delete data if not initial setup
+        if self._is_initial_project_ready:
+            # Reset project, clear the data
+            self._reset_project_data()
 
-        # If the previous project is empty, it means the user never used it.
-        # (for instance, this happens just after starting the GUI and the user
-        # doesn't like the automatically chosen name)
-        # => Just automatically delete previous folder if empty.
-        try:
-            if os.path.isdir(prev_dir) and not os.listdir(prev_dir):
-                logging.debug("Deleting empty project folder %s", prev_dir)
-                os.rmdir(prev_dir)
-        except Exception:
-            # It might be just due to some access rights, let's not worry too much
-            logging.exception("Failed to delete previous project folder %s", prev_dir)
+            # If the previous project is empty, it means the user never used it.
+            # (for instance, this happens just after starting the GUI and the user
+            # doesn't like the automatically chosen name)
+            # => Just automatically delete previous folder if empty.
+            try:
+                if os.path.isdir(prev_dir) and not os.listdir(prev_dir):
+                    logging.debug("Deleting empty project folder %s", prev_dir)
+                    os.rmdir(prev_dir)
+            except Exception:
+                # It might be just due to some access rights, let's not worry too much
+                logging.exception("Failed to delete previous project folder %s", prev_dir)
 
-        # Handle weird cases where the previous directory would point to the same
-        # folder as the new folder, either with completely the same path, or with
-        # different paths (eg, due to symbolic links).
-        if not os.path.isdir(new_dir):
-            logging.warning("Recreating folder %s which was gone", new_dir)
-            os.mkdir(new_dir)
+            # Handle weird cases where the previous directory would point to the same
+            # folder as the new folder, either with completely the same path, or with
+            # different paths (eg, due to symbolic links).
+            if not os.path.isdir(new_dir):
+                logging.warning("Recreating folder %s which was gone", new_dir)
+                os.mkdir(new_dir)
 
         self._change_project_conf(new_dir)
+
+        return True
 
     def _change_project_conf(self, new_dir):
         """
@@ -353,6 +362,13 @@ class CryoChamberTab(Tab):
 
         self._change_project_conf(np)
 
+    def _create_project(self) -> bool:
+        """
+        Create a project based on the user selected directory and name
+        :return: True if the project was successfully created, False otherwise
+        """
+        return self._on_change_project_folder(None)
+
     def _reset_project_data(self):
         try:
             streams = self._get_overview_view().getStreams()
@@ -368,27 +384,32 @@ class CryoChamberTab(Tab):
         except LookupError:
             logging.warning("Unable to find localization tab.")
 
-    def _load_project_data(self, evt: wx.Event):
+    def _load_project_data(self, evt: wx.Event) -> bool:
+        """ Load a project based on the user selected directory.
+        :return: True if the project was successfully loaded, False otherwise
+        """
 
-        # TODO: do not warn if there is no data (eg, at init)
-        box = wx.MessageDialog(self.main_frame,
-                               "This will clear the current project data from Odemis",
-                               caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        # do not warn if there is no data (eg, at init)
+        if self._is_initial_project_ready:
+            box = wx.MessageDialog(self.main_frame,
+                                "This will clear the current project data from Odemis",
+                                caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
 
-        box.SetYesNoLabels("&Reset Project", "&Cancel")
-        ans = box.ShowModal()  # Waits for the window to be closed
-        if ans == wx.ID_NO:
-            return
+            box.SetYesNoLabels("&Reset Project", "&Cancel")
+            ans = box.ShowModal()  # Waits for the window to be closed
+            if ans == wx.ID_NO:
+                return False
 
         # select a project directory to load
         proj_path = LoadProjectFileDialog(self.panel, self.conf.pj_last_path)
         if proj_path is None: # Cancelled
-            return
+            return False
 
         logging.debug("Selected project folder %s", proj_path)
 
         # Reset project, clear the data
-        self._reset_project_data()
+        if self._is_initial_project_ready:
+            self._reset_project_data()
 
         # dont delete empty directories for now
         # If the previous project is empty, it means the user never used it.
@@ -409,6 +430,8 @@ class CryoChamberTab(Tab):
         # load project data
         proj_data = load_project_data(proj_path)
 
+        # no data found in the project directory, not necessarily an error as the
+        # user may create a project, but not have any data yet. so we just inform the user
         if len(proj_data["features"]) == 0 and len(proj_data["overviews"]) == 0:
             logging.warning("No data found in the project directory.")
             box = wx.MessageDialog(self.main_frame,
@@ -417,7 +440,7 @@ class CryoChamberTab(Tab):
 
             box.SetOKLabel("&OK")
             ans = box.ShowModal()  # Waits for the window to be closed
-            return
+            return True
 
         # follow the order of the data loading in the localization tab
         # load overview streams
@@ -441,7 +464,7 @@ class CryoChamberTab(Tab):
         logging.debug(f"{len(proj_data['overviews'])} overviews loaded.")
         logging.debug(f"{len(localization_tab.tab_data_model.streams.value)} streams loaded.")
 
-        return
+        return True
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):
@@ -909,6 +932,37 @@ class CryoChamberTab(Tab):
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
+
+        # the first time the tab is shown, ask the user to create or load a project
+        if self.IsShown() and not self._is_initial_project_ready:
+
+            # stay in the loop until the user successfully creates or loads a project
+            while True:
+
+                # Ask the user to create or load a project
+                box = wx.MessageDialog(
+                    self.main_frame,
+                    message="Create or Load a Meteor Project?",
+                    caption="Meteor",
+                    style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
+                )
+
+                box.SetYesNoLabels("&Load Project", "&Create Project",)
+                ans = box.ShowModal()  # Waits for the window to be closed
+
+                if ans == wx.ID_NO:
+                    logging.debug("creating project")
+                    ret = self._create_project()
+                elif ans == wx.ID_YES:
+                    logging.debug("loading project")
+                    ret = self._load_project_data(None)
+
+                # break if the user successfully created or loaded a project
+                if ret:
+                    break
+
+            # Set the project as ready
+            self._is_initial_project_ready = True
 
     def query_terminate(self):
         """
