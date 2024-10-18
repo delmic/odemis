@@ -65,7 +65,6 @@ ST_CANCELED = "CANCELED"
 # TODO: remove and replace once the licenced version is released
 ODEMIS_ADVANCED_FLAG: bool = False
 
-
 class CryoAcquiController(object):
     """
     Controller to handle the acquisitions of the cryo-secom
@@ -157,6 +156,7 @@ class CryoAcquiController(object):
 
         # advanced features toggle
         self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -177,6 +177,7 @@ class CryoAcquiController(object):
         self._panel.btn_acquire_features.Enable(not is_acquiring)
         self._panel.z_stack_chkbox.Enable(not is_acquiring)
         self._panel.streams_chk_list.Enable(not is_acquiring)
+        self._panel.chk_use_autofocus_acquire_features.Enable(not is_acquiring)
         self._panel.param_Zmin.Enable(not is_acquiring and self._zStackActive.value)
         self._panel.param_Zmax.Enable(not is_acquiring and self._zStackActive.value)
         self._panel.param_Zstep.Enable(not is_acquiring and self._zStackActive.value)
@@ -271,10 +272,14 @@ class CryoAcquiController(object):
         # the acquisition is started
         self._tab_data.main.is_acquiring.value = True
 
-        zlevels: dict = {}
+        zparams: dict = {}
         if self._zStackActive:
-            self._on_zstack()  # update the zlevels with the current focus position
-            zlevels = self._zlevels
+            self._on_zstack()
+            # Note: we use the zparams to calculate the zlevels for each feature individually,
+            # rather than using the same zlevels for all features.
+            zparams = {"zmin": self._tab_data.zMin.value,
+                       "zmax": self._tab_data.zMax.value,
+                       "zstep": self._tab_data.zStep.value}
 
         filename = self._filename.value
         stage = self._tab_data.main.stage
@@ -288,9 +293,10 @@ class CryoAcquiController(object):
             stage=stage,
             focus=focus,
             streams=self._acquiStreams.value,
-            zlevels=zlevels,
+            zparams=zparams,
             filename=filename,
             settings_obs=self._tab_data.main.settings_obs,
+            use_autofocus=self._panel.chk_use_autofocus_acquire_features.IsChecked(),
         )
 
         # link the acquisition gauge to the acquisition future
@@ -645,4 +651,17 @@ class CryoAcquiController(object):
         """ Called when the features are changed.
         To enable/disable the acquire features button.
         """
-        self._panel.btn_acquire_features.Enable(bool(features))
+        ENABLED_TOOLTIP = "Acquire at each feature using the current imaging settings."
+        ENABLED_AUTOFOCUS_TOOLTIP = "Automatically focus at each feature before acquiring."
+        DISABLED_TOOLTIP = "Acquire features is disabled because no features are selected."
+
+        if features:
+            self._panel.btn_acquire_features.Enable()
+            self._panel.btn_acquire_features.SetToolTip(ENABLED_TOOLTIP)
+            self._panel.chk_use_autofocus_acquire_features.Enable()
+            self._panel.chk_use_autofocus_acquire_features.SetToolTip(ENABLED_AUTOFOCUS_TOOLTIP)
+        else:
+            self._panel.btn_acquire_features.Disable()
+            self._panel.btn_acquire_features.SetToolTip(DISABLED_TOOLTIP)
+            self._panel.chk_use_autofocus_acquire_features.Disable()
+            self._panel.chk_use_autofocus_acquire_features.SetToolTip(DISABLED_TOOLTIP)
