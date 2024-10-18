@@ -236,3 +236,42 @@ def update_counter(old_count):
     n_digits = len(old_count)
     new_count = str(c).zfill(n_digits)  # add as many leading zeros as specified
     return new_count
+
+
+def make_compliant_string(input_string, allowed_pattern=r'[^A-Za-z0-9/_()\-\.]'):
+    """
+    Removes any characters from the input string that do not match the allowed
+    pattern. By default, the allowed pattern includes characters in the set
+    (A-Z, a-z, 0-9, /, _, (, ), -, .). The function ensures that the returned
+    string contains only the allowed characters.
+
+    :param input_string: (str) The string to be processed.
+    :param allowed_pattern (str or re.Pattern): A regular expression pattern
+                                                that defines the set of allowed
+                                                characters.
+
+    :returns: (str) A new string that contains only the allowed characters as per
+                    the provided pattern.
+    :raises: (ValueError or TypeError) If the provided pattern is an invalid regular
+                                       expression or is of invalid type.
+
+    Example:
+        >>> make_compliant_string("Invalid@String! With#Extra*Chars$")
+        'InvalidStringWithExtraChars'
+    """
+    # Try to compile the pattern if it's a string
+    if isinstance(allowed_pattern, str):
+        try:
+            allowed_pattern = re.compile(allowed_pattern)
+        except re.error as e:
+            raise ValueError(f"Invalid regular expression pattern: {e}")
+
+    # Ensure that allowed_pattern is now a valid re.Pattern
+    if not isinstance(allowed_pattern, re.Pattern):
+        raise TypeError("allowed_pattern must be a valid regular expression pattern"
+                        " or compiled `re.Pattern` object.")
+
+    # Replace all characters not matching the allowed pattern with an empty string
+    compliant_string = allowed_pattern.sub('', input_string)
+
+    return compliant_string

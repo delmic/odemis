@@ -26,14 +26,16 @@ Content:
 """
 import fnmatch
 import logging
-from odemis.gui import img
-import odemis.gui
-from odemis.util.dataio import splitext
 import os
+
 import wx
 import wx.lib.newevent
 
-from .buttons import ImageTextButton, ImageButton
+import odemis.gui
+from odemis.gui import img
+from odemis.util.dataio import splitext
+
+from .buttons import ImageButton, ImageTextButton
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
@@ -55,17 +57,24 @@ class FileBrowser(wx.Panel):
                  name='fileBrowser',
                  file_path=None,
                  default_dir=None,
+                 btn_label="change..."
         ):
         """
-        clear_btn (bool): whether to show a button to remove the file selection
-        clear_label (str): text to show when there is no file selected
-        wildcard (None or str): the list of wildcard to pass to file dialog.
-          If it's None, it will use the default, which is to show all files (*.*).
+        clear_btn (bool): Whether to show a button to clear/remove the file selection.
+        clear_label (str): The text to show when no file is selected.
+        dialog_title (str): The title of the file dialog window.
+        wildcard (str or None): The list of file types/extensions to display in the dialog.
+            If None, it defaults to showing all files (*.*).
+        name (str): The name of the control (default is 'fileBrowser').
+        file_path (str or None): The initial file path to display or load (default is None).
+        default_dir (str or None): The default directory that the file dialog will open (default is None).
+        btn_label (str): The label of the button which opens the file dialog window (default is 'change..').
         """
 
         style |= wx.TAB_TRAVERSAL
 
         self.file_path = file_path
+        self.btn_label = btn_label
         self.default_dir = os.path.abspath(default_dir or os.path.dirname(file_path) or
                                            os.path.curdir)
         if not os.path.dirname(self.file_path):
@@ -113,7 +122,7 @@ class FileBrowser(wx.Panel):
             self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
             box.Add(self._btn_clear, 0, wx.LEFT, 10)
 
-        self.btn_ctrl = ImageTextButton(self, label="change...", height=16, style=wx.ALIGN_CENTER)
+        self.btn_ctrl = ImageTextButton(self, label=self.btn_label, height=16, style=wx.ALIGN_CENTER)
         self.btn_ctrl.Bind(wx.EVT_BUTTON, self._on_browse)
 
         box.Add(self.btn_ctrl, 0, wx.LEFT, 5)

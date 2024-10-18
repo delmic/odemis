@@ -27,22 +27,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import ast
 import logging
+
+import wx
+import wx.adv
+import wx.xrc as xrc
+
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.foldpanelbar as fpb
-import odemis.gui.comp.viewport as vport
-import odemis.gui.comp.slider as slide
-from odemis.gui.comp.fastem import (FastEMCalibrationPanelHeader, FastEMOverviewSelectionPanel,
-                                    FastEMProjectList)
-from odemis.gui.comp.stream_bar import StreamBar
-from odemis.gui.comp.stream_panel import StreamPanel
 import odemis.gui.comp.grid as grid
+import odemis.gui.comp.slider as slide
 import odemis.gui.comp.text as txt
+import odemis.gui.comp.viewport as vport
 import odemis.gui.cont.tools as tools
 from odemis.gui import img
-import wx
-import wx.xrc as xrc
-import wx.adv
-
+from odemis.gui.comp.fastem_project_list_panel import FastEMProjectList
+from odemis.gui.comp.stream_bar import StreamBar
+from odemis.gui.comp.stream_panel import StreamPanel
 
 HANDLER_CLASS_LIST = []
 
@@ -224,7 +224,7 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
-class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
+class FastEMProjectListXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
@@ -240,71 +240,14 @@ class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
         if self.GetClass() == 'FastEMProjectList':
             parent = self.GetParentAsWindow()
             w = FastEMProjectList(parent,
-                                       self.GetID(),
-                                       self.GetPosition(),
-                                       self.GetSize(),
-                                       self.GetStyle(),
-                                       add_button=self.GetBool('add_button'))
-            self.SetupWindow(w)
-            # 'Dirty' fix for the hard coded 'add stream' child button
-            if self.GetBool('add_button'):
-                w.btn_add_project.SetBackgroundColour(w.GetBackgroundColour())
-            parent.add_item(w)
-            return w
-HANDLER_CLASS_LIST.append(FastEMProjectBarXmlHandler)
-
-
-class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
-    def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
-        self.AddWindowStyles()
-        # Custom styles
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, 'FastEMCalibrationPanelHeader')
-
-    # Process XML parameters and create the object
-    def DoCreateResource(self):
-
-        if self.GetClass() == 'FastEMCalibrationPanelHeader':
-            parent = self.GetParentAsWindow()
-            w = FastEMCalibrationPanelHeader(parent,
-                                                  self.GetID(),
-                                                  self.GetPosition(),
-                                                  self.GetSize(),
-                                                  self.GetStyle(),
-                                                  add_button=self.GetBool('add_button'))
-            self.SetupWindow(w)
-            parent.add_item(w)
-            return w
-HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
-
-
-class FastEMSelectionPanelXmlHandler(xrc.XmlResourceHandler):
-    def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
-        self.AddWindowStyles()
-        # Custom styles
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, 'FastEMSelectionPanel')
-
-    # Process XML parameters and create the object
-    def DoCreateResource(self):
-
-        if self.GetClass() == 'FastEMSelectionPanel':
-            parent = self.GetParentAsWindow()
-            w = FastEMOverviewSelectionPanel(parent,
-                                                  self.GetID(),
-                                                  self.GetPosition(),
-                                                  self.GetSize(),
-                                                  self.GetStyle())
+                                  self.GetID(),
+                                  self.GetPosition(),
+                                  self.GetSize(),
+                                  self.GetStyle())
             self.SetupWindow(w)
             #parent.add_item(w)
             return w
-HANDLER_CLASS_LIST.append(FastEMSelectionPanelXmlHandler)
+HANDLER_CLASS_LIST.append(FastEMProjectListXmlHandler)
 
 
 class _ImageButtonHandler(xrc.XmlResourceHandler):

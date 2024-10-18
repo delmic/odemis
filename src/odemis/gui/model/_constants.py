@@ -37,6 +37,7 @@ VIEW_LAYOUT_ONE = 0  # one big view
 VIEW_LAYOUT_22 = 1  # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2  # Fullscreen view (not yet supported)
 VIEW_LAYOUT_VERTICAL = 3  # 2x1 layout
+VIEW_LAYOUT_DYNAMIC = 4  # mxn layout
 
 # The different tools (selectable in the tool bar). First, the "mode" ones:
 TOOL_NONE = 0  # No tool (normal)
@@ -56,6 +57,9 @@ TOOL_FEATURE = 12  # Create new feature or move selected one
 TOOL_RECTANGLE = 13  # Create new rectangle or move selected one
 TOOL_ELLIPSE = 14  # Create new ellipse or move selected one
 TOOL_POLYGON = 15  # Create new polygon or move selected one
+TOOL_VIEW_LAYOUT = 16  # Set the view layout
+TOOL_CURSOR = 17  # Equivalent to TOOL_NONE, if this tool is selected the tool VA is set to TOOL_NONE
+TOOL_EXPAND = 18  # Expand the view layout
 
 ALL_TOOL_MODES = {
     TOOL_NONE,
@@ -87,3 +91,8 @@ TOOL_AUTO_FOCUS_OFF = False
 Z_ALIGN = "Z alignment"
 SEM_ALIGN = "SEM alignment"
 FLM_ALIGN = "FLM alignment"
+
+# Used for fastem
+CALIBRATION_1 = "Calibration 1"
+CALIBRATION_2 = "Calibration 2"
+CALIBRATION_3 = "Calibration 3"

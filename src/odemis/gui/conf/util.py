@@ -24,25 +24,31 @@ This module contains functions that help in the generation of dynamic configurat
 
 """
 
-from builtins import str
-from collections import OrderedDict
-from collections.abc import Iterable, Mapping
 import logging
 import math
 import numbers
-from odemis import util
-import odemis.gui
-from odemis.gui.comp.file import EVT_FILE_SELECT
-from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
-from odemis.util import fluo
-from odemis.util.conversion import reproduce_typed_value
-from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
-    si_scale_val, value_to_str
 import re
+from builtins import str
+from collections import OrderedDict
+from collections.abc import Iterable, Mapping
+
 import wx
 
+import odemis.gui
 import odemis.gui.conf as guiconf
 import odemis.util.units as utun
+from odemis import util
+from odemis.gui.comp.file import EVT_FILE_SELECT
+from odemis.gui.util.widgets import AxisConnector, VigilantAttributeConnector
+from odemis.util import fluo
+from odemis.util.conversion import reproduce_typed_value
+from odemis.util.units import (
+    decompose_si_prefix,
+    readable_str,
+    si_scale_val,
+    to_string_si_prefix,
+    value_to_str,
+)
 
 MIN_RES = 128 * 128  # px, minimum amount of pixels acceptable in an acquisition
 
@@ -733,8 +739,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         clearlabel = conf.get('clearlabel')  # Text to show when no filename (+ allow to clear the filename)
         wildcard = conf.get('wildcard')  # File extension wildcard string
         lbl_ctrl, value_ctrl = container.add_file_button(label_text,
-                                                         val,
-                                                         clearlabel,
+                                                         value=val,
+                                                         clearlabel=clearlabel,
                                                          wildcard=wildcard,
                                                          dialog_style=dialog_style)
 

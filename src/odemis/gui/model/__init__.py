@@ -31,7 +31,6 @@ from .tab_gui_data import (AcquisitionWindowData, ActuatorGUIData,
                            CryoCorrelationGUIData, CryoGUIData,
                            CryoLocalizationGUIData, EnzelAlignGUIData,
                            FastEMAcquisitionGUIData, FastEMMainTabGUIData,
-                           FastEMOverviewGUIData,FastEMProject,
-                           LiveViewGUIData, MicroscopyGUIData,
+                           FastEMSetupGUIData, LiveViewGUIData, MicroscopyGUIData,
                            SecomAlignGUIData, Sparc2AlignGUIData,
                            SparcAcquisitionGUIData, SparcAlignGUIData)

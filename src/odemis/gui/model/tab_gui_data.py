@@ -20,29 +20,50 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from abc import ABCMeta
 import logging
 import math
+from abc import ABCMeta
 from typing import Tuple
 
-from odemis.acq.feature import CryoFeature
-from odemis.gui import conf, FG_COLOUR_WARNING
-from odemis.gui.model._constants import (TOOL_NONE, VIEW_LAYOUT_ONE, VIEW_LAYOUT_22,
-                                         VIEW_LAYOUT_FULLSCREEN, TOOL_RULER, TOOL_ROA,
-                                         TOOL_SPOT, STATE_OFF, STATE_ON, STATE_DISABLED,
-                                         TOOL_FEATURE, TOOL_RO_ANCHOR, TOOL_POINT, TOOL_LINE,
-                                         TOOL_LABEL, TOOL_DICHO, VIEW_LAYOUT_VERTICAL,
-                                         Z_ALIGN, SEM_ALIGN, FLM_ALIGN)
-from odemis.util.filename import create_filename, make_unique_name
-from odemis import model
-from odemis.acq import fastem
-from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import (CALIBRATION_1, CALIBRATION_2, CALIBRATION_3,
-                               FastEMCalibration)
 import odemis.acq.stream as acqstream
+from odemis import model
+from odemis.acq.feature import CryoFeature
+from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
-from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
-                          StringEnumerated, MD_CALIB)
+from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
+from odemis.gui.model._constants import (
+    FLM_ALIGN,
+    SEM_ALIGN,
+    STATE_DISABLED,
+    STATE_OFF,
+    STATE_ON,
+    TOOL_DICHO,
+    TOOL_FEATURE,
+    TOOL_LABEL,
+    TOOL_LINE,
+    TOOL_NONE,
+    TOOL_POINT,
+    TOOL_RO_ANCHOR,
+    TOOL_ROA,
+    TOOL_RULER,
+    TOOL_SPOT,
+    VIEW_LAYOUT_22,
+    VIEW_LAYOUT_DYNAMIC,
+    VIEW_LAYOUT_FULLSCREEN,
+    VIEW_LAYOUT_ONE,
+    VIEW_LAYOUT_VERTICAL,
+    Z_ALIGN,
+)
+from odemis.model import (
+    MD_CALIB,
+    BooleanVA,
+    FloatContinuous,
+    IntEnumerated,
+    StringEnumerated,
+    StringVA,
+    VigilantAttribute,
+)
+from odemis.util.filename import create_filename, make_unique_name
 
 
 class MicroscopyGUIData(metaclass=ABCMeta):
@@ -124,6 +145,9 @@ class MicroscopyGUIData(metaclass=ABCMeta):
         # The `views` list basically keeps track of the relevant references.
         self.views = model.ListVA()
 
+        # Available viewports
+        self.viewports = model.ListVA()
+
         # Current tool selected (from the toolbar, cf cont.tools)
         # Child can update the .choices with extra TOOL_*
         self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
@@ -132,7 +156,7 @@ class MicroscopyGUIData(metaclass=ABCMeta):
         # See class docstring for more info.
         self.focussedView = VigilantAttribute(None)
 
-        layouts = {VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN}
+        layouts = {VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN, VIEW_LAYOUT_DYNAMIC}
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
         # The subset of views taken from `views` that *can* actually displayed,
@@ -937,100 +961,21 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
     def __init__(self, main, panel):
         assert main.microscope is not None
         super(FastEMAcquisitionGUIData, self).__init__(main)
-        self.calibrations = {}  # dict, name --> FastEMCalibration
-
-        if main.microscope.name.lower().endswith("sim"):
-            calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                                    Calibrations.IMAGE_TRANSLATION_PREALIGN]
-            calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                                    Calibrations.DARK_OFFSET]
-            calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                                    Calibrations.IMAGE_TRANSLATION_PREALIGN]
-        else:
-            calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                                    Calibrations.IMAGE_ROTATION_PREALIGN,
-                                    Calibrations.SCAN_ROTATION_PREALIGN,
-                                    Calibrations.DESCAN_GAIN_STATIC,
-                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                                    Calibrations.IMAGE_ROTATION_FINAL,
-                                    Calibrations.IMAGE_TRANSLATION_FINAL]
-            calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                                    Calibrations.DARK_OFFSET,
-                                    Calibrations.DIGITAL_GAIN]
-            calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                                    Calibrations.SCAN_ROTATION_FINAL,
-                                    Calibrations.CELL_TRANSLATION]
-
-        for name in [CALIBRATION_1, CALIBRATION_2, CALIBRATION_3]:
-            calibration = FastEMCalibration(name, panel)
-
-            if name == CALIBRATION_1:
-                calibration.calibrations.value = calib_1_calibrations
-                calibration.panel.GetParent().GetParent() \
-                    .SetToolTip("Optical path and pattern calibrations: Calibrating and "
-                                "focusing the optical path and the multiprobe pattern. "
-                                "Calibrating the scanning orientation and distance.")
-            elif name == CALIBRATION_2:
-                calibration.calibrations.value = calib_2_calibrations
-                calibration.panel.GetParent().GetParent() \
-                    .SetToolTip("Dark offset and digital gain calibration (orange square): "
-                                "Correcting between cell images for differences in "
-                                "background noise and homogenizing across amplification "
-                                "differences.")
-                calibration.panel.SetToolTip("Select to place region of calibration (ROC) on empty "
-                                             "scintillator.")
-            elif name == CALIBRATION_3:
-                calibration.calibrations.value = calib_3_calibrations
-                calibration.panel.GetParent().GetParent() \
-                    .SetToolTip("Cell image calibration (green square): Fine-tuning the cell "
-                                "image size and the cell image orientation in respect to the "
-                                "scanning direction. Stitching of cell images into a single "
-                                "field image.")
-                calibration.panel.SetToolTip("Select to place region of calibration (ROC) on "
-                                             "tissue.")
-
-            # Assign FastEMROC only for calibration 2 and 3
-            if name in (CALIBRATION_2, CALIBRATION_3):
-                if name == CALIBRATION_2:
-                    colour = FG_COLOUR_WARNING
-                elif name == CALIBRATION_3:
-                    colour = "#00ff00"  # green
-                for num in main.scintillator_positions:
-                    calibration.regions.value[num] = fastem.FastEMROC(str(num),
-                                                                      acqstream.UNDEFINED_ROI,
-                                                                      colour=colour)
-
-            self.calibrations[name] = calibration
-
-        self.projects = model.ListVA([])  # list of FastEMProject
 
 
-class FastEMOverviewGUIData(MicroscopyGUIData):
+class FastEMSetupGUIData(MicroscopyGUIData):
     """
     GUI model for the FastEM overview tab.
     """
 
     def __init__(self, main):
         assert main.microscope is not None
-        super(FastEMOverviewGUIData, self).__init__(main)
-
-        self.selected_scintillators = model.ListVA([])  # set of ints, overview images to be acquired
+        super(FastEMSetupGUIData, self).__init__(main)
 
         # Indicates the calibration state; True: is calibrated successfully; False: not yet calibrated
-        self.is_calib_done = model.BooleanVA(False)
+        self.is_optical_autofocus_done = model.BooleanVA(False)
         # Indicates the microscope state; True: is currently calibrating; False: not in calibration mode
         self.is_calibrating = model.BooleanVA(False)
-
-
-class FastEMProject(object):
-    """ Representation of a FastEM project. """
-
-    def __init__(self, name):
-        self.name = model.StringVA(name)
-        self.roas = model.ListVA([])  # list of acq.fastem.FastEMROA
 
 
 class FastEMMainTabGUIData(MicroscopyGUIData):
@@ -1042,4 +987,20 @@ class FastEMMainTabGUIData(MicroscopyGUIData):
         assert main.microscope is not None
         super().__init__(main)
 
+        # FastEM specific view layout
+        self.viewLayout._choices = {VIEW_LAYOUT_DYNAMIC, VIEW_LAYOUT_ONE}
+        self.viewLayout._value = VIEW_LAYOUT_DYNAMIC
+        # Toggle between FastEMSetupTab and FastEMAcquisitionTab
         self.active_tab = model.VAEnumerated(None, choices={None: ""})
+        # Toggle between FastEMProjectSettingsTab, FastEMProjectRibbonsTab, FastEMProjectSectionsTab, FastEMProjectROAsTab
+        self.active_project_tab = model.VAEnumerated(None, choices={None: ""})
+        # Shared VA which stores all EditableShape in any canvas
+        self.shapes = model.ListVA([])
+        # Shared VA which the shape to copy object of a canvas
+        self.shape_to_copy = model.VigilantAttribute(None, readonly=True)
+        # The project tree which connects the grids and FastEMProjectTreeCtrl, also it stores data necessary for import / export
+        self.projects_tree = FastEMTreeNode("All Projects", NodeType.ALL_PROJECTS)
+        # The current project in use
+        self.current_project = model.StringVA("Project-1")
+        # The project settings data, needed during acquisition
+        self.project_settings_data = model.VigilantAttribute({})

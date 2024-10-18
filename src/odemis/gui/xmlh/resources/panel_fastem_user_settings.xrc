@@ -84,25 +84,29 @@
               <border>10</border>
             </object>
             <object class="sizeritem">
-              <object class="wxTextCtrl">
-                <size>150,20</size>
-                <value>SCINTILLATOR SELECTION</value>
-                <fg>#DDDDDD</fg>
-                <bg>#333333</bg>
-                <style>wxBORDER_NONE|wxTE_READONLY</style>
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>USER SETTINGS</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="user_settings_panel">
+                      <bg>#333333</bg>
+                      <fg>#999999</fg>
+                      <size>300,600</size>
+                      <flag>wxTOP|wxEXPAND</flag>
+                    </object>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
               </object>
-              <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="FastEMSelectionPanel" name="selection_panel">
-                <tooltip>Select scintillators containing sample.</tooltip>
-                <bg>#333333</bg>
-                <fg>#999999</fg>
-                <size>300,-1</size>
-                <flag>wxTOP|wxEXPAND</flag>
-                <border>5</border>
-              </object>
+              <flag>wxEXPAND</flag>
             </object>
             <object class="spacer">
               <option>1</option>
