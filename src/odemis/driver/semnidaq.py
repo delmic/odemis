@@ -26,8 +26,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # electron and/or backscatter detector (or any other detector reporting a
 # voltage). The DAQ card is controlled via the NI DAQmx driver and framework.
 #
-# Although it should in theory be quite generic, this driver is only tested on
-# Ubuntu 20.04, with nidaqmx 0.7 and a NI PCIe 6361 DAQ card.
+# Although it should in theory be quite generic, this driver is tested on
+# Ubuntu 20.04 & 22.04, with nidaqmx 1.0 and a NI PCIe 6361 DAQ card (and 6363).
 #
 # From the point of view of Odemis, this driver provides several HwComponents.
 # The e-beam position control is represented by an Scanner (Emitter) component,
@@ -45,7 +45,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # sudo apt update
 # sudo apt install ni-daqmx ni-hwcfg-utility
 # sudo dkms autoinstall
-# pip3 install nidaqmx
+# sudo pip3 install nidaqmx
 #
 # It's possible to simulate a specific card by obtaining a NCE file, adding
 # "DevIsSimulated = 1" to the file content and running:
@@ -103,11 +103,11 @@ MAX_GC_PERIOD = 10  # s, maximum time elapsed before running the garbage collect
 # by frequent active/inactive status.
 AFTER_SCAN_DELAY = 0.1  # s
 
-# Rough duration of the AI/AO buffer, during which the command loop is not checked.
+# Rough duration of the AI/AO "chunk", during which the command loop is not checked.
 # The exact duration will depend on the data. It's good to not be too short, otherwise too much CPU
 # is used, and it shouldn't be too long otherwise the NI DAQ might not have an internal buffer
 # long enough, and the request to stop acquisition might suffer latency.
-BUFFER_DURATION = 0.1  # s
+CHUNK_DURATION = 0.1  # s
 
 # Any settings with frame shorter than below will not be handled by the "standard" continuous
 # acquisition, and instead be handled by the "synchronized" acquisition (ie, 1 frame at a time).
@@ -592,6 +592,19 @@ class AcquisitionSettings:
         self.ci_sample_rate = ao_osr / dwell_time  # Hz
         self.ci_samples_n = positions_n * ao_osr
 
+        # These values will be computed later
+        # Chunk: number of samples to read/write at once
+        self.ai_chunk_size = None
+        self.ci_chunk_size = None
+        self.ao_chunk_size = None
+        self.do_chunk_size = None
+
+        # Buffer: number of samples to buffer in memory for the hardware to write/read
+        self.ai_buffer_size = None
+        self.ci_buffer_size = None
+        self.ao_buffer_size = None
+        self.do_buffer_size = None
+
 
 class Acquirer:
 
@@ -1054,43 +1067,43 @@ class Acquirer:
             logging.exception("Failure to send more data")
         return 0
 
-    def _find_good_ai_buffer_size(self, acq_settings: AcquisitionSettings, period: float) -> int:
+    def _find_good_ai_chunk_size(self, acq_settings: AcquisitionSettings, period: float) -> int:
         """
-        Compute a buffer size for the AI that fits well with the data shape, so that _downsample_data()
+        Compute a size for the AI chunk that fits well with the data shape, so that _downsample_data()
         runs efficiently.
         :param acq_settings: acquisition settings
-        :param period: maximum duration of a buffer. This function tries to find a buffer duration
+        :param period: maximum duration of a read. This function tries to find a read duration
           that is as close as possible, but less or equal to that period.
         :return: number of samples in the AI acquisition per channel
         """
         # Does it fit a whole frame?
         if acq_settings.ai_samples_n / acq_settings.ai_sample_rate < period:
-            logging.debug("AI buffer set to the size of a whole frame")
+            logging.debug("AI chunk set to the size of a whole frame")
             return max(2, acq_settings.ai_samples_n)  # The buffer must be at least of length 2 for the hardware
 
         # Can we fit a whole line? If so, how many lines per period?
         line_length = acq_settings.res[0] * acq_settings.ai_osr
         line_dur = line_length / acq_settings.ai_sample_rate  # s
         if line_dur < period:
-            logging.debug("AI buffer set to the size of a number of lines")
+            logging.debug("AI chunk set to the size of a number of lines")
             return max(2, int(period / line_dur) * line_length)  # samples
 
         # Can we fit a whole pixel? If so, how many pixels per period?
         pixel_dur = acq_settings.ai_osr / acq_settings.ai_sample_rate  # s
         if pixel_dur < period:
             # Find a round number of pixels per period and convert back to samples
-            logging.debug("AI buffer set to the size of a number of pixels")
+            logging.debug("AI chunk set to the size of a number of pixels")
             return max(2, int(period / pixel_dur) * acq_settings.ai_osr)  # samples
 
         # Can we fit just one pixel if we extend a bit the period? If so, acquire one pixel at a time
         # This is mainly to handle odd cases when the dwell time is just above the period (eg, 0.11 s)
-        # in which case we would end up reading a full buffer followed by a tiny bit of a second one.
+        # in which case we would end up reading a full chunk followed by a tiny bit of a second one.
         if pixel_dur < (2 * period):
-            logging.debug("AI buffer set to the size of a single pixel")
+            logging.debug("AI chunk set to the size of a single pixel")
             return max(2, acq_settings.ai_osr)  # samples
 
         # OK... let's give up, even a pixel doesn't fit in a period, so just fit exactly the number of samples
-        logging.debug("AI buffer set to less than a pixel")
+        logging.debug("AI chunk set to less than a pixel")
         return min(max(2, int(acq_settings.ai_sample_rate * period)), acq_settings.ai_samples_n)
 
     def _acquire_sync(self, detectors: list):
@@ -1193,29 +1206,40 @@ class Acquirer:
         self._do_data = ttl_array
         self._do_data_next_sample = 0  # position of the next sample to write to the board (updated by _write_do_data())
 
-        # we want a buffer which is not too long (~ BUFFER_DURATION)
-        ai_buffer_n = self._find_good_ai_buffer_size(acq_settings, BUFFER_DURATION)
-        logging.debug("Using a AI buffer of %s samples (%s s) => %g buffers per frame",
-                      ai_buffer_n, ai_buffer_n / acq_settings.ai_sample_rate,
-                      acq_settings.ai_samples_n / ai_buffer_n)
+        # we want to read not too frequently as it'd have a large overhead, and not too unfrequently
+        # as this would require a huge memory buffer to process all at once: CHUNK_DURATION.
+        acq_settings.ai_chunk_size = self._find_good_ai_chunk_size(acq_settings, CHUNK_DURATION)
+        logging.debug("Using a AI chunk of %s samples (%s s) => %g chunks per frame",
+                      acq_settings.ai_chunk_size, acq_settings.ai_chunk_size / acq_settings.ai_sample_rate,
+                      acq_settings.ai_samples_n / acq_settings.ai_chunk_size)
+        # Use a buffer to hold 2 chunks, so that while we read the latest chunk the board can keep
+        # going by writing into the "next chunk", which is the rest of the buffer.
+        acq_settings.ai_buffer_size = acq_settings.ai_chunk_size * 2
+        if continuous:
+            # Use a larger buffer if the duration would be small, otherwise the hardware fills up
+            # the buffer too quickly and the acquisition stops.
+            min_ai_buffer_size = int(CHUNK_DURATION * acq_settings.ai_sample_rate)
+            acq_settings.ai_buffer_size = max(acq_settings.ai_buffer_size, min_ai_buffer_size)
+        else:  # finite
+            # If only going to read it once, no need to have a very large buffer (but at least 2 for the HW)
+            acq_settings.ai_buffer_size = max(2, min(acq_settings.ai_buffer_size, acq_settings.ai_samples_n))
 
-        ao_samples_n = acq_settings.ao_samples_n
+        ao_samples_n_per_frame = acq_settings.ao_samples_n
         if not continuous and counting_dets:
             # The CI tasks' clock rely on the AO clock. On finite acquisition, we need an extra tick
             # for ending the last sample. So we just duplicate the last AO sample.
-            ao_samples_n += 1
             acq_settings.ao_samples_n += 1
-            logging.debug("Extending AO samples to %s for CI", ao_samples_n)
+            logging.debug("Extending AO samples to %s for CI", acq_settings.ao_samples_n)
             self._ao_data = numpy.append(self._ao_data, self._ao_data[:,-1:], axis=1)
 
-        # The AO buffer size must be at least of len 2. So if there is just one
+        # WORKAROUND: The AO buffer size must be at least of len 2. So if there is just one
         # point, we duplicate it, to make the NI DAQ happy. (It's the same behaviour
         # as anyway the task is continuously repeating)
         # Note: we don't have the issue with the DO buffer, because for each pixels, it contains two
         # samples, so it's at least length 2.
-        if ao_samples_n == 1:
+        if acq_settings.ao_samples_n == 1:
             logging.debug("Duplicating AO buffer as it has size 1")
-            ao_samples_n = 2
+            acq_settings.ao_samples_n = 2
             self._ao_data = numpy.append(self._ao_data, self._ao_data, 1)
 
         # Also pass AO data in chunks, so that it doesn't need to write the whole AO data before
@@ -1223,13 +1247,36 @@ class Acquirer:
         # updates, but there is enough buffer to do quite a lot bigger (and really make sure that
         # no interruption can disturb the write).
         # As CI uses the same buffer size, it's best to just use the same period as AI.
-        ao_buffer_n = min(max(self._min_ao_buffer_n, int((ai_buffer_n * ao_osr) // ai_osr)), ao_samples_n)
-        logging.debug("Using a AO buffer (min = %s) of %s samples (%s s) => %g buffers per frame",
+        ao_chunk_size_ideal = int((acq_settings.ai_chunk_size * ao_osr) // ai_osr)
+        acq_settings.ao_chunk_size = min(max(self._min_ao_buffer_n, ao_chunk_size_ideal), acq_settings.ao_samples_n)
+        logging.debug("Using a AO chunk size (min = %s) of %s samples (%s s) => %g chunks per frame",
                       self._min_ao_buffer_n,
-                      ao_buffer_n, ao_buffer_n / acq_settings.ao_sample_rate,
-                      ao_samples_n / ao_buffer_n)
+                      acq_settings.ao_chunk_size, acq_settings.ao_chunk_size / acq_settings.ao_sample_rate,
+                      ao_samples_n_per_frame / acq_settings.ao_chunk_size)
+        # Use a buffer to hold 2 chunks
+        acq_settings.ao_buffer_size = min(acq_settings.ao_chunk_size * 2, acq_settings.ao_samples_n)
 
-        do_buffer_n = min(2 * ao_buffer_n, acq_settings.do_samples_n)  # It's always 2x faster, so always twice bigger
+        # DO is always 2x faster than AO, so always twice bigger
+        acq_settings.do_chunk_size = min(2 * acq_settings.ao_chunk_size, acq_settings.do_samples_n)
+        # DO buffer = 2x the size of a chunk
+        acq_settings.do_buffer_size = min(2 * acq_settings.do_chunk_size, acq_settings.do_samples_n)
+
+        # WORKAROUND: The DO buffer size must be at least of length 2, and it is always the case.
+        # BUT, if it's less than length 4, the AI task sometimes fails to start!
+        # Note: another way to workaround it is to disable the SDK buffer, by doing
+        # "channel.do_use_only_on_brd_mem = True". However, it only works in continuous mode, and
+        # still needs to check that the buffer fits in the device memory (2048 bytes?)
+        if self._do_data is not None and acq_settings.do_samples_n < 4:
+            logging.debug("Duplicating DO buffer as it has size %d", acq_settings.do_samples_n)
+            acq_settings.do_samples_n *= 2
+            self._do_data = numpy.append(self._do_data, self._do_data)
+            acq_settings.do_chunk_size = acq_settings.do_samples_n
+            acq_settings.do_buffer_size = acq_settings.do_samples_n
+
+        # CI is at the same rate as AO, so use the same chunk and buffer sizes
+        acq_settings.ci_chunk_size = min(acq_settings.ao_chunk_size, acq_settings.ci_samples_n)
+        # Hw requires that the buffer be at least of length 2
+        acq_settings.ci_buffer_size = max(2, min(acq_settings.ao_buffer_size, acq_settings.ci_samples_n))
 
         # Note: creating and configuring the tasks can take up to 30ms!
         ci_tasks = []
@@ -1246,23 +1293,23 @@ class Acquirer:
                 self._do_task = None
 
             has_event_registration = False
-            if ao_buffer_n < ao_samples_n:
+            if acq_settings.ao_buffer_size < acq_settings.ao_samples_n:
                 has_event_registration = True
                 # Note: it seems the event doesn't always actually gets triggered. The number of
-                # events matter. At least, if it's less than 2048, it doesn't seem to work on the
-                # 6361. Maybe also need to have it a multiple of the board buffer size?
+                # events matter. At least, if it's less than 2048 (= hw buffer size / 2), it doesn't
+                # seem to work on the 6361. Maybe also need to have it a multiple of the board buffer size?
                 # TODO: instead of relying on the callback, we could push the new data at the same
                 # time as the AI is read. It's mostly just a matter of using a buffer of the right size.
                 logging.debug("Will push new AO data every %s s (%s samples)",
-                              (ao_buffer_n // 2) / acq_settings.ao_sample_rate,
-                              ao_buffer_n // 2)
+                              acq_settings.ao_chunk_size / acq_settings.ao_sample_rate,
+                              acq_settings.ao_chunk_size)
                 on_ao_data_consumed = functools.partial(self._on_ao_data_consumed, continuous=continuous)
-                ao_task.register_every_n_samples_transferred_from_buffer_event(ao_buffer_n // 2,
+                ao_task.register_every_n_samples_transferred_from_buffer_event(acq_settings.ao_chunk_size,
                                                                                on_ao_data_consumed)
                 ao_task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION  # Don't loop back
                 if acq_settings.do_samples_n:
                     on_do_data_consumed = functools.partial(self._on_do_data_consumed, continuous=continuous)
-                    do_task.register_every_n_samples_transferred_from_buffer_event(do_buffer_n // 2,
+                    do_task.register_every_n_samples_transferred_from_buffer_event(acq_settings.do_chunk_size,
                                                                                    on_do_data_consumed)
                     do_task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION  # Don't loop back
             elif continuous:
@@ -1295,11 +1342,10 @@ class Acquirer:
 
             try:
                 self._acquire_frames(acq_settings,
-                                     ao_task, do_task, ai_task, ci_tasks,
-                                     ao_buffer_n, do_buffer_n, ai_buffer_n)
+                                     ao_task, do_task, ai_task, ci_tasks)
             except IOError as ex:
                 if continuous:
-                    logging.info(f"Continuous acquisition failed ({ex}), will use synchronized acquisition")
+                    logging.info(f"Continuous acquisition failed ({ex}), will use synchronized acquisition", exc_info=True)
                     return False
                 else:  # Too fast for single frame? There is not much hope.
                     raise
@@ -1331,8 +1377,7 @@ class Acquirer:
     def _acquire_frames(self,
                         acq_settings: AcquisitionSettings,
                         ao_task: nidaqmx.Task, do_task: nidaqmx.Task, ai_task: nidaqmx.Task,
-                        ci_tasks: List[nidaqmx.Task],
-                        ao_buffer_n: int, do_buffer_n: int, ai_buffer_n: int,
+                        ci_tasks: List[nidaqmx.Task]
                         ):
         """
         Acquires a series of frames, with the given settings
@@ -1340,24 +1385,20 @@ class Acquirer:
         :param ao_task: The AO task object.
         :param do_task: The DO task object.
         :param ai_task: The AI task object.
-        :param ci_tasks: All the CI task (counter input)
-        :param ao_buffer_n: The number of samples for AO.
-        :param do_buffer_n: The number of samples for DO.
-        :param ai_buffer_n: The number of samples for AI.
+        :param ci_tasks: All the CI tasks (counter input)
         :raise:
           IOError: if fails to write to buffer or fails to read the data fast enough for the hardware
         """
         assert self._ai_dtype is not None  # It should be now specified
 
         self._configure_sync_tasks(acq_settings,
-                                   ao_task, do_task, ai_task, ci_tasks,
-                                   ao_buffer_n, do_buffer_n, ai_buffer_n)
+                                   ao_task, do_task, ai_task, ci_tasks)
 
         # Initiate the AO and DO buffers & start the tasks (so they wait for the start trigger)
-        self._write_ao_data(ao_buffer_n)
+        self._write_ao_data(acq_settings.ao_buffer_size) # TODO: check that the buffer is 2x chunk or the whole frame
         ao_task.start()  # still waits for the start trigger
         if acq_settings.do_samples_n:
-            self._write_do_data(do_buffer_n)
+            self._write_do_data(acq_settings.do_buffer_size)
             do_task.start()  # still waits for the start trigger
         for ci_task in ci_tasks:
             ci_task.start()  # still waits for the start trigger
@@ -1373,7 +1414,7 @@ class Acquirer:
         # Acquire data until a STOP message is received (or only once if it's a single frame)
         should_stop = not acq_settings.continuous
         # Place to store the raw AI data, with over-sampling
-        ai_buffer_full = numpy.empty((n_analog_det, ai_buffer_n), dtype=self._ai_dtype)
+        ai_buffer_full = numpy.empty((n_analog_det, acq_settings.ai_chunk_size), dtype=self._ai_dtype)
         acc_dtype = get_best_dtype_for_acc(ai_buffer_full.dtype, acq_settings.ai_osr)
 
         ai_reader = AnalogUnscaledReader(ai_task.in_stream)
@@ -1385,11 +1426,9 @@ class Acquirer:
             ci_reader.verify_array_shape = False  # To go a tiny bit faster when reading
             ci_readers.append(ci_reader)
 
-        # TODO: acquire in multiple times, of sizes ao_buffer_n
         # Note: also works if n_counting_det == 0 => makes a numpy array of dim 0
         # We only need one buffer for all the counters, as they are read one at a time
-        ci_buffer_n = ao_buffer_n  # For now ao_buffer is sized for the same duration as AI buffer, so it's what we want
-        ci_buffer = numpy.empty((ci_buffer_n,),
+        ci_buffer = numpy.empty((acq_settings.ci_chunk_size,),
                                 dtype=numpy.uint32)  # TODO get dtype from the detector
 
         n_ci_samples_per_ai_sample = acq_settings.ao_sample_rate / acq_settings.ai_sample_rate
@@ -1408,11 +1447,12 @@ class Acquirer:
             prev_samples_n = [0] * n_analog_det
             prev_samples_sum = [0] * n_analog_det
 
-            ci_data = numpy.empty((n_counting_det, acq_settings.res[1], acq_settings.res[0]),
-                                  dtype=numpy.uint32)
-            ci_acquired_n = 0
-            ci_prev_samples_n = [0] * n_counting_det
-            ci_prev_samples_sum = [0] * n_counting_det
+            if ci_tasks:
+                ci_data = numpy.empty((n_counting_det, acq_settings.res[1], acq_settings.res[0]),
+                                      dtype=numpy.uint32)
+                ci_acquired_n = 0
+                ci_prev_samples_n = [0] * n_counting_det
+                ci_prev_samples_sum = [0] * n_counting_det
 
             while acquired_n < acq_settings.ai_samples_n:
                 new_samples_n, prev_samples_n, prev_samples_sum = self._read_ai_buffer(
@@ -1423,11 +1463,12 @@ class Acquirer:
                 acquired_n += new_samples_n
 
                 # Is it time to acquire CI?
-                ci_acquired_n, ci_prev_samples_n, ci_prev_samples_sum = self._read_ci_buffer(
-                    acq_settings,
-                    ci_readers, ci_data, ci_buffer, acquired_n,
-                    ci_acquired_n, n_ci_samples_per_ai_sample,
-                    ci_prev_samples_n, ci_prev_samples_sum)
+                if ci_tasks:
+                    ci_acquired_n, ci_prev_samples_n, ci_prev_samples_sum = self._read_ci_buffer(
+                        acq_settings,
+                        ci_readers, ci_data, ci_buffer, acquired_n,
+                        ci_acquired_n, n_ci_samples_per_ai_sample,
+                        ci_prev_samples_n, ci_prev_samples_sum)
 
                 m = self._wait_for_message(timeout=0)
                 if m is None:  # No message
@@ -1485,13 +1526,13 @@ class Acquirer:
             * samples_sum: the sum of the (last) samples which could not be fully
             fitted in a pixel yet.
         """
-        n_detectors, ai_buffer_n = ai_buffer_full.shape
+        n_detectors, ai_chunk_size = ai_buffer_full.shape
         # Compute the number of data left to acquire to fill the array
         samples_left_n = acq_settings.ai_samples_n - acquired_n
         # Note: the hardware buffer must be at least 2, but it's fine to read just 1 at a
         # time, so no minimum value.
-        samples_to_acquire = min(samples_left_n, ai_buffer_n)
-        if samples_to_acquire < ai_buffer_n:
+        samples_to_acquire = min(samples_left_n, ai_chunk_size)
+        if samples_to_acquire < ai_chunk_size:
             # Need to reshape the buffer so that it's of shape C, N *and* contiguous
             # The simple "ai_buffer[:, :samples_to_acquire]" is not contiguous for C > 1.
             # As it's just a buffer we don't really care of the final shape, it's fine
@@ -1570,21 +1611,21 @@ class Acquirer:
         if not ci_readers:  # Short-cut
             return 0, ci_prev_samples_n, ci_prev_samples_sum
 
-        ci_buffer_n = ci_buffer.shape[0]  # not duplicated per detector, so just 1 dim
+        ci_chunk_size = ci_buffer.shape[0]  # not duplicated per detector, so just 1 dim
 
         # Estimate how many samples we can expect to be available, and read by chunks of buffer size
         # (typically, 0 or 1 buffer)
         if ai_acquired_n < acq_settings.ai_samples_n:
             ci_samples_done_n = int(ai_acquired_n * n_ci_samples_per_ai_sample)  # theoretical & pessimistic number
             ci_to_read_n = ci_samples_done_n - ci_acquired_n
-            ci_to_read_n = (ci_to_read_n // ci_buffer_n) * ci_buffer_n  # round down to buffer size
+            ci_to_read_n = (ci_to_read_n // ci_chunk_size) * ci_chunk_size  # round down to buffer size
             ci_samples_goal_n = ci_acquired_n + ci_to_read_n
         else:  # It's the end => read the rest
             ci_samples_goal_n = acq_settings.ci_samples_n
 
         while ci_acquired_n < ci_samples_goal_n:
             samples_left_n = acq_settings.ci_samples_n - ci_acquired_n
-            samples_to_acquire = min(samples_left_n, ci_buffer_n)
+            samples_to_acquire = min(samples_left_n, ci_chunk_size)
             logging.debug("Going to read CI buffer of %s samples", samples_to_acquire)
             for c, ci_reader in enumerate(ci_readers):
                 try:
@@ -1618,7 +1659,6 @@ class Acquirer:
                               acq_settings: AcquisitionSettings,
                               ao_task: nidaqmx.Task, do_task: nidaqmx.Task, ai_task: nidaqmx.Task,
                               ci_tasks: List[nidaqmx.Task],
-                              ao_buffer_n: int, do_buffer_n: int, ai_buffer_n: int,
                               ):
         """
         Configures the synchronization tasks for AI, AO, and DO.
@@ -1626,33 +1666,26 @@ class Acquirer:
         :param do_task: The DO task object.
         :param ai_task: The AI task object.
         :param ci_tasks: The list of counter input tasks.
-        :param ao_buffer_n: The number of samples for AO (also used for CI, which uses double the value).
-        :param do_buffer_n: The number of samples for DO.
-        :param ai_buffer_n: The number of samples for AI.
         :raises:
             IOError: If the actual sample rate of a task, as accepted by the hardware is not equal
             to the expected sample rate.
         """
-        # CI use the same buffer size as AO, but it seems that to read it reliably, we need to
-        # ask for extra room (which is automatically done on AI)
-        ci_buffer_n = ao_buffer_n * 2
-
         if acq_settings.continuous:
             sample_mode = AcquisitionType.CONTINUOUS
             ai_sample_mode = sample_mode
             # Buffer size is a hint to "guide the internal buffer size" indicating how much data
             # will be read each time. For AI, it seems that internally the buffer is 8x bigger.
-            ai_samples_n = ai_buffer_n
-            ci_samples_n = ci_buffer_n
-            ao_samples_n = ao_buffer_n
-            do_samples_n = do_buffer_n
+            ai_samples_n = acq_settings.ai_chunk_size
+            ci_samples_n = acq_settings.ci_chunk_size
+            ao_samples_n = acq_settings.ao_chunk_size
+            do_samples_n = acq_settings.do_chunk_size
         else:
             sample_mode = AcquisitionType.FINITE
             # Hardware wants at least 2 samples. If it's less than that, ask 2, and we'll stop before the end.
             ao_samples_n = max(2, acq_settings.ao_samples_n)
             do_samples_n = max(2, acq_settings.do_samples_n)
             ci_samples_n = max(2, acq_settings.ci_samples_n)
-            if ai_buffer_n >= acq_settings.ai_samples_n:
+            if acq_settings.ai_chunk_size >= acq_settings.ai_samples_n:
                 # If buffer is big enough to contain all the samples, it's a sign that it's going to
                 # be a small & short acquisition => need to stop automatically, otherwise the SDK complains
                 # we don't read fast enough
@@ -1663,7 +1696,7 @@ class Acquirer:
                 # of samples for large acquisition, larger than what is supported by the SDK.
                 # So run the AI continuously, which is fine as it'll just read a few samples extra at the end.
                 ai_sample_mode = AcquisitionType.CONTINUOUS
-                ai_samples_n = ai_buffer_n
+                ai_samples_n = acq_settings.ai_chunk_size
 
         # See list of terminals for the options of source
         # https://www.ni.com/docs/en-US/bundle/ni-daqmx/page/mxcncpts/termnames.html
@@ -1676,8 +1709,11 @@ class Acquirer:
                 sample_mode=ai_sample_mode,
                 samps_per_chan=ai_samples_n
             )
-            ai_task.in_stream.input_buf_size = ai_buffer_n
+            ai_task.in_stream.input_buf_size = acq_settings.ai_buffer_size
             ai_sample_rate_actual = ai_task.timing.samp_clk_rate
+            logging.debug("AI task at rate %s, mode = %s, samps_per_chan = %s, buffer size = %s",
+                          ai_sample_rate_actual, ai_sample_mode, ai_samples_n, ai_task.in_stream.input_buf_size)
+
 
         if not util.almost_equal(ai_sample_rate_actual, acq_settings.ai_sample_rate):
             raise IOError(f"AI sample rate accepted to {ai_sample_rate_actual}, "
@@ -1693,11 +1729,15 @@ class Acquirer:
             sample_mode=sample_mode,
             samps_per_chan=ao_samples_n
         )
-        ao_task.out_stream.output_buf_size = ao_buffer_n
+        ao_task.out_stream.output_buf_size = acq_settings.ao_buffer_size
         ao_sample_rate_actual = ao_task.timing.samp_clk_rate
         if not util.almost_equal(ao_sample_rate_actual, acq_settings.ao_sample_rate):
             raise IOError(f"AO sample rate accepted to {ao_sample_rate_actual}, "
                           f"while expected {acq_settings.ao_sample_rate}")
+
+        logging.debug("AO task at rate %s, mode = %s, samps_per_chan = %s, buffer size = %s",
+                      ao_sample_rate_actual, sample_mode, ao_samples_n,
+                      ao_task.out_stream.output_buf_size)
 
         if acq_settings.do_samples_n:
             # In continuous mode, samps_per_chan indicates the size of the buffer.
@@ -1706,7 +1746,10 @@ class Acquirer:
                                                sample_mode=sample_mode,
                                                samps_per_chan=do_samples_n,
                                                )
-            do_task.out_stream.output_buf_size = do_buffer_n
+            do_task.out_stream.output_buf_size = acq_settings.do_buffer_size
+            logging.debug("DO task at rate %s, mode = %s, samps_per_chan = %s, buffer size = %s",
+                          do_task.timing.samp_clk_rate, sample_mode, do_samples_n,
+                          do_task.out_stream.output_buf_size)
 
             # TODO: instead of using isclose(), have a special function that converts between rate and period in ns
             # The value in ns is actually what the hardware uses, and we know it's a int, so that
@@ -1749,14 +1792,17 @@ class Acquirer:
             # Note: the hardware doesn't support as a clock source the base clock. So we use the AO
             # clock, which is the same sample rate. However, in finite mode, that means the AO tasks
             # has to do 1 extra sample, to send the clock tick for the end of the CI task.
-            ci_task.timing.cfg_samp_clk_timing(acq_settings.ao_sample_rate,
+            ci_task.timing.cfg_samp_clk_timing(acq_settings.ci_sample_rate,
                                                source=ao_task.timing.samp_clk_term,  # Cannot be onboard clock
                                                active_edge=Edge.RISING,
                                                sample_mode=sample_mode,
                                                samps_per_chan=ci_samples_n,
                                                )
 
-            ci_task.in_stream.input_buf_size = ci_buffer_n
+            ci_task.in_stream.input_buf_size = acq_settings.ci_buffer_size
+            logging.debug("CI task at rate %s, mode = %s, samps_per_chan = %s, buffer size = %s",
+                          ci_task.timing.samp_clk_rate, sample_mode, ci_samples_n,
+                          ci_task.in_stream.input_buf_size)
 
             # For counter *input*, it's not the "start trigger" which is used, but the "arm start trigger".
             ci_task.triggers.arm_start_trigger.trig_type = TriggerType.DIGITAL_EDGE
