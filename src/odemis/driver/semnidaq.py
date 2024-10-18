@@ -610,6 +610,9 @@ class Acquirer:
         self._do_data_end = self._scanner._generate_signal_array_end()
         self._do_task_end = nidaqmx.Task()
         self._scanner.configure_do_task(self._do_task_end)
+        if self._do_data_end is not None:
+            self._do_task_end.write(self._do_data_end, auto_start=True)
+            logging.debug(f"Reset fast TTL signals to 0b{self._do_data_end[0]:b}")
 
         self._ao_task = None
         self._ao_writer = None
@@ -2321,6 +2324,7 @@ class Scanner(model.Emitter):
             raise ValueError(f"image_ttl should be a dict[str->dict], but got '{image_ttl}'")
 
         available_do_ports = parent.get_available_do_channels(port_number=0)
+        self._ttl_inverted: Dict[int, bool] = {}  # TTL channel -> inverted
         for ttl_type, ttl_info in image_ttl.items():
             if ttl_type not in ("pixel", "line", "frame"):
                 raise ValueError(f"image_ttl keys should be 'pixel', 'line' or 'frame', but got '{ttl_type}'")
@@ -2328,6 +2332,10 @@ class Scanner(model.Emitter):
                 ports = ttl_info["ports"]
             except KeyError:
                 raise ValueError(f"image_ttl['{ttl_type}'] should have a 'ports' key")
+            inverted = ttl_info.get("inverted", [False] * len(ports))
+            if not isinstance(inverted, list) or not len(inverted) == len(ports):
+                raise ValueError(f"image_ttl['{ttl_type}']['inverted'] should be a list of booleans, but got '{inverted}'")
+            self._ttl_inverted.update(zip(ports, inverted))
 
             # Check it's all valid channels
             for do_channel in ports:
@@ -2507,6 +2515,15 @@ class Scanner(model.Emitter):
             # It's OK, the task is just going to do nothing... should just not write to it.
             return
 
+        # This creates a task that expects one single uint32 "bitmask" per sample containing the state
+        # of each line per bit. So line 4 corresponds to bit 4 (from 0), and its state s
+        # (0 = low, 1 = high) is defined as "s<<4". The lines which are not specified are not modified
+        # by the bitmask (so another task can control them). There is one uint32 per port. As nidaqmx only
+        # supports writing 32 bits at once, you cannot have multiple ports together.
+        # Note that every call to this function adds a separate bitmask. So if you call it twice the
+        # task will expect two uint32 per sample.
+        # BUT if there is a single port with a single line, then the task will expect a single boolean.
+        # Note: it doesn't seem to work properly to mix single line and multiple lines in the same task.
         do_task.do_channels.add_do_chan(
             self._fast_do_names,
             line_grouping=LineGrouping.CHAN_FOR_ALL_LINES,  # data array should be of shape (samples,)
@@ -2926,40 +2943,49 @@ class Scanner(model.Emitter):
             # It's OK, the task is just going to do nothing... should just not write to it.
             return None
 
+        # If the task has a single line, then nidaqmx expects a single boolean per sample!
+        # Note that in memory, a boolean is an uint8, but only containing either 0 or 1.
+        if len(self._pixel_ttl) + len(self._line_ttl) + len(self._frame_ttl) == 1:
+            dtype = numpy.bool_  # Need to use numpy bool for correct bitwise operations (instead of "bool")
+        else:
+            dtype = numpy.uint32
+
         # Y dim is as expected, X dim is twice longer, to have the rate twice higher
         # than the dwell time, with half of the dwell time the pixel signal high
         # and half of the pixel signal the dwell time low. That's the slowest rate
         # that allows to distinguish each pixel.
         full_shape = (res[1], 2 * (res[0] + margin), dup)
-        ttl_signal = numpy.zeros(full_shape, dtype=numpy.uint32, order='C')
+        ttl_signal = numpy.empty(full_shape, dtype=dtype, order='C')
+        inactive_bitmap = sum(1 << port for port, inv in self._ttl_inverted.items() if inv)
+        ttl_signal[...] = inactive_bitmap
 
         # Pixel: everything after the margin, is filled with alternating high/low
         for c in self._pixel_ttl:
-            pixel_bit = numpy.uint32(1 << c)
-            ttl_signal[:, margin * 2::2, 0] |= pixel_bit
+            pixel_bit = dtype(1 << c)
+            ttl_signal[:, margin * 2::2, 0] ^= pixel_bit  # xor, to flip the bit
 
         # Line: everything after the margin is the line
         # Special array view, with dup to as first dim, to tell numpy everything needs to be copied
         ttl_signal_dup = numpy.moveaxis(ttl_signal, 2, 0)
         for c in self._line_ttl:
-            line_bit = numpy.uint32(1 << c)
-            ttl_signal_dup[:, :, margin * 2:] |= line_bit
+            line_bit = dtype(1 << c)
+            ttl_signal_dup[:, :, margin * 2:] ^= line_bit
             # Special case when there is no margin: make it low as the end of the line, to get a transition
             # TODO: if there is really some hardware that rely on the precise timing for line and frame
             # signals, even on such special cases (eg, spot mode), that might not be good enough. We
             # would need to increase the TTL rate to AI rate, so that the last value corresponds to a very
             # short time.
             if not margin:
-                ttl_signal_dup[-1, :, -1] &= ~line_bit
+                ttl_signal_dup[-1, :, -1] ^= line_bit
 
         # Frame: almost everywhere high, except for the margin of the first line
         for c in self._frame_ttl:
-            frame_bit = numpy.uint32(1 << c)
+            frame_bit = dtype(1 << c)
             frame_signal = ttl_signal_dup.reshape(dup, res[1] * 2 * (res[0] + margin))
-            frame_signal[:, margin * 2:] |= frame_bit
+            frame_signal[:, margin * 2:] ^= frame_bit
             # Special case when there is no margin: make it low as the end of the frame, to get a transition
             if not margin:
-                frame_signal[-1, -1] &= ~frame_bit
+                frame_signal[-1, -1] ^= frame_bit
 
         return ttl_signal
 
@@ -2973,8 +2999,14 @@ class Scanner(model.Emitter):
             # It's OK, the task is just going to do nothing... should just not write to it.
             return None
 
-        # Everything is off => all bits are 0 => 0.
-        return numpy.zeros(1, dtype=numpy.uint32)
+        if len(self._pixel_ttl) + len(self._line_ttl) + len(self._frame_ttl) == 1:
+            dtype = numpy.bool_
+        else:
+            dtype = numpy.uint32
+
+        # Everything is off => all bits are low, except the inverted ones
+        inactive_bitmap = sum(1 << port for port, inv in self._ttl_inverted.items() if inv)
+        return numpy.array([inactive_bitmap], dtype=dtype)
 
 
 class AnalogDetector(model.Detector):

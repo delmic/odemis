@@ -96,15 +96,18 @@ CONFIG_SCANNER = {
         3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
     },
     "image_ttl": {
-         "pixel": {
+        "pixel": {
              "ports": [0, 7],
+             "inverted": [False, True],
              "affects": ["IR Camera", "UV Camera"],
         },
         "line": {
              "ports": [1],
+             # "inverted": [True],
         },
         "frame": {
              "ports": [6],
+             # "inverted": [True],
         },
     },
 }
@@ -147,7 +150,10 @@ class TestAnalogSEM(unittest.TestCase):
                 cls.counter = child
 
         # Compute the fast TTL masks, for the waveform checks
-        cls.pixel_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["pixel"]["ports"])
+        pixel_ttls = CONFIG_SCANNER["image_ttl"]["pixel"]
+        pixel_ttls_conf = list(zip(pixel_ttls["ports"], pixel_ttls["inverted"]))
+        cls.pixel_bit = sum(1 << c for c, inv in pixel_ttls_conf if not inv)
+        cls.pixel_bit_inv = sum(1 << c for c, inv in pixel_ttls_conf if inv)
         cls.line_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["line"]["ports"])
         cls.frame_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["frame"]["ports"])
 
@@ -227,9 +233,11 @@ class TestAnalogSEM(unittest.TestCase):
         ttl_clock = numpy.arange(ttl_array.shape[-1]) * 0.5  # The clock for the TTL is twice faster than the analog out
 
         ttl_pixel = (ttl_array & self.pixel_bit) != 0
+        ttl_pixel_inv = (ttl_array & self.pixel_bit_inv) != 0
         ttl_line = (ttl_array & self.line_bit) != 0
         ttl_frame = (ttl_array & self.frame_bit) != 0
         plt.plot(ttl_clock, ttl_pixel * 10000 - 51000, label="pixel TTL")
+        plt.plot(ttl_clock, ttl_pixel_inv * 10000 - 51000, label="pixel inv TTL")
         plt.plot(ttl_clock, ttl_line * 10000 - 40000, label="line TTL")
         plt.plot(ttl_clock, ttl_frame * 10000 - 29000, label="frame TTL")
         # plt.plot(scan_array[0].flat, scan_array[1].flat, "ro") # X vs Y -> should show the whole grid of points
@@ -287,8 +295,11 @@ class TestAnalogSEM(unittest.TestCase):
         # Check the TTL signals
         self.assertEqual(ttl_array.shape, (exp_length * 2,))
         # There should be one high tick per pixel position
-        nb_high = numpy.sum((ttl_array & self.pixel_bit).astype(bool))
-        self.assertEqual(nb_high, res[0] * res[1])
+        nb_active = numpy.sum((ttl_array & self.pixel_bit).astype(bool))
+        self.assertEqual(nb_active, res[0] * res[1])
+        nb_active_inv = numpy.sum(~(ttl_array & self.pixel_bit_inv).astype(bool))
+        self.assertEqual(nb_active_inv, res[0] * res[1])
+
         # First value of line and frame should be low, and last one should be high
         self.assertEqual(bool(ttl_array[0] & self.line_bit), False)
         self.assertEqual(bool(ttl_array[-1] & self.line_bit), True)
@@ -333,8 +344,11 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(ttl_array.shape, (exp_length * 2,))
 
         # There should be one high tick per pixel position
-        nb_high = numpy.sum((ttl_array & self.pixel_bit).astype(bool))
-        self.assertEqual(nb_high, res[0] * res[1])
+        nb_active = numpy.sum((ttl_array & self.pixel_bit).astype(bool))
+        self.assertEqual(nb_active, res[0] * res[1])
+        nb_active_inv = numpy.sum(~(ttl_array & self.pixel_bit_inv).astype(bool))
+        self.assertEqual(nb_active_inv, res[0] * res[1])
+
         # No margin, so first value of line and frame should immediately be high,
         # but (as a special case), the very last value should be low
         self.assertEqual(bool(ttl_array[0] & self.line_bit), True)
