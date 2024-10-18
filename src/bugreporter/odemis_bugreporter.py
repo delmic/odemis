@@ -43,6 +43,7 @@ import time
 import webbrowser
 import wx
 import zipfile
+from typing import List
 
 logging.getLogger().setLevel(logging.DEBUG)
 DEFAULT_CONFIG = {"LOGLEVEL": "1", 'CONFIGPATH': '/usr/share/odemis'}
@@ -81,6 +82,7 @@ TOPIC_IDS = {
     "fast": 15,  # Fast imaging (FastEM...)
 }
 
+MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024 # 100 MB
 
 # The next to functions will be needed to parse odemis.conf
 def _add_var_config(config, var, content):
@@ -146,6 +148,16 @@ def parse_config(configfile):
 
     return config
 
+def _validate_user_attachment_size(attachments: List[str]) -> bool:
+    """Check if the total size of the attached files is below the maximum limit"""
+
+    total_size = sum(os.path.getsize(path) for path in attachments)
+    if total_size > MAX_ATTACHMENT_SIZE:
+        total_str = int(total_size / (1024*1024))
+        max_str = int(MAX_ATTACHMENT_SIZE / (1024*1024))
+        logging.warning(f"Total size of user attachments ({total_str} MB) exceeds the limit ({max_str} MB)")
+        return False
+    return True
 
 class OdemisBugreporter(object):
     """
@@ -157,6 +169,7 @@ class OdemisBugreporter(object):
 
         self.zip_fn = None  # (str) Path to zip file.
         self._executor = futures.ThreadPoolExecutor(max_workers=4)
+        self.user_attachments: List[str] = []
 
     def run(self):
         """
@@ -390,6 +403,21 @@ class OdemisBugreporter(object):
             logging.exception("Failed to store bug report")
             raise
 
+    def _compress_user_attachments(self) -> None:
+        """Add the user attachments to the zip file"""
+
+        files = self.user_attachments
+
+        if not files:
+            return
+
+        # QUERY: upload the attachments as a seprarate zip?
+        with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
+            for f in files:
+                if os.path.isfile(f):
+                    logging.debug("Adding file %s", f)
+                    archive.write(f, os.path.basename(f))
+
     def _set_description(self, name, email, subject, message, topic_id: int, installation: str):
         """
         Saves the description parameters for the ticket creation in a txt file, compresses
@@ -404,7 +432,12 @@ class OdemisBugreporter(object):
             logging.debug("Changing topic ID from %s to test ID", topic_id)
             topic_id = TOPIC_IDS["test"]
 
+        # wait for system files to be compressed
         self._compress_files_f.result()
+
+        # compress user attachments
+        self._compress_user_attachments()
+
         report_description = {'name': name,
                               'email': email,
                               'subject': subject,
@@ -473,6 +506,22 @@ class BugreporterFrame(wx.Frame):
         sizer.Add(description_lbl, 0, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
         sizer.Add(description_ctrl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
 
+        # add button to attach files, remove files and label to show attached files.
+        outer_attachment_sizer = wx.BoxSizer(wx.VERTICAL)
+        attachment_ctrl_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        attach_btn = wx.Button(panel, wx.ID_ANY, "Attach additional files")
+        attach_btn.Bind(wx.EVT_BUTTON, self._add_attachment_dialog)
+        remove_btn = wx.Button(panel, wx.ID_ANY, "Remove attachments")
+        remove_btn.Bind(wx.EVT_BUTTON, self._remove_attachments)
+        attached_files_lbl = wx.StaticText(panel, wx.ID_ANY, "No files attached")
+        attachment_ctrl_sizer.Add(attach_btn, 0, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        attachment_ctrl_sizer.Add(remove_btn, 0, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        outer_attachment_sizer.Add(attachment_ctrl_sizer)
+        outer_attachment_sizer.AddSpacer(10)
+        outer_attachment_sizer.Add(attached_files_lbl, 0, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        outer_attachment_sizer.AddSpacer(10)
+        sizer.Add(outer_attachment_sizer)
+
         # GDPR text
         gdpr_sizer = wx.BoxSizer(wx.HORIZONTAL)
         gdpr_lbl = wx.StaticText(panel, -1, GDPR_TEXT)
@@ -480,7 +529,7 @@ class BugreporterFrame(wx.Frame):
         gdpr_lbl.SetMinSize((-1, 100))  # High enough to fit all the text
         font = wx.Font(10, wx.NORMAL, wx.ITALIC, wx.NORMAL)
         gdpr_lbl.SetFont(font)
-        gdpr_sizer.Add(gdpr_lbl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
+        gdpr_sizer.Add(gdpr_lbl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
         sizer.Add(gdpr_sizer, 0, wx.EXPAND)
 
         # Status update label
@@ -513,6 +562,7 @@ class BugreporterFrame(wx.Frame):
         self.description_ctrl = description_ctrl
         self.wait_lbl = wait_lbl
         self.report_btn = report_btn
+        self.attached_files_lbl = attached_files_lbl
 
         self.bugreporter = controller
 
@@ -737,6 +787,74 @@ class BugreporterFrame(wx.Frame):
         if val == wx.ID_OK:
             self.Destroy()
             webbrowser.open('https://support.delmic.com/open.php')
+
+
+    def _add_attachment_dialog(self, evt: wx.Event) -> List[str]:
+        """Open a dialog to select files to attach to the bug report"""
+
+        dlg = wx.FileDialog(self, message="Select files to attach",
+                            wildcard="All files (*.*)|*.*",
+                            style=wx.FD_OPEN | wx.FD_MULTIPLE)
+
+        if dlg.ShowModal() == wx.ID_OK:
+            paths = dlg.GetPaths()
+        else:
+            paths = []
+        dlg.Destroy()
+
+        # Add the selected files to the list of attachments
+        self.bugreporter.user_attachments.extend(paths)
+        logging.info("Added attachments: %s", paths)
+
+        # update label
+        self._update_attachment_label()
+
+    def _remove_attachments(self, evt: wx.Event) -> None:
+        """Remove all user-selected attachments"""
+        self.bugreporter.user_attachments.clear()
+        logging.info("Removed all attachments")
+
+        # update label
+        self._update_attachment_label()
+
+    def _update_attachment_label(self) -> None:
+        """Update the label showing the number of attached files"""
+
+        paths = self.bugreporter.user_attachments
+
+        # no files attached
+        if len(paths) == 0:
+            self.attached_files_lbl.SetForegroundColour(wx.Colour(255, 255, 255))
+            self.attached_files_lbl.SetLabel("No files attached")
+            return
+
+        valid_attachments = _validate_user_attachment_size(self.bugreporter.user_attachments)
+        self.report_btn.Enable(valid_attachments)
+
+        if not valid_attachments:
+            max_str = int(MAX_ATTACHMENT_SIZE / (1024*1024))
+            self.attached_files_lbl.SetLabel(f"Total size of attachments exceeds the limit ({max_str}MB). Please remove some attached files.")
+            # set text color to red
+            self.attached_files_lbl.SetForegroundColour(wx.Colour(255, 0, 0))
+            self.Layout()
+            return
+
+        # show the number of attached files
+        if len(paths) == 1:
+            label = "1 file attached"
+        else:
+            label = f"{len(paths)} files attached"
+
+        # resize the label to fit the text
+        self.attached_files_lbl.Wrap(self.attached_files_lbl.GetSize().width)
+        self.Layout()
+
+        # show each attachment basename on a new line
+        self.attached_files_lbl.SetForegroundColour(wx.Colour(255, 255, 255))
+        label = f"{label}\n" + "\n".join(os.path.basename(path) for path in paths)
+        self.attached_files_lbl.SetLabel(label)
+
+
 
 
 if __name__ == '__main__':
