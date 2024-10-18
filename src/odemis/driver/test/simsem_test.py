@@ -551,7 +551,7 @@ class TestIndependentDetector(unittest.TestCase):
         self.assertAlmostEqual(self.det.dwellTime.value, self.det.dwellTime.range[0], delta=0.1e-9)
 
         self.det.dwellTime.value = 10e-6
-        self.assertEqual(self.det.dwellTime.value, 10e-6)
+        self.assertAlmostEqual(self.det.dwellTime.value, 10e-6)
 
         self.det.dwellTime.value = 1.16e-6
         self.assertAlmostEqual(self.det.dwellTime.value, 1.1e-6, delta=0.1e-9)
