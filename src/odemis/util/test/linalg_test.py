@@ -25,7 +25,7 @@ import numpy
 from scipy.linalg.misc import LinAlgError
 
 from odemis.util.linalg import tri_inv, get_z_pos_on_plane, get_point_on_plane, are_collinear, fit_plane_lstsq, \
-    generate_triangulation_points
+    generate_triangulation_points, ranges_overlap
 
 
 class TriInvBadInput(unittest.TestCase):
@@ -127,6 +127,32 @@ class PlaneFittingTestCase(unittest.TestCase):
         # Create points not in same line with above equation
         non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
         self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
+
+    def test_ranges_overlap(self):
+        """
+        Test if there is an overlap between two list of ranges.
+        """
+        range1 = [1, 4]
+        range2 = [2, 6]
+        self.assertTrue(ranges_overlap(range1, range2))
+        # order should not matter
+        self.assertTrue(ranges_overlap(range2, range1))
+        # check boundary values
+        range1 = [1, 4]
+        range2 = [4, 6]
+        self.assertTrue(ranges_overlap(range1, range2))
+        # check decimal values
+        range1 = [1, 4]
+        range2 = [4.1, 6]
+        self.assertFalse(ranges_overlap(range1, range2))
+        # check negative values
+        range1 = [-1, -4]
+        range2 = [3.9, -3]
+        self.assertTrue(ranges_overlap(range1, range2))
+        # check negative values
+        range1 = [-1, -4]
+        range2 = [1, 4]
+        self.assertFalse(ranges_overlap(range1, range2))
 
 
 class GenerateTriangulationTestCase(unittest.TestCase):
