@@ -871,6 +871,9 @@ class AndorCam2(model.DigitalCamera):
             else:
                 logging.info("Camera does not support external trigger")
 
+            # Start the acquisition thread immediately, as it also takes care of updating the
+            # frameDuration whenever some of the settings change.
+            self._ensure_acq_thread_is_running()
             logging.debug("Camera component ready to use.")
         except Exception as ex:
             logging.error("Failed to complete initialization (%s), will shutdown camera", ex)
@@ -2226,6 +2229,12 @@ class AndorCam2(model.DigitalCamera):
         The image are sent via the .data DataFlow
         """
         self._genmsg.put(GEN_START)
+        self._ensure_acq_thread_is_running()
+
+    def _ensure_acq_thread_is_running(self):
+        """
+        Start the acquisition thread if it's not already running
+        """
         if not self._acq_thread or not self._acq_thread.is_alive():
             logging.info("Starting acquisition thread")
             self._acq_thread = threading.Thread(target=self._acquire,
@@ -3351,8 +3360,10 @@ class FakeAndorV2DLL(object):
                 raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
 
         elif self._trigger_mode == AndorV2DLL.TM_EXTERNAL:
-            # Pretends trigger immediately arrived, so acquisition starts just now
-            pass
+            # Pretends the trigger takes time to arrive on the first frame, and for the other frames
+            # it immediately arrives.
+            if self._first_frame == 0:
+                time.sleep(1.0)
             # Uncomment to simulate when hardware trigger is never received
             # time.sleep(timeout)
             # raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
