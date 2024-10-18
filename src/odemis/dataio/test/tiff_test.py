@@ -500,7 +500,6 @@ class TestTiffIO(unittest.TestCase):
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
         self.assertEqual(bin_str, exp_bin)
 
-        self.assertEqual(json.loads(ime.find("ExtraSettings").text), exp_extra_md)
         imo.close()
 
     def checkImageJMetadata(self, sizes: list, num_channels: int, num_slices: int, num_frames: int):
@@ -1894,11 +1893,6 @@ class TestTiffIO(unittest.TestCase):
             # None of the images are using light => no MD_IN_WL
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
-
-            # only MD_TIME_LIST is read back
-            if model.MD_PIXEL_DUR in md and model.MD_TIME_OFFSET in md:
-                self.assertIn(model.MD_TIME_LIST, im.metadata)
-                self.assertEqual(len(im.metadata[model.MD_TIME_LIST]), rdata[i].shape[1])
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)

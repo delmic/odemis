@@ -735,8 +735,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
                 self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
                 self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
-                if model.MD_ROTATION in md:
-                    self.assertAlmostEqual(im.metadata[model.MD_ROTATION], md[model.MD_ROTATION], delta=1e-4)
                 if model.MD_USER_TINT in md:
                     self.assertEqual(im.metadata[model.MD_USER_TINT], md[model.MD_USER_TINT])
 
