@@ -27,6 +27,7 @@ of microscope images.
 
 """
 
+import configparser
 import logging
 import math
 import os
@@ -63,7 +64,22 @@ ST_CANCELED = "CANCELED"
 
 # tmp flag for odemis advanced mode
 # TODO: remove and replace once the licenced version is released
-ODEMIS_ADVANCED_FLAG: bool = False
+def get_license_enabled() -> bool:
+    """
+    Temporary function to get the license status.
+    Allows to enable/disable without changing the code.
+    """
+    enabled  = False
+    odemis_advanced_config = os.path.abspath(os.path.join(conf.file.CONF_PATH, "odemis_advanced.config"))
+    if os.path.exists(odemis_advanced_config):
+        config = configparser.ConfigParser(interpolation=None)
+        config.read(odemis_advanced_config)
+        enabled = config["licence"].get("enabled", "False") == "True"
+
+    logging.debug(f"odemis-advanced mode is {'enabled' if enabled else 'disabled'}")
+    return enabled
+
+ODEMIS_ADVANCED_FLAG = get_license_enabled()
 
 
 class CryoAcquiController(object):
