@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
-from bugreporter.odemis_bugreporter import OdemisBugreporter, BugreporterFrame
+from bugreporter.odemis_bugreporter import OdemisBugreporter, BugreporterFrame, _validate_user_attachment_size
 from urllib.error import HTTPError
 import logging
 import odemis
@@ -169,6 +169,91 @@ class TestOdemisBugreporter(unittest.TestCase):
         self.bugreporter.compress_files()
         self.assertTrue(zipfile.is_zipfile(self.bugreporter.zip_fn))
         os.remove(self.bugreporter.zip_fn)
+
+    def test_add_user_attachment(self):
+        """Test adding user attachments to the bugreporter archive"""
+
+        bugreporter = OdemisBugreporter()
+        bugreporter.compress_files() # wait for system files to be compressed
+
+        # create user attachment
+        path = os.path.expanduser(u"~") + '/odemis-overlay-report/attachments'
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        valid_1_fn = os.path.join(path, "user_attachment_valid_1")
+        valid_2_fn = os.path.join(path, "user_attachment_valid_2")
+
+        # remove files if they exist
+        if os.path.isfile(valid_1_fn):
+            os.remove(valid_1_fn)
+        if os.path.isfile(valid_2_fn):
+            os.remove(valid_2_fn)
+
+        for fn in [valid_1_fn, valid_2_fn]:
+            with open(fn, 'w+') as f:
+                f.write('x' * int(4e7))  # 40 MB file
+
+        # test the case where no user attachments are added
+        bugreporter.user_attachments = []
+        bugreporter._compress_user_attachments()
+        self.assertEqual(bugreporter.attachment_zip_fn, None)
+
+        # add user attachments to bugreporter
+        bugreporter.user_attachments.extend([valid_1_fn, valid_2_fn])
+
+        # validate user attachments
+        valid = _validate_user_attachment_size(bugreporter.user_attachments)
+        self.assertTrue(valid, "User attachments are not valid.")
+
+        # compress user attachments
+        bugreporter._compress_user_attachments()
+
+        # check attachment is in zip file
+        zip_file = zipfile.ZipFile(bugreporter.attachment_zip_fn)
+        for f in bugreporter.user_attachments:
+            if os.path.isfile(f):
+                self.assertTrue(os.path.basename(f) in zip_file.namelist(), "File %s not found in archive." % f)
+
+        # clean up
+        os.remove(bugreporter.zip_fn)
+        os.remove(bugreporter.attachment_zip_fn)
+        os.remove(valid_1_fn)
+        os.remove(valid_2_fn)
+
+    def test_validate_user_attachment_size(self):
+        """Test the size validation of user attachments"""
+
+        # add user attachment
+        path = os.path.expanduser(u"~") + '/odemis-overlay-report'
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        valid_fn = os.path.join(path, "user_attachment_valid")
+        valid_fn2 = os.path.join(path, "user_attachment_valid2")
+        invalid_fn = os.path.join(path, "user_attachment_invalid")
+        with open(valid_fn, 'w+') as f:
+            f.write('x' * int(5e7))  # 50 MB file
+
+        with open(valid_fn2, 'w+') as f:
+            f.write('x' * int(9e7))  # 90 MB file
+
+        with open(invalid_fn, 'w+') as f:
+            f.write('x' * int(5e8))  # 500 MB file
+
+        # return true files below 100MB
+        user_attachments = [valid_fn]
+        self.assertTrue(_validate_user_attachment_size(user_attachments))
+
+        # return false, sum of files too large
+        user_attachments = [valid_fn, valid_fn2]
+        self.assertFalse(_validate_user_attachment_size(user_attachments))
+
+        # return false file too large
+        user_attachments = [invalid_fn]
+        self.assertFalse(_validate_user_attachment_size(user_attachments))
+
+        # clean up
+        os.remove(valid_fn)
+        os.remove(invalid_fn)
 
     def test_window(self):
         # Note: UIActionSimulator.Text() doesn't seem to work on wxPython 4.0.7,
