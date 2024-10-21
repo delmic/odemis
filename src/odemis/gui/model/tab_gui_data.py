@@ -23,7 +23,7 @@ This file is part of Odemis.
 from abc import ABCMeta
 import logging
 import math
-from typing import Tuple
+from typing import Tuple, Dict
 
 from odemis.acq.feature import CryoFeature
 from odemis.gui import conf, FG_COLOUR_WARNING
@@ -222,16 +222,16 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
-    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None):
+    def add_new_feature(self, stage_pos: Dict[str, float], focus_pos: Dict[str, float] = None, f_name: str = None):
         """
         Create a new feature and add it to the features list
         """
         if not f_name:
             existing_names = [f.name.value for f in self.main.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
-        if pos_z is None:
-            pos_z = self.main.focus.position.value['z']
-        feature = CryoFeature(f_name, pos_x, pos_y, pos_z)
+        if focus_pos is None:
+            focus_pos = self.main.focus.position.value
+        feature = CryoFeature(f_name, stage_pos, focus_pos)
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
         return feature
@@ -248,8 +248,10 @@ class CryoGUIData(MicroscopyGUIData):
         current_feature = self.main.currentFeature.value
 
         def dist_to_pos(feature):
-            return math.hypot(feature.pos.value[0] - current_position["x"],
-                              feature.pos.value[1] - current_position["y"])
+            pm = self.main.posture_manager
+            pos = pm.from_dependant_position(feature.stage_pos.value)
+            return math.hypot(pos["x"] - current_position["x"],
+                              pos["y"] - current_position["y"])
 
 
         if current_feature and dist_to_pos(current_feature) <= self.ATOL_FEATURE_POS:
@@ -265,10 +267,8 @@ class CryoGUIData(MicroscopyGUIData):
             pass
 
         # No feature nearby => create a new one
-        feature = self.add_new_feature(current_position["x"], current_position["y"],
-                                       self.main.focus.position.value["z"])
-        logging.debug("New feature created at %s because none are close by.",
-                      (current_position["x"], current_position["y"]))
+        feature = self.add_new_feature(stage_pos=current_position, focus_pos=self.main.focus.position.value)
+        logging.debug(f"New feature created at {current_position} because none are close by.")
         self.main.currentFeature.value = feature
 
 

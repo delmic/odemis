@@ -42,18 +42,19 @@ class CryoFeature(object):
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, stage_pos: dict, focus_pos: dict, streams=None, posture: str = "FM"):
         """
         :param name: (string) the feature name
-        :param x: (float) the X axis of the feature position
-        :param y: (float) the Y axis of the feature position
-        :param z: (float) the Z axis of the feature position
+        :param stage_pos: (dict) the stage position of the feature (stage-bare)
+        :param focus_pos: (dict) the focus position of the feature
+        :param posture: (string) the initial posture of the feature
         :param streams: (List of StaticStream) list of acquired streams on this feature
         """
         self.name = model.StringVA(name)
-        # The 3D position of an interesting point in the site (Typically, the milling should happen around that
-        # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
+        self.stage_pos = model.VigilantAttribute(stage_pos, unit="m") # stage-bare
+        self.focus_pos = model.VigilantAttribute(focus_pos, unit="m")
+        self.posture = model.StringVA(posture)
+        self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
@@ -68,8 +69,12 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
     flist = []
     for feature in features:
-        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+        feature_item = {'name': feature.name.value,
+                        'status': feature.status.value,
+                        'stage_pos': feature.stage_pos.value,
+                        'focus_pos': feature.focus_pos.value,
+                        'posture': feature.posture.value,
+                        'posture_positions': feature.posture_positions}
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -85,13 +90,20 @@ class FeaturesDecoder(json.JSONDecoder):
     def object_hook(self, obj):
         # Either the object is the feature list or the feature objects inside it
         if 'name' in obj:
-            pos = obj['pos']
-            feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
+            stage_pos = obj['stage_pos']
+            focus_pos = obj['focus_pos']
+            posture = obj['posture']
+            posture_positions = obj.get('posture_positions', {})
+            feature = CryoFeature(name=obj['name'],
+                                  stage_pos=stage_pos,
+                                  focus_pos=focus_pos,
+                                  posture=posture)
             feature.status.value = obj['status']
+            feature.posture_positions = posture_positions
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
-
+        return obj
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
