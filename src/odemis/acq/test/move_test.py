@@ -316,7 +316,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
     ROTATION_AXES = {'rx', 'rz'}
     @classmethod
     def setUpClass(cls):
-        # testing.start_backend(cls.MIC_CONFIG)
+        testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
 
@@ -627,6 +627,7 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
     MIC_CONFIG = METEOR_TESCAN1_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
 
+
     def test_at_different_tilts(self):
         """Test the stage position robustness with changing tilts. In SEM when feature is at the coincidence
         point of SEM and FIB, applying different tilts should keep the same feature of interest at the
@@ -634,11 +635,12 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         # Make sure the current stage position is at the coincidence point between SEM and FIB
         # before running this test case
         if SEM_FIB_COINCIDENCE:
-            start_tilt = numpy.radians(0)  # TODO change depending on the current tilt of the starting position
+            start_tilt = numpy.radians(15)
             step = numpy.radians(1)
-            end_tilt = numpy.radians(10)
-            for t in numpy.linspace(start_tilt + step, end_tilt, 10):
-                pos = self.stage.position.value  # current sem stage position
+            end_tilt = numpy.radians(20)
+            pos = {"x": -0.02235e-03, "y": -0.01071e-03, "z": 30.24083e-03, "rx": 0.261799,
+                   "rz": 0.523598775}
+            for t in numpy.linspace(start_tilt + step, end_tilt, 5):
                 stage_md = self.stage.getMetadata()
                 transformed_pos = pos.copy()
 
@@ -648,8 +650,8 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
                 x_0 = calibrated_values["x_0"]
                 y_0 = calibrated_values["y_0"]
                 z_ct = calibrated_values["z_ct"]
-                b_z = (pos["z"] - z_ct) * math.cos(t)
                 b_y = calibrated_values["b_y"]
+                b_z = (pos["z"] - z_ct) * math.cos(t) + b_y * math.sin(t)
 
                 # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
                 sem_reference_pos_x = x_0
@@ -658,76 +660,61 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
 
                 # Calculate the equivalent coordinates of the calibrated position, at the FM position
                 old_sem_pos_x = x_0
-                old_sem_pos_y = y_0 - b_y * (1 - 1 / math.cos(t - step)) - b_z * math.tan(t - step)
-                old_sem_pos_z = 0 - b_y * math.tan(t - step) - b_z * (1 - 1 / math.cos(t - step))
+                old_sem_pos_y = y_0 - b_y * (1 - 1 / math.cos(start_tilt)) - b_z * math.tan(start_tilt)
+                old_sem_pos_z = 0 - b_y * math.tan(start_tilt) - b_z * (1 - 1 / math.cos(start_tilt))
 
-                transformed_pos["x"] = sem_reference_pos_x + (old_sem_pos_x - pos["x"])
-                transformed_pos["y"] = sem_reference_pos_y + (old_sem_pos_y - pos["y"])
+                transformed_pos["x"] = sem_reference_pos_x - (old_sem_pos_x - pos["x"])
+                transformed_pos["y"] = sem_reference_pos_y - (old_sem_pos_y - pos["y"])
                 transformed_pos["z"] = sem_reference_pos_z + (pos["z"] - old_sem_pos_z)
 
                 # Update the angles to the FM position angles
-                sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                sem_pos_active["rx"] = t
-                transformed_pos.update(sem_pos_active)
-                logging.debug(f"For new tilt {t}, moving stage to {transformed_pos}")
-                self.stage.moveAbs(transformed_pos)
+                transformed_pos["rx"] = t
+                print(f"For new tilt {t} radians, {numpy.degrees(t)} degrees, moving stage to {transformed_pos}")
                 time.sleep(1)
 
-    def test_tilt_offset_correction(self):
-        # TODO change the difference value to relax or tighten it
-        # will depend on how good calibration is done
-
-        logging.debug("Check without tilt offset correction")
-        self.posture_manager.tescan_modified = False
-        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
-        f.result()
-        # move to sem
-        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.result()
-        sem_stage_position = self.stage.position.value
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
-        # move to fm
-        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
-        f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
-        # move back to sem
-        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.result()
-        sem_new_stage_position = self.stage.position.value
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
-        self.assertTrue(abs(sem_stage_position["y"] - sem_new_stage_position["y"]) > 50.0e-06)
-        logging.debug("The sem stage position without tilt correction before and after: %s, %s",
-        sem_stage_position, sem_new_stage_position)
-
-        logging.debug("Check with tilt offset correction")
-        self.posture_manager.tescan_modified = True
-        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
-        f.result()
-        # move to sem
-        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.result()
-        sem_stage_position = self.stage.position.value
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
-        # move to fm
-        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
-        f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
-        # move back to sem
-        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.result()
-        sem_new_stage_position = self.stage.position.value
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
-        self.assertTrue(abs(sem_stage_position["y"] - sem_new_stage_position["y"]) < 10.0e-06)
-        logging.debug("The sem stage position with tilt correction before and after: %s, %s",
-        sem_stage_position, sem_new_stage_position)
-        for axis in ["x", "z", "rx", "rz"]:
-            self.assertAlmostEqual(sem_new_stage_position[axis], sem_stage_position[axis], places=5)
+    def test_switching_consistency(self):
+        """Test if switching to and from sem results in the same stage coordinates"""
+        # Update the stage metadata according to the example
+        self.stage.updateMetadata({model.MD_CALIB: {"x_0": 1.77472e-03, "y_0":-0.05993e-03, "b_y":-0.297e-03,
+                                                  "z_ct":4.774e-03, "dx":-40.1e-03, "dy":0.157e-03}})
+        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {"rx": 0.349065850, "rz": 0.523598775}})  # 20°, 30°
+        self.stage.updateMetadata({model.MD_FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": -2.6179938779914944}})  # 15°, -150°
+        self.linked_stage.updateMetadata({model.MD_ROTATION: 0.6981317})  # pre-tilt 40°
+        sem_positions = [{"x": -4.413e-03, "y": -2.13888e-03, "z": 29.95268e-03, "rx": 0.349065850, "rz": 0.523598775},
+                         {"x": -0.413e-03, "y": -3.139e-03, "z": 30.637e-03, "rx": 0.349065850, "rz": 0.523598775},
+                         {"x": -5.413e-03, "y": -2.139e-03, "z": 29.953e-03, "rx": 0.349065850, "rz": 0.523598775}
+                         ]
+        # corresponding fm positions
+        fm_positions = [{"x": -32.137e-03, "y": -12.741e-03, "z": 29.243e-03, "rx": 0.261799, "rz": -2.6179938779914944},
+                        {"x": -36.137e-03, "y": -12.147e-03, "z": 29.909e-03, "rx": 0.261799, "rz": -2.6179938779914944},
+                        {"x": -31.137e-03, "y": -12.745e-03, "z": 29.243e-03, "rx": 0.261799, "rz": -2.6179938779914944}
+                        ]
+        for i in range(len(sem_positions)):
+            # move to sem
+            sem_position = sem_positions[i]
+            self.stage.moveAbs(sem_position).result()
+            current_stage_position = self.stage.position.value
+            current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+            self.assertEqual(SEM_IMAGING, current_imaging_mode)
+            for axis in sem_position.keys():
+                self.assertAlmostEqual(sem_position[axis], current_stage_position[axis], places=4)
+            # move to fm
+            f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+            f.result()
+            current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+            self.assertEqual(FM_IMAGING, current_imaging_mode)
+            fm_position = fm_positions[i]
+            current_stage_position = self.stage.position.value
+            for axis in fm_position.keys():
+                self.assertAlmostEqual(fm_position[axis], current_stage_position[axis], places=4)
+            # move back to sem
+            f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+            f.result()
+            current_stage_position = self.stage.position.value
+            current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+            self.assertEqual(SEM_IMAGING, current_imaging_mode)
+            for axis in sem_position.keys():
+                self.assertAlmostEqual(sem_position[axis], current_stage_position[axis], places=4)
 
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""

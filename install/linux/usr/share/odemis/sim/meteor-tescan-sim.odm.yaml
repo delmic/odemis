@@ -47,7 +47,7 @@ METEOR: {
         # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
         # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
         SEM_IMAGING_RANGE: {"x": [-13.e-3, 7.e-3], "y": [-10.e-3, 10.e-3], "z": [28.e-3, 32.e-3]},
-        FM_IMAGING_RANGE: {"x": [-44.e-3, -24.e-3], "y": [-23.e-3, -3.e-3], "z": [28.e-3, 32.e-3]},
+        FM_IMAGING_RANGE: {"x": [-44.e-3, -15.e-3], "y": [-23.e-3, 3.e-3], "z": [28.e-3, 32.e-3]},
         # Grid centers in SEM range,
         # These values are based on the expectation from the CAD model. Recalibrate for each system:
         SAMPLE_CENTERS: {"GRID 1": {'x': -4.73816e-3, 'y': 0.20226e-3, 'z': 30.39e-3}, "GRID 2": {'x': -0.7382e-3, 'y': 0.2023e-3, 'z': 30.39e-3}},
@@ -88,7 +88,7 @@ METEOR: {
     affects: ["Camera", "EBeam"],
     metadata: {
         # Should match exactly the FM imaging range metadata for the "Stage" component!
-        POS_ACTIVE_RANGE: {"x": [-44.e-3, -24.e-3], "y": [-23.e-3, -3.e-3]}
+        POS_ACTIVE_RANGE: {"x": [-44.e-3, 0.e-3], "y": [-23.e-3, 3.e-3]}
     },
 }
 

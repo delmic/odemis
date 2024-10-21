@@ -942,7 +942,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(self.required_keys)
         self.check_calib_data(required_keys_tescan1)
-        self.tescan_modified = True
         if not {"x", "y", "z", "rx", "rz"}.issubset(self.stage.axes):
             missed_axes = {'x', 'y', 'z', 'rx', 'rz'} - self.stage.axes.keys()
             raise KeyError("The stage misses %s axes" % missed_axes)
@@ -1051,8 +1050,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
-        :param pos: (dict str->float) the current stage position.
-        :return: (dict str->float) the transformed position.
+        :param pos: the current stage position.
+        :return: the transformed position.
         """
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
@@ -1067,45 +1066,30 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         x_0 = calibrated_values["x_0"]
         y_0 = calibrated_values["y_0"]
         z_ct = calibrated_values["z_ct"]
-        b_z = (pos["z"] - z_ct)*math.cos(rx_sem)
         b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_sem) + b_y * math.sin(rx_sem)
 
-        if self.tescan_modified:
-            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
-            # at the SEM position stage tilt
-            sem_reference_pos_x = x_0
-            sem_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
-            sem_reference_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+        # at the SEM position stage tilt
+        sem_current_pos_x = x_0
+        sem_current_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_current_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
 
-            # Calculate the equivalent coordinates of the calibrated position, at the FM position
-            fm_reference_pos_x = x_0 + calibrated_values["dx"]
-            fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_y * (1 - 1 / math.cos(rx_fm)) - b_z * math.tan(rx_fm)
-            fm_reference_pos_z = 0 - b_y * math.tan(rx_fm) - b_z * (1 - 1 / math.cos(rx_fm))
-
-        else:
-            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
-            # at the SEM position stage tilt
-            b_0 = b_z
-            sem_reference_pos_x = x_0
-            sem_reference_pos_y = y_0 - b_0 * math.tan(rx_sem)
-            sem_reference_pos_z = b_0 * (1/math.cos(rx_sem) - 1)
-
-            # Calculate the equivalent coordinates of the calibrated position, at the FM position
-            fm_reference_pos_x = x_0 + calibrated_values["dx"]
-            fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_0 * math.tan(rx_fm)
-            fm_reference_pos_z = b_0 * (1/math.cos(rx_fm) - 1)
+        # Calculate the equivalent coordinates of the calibrated position, at the FM position
+        fm_target_pos_x = x_0 + calibrated_values["dx"]
+        fm_target_pos_y = y_0 + calibrated_values["dy"] - b_y * (1 - 1 / math.cos(rx_fm)) - b_z * math.tan(rx_fm)
+        fm_target_pos_z = 0 - b_y * math.tan(rx_fm) - b_z * (1 - 1 / math.cos(rx_fm))
 
         # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
         # at the FM position.
         # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
-        transformed_pos["x"] = fm_reference_pos_x + (sem_reference_pos_x - pos["x"])
-        transformed_pos["y"] = fm_reference_pos_y + (sem_reference_pos_y - pos["y"])
-        transformed_pos["z"] = fm_reference_pos_z + (pos["z"] - sem_reference_pos_z)
+        transformed_pos["x"] = fm_target_pos_x + (sem_current_pos_x - pos["x"])
+        transformed_pos["y"] = fm_target_pos_y + (sem_current_pos_y - pos["y"])
+        transformed_pos["z"] = fm_target_pos_z + (pos["z"] - sem_current_pos_z)
 
         # Update the angles to the FM position angles
         transformed_pos.update(fm_pos_active)
 
-        # Return transformed_pos (containing the new x, y, z, rx, rz coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
     # Note: this transformation consists of translation and rotation.
@@ -1117,8 +1101,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
-        :param pos: (dict str->float) the current stage position
-        :return: (dict str->float) the transformed stage position.
+        :param pos: the current stage position
+        :return: the transformed stage position.
         """
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
@@ -1134,43 +1118,29 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         x_0 = calibrated_values["x_0"]
         y_0 = calibrated_values["y_0"]
         z_ct = calibrated_values["z_ct"]
-        b_z = (pos["z"] - z_ct) * math.cos(rx_sem)
         b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_fm) + b_y * math.sin(rx_fm)
 
+        # Calculate the equivalent coordinates of the calibrated position, at the FM position
+        fm_current_pos_x = x_0 + calibrated_values["dx"]
+        fm_current_pos_y = y_0 + calibrated_values["dy"] - b_y * (1 - 1 / math.cos(rx_fm)) - b_z * math.tan(rx_fm)
+        fm_current_pos_z = 0 - b_y * math.tan(rx_fm) - b_z * (1 - 1 / math.cos(rx_fm))
 
-        if self.tescan_modified:
-            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
-            sem_reference_pos_x = x_0
-            sem_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
-            sem_reference_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
-
-            # Calculate the equivalent coordinates of the calibrated position, at the FM position
-            fm_reference_pos_x = x_0 + calibrated_values["dx"]
-            fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_y * (1 - 1 / math.cos(rx_fm)) - b_z * math.tan(rx_fm)
-            fm_reference_pos_z = 0 - b_y * math.tan(rx_fm) - b_z * (1 - 1 / math.cos(rx_fm))
-        else:
-            b_0 = b_z
-            # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
-            sem_reference_pos_x = x_0
-            sem_reference_pos_y = y_0 - b_0 * math.tan(rx_sem)
-            sem_reference_pos_z = b_0 * (1/math.cos(rx_sem) - 1)
-
-            # Calculate the equivalent coordinates of the calibrated position, at the FM position
-            fm_reference_pos_x = x_0 + calibrated_values["dx"]
-            fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_0 * math.tan(rx_fm)
-            fm_reference_pos_z = b_0 * (1/math.cos(rx_fm) - 1)
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
+        sem_target_pos_x = x_0
+        sem_target_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_target_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
 
         # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
         # at the FM position.
         # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
-        transformed_pos["x"] = sem_reference_pos_x + (fm_reference_pos_x - pos["x"])
-        transformed_pos["y"] = sem_reference_pos_y + (fm_reference_pos_y - pos["y"])
-        transformed_pos["z"] = sem_reference_pos_z + (pos["z"] - fm_reference_pos_z)
+        transformed_pos["x"] = sem_target_pos_x + (fm_current_pos_x - pos["x"])
+        transformed_pos["y"] = sem_target_pos_y + (fm_current_pos_y - pos["y"])
+        transformed_pos["z"] = sem_target_pos_z + (pos["z"] - fm_current_pos_z)
 
         # Update the angles to the FM position angles
         transformed_pos.update(sem_pos_active)
 
-        # Return transformed_pos (containing the new x, y, z, rx, rz coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
     def _doCryoSwitchSamplePosition(self, future, target):
