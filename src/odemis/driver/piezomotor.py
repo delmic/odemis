@@ -28,6 +28,7 @@ import threading
 import time
 from concurrent.futures import CancelledError
 from threading import Thread
+from typing import Optional
 
 import serial
 import serial.tools.list_ports
@@ -327,7 +328,7 @@ class PMD401Bus(Actuator):
             finally:
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
-                self._updatePosition()
+                self._updatePosition(axes)
 
     def _search_index(self, f, axname, direction):
         """
@@ -404,9 +405,9 @@ class PMD401Bus(Actuator):
                 self._waitEndMotion(f, shifts)
             finally:
                 # Leave target mode in case of closed-loop move
-                for ax in pos:
+                for ax in shifts:
                     self.stopAxis(self._axis_map[ax])
-                self._updatePosition()
+                self._updatePosition(set(shifts.keys()))
 
     def _doMoveRel(self, f, shift):
         with f._moving_lock:
@@ -434,9 +435,9 @@ class PMD401Bus(Actuator):
                 self._waitEndMotion(f, shifts)
             finally:
                 # Leave target mode in case of closed-loop move
-                for ax in shift:
+                for ax in shifts:
                     self.stopAxis(self._axis_map[ax])
-                self._updatePosition()
+                self._updatePosition(set(shifts.keys()))
 
     def _waitEndMotion(self, f, shifts):
         """
@@ -523,16 +524,22 @@ class PMD401Bus(Actuator):
         elif status[1] & 4:
             raise PMDError(6, "External limit reached, detected on axis %s." % axis_id)
 
-    def _updatePosition(self):
+    def _updatePosition(self, axes: Optional[set] = None):
         """
         Update the position VA.
+        :param axes: names of the axes to update or None if all should be updated
         """
         pos = {}
-        for axname, axis in self._axis_map.items():
-            # TODO: if not in closed-loop, it's probably because there is no encoder, so we need a different way
-            pos[axname] = self.getEncoderPosition(axis)
+        for axname in self._axis_map:
+            if axes is None or axname in axes:
+                # TODO: if not in closed-loop, it's probably because there is no encoder, so we need a different way
+                pos[axname] = self.getEncoderPosition(axname)
         logging.debug("Reporting new position at %s", pos)
         pos = self._applyInversion(pos)
+        if axes is not None:
+            pos_full = self.position.value
+            pos_full.update(pos)
+            pos = pos_full
         self.position._set_value(pos, force_write=True)
 
     def stopAxis(self, axis):
@@ -567,13 +574,12 @@ class PMD401Bus(Actuator):
         """
         self._sendCommand(b'X%dY2,%d' % (axis, limit_type))
 
-    def getEncoderPosition(self, axis):
+    def getEncoderPosition(self, axname):
         """
-        :param axis: (int) axis number
+        :param axname: (str) axis name
         :returns (float): current position of the axis as reported by encoders (in m)
         """
-        axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
-        return int(self._sendCommand(b'X%dE' % axis)) / self._counts_per_meter[axname]
+        return int(self._sendCommand(b'X%dE' % self._axis_map[axname])) / self._counts_per_meter[axname]
 
     def runRelTargetMove(self, axis, encoder_cnts, speed):
         """
