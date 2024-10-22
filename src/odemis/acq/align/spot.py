@@ -288,7 +288,7 @@ def estimateAlignmentTime(et, dist=None, n_autofocus=2):
     n_autofocus (int): number of autofocus procedures
     returns (float):  process estimated time #s
     """
-    return estimateCenterTime(et, dist) + n_autofocus * autofocus.estimateAutoFocusTime(et)  # s
+    return estimateCenterTime(et, dist) + n_autofocus * (autofocus.MAX_STEPS_NUMBER / 2) * et  # s
 
 
 def _set_blanker(escan, active):
