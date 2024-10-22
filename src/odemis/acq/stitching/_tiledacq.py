@@ -511,8 +511,7 @@ class TiledAcquisitionTask(object):
                 # Acquisition time for each stream will be multiplied by the number of zstack levels
                 zlevels = [item for item in self._zlevels if item is not None]
                 acq_stream_time *= len(zlevels)
-            # add 2 seconds to account for switching from one tile to next tile
-            acq_time += acq_stream_time + 2
+            acq_time += acq_stream_time
 
         # Estimate stitching time based on number of pixels in the overlapping part
         max_pxs = 0
@@ -524,7 +523,8 @@ class TiledAcquisitionTask(object):
 
         stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / self.STITCH_SPEED
         try:
-            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed
+            # Extra time to account for actual stage movement happening in more than 2 dimensions
+            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed  + 0.3 * remaining
             # current tile is part of remaining, so no need to move there
         except ValueError:  # no current streams
             move_time = 0.5
