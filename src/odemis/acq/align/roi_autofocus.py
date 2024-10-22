@@ -24,7 +24,7 @@ import logging
 import threading
 import time
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
-from typing import Iterable
+from typing import Iterable, Dict, List, Optional
 
 import numpy
 
@@ -32,6 +32,25 @@ from odemis import model
 from odemis.acq import align
 from odemis.acq.align.autofocus import estimateAutoFocusTime
 from odemis.util import executeAsyncTask
+
+
+def correct_roi_autofocus_time(time_per_action: Dict[str, List[float]]) -> Optional[float]:
+    """
+    Compute average time taken to run autofocus and move stage for one focus position.
+    :param time_per_action: (Dict[str, List[float]) (Dict[str, List[float]) time taken per action (move and focus)
+        for each focus position
+    :return: computed time in seconds
+    """
+    observed_time = 0
+    for k, v in time_per_action.items():
+        if len(v) > 0:
+            observed_time += numpy.mean(v)
+        else:
+            # Time is not recorded for each action yet
+            return None
+    else:
+        observed_time = None
+    return observed_time
 
 
 def do_autofocus_in_roi(
@@ -61,18 +80,25 @@ def do_autofocus_in_roi(
     focus_positions = []
     try:
         init_pos = stage.position.value
-
-        for (x, y) in focus_points:
+        time_observers = {"focus", "move"}
+        time_per_action = {k: [] for k in time_observers}
+        for i, (x, y) in enumerate(focus_points):
+            # Update the time progress
+            f.set_progress(end=estimate_autofocus_in_roi_time(len(focus_points) - i, ccd, time_per_action) + time.time())
             with f._autofocus_roi_lock:
                 if f._autofocus_roi_state == CANCELLED:
                     raise CancelledError()
 
                 logging.debug(f"Moving the stage to autofocus at position: {x, y}")
+                move_to_pos_start = time.time()
                 stage.moveAbsSync({"x": x, "y": y})
+                time_per_action["move"].append(time.time() - move_to_pos_start)
                 # run autofocus
+                focus_start = time.time()
                 f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
 
             foc_pos, foc_lev, conf = f._running_subf.result(timeout=900)
+            time_per_action["focus"].append(time.time() - focus_start)
             if conf >= conf_level:
                 focus_positions.append([stage.position.value["x"],
                                         stage.position.value["y"],
@@ -91,6 +117,7 @@ def do_autofocus_in_roi(
         raise
 
     finally:
+        logging.info(f"The actual time taken per focus position for each action is {time_per_action}")
         logging.debug(f"Moving back to initial stage position {init_pos}")
         stage.moveAbsSync(init_pos)
         with f._autofocus_roi_lock:
@@ -101,15 +128,26 @@ def do_autofocus_in_roi(
     return focus_positions
 
 
-def estimate_autofocus_in_roi_time(n_focus_points, detector):
+def estimate_autofocus_in_roi_time(n_focus_points, detector, time_per_action=None):
     """
     Estimate the time it will take to run autofocus in a roi with nx * ny positions.
     :param n_focus_points: (tuple) number of focus points in x and y direction
     :param detector: component of the detector
-    :return:
+    :param time_per_action: (Dict[str, List[float]) time taken per action (move and focus) for each focus position
+    :return: time in seconds to complete autofocus procedure at given focus points
     """
+    # After the autofocus on first focus point, correct the time taken for subsequent focus positions
+    if time_per_action is None:
+        time_per_action = {}
+    time_per_focus_position = correct_roi_autofocus_time(time_per_action)
+    if time_per_focus_position:
+        return time_per_focus_position * n_focus_points
     # add 10 seconds to account for stage movement between focus points
-    return n_focus_points * (estimateAutoFocusTime(detector, None) + 10)
+    focus_time = n_focus_points * (estimateAutoFocusTime(detector, None))
+    move_time = n_focus_points * 10
+    logging.info(f"The computed time in seconds for autofocus for {n_focus_points} focus positions for move is {move_time}, "
+                 f"focus is {focus_time}")
+    return focus_time + move_time
 
 
 def _cancel_autofocus_bbox(future):

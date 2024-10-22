@@ -769,6 +769,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # range for the autofocus (in m)
         # default min/max range to 50 µm (half a grid square) to 1 mm (half a grid)
         # this range should cover all cases for different magnifications (e.g. 20x, 50x, 100x)
+        self.focus_points_dist_ctrl.SetValueRange(50e-6, 1000e-6)
         self.focus_points_dist= model.FloatContinuous(MAX_DISTANCE_FOCUS_POINTS, range=(50e-6, 1000e-6))
         self.focus_points_dist_vac = VigilantAttributeConnector(
             self.focus_points_dist, self.focus_points_dist_ctrl, events=wx.EVT_COMMAND_ENTER)
