@@ -481,56 +481,93 @@ class TrueForm(model.Emitter):
 
         # Immediately update the internal state, to let the setters know they should apply the settings
         self._is_powered = p
-        if p:
-            # Powered on means a square waveform
-            self.setWaveform(self._channel, "SQU")
-            for c, t in self._tracking.items():
-                other_c = 3 - c
-                self.setTracking(other_c, t)
-
-            for c, lim in enumerate(self._limits):
-                self.setVoltageMin(c + 1, lim[0])
-                self.setVoltageMax(c + 1, lim[1])
-
-            # Reset all the settings by "setting" the VAs to the current values. We need this for 3 reasons:
-            # * if the VAs were changed while the power was off, they couldn't be applied, so we
-            #   need to set them now.
-            # * maybe the user has changed them in the meantime. So we need to put back the expected values.
-            # * it actually might be the first time the device is powered on, so we need to set them all.
-            try:
-                self.dutyCycle.value = self.dutyCycle.value
-            except TrueFormError as ex:
-                logging.warning("Failed to set the duty cycle to %s after power on: %s", self.dutyCycle.value, ex)
-            try:
-                self.period.value = self.period.value  # also updates .delay, in a safe way
-            except TrueFormError as ex:
-                logging.warning("Failed to set the period to %s after power on: %s", self.period.value, ex)
-
-            # Ends by enabling the output
-            self.setOutput(self._channel, True)
-            for c in self._tracking.keys():
-                self.setOutput(c, True)
-
-            if not self.requestLock():
-                # It's not a big deal if we can't lock the device. At worse the user might
-                # be able to change the settings manually, which might be a little confusing.
-                logging.warning("Failed to lock the device front panel")
-        else:  # Off
-            # Either disable the output (if off_voltage is None), or set a DC voltage
-            # Note: when power is off, the sync is still sent.
-            for c, volt in enumerate(self._off_voltage):
-                if volt is None:
-                    self.setOutput(c + 1, False)
-                else:
-                    # Note: in DC mode, some settings cannot be changed (like the phase & duty cycle).
-                    # Also, tracking doesn't work in DC mode, so should be re-enabled when powered on.
-                    self.applyDC(c + 1, volt)
-            try:
-                self.releaseLock()
-            except TrueFormError as ex:
-                logging.warning("Failed to release the lock: %s", ex)
+        try:
+            if p:
+                self._power_device_on()
+            else:
+                self._power_device_off()
+        except Exception:
+            # If an error occurs, the device might be in some sort of inconsistent state. It's pretty
+            # hard to do "something clever". However, at least we should assume intenal state is synchronized
+            # with the VA value (which will not be updated). This way, try to set the VA again, will
+            # allow to try again doing the same thing.
+            self._is_powered = not p
+            raise
 
         return p
+
+    def _power_device_on(self):
+        """
+        Configure the device to "on" state
+        """
+        # Powered on means a square waveform
+        try:
+            self.setWaveform(self._channel, "SQU")
+        except TrueFormError as ex:
+            # It happens that when setting the waveform, some current settings have to be reset,
+            # which the keysight reports as an error, but it's not an issue, as we set all the
+            # settings again afterwards. A second error would be a sign of a real issue.
+            logging.warning("Failed to set the waveform to square, will retry: %s", ex)
+            self.setWaveform(self._channel, "SQU")
+
+        # If required, set the other channel to track the main channel
+        for c, t in self._tracking.items():
+            # The channel can only be 1 or 2. So the other channel is 3 - c: c=1 -> 2, c=2 -> 1.
+            other_c = 3 - c
+            try:
+                self.setTracking(other_c, t)
+            except TrueFormError as ex:
+                # Tracking a channel is similar to activating it, so it can have the same issue
+                # as setting the waveform.
+                logging.warning("Failed to set the channel %s to track %s, will retry: %s", t, other_c, ex)
+                self.setTracking(other_c, t)
+
+        # Configure the (square) waveform voltages: low = min and high = max
+        for c, lim in enumerate(self._limits, start=1):
+            self.setVoltageMin(c, lim[0])
+            self.setVoltageMax(c, lim[1])
+
+        # Reset all the settings by "setting" the VAs to the current values. We need this for 3 reasons:
+        # * if the VAs were changed while the power was off, they couldn't be applied, so we
+        #   need to set them now.
+        # * maybe the user has changed them in the meantime. So we need to put back the expected values.
+        # * it actually might be the first time the device is powered on, so we need to set them all.
+        try:
+            self.dutyCycle.value = self.dutyCycle.value
+        except TrueFormError as ex:
+            logging.warning("Failed to set the duty cycle to %s after power on: %s", self.dutyCycle.value, ex)
+        try:
+            self.period.value = self.period.value  # also updates .delay, in a safe way
+        except TrueFormError as ex:
+            logging.warning("Failed to set the period to %s after power on: %s", self.period.value, ex)
+
+        # Ends by enabling the output
+        self.setOutput(self._channel, True)
+        for c in self._tracking.keys():
+            self.setOutput(c, True)
+
+        if not self.requestLock():
+            # It's not a big deal if we can't lock the device. At worst, the user might
+            # be able to change the settings manually, which might be a little confusing.
+            logging.warning("Failed to lock the device front panel")
+
+    def _power_device_off(self):
+        """
+        Configure the device to "off" state
+        """
+        # Either disable the output (if off_voltage is None), or set a DC voltage
+        # Note: when power is off, the sync is still sent.
+        for c, volt in enumerate(self._off_voltage, start=1):
+            if volt is None:
+                self.setOutput(c, False)
+            else:
+                # Note: in DC mode, some settings cannot be changed (like the phase & duty cycle).
+                # Also, tracking doesn't work in DC mode, so should be re-enabled when powered on.
+                self.applyDC(c, volt)
+        try:
+            self.releaseLock()
+        except TrueFormError as ex:
+            logging.warning("Failed to release the lock: %s", ex)
 
 
 class IPBusAccesser(object):
