@@ -280,7 +280,6 @@ class PMD401Bus(Actuator):
         return f
 
     def _doReference(self, f, axes):
-        self._check_hw_error()
         # Request referencing on all axes
         # Referencing procedure: index signal is in the middle of the rod (when using encoder)
         #   * move to the limit switch in the negative direction (fixed end of the rod)
@@ -361,7 +360,8 @@ class PMD401Bus(Actuator):
 
             # Check if limit is reached
             try:
-                self._check_hw_error()
+                status = self.getStatus(axis)
+                self._check_axis_error(axis, status)
             except PMDError as ex:
                 if ex.errno == 6:  # external limit reached
                     logging.debug("Axis %d limit reached during referencing", axis)
@@ -378,10 +378,7 @@ class PMD401Bus(Actuator):
 
     def _doMoveAbs(self, f, pos):
         with f._moving_lock:
-            self._check_hw_error()
-            self._updatePosition()
             current_pos = self._applyInversion(self.position.value)
-
             shifts = {}
             if f._must_stop.is_set():
                 raise CancelledError()
@@ -413,8 +410,6 @@ class PMD401Bus(Actuator):
 
     def _doMoveRel(self, f, shift):
         with f._moving_lock:
-            self._check_hw_error()
-
             shifts = {}
             if f._must_stop.is_set():
                 raise CancelledError()
@@ -482,8 +477,10 @@ class PMD401Bus(Actuator):
                 if not moving:
                     logging.debug(f"Axis {axis} finished moving.")
                     moving_axes.discard(axname)
+                    # No need to further check and sleep, since axes finished moving
+                    if not moving_axes:
+                        break
 
-            self._check_hw_error()
             # Wait half of the time left (minimum 0.001, maximum 0.1 s)
             left_time = end_time - time.time()
             sleep_time = max(0.001, min(left_time / 2, 0.1))
@@ -492,28 +489,39 @@ class PMD401Bus(Actuator):
 
     def _check_hw_error(self):
         """
-        Read hardware status and raise exception if error is detected.
+        Read hardware status for all axis and check for errors.
+        :raise: (PMDError) exception if error is detected.
         """
         for ax, axnum in self._axis_map.items():
             status = self.getStatus(axnum)
             # Always log the status
-            logging.debug("Device status: %s", status)
-            if status[0] & 8:
-                raise PMDError(1, "Communication Error on axis %s (wrong baudrate, data collision, "
-                                  "or buffer overflow)" % ax)
-            elif status[0] & 4:
-                raise PMDError(2, "Encoder error on axis %s (serial communication or reported error from "
-                                  "serial encoder)" % ax)
-            elif status[0] & 2:
-                raise PMDError(3, "Supply voltage or motor fault was detected on axis %s." % ax)
-            elif status[0] & 1:
-                raise PMDError(4, "Command timeout occurred or a syntax error was detected on axis %s when "
-                                  "response was not allowed." % ax)
-            elif status[1] & 8:
-                # That's really not a big deal since everything is working fine after power-on, so don't raise an error.
-                logging.debug("Power-on/reset has occurred and detected on axis %s." % ax)
-            elif status[1] & 4:
-                raise PMDError(6, "External limit reached, detected on axis %s." % ax)
+            self._check_axis_error(ax, status)
+
+    def _check_axis_error(self, axis_id: int, status: list):
+        """
+        Check axis status and check for errors.
+
+        :param axis_id: axis number used by controller.
+        :param status: 4-bit status code of the axis_id.
+        :raise: (PMDError) exception if error is detected.
+        """
+        logging.debug("Device status: %s", status)
+        if status[0] & 8:
+            raise PMDError(1, "Communication Error on axis %s (wrong baudrate, data collision, "
+                              "or buffer overflow)" % axis_id)
+        elif status[0] & 4:
+            raise PMDError(2, "Encoder error on axis %s (serial communication or reported error from "
+                              "serial encoder)" % axis_id)
+        elif status[0] & 2:
+            raise PMDError(3, "Supply voltage or motor fault was detected on axis %s." % axis_id)
+        elif status[0] & 1:
+            raise PMDError(4, "Command timeout occurred or a syntax error was detected on axis %s when "
+                              "response was not allowed." % axis_id)
+        elif status[1] & 8:
+            # That's really not a big deal since everything is working fine after power-on, so don't raise an error.
+            logging.debug("Power-on/reset has occurred and detected on axis %s." % axis_id)
+        elif status[1] & 4:
+            raise PMDError(6, "External limit reached, detected on axis %s." % axis_id)
 
     def _updatePosition(self):
         """
@@ -631,18 +639,16 @@ class PMD401Bus(Actuator):
         """
         :param axis: (int) axis number
         :returns: (bool) True if moving, False otherwise
+        :raise: (PMDError) exception if error is detected.
         """
-        _, d2, d3, _ = self.getStatus(axis)
-        # Check d2 (second status value) bit 2 (external limit)
-        if d2 & 0b100:
-            logging.debug(f"External limit reached on axis {axis}, current position is {self.position.value}")
-            raise PMDError(6, f"External limit reached on axis {axis}.")
+        status = self.getStatus(axis)
+        self._check_axis_error(axis, status)
 
         # Check d3 (third status value) bit 2 (targetLimit: position limit reached) and bit 0 (targetReached)
-        if not d3 & 0b010:  # closed loop not active, thus it is not moving in closed loop
+        if not status[2] & 2:  # closed loop not active, thus it is not moving in closed loop
             logging.debug(f"Closed loop not active, therefore not moving in closed loop on axis {axis}.")
             return False
-        elif d3 & 0b101:
+        elif status[2] & 5:
             logging.debug(f"Target reached or position limit reached on axis {axis}.")
             return False
         else:
