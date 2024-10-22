@@ -27,6 +27,8 @@ import logging
 from typing import Tuple, Optional, List
 
 import numpy
+from odemis.util.driver import estimateMoveDuration, guessActuatorMoveDuration
+
 from odemis import model
 from odemis.acq.align import light
 from odemis.model import InstantaneousFuture
@@ -542,15 +544,23 @@ def estimateAcquisitionTime(detector, scanner=None):
     return et
 
 
-def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
+def estimateAutoFocusTime(detector, emt, focus: model.Actuator, dfbkg=None, good_focus=None, rng_focus=None, method=MTD_BINARY) -> float:
     """
-    detector (model.DigitalCamera or model.Detector): Detector on which to
-      improve the focus quality
-    scanner (None or model.Emitter): In case of a SED this is the scanner used
-    Estimates overlay procedure duration
+    Estimates autofocus procedure duration.
+    For the input parameters, see AutoFocus function docstring
+    :return: time in seconds
     """
-    # Add 0.5s per step to account for the focus movement (very roughly approximated)
-    return steps * estimateAcquisitionTime(detector, scanner) + steps * 0.5
+    # adjust to rng_focus if provided
+    rng = focus.axes["z"].range
+    if rng_focus:
+        rng = (max(rng[0], rng_focus[0]), min(rng[1], rng_focus[1]))
+    distance = rng[1] - rng[0]
+    # Optimally, the focus starts from middle to minimum, then maximum. Then it goes back to the middle.
+    # optimistic guess
+    move_time = guessActuatorMoveDuration(focus, "z", distance) + 2 * guessActuatorMoveDuration(focus, "z", distance/2)
+    # pessimistic guess
+    acquisition_time = MAX_STEPS_NUMBER * estimateAcquisitionTime(detector, emt)
+    return move_time + acquisition_time
 
 
 def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
@@ -610,7 +620,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     # * 0.1 s to turn off the light
     if start_autofocus:
         # calculate the time needed for the AutoFocusSpectrometer procedure to be completed
-        af_time = _totalAutoFocusTime(spgr, dets)
+        af_time = _totalAutoFocusTime(spgr, focuser,  dets, selector, streams)
         autofocus_loading_times = (5, 5, af_time, 0.2, 5) # a list with the time that each action needs
     else:
         autofocus_loading_times = (5, 5)
@@ -971,7 +981,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateAutoFocusTime(detector, emt))
+                                end=est_start + estimateAutoFocusTime(detector, emt, focus, dfbkg, good_focus, rng_focus))
     f._autofocus_state = RUNNING
     f._autofocus_lock = threading.Lock()
     f.task_canceller = _CancelAutoFocus
@@ -1019,7 +1029,7 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, strea
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     #calculate the time for the AutoFocusSpectrometer procedure to be completed
-    a_time = _totalAutoFocusTime(spectrograph, detectors)
+    a_time = _totalAutoFocusTime(spectrograph, focuser, detectors, selector, streams)
     f = model.ProgressiveFuture(start=est_start, end=est_start + a_time)
     f.task_canceller = _CancelAutoFocusSpectrometer
     # Extra info for the canceller
@@ -1036,10 +1046,10 @@ MOVE_TIME_GRATING = 20  # s
 MOVE_TIME_DETECTOR = 5  # , for the detector selector
 
 
-def _totalAutoFocusTime(spgr, dets):
-    ngs = len(spgr.axes["grating"].choices)
-    nds = len(dets)
-    et = estimateAutoFocusTime(dets[0], None)
+def _totalAutoFocusTime(spectrograph, focuser, detectors, selector, streams):
+    ngs = len(spectrograph.axes["grating"].choices)
+    nds = len(detectors)
+    et = estimateAutoFocusTime(detectors[0], None, focuser)
 
     # 1 time for each grating/detector combination, with the gratings changing slowly
     move_et = ngs * MOVE_TIME_GRATING if ngs > 1 else 0
