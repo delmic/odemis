@@ -537,7 +537,7 @@ class PMD401Bus(Actuator):
         logging.debug("Reporting new position at %s", pos)
         pos = self._applyInversion(pos)
         if axes is not None:
-            pos_full = self.position.value
+            pos_full = self.position.value.copy()
             pos_full.update(pos)
             pos = pos_full
         self.position._set_value(pos, force_write=True)
