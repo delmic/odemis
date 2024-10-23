@@ -1080,10 +1080,11 @@ class MirrorDescanner(model.Emitter):
         init_cellCompleteResolution = self.parent._mppc.cellCompleteResolution.value
 
         try:
-            # Set dwell time, flyback time, and resolution to maximum values to avoid moving the descanners too fast
+            # Set dwell time, and resolution to maximum values to avoid moving the descanners too fast
             self.parent._ebeam_scanner.dwellTime.value = self.parent._ebeam_scanner.dwellTime.range[-1]
-            self.physicalFlybackTime.value = self.physicalFlybackTime.range[-1]
             self.parent._mppc.cellCompleteResolution.value = self.parent._mppc.cellCompleteResolution.range[-1]
+            # flyback is set to minimum value, because the sine starts and ends at the same position
+            self.physicalFlybackTime.value = self.physicalFlybackTime.range[0]
             self.scanOffset.value = (0.0, 0.0)
             scan_amp_rng = self.scanAmplitude.range
 
