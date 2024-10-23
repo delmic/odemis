@@ -573,7 +573,7 @@ class ActuatorGUIData(MicroscopyGUIData):
                   }
         if main.spec_ded_aligner:
             ss_def.update({
-                "spec_ded_aligner_xy": (5e-6, [100e-9, 1e-4], "spec_ded_aligner", {"x", "y"}),
+                "spec_ded_aligner_xy": (5e-6, [100e-9, 1e-3], "spec_ded_aligner", {"x", "y"}),
                 "spec_ded_aligner_z": (25e-6, [5e-6, 500e-6], "spec_ded_aligner", {"z"}),
             })
 
