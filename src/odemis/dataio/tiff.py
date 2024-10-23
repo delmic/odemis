@@ -21,27 +21,34 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import calendar
 import configparser
-from datetime import datetime
 import json
-from libtiff import TIFF
 import logging
 import math
-import numpy
-from odemis import model, util
-import odemis
-from odemis.model import DataArrayShadow, AcquisitionData
-from odemis.util import spectrum, img, fluo, units
-from odemis.util.conversion import get_tile_md_pos, JsonExtraEncoder
 import operator
 import os
 import re
-import sys
+import statistics
 import threading
 import time
 import uuid
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from typing import List, Optional, Union
 
 import libtiff.libtiff_ctypes as T  # for the constant names
-import xml.etree.ElementTree as ET
+import numpy
+from libtiff import TIFF
+
+import odemis
+from odemis import model, util
+from odemis.model import AcquisitionData, DataArrayShadow
+from odemis.util import fluo, img, spectrum, units
+from odemis.util.conversion import (
+    JsonExtraEncoder,
+    get_tile_md_pos,
+    int32_to_rgba,
+    rgba_to_int32,
+)
 
 #pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
@@ -344,7 +351,7 @@ def _indent(elem, level=0):
             elem.tail = i
 
 
-_ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2012-06"
+_ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2016-06"
 
 
 def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids=None):
@@ -435,16 +442,16 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     # much better ignoring it completely
     if multiple_files:
         root = ET.Element('OME', attrib={
-                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2016-06",
                 "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
                 "UUID": "%s" % uuids[findex],
-                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd",
                 })
     else:
         root = ET.Element('OME', attrib={
-                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2016-06",
                 "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
-                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd",
                 })
     com_txt = ("Warning: this comment is an OME-XML metadata block, which "
                "contains crucial dimensional parameters and other important "
@@ -469,6 +476,9 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     groups = _findImageGroups(images)
 
     # Detectors, Objectives & LightSource: one per group of data with same metadata
+    light_sources = []
+    detectors = []
+    objectives = []
     for ifd, g in groups.items():
         did = ifd # our convention: ID is the first IFD
         da0 = g[0]
@@ -484,28 +494,38 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             description = ET.SubElement(experiment, "Description")
             description.text = da0.metadata[model.MD_HW_NOTE]
 
-        if model.MD_HW_NAME in da0.metadata:
-            obj = ET.SubElement(instr, "Detector", attrib={
-                                "ID": "Detector:%d" % did,
-                                "Model": da0.metadata[model.MD_HW_NAME]})
-
+        # light source must come before detector for valid ome-xml
         if (model.MD_LIGHT_POWER in da0.metadata or
             model.MD_EBEAM_CURRENT in da0.metadata or
             model.MD_EBEAM_CURRENT_TIME in da0.metadata
            ):
-            obj = ET.SubElement(instr, "LightSource",
+
+            # change the type of this light source, depending on metadata?
+            # MD_LIGHT_POWER only -> LED
+            # MD_EBEAM_CURRENT or MD_EBEAM_CURRENT_TIME -> ElectronBeam?
+
+            obj = ET.Element("LightEmittingDiode",
                                 attrib={"ID": "LightSource:%d" % did})
             if model.MD_LIGHT_POWER in da0.metadata:
                 pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
                 obj.attrib["Power"] = "%.15f" % pwr
+                obj.attrib["PowerUnit"] = "mW"
+            light_sources.append(obj)
+
+        if model.MD_HW_NAME in da0.metadata:
+            obj = ET.Element("Detector", attrib={
+                                "ID": "Detector:%d" % did,
+                                "Model": da0.metadata[model.MD_HW_NAME]})
+            detectors.append(obj)
 
         if model.MD_LENS_MAG in da0.metadata:
             mag = da0.metadata[model.MD_LENS_MAG]
-            obj = ET.SubElement(instr, "Objective", attrib={
+            obj = ET.Element("Objective", attrib={
                                 "ID": "Objective:%d" % did,
                                 "CalibratedMagnification": "%.15f" % mag})
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
+            objectives.append(obj)
 
         # Make sure all string metadata values are unicode strings (not bytes),
         # otherwise serialization will fail later on
@@ -518,20 +538,30 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
                         logging.warning("Failed to decode value of metadata '%s'.", key)
                         da.metadata[key] = ''
 
+    # add the instrument elements in the correct order
+    instr.extend(light_sources + detectors + objectives)
     # TODO: filters (with TransmittanceRange)
 
     rois = {} # dict str->ET.Element (ROI ID -> ROI XML element)
     fname_index = 0
+    map_annos = []
     for ifd, g in groups.items():
         if multiple_files:
             # Remove path from filename
             path, bname = os.path.split(fname)
             tokens = bname.rsplit(STIFF_SPLIT, 1)
             part_fname = tokens[0] + "." + str(fname_index) + "." + tokens[1]
-            _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
+            ma = _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
             fname_index += 1
         else:
-            _addImageElement(root, g, ifd, rois)
+            ma = _addImageElement(root, g, ifd, rois)
+
+        if ma is not None:
+            map_annos.append(ma)
+
+    # Create the StructuredAnnotations element as a sub-element of root
+    sa = ET.SubElement(root, "StructuredAnnotations")
+    sa.extend(map_annos)
 
     # ROIs have to come _after_ images, so add them only now
     root.extend(list(rois.values()))
@@ -577,7 +607,7 @@ def _updateMDFromOME(root, das):
     # images found in the files that are already accessed
     ifd_offset = 0
 
-    for ime in root.findall("Image"):
+    for idnum, ime in enumerate(root.findall("Image")):
         md = {}
         try:
             md[model.MD_DESCRIPTION] = ime.attrib["Name"]
@@ -622,6 +652,7 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
+        # maintain ExtraSettings and Transform direct reads for legacy support
         extrase = ime.find("ExtraSettings")
         try:
             md[model.MD_EXTRA_SETTINGS] = json.loads(extrase.text)
@@ -650,6 +681,26 @@ def _updateMDFromOME(root, das):
                     md[model.MD_SHEAR] = shear
             except (AttributeError, KeyError, ValueError):
                 pass
+
+        # QUERY: the extrasettings and rotation/shear are the same for all the images,
+        # if not we should store as MapAnnotation:X
+        sa = root.find("StructuredAnnotations")
+        try:
+            mapa = sa.find(f".//MapAnnotation[@ID='Annotation:{idnum}']")
+            # read extrasettings from root.structuredannotation.mapannotation:0
+            extrasettings = mapa.find(".//M[@K='ExtraSettings']")
+            md[model.MD_EXTRA_SETTINGS] = json.loads(extrasettings.text)
+
+            rotation = mapa.find(".//M[@K='Rotation']")
+            if rotation is not None:
+                md[model.MD_ROTATION] = float(rotation.text)
+
+            shear = mapa.find(".//M[@K='Shear']")
+            if shear is not None:
+                md[model.MD_SHEAR] = float(shear.text)
+
+        except (AttributeError, KeyError, ValueError):
+            pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
 
@@ -725,8 +776,13 @@ def _updateMDFromOME(root, das):
 
             try:
                 hex_str = che.attrib["Color"] # hex string
-                hex_str = hex_str[-8:] # almost copy of conversion.hex_to_rgb
-                tint = tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4, 6])
+                try:
+                    # try to cast as int -> its uint32 stored, otherwise its hex str
+                    color_int = int(hex_str)
+                    tint = int32_to_rgba(color_int)
+                except Exception:
+                    hex_str = hex_str[-8:] # almost copy of conversion.hex_to_rgb
+                    tint = tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4, 6])
                 mdc[model.MD_USER_TINT] = tint[:3] # only RGB
             except (KeyError, ValueError):
                 pass
@@ -759,7 +815,12 @@ def _updateMDFromOME(root, das):
             ls_settings = che.find("LightSourceSettings")
             if ls_settings is not None:
                 try:
+                    # previous metadata versions used LightSource to store the LightSourceSettings,
+                    # but for full compatibility we need to specify the specific source as LightEmittingDiode,
+                    # we check both to maintain backwards compatibility.
                     ls = _findElementByID(root, ls_settings.attrib["ID"], "LightSource")
+                    if ls is None:
+                         ls = _findElementByID(root, ls_settings.attrib["ID"], "LightEmittingDiode")
                     try:
                         pwr = float(ls.attrib["Power"]) * 1e-3  # mW -> W
                         mdc[model.MD_LIGHT_POWER] = pwr
@@ -845,6 +906,7 @@ def _updateMDFromOME(root, das):
 
         # Plane (= one per high dim -> IFD)
         deltats = {}  # T -> DeltaT
+        z_positions = [] # the Z positions
         for ple in pxe.findall("Plane"):
             mdp = {}
             pos = []
@@ -883,6 +945,7 @@ def _updateMDFromOME(root, das):
                 # we should add it as well. If not, this part will trigger a KeyError
                 psz = float(ple.attrib["PositionZ"])
                 mdp[model.MD_POS] = (psx, psy, psz)
+                z_positions.append(psz)
             except (KeyError, ValueError):
                 pass
 
@@ -897,6 +960,14 @@ def _updateMDFromOME(root, das):
             if da is None:
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
+
+        # update the metadata to overwrite the Z position .
+        # the ome stores the Z position in the metadata of each plane
+        # but odemis MD_POS is the centre of the image
+        if z_positions:
+            for da in das:
+                pos = da.metadata[model.MD_POS]
+                da.metadata[model.MD_POS] = pos[0], pos[1], statistics.median(z_positions)
 
         # Update metadata of each da, so that they will be merged
         if deltats:
@@ -1344,29 +1415,42 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                             attrib={"ID": "Detector:%d" % ifd,
                                     "Offset": "%.15f" % globalMD[model.MD_BASELINE]})
 
-    if model.MD_ROTATION in globalMD or model.MD_SHEAR in globalMD:
-        # globalMD.get(model.MD_ROTATION, 0)
-        rot = globalMD.get(model.MD_ROTATION, 0)
-        sinr, cosr = math.sin(rot), math.cos(rot)
-        she = globalMD.get(model.MD_SHEAR, 0)
-        # Note: Transform was suggested in 2013 (and mistakenly shown as official
-        # for a short while) but it's just our extention.
-        # It was suggested to use a special key/value pair in MapAnnotation instead.
-        trane = ET.SubElement(ime, "Transform")
-        trans_mat = [[cosr + sinr * she, sinr, 0],
-                     [-sinr + cosr * she, cosr, 0]]
-        for i in range(2):
-            for j in range(3):
-                trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
+    # store the rotation, shear and extra settings in the StructuredAnnotations
+    # as they are non-standard metadata
+    map_annotation = None
+    if (model.MD_EXTRA_SETTINGS in globalMD or
+        model.MD_ROTATION in globalMD or
+        model.MD_SHEAR in globalMD):
 
-    if model.MD_EXTRA_SETTINGS in globalMD:
-        sett = globalMD[model.MD_EXTRA_SETTINGS]
-        extrase = ET.SubElement(ime, "ExtraSettings")
+        # get the extra settings from the global metadata
+        sett = globalMD.get(model.MD_EXTRA_SETTINGS, {})
+
+        # Create the MapAnnotation element
+        map_annotation = ET.Element("MapAnnotation")
+        map_annotation.set("ID", "Annotation:%d" % idnum)
+
+        # Create the Value element
+        value = ET.SubElement(map_annotation, "Value")
+
+        # Create the M element
+        m = ET.SubElement(value, "M")
+        m.set("K", "ExtraSettings")
+
+        # Set the text of the M element to the JSON string
         try:
-            extrase.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
+            m.text = json.dumps(sett, cls=JsonExtraEncoder)  # serialize hw settings
         except Exception as ex:
             logging.error("Failed to save ExtraSettings metadata, exception %s" % ex)
-            extrase.text = ''
+            m.text = ''
+
+        # Create the M element
+        if model.MD_ROTATION in globalMD:
+            m = ET.SubElement(value, "M", attrib={"K": model.MD_ROTATION})
+            m.text = "%.15f" % globalMD[model.MD_ROTATION]
+        if model.MD_SHEAR in globalMD:
+            m = ET.SubElement(value, "M", attrib={"K": model.MD_SHEAR})
+            m.text = "%.15f" % globalMD[model.MD_SHEAR]
+
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
@@ -1415,8 +1499,11 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
+        pixels.attrib["PhysicalSizeXUnit"] = "µm"
+        pixels.attrib["PhysicalSizeYUnit"] = "µm"
         if len(pxs) == 3:
             pixels.attrib["PhysicalSizeZ"] = "%.15f" % (pxs[2] * 1e6)
+            pixels.attrib["PhysicalSizeZUnit"] = "µm"
 
     # Note: TimeIncrement can be used to replace DeltaT if the duration is always
     # the same (which it is), but it also means it starts at 0, which is not
@@ -1513,9 +1600,30 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 tint = da.metadata[model.MD_USER_TINT]
                 if isinstance(tint, tuple):
                     if len(tint) == 3:
-                        tint = tuple(tint) + (255,)  # need alpha channel
-                    hex_str = "".join("%.2x" % c for c in tint)  # copy of conversion.rgb_to_hex()
-                    chan.attrib["Color"] = "#%s" % hex_str
+                        tint = *tint, 255 # add alpha
+                    chan.attrib["Color"] = str(rgba_to_int32(tint))
+
+            # light source must be before detector...
+            # Add info on the light source: same structure as Detector
+            attrib = {}
+            if model.MD_EBEAM_CURRENT in da.metadata:
+                attrib["Current"] = "%.15f" % da.metadata[model.MD_EBEAM_CURRENT]  # A
+
+            # TODO: non-standard metadata, treat it differently for different detectors
+            cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
+            if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
+                attrib["ID"] = "LightSource:%d" % ifd
+                ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
+                # This is a non-standard metadata, it defines the emitter, which
+                # OME considers to always be a LightSource (although in this case it's
+                # an e-beam). To associate time -> current, we use a series of elements
+                # "Current" with an attribute date (same format as AcquisitionDate),
+                # and the current in A as the value.
+                if cot:
+                    for t, cur in cot:
+                        st = datetime.utcfromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S.%f")
+                        cote = ET.SubElement(ds, "Current", attrib={"Time": st})
+                        cote.text = "%.18f" % cur
 
             # Add info on detector
             attrib = {}
@@ -1534,26 +1642,6 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 # detector of the group has the same id as first IFD of the group
                 attrib["ID"] = "Detector:%d" % ifd
                 ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
-
-            # Add info on the light source: same structure as Detector
-            attrib = {}
-            if model.MD_EBEAM_CURRENT in da.metadata:
-                attrib["Current"] = "%.15f" % da.metadata[model.MD_EBEAM_CURRENT]  # A
-
-            cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
-            if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
-                attrib["ID"] = "LightSource:%d" % ifd
-                ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
-                # This is a non-standard metadata, it defines the emitter, which
-                # OME considers to always be a LightSource (although in this case it's
-                # an e-beam). To associate time -> current, we use a series of elements
-                # "Current" with an attribute date (same format as AcquisitionDate),
-                # and the current in A as the value.
-                if cot:
-                    for t, cur in cot:
-                        st = datetime.utcfromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S.%f")
-                        cote = ET.SubElement(ds, "Current", attrib={"Time": st})
-                        cote.text = "%.18f" % cur
 
             subid += 1
 
@@ -1602,6 +1690,21 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
     # Plane Element
     subid = 0
+
+    # get the actual z positions (MD_POS is the center of the image)
+    pos = da.metadata.get(model.MD_POS, (0, 0))
+    pixelsize = da.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
+    if len(pos) == 3 and len(pixelsize) == 3:
+        nz = rep_hdim[hdims.index("Z")]
+        center_pos_z = pos[2]
+        zstep = pixelsize[2]
+
+        # calculate the actual pos of the z planes
+        # centre z -/+ pixelsize * zstep
+        z_positions = numpy.linspace(center_pos_z - (nz - 1) * zstep / 2,
+                               center_pos_z + (nz - 1) * zstep / 2,
+                               nz)
+
     for index in numpy.ndindex(*rep_hdim):
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
@@ -1614,22 +1717,19 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         # each C. However, that's not the point of this field, and it's pretty
         # much never useful to know the slightly different acquisition dates for
         # each C.
-        # We now just store TIME_OFFSET + PIXEL_DUR info
-        # TODO in future only use TIME_LIST
-        if model.MD_PIXEL_DUR in da.metadata:
-            t = index[hdims.index("T")]
-            deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
-            plane.attrib["DeltaT"] = "%.15f" % deltat
         if time_list is not None:
             plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
             plane.attrib["ExposureTime"] = "%.15f" % exp
+            plane.attrib["ExposureTimeUnit"] = "s"
+
         elif model.MD_DWELL_TIME in da.metadata:
             # save it as is (it's the time each pixel receives "energy")
             exp = da.metadata[model.MD_DWELL_TIME]
             plane.attrib["ExposureTime"] = "%.15f" % exp
+            plane.attrib["ExposureTimeUnit"] = "s"
 
         # integration count: number of samples/images per px (ebeam) position
         if model.MD_INTEGRATION_COUNT in da.metadata:
@@ -1643,9 +1743,12 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             pos = da.metadata[model.MD_POS]
             plane.attrib["PositionX"] = "%.15f" % pos[0] # any unit is allowed => m
             plane.attrib["PositionY"] = "%.15f" % pos[1]
+            plane.attrib["PositionXUnit"] = "m"
+            plane.attrib["PositionYUnit"] = "m"
 
             if len(pos) == 3:
-                plane.attrib["PositionZ"] = "%.15f" % pos[2]
+                plane.attrib["PositionZ"] = "%.15f" % z_positions[index[hdims.index("Z")]] # the actual z position
+                plane.attrib["PositionZUnit"] = "m"
 
         subid += 1
 
@@ -1719,6 +1822,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         if model.MD_TRIGGER_RATE in globalMD:
             streakCamData.attrib["TriggerRate"] = "%f" % globalMD[model.MD_TRIGGER_RATE]
 
+    return map_annotation
 
 def _createPointROI(rois, name, p, shp_attrib=None):
     """
@@ -1766,20 +1870,29 @@ def _mergeCorrectionMetadata(da):
     return model.DataArray(da, md) # create a view
 
 
-def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False,
-                       file_index=None, uuid_list=None, pyramid=False):
+def _saveAsMultiTiffLT(
+    filename: str,
+    ldata: List[model.DataArray],
+    thumbnail: Optional[model.DataArray],
+    compressed: bool = True,
+    multiple_files: bool = False,
+    file_index: int = None,
+    uuid_list: List[str] = None,
+    pyramid: bool = False,
+    imagej: bool = False,
+):
     """
     Saves a list of DataArray as a multiple-page TIFF file.
-    filename (string): name of the file to save
-    ldata (list of DataArray): list of 2D data of int or float. Should have at least one array
-    thumbnail (None or DataArray): see export
-    compressed (boolean): whether the file is LZW compressed or not.
-    multiple_files (boolean): whether the data is distributed across multiple
-      files or not.
-    file_index (int): index of this particular file.
-    uuid_list (list of str): list that contains all the file uuids
-    pyramid (boolean): whether the file should be saved in the pyramid format or not.
+    :param filename: name of the file to save
+    :param ldata: list of 2D data of int or float. Should have at least one array
+    :param thumbnail: see export
+    :param compressed: whether the file is LZW compressed or not.
+    :param multiple_files: whether the data is distributed across multiple files or not.
+    :param file_index: index of this particular file.
+    :param uuid_list: list that contains all the file uuids
+    :param pyramid: whether the file should be saved in the pyramid format or not.
       In this format, each image is saved along with different zoom levels
+    :param imagej: save the metadata in a way that ImageJ can read it
     """
     if multiple_files:
         # Add index
@@ -1888,8 +2001,6 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     groups = _findImageGroups(ldata)
 
     sorted_groups = sorted(groups.items(), key=operator.itemgetter(0))
-    # Extract ImageJ compatible Image description based on the first group dimension
-    imagej_description = extract_imagej_metadata(sorted_groups[0][1])
 
     if multiple_files:
         groups = _findImageGroups(alldata)
@@ -1900,10 +2011,15 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
 
-    # Write the OME metadata + ImageJ metadata on the first image (only)
-    # If thumbnail is present, the tiff file is not compatible with ImageJ
+    # Extract ImageJ compatible Image description based on the first group dimension
+    # and add it too the head of the OME metadata
+    if imagej:
+        imagej_description = extract_imagej_metadata(sorted_groups[0][1])
+        ometxt = imagej_description + ometxt
+
+    # Write the OME metadata in the first image
     if ometxt:
-        f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
+        f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
 
     for fifd, das in sorted_groups:
         if len(das) == 0:
@@ -2059,24 +2175,34 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
         f.write_tiles(subim, TILE_SIZE, TILE_SIZE, compression, write_rgb)
 
 
-def export(filename, data, thumbnail=None, compressed=True, multiple_files=False, pyramid=False):
-    '''
+def export(
+    filename: str,
+    data: Union[model.DataArray, List[model.DataArray]],
+    thumbnail: Optional[model.DataArray] = None,
+    compressed: bool = True,
+    multiple_files: bool = False,
+    pyramid: bool = False,
+    imagej: bool = False,
+) -> None:
+    """
     Write a TIFF file with the given image and metadata
-    filename (unicode): filename of the file to create (including path)
-    data (list of model.DataArray, or model.DataArray): the data to export.
+    :param filename: filename of the file to create (including path)
+    :param data: the data to export.
        Metadata is taken directly from the DA object. If it's a list, a multiple
        page file is created. It must have 5 dimensions in this order: Channel,
        Time, Z, Y, X. However, all the first dimensions of size 1 can be omitted
        (ex: an array of 111YX can be given just as YX, but RGB images are 311YX,
        so must always be 5 dimensions).
-    thumbnail (None or numpy.array): Image used as thumbnail
+    :param thumbnail: Image used as thumbnail
       for the file. Can be of any (reasonable) size. Must be either 2D array
       (greyscale) or 3D with last dimension of length 3 (RGB). If the exporter
       doesn't support it, it will be dropped silently.
-    compressed (boolean): whether the file is compressed or not.
-    multiple_files (boolean): whether the data is distributed across multiple
+    :param compressed: whether the file is compressed or not.
+    :param multiple_files: whether the data is distributed across multiple
       files or not.
-    '''
+    :param pyramid: whether to export data as pyramid
+    :param imagej: save the metadata in a format compatible with ImageJ
+    """
     if not isinstance(data, list):
         data = [data]
 
@@ -2092,10 +2218,10 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
         for i in range(nfiles):
             # TODO: Take care of thumbnails
             _saveAsMultiTiffLT(filename, data, None, compressed,
-                                multiple_files, i, uuid_list, pyramid)
+                                multiple_files, i, uuid_list, pyramid, imagej=imagej)
         return
 
-    _saveAsMultiTiffLT(filename, data, thumbnail, compressed, pyramid=pyramid)
+    _saveAsMultiTiffLT(filename, data, thumbnail, compressed, pyramid=pyramid, imagej=imagej)
 
 
 def read_data(filename):
@@ -2337,8 +2463,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         try:
             data, thumbnails = self._getAllOMEDataArrayShadows(filename, tiff_file)
         except ValueError as ex:
-            logging.info("Failed to use the OME data (%s), will use standard TIFF",
-                         ex)
+            logging.info("Failed to use the OME data (%s), will use standard TIFF", ex)
             data, thumbnails = self._getAllDataArrayShadows(tiff_file, self._lock)
 
         # In case we open a basic TIFF file not generated by Odemis, this is a
