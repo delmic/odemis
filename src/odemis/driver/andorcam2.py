@@ -2531,9 +2531,9 @@ class AndorCam2(model.DigitalCamera):
                     # Trigger received => start the acquisition
                     self.atcore.SendSoftwareTrigger()
                 elif trigger_mode == TRIG_FAKE:
-                    # In theory, it's supposed to make the StartAcquisition(). In practice, it doesn't
-                    # seem to help much, but we still do it just in case it helps a little bit.
-                    self.atcore.PrepareAcquisition()
+                    # In theory, we could call PrepareAcquisition(), as it's supposed to make the StartAcquisition().
+                    # In practice, it doesn't seem to help much, and even more annoyingly, it sometimes fails
+                    # claiming that the (previous) acquisition is still running.
 
                     # Wait for trigger
                     msg = self._acq_wait_trigger()
