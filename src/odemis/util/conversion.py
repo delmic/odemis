@@ -23,6 +23,7 @@ import logging
 import math
 import re
 from collections.abc import Iterable
+from typing import Tuple
 
 import cv2
 import numpy
@@ -164,6 +165,41 @@ def hex_to_frgba(hex_str, af=1.0):
     """
     return rgba_to_frgba(hex_to_rgba(hex_str, int(af * 255)))
 
+# from claude / ome_types
+def rgba_to_int32(rgba: Tuple[int]) -> int:
+    """Convert an RGBA tuple to a signed 32-bit integer representation.
+    :param rgba: A tuple of values (Red, Green, Blue, Alpha) (0-255)
+    :return: A signed 32-bit integer representation of the color with alpha"""
+    if len(rgba) != 4:
+        raise ValueError(f"Illegal RGBA colour {rgba}")
+    r, g, b, a = rgba
+    v = r << 24 | g << 16 | b << 8 | a
+    return v if v < 2**31 else v - 2**32
+
+def int32_to_rgba(int32_color: int) -> Tuple[int]:
+    """
+    Convert a signed 32-bit integer representation back to an RGBA tuple.
+
+    :param int32_color: A signed 32-bit integer representation of the color with alpha
+    :return: A tuple of four values (Red, Green, Blue, Alpha),
+        where each value is in the range (0-255)
+    """
+    if not isinstance(int32_color, int):
+        raise TypeError(f"Value {int32_color} is not an integer")
+    # check if the value is a signed 32-bit integer
+    if not -2**31 <= int32_color < 2**31:
+        raise ValueError(f"Value {int32_color} is not a signed 32-bit integer")
+
+    # Convert to unsigned if negative
+    if int32_color < 0:
+        int32_color += 2**32
+
+    r = (int32_color >> 24) & 255
+    g = (int32_color >> 16) & 255
+    b = (int32_color >> 8) & 255
+    a = (int32_color & 255)
+
+    return r, g, b, a
 
 # String -> VA conversion helper
 def convert_to_object(s):

@@ -33,7 +33,8 @@ from odemis.util.conversion import (JsonExtraEncoder, YamlExtraDumper,
                                     convert_to_object, ensure_tuple,
                                     get_img_transformation_matrix,
                                     get_img_transformation_md, get_tile_md_pos,
-                                    reproduce_typed_value)
+                                    reproduce_typed_value,
+                                    rgba_to_int32, int32_to_rgba)
 
 
 class TestConversion(unittest.TestCase):
@@ -370,6 +371,38 @@ class TestConversion(unittest.TestCase):
         self.assertEqual(loaded_data["float16"], data["float16"])
         self.assertEqual(loaded_data["float32"], data["float32"])
         self.assertEqual(loaded_data["float64"], data["float64"])
+
+
+    def test_color_conversion(self):
+        # Test color conversion between rgba and int32
+
+        # check limits
+        rgba = (255, 255, 255, 255)
+        int32 = rgba_to_int32(rgba)
+        self.assertEqual(int32, -1)
+
+        rgba = (0, 0, 0, 0)
+        int32 = rgba_to_int32(rgba)
+        self.assertEqual(int32, 0)
+
+        # red
+        rgba = (255, 0, 0, 255)
+        int32 = rgba_to_int32(rgba)
+        self.assertEqual(int32, -16776961)
+
+        # roundtrip rgba -> int32 -> rgba
+        rgba = (255, 128, 0, 255)
+        int32 = rgba_to_int32(rgba)
+        rgba2 = int32_to_rgba(int32)
+        self.assertEqual(rgba, rgba2)
+
+        # check error cases
+        with self.assertRaises(ValueError):
+            rgba_to_int32((255, 0, 0)) # no alpha
+        with self.assertRaises(TypeError):
+            int32_to_rgba("foo") # not an int
+        with self.assertRaises(ValueError):
+            int32_to_rgba(1 << 32) # too big (not int32)
 
 
 if __name__ == "__main__":
