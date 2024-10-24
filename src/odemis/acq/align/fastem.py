@@ -93,7 +93,7 @@ class Calibrations(Enum):
 
 
 def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
-          se_detector, ebeam_focus, calibrations, stage_pos=None, spot_grid_thresh=0.5):
+          se_detector, ebeam_focus, calibrations, stage_pos=None, spot_grid_thresh=0.5, debug=True):
     """
     Start a calibration task for a given list of calibrations.
 
@@ -113,6 +113,7 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
                       the calibration is run at the current stage position.
     :param spot_grid_thresh: (0<float<=1) Relative threshold on the minimum intensity of spots in the
         diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
+    :param debug: (bool) flag which states if the calibration images should be saved for debugging purpose or not.
 
     :returns: (ProgressiveFuture) Alignment future object, which can be cancelled.
     """
@@ -125,7 +126,7 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
 
     # Create a task that runs the calibration and alignments.
     task = CalibrationTask(f, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
-                           se_detector, ebeam_focus, calibrations, stage_pos, spot_grid_thresh)
+                           se_detector, ebeam_focus, calibrations, stage_pos, spot_grid_thresh, debug=debug)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -152,7 +153,7 @@ class CalibrationTask(object):
     """
 
     def __init__(self, future, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
-                 se_detector, ebeam_focus, calibrations, stage_pos, spot_grid_thresh):
+                 se_detector, ebeam_focus, calibrations, stage_pos, spot_grid_thresh, debug=True):
         """
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled.
                        (Exception or None): Exception raised during the calibration or None.
@@ -173,6 +174,7 @@ class CalibrationTask(object):
                       the calibration is run at the current stage position.
         :param spot_grid_thresh: (0<float<=1) Relative threshold on the minimum intensity of spots in the
             diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
+        :param debug: (bool) flag which states if the calibration images should be saved for debugging purpose or not.
         """
         self.asm_config = None
         self._scanner = scanner
@@ -191,6 +193,7 @@ class CalibrationTask(object):
         self.calibrations = calibrations
         self.stage_pos = stage_pos
         self.spot_grid_thresh = spot_grid_thresh
+        self.debug = debug
 
         # List of calibrations to be executed. Used for progress update.
         self._calibrations_remaining = set(calibrations)
@@ -259,7 +262,7 @@ class CalibrationTask(object):
             for calib in self.calibrations:
                 calib_cls = calib.value
                 logging.debug("Starting calibration %s", calib_cls.__name__)
-                calib_runner = calib_cls(components)
+                calib_runner = calib_cls(components, debug=self.debug)
                 # TODO return a sub-future when implemented for calibrations
                 self.run_calibration(calib_runner, spot_grid_thresh=self.spot_grid_thresh)
 
