@@ -643,11 +643,14 @@ class FastEMMainGUIData(MainGUIData):
             calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:
+            # Run image translation before image rotation to ensure the pattern is fully on the mppc, run it again
+            # after image rotation because the pattern is not rotated exactly around its own center.
             calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                                     Calibrations.IMAGE_ROTATION_PREALIGN,
                                     Calibrations.SCAN_ROTATION_PREALIGN,
                                     Calibrations.DESCAN_GAIN_STATIC,
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.IMAGE_TRANSLATION_FINAL,
                                     Calibrations.IMAGE_ROTATION_FINAL,
                                     Calibrations.IMAGE_TRANSLATION_FINAL]
             calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
