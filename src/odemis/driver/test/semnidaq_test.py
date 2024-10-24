@@ -774,9 +774,9 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
-    def test_acquisition_sparc(self):
+    def test_acquisition_sparc_hwsync(self):
         """
-        Test acquisitions for SPARC spectrum data
+        Test acquisitions for "fast" SPARC spectrum data (eg, every 0.5ms), with HW pixel trigger
         """
         self.scanner.dwellTime.value = 0.5e-3
         self.scanner.scale.value = (1, 1)  # => res is max
@@ -788,6 +788,38 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
         for i in range(da.shape[0]):
             print("%d th line average: %s" % (i, da[i, :].mean(),))
+
+    def test_acquisition_sparc_slow(self):
+        """
+        Test acquisitions for "slow" SPARC spectrum data (eg, every 0.1s), without HW trigger synchronization
+        """
+        start_dt = 0.1
+        self.scanner.dwellTime.value = start_dt
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = (1, 1)
+        self.scanner.translation.value = (0, 0)
+        exp_shape, exp_pxs, exp_duration = self.compute_expected_metadata()
+
+        spots_dates = []
+        for i in range(50):
+            # On the SPARC, the dwell time doesn't actually change for every spot, but let's make it
+            # a little harder.
+            self.scanner.dwellTime.value = start_dt / (i + 1)
+            logging.debug("Will acquire spot %d at dt = %s", i, self.scanner.dwellTime.value)
+            self.scanner.translation.value = (0, i)  # New scan parameter every time
+            # Typically acquires 1 frame, and runs a second frame until half of it. But let's just let it
+            # run a lot, and we'll stop it before it's done.
+            self.expected_shape = exp_shape
+            self.left = 10
+            self.im_received.clear()
+            self.sed.data.subscribe(self.receive_image)
+            time.sleep(0.2 + exp_duration * 1.5)
+            self.sed.data.unsubscribe(self.receive_image)
+            self.assertTrue(self.im_received.is_set(), f"No image received on pixel {i}")
+            spots_dates.append(self.acq_dates[-1])
+            time.sleep(5e-3)  # simulate data processing
+
+        self.assertEqual(len(spots_dates), 50)
 
     def test_acquisition_long_dt(self):
         """
