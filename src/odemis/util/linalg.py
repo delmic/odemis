@@ -44,7 +44,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 """
 import math
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, List
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
@@ -262,3 +262,13 @@ def generate_triangulation_points(max_dist: float, area_coords: Iterable[float])
         points = matrix.tolist()
 
     return points
+
+
+def ranges_overlap(range1: List[float], range2: List[float]) -> bool:
+    """
+    Determines if two numerical ranges overlap.
+    :param range1: The first numerical range, represented as a list of floats.
+    :param range2: The second numerical range, represented as a list of floats.
+    :return: True if the ranges overlap, False otherwise.
+    """
+    return min(range1) <= max(range2) and max(range1) >= min(range2)
