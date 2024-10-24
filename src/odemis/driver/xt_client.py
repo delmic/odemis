@@ -43,7 +43,7 @@ from odemis import util
 from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
                           DataArray, HwError, ProgressiveFuture,
                           StringEnumerated, isasync)
-from odemis.util.driver import isNearPosition
+from odemis.util.driver import isNearPosition, estimate_stage_movement_time
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -2161,6 +2161,12 @@ class SEMDataFlow(model.DataFlow):
         self._detector.stop_generate()
 
 
+STAGE_WAIT_DURATION = 20e-03  # s
+STAGE_FRACTION_TOTAL_MOVE = 0.01  # tolerance of the requested stage movement
+STAGE_TOL_LINEAR = 1e-06  # in m, minimum tolerance
+STAGE_TOL_ROTATION = 0.00436  # in radians (0.25 degrees), minimum tolerance
+
+
 class Stage(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
@@ -2297,8 +2303,6 @@ class Stage(model.Actuator):
     def _moveTo(self, future: futures.Future, pos: Dict[str, float], rel: bool = False, timeout: float = 60) -> None:
         with future._moving_lock:
             try:
-                WAIT_DURATION = 20e-03  # s
-
                 if future._must_stop.is_set():
                     raise CancelledError()
                 if rel:
@@ -2346,7 +2350,7 @@ class Stage(model.Actuator):
                         break
 
                     # Wait for a little while so that we do not keep using the CPU all the time.
-                    time.sleep(WAIT_DURATION)
+                    time.sleep(STAGE_WAIT_DURATION)
                     moving = self.parent.stage_is_moving()
                     if not moving:
                         # Be a little careful, because sometimes, half-way through a move
@@ -2355,7 +2359,7 @@ class Stage(model.Actuator):
                         self._updatePosition()
                         logging.debug("Confirming the stage really stopped")
 
-                        time.sleep(WAIT_DURATION)
+                        time.sleep(STAGE_WAIT_DURATION)
                         moving = self.parent.stage_is_moving()
                         if moving:
                             logging.warning("Stage reported stopped but moving again, will wait longer")
@@ -2374,54 +2378,47 @@ class Stage(model.Actuator):
                 # is eventually updated that the stage has moved unexpectedly. So, wait until the reported position is
                 # (1) not identical to the starting position and (2) not too far from the target position.
 
-                # The stage is not moving anymore, but we still want to wait until the position has been updated
-                # TODO: base the timeout on the stage movement time estimation (est. *10)
-                timeout = 10  # s
-                expected_end_time = time.time() + timeout  # s
-                check_pos = True
-
-                # TODO: Include rotation and tilt to check stage movement to target position. Test it on a hardware.
-                # The below check to skip the check on stage movement to target position if it includes r ot t
-                # is temporary. It will be removed once the behavior is extended to all the axes and confirmed to work
-                # on a hardware.
-                if 'r' in pos or 't' in pos:
-                    logging.debug("Position requested to move includes t (rx/tilt) or r (rz/rotation). "
-                                  "Reported position accuracy is not checked.")
-                    check_pos = False
-
                 # Get the target position in absolute coordinates
                 if rel:
                     target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
                 else:
-                    target_pos = pos
+                    target_pos = {ax: pos[ax] for ax, val in orig_pos.items()}
 
-                while check_pos:
+                # The stage is not moving anymore, but we still want to wait until the position has been updated
+                # TODO: base the timeout on stage movement time estimation, needs to be checked on hardware
+                wait_stage_move = 10  # s
+                expected_end_time = time.time() + wait_stage_move  # s
+
+                # Update rotational and linear tolerances according to the magnitude of requested change
+                linear_axes_to_check = {"x", "y", "z"}.intersection(target_pos.keys())
+                rotational_axes_to_check = {"t", "r"}.intersection(target_pos.keys())
+                current_pos = self.parent.get_stage_position()
+                movement_req = {ax: STAGE_FRACTION_TOTAL_MOVE * abs(target_pos[ax] - current_pos[ax]) for ax in
+                                target_pos.keys()}
+                tol_linear = STAGE_TOL_LINEAR
+                tol_rotation = STAGE_TOL_ROTATION
+                if linear_axes_to_check:
+                    movement_req_linear = [movement_req[ax] for ax in linear_axes_to_check]
+                    tol_linear = max(min(movement_req_linear), STAGE_TOL_LINEAR)  # m
+
+                if rotational_axes_to_check:
+                    movement_req_rotational = [movement_req[ax] for ax in rotational_axes_to_check]
+                    tol_rotation = max(min(movement_req_rotational), STAGE_TOL_ROTATION)  # radians
+
+                axes_to_check = linear_axes_to_check | rotational_axes_to_check
+
+                while True:
                     current_pos = self.parent.get_stage_position()
                     # Every axis requested to move should have moved (compared to the position before starting)
                     # if there is some change w.r.t starting position, proceed to check the target position
-
-                    # TODO Check all axes and confirm it works on the hardware
-                    # if all(current_pos[a] != op for a, op in orig_pos.items()):
-                    #     axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
-                    #                                   axes=set(orig_pos.keys()), atol_linear=1e-6,
-                    #                                   atol_rotation=numpy.radians(6))
-                    #     if axes_updated:
-                    #         logging.debug("Position has updated fully: from %s -> %s", orig_pos,
-                    #                       current_pos)
-                    #         break
-
-                    # TODO Remove the check only on x any y
                     # Note that we don't use almost_equal() on the floats, because all we care about is whether
-                    # the position has changed. Even a very tiny change is a sign we've receive a position update.
+                    # the position has changed. Even a very tiny change is a sign we've received a position update.
                     if all(current_pos[a] != op for a, op in orig_pos.items()):
-                        # For x, y, and z, be extra picky and wait until they are "almost" at the target
-                        # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
-                        # Therefore, it is not important to check z
-                        # check for x and y axes as they move repeatedly in overview acquisitions
-                        axes_to_check = {"x", "y"}.intersection(target_pos.keys())
+
                         if axes_to_check:
                             axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
-                                                          axes=axes_to_check, atol_linear=1e-6)
+                                                          axes=axes_to_check, rot_axes=rotational_axes_to_check,
+                                                          atol_linear=tol_linear, atol_rotation=tol_rotation)
                         else:
                             axes_updated = True  # No axis to check => move is done
 
@@ -2438,13 +2435,13 @@ class Stage(model.Actuator):
 
                     if time.time() > expected_end_time:
                         logging.warning("Stage position after move + %s s is %s instead of target pos: %s. "
-                                        "Giving up waiting.", timeout, current_pos, target_pos)
+                                        "Giving up waiting.", wait_stage_move, current_pos, target_pos)
                         break
 
                     if future._must_stop.is_set():
                         raise CancelledError()
 
-                    time.sleep(WAIT_DURATION)
+                    time.sleep(STAGE_WAIT_DURATION)
 
             except Exception:
                 if future._must_stop.is_set():
