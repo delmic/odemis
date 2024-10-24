@@ -15,8 +15,10 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import json
 import os
 import re
+import tempfile
 import time
 import unittest
 import warnings
@@ -27,8 +29,16 @@ from odemis import model
 from odemis.acq import stream
 from odemis.dataio import tiff
 from odemis.util import testing
-from odemis.util.dataio import (_split_planes, data_to_static_streams,
-                                open_acquisition, open_files_and_stitch, splitext)
+from odemis.util.dataio import (
+    _split_planes,
+    data_to_static_streams,
+    open_acquisition,
+    open_files_and_stitch,
+    read_json,
+    splitext,
+    write_json,
+)
+
 FILENAMES = [u"test_%d" % i + tiff.EXTENSIONS[0] for i in range(4)]
 
 class TestDataIO(unittest.TestCase):
@@ -372,6 +382,98 @@ class TestSplitPlanes(unittest.TestCase):
             self.assertIsInstance(da, model.DataArray)
             self.assertEqual(da.shape, (256, 512))
             self.assertEqual(da.metadata[model.MD_DIMS], "XY")
+
+
+class TestJsonUtils(unittest.TestCase):
+
+    def test_read_json_success(self):
+        # Create a temporary file with JSON content
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.write(b'{"key": "value"}')
+        temp_file.close()
+
+        # Read the JSON file
+        result = read_json(temp_file.name)
+
+        # Check if the result matches the expected output
+        self.assertEqual(result, {"key": "value"})
+
+        # Clean up the temporary file
+        os.remove(temp_file.name)
+
+    def test_read_json_file_not_found(self):
+        with self.assertLogs(level="INFO") as log:
+            # Try reading a non-existent file
+            result = read_json("non_existent_file.json")
+
+            # Check if the result is None
+            self.assertIsNone(result)
+
+            # Check if the log contains the expected info message
+            self.assertTrue(
+                any(
+                    "The json file at non_existent_file.json was not found." in message
+                    for message in log.output
+                )
+            )
+
+    def test_read_json_invalid_json(self):
+        # Create a temporary file with invalid JSON content
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.write(b'{"key": "value"')  # Invalid JSON
+        temp_file.close()
+
+        with self.assertLogs(level="ERROR") as log:
+            # Read the JSON file
+            result = read_json(temp_file.name)
+
+            # Check if the result is None
+            self.assertIsNone(result)
+
+            # Check if the log contains the expected error message
+            self.assertTrue(
+                any("Failed to load json file at" in message for message in log.output)
+            )
+
+        # Clean up the temporary file
+        os.remove(temp_file.name)
+
+    def test_write_json_success(self):
+        # Create a temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.close()
+
+        # Data to write to the JSON file
+        data = {"key": "value"}
+
+        # Write the data to the JSON file
+        write_json(temp_file.name, data)
+
+        # Read the content back to check if it was written correctly
+        with open(temp_file.name, "r") as file:
+            content = json.load(file)
+
+        # Check if the content matches the original data
+        self.assertEqual(content, data)
+
+        # Clean up the temporary file
+        os.remove(temp_file.name)
+
+    def test_write_json_failure(self):
+        # Data to write to the JSON file
+        data = {"key": "value"}
+
+        with self.assertLogs(level="ERROR") as log:
+            # Try writing to a file in a non-existent directory
+            write_json("/non_existent_directory/file.json", data)
+
+            # Check if the log contains the expected error message
+            self.assertTrue(
+                any(
+                    "Failed to write data to json file" in message
+                    for message in log.output
+                )
+            )
 
 
 if __name__ == "__main__":

@@ -63,7 +63,7 @@ class KnobPressEvent(wx.PyCommandEvent):
         return wx.GetKeyState(wx.WXK_ALT)
 
 
-# Used by StreamPanel, StreamBar, StreamController, FastEMProjectList
+# Used by StreamPanel, StreamBar, StreamController
 StreamRemoveEvent, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 StreamVisibleEvent, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()
 StreamPeakEvent, EVT_STREAM_PEAK = wx.lib.newevent.NewEvent()

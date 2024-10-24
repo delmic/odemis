@@ -34,29 +34,69 @@ from typing import Dict, Tuple
 import wx
 
 from odemis import gui, model, util
-from odemis.acq.stream import SpectrumStream, \
-    StaticStream, CLStream, FluoStream, \
-    StaticFluoStream, Stream, DataProjection, POL_POSITIONS
+from odemis.acq.stream import (
+    POL_POSITIONS,
+    CLStream,
+    DataProjection,
+    FluoStream,
+    SpectrumStream,
+    StaticFluoStream,
+    StaticStream,
+    Stream,
+)
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
-from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
+from odemis.gui.comp.legend import AxisLegend, InfoLegend, RadioLegend
 from odemis.gui.comp.overlay.box import BoxOverlay
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.gui.comp.overlay.current_pos_cross_hair import CurrentPosCrossHairOverlay
+from odemis.gui.comp.overlay.curve import CurveOverlay
 from odemis.gui.comp.overlay.ek import EKOverlay
 from odemis.gui.comp.overlay.mirror_arc import MirrorArcOverlay
 from odemis.gui.comp.overlay.sample_background import SampleBackgroundOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
-from odemis.gui.comp.overlay.curve import CurveOverlay
 from odemis.gui.img import getBitmap
-from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
-from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
-    release_mouse_on_drag, wxlimit_invocation
-from odemis.model import MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_S0, MD_POL_S1, \
-    MD_POL_S2, MD_POL_S3, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_EPHI, MD_POL_DOLP, MD_POL_DOP, \
-    MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N, MD_POL_S3N, MD_POL_S2N, MD_POL_S1N
-from odemis.util import units, spectrum, peak
+from odemis.gui.model import (
+    CALIBRATION_2,
+    CALIBRATION_3,
+    CHAMBER_UNKNOWN,
+    CHAMBER_VACUUM,
+    CryoChamberGUIData,
+)
+from odemis.gui.model.main_gui_data import Scintillator
+from odemis.gui.util import (
+    call_in_wx_main,
+    capture_mouse_on_drag,
+    release_mouse_on_drag,
+    wxlimit_invocation,
+)
+from odemis.model import (
+    MD_POL_DOCP,
+    MD_POL_DOLP,
+    MD_POL_DOP,
+    MD_POL_DS0,
+    MD_POL_DS1,
+    MD_POL_DS1N,
+    MD_POL_DS2,
+    MD_POL_DS2N,
+    MD_POL_DS3,
+    MD_POL_DS3N,
+    MD_POL_EPHI,
+    MD_POL_ETHETA,
+    MD_POL_EX,
+    MD_POL_EY,
+    MD_POL_EZ,
+    MD_POL_S0,
+    MD_POL_S1,
+    MD_POL_S1N,
+    MD_POL_S2,
+    MD_POL_S2N,
+    MD_POL_S3,
+    MD_POL_S3N,
+    MD_POL_UP,
+)
+from odemis.util import peak, spectrum, units
 from odemis.util.raster import rasterize_line
 
 
@@ -662,10 +702,15 @@ class MicroscopeViewport(ViewPort):
         fov = self.get_fov_from_mpp()
         if self.view:
             if fov:
-                self.view.fov.value = fov
+                # Clip the fov
+                fov = self.view.fov.value = self.view.fov.clip(fov)
             buf_fov = self.get_buffer_fov_from_mpp()
             if buf_fov:
-                self.view.fov_buffer.value = buf_fov
+                # Clip the fov buffer
+                self.view.fov_buffer.value = self.view.fov_buffer.clip(buf_fov)
+            if self.view.fov_hw is None:
+                # Set the mpp according to the clipped fov
+                self.set_mpp_from_fov(self.view.fov.value)
 
         return fov
 
@@ -859,20 +904,38 @@ class FastEMMainViewport(MicroscopeViewport):
 
     canvas_class = miccanvas.FastEMMainCanvas
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, scintillator: Scintillator, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Disable moving stage by dragging
         self.canvas.abilities.discard(CAN_MOVE_STAGE)
+        self.scintillator = scintillator
+        self.cpol = None
+        # By default don't show the viewport on creation
+        self.Show(False)
 
     def setView(self, view, tab_data):
         super().setView(view, tab_data)
-        self.canvas.add_background_overlay(self._tab_data_model.main.background)
+        view.show_crosshair.value = False
+
+        # Add the scintillator background overlay
+        self.canvas.add_background_overlay(self.scintillator)
+
+        # Add CALIBRATION_2 and CALIBRATION_3 boxes
+        for name, calib in self.scintillator.calibrations.items():
+            if name in [CALIBRATION_2, CALIBRATION_3]:
+                calib.shape = self.canvas.add_calibration_shape(
+                    calib.region.coordinates,
+                    calib.region.name.value,
+                    self.scintillator.shape.get_bbox(),
+                    calib.region.colour
+                )
 
         # Show a crosshair where the stage is
-        cpol = CurrentPosCrossHairOverlay(self.canvas)
-        cpol.active.value = True
-        self.canvas.add_world_overlay(cpol)
+        self.cpol = CurrentPosCrossHairOverlay(self.canvas)
+        # The focussed view will activate the cpol
+        self.cpol.active.value = False
+        self.canvas.add_world_overlay(self.cpol)
 
         # Double-click to move the stage
         slol = StagePointSelectOverlay(self.canvas)

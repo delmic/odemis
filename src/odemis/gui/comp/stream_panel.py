@@ -23,30 +23,48 @@ data streams coming from the microscope.
 
 """
 
-from decorator import decorator
 import logging
 from collections import OrderedDict
+
+import matplotlib.colors as colors
+import wx
+import wx.lib.newevent
+from decorator import decorator
+
 from odemis import gui
-from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
-    FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE
-from odemis.gui import img
+from odemis.gui import (
+    BG_COLOUR_MAIN,
+    BG_COLOUR_STREAM,
+    FG_COLOUR_DIS,
+    FG_COLOUR_EDIT,
+    FG_COLOUR_MAIN,
+    FG_COLOUR_RADIO_ACTIVE,
+    img,
+)
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
-from odemis.gui.comp.combo import ComboBox, ColorMapComboBox
+from odemis.gui.comp.combo import ColorMapComboBox, ComboBox
 from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
+from odemis.gui.comp.slider import (
+    Slider,
+    UnitFloatSlider,
+    UnitIntegerSlider,
+    VisualRangeSlider,
+)
 from odemis.gui.comp.stream_bar import StreamBar
-from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
-from odemis.gui.evt import StreamRemoveEvent, StreamVisibleEvent, StreamPeakEvent
+from odemis.gui.comp.text import (
+    FloatTextCtrl,
+    SuggestTextCtrl,
+    UnitFloatCtrl,
+    UnitIntegerCtrl,
+)
+from odemis.gui.conf.data import COLORMAPS
+from odemis.gui.evt import StreamPeakEvent, StreamRemoveEvent, StreamVisibleEvent
 from odemis.gui.util import call_in_wx_main, ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
-import wx
-import wx.lib.newevent
-from odemis.gui.conf.data import COLORMAPS
-import matplotlib.colors as colors
 
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
@@ -1110,7 +1128,7 @@ class StreamPanel(wx.Panel):
         value_ctrl = wx.CheckBox(self._panel, wx.ID_ANY,
                                  style=wx.ALIGN_RIGHT | wx.NO_BORDER,
                                  **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 2), span=(1, 1),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         value_ctrl.SetValue(value)
 
@@ -1166,14 +1184,14 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_run_btn(self, label_text):
+    def add_run_btn(self, label_text, button_label="Run..."):
         """
         Add a generic run button and the corresponding side label to the gridbag sizer.
         :param label_text: (str) label text to display
         :returns: (wx.StaticText, ImageTextButton) side label and run button
         """
         lbl_ctrl = self._add_side_label(label_text)
-        run_btn = ImageTextButton(self._panel, label="Run...", height=16, style=wx.ALIGN_CENTER)
+        run_btn = ImageTextButton(self._panel, label=button_label, height=16, style=wx.ALIGN_CENTER)
         self.gb_sizer.Add(run_btn, (self.num_rows, 2), span=(1, 1),
                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         return lbl_ctrl, run_btn

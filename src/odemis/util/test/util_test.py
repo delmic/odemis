@@ -19,20 +19,25 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-import inspect
-from functools import partial
-import os
-import numpy.random
-import odemis
-from odemis import model, util
 import logging
 import math
-from odemis.model import CancellableFuture
-from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
-    perpendicular_distance, to_str_escape, timeout
 import time
 import unittest
 import weakref
+from functools import partial
+
+import numpy.random
+
+from odemis import util
+from odemis.model import CancellableFuture
+from odemis.util import (
+    TimeoutError,
+    executeAsyncTask,
+    limit_invocation,
+    perpendicular_distance,
+    timeout,
+    to_str_escape,
+)
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -735,6 +740,7 @@ class LineFunctionsTestCase(unittest.TestCase):
 
         # Test horizontal line
         self.assertTupleEqual(util.project_point_on_line((2, 3), 0.0, 1.0), (2.0, 1.0))
+
 
 if __name__ == "__main__":
     unittest.main()

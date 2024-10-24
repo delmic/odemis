@@ -29,7 +29,8 @@ import warnings
 
 from odemis.gui.util import get_home_folder
 from odemis.util.filename import (create_filename, guess_pattern,
-                                  make_unique_name, update_counter)
+                                  make_unique_name, update_counter,
+                                  make_compliant_string)
 
 date = time.strftime("%Y%m%d")
 daterev = time.strftime("%d%m%Y")
@@ -195,6 +196,52 @@ class TestFilenameSuggestions(unittest.TestCase):
         self.assertEqual(make_unique_name('abc-0', ['abc-0']), 'abc-1')
         self.assertEqual(make_unique_name('abc-1abc', ['abc-1abc']), 'abc-2abc')
         self.assertEqual(make_unique_name('abc-1s-0.5d-1', ['abc-1s-0.5d-1']), 'abc-1s-0.5d-2')
+
+
+class TestMakeCompliantString(unittest.TestCase):
+
+    def test_valid_pattern_string(self):
+        """Test with a valid string pattern."""
+        result = make_compliant_string("Invalid@String! With#Extra*Chars$", r'[^A-Za-z0-9/_()\-\.]')
+        self.assertEqual(result, "InvalidStringWithExtraChars")
+
+    def test_valid_pattern_with_spaces(self):
+        """Test with a valid string pattern that allows spaces."""
+        result = make_compliant_string("Invalid@String! With#Extra*Chars$", r'[^A-Za-z0-9/_()\-\. ]')
+        self.assertEqual(result, "InvalidString WithExtraChars")
+
+    def test_precompiled_pattern(self):
+        """Test with a valid precompiled pattern."""
+        pattern = re.compile(r'[^A-Za-z0-9/_()\-\.]')
+        result = make_compliant_string("Invalid@String! With#Extra*Chars$", pattern)
+        self.assertEqual(result, "InvalidStringWithExtraChars")
+
+    def test_invalid_pattern_string(self):
+        """Test with an invalid string pattern that raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            make_compliant_string("Invalid@String! With#Extra*Chars$", r'[^A-Za-z0-9/_()\-\.[')  # Invalid regex
+
+        self.assertIn("Invalid regular expression pattern", str(context.exception))
+
+    def test_type_error_for_invalid_input(self):
+        """Test for raising TypeError when an invalid pattern type is passed."""
+        with self.assertRaises(TypeError):
+            make_compliant_string("Invalid@String! With#Extra*Chars$", 12345)  # Invalid type, not a string or re.Pattern
+
+    def test_empty_string(self):
+        """Test with an empty input string."""
+        result = make_compliant_string("", r'[^A-Za-z0-9/_()\-\.]')
+        self.assertEqual(result, "")
+
+    def test_no_invalid_characters(self):
+        """Test with a string that contains only valid characters."""
+        result = make_compliant_string("Valid_String-1234", r'[^A-Za-z0-9/_()\-\.]')
+        self.assertEqual(result, "Valid_String-1234")
+
+    def test_only_invalid_characters(self):
+        """Test with a string that contains only invalid characters."""
+        result = make_compliant_string("@#$%^&*", r'[^A-Za-z0-9/_()\-\.]')
+        self.assertEqual(result, "")
 
 
 if __name__ == "__main__":

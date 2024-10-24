@@ -148,41 +148,46 @@ FASTEM-sim: {
         # Z: useful range for the (auto) focus
         POS_ACTIVE_RANGE: {"x": [-25.e-3, 25.e-3], "y": [-24.5e-3, 24.5e-3], "z": [-85.e-6, 5.e-6]}, # m, min/max
         FAV_POS_ACTIVE: {"z": -63.e-6},  # [m] Estimate for good focus position
-        # Centers (X, Y) [m] of each scintillator from bottom-left position with a sample
+        # The SAMPLE_CENTERS contains information about the supported sample carriers
+        # A sample carrier has a number of scintillators. A scintillator is associated with a number.
+        # Further a scintillator is described by its shape and center. Given the shape type, the
+        # shape's dimensions are described by its size (rectangle) or radius (circle).
+        # Currently two shape types are supported namely rectangle and circle.
+        # center (X, Y) [m] of each scintillator is measured from the bottom-left position of the sample carrier
         SAMPLE_CENTERS: {
-            "SCINTILLATOR 1": [7.0e-3, 6.5e-3],
-            "SCINTILLATOR 2": [7.0e-3, 24.5e-3],
-            "SCINTILLATOR 3": [7.0e-3, 42.5e-3],
-            "SCINTILLATOR 4": [25.0e-3, 6.5e-3],
-            "SCINTILLATOR 5": [25.0e-3, 24.5e-3],
-            "SCINTILLATOR 6": [25.0e-3, 42.5e-3],
-            "SCINTILLATOR 7": [43.0e-3, 6.5e-3],
-            "SCINTILLATOR 8": [43.0e-3, 24.5e-3],
-            "SCINTILLATOR 9": [43.0e-3, 42.5e-3],
+            "9 rectangle sample carrier": {
+                1: {"shape": "rectangle", "center": [7.0e-3, 6.5e-3], "size": [14.0e-3, 13.0e-3]},
+                2: {"shape": "rectangle", "center": [7.0e-3, 24.5e-3], "size": [14.0e-3, 13.0e-3]},
+                3: {"shape": "rectangle", "center": [7.0e-3, 42.5e-3], "size": [14.0e-3, 13.0e-3]},
+                4: {"shape": "rectangle", "center": [25.0e-3, 6.5e-3], "size": [14.0e-3, 13.0e-3]},
+                5: {"shape": "rectangle", "center": [25.0e-3, 24.5e-3], "size": [14.0e-3, 13.0e-3]},
+                6: {"shape": "rectangle", "center": [25.0e-3, 42.5e-3], "size": [14.0e-3, 13.0e-3]},
+                7: {"shape": "rectangle", "center": [43.0e-3, 6.5e-3], "size": [14.0e-3, 13.0e-3]},
+                8: {"shape": "rectangle", "center": [43.0e-3, 24.5e-3], "size": [14.0e-3, 13.0e-3]},
+                9: {"shape": "rectangle", "center": [43.0e-3, 42.5e-3], "size": [14.0e-3, 13.0e-3]},
+            },
+            "8 rectangle sample carrier": {
+                1: {"shape": "rectangle", "center": [7.0e-3, 6.5e-3], "size": [14.0e-3, 13.0e-3]},
+                2: {"shape": "rectangle", "center": [7.0e-3, 24.5e-3], "size": [14.0e-3, 13.0e-3]},
+                3: {"shape": "rectangle", "center": [7.0e-3, 42.5e-3], "size": [14.0e-3, 13.0e-3]},
+                4: {"shape": "rectangle", "center": [25.0e-3, 6.5e-3], "size": [14.0e-3, 13.0e-3]},
+                5: {"shape": "rectangle", "center": [25.0e-3, 24.5e-3], "size": [14.0e-3, 13.0e-3]},
+                6: {"shape": "rectangle", "center": [25.0e-3, 42.5e-3], "size": [14.0e-3, 13.0e-3]},
+                7: {"shape": "rectangle", "center": [43.0e-3, 6.5e-3], "size": [14.0e-3, 13.0e-3]},
+                8: {"shape": "rectangle", "center": [43.0e-3, 24.5e-3], "size": [14.0e-3, 13.0e-3]},
+            },
+            "9 circle sample carrier": {
+                1: {"shape": "circle", "center": [7.0e-3, 6.5e-3], "radius": 6.0e-3},
+                2: {"shape": "circle", "center": [7.0e-3, 24.5e-3], "radius": 6.0e-3},
+                3: {"shape": "circle", "center": [7.0e-3, 42.5e-3], "radius": 6.0e-3},
+                4: {"shape": "circle", "center": [25.0e-3, 6.5e-3], "radius": 6.0e-3},
+                5: {"shape": "circle", "center": [25.0e-3, 24.5e-3], "radius": 6.0e-3},
+                6: {"shape": "circle", "center": [25.0e-3, 42.5e-3], "radius": 6.0e-3},
+                7: {"shape": "circle", "center": [43.0e-3, 6.5e-3], "radius": 6.0e-3},
+                8: {"shape": "circle", "center": [43.0e-3, 24.5e-3], "radius": 6.0e-3},
+                9: {"shape": "circle", "center": [43.0e-3, 42.5e-3], "radius": 6.0e-3},
+            },
         },
-        # Size [m] of each scintillator
-        SAMPLE_SIZES: {
-            "SCINTILLATOR 1": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 2": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 3": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 4": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 5": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 6": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 7": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 8": [14.0e-3, 13.0e-3],
-            "SCINTILLATOR 9": [14.0e-3, 13.0e-3],
-        },
-        # minx, miny, maxx, maxy [m] positions of rectangles for background from bottom-left position with a sample
-        SAMPLE_BACKGROUND: [
-            [-35.0e-3, -35.5e-3, 0.0, 84.5e-3],
-            [14.0e-3, -35.5e-3, 18.0e-3, 84.5e-3],
-            [32.0e-3, -35.5e-3, 36.0e-3, 84.5e-3],
-            [50.0e-3, -35.5e-3, 85.0e-3, 84.5e-3],
-            [-35.0e-3, -35.5e-3, 85.0e-3, 0.0e-3],
-            [-35.0e-3, 13.0e-3, 85.0e-3, 18.0e-3],
-            [-35.0e-3, 31.0e-3, 85.0e-3, 36.0e-3],
-            [-35.0e-3, 49.0e-3, 85.0e-3, 84.5e-3],
-        ],
     },
     affects: ["Diagnostic Camera", "MultiBeam Scanner XT", "MultiBeam Scanner", "MPPC"]
 }

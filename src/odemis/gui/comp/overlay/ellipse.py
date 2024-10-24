@@ -20,22 +20,25 @@ This file is part of Odemis.
 
 """
 import math
-from typing import Optional
+from typing import Optional, Tuple
 
 import cairo
 
 import odemis.gui as gui
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
-from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, Vec
+from odemis.gui.comp.overlay.base import (
+    SEL_MODE_EDIT,
+    SEL_MODE_NONE,
+    SEL_MODE_ROTATION,
+    Vec,
+)
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
+from odemis.util.conversion import frgba_to_hex, hex_to_frgba
 
-# The circumference of an ellipse is divided by this factor to calculate number of
-# arcs to be drawn. This increases the angle of an arc and reduces the number of
-# points on the circumference of the ellipse. A factor value of 3 is choosen because
-# the cicumference is calculated in buffer coordinates which has values greater than
-# 1 and even with the reduced number of points on the circumference the ellipse is
-# still visible.
-NUM_ARCS_FACTOR = 3
+# The circumference of an ellipse is divided into 72 arcs.
+# This will result in an angle increment of 5 degrees.
+NUM_ARCS = 72
+ANGLE_INCREMENT = 2 * math.pi / NUM_ARCS
 
 
 class EllipseState:
@@ -44,7 +47,35 @@ class EllipseState:
         self.p_point2 = ellipse_overlay.p_point2
         self.p_point3 = ellipse_overlay.p_point3
         self.p_point4 = ellipse_overlay.p_point4
-        self._points = ellipse_overlay._points.copy()
+
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        return {
+            "p_point1": self.p_point1,
+            "p_point2": self.p_point2,
+            "p_point3": self.p_point3,
+            "p_point4": self.p_point4,
+        }
+
+    @staticmethod
+    def from_dict(state: dict, ellipse_overlay):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param state: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param ellipse_overlay: (EllipseOverlay) The overlay representing an ellipse.
+        :returns: (EllipseState) reconstructed EllipseState class.
+        """
+        ellipse_state = EllipseState(ellipse_overlay)
+        ellipse_state.p_point1 = Vec(state["p_point1"])
+        ellipse_state.p_point2 = Vec(state["p_point2"])
+        ellipse_state.p_point3 = Vec(state["p_point3"])
+        ellipse_state.p_point4 = Vec(state["p_point4"])
+        return ellipse_state
 
 
 class EllipseOverlay(RectangleOverlay):
@@ -68,6 +99,57 @@ class EllipseOverlay(RectangleOverlay):
         """
         super().__init__(cnvs, colour)
 
+    def to_dict(self) -> dict:
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        state = self.get_state()
+        state_dict = state.to_dict() if state is not None else {}
+        return {
+            "name": self.name.value,
+            "colour": frgba_to_hex(self.colour),
+            "selected": self.selected.value,
+            "cnvs_view_name": self.cnvs.view.name.value,
+            "type": self.__class__.__name__,
+            "state": state_dict,
+        }
+
+    @staticmethod
+    def from_dict(ellipse: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param ellipse: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (EllipseOverlay) reconstructed EllipseOverlay class.
+        """
+        name = ellipse["name"]
+        selected = ellipse["selected"]
+        cnvs_view_name = ellipse["cnvs_view_name"]
+        colour = ellipse["colour"]
+        shape_cnvs = None
+        for viewport in tab_data.viewports.value:
+            if viewport.canvas.view.name.value == cnvs_view_name:
+                shape_cnvs = viewport.canvas
+                break
+        if shape_cnvs is None:
+            raise ValueError("Could not find shape canvas.")
+        ellipse_overlay = EllipseOverlay(shape_cnvs)
+        ellipse_overlay.name.value = name
+        ellipse_overlay.selected.value = selected
+        ellipse_overlay.is_created.value = True
+        ellipse_overlay.colour = hex_to_frgba(colour)
+        state_data = ellipse["state"]
+        state = EllipseState.from_dict(state_data, ellipse_overlay)
+        ellipse_overlay.restore_state(state)
+        return ellipse_overlay
+
+    def reset(self):
+        """Reset the shape creation."""
+        pass
+
     def copy(self):
         """
         :returns: (EllipseOverlay) a new instance of EllipseOverlay with necessary copied attributes.
@@ -75,10 +157,12 @@ class EllipseOverlay(RectangleOverlay):
         """
         shape = EllipseOverlay(self.cnvs)
         shape.colour = self.colour
+        shape.name.value = self.name.value
         shape.restore_state(self.get_state())
+        shape.is_created.value = True
         return shape
 
-    def move_to(self, pos):
+    def move_to(self, pos: Tuple[float, float]):
         """Move the shape's center to a physical position."""
         current_pos  = self.get_position()
         shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
@@ -90,6 +174,13 @@ class EllipseOverlay(RectangleOverlay):
         self._phys_to_view()
         self.points.value = self._points
 
+    def set_rotation(self, target_rotation: float):
+        """Set the rotation of the shape to a specific angle."""
+        self._set_rotation(target_rotation)
+        self._view_to_phys()
+        self.cnvs.update_drawing()
+        self.points.value = self._points
+
     def get_state(self) -> Optional[EllipseState]:
         """Get the current state of the shape."""
         # Only return the state if the ellipse creation is finished
@@ -98,15 +189,16 @@ class EllipseOverlay(RectangleOverlay):
             return EllipseState(self)
         return None
 
-    def restore_state(self, state: EllipseState):
+    def restore_state(self, state: Optional[EllipseState]):
         """Restore the shape to a given state."""
-        self.p_point1 = state.p_point1
-        self.p_point2 = state.p_point2
-        self.p_point3 = state.p_point3
-        self.p_point4 = state.p_point4
-        self._points = state._points
-        self._phys_to_view()
-        self.points.value = self._points
+        if state is not None:
+            self.p_point1 = state.p_point1
+            self.p_point2 = state.p_point2
+            self.p_point3 = state.p_point3
+            self.p_point4 = state.p_point4
+            self._phys_to_view()
+            self.calculate_ellipse_points()
+            self.points.value = self._points
 
     def check_point_proximity(self, v_point):
         """
@@ -132,14 +224,19 @@ class EllipseOverlay(RectangleOverlay):
         """
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.
         """
+        is_mode_rotation_edit = self.selection_mode in (SEL_MODE_ROTATION, SEL_MODE_EDIT)
         # If the Diagonal points are not the same means the ellipse has been created
         if self.p_point1 != self.p_point3:
             # Activate/deactivate region
             self._view_to_phys()
             rectangle_points = self.get_physical_sel()
             if rectangle_points:
+                self.is_created.value = True
                 self.selected.value = self.check_point_proximity(evt.Position)
-                if self.selected.value:
+                # While selection mode is SEL_MODE_ROTATION or SEL_MODE_EDIT it can be that the hover
+                # is outside the edge and left up event is called, update the points in this
+                # corner case
+                if self.selected.value or is_mode_rotation_edit:
                     self.set_physical_sel(rectangle_points)
 
         # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
@@ -150,12 +247,40 @@ class EllipseOverlay(RectangleOverlay):
 
         # Set the points VA after drawing because draw() gathers the ellipse points
         self.cnvs.update_drawing()
-        if self.selected.value:
+        # While selection mode is SEL_MODE_ROTATION or SEL_MODE_EDIT it can be that the hover
+        # is outside the edge and left up event is called, update the points VA in this
+        # corner case
+        if self.selected.value or is_mode_rotation_edit:
             self.points.value = self._points
+
+    def calculate_ellipse_points(self):
+        """Calculate the ellipse points."""
+        self._points.clear()
+        # Calculate center of the ellipse
+        center_x = (self.p_point1.x + self.p_point3.x) / 2
+        center_y = (self.p_point1.y + self.p_point3.y) / 2
+
+        # Calculate side lengths to get semi-major and semi-minor axes
+        side_length1 = math.hypot(self.p_point1.x - self.p_point2.x, self.p_point1.y - self.p_point2.y)
+        side_length2 = math.hypot(self.p_point1.x - self.p_point4.x, self.p_point1.y - self.p_point4.y)
+
+        # Semi-major and semi-minor axes
+        a = side_length1 / 2
+        b = side_length2 / 2
+
+        # Calculate rotation angle
+        rotation = math.atan2(self.p_point2.y - self.p_point1.y, self.p_point2.x - self.p_point1.x)
+
+        if a + b:
+            # Calculate the ellipse points
+            for i in range(NUM_ARCS):
+                angle = i * ANGLE_INCREMENT
+                x = a * math.cos(angle) * math.cos(rotation) - b * math.sin(angle) * math.sin(rotation)
+                y = a * math.cos(angle) * math.sin(rotation) + b * math.sin(angle) * math.cos(rotation)
+                self._points.append(Vec(center_x + x, center_y + y))
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, dash=True):
         """Draw the selection as a ellipse."""
-        self._points.clear()
         line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
         if self.p_point1 and self.p_point2 and self.p_point3 and self.p_point4:
@@ -175,47 +300,38 @@ class EllipseOverlay(RectangleOverlay):
                 ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
-            # Calculate the center of the ellipse
-            ellipse_center_x = (b_point1.x + b_point3.x) / 2
-            ellipse_center_y = (b_point1.y + b_point3.y) / 2
-            # Calculate the side lengths to find the semi-major and semi-minor axis
-            side_length1 = math.hypot(b_point1.x - b_point2.x, b_point1.y - b_point2.y)
-            side_length2 = math.hypot(b_point1.x - b_point4.x, b_point1.y - b_point4.y)
-            # Fixed semi-major axis
-            a = side_length1 / 2
-            # Fixed semi-minor axis
-            b = side_length2 / 2
 
-            rotation = math.atan2((b_point2.y - b_point1.y), (b_point2.x - b_point1.x))
-            if a + b:
-                # Calculate the circumference of the ellipse using Ramanujan's approximation
-                h = ((a - b) ** 2) / ((a + b) ** 2)
-                circumference = math.pi * (a + b) * (1 + (3 * h) / (10 + math.sqrt(4 - 3 * h)))
-                # Determine the number of arcs based on the circumference of the ellipse
-                num_arcs = max(int(circumference / NUM_ARCS_FACTOR), 4)  # Ensure minimum of 4 arcs
-                # Divide the ellipse into multiple arcs and draw each arc
-                angle_increment = 2 * math.pi / num_arcs
-                for i in range(num_arcs):
-                    angle = i * angle_increment
-                    x = a * math.cos(angle) * math.cos(rotation) - b * math.sin(angle) * math.sin(rotation)
-                    y = a * math.cos(angle) * math.sin(rotation) + b * math.sin(angle) * math.cos(rotation)
-                    point = (ellipse_center_x + x, ellipse_center_y + y)
-                    if i == 0:
-                        ctx.move_to(*point)
-                    else:
-                        ctx.line_to(*point)
-                    p_point = self.cnvs.buffer_to_phys(point, offset)
-                    self._points.append(Vec(p_point))
-                ctx.close_path()
-                ctx.stroke()
+            self.calculate_ellipse_points()
+            for i, p_point in enumerate(self._points):
+                b_point = self.cnvs.phys_to_buffer(p_point, offset)
+                if i == 0:
+                    ctx.move_to(*b_point)
+                else:
+                    ctx.line_to(*b_point)
+            ctx.close_path()
+            ctx.stroke()
 
-                self._calc_edges()
-                self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
+            self._calc_edges()
+            self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # show size label if ROA is selected
             if self.selected.value:
                 self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
-            # Draw the rotation label
+            # Draw the rotation label or name label at the center
             if self.selection_mode == SEL_MODE_ROTATION:
                 self.draw_rotation_label(ctx)
+            else:
+                self.draw_name_label(ctx)
+
+            # Draw the grid rectangles
+            if self.fill_grid.value and self.grid_rects:
+                for p_start_pos, p_end_pos in self.grid_rects:
+                    b_start_pos = Vec(self.cnvs.phys_to_buffer(p_start_pos, offset))
+                    b_end_pos = Vec(self.cnvs.phys_to_buffer(p_end_pos, offset))
+                    rect = (b_start_pos.x,
+                            b_start_pos.y,
+                            b_end_pos.x - b_start_pos.x,
+                            b_end_pos.y - b_start_pos.y)
+                    ctx.rectangle(*rect)
+                ctx.stroke()

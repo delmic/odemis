@@ -212,14 +212,11 @@ class StreamController(object):
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
-        if tab_data_model.main.role == "mbsem" and isinstance(stream, acqstream.SEMStream):  # don't show for CCD stream
-            # It's a FastEM
-            self._add_fastem_ctrls()
-
         # Set the visibility button on the stream panel
+        vis = False
         if view:
             vis = stream in view.stream_tree
-        else:
+        elif tab_data_model.focussedView.value:
             vis = stream in tab_data_model.focussedView.value.stream_tree
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
@@ -1377,12 +1374,37 @@ class StreamController(object):
         # Make sure the current value is selected
         self._rep_ctrl.SetSelection(choices.index(rep))
 
+
+class FastEMStreamController(StreamController):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None,
+                 sb_ctrl=None):
+        super().__init__(
+            stream_bar=stream_bar, stream=stream, tab_data_model=tab_data_model,
+            show_panel=show_panel, view=view, sb_ctrl=sb_ctrl
+        )
+
+        assert isinstance(stream, acqstream.SEMStream)  # don't show for CCD stream
+        self._add_fastem_ctrls()
+
     def _add_fastem_ctrls(self):
         self.stream_panel.add_divider()
         # Create the immersion mode button
         _, cbox_immersion_mode = self.stream_panel.add_checkbox_control(
             label_text="Immersion Mode", value=self.stream.emitter.immersion.value
         )
+        _, self.btn_optical_autofocus = self.stream_panel.add_run_btn(
+            label_text="Optical autofocus", button_label="Run"
+        )
+        _, self.btn_auto_brightness_contrast = self.stream_panel.add_run_btn(
+            label_text="Auto brightness / contrast", button_label="Run"
+        )
+        _, self.btn_sem_autofocus = self.stream_panel.add_run_btn(
+            label_text="SEM autofocus", button_label="Run"
+        )
+        # TODO uncomment when Autostigmation is working
+        # _, self.btn_autostigmation = self.stream_panel.add_run_btn(
+        #     label_text="Autostigmation", button_label="Run"
+        # )
 
         # Store a setting entry for the immersion mode button
         se = SettingEntry(name="immersion_mode", va=self.stream.emitter.immersion,

@@ -19,19 +19,24 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
-
+import json
 import logging
 import os
-import numpy
-from odemis import dataio
-from odemis import model
-from odemis.acq import stitching, stream
-from odemis.model import MD_WL_LIST, MD_TIME_LIST, MD_THETA_LIST
+from typing import Any, Optional
 
-from odemis.acq.stitching import REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT, REGISTER_SHIFT, \
-                              WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE, WEAVER_MEAN
-from odemis.acq.stream import StaticARStream, StaticCLStream, StaticFluoStream, StaticSEMStream, \
-                              StaticSpectrumStream
+import numpy
+
+from odemis import dataio, model
+from odemis.acq import stitching, stream
+from odemis.acq.stitching import REGISTER_IDENTITY, WEAVER_MEAN
+from odemis.acq.stream import (
+    StaticARStream,
+    StaticCLStream,
+    StaticFluoStream,
+    StaticSEMStream,
+    StaticSpectrumStream,
+)
+from odemis.model import MD_THETA_LIST, MD_TIME_LIST, MD_WL_LIST
 from odemis.util import img
 
 
@@ -341,3 +346,35 @@ def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENT
         st_data.append(da)
 
     return st_data
+
+
+def read_json(file_path: str) -> Optional[Any]:
+    """
+    Read a json file.
+
+    :param file_path: The absolute file path of the json file.
+
+    """
+    try:
+        with open(file_path, "r") as file:
+            data = json.load(file)
+        return data
+    except FileNotFoundError:
+        logging.info("The json file at %s was not found.", file_path)
+    except Exception:
+        logging.exception("Failed to load json file at %s", file_path)
+
+
+def write_json(file_path: str, data: Any):
+    """
+    Write data to a json file.
+
+    :param file_path: The absolute file path of the json file.
+    :param data: The data which needs to be dumped.
+
+    """
+    try:
+        with open(file_path, "w") as file:
+            json.dump(data, file, indent=2)
+    except Exception:
+        logging.exception("Failed to write data to json file at %s", file_path)

@@ -20,57 +20,105 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
-from concurrent.futures import CancelledError
 import logging
+from concurrent.futures import CancelledError
+
 import wx
 
+import odemis.gui.model as guimod
 from odemis.acq.align import fastem
 from odemis.acq.align.fastem import Calibrations
-from odemis.gui.cont.acquisition import FastEMOverviewAcquiController
-from odemis.gui.cont.stream_bar import FastEMStreamsController
+from odemis.acq.stream import FastEMSEMStream
+from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.cont.acquisition import (
+    FastEMCalibrationController,
+    FastEMOverviewAcquiController,
+)
+from odemis.gui.cont.stream import FastEMStreamController
+from odemis.gui.cont.stream_bar import FastEMStreamsBarController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
-import odemis.gui.model as guimod
+from odemis.model import getVAs
 
 
-class FastEMOverviewTab(Tab):
-    def __init__(self, name, button, panel, main_frame, main_data, vp, view_controller, sem_stream):
-
-        # During creation, the following controllers are created:
-        #
-        # StreamController
-        #   Manages the single beam stream.
-        #
-        # Acquisition Controller
-        #   Takes care of the acquisition and acquisition selection buttons.
-
-        self.tab_data = guimod.FastEMOverviewGUIData(main_data)
+class FastEMSetupTab(Tab):
+    def __init__(
+        self,
+        name,
+        button,
+        panel,
+        main_frame,
+        main_data,
+        view_controller,
+        main_tab_data,
+    ):
+        self.tab_data = guimod.FastEMSetupGUIData(main_data)
+        self.main_tab_data = main_tab_data
+        self.panel = panel
         super().__init__(name, button, panel, main_frame, self.tab_data)
 
+        self.active_scintillator_panel = SettingsPanel(
+            panel.pnl_active_scintillator, size=(400, 40)
+        )
+        conf = {
+            "style": wx.CB_READONLY,
+        }
+        _, self.active_scintillator_ctrl = (
+            self.active_scintillator_panel.add_combobox_control(
+                "Active scintillator", conf=conf
+            )
+        )
+        self.active_scintillator_ctrl.Bind(
+            wx.EVT_COMBOBOX, self._on_active_scintillator
+        )
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
         # need to wait for the tab to be shown on the first time.
         self._initialized_after_show = False
 
-        self.vp = vp
-        self._stream_controller = FastEMStreamsController(
+        # Single-beam SEM stream
+        hwemt_vanames = ("resolution", "scale", "horizontalFoV")
+        emt_vanames = ("dwellTime",)
+        hwdet_vanames = ("brightness", "contrast")
+        hwemtvas = set()
+        emtvas = set()
+        hwdetvas = set()
+        for vaname in getVAs(main_data.ebeam):
+            if vaname in hwemt_vanames:
+                hwemtvas.add(vaname)
+            if vaname in emt_vanames:
+                emtvas.add(vaname)
+        for vaname in getVAs(main_data.sed):
+            if vaname in hwdet_vanames:
+                hwdetvas.add(vaname)
+
+        sem_stream = FastEMSEMStream(
+            "Single Beam",
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=hwemtvas,
+            hwdetvas=hwdetvas,
+            emtvas=emtvas,
+        )
+
+        self._stream_controller = FastEMStreamsBarController(
             view_controller._data_model,
             panel.pnl_overview_streams,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport
             view_ctrl=view_controller,
         )
-        self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
+        self.sem_stream_cont = self._stream_controller.addStream(
+            sem_stream, add_to_view=True, stream_cont_cls=FastEMStreamController
+        )
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
         self.tab_data.streams.value.append(sem_stream)  # it should also be saved
         self.tab_data.semStream = sem_stream
 
         # Buttons of the calibration panel
-        self.btn_optical_autofocus = panel.btn_optical_autofocus_run
-        self.btn_sem_autofocus = panel.btn_sem_autofocus_run
-        self.btn_autobc = panel.btn_autobrigtness_contrast
-
-        # Selection panel
-        self.selection_panel = panel.selection_panel
+        self.btn_optical_autofocus = self.sem_stream_cont.btn_optical_autofocus
+        self.btn_sem_autofocus = self.sem_stream_cont.btn_sem_autofocus
+        self.btn_autobc = self.sem_stream_cont.btn_auto_brightness_contrast
 
         self.btn_optical_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_optical_autofocus)
         self.btn_sem_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_sem_autofocus)
@@ -79,15 +127,67 @@ class FastEMOverviewTab(Tab):
         # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 
         # For Optical Autofocus calibration
-        self.tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button if acquiring
-        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
+        self.tab_data.main.is_acquiring.subscribe(
+            self._on_is_acquiring
+        )  # enable/disable button if acquiring
+        self.tab_data.is_calibrating.subscribe(
+            self._on_is_acquiring
+        )  # enable/disable button if calibrating
 
         # Acquisition controller
         self._acquisition_controller = FastEMOverviewAcquiController(
             self.tab_data,
+            self.main_tab_data,
             panel,
+            view_controller,
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
+
+        self.calibration_controller = FastEMCalibrationController(
+            self.tab_data,
+            self.main_tab_data,
+            panel,
+        )
+
+        self.main_tab_data.visible_views.subscribe(self._on_visible_views)
+        self.main_tab_data.focussedView.subscribe(self._on_focussed_view)
+
+    def _on_focussed_view(self, focussed_view):
+        if focussed_view:
+            self.tab_data.semStream.is_active.value = False
+            self.tab_data.semStream.should_update.value = False
+            for view in self.main_tab_data.views.value:
+                if focussed_view == view:
+                    self.sem_stream_cont.view = view
+                    self.sem_stream_cont.stream_panel.set_visible(True)
+                    if self.tab_data.semStream not in view.getStreams():
+                        view.addStream(self.tab_data.semStream)
+                else:
+                    view.removeStream(self.tab_data.semStream)
+            scintillator_num = focussed_view.name.value
+            if scintillator_num != self.active_scintillator_ctrl.GetValue():
+                self.active_scintillator_ctrl.SetValue(scintillator_num)
+
+    def _on_active_scintillator(self, evt):
+        ctrl = evt.GetEventObject()
+        if ctrl is None:
+            return
+        value = str(ctrl.GetValue())
+        for view in self.main_tab_data.visible_views.value:
+            if view.name.value == value:
+                self.main_tab_data.focussedView.value = view
+                return
+
+    def _on_visible_views(self, views):
+        current_value = self.active_scintillator_ctrl.GetValue()
+        self.active_scintillator_ctrl.Clear()
+        for view in views:
+            scintillator_num = view.name.value
+            self.active_scintillator_ctrl.Append(
+                str(scintillator_num), int(scintillator_num)
+            )
+        if views:
+            self.active_scintillator_ctrl.SetValue(current_value)
 
     def _on_btn_optical_autofocus(self, _):
         """
@@ -98,14 +198,19 @@ class FastEMOverviewTab(Tab):
             fastem._executor.cancel()
             return
 
+        # Pause the live stream
+        self.tab_data.semStream.is_active.value = False
+        self.tab_data.semStream.should_update.value = False
         # Disable other calibration buttons
         self.btn_sem_autofocus.Enable(False)
         self.btn_autobc.Enable(False)
+        self.calibration_controller.calibration_panel.Enable(False)
         # calibrate
         self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
-        self.tab_data.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
+        # make sure the acquire/tab buttons are disabled
+        self.tab_data.is_calibrating.value = True
         self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
         logging.debug("Starting Optical Autofocus calibration")
         # Start alignment
@@ -122,22 +227,27 @@ class FastEMOverviewTab(Tab):
             self.tab_data.main.ebeam_focus,
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS],
         )
-        f.add_done_callback(self._on_optical_autofocus_done)  # also handles cancelling and exceptions
+        f.add_done_callback(
+            self._on_optical_autofocus_done
+        )  # also handles cancelling and exceptions
         self._update_optical_autofocus_controls()
-        self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
+        self.tab_data.is_optical_autofocus_done.value = False
 
     @call_in_wx_main
     def _on_is_acquiring(self, mode):
         """
-        Enable or disable the button to start a calibration depending on whether
+        Enable or disable relevant wx objects depending on whether
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
         # TODO also include btn_autostigmation once autostigmation is working
-        self.btn_optical_autofocus.Enable(not mode)
-        self.btn_sem_autofocus.Enable(not mode)
-        self.btn_autobc.Enable(not mode)
-        self.selection_panel.Enable(not mode)
+        enable = not mode
+        self.active_scintillator_ctrl.Enable(enable)
+        self.sem_stream_cont.stream_panel.Enable(enable)
+        self._acquisition_controller.overview_acq_panel.Enable(enable)
+        self.btn_optical_autofocus.Enable(enable)
+        self.btn_sem_autofocus.Enable(enable)
+        self.btn_autobc.Enable(enable)
 
     @call_in_wx_main
     def _on_optical_autofocus_done(self, future, _=None):
@@ -150,19 +260,23 @@ class FastEMOverviewTab(Tab):
 
         try:
             future.result()  # wait until the calibration is done
-            self.tab_data.is_calib_done.value = True
+            self.tab_data.is_optical_autofocus_done.value = True
             logging.debug("Optical Autofocus calibration successful")
         except CancelledError:
-            self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
+            self.tab_data.is_optical_autofocus_done.value = (
+                False  # don't enable overview image acquisition
+            )
             logging.debug("Optical Autofocus calibration cancelled")
         except Exception as ex:
-            self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
-            logging.exception("Optical Autofocus calibration failed with exception: %s.", ex)
-            self._acquisition_controller._set_status_message(
-                "Optical Autofocus calibration failed.", logging.WARN
+            self.tab_data.is_optical_autofocus_done.value = (
+                False  # don't enable overview image acquisition
+            )
+            logging.exception(
+                "Optical Autofocus calibration failed with exception: %s.", ex
             )
         finally:
             self._update_optical_autofocus_controls()
+            self.calibration_controller.calibration_panel.Enable(True)
 
     @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
     def _update_optical_autofocus_controls(self, button_state=True):
@@ -173,11 +287,16 @@ class FastEMOverviewTab(Tab):
         self.btn_optical_autofocus.Enable(button_state)  # enable/disable button
 
         if self.tab_data.is_calibrating.value:
-            self.btn_optical_autofocus.SetLabel("Cancel")  # indicate cancelling is possible
+            self.btn_optical_autofocus.SetLabel(
+                "Cancel"
+            )  # indicate cancelling is possible
         else:
-            self.btn_optical_autofocus.SetLabel("Run")  # change button label back to ready for calibration
+            self.btn_optical_autofocus.SetLabel(
+                "Run"
+            )  # change button label back to ready for calibration
 
-        self.btn_optical_autofocus.Parent.Layout()
+        self.sem_stream_cont.stream_panel.Layout()
+        self.sem_stream_cont.stream_panel.Refresh()
 
     @call_in_wx_main
     def _on_btn_sem_autofocus(self, _):
@@ -226,7 +345,9 @@ class FastEMOverviewTab(Tab):
         self.sem_stream_cont.stream_panel.Enable(False)
         self.sem_stream_cont.pause()
         self.sem_stream_cont.pauseStream()
-        f = self.sem_stream_cont.stream.emitter.applyAutoStigmator(self.sem_stream_cont.stream.detector)
+        f = self.sem_stream_cont.stream.emitter.applyAutoStigmator(
+            self.sem_stream_cont.stream.detector
+        )
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
@@ -265,10 +386,6 @@ class FastEMOverviewTab(Tab):
     def Show(self, show=True):
         super().Show(show)
         if show and not self._initialized_after_show:
-            # At init the canvas has sometimes a weird size (eg, 1000x1 px), which
-            # prevents the fitting to work properly. We need to wait until the
-            # canvas has been resized to the final size. That's quite late...
-            wx.CallAfter(self.vp.canvas.zoom_out)
             self._initialized_after_show = True
 
         if not show:

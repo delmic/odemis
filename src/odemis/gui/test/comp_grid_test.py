@@ -20,13 +20,13 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-import logging
 import unittest
 
-import odemis.gui.test as test
-from odemis.gui.test import gui_loop
-from odemis.gui.model import StreamView
+import wx
 
+import odemis.gui.test as test
+from odemis.gui.model import StreamView
+from odemis.gui.test import gui_loop
 
 test.goto_manual()
 
@@ -59,18 +59,20 @@ class GridPanelTestCase(test.GuiTestCase):
         f = self.frame
         gp.set_visible_viewports([f.yellow, f.blue, f.purple, f.brown])
         gui_loop(0.2)
-        self.assertEqual(f.yellow.Size, gp.grid_layout.tl.size)
-        self.assertEqual(f.blue.Size, gp.grid_layout.tr.size)
-        self.assertEqual(f.purple.Size, gp.grid_layout.bl.size)
-        self.assertEqual(f.brown.Size, gp.grid_layout.br.size)
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        self.assertEqual(f.yellow.Size, vvp_grid_layout[f.yellow].size)
+        self.assertEqual(f.blue.Size, vvp_grid_layout[f.blue].size)
+        self.assertEqual(f.purple.Size, vvp_grid_layout[f.purple].size)
+        self.assertEqual(f.brown.Size, vvp_grid_layout[f.brown].size)
 
         # Mix them around
         gp.set_visible_viewports([f.green, f.yellow, f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(f.green.Size, gp.grid_layout.tl.size)
-        self.assertEqual(f.yellow.Size, gp.grid_layout.tr.size)
-        self.assertEqual(f.blue.Size, gp.grid_layout.bl.size)
-        self.assertEqual(f.purple.Size, gp.grid_layout.br.size)
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        self.assertEqual(f.green.Size, vvp_grid_layout[f.green].size)
+        self.assertEqual(f.yellow.Size, vvp_grid_layout[f.yellow].size)
+        self.assertEqual(f.blue.Size, vvp_grid_layout[f.blue].size)
+        self.assertEqual(f.purple.Size, vvp_grid_layout[f.purple].size)
 
         # Show just 1 viewport
         gp.set_visible_viewports([f.green])
@@ -87,27 +89,45 @@ class GridPanelTestCase(test.GuiTestCase):
         # Back to 2x2
         gp.set_visible_viewports([f.green, f.yellow, f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(f.green.Size, gp.grid_layout.tl.size)
-        self.assertEqual(f.yellow.Size, gp.grid_layout.tr.size)
-        self.assertEqual(f.blue.Size, gp.grid_layout.bl.size)
-        self.assertEqual(f.purple.Size, gp.grid_layout.br.size)
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        self.assertEqual(f.green.Size, vvp_grid_layout[f.green].size)
+        self.assertEqual(f.yellow.Size, vvp_grid_layout[f.yellow].size)
+        self.assertEqual(f.blue.Size, vvp_grid_layout[f.blue].size)
+        self.assertEqual(f.purple.Size, vvp_grid_layout[f.purple].size)
 
-        # 2 stacked
-
+        # 2x1 stacked
         gp.set_visible_viewports([f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(f.blue.Size, (csize.x, gp.grid_layout.tr.size.y))
-        self.assertEqual(f.purple.Size, (csize.x, gp.grid_layout.br.size.y))
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        self.assertEqual(f.blue.Size, (csize.x, vvp_grid_layout[f.blue].size.y))
+        self.assertEqual(f.purple.Size, (csize.x, vvp_grid_layout[f.purple].size.y))
         self.assertTrue(f.purple.Shown)
         self.assertFalse(f.green.Shown)
 
-        # Back to 4x2
+        # Back to 2x2
         gp.set_visible_viewports([f.green, f.yellow, f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(f.green.Size, gp.grid_layout.tl.size)
-        self.assertEqual(f.yellow.Size, gp.grid_layout.tr.size)
-        self.assertEqual(f.blue.Size, gp.grid_layout.bl.size)
-        self.assertEqual(f.purple.Size, gp.grid_layout.br.size)
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        self.assertEqual(f.green.Size, vvp_grid_layout[f.green].size)
+        self.assertEqual(f.yellow.Size, vvp_grid_layout[f.yellow].size)
+        self.assertEqual(f.blue.Size, vvp_grid_layout[f.blue].size)
+        self.assertEqual(f.purple.Size, vvp_grid_layout[f.purple].size)
+
+        # 1x3 stacked
+        gp.set_visible_viewports([f.red, f.blue, f.purple])
+        gui_loop(0.2)
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        viewport_width = csize.x // 3
+        viewport_height = csize.y // 1
+        self.assertEqual(f.red.Size, wx.Size(viewport_width, viewport_height))
+
+        # 2x3
+        gp.set_visible_viewports([f.red, f.blue, f.purple, f.brown, f.yellow, f.green])
+        gui_loop(0.2)
+        vvp_grid_layout = gp.get_visible_viewport_grid_layout()
+        viewport_width = csize.x // 3
+        viewport_height = csize.y // 2
+        self.assertEqual(f.red.Size, wx.Size(viewport_width, viewport_height))
 
     def test_grid_edit(self):
 

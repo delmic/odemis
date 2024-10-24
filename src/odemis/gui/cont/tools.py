@@ -29,11 +29,20 @@ This module contains classes that allow to create ToolBars for the MicroscopeGUI
 
 """
 import itertools
-from odemis.gui import model, img
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
-from odemis.gui.util import call_in_wx_main
+from typing import Union
+
 import wx
-from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_LABEL
+
+from odemis.gui import img, model
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
+from odemis.gui.model import (
+    TOOL_ACT_ZOOM_FIT,
+    TOOL_LABEL,
+    TOOL_LINE,
+    TOOL_POINT,
+    TOOL_RULER,
+)
+from odemis.gui.util import call_in_wx_main
 
 
 # Two types of tools:
@@ -62,6 +71,10 @@ class ModeTool(Tool):
 
 
 class ActionTool(Tool):
+    pass
+
+
+class ToggleTool(Tool):
     pass
 
 
@@ -177,6 +190,21 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move polygon"
         ),
+    model.TOOL_VIEW_LAYOUT:
+        ToggleTool(
+            "btn_view_layout",
+            "Set viewport grid layout"
+        ),
+    model.TOOL_CURSOR:
+        ToggleTool(
+            "btn_cursor",
+            "Cursor"
+        ),
+    model.TOOL_EXPAND:
+        ActionTool(
+            "btn_expand",
+            "Expand the view"
+        ),
 }
 
 
@@ -245,6 +273,13 @@ class ToolBar(wx.Panel):
             self._add_action_tool(tooltype, tool_id, handler)
         elif isinstance(tooltype, ModeTool):
             self._add_mode_tool(tooltype, tool_id, handler)
+        elif isinstance(tooltype, ToggleTool):
+            self._add_toggle_tool(tooltype, tool_id, handler)
+
+    def _add_toggle_tool(self, tooltype, tool_id, callback):
+        btn = self._add_button(tool_id, ImageToggleButton, tooltype.icon, tooltype.tooltip)
+        btn.Bind(wx.EVT_BUTTON, callback)
+        self._buttons[tool_id] = btn
 
     def _add_action_tool(self, tooltype, tool_id, callback):
         btn = self._add_button(tool_id, ImageButton, tooltype.icon, tooltype.tooltip)
@@ -315,6 +350,9 @@ class ToolBar(wx.Panel):
 
     def enable_button(self, tool_id, enable):
         self._buttons[tool_id].Enable(enable)
+
+    def get_button(self, tool_id: int) -> Union[ImageButton, ImageToggleButton]:
+        return self._buttons[tool_id]
 
     def enable(self, enabled=True):
         """
