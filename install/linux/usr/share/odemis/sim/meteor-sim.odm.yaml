@@ -195,6 +195,14 @@
              1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
              2.4361944: [663.e-9, 733.e-9], # FF02-698/70
         },
+        metadata: {
+            CHROMATIC_COR: {
+                0.08: {"Pixel size cor": [1, 1],"Centre position cor": [2, 3] ,"Rotation cor": 0.1 ,"Shear cor": 0.2},
+                0.865398: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 1},
+                1.650796: {"Pixel size cor": [1, 1],"Centre position cor": [4, 5] ,"Rotation cor": 0.2 ,"Shear cor": 0.3},
+                2.4361944: {"Pixel size cor": [2, 3],"Centre position cor": [6, 7] ,"Rotation cor": 0 ,"Shear cor": 0.4},
+            },
+        },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
     # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
