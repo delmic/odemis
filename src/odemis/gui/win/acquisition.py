@@ -821,9 +821,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 "y": self.stage.axes["y"].range
             }
 
-            stage_md = self.stage.getMetadata()
-            if imaging_range in stage_md:
-                self._tiling_rng.update(stage_md[imaging_range])
+            # tmp disable until consolidate to sem posture range
+            # stage_md = self.stage.getMetadata()
+            # if imaging_range in stage_md:
+                # self._tiling_rng.update(stage_md[imaging_range])
         except (KeyError, IndexError):
             raise ValueError(f"Failed to find stage {imaging_range} with x and y range")
 
