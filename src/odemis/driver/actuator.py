@@ -37,7 +37,7 @@ from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
 from odemis.util.transform import RigidTransform
-from odemis.acq.move import MicroscopePostureManager
+from odemis.acq.move import MicroscopePostureManager, SEM_IMAGING, FM_IMAGING
 
 class MultiplexActuator(model.Actuator):
     """
@@ -3635,9 +3635,25 @@ class SampleStage(model.Actuator):
         """
         update the position VA when the dep's position is updated
         """
+        # TODO: this should be posture converted to SEM posture
+        # pos_sem = self.pm.to_posture(pos_dep, SEM_IMAGING)
+        # pos = self.pm.to_sample_stage_from_stage_position(pos_sem)
+        # logging.warning(f"Converted position from {pos_dep} to {pos_sem}, Updating SampleStage position to {pos}")
+
         pos = self.pm.to_sample_stage_from_stage_position(pos_dep)
         # it's read-only, so we change it via _value
         self.position._set_value(pos, force_write=True)
+
+        # update related MDs
+        affects = ["ccd", "e-beam"] # roles
+        for a in affects:
+            try:
+                comp = model.getComponent(role=a)
+                if comp:
+                    md_pos = pos.get("x", 0), pos.get("y", 0)
+                    comp.updateMetadata({model.MD_POS: md_pos})
+            except Exception as e:
+                logging.error("Failed to update %s with new position: %s", a, e)
 
     def _updateSpeed(self, dep_speed):
         """
