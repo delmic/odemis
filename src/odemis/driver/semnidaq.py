@@ -2267,7 +2267,7 @@ class Scanner(model.Emitter):
                  limits: List[List[float]],
                  park: Optional[List[float]] = None,
                  scanning_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
-                 image_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
+                 image_ttl: Optional[Dict[str, list]] = None,
                  settle_time: float = 0,
                  scan_active_delay: float = 0,
                  hfw_nomag: float = 0.1,
@@ -2283,17 +2283,6 @@ class Scanner(model.Emitter):
         :param park (None or 2-tuple of (0<=float)): voltage (in V) of resting position,
         if None, it will default to top-left corner. If the beam cannot be blanked
         this will be the position of the beam when not scanning.
-        :param image_ttl: digital output channels (on port0) to indicate various moments of
-        the image acquisition: "pixel" defines the beginning of a scan of a pixel. It goes high
-        the first half of the duration of a pixel. "line" defines the beginning of a scan of a line,
-        not including the settling time. It goes high on the first pixel of the line,
-        and goes down at the end of the last pixel. "frame" defines the beginning of a scan of a
-        frame, not including the settling time. It goes high on the first
-        pixel of the frame, and goes down at the end of the last pixel.
-        For each of the 3 types of TTL, a dictionary can be provided with the following keys:
-        * "port": list of int, defining the digital output port(s) to use.
-        * "affects": list of str, containing the names of components which are physically connected
-        to the signal.
         :param scanning_ttl (None or dict of int -> (bool, bool, Optional[str])):
         List of digital output ports to indicate the ebeam is scanning or not.
         * First argument is "high_auto": if True, it is set to high when scanning,
@@ -2304,6 +2293,18 @@ class Scanner(model.Emitter):
         created, and will allow to force the TTL to enabled (True) or disabled (False), in
         addition to the automatic behaviour (None) which is the default. Note that it's allowed
         to have multiple channels linked to the same VA.
+        :param image_ttl: digital output channels (on port0) to indicate various moments of
+        the image acquisition: "pixel" defines the beginning of a scan of a pixel. It goes high
+        the first half of the duration of a pixel. "line" defines the beginning of a scan of a line,
+        not including the settling time. It goes high on the first pixel of the line,
+        and goes down at the end of the last pixel. "frame" defines the beginning of a scan of a
+        frame, not including the settling time. It goes high on the first
+        pixel of the frame, and goes down at the end of the last pixel.
+        For each of the 3 types of TTL, a dictionary can be provided with the following keys:
+        * "port": list of int, defining the digital output port(s) to use.
+        * "inverted": list of boolean, defining for each port whether the inactive state is low (False), or high (True).
+        * "affects": list of str, containing the names of components which are physically connected
+        to the signal.
         :param settle_time (0<=float<=1e-3): time in s for the signal to settle after
         each scan line, when scanning the whole field-of-view.
         :param scan_active_delay (0<=float): minimum time (s) to wait before starting
