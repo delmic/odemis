@@ -60,9 +60,7 @@ class SetFactoryValues(Plugin):
         self._acquisition_controller = self._acquisition_tab._acquisition_controller
 
         self.addMenu("Help/Development/Set factory values",
-                     self._set_factory_values,
-                     item_kind=wx.ITEM_NORMAL,
-                     pass_menu_item=False)
+                     self._set_factory_values)
 
     def _set_factory_values(self):
         """
@@ -76,22 +74,33 @@ class SetFactoryValues(Plugin):
             style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
         )
         ans = box.ShowModal()  # Waits for the window to be closed
-        if ans == wx.ID_YES:  # only set values when "yes" has been selected
-            descanner_md = self.descanner.getMetadata()
-            upload = False
-            if model.MD_SCAN_OFFSET in descanner_md:
-                logging.debug("Update descanner scan offset to factory calibration")
-                self.descanner.scanOffset.value = descanner_md.get(model.MD_SCAN_OFFSET)
-                upload = True
-            if model.MD_SCAN_AMPLITUDE in descanner_md:
-                logging.debug("Update descanner scan amplitude to factory calibration")
-                self.descanner.scanAmplitude.value = descanner_md.get(model.MD_SCAN_AMPLITUDE)
-                upload = True
-            if upload:  # upload params to ASM
-                self.mppc.data.get(dataContent="empty")
+        if ans != wx.ID_YES:  # only set values when "yes" has been selected
+            return
 
-            logging.debug("<ove the z component of the stage to roughly a good focus position")
-            ccd_md = self.ccd.getMetadata()
-            focus_pos = ccd_md.get(model.MD_FAV_POS_ACTIVE).get("z")
-            if focus_pos:
-                self.stage.moveAbs({"z": focus_pos})
+        descanner_md = self.descanner.getMetadata()
+        upload = False
+        if model.MD_SCAN_OFFSET in descanner_md:
+            logging.debug("Update descanner scan offset to factory calibration")
+            self.descanner.scanOffset.value = descanner_md.get(model.MD_SCAN_OFFSET)
+            upload = True
+        else:
+            logging.warning("No SCAN_OFFSET metadata available on descanner component, cannot load factory setting.")
+
+        if model.MD_SCAN_AMPLITUDE in descanner_md:
+            logging.debug("Update descanner scan amplitude to factory calibration")
+            self.descanner.scanAmplitude.value = descanner_md.get(model.MD_SCAN_AMPLITUDE)
+            upload = True
+        else:
+            logging.warning("No SCAN_AMPLITUDE metadata available on descanner component, cannot load factory setting.")
+
+        if upload:  # upload params to the acquisition server module (ASM) controlling the descanner
+            self.mppc.data.get(dataContent="empty")
+
+        ccd_md = self.ccd.getMetadata()
+        focus_pos = ccd_md.get(model.MD_FAV_POS_ACTIVE).get("z")
+        if focus_pos:
+            logging.debug("Move the z component of the stage to roughly a good focus position.")
+            self.stage.moveAbs({"z": focus_pos}).result()
+        else:
+            logging.warning("No FAV_POS_ACTIVE metadata available on ccd component, "
+                            "cannot load factory setting.")
