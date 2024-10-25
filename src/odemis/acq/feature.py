@@ -42,18 +42,19 @@ class CryoFeature(object):
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, stage_position: dict, fm_focus_position: dict, streams=None, posture: str = "FM"):
         """
         :param name: (string) the feature name
-        :param x: (float) the X axis of the feature position
-        :param y: (float) the Y axis of the feature position
-        :param z: (float) the Z axis of the feature position
+        :param stage_position: (dict) the stage position of the feature (stage-bare)
+        :param fm_focus_position: (dict) the focus position of the feature
+        :param posture: (string) the initial posture of the feature
         :param streams: (List of StaticStream) list of acquired streams on this feature
         """
         self.name = model.StringVA(name)
-        # The 3D position of an interesting point in the site (Typically, the milling should happen around that
-        # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
+        self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare
+        self.fm_focus_pos = model.VigilantAttribute(fm_focus_position, unit="m")
+        self.posture = model.StringVA(posture)
+        self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
@@ -68,8 +69,12 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
     flist = []
     for feature in features:
-        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+        feature_item = {'name': feature.name.value,
+                        'status': feature.status.value,
+                        'stage_position': feature.stage_position.value,
+                        'fm_focus_position': feature.fm_focus_position.value,
+                        'posture': feature.posture.value,
+                        'posture_positions': feature.posture_positions}
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -85,13 +90,20 @@ class FeaturesDecoder(json.JSONDecoder):
     def object_hook(self, obj):
         # Either the object is the feature list or the feature objects inside it
         if 'name' in obj:
-            pos = obj['pos']
-            feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
+            stage_position = obj['stage_position']
+            fm_focus_position = obj['fm_focus_position']
+            posture = obj['posture']
+            posture_positions = obj.get('posture_positions', {})
+            feature = CryoFeature(name=obj['name'],
+                                  stage_position=stage_position,
+                                  fm_focus_position=fm_focus_position,
+                                  posture=posture)
             feature.status.value = obj['status']
+            feature.posture_positions = posture_positions
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
-
+        return obj
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
@@ -338,19 +350,19 @@ class CryoFeatureAcquisitionTask(object):
         :raises MoveError: if the stage failed to move to the given site.
         """
         # NOTE: site.pos is a tuple of (stage_x, stage_y, objective_z) coordinates
-        stage_pos = {
+        stage_position = {
             "x": site.pos.value[0],
             "y": site.pos.value[1],
         }
-        focus_pos = {"z": site.pos.value[2]}
-        logging.debug(f"For feature {site.name.value} moving the stage to {stage_pos} m")
-        self._future.running_subf = self.stage.moveAbs(stage_pos)
+        fm_focus_position = {"z": site.pos.value[2]}
+        logging.debug(f"For feature {site.name.value} moving the stage to {stage_position} m")
+        self._future.running_subf = self.stage.moveAbs(stage_position)
 
         # estimate the time to move the stage
         t = estimate_stage_movement_time(
             stage=self.stage,
             start_pos=self.stage.position.value,
-            end_pos=stage_pos,
+            end_pos=stage_position,
             axes=["x", "y"],
             independent_axes=True,
         )
@@ -364,13 +376,13 @@ class CryoFeatureAcquisitionTask(object):
             )
 
         logging.debug(
-            "For feature %s moving the objective to %s m", site.name.value, focus_pos
+            "For feature %s moving the objective to %s m", site.name.value, fm_focus_position
         )
-        self._move_focus(site, focus_pos)
+        self._move_focus(site, fm_focus_position)
 
-    def _move_focus(self, site: CryoFeature, focus_pos: Dict[str, float]) -> None:
+    def _move_focus(self, site: CryoFeature, fm_focus_position: Dict[str, float]) -> None:
         """Move the focus to the given position."""
-        self._future.running_subf = self.focus.moveAbs(focus_pos)
+        self._future.running_subf = self.focus.moveAbs(fm_focus_position)
 
         # objective move shouldn't take longer than 2 seconds
         t = OBJECTIVE_WAIT_TIME * 2 # adding extra margin

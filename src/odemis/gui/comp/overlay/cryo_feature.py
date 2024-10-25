@@ -54,6 +54,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         DragMixin.__init__(self)
         self._mode = MODE_SHOW_FEATURES
         self.tab_data = tab_data
+        self.pm = self.tab_data.main.posture_manager
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         if self._selected_tool_va:
@@ -128,9 +129,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
-                pos = feature.pos.value
                 logging.info("moving to feature {}".format(feature.name.value))
-                self.cnvs.view.moveStageTo((pos[0], pos[1]))
+                # convert from stage position to view position
+                view_pos = self.pm.from_dependant_position(feature.stage_position.value)
+                self.cnvs.view.moveStageTo(view_pos)
                 self.tab_data.main.currentFeature.value = feature
             else:
                 # Move to selected point (if normally allowed to move)
@@ -156,8 +158,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     DragMixin._on_left_down(self, evt)
                 else:
                     # create new feature based on the physical position then disable the feature tool
-                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    self.tab_data.add_new_feature(p_pos[0], p_pos[1])
+                    pos = self._view_to_stage_pos(v_pos)
+                    self.tab_data.add_new_feature(stage_position=pos)
+
                     self._selected_tool_va.value = TOOL_NONE
             else:
                 if feature:
@@ -186,8 +189,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         Update the selected feature with the newly moved position
         :param v_pos: (int, int) the coordinates in the view
         """
-        p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-        self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
+        self._selected_feature.stage_position.value = self._view_to_stage_pos(v_pos)
         # Reset the selected tool to signal end of feature moving operation
         self._selected_feature = None
         self._selected_tool_va.value = TOOL_NONE
@@ -205,8 +207,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
         for feature in self.tab_data.main.features.value:
-            pos = feature.pos.value
-            fvsp = self.cnvs.phys_to_view(pos, offset)
+            view_pos = self.pm.from_dependant_position(feature.stage_position.value)
+            fvsp = self.cnvs.phys_to_view((view_pos["x"], view_pos["y"]), offset)
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                 return feature
 
@@ -216,8 +218,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             if self.dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                self._selected_feature.pos.value = tuple((p_pos[0], p_pos[1], self._selected_feature.pos.value[2]))
+                self._selected_feature.stage_position.value = self._view_to_stage_pos(v_pos)
                 self.cnvs.update_drawing()
                 return
             feature = self._detect_point_inside_feature(v_pos)
@@ -241,11 +242,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         # Show each feature icon and label if applicable
         for feature in self.tab_data.main.features.value:
-            pos = feature.pos.value
+            view_pos = self.pm.from_dependant_position(feature.stage_position.value)
             half_size_offset = self.cnvs.get_half_buffer_size()
 
             # convert physical position to buffer 'world' coordinates
-            bpos = self.cnvs.phys_to_buffer_pos((pos[0], pos[1]), self.cnvs.p_buffer_center, self.cnvs.scale,
+            bpos = self.cnvs.phys_to_buffer_pos((view_pos["x"], view_pos["y"]),
+                                                self.cnvs.p_buffer_center, self.cnvs.scale,
                                                 offset=half_size_offset)
 
             def set_icon(feature_icon):
@@ -267,3 +269,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 self._label.draw(ctx)
 
             ctx.paint()
+
+    def _view_to_stage_pos(self, v_pos):
+        """Convert view position to stage position"""
+        p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+        new_pos = {
+            "x": p_pos[0],
+            "y": p_pos[1],
+            "z": self.tab_data.main.stage.position.value["z"],  #NOTE: we cannot use cnvs.view._stage, because the acquired cnvs does not have a _stage....? why?
+        }
+        pos = self.pm.to_dependant_position(new_pos)
+        return pos

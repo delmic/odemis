@@ -76,9 +76,7 @@ class CryoFeatureController(object):
         # Use current focus to set currently selected feature
         feature = self._tab_data_model.main.currentFeature.value
         if feature:
-            pos = feature.pos.value
-            current_focus = self._main_data_model.focus.position.value['z']
-            feature.pos.value = (pos[0], pos[1], current_focus)
+            feature.fm_focus_position.value = self._main_data_model.focus.position.value
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -87,8 +85,8 @@ class CryoFeatureController(object):
         feature = self._tab_data_model.main.currentFeature.value
         if not feature:
             return
-        pos = feature.pos.value
-
+        stage_position = feature.stage_position.value
+        fm_focus_position = feature.fm_focus_position.value
         # get current position
         pm = self._tab_data_model.main.posture_manager
         current_label = pm.getCurrentPostureLabel()
@@ -102,9 +100,9 @@ class CryoFeatureController(object):
             return
 
         # move to feature position
-        logging.info(f"Moving to position: {pos}")
-        self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
-        self._main_data_model.focus.moveAbs({'z': pos[2]})
+        logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}")
+        pm.stage.moveAbs(stage_position)
+        self._main_data_model.focus.moveAbs(fm_focus_position)
 
     def _display_go_to_feature_warning(self) -> bool:
         box = wx.MessageDialog(self._tab.main_frame,
@@ -212,15 +210,15 @@ class CryoFeatureController(object):
 
         # TODO: check, it seems that sometimes the EVT_TEXT_ENTER is first received
         # by the VAC, before the widget itself, which prevents getting the right value.
-        self._feature_z_va_connector = VigilantAttributeConnector(feature.pos,
+        self._feature_z_va_connector = VigilantAttributeConnector(feature.fm_focus_position,
                                                                   self._panel.ctrl_feature_z,
                                                                   events=wx.EVT_TEXT_ENTER,
                                                                   ctrl_2_va=self._on_ctrl_feature_z_change,
-                                                                  va_2_ctrl=self._on_feature_pos)
+                                                                  va_2_ctrl=self._on_feature_focus_pos)
 
-    def _on_feature_pos(self, feature_pos):
-        # Set the feature Z ctrl with the 3rd (focus) element of the feature position
-        self._panel.ctrl_feature_z.SetValue(feature_pos[2])
+    def _on_feature_focus_pos(self, fm_focus_position: dict):
+        # Set the feature Z ctrl with the focus position
+        self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def _on_feature_name(self, _):
@@ -267,17 +265,12 @@ class CryoFeatureController(object):
 
     def _on_ctrl_feature_z_change(self):
         """
-        Get the current feature Z ctrl value to set feature Z position
-        :return: (tuple of 3 floats) the full position including the Z ctrl value
+        Get the current feature Z ctrl value to set feature focus position
+        :return: (dict) feature focus position
         """
         # HACK: sometimes the event is first received by this handler and later
         # by the UnitFloatCtrl. So the value is not yet computed => Force it, just in case.
         self._panel.ctrl_feature_z.on_text_enter(None)
         zpos = self._panel.ctrl_feature_z.GetValue()
 
-        feature = self._tab_data_model.main.currentFeature.value
-        if not feature:
-            logging.error("No feature connected, but Z position changed!")
-            return None, None, zpos
-        pos = feature.pos.value
-        return pos[0], pos[1], zpos
+        return {"z": zpos}

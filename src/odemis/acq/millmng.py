@@ -242,7 +242,8 @@ class MillingRectangleTask(object):
         stage_time = 0
         for site in self.sites:
             stage_time += self.estimate_stage_movement_time(site, prev_stage_pos_ref)
-            prev_stage_pos_ref = site.pos.value
+            prev_pos = site.stage_position.value
+            prev_stage_pos_ref = (prev_pos["x"], prev_pos["y"], prev_pos["z"])
 
         return milling_time + stage_time
 
@@ -253,13 +254,15 @@ class MillingRectangleTask(object):
         :param stage_pos_ref: (tuple) reference position of the stage in m from where the stage moves.
         :return: (float) time to move the stage between two points in s.
         """
+        # TODO: refactor this func to use dict instead of tuple
         # current position from x,y,z of stage position and eliminating rx,ry,rz
         if stage_pos_ref is None:
-            stage_pos = self._stage.position.value
-            current_pos = [stage_pos[an] for an in ("x", "y", "z")]
+            stage_position = self._stage.position.value
+            current_pos = [stage_position[an] for an in ("x", "y", "z")]
         else:
             current_pos = stage_pos_ref
-        target_pos = site.pos.value  # list
+        tpos = site.stage_position.value
+        target_pos = (tpos["x"], tpos["y"], tpos["z"])
         diff = [abs(target - current) for target, current in zip(target_pos, current_pos)]
         stage_time = math.sqrt(sum(d ** 2 for d in diff)) / self._move_speed
 
@@ -286,9 +289,7 @@ class MillingRectangleTask(object):
         :param site: (CryoFeature) The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        target_pos = {"x": site.pos.value[0],
-                      "y": site.pos.value[1],
-                      "z": site.pos.value[2]}
+        target_pos = site.stage_position.value
         logging.debug("For feature %s moving the stage to %s m", site.name.value, target_pos)
         self._future.running_subf = self._stage.moveAbs(target_pos)
         stage_time = self.estimate_stage_movement_time(site)
