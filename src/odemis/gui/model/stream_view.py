@@ -25,6 +25,7 @@ import math
 import queue
 import threading
 import time
+from typing import Tuple
 
 from odemis import model
 from odemis.acq.stream import DataProjection, RGBSpatialProjection, Stream, StreamTree
@@ -431,7 +432,7 @@ class StreamView(View):
         shift = (view_pos[0] - prev_pos["x"], view_pos[1] - prev_pos["y"])
         return self.moveStageBy(shift)
 
-    def moveStageTo(self, pos):
+    def moveStageTo(self, pos: Tuple[float, float]):
         """
         Request an absolute move of the stage to a given position
 
@@ -441,8 +442,6 @@ class StreamView(View):
         if not self._stage:
             return None
 
-        if isinstance(pos, dict):
-            pos = (pos["x"], pos["y"]) # tmp compatibility with old code
         if isinstance(pos, tuple):
             move = self.clipToStageLimits({"x": pos[0], "y": pos[1]})
 

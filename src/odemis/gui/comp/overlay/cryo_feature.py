@@ -132,7 +132,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 logging.info("moving to feature {}".format(feature.name.value))
                 # convert from stage position to view position
                 view_pos = self.pm.to_sample_stage_from_stage_position(feature.stage_position.value)
-                self.cnvs.view.moveStageTo(view_pos)
+                self.cnvs.view.moveStageTo((view_pos["x"], view_pos["y"]))
                 self.tab_data.main.currentFeature.value = feature
             else:
                 # Move to selected point (if normally allowed to move)
