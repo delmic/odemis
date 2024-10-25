@@ -3552,6 +3552,21 @@ class LinkedAxesActuator(model.Actuator):
         raise NotImplementedError("Referencing is currently not implemented.")
 
 
+
+# "Sample Stage": {
+#     class: actuator.SampleStage,
+#     role: "stage",
+#     dependencies: {
+#         "under": "Stage"
+#     },
+#     affects: ["Camera", "EBeam"],
+#     metadata: {
+#         # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
+#         POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 30.e-3]}  # TODO: migrate this to stage-bare? I think it's only used for tiled acq?
+#     },
+#     init: {},
+# }
+
 class SampleStage(model.Actuator):
     """
     Stage wrapper component which converts the stage position to the sample stage position.
@@ -3559,7 +3574,7 @@ class SampleStage(model.Actuator):
     according to the pre-tilt and other factors.
     """
 
-    def __init__(self, name, role, dependencies, **kwargs):
+    def __init__(self, name, role, dependencies, posture_manager: MicroscopePostureManager, **kwargs):
         """
         dependencies (dict str -> actuator): name to objective lens actuator
         """
@@ -3572,7 +3587,8 @@ class SampleStage(model.Actuator):
                                 axes=copy.deepcopy(self._dependency.axes), **kwargs)
 
         # posture manager, to convert the positions
-        self.pm: MicroscopePostureManager = MicroscopePostureManager(model.getMicroscope())
+        # self.pm: MicroscopePostureManager = MicroscopePostureManager(model.getMicroscope())
+        self.pm = posture_manager
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0},

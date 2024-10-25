@@ -280,6 +280,8 @@ class MicroscopePostureManager:
         """
         self.current_posture.value = self.getCurrentPostureLabel(position)
 
+        # TODO: update MD_POS on related components
+
 class MeteorPostureManager(MicroscopePostureManager):
     def __init__(self, microscope):
         # Load components
@@ -833,6 +835,17 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         pre_tilt = stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
 
         self.initialise_transformation(rotation=pre_tilt)
+        self.create_sample_stage()
+
+    def create_sample_stage(self):
+        from odemis.driver.actuator import SampleStage
+        # TODO: migrate this to stage-bare? I think it's only used for tiled acq?
+        md = {model.MD_POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 30.e-3]}}
+        self.sample_stage = SampleStage(name="Sample Stage", 
+                                        role="stage", 
+                                        dependencies={"under": self.stage}, 
+                                        posture_manager=self, 
+                                        metadata=md)
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):

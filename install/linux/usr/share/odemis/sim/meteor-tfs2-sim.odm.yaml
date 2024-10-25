@@ -83,19 +83,19 @@
     },
 }
 
-"Sample Stage": {
-    class: actuator.SampleStage,
-    role: "stage",
-    dependencies: {
-        "under": "Stage"
-    },
-    affects: ["Camera", "EBeam"],
-    metadata: {
-        # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
-        POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 30.e-3]}  # TODO: migrate this to stage-bare? I think it's only used for tiled acq?
-    },
-    init: {},
-}
+# "Sample Stage": {
+#     class: actuator.SampleStage,
+#     role: "stage",
+#     dependencies: {
+#         "under": "Stage"
+#     },
+#     affects: ["Camera", "EBeam"],
+#     metadata: {
+#         # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
+#         POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 30.e-3]}  # TODO: migrate this to stage-bare? I think it's only used for tiled acq?
+#     },
+#     init: {},
+# }
 
 "Light Source": {
     class: omicronxx.HubxX,

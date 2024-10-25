@@ -314,6 +314,10 @@ class MainGUIData(object):
             elif self.role == "mbsem":
                 required_roles += ["e-beam", "stage"]
 
+            if microscope.name == "METEOR TFSv2" and self.role == "meteor":
+                # remove stage from required roles for METEOR TFSv2
+                required_roles.remove("stage")
+
             for crole in required_roles:
                 attrname = self._ROLE_TO_ATTR[crole]
                 if getattr(self, attrname) is None:
@@ -508,6 +512,8 @@ class CryoMainGUIData(MainGUIData):
 
         # Controls the stage movement based on the imaging mode
         self.posture_manager = MicroscopePostureManager(microscope)
+        if self.role == "meteor":
+            self.stage = self.posture_manager.sample_stage
 
         # stage.MD_SAMPLE_CENTERS contains the date in almost the right format, but the
         # position is a dict instead of a tuple. => Convert it, while checking the data.
@@ -536,6 +542,9 @@ class CryoMainGUIData(MainGUIData):
         self.sample_radius = self.SAMPLE_RADIUS_TEM_GRID
         # Bounding-box of the "useful area" relative to the center of a grid
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
+
+
+
 
 
 class ScintillatorShape(metaclass=ABCMeta):
