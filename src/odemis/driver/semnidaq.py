@@ -2267,7 +2267,7 @@ class Scanner(model.Emitter):
                  limits: List[List[float]],
                  park: Optional[List[float]] = None,
                  scanning_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
-                 image_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
+                 image_ttl: Optional[Dict[str, list]] = None,
                  settle_time: float = 0,
                  scan_active_delay: float = 0,
                  hfw_nomag: float = 0.1,
@@ -2292,6 +2292,7 @@ class Scanner(model.Emitter):
         pixel of the frame, and goes down at the end of the last pixel.
         For each of the 3 types of TTL, a dictionary can be provided with the following keys:
         * "port": list of int, defining the digital output port(s) to use.
+        * "inverted": list of boolean, defining for each port whether the inactive state is low (False), or high (True).
         * "affects": list of str, containing the names of components which are physically connected
         to the signal.
         :param scanning_ttl (None or dict of int -> (bool, bool, Optional[str])):
