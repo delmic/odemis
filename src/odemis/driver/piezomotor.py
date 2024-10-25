@@ -812,13 +812,12 @@ class PMD401Bus(Actuator):
         :returns: (str) response
         """
         cmd += EOL
-        resp = b""
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             try:
                 self._serial.write(cmd)
-                resp = self._serial.read_until(EOL)
-            except (serial.SerialException, IOError):
+            # TODO: what kind of exception is raised? Needs to be more specific.
+            except:
                 logging.warning("Failed to read from PMT Control firmware, "
                                 "trying to reconnect.")
                 if self._recovering:
@@ -828,10 +827,28 @@ class PMD401Bus(Actuator):
                     # don't send command again
                     raise IOError("Failed to read from PMT Control firmware, "
                                   "restarted serial connection.")
+
+            resp = b""
+            while resp[-len(EOL):] != EOL:
+                try:
+                    char = self._serial.read()
+                # TODO: what kind of exception is raised? Needs to be more specific.
+                except:
+                    logging.warning("Failed to read from PMT Control firmware, "
+                                    "trying to reconnect.")
+                    if self._recovering:
+                        raise
+                    else:
+                        self._tryRecover()
+                        # don't send command again
+                        raise IOError("Failed to read from PMT Control firmware, "
+                                      "restarted serial connection.")
+                if not char:
+                    raise IOError("Timeout after receiving %s" % to_str_escape(resp))
+                else:
+                    resp += char
             logging.debug("Received response %s", to_str_escape(resp))
 
-            if not resp.endswith(EOL):
-                raise IOError("Timeout: no EOL received after response '%s'" % to_str_escape(resp))
             # Check response (command should be echoed back)
             if not resp.startswith(cmd[:-len(EOL)-1]):
                 raise IOError("Response starts with %s != %s" % (to_str_escape(resp[:len(cmd)]), cmd))
