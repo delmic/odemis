@@ -52,7 +52,7 @@ class CryoFeature(object):
         """
         self.name = model.StringVA(name)
         self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare
-        self.fm_focus_pos = model.VigilantAttribute(fm_focus_position, unit="m")
+        self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
         self.posture = model.StringVA(posture)
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 

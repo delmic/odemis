@@ -198,7 +198,7 @@ class CryoZLocalizationController(object):
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             raise ValueError("Select a feature first to specify the Z localization in X/Y")
-        pos = self._tab_data.main.posture_manager.from_dependant_position(feature.stage_position.value)
+        pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(feature.stage_position.value)
 
         # Disable the GUI and show the progress bar
         self._tab.streambar_controller.pauseStreams()

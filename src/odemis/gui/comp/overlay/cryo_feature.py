@@ -131,7 +131,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if feature:
                 logging.info("moving to feature {}".format(feature.name.value))
                 # convert from stage position to view position
-                view_pos = self.pm.from_dependant_position(feature.stage_position.value)
+                view_pos = self.pm.to_sample_stage_from_stage_position(feature.stage_position.value)
                 self.cnvs.view.moveStageTo(view_pos)
                 self.tab_data.main.currentFeature.value = feature
             else:
@@ -207,7 +207,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
         for feature in self.tab_data.main.features.value:
-            view_pos = self.pm.from_dependant_position(feature.stage_position.value)
+            view_pos = self.pm.to_sample_stage_from_stage_position(feature.stage_position.value)
             fvsp = self.cnvs.phys_to_view((view_pos["x"], view_pos["y"]), offset)
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                 return feature
@@ -242,7 +242,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         # Show each feature icon and label if applicable
         for feature in self.tab_data.main.features.value:
-            view_pos = self.pm.from_dependant_position(feature.stage_position.value)
+            view_pos = self.pm.to_sample_stage_from_stage_position(feature.stage_position.value)
             half_size_offset = self.cnvs.get_half_buffer_size()
 
             # convert physical position to buffer 'world' coordinates
@@ -278,5 +278,5 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             "y": p_pos[1],
             "z": self.tab_data.main.stage.position.value["z"],  #NOTE: we cannot use cnvs.view._stage, because the acquired cnvs does not have a _stage....? why?
         }
-        pos = self.pm.to_dependant_position(new_pos)
+        pos = self.pm.from_sample_stage_to_stage_position(new_pos)
         return pos
