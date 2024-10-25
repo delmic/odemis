@@ -839,11 +839,10 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
 
     def create_sample_stage(self):
         from odemis.driver.actuator import SampleStage
-        # TODO: migrate this to stage-bare? I think it's only used for tiled acq?
-        self.sample_stage = SampleStage(name="Sample Stage", 
-                                        role="stage", 
-                                        dependencies={"under": self.stage}, 
-                                        posture_manager=self) 
+        self.sample_stage = SampleStage(name="Sample Stage",
+                                        role="stage",
+                                        dependencies={"under": self.stage},
+                                        posture_manager=self)
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
