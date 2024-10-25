@@ -20,13 +20,12 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
     """
     Test the json encoder and decoder of the CryoFeature class
     """
-    test_str = '{"feature_list": [{"name": "Feature-1", "status": "Active", "stage_position": {"x": 0, "y": 0, "z": 0}, "fm_focus_position": {"z": 0}, "posture": "FM"}, '+ \
-               '{"name": "Feature-2", "status": "Active", "stage_position": {"x": 0.001, "y": 0.001, "z": 0.001}, "fm_focus_position": {"z": 0.002}, "posture": "FM"}]}'
+    test_str = '{"feature_list": [{"name": "Feature-1", "status": "Active", "stage_position": {"x": 0, "y": 0, "z": 0}, "fm_focus_position": {"z": 0}, "posture": "FM", "posture_positions": {}}, '+ \
+               '{"name": "Feature-2", "status": "Active", "stage_position": {"x": 0.001, "y": 0.001, "z": 0.001}, "fm_focus_position": {"z": 0.002}, "posture": "FM", "posture_positions": {}}]}'
 
     def test_feature_encoder(self):
         feature1 = CryoFeature("Feature-1", stage_position={"x": 0, "y": 0, "z": 0}, fm_focus_position={"z": 0})
         feature2 = CryoFeature("Feature-2", stage_position={"x": 1e-3, "y": 1e-3, "z": 1e-3}, fm_focus_position={"z": 2e-3})
-
         features = [feature1, feature2]
         json_str = json.dumps(get_features_dict(features))
         self.assertEqual(json_str, self.test_str)
