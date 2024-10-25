@@ -37,7 +37,7 @@ from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
 from odemis.util.transform import RigidTransform
-
+from odemis.acq.move import MicroscopePostureManager
 
 class MultiplexActuator(model.Actuator):
     """
@@ -3550,3 +3550,128 @@ class LinkedAxesActuator(model.Actuator):
     def reference(self, axes):
         """Reference the linked axes stage"""
         raise NotImplementedError("Referencing is currently not implemented.")
+
+
+class SampleStage(model.Actuator):
+    """
+    Stage wrapper component which converts the stage position to the sample stage position.
+    The sample stage coordinates system is along the sample-plane which is adjusted
+    according to the pre-tilt and other factors.
+    """
+
+    def __init__(self, name, role, dependencies, **kwargs):
+        """
+        dependencies (dict str -> actuator): name to objective lens actuator
+        """
+        if len(dependencies) != 1:
+            raise ValueError("SampleStage needs 1 dependency")
+
+        self._dependency = list(dependencies.values())[0]
+
+        model.Actuator.__init__(self, name, role, dependencies=dependencies,
+                                axes=copy.deepcopy(self._dependency.axes), **kwargs)
+
+        # posture manager, to convert the positions
+        self.pm: MicroscopePostureManager = MicroscopePostureManager(model.getMicroscope())
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute({"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0},
+                                                unit=("m", "m", "m", "rad", "rad"),  readonly=True)
+        # it's just a conversion from the dep's position
+        self._dependency.position.subscribe(self._updatePosition, init=True)
+
+        if model.hasVA(self._dependency, "referenced"):
+            self.referenced = model.VigilantAttribute({}, readonly=True)
+            self._dependency.referenced.subscribe(self._updateReferenced, init=True)
+
+        if model.hasVA(self._dependency, "speed"):
+            speed_axes = set(self._dependency.speed.value.keys())
+            if set(self.axes) <= speed_axes:
+                self.speed = model.VigilantAttribute({}, readonly=True)
+                self._dependency.speed.subscribe(self._updateSpeed, init=True)
+            else:
+                logging.info("Axes %s of dependency are missing from .speed, so not providing it",
+                             set(self.axes) - speed_axes)
+
+        # TODO: correctly modify the reference, speed and axes range attributes
+
+    # def _updateAxesRange(self):
+    #     """
+    #     Calculate the axes range of position VA from the given range of dep's.
+    #     """
+    #     # Calculate rectangular border points on the given range
+    #     min_x, max_x = self.axes["x"].range
+    #     min_y, max_y = self.axes["y"].range
+    #     coordinates = [[min_x, min_y],
+    #                    [min_x, max_y],
+    #                    [max_x, min_y],
+    #                    [max_x, max_y]]
+
+    #     # Calculate range based on the conversion
+    #     new_coordinates = list(map(self._convertPosFromdep, coordinates))
+
+    #     # Update default axes range
+    #     new_range = numpy.array(new_coordinates, dtype=float)
+    #     self.axes["x"].range = (min(new_range[:, 0]), max(new_range[:, 0]))
+    #     self.axes["y"].range = (min(new_range[:, 1]), max(new_range[:, 1]))
+
+    def _updatePosition(self, pos_dep):
+        """
+        update the position VA when the dep's position is updated
+        """
+        pos = self.pm.to_sample_stage_from_stage_position(pos_dep)
+        # it's read-only, so we change it via _value
+        self.position._set_value(pos, force_write=True)
+
+    def _updateSpeed(self, dep_speed):
+        """
+        update the speed VA based on the dependency's speed
+        """
+        # stage_speed = self.pm.to_sample_stage_from_stage_movement(dep_speed)
+        self.speed._set_value(dep_speed, force_write=True)
+
+    def _updateReferenced(self, dep_refd):
+        """
+        update the referenced VA
+        """
+        refd = {
+            ax: dep_refd[ad] for ax, ad in self.axes.items() if ad in dep_refd
+        }
+
+        self.referenced._set_value(refd, force_write=True)
+
+    @isasync
+    def moveRel(self, shift: Dict[str, float], **kwargs):
+        """
+        :param shift: The relative shift to be made
+        :param **kwargs: Mostly there to support "update" argument
+        """
+        # missing values are assumed to be zero
+        shift_stage = self.pm.from_sample_stage_to_stage_movement(shift)
+        logging.debug("converted relative move from %s to %s", shift, shift_stage)
+        return self._dependency.moveRel(shift_stage, **kwargs)
+
+    @isasync
+    def moveAbs(self, pos: Dict[str, float], **kwargs):
+        """
+        :param pos: The absolute position to be moved to
+        :param **kwargs: Mostly there to support "update" argument
+        """
+
+        # if key is missing from pos, fill it with the current position
+        for key in self.axes.keys():
+            if key not in pos:
+                pos[key] = self.position.value[key]
+
+        # pos is a position, so absolute conversion
+        pos_stage = self.pm.from_sample_stage_to_stage_position(pos)
+        logging.debug("converted absolute move from %s to %s", pos, pos_stage)
+        return self._dependency.moveAbs(pos_stage, **kwargs)
+
+    def stop(self, axes=None):
+        self._dependency.stop()
+
+    @isasync
+    def reference(self, axes):
+        dep_axes = {self._axes_dep[a] for a in axes}
+        return self._dependency.reference(dep_axes)

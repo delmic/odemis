@@ -148,6 +148,7 @@ class MetadataUpdater(model.Component):
         return bool: True if will actually update the affected component,
                      False if the affect is not supported (here)
         """
+        # TODO: write a special updater for the posture adjusted position
 
         # we need to keep the information on the detector to update
         def updateStagePos(pos, comp_affected=comp_affected):
