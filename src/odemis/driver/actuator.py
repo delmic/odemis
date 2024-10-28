@@ -37,7 +37,7 @@ from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
 from odemis.util.transform import RigidTransform
-
+from odemis.acq.move import MicroscopePostureManager, SEM_IMAGING, FM_IMAGING
 
 class MultiplexActuator(model.Actuator):
     """

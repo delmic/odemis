@@ -35,6 +35,8 @@ import scipy
 from odemis import model, util
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isNearPosition, isInRange
+from odemis.util.transform import RigidTransform
+from odemis.model import isasync
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -81,6 +83,8 @@ class MicroscopePostureManager:
                 return super().__new__(MeteorZeiss1PostureManager)
             elif stage_version == "tfs_1":
                 return super().__new__(MeteorTFS1PostureManager)
+            elif stage_version == "tfs_2":
+                return super().__new__(MeteorTFS2PostureManager)
             elif stage_version == "tescan_1":
                 return super().__new__(MeteorTescan1PostureManager)
             else:
@@ -195,6 +199,19 @@ class MicroscopePostureManager:
             missing_keys = required_keys - stage_md.keys()
             raise ValueError(f"Stage metadata is missing the following required keys: {missing_keys}.")
 
+    def check_calib_data(self, required_keys: set):
+        """
+        Checks the keys in the stage metadata MD_CALIB.
+        :param required_keys : A set of keys that must be present in the MD_CALIB metadata.
+        :raises ValueError: if the metadata does not have all required keys.
+        """
+        # Check for required keys in the given metadata
+        stage_md = self.stage.getMetadata()
+        calibrated_md = stage_md[model.MD_CALIB]
+        if not required_keys.issubset(calibrated_md.keys()):
+            missing_keys = required_keys - calibrated_md.keys()
+            raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
+
     def _cancelCryoMoveSample(self, future):
         """
         Canceller of _doCryoSwitchAlignPosition and _doCryoSwitchSamplePosition tasks
@@ -258,6 +275,13 @@ class MicroscopePostureManager:
             logging.info("Move procedure is cancelled after moving %s -> %s", component.name, sub_move)
             raise CancelledError()
 
+    def _update_posture(self, position: Dict[str, float]):
+        """
+        Update the current posture of the microscope
+        """
+        self.current_posture.value = self.getCurrentPostureLabel(position)
+
+        # TODO: update MD_POS on related components
 
 class MeteorPostureManager(MicroscopePostureManager):
     def __init__(self, microscope):
@@ -272,6 +296,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.required_keys = {
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
             model.MD_SAMPLE_CENTERS}
+        # current posture va
+        self.current_posture = model.VigilantAttribute(UNKNOWN)
+        self.stage.position.subscribe(self._update_posture, init=True)
 
     def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
         """
@@ -295,6 +322,16 @@ class MeteorPostureManager(MicroscopePostureManager):
             return SEM_IMAGING
         # None of the above -> unknown position
         return UNKNOWN
+
+    def get_posture_orientation(self, posture: int) -> Dict[str, float]:
+        """Get the orientation of the stage for the given posture"""
+        stage_md = self.stage.getMetadata()
+        if posture == SEM_IMAGING:
+            return stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        elif posture == FM_IMAGING:
+            return stage_md[model.MD_FAV_FM_POS_ACTIVE]
+        elif posture == LOADING:
+            return stage_md[model.MD_FAV_POS_DEACTIVE]
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -333,6 +370,175 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         pass
 
+    def initialise_transformation(
+        self,
+        rotation: float = 0,
+        scale: tuple = (1, 1),
+        translation: tuple = (0, 0),
+        shear: tuple = (0, 0),
+    ):
+
+        self._transforms: Dict[int, numpy.ndarray] = {}     # transforms (to-sample-stage)
+        self._inv_transforms: Dict[int, numpy.ndarray] = {} # inverse transforms (from-sample-stage)
+
+        # FROM CONVERT STAGE
+        self._axes_dep = {"x": "y", "y": "z"}
+
+        self._metadata = {}
+        self._metadata[model.MD_POS_COR] = translation
+        self._metadata[model.MD_ROTATION_COR] = rotation
+        self._metadata[model.MD_PIXEL_SIZE_COR] = scale
+        self._metadata[model.MD_SHEAR_COR] = shear
+        self._updateConversion()
+
+    def _get_rot_matrix(self, invert=False):
+
+        rotation = self._metadata[model.MD_ROTATION_COR]
+        if invert:
+            rotation *= -1
+        return RigidTransform(rotation=rotation).matrix
+
+    def _updateConversion(self):
+        translation = self._metadata[model.MD_POS_COR]
+        scale = self._metadata[model.MD_PIXEL_SIZE_COR]
+        shear = self._metadata[model.MD_SHEAR_COR]
+
+        shear_matrix = numpy.array([[1, shear[0]], [shear[1], 1]])
+
+        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
+        scale_matrix = numpy.identity(len(scale)) * scale
+
+        # fm imaging
+        self._transforms[FM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix()
+        self._inv_transforms[FM_IMAGING] = numpy.linalg.inv(self._transforms[FM_IMAGING])
+
+        # sem imaging
+        self._transforms[SEM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix(invert=True)
+        self._inv_transforms[SEM_IMAGING] =  numpy.linalg.inv(self._transforms[SEM_IMAGING])
+
+        # add unknown as same as SEM IMAGING
+        self._transforms[UNKNOWN] = self._transforms[SEM_IMAGING]
+        self._inv_transforms[UNKNOWN] = self._inv_transforms[SEM_IMAGING]
+
+        # Offset between origins of the coordinate systems
+        self._O = numpy.array(translation, dtype=float)
+
+    def _convert_to_sample_stage_from_stage(self, pos_dep, absolute=True):
+        # Object lens position vector
+        Q = numpy.array(pos_dep, dtype=float)
+        # Transform to coordinates in the reference frame of the sample stage
+        posture = self.current_posture.value
+        p = self._inv_transforms[posture].dot(Q)
+        if absolute:
+            p -= self._O
+        return p.tolist()
+
+    def _convert_from_sample_stage_to_stage(self, pos, absolute=True):
+        # Sample stage position vector
+        P = numpy.array(pos, dtype=float)
+        if absolute:
+            P += self._O
+        # Transform to coordinates in the reference frame of the objective stage
+        posture = self.current_posture.value
+        q = self._transforms[posture].dot(P)
+        return q.tolist()
+
+    def _get_pos_vector(self, pos_val, absolute=True):
+        """ Convert position dict into dependant axes position dict"""
+        if absolute:
+            vpos = pos_val["x"], pos_val["y"]
+        else:
+            vpos = pos_val.get("x", 0), pos_val.get("y", 0)
+        vpos_dep = self._convert_from_sample_stage_to_stage(vpos, absolute=absolute)
+        return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1]}
+
+    def from_sample_stage_to_stage_movement(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Convert position dict from the sample-stage axes to the stage axes
+        Note: from sample-stage -> stage-bare (for relative movements)
+        :param pos: move dict with axis values (x, y, z) in the original axes. not all axes are required
+        :return: move dict with original axis values  in the dependant axes"""
+        # Convert position dict from original axes to dependant axes
+        vpos = self._get_pos_vector({"x": pos.get("y", 0), "y": pos.get("z", 0)}, absolute=False)
+
+        # return the new position
+        new_pos = pos.copy()
+        new_pos.update(vpos)
+        return new_pos
+
+    def from_sample_stage_to_stage_position(self, pos: Dict[str, float], posture: int = None) -> Dict[str, float]:
+        """Convert position dict from the sample-stage axes to the stage axes
+        Note: from sample-stage -> stage-bare
+        :param pos: position dict with all axis values (x, y) in the original axes
+        :param posture: (int) the posture of the stage
+        :return: position dict with all axis values (x, y) in the dependant axes
+        """
+        # Convert position dict from original axes to dependant axes
+        vpos = self._get_pos_vector({"x": pos["y"], "y": pos["z"]}, absolute=True)
+
+        # add rx, rz (orientation)
+        if posture is None:
+            posture = self.getCurrentPostureLabel()
+        orientation = self.get_posture_orientation(posture)
+
+        # return the new position
+        new_pos = pos.copy()
+        new_pos.update(orientation)
+        new_pos.update(vpos)
+        return new_pos
+
+    def to_sample_stage_from_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Convert a stage position dict from the stage axes to the sample-stage axes
+        Note: from stage-bare -> sample stage
+        :param pos: position dict with all axis values (x, y, z) in the dependent axes
+        :return: position dict with all axis values (x, y, z) in the original axes
+        """
+        # Convert position dict from dependant axes to original axes
+        vpos = self._convert_to_sample_stage_from_stage([pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
+        # remap vpos x, y -> stage y, z
+        vpos = {self._axes_dep["x"]: vpos[0], self._axes_dep["y"]: vpos[1]}
+
+        new_pos = pos.copy()
+        new_pos.update(vpos)
+        return new_pos
+
+    def to_posture(self, pos: Dict[str, float], posture: int) -> Dict[str, float]:
+        """Convert a stage position dict to the given posture
+        :param pos: position dict with all axis values in the stage axes
+        :param posture: (int) the target posture of the stage
+        :return: position dict with all axis values in the stage axes"""
+
+        position_posture = self.getCurrentPostureLabel(pos)
+
+        logging.info(f"Position Posture: {POSITION_NAMES[position_posture]}")
+        logging.info(f"Position: {pos}")
+        logging.info(f"Target Posture: {POSITION_NAMES[posture]}")
+
+        # TODO: what is the correct datastructure to store the different combinations of positions and transforms?
+
+        self._posture_transforms = {
+            FM_IMAGING: {
+                SEM_IMAGING: self._transformFromMeteorToSEM,
+            },
+            SEM_IMAGING: {
+                FM_IMAGING: self._transformFromSEMToMeteor,
+            },
+            UNKNOWN: {
+                UNKNOWN: lambda x: x
+         }
+        }
+        if position_posture == posture:
+            return pos
+
+        # validate the transformation
+        if position_posture not in self._posture_transforms:
+            raise ValueError(f"Position posture {position_posture} not supported")
+
+        if posture not in self._posture_transforms[position_posture]:
+            raise ValueError(f"Posture {posture} not supported for position posture {position_posture}")
+
+        tf = self._posture_transforms[position_posture][posture]
+
+        return tf(pos)
 
 class MeteorTFS1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
@@ -613,6 +819,31 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     raise CancelledError()
                 future._task_state = FINISHED
 
+class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
+    def __init__(self, microscope):
+        super().__init__(microscope)
+        # Check required metadata used during switching
+        self.required_keys.add(model.MD_POS_COR)
+        self.required_keys.add(model.MD_FAV_MILL_POS_ACTIVE)
+        self.required_keys.add(model.MD_CALIB)
+        self.check_stage_metadata(required_keys=self.required_keys)
+        self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT})
+        if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
+            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
+
+        # get the stage pre-tilt from the stage metadata
+        stage_md = self.stage.getMetadata()
+        pre_tilt = stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+
+        self.initialise_transformation(rotation=pre_tilt)
+        self.create_sample_stage()
+
+    def create_sample_stage(self):
+        from odemis.driver.actuator import SampleStage
+        self.sample_stage = SampleStage(name="Sample Stage",
+                                        role="stage",
+                                        dependencies={"under": self.stage},
+                                        posture_manager=self)
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
@@ -1470,6 +1701,10 @@ class EnzelPostureManager(MicroscopePostureManager):
         if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
             raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
 
+        # current posture va
+        self.current_posture = model.VigilantAttribute(UNKNOWN)
+        self.stage.position.subscribe(self._update_posture, init=True)
+
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
@@ -1867,3 +2102,105 @@ class EnzelPostureManager(MicroscopePostureManager):
             return LOADING_PATH
         # None of the above -> unknown position
         return UNKNOWN
+
+
+class SampleStage(model.Actuator):
+    """
+    Stage wrapper component which converts the stage position to the sample stage position.
+    The sample stage coordinates system is along the sample-plane which is adjusted
+    according to the pre-tilt and other factors.
+    """
+
+    def __init__(self, name: str, role: str, stage_bare: model.Actuator , posture_manager: MicroscopePostureManager, **kwargs):
+        """
+        :param name: the name of the component (usually "Sample Stage")
+        :param role: the role of the component (usually "stage")
+        :param stage_bare: the stage component to be wrapped
+        :param posture_manager: the posture manager to be used for conversion
+        :param **kwargs: additional arguments to be passed to the parent class
+        """
+
+        self._stage_bare = stage_bare
+
+        model.Actuator.__init__(self, name, role, dependencies={"under": stage_bare},
+                                axes=copy.deepcopy(self._stage_bare.axes), **kwargs)
+
+        # posture manager to convert the positions
+        self.pm = posture_manager
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute({"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0},
+                                                unit=("m", "m", "m", "rad", "rad"),  readonly=True)
+        # it's just a conversion from the dep's position
+        self._stage_bare.position.subscribe(self._updatePosition, init=True)
+
+        if model.hasVA(self._stage_bare, "speed"):
+            speed_axes = set(self._stage_bare.speed.value.keys())
+            if set(self.axes) <= speed_axes:
+                self.speed = model.VigilantAttribute({}, readonly=True)
+                self._stage_bare.speed.subscribe(self._updateSpeed, init=True)
+            else:
+                logging.info("Axes %s of dependency are missing from .speed, so not providing it",
+                             set(self.axes) - speed_axes)
+
+    def _updatePosition(self, pos_dep):
+        """
+        update the position VA when the dep's position is updated
+        """
+        # TODO: this should be posture converted to SEM posture
+        # pos_sem = self.pm.to_posture(pos_dep, SEM_IMAGING)
+        # pos = self.pm.to_sample_stage_from_stage_position(pos_sem)
+        # logging.warning(f"Converted position from {pos_dep} to {pos_sem}, Updating SampleStage position to {pos}")
+
+        pos = self.pm.to_sample_stage_from_stage_position(pos_dep)
+        # it's read-only, so we change it via _value
+        self.position._set_value(pos, force_write=True)
+
+        # update related MDs
+        affects = ["ccd", "e-beam"] # roles
+        for a in affects:
+            try:
+                comp = model.getComponent(role=a)
+                if comp:
+                    md_pos = pos.get("x", 0), pos.get("y", 0)
+                    comp.updateMetadata({model.MD_POS: md_pos})
+            except Exception as e:
+                logging.error("Failed to update %s with new position: %s", a, e)
+
+    def _updateSpeed(self, dep_speed):
+        """
+        update the speed VA based on the dependency's speed
+        """
+        # stage_speed = self.pm.to_sample_stage_from_stage_movement(dep_speed)
+        self.speed._set_value(dep_speed, force_write=True)
+
+    @isasync
+    def moveRel(self, shift: Dict[str, float], **kwargs):
+        """
+        :param shift: The relative shift to be made
+        :param **kwargs: Mostly there to support "update" argument
+        """
+        # missing values are assumed to be zero
+        shift_stage = self.pm.from_sample_stage_to_stage_movement(shift)
+        logging.debug("converted relative move from %s to %s", shift, shift_stage)
+        return self._stage_bare.moveRel(shift_stage, **kwargs)
+
+    @isasync
+    def moveAbs(self, pos: Dict[str, float], **kwargs):
+        """
+        :param pos: The absolute position to be moved to
+        :param **kwargs: Mostly there to support "update" argument
+        """
+
+        # if key is missing from pos, fill it with the current position
+        for key in self.axes.keys():
+            if key not in pos:
+                pos[key] = self.position.value[key]
+
+        # pos is a position, so absolute conversion
+        pos_stage = self.pm.from_sample_stage_to_stage_position(pos)
+        logging.debug("converted absolute move from %s to %s", pos, pos_stage)
+        return self._stage_bare.moveAbs(pos_stage, **kwargs)
+
+    def stop(self, axes=None):
+        self._stage_bare.stop()
