@@ -298,7 +298,7 @@ class CryoAcquiController(object):
                        "zstep": self._tab_data.zStep.value}
 
         filename = self._filename.value
-        stage = self._tab_data.main.stage
+        stage = self._tab_data.main.stage_bare
         focus = self._tab_data.main.focus
         features = self._tab_data.main.features.value
 

@@ -327,21 +327,20 @@ class CryoFeatureAcquisitionTask(object):
             if conf >= self.autofocus_conf_level:
 
                 # update the feature focus position
-                pos = site.pos.value
-                site.pos.value = (pos[0], pos[1], foc_pos)  # NOTE: tuples cant do assignment so we need to replace the whole tuple
+                site.fm_focus_position.value = {"z": foc_pos}  # NOTE: tuples cant do assignment so we need to replace the whole tuple
                 logging.debug(f"auto focus succeeded at {site.name.value} with conf:{conf}. new focus position: {foc_pos}")
             else:
                 # if the confidence is low, restore the previous focus position
-                self._move_focus(site, {"z": site.pos.value[2]})
-                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.pos.value[2]}")
+                self._move_focus(site, site.fm_focus_position.value)
+                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.fm_focus_position.value}")
 
         except TimeoutError as e:
             logging.debug(f"Timed out during autofocus at {site.name.value}. {e}")
             self._future._running_subf.cancel()
 
             # restore the previous focus position
-            self._move_focus(site, {"z": site.pos.value[2]})
-            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.pos.value[2]}")
+            self._move_focus(site, site.fm_focus_position.value)
+            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.fm_focus_position.value}")
 
     def _move_to_site(self, site: CryoFeature):
         """
@@ -349,13 +348,9 @@ class CryoFeatureAcquisitionTask(object):
         :param site: The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        # NOTE: site.pos is a tuple of (stage_x, stage_y, objective_z) coordinates
-        stage_position = {
-            "x": site.pos.value[0],
-            "y": site.pos.value[1],
-        }
-        fm_focus_position = {"z": site.pos.value[2]}
-        logging.debug(f"For feature {site.name.value} moving the stage to {stage_position} m")
+        stage_position = site.stage_position.value      # stage-bare
+        fm_focus_position = site.fm_focus_position.value
+        logging.debug(f"For feature {site.name.value} moving the stage to {stage_position}")
         self._future.running_subf = self.stage.moveAbs(stage_position)
 
         # estimate the time to move the stage
@@ -363,7 +358,7 @@ class CryoFeatureAcquisitionTask(object):
             stage=self.stage,
             start_pos=self.stage.position.value,
             end_pos=stage_position,
-            axes=["x", "y"],
+            axes=["x", "y", "z"],
             independent_axes=True,
         )
         t = t * 5 + 3 # adding extra margin
@@ -427,15 +422,14 @@ class CryoFeatureAcquisitionTask(object):
         for f in self.features:
             if f.status.value == FEATURE_DEACTIVE:
                 continue
-            positions.append(f.pos.value)
+            positions.append(f.stage_position.value)
 
         stage_movement_time = 0
         for start, end in zip(positions[0:-1], positions[1:]):
             stage_movement_time += estimate_stage_movement_time(
                                     stage=self.stage,
-                                    start_pos={"x": start[0], "y": start[1]},
-                                    end_pos={"x": end[0], "y": end[1]},
-                                    axes=["x", "y"], independent_axes=True)
+                                    start_pos=start, end_pos=end,
+                                    axes=["x", "y", "z"], independent_axes=True)
 
         # add the time to wait for the stage to settle
         expected_stage_time = stage_movement_time + STAGE_WAIT_TIME * len(positions)
