@@ -7742,7 +7742,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                     </object>
                     <option>1</option>
                     <flag>wxEXPAND</flag>
-                  </object> 
+                  </object>
                 </object>
               </object>
               <flag>wxEXPAND</flag>
@@ -9529,7 +9529,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                             </object>
                             <object class="sizeritem">
                               <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
-                                <label>Use AutoFocus</label>
+                                <label>AutoFocus before acquiring at features</label>
                                 <fg>#E5E5E5</fg>
                                 <checked>0</checked>
                                 <flag>wxVERTICAL</flag>
@@ -9541,6 +9541,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <border>10</border>
                             </object>
                             <orient>wxVERTICAL</orient>
+                          <border>10</border>
                           </object>
                           <size>400,-1</size>
                           <bg>#333333</bg>
