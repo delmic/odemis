@@ -502,6 +502,12 @@ class CryoFeatureAcquisitionTask(object):
 
         filename = add_feature_info_to_filename(feature, self.filename)
 
+        # add feature name to the data description
+        for d in data:
+            name = feature.name.value
+            status = feature.status.value
+            d.metadata[model.MD_DESCRIPTION] = f"{name}-{status}-{d.metadata[model.MD_DESCRIPTION]}"
+
         self.exporter.export(filename, data)
         logging.info("Acquisition saved as file '%s'.", filename)
 
