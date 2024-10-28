@@ -825,7 +825,7 @@
                             </object>
                             <object class="sizeritem">
                               <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
-                                <label>Use AutoFocus</label>
+                                <label>AutoFocus before acquiring at features</label>
                                 <fg>#E5E5E5</fg>
                                 <checked>0</checked>
                                 <flag>wxVERTICAL</flag>
@@ -837,6 +837,7 @@
                               <border>10</border>
                             </object>
                             <orient>wxVERTICAL</orient>
+                          <border>10</border>
                           </object>
                           <size>400,-1</size>
                           <bg>#333333</bg>
