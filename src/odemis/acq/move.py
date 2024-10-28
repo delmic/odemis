@@ -36,6 +36,7 @@ from odemis import model, util
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isNearPosition, isInRange
 from odemis.util.transform import RigidTransform
+from odemis.model import isasync
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -838,10 +839,9 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         self.create_sample_stage()
 
     def create_sample_stage(self):
-        from odemis.driver.actuator import SampleStage
         self.sample_stage = SampleStage(name="Sample Stage",
                                         role="stage",
-                                        dependencies={"under": self.stage},
+                                        stage_bare=self.stage,
                                         posture_manager=self)
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
@@ -2101,3 +2101,105 @@ class EnzelPostureManager(MicroscopePostureManager):
             return LOADING_PATH
         # None of the above -> unknown position
         return UNKNOWN
+
+
+class SampleStage(model.Actuator):
+    """
+    Stage wrapper component which converts the stage position to the sample stage position.
+    The sample stage coordinates system is along the sample-plane which is adjusted
+    according to the pre-tilt and other factors.
+    """
+
+    def __init__(self, name: str, role: str, stage_bare: model.Actuator , posture_manager: MicroscopePostureManager, **kwargs):
+        """
+        :param name: the name of the component (usually "Sample Stage")
+        :param role: the role of the component (usually "stage")
+        :param stage_bare: the stage component to be wrapped
+        :param posture_manager: the posture manager to be used for conversion
+        :param **kwargs: additional arguments to be passed to the parent class
+        """
+
+        self._stage_bare = stage_bare
+
+        model.Actuator.__init__(self, name, role, dependencies={"under": stage_bare},
+                                axes=copy.deepcopy(self._stage_bare.axes), **kwargs)
+
+        # posture manager to convert the positions
+        self.pm = posture_manager
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute({"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0},
+                                                unit=("m", "m", "m", "rad", "rad"),  readonly=True)
+        # it's just a conversion from the dep's position
+        self._stage_bare.position.subscribe(self._updatePosition, init=True)
+
+        if model.hasVA(self._stage_bare, "speed"):
+            speed_axes = set(self._stage_bare.speed.value.keys())
+            if set(self.axes) <= speed_axes:
+                self.speed = model.VigilantAttribute({}, readonly=True)
+                self._stage_bare.speed.subscribe(self._updateSpeed, init=True)
+            else:
+                logging.info("Axes %s of dependency are missing from .speed, so not providing it",
+                             set(self.axes) - speed_axes)
+
+    def _updatePosition(self, pos_dep):
+        """
+        update the position VA when the dep's position is updated
+        """
+        # TODO: this should be posture converted to SEM posture
+        # pos_sem = self.pm.to_posture(pos_dep, SEM_IMAGING)
+        # pos = self.pm.to_sample_stage_from_stage_position(pos_sem)
+        # logging.warning(f"Converted position from {pos_dep} to {pos_sem}, Updating SampleStage position to {pos}")
+
+        pos = self.pm.to_sample_stage_from_stage_position(pos_dep)
+        # it's read-only, so we change it via _value
+        self.position._set_value(pos, force_write=True)
+
+        # update related MDs
+        affects = ["ccd", "e-beam"] # roles
+        for a in affects:
+            try:
+                comp = model.getComponent(role=a)
+                if comp:
+                    md_pos = pos.get("x", 0), pos.get("y", 0)
+                    comp.updateMetadata({model.MD_POS: md_pos})
+            except Exception as e:
+                logging.error("Failed to update %s with new position: %s", a, e)
+
+    def _updateSpeed(self, dep_speed):
+        """
+        update the speed VA based on the dependency's speed
+        """
+        # stage_speed = self.pm.to_sample_stage_from_stage_movement(dep_speed)
+        self.speed._set_value(dep_speed, force_write=True)
+
+    @isasync
+    def moveRel(self, shift: Dict[str, float], **kwargs):
+        """
+        :param shift: The relative shift to be made
+        :param **kwargs: Mostly there to support "update" argument
+        """
+        # missing values are assumed to be zero
+        shift_stage = self.pm.from_sample_stage_to_stage_movement(shift)
+        logging.debug("converted relative move from %s to %s", shift, shift_stage)
+        return self._stage_bare.moveRel(shift_stage, **kwargs)
+
+    @isasync
+    def moveAbs(self, pos: Dict[str, float], **kwargs):
+        """
+        :param pos: The absolute position to be moved to
+        :param **kwargs: Mostly there to support "update" argument
+        """
+
+        # if key is missing from pos, fill it with the current position
+        for key in self.axes.keys():
+            if key not in pos:
+                pos[key] = self.position.value[key]
+
+        # pos is a position, so absolute conversion
+        pos_stage = self.pm.from_sample_stage_to_stage_position(pos)
+        logging.debug("converted absolute move from %s to %s", pos, pos_stage)
+        return self._stage_bare.moveAbs(pos_stage, **kwargs)
+
+    def stop(self, axes=None):
+        self._stage_bare.stop()
