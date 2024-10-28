@@ -1326,7 +1326,7 @@ class FixedPositionsActuator(model.Actuator):
     """
 
     def __init__(self, name, role, dependencies, axis_name, positions, cycle=None,
-                 inverted=None, **kwargs):
+                 inverted=None, metadata: dict = {}, **kwargs):
         """
         name (string)
         role (string)
@@ -1390,6 +1390,9 @@ class FixedPositionsActuator(model.Actuator):
             # If not at a known position => move to the closest known position
             nearest = util.find_closest(self._dependency.position.value[self._caxis], list(self._positions.keys()))
             self.moveAbs({self._axis: nearest}).result()
+
+        # assign metadata
+        self._metadata = metadata or {}
 
     def _on_referenced(self, future):
         try:
