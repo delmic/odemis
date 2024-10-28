@@ -28,7 +28,7 @@ import logging
 import math
 import os
 import time
-from concurrent.futures import CancelledError
+from concurrent.futures import CancelledError, Future
 from functools import partial
 
 import pkg_resources
@@ -274,6 +274,13 @@ class Sparc2AlignTab(Tab):
 
         ccd_focuser_ext = None
         if "tunnel-lens-align" in tab_data.align_mode.choices:
+            # if there is a favourite position, go to that position at init
+            if main_data.spec_ded_aligner:
+                md = main_data.spec_ded_aligner.getMetadata()
+                if model.MD_FAV_POS_ACTIVE in md:
+                    f = main_data.spec_ded_aligner.moveAbs(md[model.MD_FAV_POS_ACTIVE])
+                    f.add_done_callback(self._on_spec_ded_aligner_init_move)  # Just to show a warning if something failed
+
             # check if there is a dedicated spectrograph which affects an external CCD
             try:
                 spec = model.getComponent(role="spectrograph-dedicated")
@@ -2019,6 +2026,16 @@ class Sparc2AlignTab(Tab):
             fib_fav_pos["y"] = pos["y"]
             logging.debug("Updating the active fiber Y position to %s", fib_fav_pos)
             fiba.updateMetadata({model.MD_FAV_POS_ACTIVE: fib_fav_pos})
+
+    def _on_spec_ded_aligner_init_move(self, f: Future) -> None:
+        """
+        Callback on end of move of spec-ded-aligner
+        :param f: the future
+        """
+        try:
+            f.result()
+        except Exception as ex:
+            logging.error("spec-ded-aligner initialisation move failed: %s", ex)
 
     @call_in_wx_main
     def _on_ebeam_blanker(self, blanked: bool) -> None:
