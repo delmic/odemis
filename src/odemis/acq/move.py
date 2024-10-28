@@ -839,10 +839,9 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         self.create_sample_stage()
 
     def create_sample_stage(self):
-        from odemis.driver.actuator import SampleStage
         self.sample_stage = SampleStage(name="Sample Stage",
                                         role="stage",
-                                        dependencies={"under": self.stage},
+                                        stage_bare=self.stage,
                                         posture_manager=self)
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
