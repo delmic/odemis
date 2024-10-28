@@ -157,10 +157,10 @@ HH_HOLDOFFMIN = 0  # ns
 HH_HOLDOFFMAX = 524296  # ns
 
 
-class PHError(Exception):
-    """Error coming from the PicoHarp 300"""
-    def __init__(self, errno, strerror, *args, **kwargs):
-        super(PHError, self).__init__(errno, strerror, *args, **kwargs)
+class DeviceError(Exception):
+    """Error coming from the device, as reported by the PicoQuant library."""
+    def __init__(self, errno, strerror):
+        super().__init__(errno, strerror)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
@@ -169,232 +169,78 @@ class PHError(Exception):
         return self.args[1]
 
 
-class HHError(Exception):
-    """Error coming from the HydraHarp 400"""
-    def __init__(self, errno, strerror, *args, **kwargs):
-        super(HHError, self).__init__(errno, strerror, *args, **kwargs)
-        self.args = (errno, strerror)
-        self.errno = errno
-        self.strerror = strerror
-
-    def __str__(self):
-        return self.args[1]
-
-
-class PHDLL(CDLL):
+class PicoDLL(CDLL):
     """
-    Subclass of CDLL specific to 'PHLib' library, which handles error codes for
+    Subclass of CDLL specific to Picoquant libraries, which handles error codes for
     all the functions automatically.
+    To be used as a base class for the specific libraries.
     """
+    prefix: str = None
+    lib_name_linux: str = None
 
     def __init__(self):
         # TODO: also support loading the Windows DLL on Windows
-        try:
-            # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libph300.so", RTLD_GLOBAL)
-        except OSError:
-            logging.error("Check that PicoQuant PHLib is correctly installed")
-            raise
+        # Global so that its sub-libraries can access it
+        CDLL.__init__(self, self.lib_name_linux, RTLD_GLOBAL)
 
-    def at_errcheck(self, result, func, args):
+    def pico_errcheck(self, result, func, args):
         """
         Analyse the return value of a call and raise an exception in case of
         error.
         Follows the ctypes.errcheck callback convention
         """
         # everything returns 0 on correct usage, and < 0 on error
-        if result != 0:
-            err_str = create_string_buffer(40)
-            self.PH_GetErrorString(err_str, result)
-            if result in PHDLL.err_code:
-                raise PHError(
-                    result,
-                    "Call to %s failed with error %s (%d): %s"
-                    % (
-                        str(func.__name__),
-                        PHDLL.err_code[result],
-                        result,
-                        err_str.value,
-                    ),
-                )
-            else:
-                raise PHError(
-                    result,
-                    "Call to %s failed with error %d: %s"
-                    % (str(func.__name__), result, err_str.value),
-                )
-        return result
+        if result == 0:
+            return result
+
+        err_cstr = create_string_buffer(40)
+        self.GetErrorString(err_cstr, result)
+        err_str = err_cstr.value.decode("latin1")
+        msg = f"Call to {func.__name__} failed with error {result}: {err_str}"
+        raise DeviceError(result, msg)
 
     def __getitem__(self, name):
-        func = super(PHDLL, self).__getitem__(name)
+        try:
+            func = super().__getitem__(name)
+        except AttributeError:
+            # Support calling functions without the prefix, by automatically adding it.
+            if not name.startswith(self.prefix):
+                return self.__getitem__(self.prefix + name)
+            else:
+                raise
         func.__name__ = name
-        func.errcheck = self.at_errcheck
+        func.errcheck = self.pico_errcheck
         return func
 
-    err_code = {
-        -1: "ERROR_DEVICE_OPEN_FAIL",
-        -2: "ERROR_DEVICE_BUSY",
-        -3: "ERROR_DEVICE_HEVENT_FAIL",
-        -4: "ERROR_DEVICE_CALLBSET_FAIL",
-        -5: "ERROR_DEVICE_BARMAP_FAIL",
-        -6: "ERROR_DEVICE_CLOSE_FAIL",
-        -7: "ERROR_DEVICE_RESET_FAIL",
-        -8: "ERROR_DEVICE_GETVERSION_FAIL",
-        -9: "ERROR_DEVICE_VERSION_MISMATCH",
-        -10: "ERROR_DEVICE_NOT_OPEN",
-        -11: "ERROR_DEVICE_LOCKED",
-        -16: "ERROR_INSTANCE_RUNNING",
-        -17: "ERROR_INVALID_ARGUMENT",
-        -18: "ERROR_INVALID_MODE",
-        -19: "ERROR_INVALID_OPTION",
-        -20: "ERROR_INVALID_MEMORY",
-        -21: "ERROR_INVALID_RDATA",
-        -22: "ERROR_NOT_INITIALIZED",
-        -23: "ERROR_NOT_CALIBRATED",
-        -24: "ERROR_DMA_FAIL",
-        -25: "ERROR_XTDEVICE_FAIL",
-        -26: "ERROR_FPGACONF_FAIL",
-        -27: "ERROR_IFCONF_FAIL",
-        -28: "ERROR_FIFORESET_FAIL",
-        -29: "ERROR_STATUS_FAIL",
-        -32: "ERROR_USB_GETDRIVERVER_FAIL",
-        -33: "ERROR_USB_DRIVERVER_MISMATCH",
-        -34: "ERROR_USB_GETIFINFO_FAIL",
-        -35: "ERROR_USB_HISPEED_FAIL",
-        -36: "ERROR_USB_VCMD_FAIL",
-        -37: "ERROR_USB_BULKRD_FAIL",
-        -64: "ERROR_HARDWARE_F01",
-        -65: "ERROR_HARDWARE_F02",
-        -66: "ERROR_HARDWARE_F03",
-        -67: "ERROR_HARDWARE_F04",
-        -68: "ERROR_HARDWARE_F05",
-        -69: "ERROR_HARDWARE_F06",
-        -70: "ERROR_HARDWARE_F07",
-        -71: "ERROR_HARDWARE_F08",
-        -72: "ERROR_HARDWARE_F09",
-        -73: "ERROR_HARDWARE_F10",
-        -74: "ERROR_HARDWARE_F11",
-        -75: "ERROR_HARDWARE_F12",
-        -76: "ERROR_HARDWARE_F13",
-        -77: "ERROR_HARDWARE_F14",
-        -78: "ERROR_HARDWARE_F15",
-    }
 
-
-class HHDLL(CDLL):
+class PHDLL(PicoDLL):
     """
-    Subclass of CDLL specific to 'HHLib' library, which handles error codes for
-    all the functions automatically.
+    PicoHarp 300 DLL
     """
+    prefix = "PH_"
+    lib_name_linux = "libph300.so"
 
     def __init__(self):
-        # TODO: also support loading the Windows DLL on Windows
         try:
-            # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libhh400.so", RTLD_GLOBAL)
+            super().__init__()
+        except OSError:
+            logging.error("Check that PicoQuant PHLib is correctly installed: sudo apt install libph300")
+            raise
+
+
+class HHDLL(PicoDLL):
+    """
+    HydraHarp 400 DLL
+    """
+    prefix = "HH_"
+    lib_name_linux = "libhh400.so"
+
+    def __init__(self):
+        try:
+            super().__init__()
         except OSError:
             logging.error("Check that PicoQuant HHLib is correctly installed")
             raise
-
-    def at_errcheck(self, result, func, args):
-        """
-        Analyse the return value of a call and raise an exception in case of
-        error.
-        Follows the ctypes.errcheck callback convention
-        """
-        # everything returns 0 on correct usage, and < 0 on error
-        if result != 0:
-            err_str = create_string_buffer(40)
-            self.HH_GetErrorString(err_str, result)
-            if result in HHDLL.err_code:
-                raise HHError(
-                    result,
-                    "Call to %s failed with error %s (%d): %s"
-                    % (
-                        str(func.__name__),
-                        HHDLL.err_code[result],
-                        result,
-                        err_str.value,
-                    ),
-                )
-            else:
-                raise HHError(
-                    result,
-                    "Call to %s failed with error %d: %s"
-                    % (str(func.__name__), result, err_str.value),
-                )
-        return result
-
-    def __getitem__(self, name):
-        func = super(HHDLL, self).__getitem__(name)
-        func.__name__ = name
-        func.errcheck = self.at_errcheck
-        return func
-
-    err_code = {
-        -1: "ERROR_DEVICE_OPEN_FAIL",
-        -2: "ERROR_DEVICE_BUSY",
-        -3: "ERROR_DEVICE_HEVENT_FAIL",
-        -4: "ERROR_DEVICE_CALLBSET_FAIL",
-        -5: "ERROR_DEVICE_BARMAP_FAIL",
-        -6: "ERROR_DEVICE_CLOSE_FAIL",
-        -7: "ERROR_DEVICE_RESET_FAIL",
-        -8: "ERROR_DEVICE_GETVERSION_FAIL",
-        -9: "ERROR_DEVICE_VERSION_MISMATCH",
-        -10: "ERROR_DEVICE_NOT_OPEN",
-        -16: "ERROR_INSTANCE_RUNNING",
-        -17: "ERROR_INVALID_ARGUMENT",
-        -18: "ERROR_INVALID_MODE",
-        -19: "ERROR_INVALID_OPTION",
-        -20: "ERROR_INVALID_MEMORY",
-        -21: "ERROR_INVALID_RDATA",
-        -22: "ERROR_NOT_INITIALIZED",
-        -23: "ERROR_NOT_CALIBRATED",
-        -24: "ERROR_DMA_FAIL",
-        -25: "ERROR_XTDEVICE_FAIL",
-        -26: "ERROR_FPGACONF_FAIL",
-        -27: "ERROR_IFCONF_FAIL",
-        -28: "ERROR_FIFORESET_FAIL",
-        -32: "ERROR_USB_GETDRIVERVER_FAIL",
-        -33: "ERROR_USB_DRIVERVER_MISMATCH",
-        -34: "ERROR_USB_GETIFINFO_FAIL",
-        -35: "ERROR_USB_HISPEED_FAIL",
-        -36: "ERROR_USB_VCMD_FAIL",
-        -37: "ERROR_USB_BULKRD_FAIL",
-        -38: "ERROR_USB_RESET_FAIL",
-        -40: "ERROR_LANEUP_TIMEOUT",
-        -41: "ERROR_DONEALL_TIMEOUT",
-        -42: "ERROR_MODACK_TIMEOUT",
-        -43: "ERROR_MACTIVE_TIMEOUT",
-        -44: "ERROR_MEMCLEAR_FAIL",
-        -45: "ERROR_MEMTEST_FAIL",
-        -46: "ERROR_CALIB_FAIL",
-        -47: "ERROR_REFSEL_FAIL",
-        -48: "ERROR_STATUS_FAIL",
-        -49: "ERROR_MODNUM_FAIL",
-        -50: "ERROR_DIGMUX_FAIL",
-        -51: "ERROR_MODMUX_FAIL",
-        -52: "ERROR_MODFWPCB_MISMATCH",
-        -53: "ERROR_MODFWVER_MISMATCH",
-        -54: "ERROR_MODPROPERTY_MISMATCH",
-        -55: "ERROR_INVALID_MAGIC",
-        -56: "ERROR_INVALID_LENGTH",
-        -57: "ERROR_RATE_FAIL",
-        -58: "ERROR_MODFWVER_TOO_LOW",
-        -59: "ERROR_MODFWVER_TOO_HIGH",
-        -64: "ERROR_EEPROM_F01",
-        -65: "ERROR_EEPROM_F02",
-        -66: "ERROR_EEPROM_F03",
-        -67: "ERROR_EEPROM_F04",
-        -68: "ERROR_EEPROM_F05",
-        -69: "ERROR_EEPROM_F06",
-        -70: "ERROR_EEPROM_F07",
-        -71: "ERROR_EEPROM_F08",
-        -72: "ERROR_EEPROM_F09",
-        -73: "ERROR_EEPROM_F10",
-        -74: "ERROR_EEPROM_F11",
-    }
-
 
 # Acquisition control messages
 GEN_START = "S"  # Start acquisition
@@ -406,7 +252,6 @@ class TerminationRequested(Exception):
     """
     Generator termination requested.
     """
-
     pass
 
 
@@ -414,14 +259,14 @@ class TerminationRequested(Exception):
 def autoretry(f, self, *args, **kwargs):
     """
     Decorator to automatically retry a call to a function (once) if it fails
-    with a PHError or HHError.
+    with a DeviceError.
     This is to handle the fact that almost every command seems to potentially
     fail with USB_VCMD_FAIL or BULKRD_FAIL randomly (due to issues on the USB
     connection). Just calling the function again deals with it fine.
     """
     try:
         res = f(self, *args, **kwargs)
-    except (PHError, HHError) as ex:
+    except DeviceError as ex:
         # TODO: GetFlags() + GetHardwareDebugInfo()
         logging.warning("Will try again after: %s", ex)
         time.sleep(0.1)
@@ -468,14 +313,10 @@ class PH300(model.Detector):
         if zero_cross is None:
             zero_cross = [0, 0]
 
-        super(PH300, self).__init__(
-            name, role, daemon=daemon, dependencies=dependencies, **kwargs
-        )
-
-        # TODO: metadata for indicating the range? cf WL_LIST?
+        super().__init__(name, role, daemon=daemon, dependencies=dependencies, **kwargs)
 
         # TODO: do we need TTTR mode?
-        self.Initialise(PH_MODE_HIST)
+        self.Initialize(PH_MODE_HIST)
         self._swVersion = self.GetLibraryVersion()
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         mod, partnum, ver = self.GetHardwareInfo()
@@ -544,11 +385,7 @@ class PH300(model.Detector):
 
         # Indicate first dim is time and second dim is (useless) X (in reversed order)
         self._metadata[model.MD_DIMS] = "XT"
-        self._shape = (
-            PH_HISTCHAN,
-            1,
-            2 ** 16,
-        )  # Histogram is 32 bits, but only return 16 bits info
+        self._shape = (PH_HISTCHAN, 1, 2 ** 16)  # Histogram is 32 bits, but only return 16 bits info
 
         # Set the CFD parameters (in mV)
         for i, (dv, zc) in enumerate(zip(disc_volt, zero_cross)):
@@ -606,8 +443,8 @@ class PH300(model.Detector):
         sn_str = create_string_buffer(8)
         for i in range(PH_MAXDEVNUM):
             try:
-                self._dll.PH_OpenDevice(i, sn_str)
-            except PHError as ex:
+                self._dll.OpenDevice(i, sn_str)
+            except DeviceError as ex:
                 if ex.errno == -1:  # ERROR_DEVICE_OPEN_FAIL == no device with this idx
                     pass
                 else:
@@ -619,10 +456,8 @@ class PH300(model.Detector):
             else:
                 logging.info("Skipping device %d, with S/N %s", i, sn_str.value)
         else:
-            # TODO: if a PHError happened indicate the error in the message
-            raise HwError(
-                "No PicoHarp300 found, check the device is turned on and connected to the computer"
-            )
+            # TODO: if a DeviceError happened indicate the error in the message
+            raise HwError("No PicoHarp300 found, check the device is turned on and connected to the computer")
 
     def terminate(self):
         self.stop_generate()
@@ -632,28 +467,28 @@ class PH300(model.Detector):
             self._generator = None
         self.CloseDevice()
 
-        super(PH300, self).terminate()
+        super().terminate()
 
     def CloseDevice(self):
-        self._dll.PH_CloseDevice(self._idx)
+        self._dll.CloseDevice(self._idx)
 
     def GetLibraryVersion(self):
         ver_str = create_string_buffer(8)
-        self._dll.PH_GetLibraryVersion(ver_str)
+        self._dll.GetLibraryVersion(ver_str)
         return ver_str.value.decode("latin1")
 
-    def Initialise(self, mode):
+    def Initialize(self, mode):
         """
         mode (MODE_*)
         """
         logging.debug("Initializing device %d", self._idx)
-        self._dll.PH_Initialize(self._idx, mode)
+        self._dll.Initialize(self._idx, mode)
 
     def GetHardwareInfo(self):
         mod = create_string_buffer(16)
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
-        self._dll.PH_GetHardwareInfo(self._idx, mod, partnum, ver)
+        self._dll.GetHardwareInfo(self._idx, mod, partnum, ver)
         return (
             mod.value.decode("latin1"),
             partnum.value.decode("latin1"),
@@ -662,12 +497,12 @@ class PH300(model.Detector):
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)
-        self._dll.PH_GetSerialNumber(self._idx, sn_str)
+        self._dll.GetSerialNumber(self._idx, sn_str)
         return sn_str.value.decode("latin1")
 
     def Calibrate(self):
         logging.debug("Calibrating device %d", self._idx)
-        self._dll.PH_Calibrate(self._idx)
+        self._dll.Calibrate(self._idx)
 
     def GetBaseResolution(self):
         """
@@ -679,7 +514,7 @@ class PH300(model.Detector):
         # TODO: check that binning is indeed the binning code: doesn't seem so (always 8?!)
         res = c_double()
         bs = c_int()
-        self._dll.PH_GetBaseResolution(self._idx, byref(res), byref(bs))
+        self._dll.GetBaseResolution(self._idx, byref(res), byref(bs))
         return res.value, bs.value
 
     def GetResolution(self):
@@ -688,7 +523,7 @@ class PH300(model.Detector):
         return (0<=float): duration of a bin (in ps)
         """
         res = c_double()
-        self._dll.PH_GetResolution(self._idx, byref(res))
+        self._dll.GetResolution(self._idx, byref(res))
         return res.value
 
     def SetInputCFD(self, channel, level, zc):
@@ -701,7 +536,7 @@ class PH300(model.Detector):
         assert channel in {0, 1}
         assert PH_DISCRMIN <= level <= PH_DISCRMAX
         assert PH_ZCMIN <= zc <= PH_ZCMAX
-        self._dll.PH_SetInputCFD(self._idx, channel, level, zc)
+        self._dll.SetInputCFD(self._idx, channel, level, zc)
 
     def SetSyncDiv(self, div):
         """
@@ -713,7 +548,7 @@ class PH300(model.Detector):
         div (1, 2, 4, or 8): input rate divider applied at channel 0
         """
         assert PH_SYNCDIVMIN <= div <= PH_SYNCDIVMAX
-        self._dll.PH_SetSyncDiv(self._idx, div)
+        self._dll.SetSyncDiv(self._idx, div)
 
     def SetSyncOffset(self, offset):
         """
@@ -723,7 +558,7 @@ class PH300(model.Detector):
         offset (int): offset in ps
         """
         assert PH_SYNCOFFSMIN <= offset <= PH_SYNCOFFSMAX
-        self._dll.PH_SetSyncOffset(self._idx, offset)
+        self._dll.SetSyncOffset(self._idx, offset)
 
     def SetOffset(self, offset):
         """
@@ -736,14 +571,14 @@ class PH300(model.Detector):
         offset (0<=int): offset in ps
         """
         assert PH_OFFSETMIN <= offset <= PH_OFFSETMAX
-        self._dll.PH_SetOffset(self._idx, offset)
+        self._dll.SetOffset(self._idx, offset)
 
     def SetBinning(self, bc):
         """
         bc (0<=int): binning code. Binning = 2**bc (IOW, 0 for binning 1, 3 for binning 8)
         """
         assert 0 <= bc <= PH_BINSTEPSMAX - 1
-        self._dll.PH_SetBinning(self._idx, bc)
+        self._dll.SetBinning(self._idx, bc)
 
     def SetStopOverflow(self, stop, stopcount):
         """
@@ -755,7 +590,7 @@ class PH300(model.Detector):
         """
         assert 0 <= stopcount <= 2 ** 16 - 1
         stop_ovfl = 1 if stop else 0
-        self._dll.PH_SetStopOverflow(self._idx, stop_ovfl, stopcount)
+        self._dll.SetStopOverflow(self._idx, stop_ovfl, stopcount)
 
     @autoretry
     def GetCountRate(self, channel):
@@ -767,7 +602,7 @@ class PH300(model.Detector):
         # TODO: check if we need a lock (to avoid multithread access)
         rate = c_int()
         with self._hw_access:
-            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
+            self._dll.GetCountRate(self._idx, channel, byref(rate))
         return rate.value
 
     @autoretry
@@ -776,7 +611,7 @@ class PH300(model.Detector):
         block (0 <= int): block number to clear
         """
         assert 0 <= block
-        self._dll.PH_ClearHistMem(self._idx, block)
+        self._dll.ClearHistMem(self._idx, block)
 
     @autoretry
     def StartMeas(self, tacq):
@@ -784,11 +619,11 @@ class PH300(model.Detector):
         tacq (0<int): acquisition time in milliseconds
         """
         assert PH_ACQTMIN <= tacq <= PH_ACQTMAX
-        self._dll.PH_StartMeas(self._idx, tacq)
+        self._dll.StartMeas(self._idx, tacq)
 
     @autoretry
     def StopMeas(self):
-        self._dll.PH_StopMeas(self._idx)
+        self._dll.StopMeas(self._idx)
 
     @autoretry
     def CTCStatus(self):
@@ -797,7 +632,7 @@ class PH300(model.Detector):
         Return (bool): True if the acquisition time has ended
         """
         ctcstatus = c_int()
-        self._dll.PH_CTCStatus(self._idx, byref(ctcstatus))
+        self._dll.CTCStatus(self._idx, byref(ctcstatus))
         return ctcstatus.value > 0
 
     @autoretry
@@ -810,7 +645,7 @@ class PH300(model.Detector):
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
 
         # Note, as of v3.0.0.3: the maximum data value is actually 65535.
-        self._dll.PH_GetHistogram(self._idx, buf_ct, block)
+        self._dll.GetHistogram(self._idx, buf_ct, block)
         return buf
 
     def GetElapsedMeasTime(self):
@@ -818,7 +653,7 @@ class PH300(model.Detector):
         return 0<=float: time since the measurement started (in s)
         """
         elapsed = c_double()  # in ms
-        self._dll.PH_GetElapsedMeasTime(self._idx, byref(elapsed))
+        self._dll.GetElapsedMeasTime(self._idx, byref(elapsed))
         return elapsed.value * 1e-3
 
     def ReadFiFo(self, count):
@@ -847,7 +682,7 @@ class PH300(model.Detector):
         buf = numpy.empty((count,), dtype=numpy.uint32)
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
         nactual = c_int()
-        self._dll.PH_ReadFiFo(self._idx, buf_ct, count, byref(nactual))
+        self._dll.ReadFiFo(self._idx, buf_ct, count, byref(nactual))
 
         # only return the values which were read
         # TODO: if it's really smaller (eg, 0), copy the data to avoid holding all the mem
@@ -1080,8 +915,8 @@ class PH300(model.Detector):
         dev = []
         for i in range(PH_MAXDEVNUM):
             try:
-                dll.PH_OpenDevice(i, sn_str)
-            except PHError as ex:
+                dll.OpenDevice(i, sn_str)
+            except DeviceError as ex:
                 if ex.errno == -1:  # ERROR_DEVICE_OPEN_FAIL == no device with this idx
                     continue
                 else:
@@ -1315,8 +1150,8 @@ class HH400(model.Detector):
         for i in range(HH_MAXDEVNUM):
             try:
                 logging.debug("Trying to open device %d using dll %s", i, self._dll)
-                self._dll.HH_OpenDevice(i, sn_str)
-            except HHError as ex:
+                self._dll.OpenDevice(i, sn_str)
+            except DeviceError as ex:
                 if ex.errno == -1:  # ERROR_DEVICE_OPEN_FAIL == no device with this idx
                     pass
                 else:
@@ -1328,7 +1163,7 @@ class HH400(model.Detector):
             else:
                 logging.info("Skipping device %d, with S/N %s", i, sn_str.value)
         else:
-            # TODO: if a HHError happened indicate the error in the message
+            # TODO: if a DeviceError happened indicate the error in the message
             raise HwError(
                 "No HydraHarp400 found, check the device is turned on and connected to the computer"
             )
@@ -1347,10 +1182,10 @@ class HH400(model.Detector):
 
     def GetLibraryVersion(self):
         """
-        This is the only function you may call before HH_Initialize. Use it to ensure compatibility of the library with your own application.
+        This is the only function you may call before Initialize. Use it to ensure compatibility of the library with your own application.
         """
         ver_str = create_string_buffer(8)
-        self._dll.HH_GetLibraryVersion(ver_str)
+        self._dll.GetLibraryVersion(ver_str)
         return ver_str.value.decode("latin1")
 
     # Device Specific Functions
@@ -1360,7 +1195,7 @@ class HH400(model.Detector):
         """
         Closes and releases the device for use by other programs.
         """
-        self._dll.HH_CloseDevice(self._idx)
+        self._dll.CloseDevice(self._idx)
 
     def Initialize(self, mode, refsource):
         """
@@ -1376,7 +1211,7 @@ class HH400(model.Detector):
             1 = external
         """
         logging.debug("Initializing device %d", self._idx)
-        self._dll.HH_Initialize(self._idx, mode, refsource)
+        self._dll.Initialize(self._idx, mode, refsource)
 
     # Functions for Use on Initialized Devices
     # All functions below can only be used after HH_Initialize was successfully called.
@@ -1385,7 +1220,7 @@ class HH400(model.Detector):
         mod = create_string_buffer(16)
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
-        self._dll.HH_GetHardwareInfo(self._idx, mod, partnum, ver)
+        self._dll.GetHardwareInfo(self._idx, mod, partnum, ver)
         return (
             mod.value.decode("latin1"),
             partnum.value.decode("latin1"),
@@ -1399,24 +1234,24 @@ class HH400(model.Detector):
         bits in the pattern.
         """
         features = c_int()
-        self._dll.HH_GetFeatures(self._idx, byref(features))
+        self._dll.GetFeatures(self._idx, byref(features))
         return features.value
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)
-        self._dll.HH_GetSerialNumber(self._idx, sn_str)
+        self._dll.GetSerialNumber(self._idx, sn_str)
         return sn_str.value.decode("latin1")
 
     def GetBaseResolution(self):
         """
-        Use the value returned in binsteps as maximum value for the HH_SetBinning function.
+        Use the value returned in binsteps as maximum value for the SetBinning function.
         return:
             res (0<=float): min duration of a bin in the histogram (in ps)
         Can calculate binning code (0<=int): binsteps = 2**bincode
         """
         res = c_double()
         binsteps = c_int()
-        self._dll.HH_GetBaseResolution(self._idx, byref(res), byref(binsteps))
+        self._dll.GetBaseResolution(self._idx, byref(res), byref(binsteps))
         global MAXBINSTEPS
         MAXBINSTEPS = binsteps.value
         return res.value, binsteps.value
@@ -1427,7 +1262,7 @@ class HH400(model.Detector):
             numinput (int): the number of installed input channels
         """
         numinput = c_int()
-        self._dll.HH_GetNumOfInputChannels(self._idx, byref(numinput))
+        self._dll.GetNumOfInputChannels(self._idx, byref(numinput))
         return numinput.value
 
     def GetNumOfModules(self):
@@ -1437,7 +1272,7 @@ class HH400(model.Detector):
             nummod (int): the number of installed modules
         """
         nummod = c_int()
-        self._dll.HH_GetNumOfModules(self._idx, byref(nummod))
+        self._dll.GetNumOfModules(self._idx, byref(nummod))
         return nummod.value
 
     def GetModuleInfo(self, modidx):
@@ -1451,7 +1286,7 @@ class HH400(model.Detector):
         """
         modelcode = c_int()
         versioncode = c_int()
-        self._dll.HH_GetModuleInfo(
+        self._dll.GetModuleInfo(
             self._idx, modidx, byref(modelcode), byref(versioncode)
         )
         return modelcode.value, versioncode.value
@@ -1459,14 +1294,14 @@ class HH400(model.Detector):
     def GetModuleIndex(self, channel):
         """
         This routine is primarily for maintenance and service purposes. It will typically not be needed by end user applications. The
-        maximum input channel index must correspond to nchannels-1 as obtained through HH_GetNumOfInputChannels().
+        maximum input channel index must correspond to nchannels-1 as obtained through GetNumOfInputChannels().
 
         channel (int): index of the identifying input channel 0..nchannels-1
         return:
             modidx (int): the index of the module where the input channel given by channel resides.
         """
         modidx = c_int()
-        self._dll.HH_GetModuleIndex(self._idx, channel, byref(modidx))
+        self._dll.GetModuleIndex(self._idx, channel, byref(modidx))
         return modidx.value
 
     def GetHardwareDebugInfo(self):
@@ -1474,25 +1309,25 @@ class HH400(model.Detector):
         Use this call to obtain debug information for support enquires if you detect HH_FLAG_SYSERROR or ERROR_STATUS_FAIL.
         """
         debuginfo = create_string_buffer(65536)
-        self._dll.HH_GetHardwareDebugInfo(self._idx, debuginfo)
+        self._dll.GetHardwareDebugInfo(self._idx, debuginfo)
         return debuginfo.value.decode("latin1")
 
     def Calibrate(self):
         logging.debug("Calibrating device %d", self._idx)
-        self._dll.HH_Calibrate(self._idx)
+        self._dll.Calibrate(self._idx)
 
     def SetSyncDiv(self, div):
         """
         The sync divider must be used to keep the effective sync rate at values ≤ 12.5 MHz. It should only be used with sync
         sources of stable period. Using a larger divider than strictly necessary does not do great harm but it may result in slightly lar -
-        ger timing jitter. The readings obtained with HH_GetCountRate are internally corrected for the divider setting and deliver the
+        ger timing jitter. The readings obtained with GetCountRate are internally corrected for the divider setting and deliver the
         external (undivided) rate. The sync divider should not be changed while a measurement is running.
 
         div (int): sync rate divider
             (1, 2, 4, .., HH_SYNCDIVMAX)
         """
         assert HH_SYNCDIVMIN <= div <= HH_SYNCDIVMAX
-        self._dll.HH_SetSyncDiv(self._idx, div)
+        self._dll.SetSyncDiv(self._idx, div)
 
     def SetSyncCFD(self, level, zc):
         """
@@ -1503,19 +1338,19 @@ class HH400(model.Detector):
         """
         assert HH_DISCRMIN <= level <= HH_DISCRMAX
         assert HH_ZCMIN <= zc <= HH_ZCMAX
-        self._dll.HH_SetSyncCFD(self._idx, level, zc)
+        self._dll.SetSyncCFD(self._idx, level, zc)
 
     def SetSyncChannelOffset(self, value):
         """
         value (int): sync timing offset in ps
         """
         assert HH_CHANOFFSMIN <= value <= HH_CHANOFFSMAX
-        self._dll.HH_SetSyncChannelOffset(self._idx, value)
+        self._dll.SetSyncChannelOffset(self._idx, value)
 
     def SetInputCFD(self, channel, level, zc):
         """
         Changes the Constant Fraction Discriminator for the input signal
-        The maximum input channel index must correspond to nchannels-1 as obtained through HH_GetNumOfInputChannels().
+        The maximum input channel index must correspond to nchannels-1 as obtained through GetNumOfInputChannels().
 
         channel (int): input channel index 0..nchannels-1
         level (int): CFD discriminator level in millivolts
@@ -1523,21 +1358,21 @@ class HH400(model.Detector):
         """
         assert HH_DISCRMIN <= level <= HH_DISCRMAX
         assert HH_ZCMIN <= zc <= HH_ZCMAX
-        self._dll.HH_SetInputCFD(self._idx, channel, level, zc)
+        self._dll.SetInputCFD(self._idx, channel, level, zc)
 
     def SetInputChannelOffset(self, channel, value):
         """
-        The maximum input channel index must correspond to nchannels-1 as obtained through HH_GetNumOfInputChannels().
+        The maximum input channel index must correspond to nchannels-1 as obtained through GetNumOfInputChannels().
 
         channel (int): input channel index 0..nchannels-1
         value (int): channel timing offset in ps
         """
         assert HH_CHANOFFSMIN <= value <= HH_CHANOFFSMAX
-        self._dll.HH_SetInputChannelOffset(self._idx, channel, value)
+        self._dll.SetInputChannelOffset(self._idx, channel, value)
 
     def SetInputChannelEnable(self, channel, enable):
         """
-        The maximum channel index must correspond to nchannels-1 as obtained through HH_GetNumOfInputChannels().
+        The maximum channel index must correspond to nchannels-1 as obtained through GetNumOfInputChannels().
 
         channel (int): input channel index 0..nchannels-1
         enable (bool): desired enable state of the input channel
@@ -1545,7 +1380,7 @@ class HH400(model.Detector):
             True (1) = enabled
         """
         enable = 1 if enable else 0
-        self._dll.HH_SetInputChannelEnable(self._idx, channel, enable)
+        self._dll.SetInputChannelEnable(self._idx, channel, enable)
 
     def SetStopOverflow(self, stop, stopcount):
         """
@@ -1557,7 +1392,7 @@ class HH400(model.Detector):
         """
         assert HH_STOPCNTMIN <= stopcount <= HH_STOPCNTMAX
         stop_ovfl = 1 if stop else 0
-        self._dll.HH_SetStopOverflow(self._idx, stop_ovfl, stopcount)
+        self._dll.SetStopOverflow(self._idx, stop_ovfl, stopcount)
 
     @autoretry
     def SetBinning(self, bincode):
@@ -1575,7 +1410,7 @@ class HH400(model.Detector):
             3 = 8x base resolution, and so on.
         """
         assert 0 <= bincode <= HH_BINSTEPSMAX - 1
-        self._dll.HH_SetBinning(self._idx, bincode)
+        self._dll.SetBinning(self._idx, bincode)
 
     def SetOffset(self, offset):
         """
@@ -1589,7 +1424,7 @@ class HH400(model.Detector):
         offset (int): histogram time offset in ns
         """
         assert HH_OFFSETMIN <= offset <= HH_OFFSETMAX
-        self._dll.HH_SetOffset(self._idx, offset)
+        self._dll.SetOffset(self._idx, offset)
 
     def SetHistoLen(self, lencode):
         """
@@ -1602,7 +1437,7 @@ class HH400(model.Detector):
         """
         actuallen = c_int()
         assert 0 <= lencode <= HH_MAXLENCODE
-        self._dll.HH_SetHistoLen(self._idx, lencode, byref(actuallen))
+        self._dll.SetHistoLen(self._idx, lencode, byref(actuallen))
         return actuallen.value
 
     @autoretry
@@ -1611,7 +1446,7 @@ class HH400(model.Detector):
         block (0 <= int): block number to clear
         """
         assert 0 <= block
-        self._dll.HH_ClearHistMem(self._idx, block)
+        self._dll.ClearHistMem(self._idx, block)
 
     def SetMeasControl(self, meascontrol, startedge, stopedge):
         """
@@ -1633,7 +1468,7 @@ class HH400(model.Detector):
         assert meascontrol in {0, 6}
         assert startedge in {0, 1}
         assert stopedge in {0, 1}
-        self._dll.HH_SetMeasControl(self._idx, meascontrol, startedge, stopedge)
+        self._dll.SetMeasControl(self._idx, meascontrol, startedge, stopedge)
 
     @autoretry
     def StartMeas(self, tacq):
@@ -1641,14 +1476,14 @@ class HH400(model.Detector):
         tacq (0<int): acquisition time in milliseconds
         """
         assert HH_ACQTMIN <= tacq <= HH_ACQTMAX
-        self._dll.HH_StartMeas(self._idx, tacq)
+        self._dll.StartMeas(self._idx, tacq)
 
     @autoretry
     def StopMeas(self):
         """
         Can also be used before the acquisition time expires.
         """
-        self._dll.HH_StopMeas(self._idx)
+        self._dll.StopMeas(self._idx)
 
     @autoretry
     def CTCStatus(self):
@@ -1659,14 +1494,14 @@ class HH400(model.Detector):
             ctcstatus (bool): True if the acquisition time has ended
         """
         ctcstatus = c_int()
-        self._dll.HH_CTCStatus(self._idx, byref(ctcstatus))
+        self._dll.CTCStatus(self._idx, byref(ctcstatus))
         return ctcstatus.value > 0
 
     @autoretry
     def GetHistogram(self, channel, clear=False):
         """
-        The histogram buffer size actuallen must correspond to the value obtained through HH_SetHistoLen().
-        The maximum input channel index must correspond to nchannels-1 as obtained through HH_GetNumOfInputChannels().
+        The histogram buffer size actuallen must correspond to the value obtained through SetHistoLen().
+        The maximum input channel index must correspond to nchannels-1 as obtained through GetNumOfInputChannels().
 
         channel (int): input channel index 0..nchannels-1
         clear (bool): denotes the action upon completing the reading process
@@ -1679,7 +1514,7 @@ class HH400(model.Detector):
         clear_int = 1 if clear else 0
         buf = numpy.empty((1, self._actuallen), dtype=numpy.uint32)
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
-        self._dll.HH_GetHistogram(self._idx, buf_ct, channel, clear_int)
+        self._dll.GetHistogram(self._idx, buf_ct, channel, clear_int)
         return buf
 
     @autoretry
@@ -1691,7 +1526,7 @@ class HH400(model.Detector):
             value (0<=float): duration of a bin (in ps)
         """
         res = c_double()
-        self._dll.HH_GetResolution(self._idx, byref(res))
+        self._dll.GetResolution(self._idx, byref(res))
         return res.value
 
     @autoretry
@@ -1701,15 +1536,15 @@ class HH400(model.Detector):
             syncrate (int): the current sync rate
         """
         syncrate = c_int()
-        self._dll.HH_GetSyncRate(self._idx, byref(syncrate))
+        self._dll.GetSyncRate(self._idx, byref(syncrate))
         return syncrate.value
 
     @autoretry
     def GetCountRate(self, channel):
         """
-        Allow at least 100 ms after HH_Initialize or HH_SetSyncDivider to get a stable rate meter reading.
+        Allow at least 100 ms after Initialize or SetSyncDivider to get a stable rate meter reading.
         Similarly, wait at least 100 ms to get a new reading. This is the gate time of the counters.
-        The maximum input channel index must correspond to nchannels-1 as obtained through HH_GetNumOfInputChannels().
+        The maximum input channel index must correspond to nchannels-1 as obtained through GetNumOfInputChannels().
 
         channel (int): input channel index 0..nchannels-1
 
@@ -1718,7 +1553,7 @@ class HH400(model.Detector):
         """
         cntrate = c_int()
         with self._hw_access:
-            self._dll.HH_GetCountRate(self._idx, channel, byref(cntrate))
+            self._dll.GetCountRate(self._idx, channel, byref(cntrate))
         return cntrate.value
 
     @autoretry
@@ -1730,7 +1565,7 @@ class HH400(model.Detector):
             flags (int): current status flags (a bit pattern)
         """
         flags = c_int()
-        self._dll.HH_GetFlags(self._idx, byref(flags))
+        self._dll.GetFlags(self._idx, byref(flags))
         return flags.value
 
     def GetElapsedMeasTime(self):
@@ -1741,29 +1576,29 @@ class HH400(model.Detector):
             elapsed (0<=float): time since the measurement started (in s)
         """
         elapsed = c_double()  # in ms
-        self._dll.HH_GetElapsedMeasTime(self._idx, byref(elapsed))
+        self._dll.GetElapsedMeasTime(self._idx, byref(elapsed))
         return elapsed.value * 1e-3
 
     def GetWarnings(self):
         """
-        You must call HH_GetCoutRate and HH_GetCoutRate for all channels prior to this call.
+        You must call GetCountRate for all channels prior to this call.
 
         return:
             warnings (int): bitwise encoded (see phdefin.h)
         """
         warnings = c_int()
-        self._dll.HH_GetWarnings(self._idx, byref(warnings))
+        self._dll.GetWarnings(self._idx, byref(warnings))
         return warnings.value
 
     def GetWarningsText(self, warnings):
         """
-        warnings (int): integer bitfield obtained from HH_GetWarnings
+        warnings (int): integer bitfield obtained from GetWarnings
 
         return:
             text (str)
         """
         text = create_string_buffer(16384)
-        self._dll.HH_GetWarningsText(self._idx, text, warnings)
+        self._dll.GetWarningsText(self._idx, text, warnings)
         return text.value.decode("latin1")
 
     def GetSyncPeriod(self, period):
@@ -1775,7 +1610,7 @@ class HH400(model.Detector):
             period (float): the sync period in ps
         """
         period = c_double()
-        self._dll.HH_GetSyncPeriod(self._idx, byref(period))
+        self._dll.GetSyncPeriod(self._idx, byref(period))
         return period.value
 
         # Special Functions for TTTR Mode
@@ -1808,7 +1643,7 @@ class HH400(model.Detector):
         buf = numpy.empty((count,), dtype=numpy.uint32)
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
         nactual = c_int()
-        self._dll.HH_ReadFiFo(self._idx, buf_ct, count, byref(nactual))
+        self._dll.ReadFiFo(self._idx, buf_ct, count, byref(nactual))
         # only return the values which were read
         # TODO: if it's really smaller (eg, 0), copy the data to avoid holding all the mem
         return buf[: nactual.value]
@@ -1819,7 +1654,7 @@ class HH400(model.Detector):
             0 = falling
             1 = rising
         """
-        self.HH_SetMarkerEdges(self._idx, me0, me1, me2, me3)
+        self.SetMarkerEdges(self._idx, me0, me1, me2, me3)
 
     def SetMarkerEnable(self, en0, en1, en2, en3):
         """
@@ -1827,7 +1662,7 @@ class HH400(model.Detector):
             0 = disabled,
             1 = enabled
         """
-        self._dll.HH_SetMarkerEnable(self._idx, en0, en1, en2, en3)
+        self._dll.SetMarkerEnable(self._idx, en0, en1, en2, en3)
 
     def SetMarkerHoldoffTime(self, holdofftime):
         """
@@ -1837,7 +1672,7 @@ class HH400(model.Detector):
         holdofftime (int) hold-off time in ns (0..HH_HOLDOFFMAX)
         """
         assert 0 <= holdofftime <= HH_HOLDOFFMAX
-        self._dll.HH_SetMarkerHoldoffTime(self._idx, holdofftime)
+        self._dll.SetMarkerHoldoffTime(self._idx, holdofftime)
 
     # Special Functions for Continuous Mode
 
@@ -1852,7 +1687,7 @@ class HH400(model.Detector):
         """
         buffer = create_string_buffer(HH_MAXCONTMODEBUFLEN)
         nbytesreceived = c_int()
-        self._dll.HH_GetContModeBlock(self._idx, buffer, byref(nbytesreceived))
+        self._dll.GetContModeBlock(self._idx, buffer, byref(nbytesreceived))
         return buffer.value.decode("latin"), nbytesreceived.value
 
     def _setPixelDuration(self, pxd):
@@ -2127,8 +1962,8 @@ class HH400(model.Detector):
         dev = []
         for i in range(HH_MAXDEVNUM):
             try:
-                dll.HH_OpenDevice(i, sn_str)
-            except HHError as ex:
+                dll.OpenDevice(i, sn_str)
+            except DeviceError as ex:
                 if ex.errno == -1:  # ERROR_DEVICE_OPEN_FAIL == no device with this idx
                     continue
                 else:
@@ -2287,7 +2122,7 @@ def _val(obj):
         return obj
 
 
-class FakePHDLL(object):
+class FakePHDLL:
     """
     Fake PHDLL. It basically simulates one connected device, which returns
     reasonable values.
@@ -2299,18 +2134,26 @@ class FakePHDLL(object):
         self._sn = b"10234567"
         self._base_res = 4  # ps
         self._bins = 0  # binning power
-        self._syncdiv = 0
+        self._syncdiv = 1
 
         # start/ (expected) end time of the current acquisition (or None if not started)
         self._acq_start = None
         self._acq_end = None
         self._last_acq_dur = None  # s
 
+    def __getattr__(self, name):
+        # Provide all the PH_* function without the PH_ prefix too.
+        # Support calling functions without the prefix, by automatically adding it.
+        if not name.startswith("PH_"):
+            return getattr(self, "PH_" + name)
+        else:
+            raise AttributeError(f"FakePHDLL has no attribute '{name}'")
+
     def PH_OpenDevice(self, i, sn_str):
         if i == self._idx:
             sn_str.value = self._sn
         else:
-            raise PHError(-1, PHDLL.err_code[-1])  # ERROR_DEVICE_OPEN_FAIL
+            raise DeviceError(-1, "ERROR_DEVICE_OPEN_FAIL")
 
     def PH_Initialize(self, i, mode):
         self._mode = mode
@@ -2372,7 +2215,7 @@ class FakePHDLL(object):
 
     def PH_StartMeas(self, i, tacq):
         if self._acq_start is not None:
-            raise PHError(-16, PHDLL.err_code[-16])
+            raise DeviceError(-16, "ERROR_INSTANCE_RUNNING")
         self._acq_start = time.time()
         self._acq_end = self._acq_start + _val(tacq) * 1e-3
 
@@ -2388,7 +2231,7 @@ class FakePHDLL(object):
             ctcstatus.value = 0  # 0 if still running
             # DEBUG
             # if random.randint(0, 10) == 0:
-            #    raise PHError(-37, PHDLL.err_code[-37])  # bad luck
+            #    raise DeviceError(-37, "ERROR_USB_BULKRD_FAIL")  # bad luck
         else:
             ctcstatus.value = 1
 
@@ -2442,6 +2285,14 @@ class FakeHHDLL(object):
         self._acq_end = None
         self._last_acq_dur = None  # s
 
+    def __getattr__(self, name):
+        # Provide all the PH_* function without the PH_ prefix too.
+        # Support calling functions without the prefix, by automatically adding it.
+        if not name.startswith("HH_"):
+            return getattr(self, "HH_" + name)
+        else:
+            raise AttributeError(f"FakeHHDLL has no attribute '{name}'")
+
     # General Functions
     # These functions work independent from any device.
 
@@ -2458,7 +2309,7 @@ class FakeHHDLL(object):
         if i == self._idx:
             sn_str.value = self._sn
         else:
-            raise HHError(-1, HHDLL.err_code[-1])  # ERROR_DEVICE_OPEN_FAIL
+            raise DeviceError(-1, "ERROR_DEVICE_OPEN_FAIL")
 
     def HH_CloseDevice(self, i):
         self._mode = None
@@ -2552,7 +2403,7 @@ class FakeHHDLL(object):
 
     def HH_StartMeas(self, i, tacq):
         if self._acq_start is not None:
-            raise HHError(-16, HHDLL.err_code[-16])
+            raise DeviceError(-16, "ERROR_INSTANCE_RUNNING")
         self._acq_start = time.time()
         self._acq_end = self._acq_start + _val(tacq) * 1e-3
 
@@ -2568,7 +2419,7 @@ class FakeHHDLL(object):
             ctcstatus.value = 0  # 0 if still running
             # DEBUG
             # if random.randint(0, 10) == 0:
-            #    raise HHError(-37, HHDLL.err_code[-37])  # bad luck
+            #    raise DeviceError(-37, "ERROR_USB_BULKRD_FAIL")  # bad luck
         else:
             ctcstatus.value = 1
 
