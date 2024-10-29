@@ -289,7 +289,7 @@ class CryoAcquiController(object):
         self._tab_data.main.is_acquiring.value = True
 
         zparams: dict = {}
-        if self._zStackActive:
+        if self._zStackActive.value:
             self._on_zstack()
             # Note: we use the zparams to calculate the zlevels for each feature individually,
             # rather than using the same zlevels for all features.
