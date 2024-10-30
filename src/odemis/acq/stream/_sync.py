@@ -1235,6 +1235,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # CCD to be sure it is not slowing thing down.
             self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
 
+        if model.hasVA(self._emitter, "external") and self._emitter.external.value is None:
+            # When the e-beam is set to automatic external mode, it would switch on/off for every
+            # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
+            # "external" while the acquisition is running.
+            self._orig_hw_values[self._emitter.external] = self._emitter.external.value
+            self._emitter.external.value = True
+
         return exp + readout, integration_count
 
     def _onCompletedData(self, n, raw_das):
@@ -1347,6 +1354,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         # TODO: to support drift correction (leeches), need to use the leech, as in SEMMDStream._runAcquisition
         # and it will need to update the ebeam setting block per block (of variable size)
+
+        # Note: no need to force the e-beam external state, as done in _adjustHardwareSettings(),
+        # because here the e-beam will scan just once, the entire area, so the driver can directly
+        # do the right thing.
 
         return frame_duration_safe, integration_count
 
