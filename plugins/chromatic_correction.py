@@ -61,8 +61,8 @@ TOLERANCE = 1.5
 # Maximum number of beads to find in the given image
 BEAD_QUANTITY = 15
 # Settings to acquire z stack of given channels
-Z_RANGE = (-10e-06, 10e-06)  # m
-Z_STEP_SIZE = 50e-09  # m
+Z_RANGE = (-5e-06, 5e-06)  # m
+Z_STEP_SIZE = 100e-09  # m
 REF_EMISSION = [500.e-9, 530.e-9]  # m, green channel wavelength
 
 
@@ -351,7 +351,7 @@ class ChromaticCorrectionPlugin(Plugin):
             if len(transformation_dict[model.MD_CHROMATIC_COR]) > 1:
                 file_location = get_file_location("lens_chromatic_correction", "odm.yaml")
                 with open(file_location, 'w') as yaml_file:
-                    yaml.dump(transformation_dict, yaml_file, default_flow_style=False, sort_keys=False)
+                    yaml.dump(transformation_dict, yaml_file, default_flow_style=True)
 
         except CancelledError:
             logging.debug("Chromatic aberration is cancelled during Z stack acquisition")
