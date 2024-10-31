@@ -613,10 +613,12 @@ class BugreporterFrame(wx.Frame):
         """
         config = configparser.ConfigParser()
         config.read(self._config_path)
-        topic_id = TOPIC_ID_DEFAULT
-        topic_str = config.get('REPORT', 'topic', fallback=str(TOPIC_ID_DEFAULT))
+        topic_id = None
+        topic_str = config.get('REPORT', 'topic', fallback=None)
         try:
-            if topic_str in TOPIC_IDS:
+            if topic_str is None:
+                pass  # Will use the fallback
+            elif topic_str in TOPIC_IDS:
                 topic_id = TOPIC_IDS[topic_str]
             else:  # Not a known department => maybe it's just an int?
                 val = int(topic_str)
@@ -624,9 +626,29 @@ class BugreporterFrame(wx.Frame):
                     raise ValueError("Topic ID must be > 0")
                 topic_id = val
         except Exception as ex:
-            logging.warning("Unknown topic ID '%s', falling back to %s. (%s)", topic_str, topic_id, ex)
+            logging.warning("Unknown topic ID '%s': %s", topic_str, ex)
+
+        if topic_id is None:
+            topic_id = self._guess_topic_id()
+            logging.info("Falling back to topic ID %s", topic_id)
 
         return topic_id
+
+    def _guess_topic_id(self) -> int:
+        """
+        Based on the hostname, guesses the topic ID
+        :return: the most likely topic ID for the current computer
+        """
+        hostname = os.uname().nodename.lower()
+        if "enzel" in hostname or "meteor" in hostname:
+            return TOPIC_IDS["cryo"]
+        elif "fast" in hostname:
+            return TOPIC_IDS["fast"]
+        elif "secom" in hostname or "sparc" in hostname:
+            return TOPIC_IDS["cl"]
+        else:
+            logging.info("Hostname %s doesn't match any known microscope type", hostname)
+            return TOPIC_ID_DEFAULT
 
     def store_user_info(self, name, email):
         """
