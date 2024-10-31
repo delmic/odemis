@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # various functions to help with computations related to fluorescence microscopy
 
 from collections.abc import Iterable
-from odemis.model import BAND_PASS_THROUGH
+from odemis.model import BAND_PASS_THROUGH, CUSTOM_FILTER
 
 # constants to indicate how well a emission/excitation setting fits a dye
 # emission/excitation (peak)
@@ -36,6 +36,9 @@ def get_center(band):
     """
     if band == BAND_PASS_THROUGH:
         return 5000e-9  # Something large, so that if it's sorted, it's after every other band
+
+    if band == CUSTOM_FILTER:
+        return 4000e-09  # Something relatively smaller to band-pass, so that if it's sorted, it's just before band-pass
 
     if isinstance(band, str):
         raise TypeError("Band must be a list or a tuple")
@@ -58,14 +61,14 @@ def get_one_band_em(bands, ex_band):
     ex_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): excitation band(s)
     return (tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band
     """
-    if bands == BAND_PASS_THROUGH:
+    if bands == BAND_PASS_THROUGH or bands == CUSTOM_FILTER:
         return bands
 
     if not isinstance(next(iter(bands)), Iterable):
         return bands
 
     # Need to guess: the closest above the excitation wavelength
-    if ex_band == BAND_PASS_THROUGH:
+    if ex_band == BAND_PASS_THROUGH or ex_band == CUSTOM_FILTER:
         ex_center = 1e9  # Nothing will match
     elif isinstance(next(iter(ex_band)), Iterable):
         # It's getting tricky, but at least above the smallest one
@@ -106,7 +109,7 @@ def get_one_band_ex(bands, em_band):
     em_band ((list of) tuple of 2 or 5 floats, or BAND_PASS_THROUGH): emission band(s)
     return (float): wavelength in m
     """
-    if bands == BAND_PASS_THROUGH:
+    if bands == BAND_PASS_THROUGH or bands == CUSTOM_FILTER:
         return bands
 
     # FIXME: make it compatible with sets instead of list
@@ -114,7 +117,7 @@ def get_one_band_ex(bands, em_band):
         return bands
 
     # Need to guess: the closest below the emission wavelength
-    if em_band == BAND_PASS_THROUGH:
+    if em_band == BAND_PASS_THROUGH or em_band == CUSTOM_FILTER:
         em_center = 0  # Nothing will match
     elif isinstance(next(iter(em_band)), Iterable):
         # It's getting tricky, but at least below the biggest one
@@ -155,7 +158,7 @@ def get_one_center(band):
 
     :return: (float) wavelength in m
     """
-    if isinstance(band[0], Iterable) and band != BAND_PASS_THROUGH:
+    if isinstance(band[0], Iterable) and band != BAND_PASS_THROUGH and band != CUSTOM_FILTER:
         return get_center(band[0])
     else:
         return get_center(band)
@@ -170,7 +173,7 @@ def estimate_fit_to_dye(wl, band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (FIT_*): how well it fits (the higher the better)
     """
-    if band == BAND_PASS_THROUGH:
+    if band == BAND_PASS_THROUGH or band == CUSTOM_FILTER:
         return FIT_IMPOSSIBLE
     # TODO: support multiple-peak/band/curve for the dye
 
@@ -195,8 +198,8 @@ def quantify_fit_to_dye(wl, band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (0<float): the more, the merrier
     """
-    if band == BAND_PASS_THROUGH:
-        return 0  # Pass-through is never good for fluorescence microscopy
+    if band == BAND_PASS_THROUGH or band == CUSTOM_FILTER:
+        return 0  # These bands are never good for fluorescence microscopy
 
     # if multi-band: get the best of all
     if isinstance(band[0], Iterable):

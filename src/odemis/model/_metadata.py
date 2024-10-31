@@ -129,6 +129,7 @@ MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 
 BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
+CUSTOM_FILTER = "custom-filter"  # Specific emission filter that has variable number of bands combined into single filter
 
 MD_AR_POLE = "Angular resolved pole position"  # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_MIRROR_TOP = "Line of the mirror top"  # px, px/m (tuple of floats), position of the top of the mirror dependent on the wavelength.
