@@ -536,10 +536,6 @@ HW_SETTINGS_CONFIG = {
             # It should not be changed directly, but via the emitter
             "control_type": odemis.gui.CONTROL_NONE,
         },
-        "repetition": {
-            # It should not be changed directly, but via the emitter
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
     },
     r"photo-detector.*":
         OrderedDict((

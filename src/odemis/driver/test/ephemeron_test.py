@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on 7 Feb 2014
+Created on 9 Oct 2024
 
-Copyright © 2014 Kimon Tsitsikas, Delmic
+Copyright © 2024 Stefan Sneep, Delmic
 
 This file is part of Odemis.
 
@@ -20,17 +20,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import os
-import queue
+import time
+import unittest
 
 import numpy
 
 from odemis.driver.ephemeron import STATE_NAME_IDLE, STATE_NAME_TRIGGER, STATE_NAME_BUSY
-from odemis import model
 from odemis.driver import ephemeron
-import time
-import unittest
-from unittest.case import skip
 
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
 # arguments used for the creation of basic components
@@ -53,20 +51,21 @@ class TestMightyEBICDetector(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not TEST_NOHW:
+            # The url used for testing the real HW may vary due to DHCP settings.
+            # If testing is done with the MightyEBIC Software on a VM, use this
+            # url -> "opc.tcp://192.168.56.2:4840/mightyebic/server/"
             cls.ebic_det = ephemeron.MightyEBIC("EBIC Scan Controller",
                                                 "ebic-detector",
                                                 2,
-                                                "opc.tcp://192.168.56.2:4840/mightyebic/server/",
-                                                "http://opcfoundation.org/UA/")
+                                                "opc.tcp://192.168.56.2:4840/mightyebic/server/")
         else:
             # EBIC detector with a simulated server
             cls.ebic_det = ephemeron.MightyEBIC("EBIC Scan Controller",
                                                 "ebic-detector",
                                                 2,
-                                                "opc.tcp://localhost:4840/freeopcua/server/",
-                                                "http://examples.freeopcua.github.io")
+                                                "fake")
         cls.acquired_data = None
-        cls.dwell_time_values = [1e-5, 2e-5, 5e-5]
+        cls.dwell_time_values = [6e-6, 1e-5, 1.19e-5, 1.2e-5, 5e-5, 2e-2]
         cls.resolution_values = [(140, 100), (300, 420), (2100, 2100)]
 
     @classmethod
@@ -79,14 +78,29 @@ class TestMightyEBICDetector(unittest.TestCase):
         """
         base_st = 0.0
 
-        for dt_num, dt in enumerate(self.dwell_time_values):
+        # TODO make a check for the accepted dt and the associated SPP
+        # and perhaps the amount to gain insight in the algorithm
+        # check a single dwell_time value with different resolutions
+        for dt in self.dwell_time_values:
             for res_num, res in enumerate(self.resolution_values):
-                st_req = self.ebic_det._opc_client.get_scan_time(dt, res[0], res[1])
+                st_req = self.ebic_det._opc_client.calculate_scan_time(dt, res[0], res[1])
                 if res_num == 0:  # take the first scan time as base
                     base_st = st_req
+                    # do a single check for return type
+                    self.assertTrue(isinstance(st_req, float))
                 else:
                     self.assertGreater(st_req, base_st)
 
+        # check a single resolution value with different dwell_time values
+        for res in self.resolution_values:
+            for dt_num, dt in enumerate(self.dwell_time_values):
+                st_req = self.ebic_det._opc_client.calculate_scan_time(dt, res[0], res[1])
+                if dt_num == 0:  # take the first scan time as base
+                    base_st = st_req
+                    # do a single check for return type
+                    self.assertTrue(isinstance(st_req, float))
+                else:
+                    self.assertGreater(st_req, base_st)
 
     def test_acquisition(self):
         """
@@ -96,7 +110,7 @@ class TestMightyEBICDetector(unittest.TestCase):
         self.assertEqual(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
 
         for dt in self.dwell_time_values:
-            # set the repetition of the region of acquisition to 140 x 100, force it non-squared
+            # set the resolution of the region of acquisition to 140 x 100, force it non-squared
             self.ebic_det.resolution.value = (140, 100)
             self.ebic_det.dwellTime.value = dt
 
@@ -113,12 +127,11 @@ class TestMightyEBICDetector(unittest.TestCase):
             self.assertEqual(self.acquired_data.shape, self.ebic_det.resolution.value)
             self.assertTrue(self.acquired_data.dtype.type == numpy.float64)
 
-    @skip("dependent on Ephemeron for this to work")
     def test_acquisition_stop(self):
         # check if the scan controller is ready
         self.assertEqual(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
 
-        # set the repetition of the region of acquisition to 500 x 480, force it non-squared
+        # set the resolution of the region of acquisition to 500 x 480, force it non-squared
         self.ebic_det.resolution.value = (500, 480)
 
         # start acquisition an acquisition threaded, to be able to stop it before it ends
@@ -168,11 +181,11 @@ class TestMightyEBICDetector(unittest.TestCase):
 
         self.ebic_det._opc_client.set_controller_state(STATE_NAME_TRIGGER)
         self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_TRIGGER)
-        time.sleep(5)
+        time.sleep(2)
 
         self.ebic_det._opc_client.set_controller_state(STATE_NAME_BUSY)
         self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_BUSY)
-        time.sleep(5)
+        time.sleep(2)
 
         # set the controller back to a ready state
         self.ebic_det._opc_client.set_controller_state(STATE_NAME_IDLE)

@@ -25,11 +25,14 @@ If not, see http://www.gnu.org/licenses/.
 import asyncio
 import logging
 import math
+import re
 import threading
 import time
 import queue
 from asyncio import AbstractEventLoop
-from typing import Optional
+from typing import Optional, Tuple
+
+from numpy.ma.testutils import assert_almost_equal, assert_equal
 
 from odemis import model
 from odemis.model import Detector, oneway, MD_ACQ_DATE, HwError
@@ -41,15 +44,18 @@ from asyncua.common.statemachine import State, StateMachine
 from asyncua.ua import NodeId, ObjectIds, LocalizedText, Argument
 
 # OPCUA StateMachine constants
-STATE_NAME_IDLE = "IDLE"
-STATE_NAME_BUSY = "BUSY"
-STATE_NAME_TRIGGER = "TRIGGER"
-STATE_NAME_ERROR = "ERROR"
+STATE_NAME_IDLE = "Idle"
+STATE_NAME_BUSY = "Busy"
+STATE_NAME_TRIGGER = "Trigger"
+STATE_NAME_ERROR = "Error"
 
 # MightyEBIC driver constants
 MAX_SAMPLES_PER_PIXEL = 10
 MAX_NUMBER_OF_CHANNELS = 8
+OVERSAMPLING_SET_VALUES = {0, 2, 4, 8, 16, 32, 64}
 NAMESPACE_INDEX = 0
+NAMESPACE_ADDRESS = "http://opcfoundation.org/UA/"
+SIMULATED_URL = "opc.tcp://localhost:4840/mightyebic/server/"
 DEFAULT_TIMEOUT = 60  #s
 DATA_VAR_NAME = "scan_result"
 EBIC_CONTROLLER_NODE = "MightyEBICController"
@@ -145,40 +151,37 @@ STATE_ARGS = [
 
 
 class MightyEBIC(Detector):
-    def __init__(self, name: str, role: str, channel: int, url: str, namespace: str, **kwargs):
+    def __init__(self, name: str, role: str, channel: int, url: str, **kwargs):
         """
         Initialise the EBIC controller
-        :param name (str): The name of the device configured through the configuration file
-        :param role (str): The role of the device configured through the configuration file
+        :param name (str): The name of the device configured through the configuration file.
+        :param role (str): The role of the device configured through the configuration file.
         :param channel (int): The channel the device should use for hw triggering.
-        :param url (str): The url address to use with the OPC UA protocol
-        :param namespace (str): The object name identifier to use for the OPC UA protocol
+        :param url (str): The url address to use with the OPC UA protocol.
+            Example of such an url might be opc.tcp://192.168.50.2:4840/mightyebic/server/
+            Note: Can contain "fake" to indicate it should be simulated.
         """
         super().__init__(name, role, **kwargs)
 
         self._channel = channel
         self._url = url
-        self._namespace = namespace
+        self._namespace = NAMESPACE_ADDRESS
 
         # server_sim is only used for simulation of the opcServer if it is non-existent
         self._opc_server_sim: Optional[MightyEBICSimulator] = None
         self._opc_client: Optional[UaClient] = None
         self._error_msg: Optional[str] = None
-        self._t_simserver: Optional[threading.Thread] = None
-        # hardcoded now, eventually -> get resolution from the controller/detector
+        # TODO: hardcoded now, eventually -> get resolution from the controller/detector if possible
         self._ebeam_res = ((1, 1), (4096, 4096))
-        self._server_exception: Optional[Exception] = None
 
-        if "localhost" in self._url:
+        if url == "fake":
             # if the device should be simulated, start a simulated server first
-            self._opc_server_sim = MightyEBICSimulator(self._url, self._namespace, self)
-            self._t_simserver = threading.Thread(target=self._start_opc_simserver)
-            self._t_simserver.start()
-            # start the simulated server threaded but wait for it to be ready (running)
-            while not self._opc_server_sim.ready:
-                time.sleep(0.1)
-                if self._server_exception:
-                    raise HwError(self._server_exception.args[0])
+            self._url = SIMULATED_URL
+            self._opc_server_sim = MightyEBICSimulator(self._url , self._namespace, self)
+        else:
+            url_check = r"^opc\.tcp://(localhost|(\d{1,3}\.){3}\d{1,3}):4840/"
+            if not re.search(url_check, url):
+                raise HwError(f"The url {url} to connect to is not in the right format.")
 
         # fire up the client needed for the opcua communication with the server
         self._opc_client = UaClient(self._url, DEFAULT_TIMEOUT)
@@ -189,10 +192,12 @@ class MightyEBIC(Detector):
                                                     setter=self.on_chan_num_change)
         # Oversampling is a digital low-pass filter that removes high-frequency
         # noise and sends back a single clean 18-bit value.
-        self.oversampling = model.IntEnumerated(0, {0, 2, 4, 8, 16, 32, 64})
+        self.oversampling = model.IntEnumerated(0, OVERSAMPLING_SET_VALUES)
         self.oversampling.subscribe(self.on_oversampling_change)
         self.resolution = model.ResolutionVA(self._ebeam_res[1], (self._ebeam_res[0], self._ebeam_res[1]), unit="px")
-        self.dwellTime = model.FloatContinuous(1e-5, (0.1e-6, 1000), unit="s")  # 10 us default
+        # set 10 us dwell time as default value, the minimum range values is determined by tests
+        # the maximum value is just a very high value which might never be used in a real acquisition
+        self.dwellTime = model.FloatContinuous(1e-5, (6e-6, 1000), unit="s", setter=self.on_dwell_time_change)
 
         self.data = EBICDataFlow(self)
         self._acquisition_thread: Optional[threading.Thread] = None
@@ -201,18 +206,9 @@ class MightyEBIC(Detector):
 
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
-
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
-        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        self._swVersion = self._opc_client.get_mightyebic_sw_version
         self._metadata[model.MD_SW_VERSION] = self._swVersion
-
-    def _start_opc_simserver(self):
-        try:
-            asyncio.run(self._opc_server_sim.connect_to_server())
-        except ConnectionError:
-            self._server_exception = ConnectionError(f"Unable to start up the simulated server")
-        except Exception as ex:
-            self._server_exception = Exception(ex)
 
     def start_acquire(self, _):
         with self._acquisition_lock:
@@ -234,15 +230,14 @@ class MightyEBIC(Detector):
             md = self.getMetadata()
             md[MD_ACQ_DATE] = time.time()
 
-            scan_time = self._opc_client.get_scan_time(self.dwellTime.value, res[0], res[1])
-            time.sleep(0.5)
+            scan_time = self._opc_client.calculate_scan_time(self.dwellTime.value, res[0], res[1])
             end_time = time.time() + DEFAULT_TIMEOUT + scan_time
 
-            f = self._opc_client.start_scan(self.dwellTime.value, 0, 1, 0, res[0], res[1], True)
-            time.sleep(10)  # wait just a second to start up the co-routine
+            f = self._opc_client.start_trigger_scan(self.dwellTime.value, 0, 1, 0, res[0], res[1], bool(self._opc_server_sim))
+            time.sleep(1)  # wait just a second to start up the co-routine and wait for the state update
 
             # while the scan controller is busy, check for a time-out or stop signal
-            while self._opc_client.controller_state == STATE_NAME_TRIGGER:
+            while self._opc_client.controller_state == STATE_NAME_BUSY:
                 if time.time() > end_time:
                     raise TimeoutError()
                 if self._acquisition_must_stop.wait(0.1):
@@ -290,31 +285,34 @@ class MightyEBIC(Detector):
         :param md: The metadata to be added to the raw data.
         :return: a Numpy array with the right shape containing the data acquired.
         """
-        async with self._opc_client.client:
-            scan_result_node = await self._opc_client.ebic_info_node.get_child(f"{NAMESPACE_INDEX}:scan_result")
-            raw_data = await scan_result_node.read_value()
+        raw_data = self._opc_client.get_scan_result()
 
         # reshape the data first -> Data array ND array + MD
         raw_arr = numpy.array(raw_data)
         raw_arr = raw_arr.reshape(resolution[0], resolution[1])
 
         da = model.DataArray(raw_arr, md)
-
         return da
 
     def on_chan_num_change(self, value):
+        self._opc_client.channels = value
         return value
 
     def on_oversampling_change(self, value):
         return value
 
+    def on_dwell_time_change(self, value):
+        # guess the samples per pixel according to the set (requested) value -> note dt_min is 5.615e-6 for a spp of 1
+        dt, spp, attempts = self._opc_client.guess_samples_per_pixel(value, self.oversampling.value)
+        if not math.isclose(dt, value, rel_tol=1e-5):
+            logging.warning(f"Requested dwell time {value} differs from calculated dwell time {dt}.")
+        self._opc_client.spp = spp
+        return dt
+
     def terminate(self):
         super().terminate()
-        # if the opcServer is simulated, stop the controlling thread first
-        if self._t_simserver:
-            self._opc_server_sim.terminated = True
-            self._t_simserver.join()
-
+        if self._opc_server_sim:
+            self._opc_server_sim.terminate()
         self._opc_client.close_connection()
 
 
@@ -335,6 +333,24 @@ class MightyEBICSimulator(Server):
         self._parent_det = parent_det
         self._data_var: Optional[Node] = None
         self._stop_scan = False
+        self._dt = 1e-5
+        self._server_exception: Optional[str] = None
+
+        self._t_simserver = threading.Thread(target=self._start_opc_simserver)
+        self._t_simserver.start()
+        # start the simulated server threaded but wait for it to be ready (running)
+        while not self.ready:
+            time.sleep(0.1)
+            if self._server_exception:
+                raise HwError(self._server_exception)
+
+    def _start_opc_simserver(self):
+        try:
+            asyncio.run(self.connect_to_server())
+        except ConnectionError:
+            self._server_exception = ConnectionError(f"Unable to start up the simulated server")
+        except Exception as ex:
+            self._server_exception = ex
 
     async def setup(self) -> None:
         """ Set up the server StateMachine, nodes, events, methods and variables. """
@@ -493,6 +509,8 @@ class MightyEBICSimulator(Server):
         :param res_slow: The vertical points of the resolution.
         :return: Scan time in ns.
         """
+        self._dt = dt
+
         LOOP2_OV = 40
         LOOP1_OV = 40
         SETUP = 1025  # Overhead to set up scan
@@ -525,19 +543,24 @@ class MightyEBICSimulator(Server):
         :param simulate: Simulate the scan.
         """
         await self.state_machine.change_state(self.states[STATE_NAME_TRIGGER])
-        scan_time = await self.calculate_scanTime(parent, parent.dwellTime.value, points_fast, points_slow)
+        # scan time in seconds
+        scan_time = (1025 + (((self._dt * 1000 + 40) * points_fast + 5) + 40) * points_slow) / 1.0e9
+        # as the scan time can be tiny, multiply by 5 to stay in this state for a significant period of time
         scan_time_end = scan_time * 5
-        scan_time_start = 0
+        scan_time_start = 0.0
+        scan_interval = 0.1
 
         while scan_time_start < scan_time_end:
             # if stop scan is requested return without updating the data
             if self._stop_scan:
                 self._stop_scan = False
                 return
-            await asyncio.sleep(1)
+            await asyncio.sleep(scan_interval)
+            scan_time_start += scan_interval
 
         scan_result = numpy.random.rand(points_fast, points_slow, channels)
-        logging.debug(f"updating nparray {self._data_var.read_display_name()} with shape {scan_result.shape}")
+        data_node_name = await self._data_var.read_display_name()
+        logging.debug(f"updating nparray {data_node_name} with shape {scan_result.shape}")
         await self._data_var.write_value(scan_result.flatten().tolist())
 
         await self.state_machine.change_state(self.states[STATE_NAME_IDLE])
@@ -546,6 +569,11 @@ class MightyEBICSimulator(Server):
     async def request_scan_stop(self, parent):
         logging.warning(f"stop_scan requested from client")
         self._stop_scan = True
+
+    def terminate(self):
+        # the opcServer is simulated, stop the controlling thread first
+        self.terminated = True
+        self._t_simserver.join()
 
 
 class EBICDataFlow(model.DataFlow):
@@ -623,7 +651,9 @@ class UaClient:
     """
     def __init__(self, url, timeout):
         self.client = Client(url=url, timeout=timeout)
-        self.ebic_info_node: Optional[Node] = None
+        self.spp = 1  # set default to 1
+        self.channels = 1  # set default to 1
+        self._ebic_info_node: Optional[Node] = None
         self._ebic_state_node: Optional[Node] = None
         self._ebic_controller_node: Optional[Node] = None
         # set the controller state to disconnected at default
@@ -631,47 +661,65 @@ class UaClient:
         self._loop: Optional[AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
 
+        # Create a new event loop
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        self._loop_thread = threading.Thread(target=self.start_event_loop, daemon=True)
+        self._loop_thread.start()
+
     async def initialize_client(self):
         """ Assign all the necessary nodes and create the event loop. """
         async with self.client:
             objects_node = await self.client.nodes.root.get_child(f"{NAMESPACE_INDEX}:Objects")
             state_node = await objects_node.get_child(f"{NAMESPACE_INDEX}:{EBIC_STATE_NODE}")
-            self.ebic_info_node = await objects_node.get_child(f"{NAMESPACE_INDEX}:{EBIC_INFO_NODE}")  # needed
+            self._ebic_info_node = await objects_node.get_child(f"{NAMESPACE_INDEX}:{EBIC_INFO_NODE}")  # needed
             self._ebic_controller_node = await objects_node.get_child(f"{NAMESPACE_INDEX}:{EBIC_CONTROLLER_NODE}")
             self._ebic_state_node = await state_node.get_child(f"{NAMESPACE_INDEX}:CurrentState")
 
-            # Create a new event loop
-            self._loop = asyncio.new_event_loop()
-            self._loop_thread = threading.Thread(target=self.start_event_loop, args=(self._loop,), daemon=True)
-            self._loop_thread.start()
+    def start_event_loop(self):
+        """ the command run_forever() has to be set in a separate thread due to its blocking nature. """
+        self._loop.run_forever()
 
-    def start_event_loop(self, loop):
-        asyncio.set_event_loop(loop)
-        loop.run_forever()
+    def guess_samples_per_pixel(self, req_dt: float, oversampling: int) -> Tuple[float, int, int]:
+        f = asyncio.run_coroutine_threadsafe(self._guess_samples_per_pixel(req_dt, oversampling), self._loop)
+        return f.result()
 
-    async def guess_samples_per_pixel(self, req_dt: float) -> float:
+    async def _guess_samples_per_pixel(self, req_dt: float, oversampling: int) -> Tuple[float, int, int]:
         """
         Samples per pixel (SPP) is the number of samples that are measured at each pixel and averaged.
         Calculate the best guess for the requested dwell time using a range of SPP apply the 50% guess method.
-        :param req_dt: The requested dwell time in microseconds.
+        :param req_dt: The requested dwell time in seconds.
         :return: Closest calculated samples per pixel value.
         """
         best_spp = 1.0
+        round_spp = 1.0
+        # convert to dwell time in µs, the method call calculate_dwell_time eventually
+        # returns a dwell time value in µs. Therefore, keep comparing values the same.
         req_dt *= 1e6
+        dt = req_dt
+        attempts = 20
 
-        for i in range(10):
-            # OS, channels, samples, delay
-            async with self.client:
-                dt = await self.ebic_info_node.call_method(f"{NAMESPACE_INDEX}:calculate_dwell_time", 0, 1, best_spp, 0)
+        # give the guessing 10 attempts, to prevent infinite looping, after 10 attempts log a warning
+        for i in range(attempts):
+            round_spp = max(math.floor(best_spp), 1)
+            # note dt returned is an integer in μs
+            dt = await self._calculate_dwell_time(oversampling, self.channels, round_spp, 0)
             if math.isclose(dt, req_dt, abs_tol=1e-3):  # abs tolerance of 1 ns
-                logging.debug("Samples per pixels match found for requested dwell time")
+                logging.debug(f"Samples per pixel match found ({best_spp}) for requested dwell time of {req_dt / 1e6}")
+                attempts = i
+                break
+            if i == attempts - 1:
+                logging.warning(f"Best samples per pixel match not found, picking lowest "
+                                f"({best_spp}) for requested dwell time of {req_dt / 1e6}")
                 break
             elif dt > req_dt:
                 best_spp /= dt / req_dt
             elif dt < req_dt:
                 best_spp *= req_dt / dt
 
-        return best_spp
+        dt /= 1e6
+
+        return dt, round_spp, attempts
 
     async def _read_controller_state(self):
         async with self.client:
@@ -690,40 +738,54 @@ class UaClient:
         async with self.client:
             await self._ebic_controller_node.call_method(f"{NAMESPACE_INDEX}:set_controller_state", new_state)
 
-    def get_scan_time(self, dt, res_fast, res_slow) -> float:
-        f = asyncio.run_coroutine_threadsafe(self._get_scan_time(dt, res_fast, res_slow) , self._loop)
+    def calculate_scan_time(self, dt, p_fast, p_slow) -> float:
+        f = asyncio.run_coroutine_threadsafe(self._calculate_scan_time(dt, p_fast, p_slow), self._loop)
         return f.result()
 
-    async def _get_scan_time(self, dt, res_fast, res_slow) -> float:
+    async def _calculate_scan_time(self, dt, p_fast, p_slow) -> float:
         async with self.client:
-            # dt pf, ps
-            st = await self.ebic_info_node.call_method(f"{NAMESPACE_INDEX}:calculate_scan_time", dt, res_fast, res_slow)
+            # dwell_time, points_fast, points_slow
+            st = await self._ebic_info_node.call_method(f"{NAMESPACE_INDEX}:calculate_scan_time", dt, p_fast, p_slow)
             return st
 
-    def start_scan(self, req_dt, oversampling, channels, delay, p_fast, p_slow, sim=False):
-        f = asyncio.run_coroutine_threadsafe(self._start_scan(req_dt, oversampling, channels, delay, p_fast, p_slow, sim), self._loop)
+    async def _calculate_dwell_time(self, oversampling, channels, spp, delay) -> int:
+        async with self.client:
+            # oversampling, channels, spp, delay -> returns dt (int) in μs
+            dt = await self._ebic_info_node.call_method(
+                f"{NAMESPACE_INDEX}:calculate_dwell_time",
+                oversampling,
+                channels,
+                spp,
+                delay)
+            return dt
+
+    def start_trigger_scan(self, req_dt, oversampling, channels, delay, p_fast, p_slow, sim=False):
+        f = asyncio.run_coroutine_threadsafe(
+            self._start_trigger_scan(req_dt, oversampling, channels, delay, p_fast, p_slow, sim),
+            self._loop)
         return f
 
-    async def _start_scan(self, req_dt, oversampling, channels, delay, p_fast, p_slow, sim=False):
+    async def _start_trigger_scan(self, req_dt, oversampling, channels, delay, p_fast, p_slow, sim=False):
         """
         Starts a scan with the MightyEBIC scan controller.
         Send specific arguments to the server/client with the start_trigger_scan method.
         """
-        spp = await self.guess_samples_per_pixel(req_dt)
+        # TODO change this in the detector code
+        # spp = await self.guess_samples_per_pixel(req_dt)
 
         async with self.client:
             # run the start scan method on the server
             logging.info(f"Starting EBIC scan, with requested dwell time of {req_dt}s")
 
-            # OS, channels, samples, delay, PF, PS, sim
+            # oversampling, channels, samples, delay, points_fast, points_slow, sim
             await self._ebic_controller_node.call_method(f"{NAMESPACE_INDEX}:start_trigger_scan",
                                                          oversampling,
                                                          channels,
-                                                         spp,
+                                                         self.spp,
                                                          delay,
                                                          p_fast,
                                                          p_slow,
-                                                         True)
+                                                         sim)
 
             await asyncio.sleep(1)  # wait just a little until the server updated scan_result internally
 
@@ -736,6 +798,24 @@ class UaClient:
             # run the stop scan method on the server
             logging.info(f"Stopping EBIC scan..")
             await self._ebic_controller_node.call_method(f"{NAMESPACE_INDEX}:stop_scan")
+
+    def get_scan_result(self) -> float:
+        f = asyncio.run_coroutine_threadsafe(self._get_scan_result(), self._loop)
+        return f.result()
+
+    async def _get_scan_result(self) -> float:
+        async with self.client:
+            scan_result_node = await self._ebic_info_node.get_child(f"{NAMESPACE_INDEX}:scan_result")
+            raw_data = await scan_result_node.read_value()
+            return raw_data
+
+    def get_mightyebic_sw_version(self):
+        f = asyncio.run_coroutine_threadsafe(self._get_mightyebic_sw_version(), self._loop)
+        return f.result()
+
+    async def _get_mightyebic_sw_version(self):
+        async with self.client:
+            await self._ebic_controller_node.call_method(f"{NAMESPACE_INDEX}:version")
 
     @property
     def controller_state(self):
