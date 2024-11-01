@@ -1128,7 +1128,7 @@ class StreamPanel(wx.Panel):
         value_ctrl = wx.CheckBox(self._panel, wx.ID_ANY,
                                  style=wx.ALIGN_RIGHT | wx.NO_BORDER,
                                  **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 2), span=(1, 1),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         value_ctrl.SetValue(value)
 
