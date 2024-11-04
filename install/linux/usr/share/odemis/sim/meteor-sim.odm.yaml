@@ -199,12 +199,20 @@
     },
     # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
     metadata: {
+        # Filter positions for the chromatic correction (by default, no correction)
         CHROMATIC_COR: {
-            0.08: {"Pixel size cor": [1, 1],"Centre position cor": [2, 3] ,"Rotation cor": 0.1 ,"Shear cor": 0.2},
-            0.865398: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 1},
-            1.650796: {"Pixel size cor": [1, 1],"Centre position cor": [4, 5] ,"Rotation cor": 0.2 ,"Shear cor": 0.3},
-            2.4361944: {"Pixel size cor": [2, 3],"Centre position cor": [6, 7] ,"Rotation cor": 0 ,"Shear cor": 0.4},
+            0.08: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 0},
+            0.865398: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 0},
+            1.650796: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 0},
+            2.4361944: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 0},
         },
+        # uncomment below to test chromatic correction, and comment out the above
+        # CHROMATIC_COR: {
+        #     0.08: {"Pixel size cor": [1, 1],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 0},
+        #     0.865398: {"Pixel size cor": [0.999, 1.001],"Centre position cor": [0, 0] ,"Rotation cor": 0 ,"Shear cor": 0},
+        #     1.650796: {"Pixel size cor": [1, 1],"Centre position cor": [1.0e-9, -2.0e-9] ,"Rotation cor": -0.001 ,"Shear cor": 0.001},
+        #     2.4361944: {"Pixel size cor": [1.001, 1.001],"Centre position cor": [0, 0] ,"Rotation cor": 0.001 ,"Shear cor": 0},
+        # },
     },
     affects: ["Camera"],
 }
