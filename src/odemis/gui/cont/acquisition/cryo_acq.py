@@ -200,7 +200,6 @@ class CryoAcquiController(object):
 
         # disable the streams settings while acquiring
         if is_acquiring:
-            self._tab.streambar_controller.pauseStreams()
             self._tab.streambar_controller.pause()
         else:
             self._tab.streambar_controller.resume()
@@ -217,6 +216,11 @@ class CryoAcquiController(object):
 
         # the acquisition is started
         self._tab_data.main.is_acquiring.value = True
+
+        # NOTE: acquisition manager expects all streams to be paused before starting.
+        # this cannot be done in the is_acquiring callback as it can be delayed
+        # until after the acquisition starts
+        self._tab.streambar_controller.pauseStreams()
 
         # acquire the data
         if self._zStackActive.value:
@@ -287,6 +291,11 @@ class CryoAcquiController(object):
 
         # the acquisition is started
         self._tab_data.main.is_acquiring.value = True
+
+        # NOTE: acquisition manager expects all streams to be paused before starting.
+        # this cannot be done in the is_acquiring callback as it can be delayed
+        # until after the acquisition starts
+        self._tab.streambar_controller.pauseStreams()
 
         zparams: dict = {}
         if self._zStackActive.value:
