@@ -618,7 +618,7 @@ class Shamrock(model.Actuator):
                                      pos, allowed_pos))
 
             if self.ShutterIsPresent():
-                if drives_shutter and not self._model == MODEL_KY193:
+                if drives_shutter and self._model == MODEL_SR303:
                     raise ValueError("Device doesn't support BNC mode for shutter")
                 if "flip-out" in axes:
                     val = self.GetFlipperMirror(OUTPUT_FLIPPER)
