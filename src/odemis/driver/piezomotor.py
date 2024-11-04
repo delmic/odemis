@@ -28,12 +28,20 @@ import threading
 import time
 from concurrent.futures import CancelledError
 from threading import Thread
+from typing import Optional
 
 import serial
 import serial.tools.list_ports
 
 from odemis import model
-from odemis.model import Actuator, CancellableThreadPoolExecutor, CancellableFuture, isasync, HwError
+from odemis.model import (
+    Actuator,
+    CancellableFuture,
+    CancellableThreadPoolExecutor,
+    HwError,
+    ParallelThreadPoolExecutor,
+    isasync,
+)
 from odemis.util import to_str_escape
 from odemis.util.driver import getSerialDriver
 
@@ -111,6 +119,7 @@ class PMD401Bus(Actuator):
         self._speed_steps = {}  # axis name (str) -> int, speed in steps per meter
         self._counts_per_meter = {}  # axis name (str) -> float
         self._steps_per_meter = {}  # axis name (str) -> float
+        self._encoder_resolution = {}  # axis name (str) -> float
         self._portpattern = port
 
         # Parse axis parameters and create axis
@@ -144,8 +153,10 @@ class PMD401Bus(Actuator):
 
             if 'encoder_resolution' in axis_par:
                 self._counts_per_meter[axis_name] = 1 / axis_par['encoder_resolution']
+                self._encoder_resolution[axis_name] = axis_par['encoder_resolution']
             else:
                 self._counts_per_meter[axis_name] = 1 / DEFAULT_ENCODER_RESOLUTION
+                self._encoder_resolution[axis_name] = DEFAULT_ENCODER_RESOLUTION
                 logging.info("Axis %s has no encoder resolution, assuming %s.",
                              axis_name, DEFAULT_ENCODER_RESOLUTION)
 
@@ -172,7 +183,7 @@ class PMD401Bus(Actuator):
             axes_def[axis_name] = ad
 
         Actuator.__init__(self, name, role, axes=axes_def, inverted=inverted, **kwargs)
-        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+        self._executor = ParallelThreadPoolExecutor()
         self._ser_access = threading.RLock()
 
         # Connect to hardware
@@ -247,26 +258,29 @@ class PMD401Bus(Actuator):
         self._checkMoveRel(shift)
         shift = self._applyInversion(shift)
         f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._doMoveRel, f, shift)
+        f = self._executor.submitf(set(shift.keys()), f, self._doMoveRel, f, shift)
         return f
 
     @isasync
     def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
         f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
+        f = self._executor.submitf(set(pos.keys()), f, self._doMoveAbs, f, pos)
         return f
 
     @isasync
     def reference(self, axes):
         self._checkReference(axes)
-        f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._doReference, f, axes)
+        if not axes:
+            return model.InstantaneousFuture()
+        f = self._createRefFuture()
+        f = self._executor.submitf(set(axes), f, self._doReference, f, set(axes))
         return f
 
     def _doReference(self, f, axes):
-        self._check_hw_error()
         # Request referencing on all axes
         # Referencing procedure: index signal is in the middle of the rod (when using encoder)
         #   * move to the limit switch in the negative direction (fixed end of the rod)
@@ -278,34 +292,43 @@ class PMD401Bus(Actuator):
         # the axis is not inverted). By referencing, this position can be set to 0 and absolute moves are possible
         # (although with less accuracy). However, we do not currently support this type of referencing without
         # encoder. With our hardware attached to the motor, it is impossible to reach the 8.9 µm indexing position.
+        with f._moving_lock:
+            try:
+                for axname in axes:
+                    with f._init_lock:
+                        axis_id = self._axis_map[axname]
+                        if f._must_stop.is_set():
+                            self.stopAxis(axis_id)
+                            raise CancelledError()
+                        f._current_axis = axis_id
+                        self.referenced._value[axname] = False
+                        # First, search for the index in negative direction.
+                        idx_found = self._search_index(f, axname, direction=-1)
 
-        for axname in axes:
-            if f._must_stop.is_set():
-                self.stopAxis(self._axis_map[axname])
-                raise CancelledError()
-            axis = self._axis_map[axname]
-            self.referenced._value[axname] = False
+                        # If it wasn't found, try again in positive direction.
+                        if not idx_found:
+                            idx_found = self._search_index(f, axname, direction=1)
 
-            # First, search for the index in negative direction.
-            idx_found = self._search_index(f, axname, direction=-1)
+                        # If it's still not found, something went wrong.
+                        if not idx_found:
+                            raise ValueError("Couldn't find index on axis %s (%s), referencing failed." % (axis_id, axname))
 
-            # If it wasn't found, try again in positive direction.
-            if not idx_found:
-                logging.debug("Referencing axis %s in the positive direction", axis)
-                idx_found = self._search_index(f, axname, direction=1)
-
-            # If it's still not found, something went wrong.
-            if not idx_found:
-                raise ValueError("Couldn't find index on axis %s (%s), referencing failed." % (axis, axname))
-
-            # Referencing complete
-            logging.debug("Finished referencing axis %s." % axname)
-            self.stopAxis(axis)  # the axis should already be stopped, make sure for safety
-            self.referenced._value[axname] = True
-
-        # read-only so manually notify
-        self.referenced.notify(self.referenced.value)
-        self._updatePosition()
+                    # Referencing complete
+                    logging.debug("Finished referencing axis %s." % axname)
+                    self.stopAxis(axis_id)  # the axis should already be stopped, make sure for safety
+                    self.referenced._value[axname] = True
+                    f._current_axis = None
+            except CancelledError:
+                logging.info("Referencing cancelled")
+                f._was_stopped = True
+                raise
+            except Exception:
+                logging.exception("Referencing failure")
+                raise
+            finally:
+                # read-only so manually notify
+                self.referenced.notify(self.referenced.value)
+                self._updatePosition(axes)
 
     def _search_index(self, f, axname, direction):
         """
@@ -322,7 +345,7 @@ class PMD401Bus(Actuator):
         maxdur = maxdist / self._speed[axname] + 1
         end_time = time.time() + 2 * maxdur
 
-        logging.debug("Searching for index in direction %s.", direction)
+        logging.debug("Searching for index in direction %s for %s.", direction, axname)
         self.startIndexMode(axis)
         self.moveToIndex(axis, steps * direction)
 
@@ -338,7 +361,8 @@ class PMD401Bus(Actuator):
 
             # Check if limit is reached
             try:
-                self._check_hw_error()
+                d1, d2, d3, d4 = self.getStatus(axis)
+                self._check_axis_error(axis, d1, d2, d3, d4)
             except PMDError as ex:
                 if ex.errno == 6:  # external limit reached
                     logging.debug("Axis %d limit reached during referencing", axis)
@@ -354,60 +378,66 @@ class PMD401Bus(Actuator):
         return index_found
 
     def _doMoveAbs(self, f, pos):
-        self._check_hw_error()
-        self._updatePosition()
-        current_pos = self._applyInversion(self.position.value)
+        with f._moving_lock:
+            current_pos = self._applyInversion(self.position.value)
+            shifts = {}
+            if f._must_stop.is_set():
+                raise CancelledError()
+            for axname, val in pos.items():
+                move = val - current_pos[axname]
+                # Only consider moves which are greater than or equals the encoder's resolution
+                if abs(move) >= self._encoder_resolution[axname]:
+                    shifts[axname] = move
+                    if self._closed_loop[axname]:
+                        encoder_cnts = round(val * self._counts_per_meter[axname])
+                        self.runAbsTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
+                    else:
+                        # No absolute move for open-loop => convert to relative move
+                        steps_float = shifts[axname] * self._steps_per_meter[axname]
+                        steps = int(steps_float)
+                        usteps = int((steps_float - steps) * USTEPS_PER_STEP)
+                        self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
+                else:
+                    logging.debug("Requested move of %s for %s is less than its resolution %s",
+                                  move, axname, self._encoder_resolution[axname])
 
-        shifts = {}
-        if f._must_stop.is_set():
-            raise CancelledError()
-        for axname, val in pos.items():
-            if self._closed_loop[axname]:
-                shifts[axname] = val - current_pos[axname]
-                encoder_cnts = round(val * self._counts_per_meter[axname])
-                self.runAbsTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
-            else:
-                # No absolute move for open-loop => convert to relative move
-                shifts[axname] = val - current_pos[axname]
-                steps_float = shifts[axname] * self._steps_per_meter[axname]
-                steps = int(steps_float)
-                usteps = int((steps_float - steps) * USTEPS_PER_STEP)
-                self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
-
-        try:
-            self._waitEndMotion(f, shifts)
-        finally:
-            # Leave target mode in case of closed-loop move
-            for ax in pos:
-                self.stopAxis(self._axis_map[ax])
-            self._updatePosition()
+            try:
+                self._waitEndMotion(f, shifts)
+            finally:
+                # Leave target mode in case of closed-loop move
+                for ax in shifts:
+                    self.stopAxis(self._axis_map[ax])
+                self._updatePosition(set(shifts.keys()))
 
     def _doMoveRel(self, f, shift):
-        self._check_hw_error()
+        with f._moving_lock:
+            shifts = {}
+            if f._must_stop.is_set():
+                raise CancelledError()
 
-        shifts = {}
-        if f._must_stop.is_set():
-            raise CancelledError()
+            for axname, val in shift.items():
+                # Only consider moves which are greater than or equals the encoder's resolution
+                if abs(val) >= self._encoder_resolution[axname]:
+                    shifts[axname] = val
+                    if self._closed_loop[axname]:
+                        encoder_cnts = val * self._counts_per_meter[axname]
+                        self.runRelTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
+                    else:
+                        steps_float = val * self._steps_per_meter[axname]
+                        steps = int(steps_float)
+                        usteps = int((steps_float - steps) * USTEPS_PER_STEP)
+                        self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
+                else:
+                    logging.debug("Requested move of %s for %s is less than its resolution %s",
+                                  val, axname, self._encoder_resolution[axname])
 
-        for axname, val in shift.items():
-            if self._closed_loop[axname]:
-                shifts[axname] = val
-                encoder_cnts = val * self._counts_per_meter[axname]
-                self.runRelTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
-            else:
-                shifts[axname] = val
-                steps_float = val * self._steps_per_meter[axname]
-                steps = int(steps_float)
-                usteps = int((steps_float - steps) * USTEPS_PER_STEP)
-                self.runMotorJog(self._axis_map[axname], steps, usteps, self._speed_steps[axname])
-
-        try:
-            self._waitEndMotion(f, shifts)
-        finally:
-            # Leave target mode in case of closed-loop move
-            for ax in shift:
-                self.stopAxis(self._axis_map[ax])
-            self._updatePosition()
+            try:
+                self._waitEndMotion(f, shifts)
+            finally:
+                # Leave target mode in case of closed-loop move
+                for ax in shifts:
+                    self.stopAxis(self._axis_map[ax])
+                self._updatePosition(set(shifts.keys()))
 
     def _waitEndMotion(self, f, shifts):
         """
@@ -422,7 +452,9 @@ class PMD401Bus(Actuator):
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
 
-        end_time = time.time() + max_dur
+        now = time.time()
+        end_time = now + dur
+        timeout = now + max_dur
         moving_axes = set(shifts.keys())  # All axes (still) moving
         logging.debug(f"Axes {moving_axes} are moving.")
         while moving_axes:
@@ -431,7 +463,7 @@ class PMD401Bus(Actuator):
                     self.stopAxis(self._axis_map[axname])
                     raise CancelledError()
 
-            if time.time() > end_time:
+            if time.time() > timeout:
                 raise TimeoutError(
                     "Timeout while waiting for end of motion on axes %s for %g s" % (moving_axes, max_dur))
 
@@ -446,46 +478,70 @@ class PMD401Bus(Actuator):
                 if not moving:
                     logging.debug(f"Axis {axis} finished moving.")
                     moving_axes.discard(axname)
+                    # No need to further check and sleep, since axes finished moving
+                    if not moving_axes:
+                        break
 
-            self._check_hw_error()
-            time.sleep(0.05)
-        logging.debug("All axis finished moving")
+            # Wait half of the time left (minimum 0.001, maximum 0.1 s)
+            left_time = end_time - time.time()
+            sleep_time = max(0.001, min(left_time / 2, 0.1))
+            time.sleep(sleep_time)
+        logging.debug("Axes finished moving")
 
     def _check_hw_error(self):
         """
-        Read hardware status and raise exception if error is detected.
+        Read hardware status for all axis and check for errors.
+        :raise: (PMDError) exception if error is detected.
         """
         for ax, axnum in self._axis_map.items():
-            status = self.getStatus(axnum)
-            # Always log the status
-            logging.debug("Device status: %s", status)
-            if status[0] & 8:
-                raise PMDError(1, "Communication Error on axis %s (wrong baudrate, data collision, "
-                                  "or buffer overflow)" % ax)
-            elif status[0] & 4:
-                raise PMDError(2, "Encoder error on axis %s (serial communication or reported error from "
-                                  "serial encoder)" % ax)
-            elif status[0] & 2:
-                raise PMDError(3, "Supply voltage or motor fault was detected on axis %s." % ax)
-            elif status[0] & 1:
-                raise PMDError(4, "Command timeout occurred or a syntax error was detected on axis %s when "
-                                  "response was not allowed." % ax)
-            elif status[1] & 8:
-                # That's really not a big deal since everything is working fine after power-on, so don't raise an error.
-                logging.debug("Power-on/reset has occurred and detected on axis %s." % ax)
-            elif status[1] & 4:
-                raise PMDError(6, "External limit reached, detected on axis %s." % ax)
+            d1, d2, d3, d4 = self.getStatus(axnum)
+            self._check_axis_error(ax, d1, d2, d3, d4)
 
-    def _updatePosition(self):
+    def _check_axis_error(self, axis_id: int, d1: int, d2: int, d3: int, d4: int):
+        """
+        Check axis status and check for errors.
+
+        :param axis_id: axis number used by controller.
+        :param d1: bit 1 status information value of the axis_id.
+        :param d2: bit 2 status information value of the axis_id.
+        :param d3: bit 3 status information value of the axis_id.
+        :param d4: bit 4 status information value of the axis_id.
+        :raise: (PMDError) exception if error is detected.
+        """
+        logging.debug("Device status: %s", [d1, d2, d3, d4])
+        if d1 & 8:
+            raise PMDError(1, "Communication Error on axis %s (wrong baudrate, data collision, "
+                              "or buffer overflow)" % axis_id)
+        elif d1 & 4:
+            raise PMDError(2, "Encoder error on axis %s (serial communication or reported error from "
+                              "serial encoder)" % axis_id)
+        elif d1 & 2:
+            raise PMDError(3, "Supply voltage or motor fault was detected on axis %s." % axis_id)
+        elif d1 & 1:
+            raise PMDError(4, "Command timeout occurred or a syntax error was detected on axis %s when "
+                              "response was not allowed." % axis_id)
+        elif d2 & 8:
+            # That's really not a big deal since everything is working fine after power-on, so don't raise an error.
+            logging.debug("Power-on/reset has occurred and detected on axis %s." % axis_id)
+        elif d2 & 4:
+            raise PMDError(6, "External limit reached, detected on axis %s." % axis_id)
+
+    def _updatePosition(self, axes: Optional[set] = None):
         """
         Update the position VA.
+        :param axes: names of the axes to update or None if all should be updated
         """
         pos = {}
-        for axname, axis in self._axis_map.items():
-            # TODO: if not in closed-loop, it's probably because there is no encoder, so we need a different way
-            pos[axname] = self.getEncoderPosition(axis)
+        for axname in self._axis_map:
+            if axes is None or axname in axes:
+                # TODO: if not in closed-loop, it's probably because there is no encoder, so we need a different way
+                pos[axname] = self.getEncoderPosition(axname)
         logging.debug("Reporting new position at %s", pos)
         pos = self._applyInversion(pos)
+        if axes is not None:
+            pos_full = self.position.value.copy()
+            pos_full.update(pos)
+            pos = pos_full
         self.position._set_value(pos, force_write=True)
 
     def stopAxis(self, axis):
@@ -520,13 +576,12 @@ class PMD401Bus(Actuator):
         """
         self._sendCommand(b'X%dY2,%d' % (axis, limit_type))
 
-    def getEncoderPosition(self, axis):
+    def getEncoderPosition(self, axname):
         """
-        :param axis: (int) axis number
+        :param axname: (str) axis name
         :returns (float): current position of the axis as reported by encoders (in m)
         """
-        axname = [name for name, num in self._axis_map.items() if num == axis][0]  # get axis name from number
-        return int(self._sendCommand(b'X%dE' % axis)) / self._counts_per_meter[axname]
+        return int(self._sendCommand(b'X%dE' % self._axis_map[axname])) / self._counts_per_meter[axname]
 
     def runRelTargetMove(self, axis, encoder_cnts, speed):
         """
@@ -592,12 +647,10 @@ class PMD401Bus(Actuator):
         """
         :param axis: (int) axis number
         :returns: (bool) True if moving, False otherwise
+        :raise: (PMDError) exception if error is detected.
         """
-        _, d2, d3, _ = self.getStatus(axis)
-        # Check d2 (second status value) bit 2 (external limit)
-        if d2 & 0b100:
-            logging.debug(f"External limit reached on axis {axis}, current position is {self.position.value}")
-            raise PMDError(6, f"External limit reached on axis {axis}.")
+        d1, d2, d3, d4 = self.getStatus(axis)
+        self._check_axis_error(axis, d1, d2, d3, d4)
 
         # Check d3 (third status value) bit 2 (targetLimit: position limit reached) and bit 0 (targetReached)
         if not d3 & 0b010:  # closed loop not active, thus it is not moving in closed loop
@@ -703,6 +756,19 @@ class PMD401Bus(Actuator):
         f.task_canceller = self._cancelCurrentMove
         return f
 
+    def _createRefFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage referencing
+        """
+        f = CancellableFuture()
+        f._init_lock = threading.Lock()  # taken when starting a new axis
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
+        f._current_axis = None  # (int or None) axis which is being referenced
+        f.task_canceller = self._cancelReference
+        return f
+
     def _cancelCurrentMove(self, future):
         """
         Cancels the current move (both absolute or relative). Non-blocking.
@@ -716,6 +782,25 @@ class PMD401Bus(Actuator):
         logging.debug("Cancelling current move")
 
         future._must_stop.set()  # tell the thread taking care of the move it's over
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling failed")
+            return future._was_stopped
+
+    def _cancelReference(self, future):
+        # The difficulty is to synchronise correctly when:
+        #  * the task is just starting (about to request axes to move)
+        #  * the task is finishing (about to say that it finished successfully)
+        logging.debug("Cancelling current referencing")
+
+        future._must_stop.set()  # tell the thread taking care of the referencing it's over
+        with future._init_lock:
+            # cancel the referencing on the current axis
+            aid = future._current_axis
+            if aid is not None:
+                self.stopAxis(aid)
+
+        # Synchronise with the ending of the future
         with future._moving_lock:
             if not future._was_stopped:
                 logging.debug("Cancelling failed")
