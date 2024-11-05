@@ -870,7 +870,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
          :param n: number of current stream
          :param raw_data: acquired data of SEM stream
          :param px_idx: pixel index: y, x
-         :param pxs_pos: position of center of data in m: x, y
+         :param px_pos: position of center of data in m: x, y
          :param rep: size of entire data being assembled (aka repetition) in pixels: x, y
          :param pol_idx: polarisation index related to name as defined in pos_polarizations variable
          (0 if no polarisation)
@@ -1381,7 +1381,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             tile_size = (1, 1)  # For now, no support for fuzzing, so always 1x1 px
 
-            self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
             self._live_data = [[] for _ in self._streams]
             self._raw = []
             self._anchor_raw = []
@@ -1428,6 +1427,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 # (for one block, corresponding to the next leech time)
                 leech_time_left = 0  # s, TODO: update when leeches are supported
                 extra_time = leech_time_left + time_move_pol_left
+
+                # Empty the queues (should be empty, so mostly to detect errors... and to support the
+                # simulator, which generates more frames than pixels)
+                for q in self._acq_data_queue:
+                    while not q.empty():
+                        logging.warning("Emptying acquisition data queue just before acquisition")
+                        q.get()
 
                 # Start CCD acquisition = last entry in _subscribers (will wait for the SEM)
                 self._ccd_df.subscribe(self._hwsync_subscribers[self._ccd_idx])
@@ -1494,18 +1500,22 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # Store the CCD data (in more or less the final format)
                     px_pos = (pos_lt[0] + px_idx[1] * self._pxs[0],
                               pos_lt[1] - px_idx[0] * self._pxs[1])  # Y is inverted
-                    self._assembleLiveData(self._ccd_idx, ccd_data, px_idx, px_pos, rep, 0)
+                    self._assembleLiveData(self._ccd_idx, ccd_data, px_idx, px_pos, rep, pol_idx)
 
                 # Once all the CCD images have been received, we should also have just received
                 # the SEM data, after scanning the whole area.
+                self._ccd_df.unsubscribe(self._hwsync_subscribers[self._ccd_idx])
+
                 # Then, for each pixel position, process the queue. If the queue is empty, wait maximum TIMEOUT.
-                for i, (s, sub, q) in enumerate(zip(self._streams[:-1], self._subscribers[:-1], self._acq_data_queue[:-1])):
+                for i, (s, sub, q) in enumerate(zip(self._streams[:-1],
+                                                    self._hwsync_subscribers[:-1],
+                                                    self._acq_data_queue[:-1])):
                     sem_data = q.get(timeout=img_time * 3 + 5)
                     logging.debug("Got SEM data from %s", s)
                     s._dataflow.unsubscribe(sub)
 
                     sem_data = self._preprocessData(i, sem_data, (0, 0))
-                    self._assembleLiveData2D(i, sem_data, (0, 0), pos_lt, rep, 0)
+                    self._assembleLiveData2D(i, sem_data, (0, 0), pos_lt, rep, pol_idx)
 
                 # TODO: if there is some missing data, we could guess which pixel is missing, based on the timestamp.
                 # => adjust the result data accordingly, and reacquire the missing pixels?
@@ -1515,13 +1525,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 # Like returning an Tuple[data, Exception]?).
                 # Or acquire in blocks of lines (~10s), and if a pixel is missing, reacquire the whole block.
 
-
+            # acquisition done!
             dur = time.time() - start_t
             logging.info("Acquisition completed in %g s -> %g s/frame", dur, dur / n)
 
-            # acquisition done!
-            for s, sub in zip(self._streams, self._hwsync_subscribers):
-                s._dataflow.unsubscribe(sub)
             self._ccd_df.synchronizedOn(None)
             self._df0.synchronizedOn(None)
 
@@ -3048,12 +3055,15 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
 
         return das
 
-    def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
+    def _assembleLiveData(self, n: int, raw_data: model.DataArray,
+                          px_idx: Tuple[int, int], px_pos: Tuple[float, float],
+                          rep: Tuple[int, int], pol_idx: int = 0):
         """
         :param n: (int) number of the current stream
         :param raw_data: acquired data of stream
         :param px_idx: (tuple of int) pixel index: y, x
-        :param rep: (tuple of int) repetition frame
+        :param px_pos: position of center of data in m: x, y
+        :param rep: size of entire data being assembled (aka repetition) in pixels: x, y
         :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
          Update the ._live_data structure with the last acquired data. So that it is suitable to display in the
          live update overlay and can be converted by _assembleFinalData into the final ._raw.
@@ -3089,25 +3099,27 @@ class SEMARMDStream(SEMCCDMDStream):
     It handles acquisition, but not rendering (so .image always returns an empty
     image).
     """
-    def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
+    def _assembleLiveData(self, n: int, raw_data: model.DataArray,
+                          px_idx: Tuple[int, int], px_pos: Tuple[float, float],
+                          rep: Tuple[int, int], pol_idx: int = 0):
         """
+        Update the ._live_data structure with the latest acquired data. So that it is suitable to display in the
+        live update overlay and can be converted by _assembleFinalData into the final ._raw.
         :param n: (int) number of the current stream
         :param raw_data: acquired data of SEM stream
         :param px_idx: (tuple of int) pixel index: y, x
-        :param rep: (tuple of int) repetition frame
+        :param px_pos: position of center of data in m: x, y
+        :param rep: size of entire data being assembled (aka repetition) in pixels: x, y
         :param pol_idx: (int) polarisation index related to name as defined in pos_polarizations variable
-         Update the ._live_data structure with the last acquired data. So that it is suitable to display in the
-         live update overlay and can be converted by _assembleFinalData into the final ._raw.
         """
         if n != self._ccd_idx:
-            return super(SEMARMDStream, self)._assembleLiveData(n, raw_data, px_idx, px_pos, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, px_pos, rep, pol_idx)
 
         # MD_POS default to position at the center of the FoV, but it needs to be
         # the position of the e-beam for this pixel (without the shift for drift correction)
         raw_data.metadata[MD_POS] = px_pos
         raw_data.metadata[MD_DESCRIPTION] = self._streams[n].name.value
 
-        # Drop wavelength information, as
         self._live_data[n].append(raw_data)
 
     def _assembleFinalData(self, n, data):
