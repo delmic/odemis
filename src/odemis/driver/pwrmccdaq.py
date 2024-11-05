@@ -307,6 +307,11 @@ class MCCDeviceLight(Emitter, MCCDevice):
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
 
+    def terminate(self):
+        # make sure everything is off
+        self.power.value = self.power.range[0]
+        super().terminate()
+
     def _power_to_volt(self, power: float, curve: List[Tuple[float, float]]) -> float:
         """
         Calculate the power to the right voltage using the specified power curve
