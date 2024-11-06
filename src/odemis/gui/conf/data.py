@@ -653,6 +653,16 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
+        r"sp-ccd.*":
+        {
+            "resolution":  # Read-only it shouldn't be changed by the user
+                {
+                    "control_type": odemis.gui.CONTROL_READONLY,
+                },
+            "shutterMinimumPeriod": {  # Only on the SPARC
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            },
+        },
         "e-beam":
         {
             "dwellTime":
