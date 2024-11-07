@@ -605,7 +605,7 @@ def _figure2data(figure):
     figure.canvas.draw()
 
     w, h = figure.canvas.get_width_height()
-    image = numpy.fromstring(figure.canvas.tostring_rgb(), dtype=numpy.uint8)
+    image = numpy.frombuffer(figure.canvas.tostring_rgb(), dtype=numpy.uint8)
     image.shape = (h, w, 3)
 
     return image

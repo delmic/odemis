@@ -2371,7 +2371,7 @@ class MMapReader(Reader):
         # mmap_action = copy to numpy array
         offset = self.buf_offset / self.buf.itemsize
         s = read_size / self.buf.itemsize
-        self.buf[offset:offset + s] = numpy.fromstring(self.mmap.read(read_size),
+        self.buf[offset:offset + s] = numpy.frombuffer(self.mmap.read(read_size),
                                                        dtype=self.dtype)
         comedi.mark_buffer_read(self._device, self._subdevice, read_size)
         if wrap:
