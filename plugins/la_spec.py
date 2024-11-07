@@ -52,7 +52,7 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
         analyzer (None or Actuator with "pol" axis): the polarization analyzer.
           It should have at least the 7 "standard" positions
         """
-        super(LASpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
 
         self.l2 = l2
         if l2:
@@ -97,7 +97,7 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
         return f
 
     def _set_optical_path(self):
-        f = super(LASpectrumSettingsStream, self)._prepare_opm()
+        f = super()._prepare_opm()
         f.result()
         # Take care of the axes as soon as the OPM is done
         # Note: it's sub-optimal, as the OPM will explicitly move the axes away
@@ -137,7 +137,7 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
 
     def _unlinkHwAxes(self):
         """"unsubscribe local axes: unlink VA from hardware axis"""
-        super(LASpectrumSettingsStream, self)._unlinkHwAxes()
+        super()._unlinkHwAxes()
 
         if self.analyzer:
             self.polarization.unsubscribe(self._onPolarization)
@@ -166,7 +166,7 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
     """
 
     def estimateAcquisitionTime(self):
-        total_time = super(LASEMSpectrumMDStream, self).estimateAcquisitionTime()
+        total_time = super().estimateAcquisitionTime()
 
         # Add time to move the lens 2
         if self._sccd.l2:
@@ -174,21 +174,30 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
 
         return total_time
 
-    def _adjustHardwareSettings(self):
-        # Ideally this would be done in .acquire(), just after .prepare(), or in .prepare()
-        # But as they return futures, it's a little more complex to do than just
-        # here.
+    # Same as LASpectrumSettingsStream: override ._prepare_opm() to move the axes
+    # *after* the standard optical path management is complete.
+    def _prepare_opm(self):
+        # Return a future which calls the OPM _and_ updates the "special" axes
+        f = futures.Future()
+        executeAsyncTask(f, self._set_optical_path)
+        return f
+
+    def _set_optical_path(self):
+        f = super()._prepare_opm()
+        f.result()
+        # Take care of the axes as soon as the OPM is done
+        # Note: it's sub-optimal, as the OPM will explicitly move the axes away
+        # while we maybe end-up putting them back.
         self._sccd._changeLensAxes()
-        return SEMSpectrumMDStream._adjustHardwareSettings(self)
 
     def _runAcquisition(self, future):
         try:
-            return super(LASEMSpectrumMDStream, self)._runAcquisition(future)
+            return super()._runAcquisition(future)
         finally:
             self._sccd._unlinkHwAxes()
 
     def _assembleFinalData(self, n, data):
-        super(LASEMSpectrumMDStream, self)._assembleFinalData(n, data)
+        super()._assembleFinalData(n, data)
 
         # In case there are several similar streams, add the polarization to the
         # stream name to make it easier to differentiate them.
@@ -199,12 +208,12 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
 
 class SpecExtraPlugin(Plugin):
     name = "Large area spectrum stream"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):
-        super(SpecExtraPlugin, self).__init__(microscope, main_app)
+        super().__init__(microscope, main_app)
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):
@@ -219,11 +228,7 @@ class SpecExtraPlugin(Plugin):
                              self.name)
                 return
 
-            if hasattr(main_data, "spectrometers"):  # From Odemis 2.10
-                sptms = main_data.spectrometers
-            else:  # Odemis 2.9
-                sptms = [main_data.spectrometer, main_data.spectrometer_int]
-                sptms = [s for s in sptms if s is not None]
+            sptms = main_data.spectrometers
             if not sptms:
                 logging.info("%s plugin cannot load as there are no spectrometers",
                              self.name)
@@ -234,6 +239,13 @@ class SpecExtraPlugin(Plugin):
             return
 
         for sptm in sptms:
+            # If the spectrometer is not affected by the lens 2, it means it's not on an optical path
+            # that supports large area FoV. It's probably on a second spectrograph. In this case,
+            # let's not give hope to the user, and don't provide this option.
+            if main_data.opm and not main_data.opm.affects(self._lens2.name, sptm.name):
+                logging.info("Skipping LA spec %s as lens 2 doesn't affect this detector", sptm.name)
+                continue
+
             if len(sptms) <= 1:
                 actname = "Large Area Spectrum"
             else:
