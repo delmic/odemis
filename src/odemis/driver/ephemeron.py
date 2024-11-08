@@ -30,9 +30,9 @@ import threading
 import time
 import queue
 from asyncio import AbstractEventLoop
+from socketserver import ThreadingMixIn
+from threading import Thread
 from typing import Optional, Tuple
-
-from numpy.ma.testutils import assert_almost_equal, assert_equal
 
 from odemis import model
 from odemis.model import Detector, oneway, MD_ACQ_DATE, HwError
@@ -214,7 +214,7 @@ class MightyEBIC(Detector):
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
             self._acquisition_thread = threading.Thread(target=self._acquire_thread,
-                                                        name="EBIC acquire flow thread")
+                                                        name="EBIC acquisition thread")
             self._acquisition_thread.start()
 
     def _acquire_thread(self) -> None:
@@ -233,20 +233,16 @@ class MightyEBIC(Detector):
             scan_time = self._opc_client.calculate_scan_time(self.dwellTime.value, res[0], res[1])
             end_time = time.time() + DEFAULT_TIMEOUT + scan_time
 
-            f = self._opc_client.start_trigger_scan(self.dwellTime.value, 0, 1, 0, res[0], res[1], bool(self._opc_server_sim))
-            time.sleep(1)  # wait just a second to start up the co-routine and wait for the state update
+            self._opc_client.start_trigger_scan(self.dwellTime.value, 0, 1, 0, res[0], res[1], True)
 
             # while the scan controller is busy, check for a time-out or stop signal
             while self._opc_client.controller_state == STATE_NAME_BUSY:
                 if time.time() > end_time:
                     raise TimeoutError()
-                if self._acquisition_must_stop.wait(0.1):
+                # TODO check if the interval is correct
+                if self._acquisition_must_stop.wait(1):
                     self._opc_client.stop_scan()
-                    f.cancel()
                     return
-
-            # if the scan is finished the result of the co-routine should be instant
-            f.result()
 
             # get the data from the last acquisition and notify subscribers
             da = asyncio.run(self.read_data(res, md))
@@ -335,6 +331,8 @@ class MightyEBICSimulator(Server):
         self._stop_scan = False
         self._dt = 1e-5
         self._server_exception: Optional[str] = None
+        self._points_fast: Optional[int] = None
+        self._points_slow: Optional[int] = None
 
         self._t_simserver = threading.Thread(target=self._start_opc_simserver)
         self._t_simserver.start()
@@ -538,31 +536,47 @@ class MightyEBICSimulator(Server):
         :param spp (float): The number of samples per pixel used, this value is determined by the requested dt.
         :param delay (int, optional): Number of clock cycles, this is a variable delay that allows for the signal to
             reach a steady state before it is measured.
-        :param points_fast: The horizontal points of the resolution.
-        :param points_slow: The vertical points of the resolution.
+        :param points_fast (int): The horizontal points of the resolution.
+        :param points_slow (int): The vertical points of the resolution.
         :param simulate: Simulate the scan.
         """
-        await self.state_machine.change_state(self.states[STATE_NAME_TRIGGER])
+        await self.state_machine.change_state(self.states[STATE_NAME_BUSY])
+        self._points_fast = points_fast
+        self._points_slow = points_slow
+
         # scan time in seconds
         scan_time = (1025 + (((self._dt * 1000 + 40) * points_fast + 5) + 40) * points_slow) / 1.0e9
-        # as the scan time can be tiny, multiply by 5 to stay in this state for a significant period of time
-        scan_time_end = scan_time * 5
-        scan_time_start = 0.0
-        scan_interval = 0.1
+        acquisition_thread = threading.Thread(target=self.start_trigger_scan,
+                                              name="Simulated EBIC acquisition thread",
+                                              args=(scan_time,))
+        acquisition_thread.start()
 
-        while scan_time_start < scan_time_end:
-            # if stop scan is requested return without updating the data
-            if self._stop_scan:
-                self._stop_scan = False
-                return
-            await asyncio.sleep(scan_interval)
-            scan_time_start += scan_interval
+    def start_trigger_scan(self, scan_time):
+        try:
+            # as the scan time can be tiny, multiply by 5 to stay in this state for a significant period of time
+            scan_time_end = scan_time * 5
+            scan_time_start = 0.0
+            scan_interval = 0.1
 
-        scan_result = numpy.random.rand(points_fast, points_slow, channels)
+            while scan_time_start < scan_time_end:
+                # if stop scan is requested return without updating the data
+                if self._stop_scan:
+                    self._stop_scan = False
+                    return
+                time.sleep(scan_interval)
+                scan_time_start += scan_interval
+
+            # update the data
+            asyncio.run(self.update_data())
+
+        except Exception as ex:
+            logging.warning(f"Scan interrupted: {ex}")
+
+    async def update_data(self):
+        scan_result = numpy.random.rand(self._points_fast, self._points_slow, 1)
         data_node_name = await self._data_var.read_display_name()
         logging.debug(f"updating nparray {data_node_name} with shape {scan_result.shape}")
         await self._data_var.write_value(scan_result.flatten().tolist())
-
         await self.state_machine.change_state(self.states[STATE_NAME_IDLE])
 
     @uamethod
@@ -763,7 +777,7 @@ class UaClient:
         f = asyncio.run_coroutine_threadsafe(
             self._start_trigger_scan(req_dt, oversampling, channels, delay, p_fast, p_slow, sim),
             self._loop)
-        return f
+        return f.result()
 
     async def _start_trigger_scan(self, req_dt, oversampling, channels, delay, p_fast, p_slow, sim=False):
         """
