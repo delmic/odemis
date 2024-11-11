@@ -26,6 +26,7 @@ If not, see http://www.gnu.org/licenses/.
 # For using the DIO ports use pins 21->28 for channels 0->7 and pins 32->39 for channels 8->15.
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from threading import Thread
@@ -82,6 +83,7 @@ class MCCDevice(HwComponent):
         self.device = None  # either MCCDeviceSimulator class or usb_1208LS class
         self._status_thread = None  # MCCDeviceDIStatus class for polling of VA status
         self._channel_vas = []  # list of ChannelVA dataclass
+        self._connection_lock = threading.RLock()  # Lock to be taken when accessing the device
 
         if mcc_device == "fake":
             self.device = MCCDeviceSimulator()
@@ -125,7 +127,7 @@ class MCCDevice(HwComponent):
                 self.device.DConfig(port, val)
 
             # create the thread to poll all the status bits
-            self._status_thread = MCCDeviceDIStatus(self.device, self._channel_vas)
+            self._status_thread = MCCDeviceDIStatus(self.device, self._channel_vas, self._connection_lock)
             self._status_thread.start()
 
     @classmethod
@@ -168,10 +170,11 @@ class MCCDeviceDIStatus(Thread):
     Polling is done at a fixed interval and a total of 8 bits can be read out or written to at the same time.
     If the component which instantiated this class is terminated, this thread is suspended first.
     """
-    def __init__(self, mcc_device, channel_vas):
+    def __init__(self, mcc_device, channel_vas, connection_lock):
         super().__init__()
         self._channel_list = channel_vas  # dict (port: str -> port_bit_value: int, VA's: list(CHANNEL_VA))
         self._device = mcc_device
+        self._connection_lock = connection_lock
         self.terminated = False
 
     def run(self):
@@ -196,10 +199,11 @@ class MCCDeviceDIStatus(Thread):
                           f"status changes are not longer tracked.")
 
     def status_bits_all_ports(self):
-        porta = self._device.DIn(usb_1208LS.DIO_PORTA)
-        bit_list_porta = [bool(porta & 1 << i) for i in range(8)]
+        with self._connection_lock:
+            porta = self._device.DIn(usb_1208LS.DIO_PORTA)
+            portb = self._device.DIn(usb_1208LS.DIO_PORTB)
 
-        portb = self._device.DIn(usb_1208LS.DIO_PORTB)
+        bit_list_porta = [bool(porta & 1 << i) for i in range(8)]
         bit_list_portb = [bool(portb & 1 << i) for i in range(8)]
 
         return bit_list_porta + bit_list_portb
@@ -307,6 +311,11 @@ class MCCDeviceLight(Emitter, MCCDevice):
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
 
+    def terminate(self):
+        # make sure everything is off
+        self.power.value = self.power.range[0]
+        super().terminate()
+
     def _power_to_volt(self, power: float, curve: List[Tuple[float, float]]) -> float:
         """
         Calculate the power to the right voltage using the specified power curve
@@ -340,17 +349,18 @@ class MCCDeviceLight(Emitter, MCCDevice):
             pwr = min(pwr, crv[-1][1])
             volt = self._power_to_volt(pwr, crv)
             data = int((volt / MAX_VOLTAGE) * MAX_VOLTAGE_VALUE)  # data input expects an uint16
-            # update the analogue output value
-            logging.debug(f"Setting ao_channel {ao_ch} to {volt} V = {pwr} W")
-            self.device.AOut(ao_ch, data)
+            with self._connection_lock:
+                # update the analogue output value
+                logging.debug(f"Setting ao_channel {ao_ch} to {volt} V = {pwr} W")
+                self.device.AOut(ao_ch, data)
 
-            port, bit = MCCDevice.channel_to_port(do_ch)
-            old_bit_value = self.device.DBitIn(port, bit)
-            new_bit_value = int(pwr > 0.0)
-            # update the digital output value by using a direct digital port bit
-            if old_bit_value != new_bit_value:
-                logging.debug(f"Setting do_channel {do_ch} from {old_bit_value} to {new_bit_value}")
-                self.device.DBitOut(port, bit, new_bit_value)
+                port, bit = MCCDevice.channel_to_port(do_ch)
+                old_bit_value = self.device.DBitIn(port, bit)
+                new_bit_value = int(pwr > 0.0)
+                # update the digital output value by using a direct digital port bit
+                if old_bit_value != new_bit_value:
+                    logging.debug(f"Setting do_channel {do_ch} from {old_bit_value} to {new_bit_value}")
+                    self.device.DBitOut(port, bit, new_bit_value)
 
 
 class MCCDeviceSimulator:
