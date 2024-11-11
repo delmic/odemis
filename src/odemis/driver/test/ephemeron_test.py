@@ -3,7 +3,7 @@
 """
 Created on 9 Oct 2024
 
-Copyright © 2024 Stefan Sneep, Delmic
+Copyright © 2024 Stefan Sneep & Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -18,30 +18,144 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import asyncio
 import logging
 import os
+import threading
 import time
 import unittest
+from typing import Optional
 
 import numpy
 
-from odemis.driver.ephemeron import STATE_NAME_IDLE, STATE_NAME_TRIGGER, STATE_NAME_BUSY
-from odemis.driver import ephemeron
+from odemis import model
+from odemis.dataio import hdf5
+from odemis.driver import ephemeron, semnidaq
+from odemis.driver.ephemeron import MightyEBICSimulator
 
-logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-# arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed"}
-CONFIG_BSD = {"name": "bsd", "role": "bsd"}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
-CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus"}
-CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
-              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
-                           "focus": CONFIG_FOCUS}
-             }
-
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+
+KWARGS_EBIC = {
+    "name": "EBIC Scan Controller",
+    "role": "ebic-detector",
+    "channel": 0,
+    # If testing is done with the MightyEBIC Software on a VM, use this
+    # "url": "opc.tcp://192.168.56.2:4840/mightyebic/server/"
+    "url": "opc.tcp://172.16.0.1:4840/mightyebic/server/"
+}
+
+if TEST_NOHW:
+    KWARGS_EBIC["url"] = "fake"
+
+# For the semnidaq driver
+CONFIG_SED = {
+    "name": "sed",
+    "role": "sed",
+    "channel": 0,
+    # "channel": "ao0",  # Loopback from the AO0, for testing
+    "limits": [-3, 6.2]
+}
+
+CONFIG_SCANNER = {
+    "name": "scanner",
+    "role": "ebeam",
+    "channels": [0, 1],
+    "max_res": [4096, 3072], # px, to force 4:3 ratio
+    "limits": [[-2.2333, 2.2333], [-1.675, 1.675]],  # V
+    "park": [-5, -5], # V
+    "settle_time": 120e-6,  # s
+    "scan_active_delay": 0.001,  # s
+    "hfw_nomag": 0.112,
+    "scanning_ttl": {
+        3: [True, True, "external"],  # High when scanning, High when VA set to True
+        4: [True, True, None],
+    },
+    "image_ttl": {
+        "pixel": {
+             "ports": [16],
+             "inverted": [True],
+        },
+    },
+}
+
+CONFIG_SEM = {
+    "name": "sem",
+    "role": "sem",
+    "device": "Dev1",
+    "multi_detector_min_period": 2e-6,  # s,
+    "children": {
+        "scanner": CONFIG_SCANNER,
+        "detector0": CONFIG_SED,
+    }
+}
+
+class TestMightyEBICSyncAcq(unittest.TestCase):
+    """
+    Test case to test the MightyEBIC detector in a synchronous acquisition with the e-beam
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.ebic = ephemeron.MightyEBIC(**KWARGS_EBIC)
+
+        cls.sem = semnidaq.AnalogSEM(**CONFIG_SEM)
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.ebic.terminate()
+        cls.sem.terminate()
+
+    def test_acquisition(self):
+        res = (900, 700)  # X,Y
+        dt = 10e-6  # s
+        self.ebic.resolution.value = res
+        self.ebic.dwellTime.value = dt
+        act_dt_ebic = self.ebic.dwellTime.value
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = res
+        self.scanner.dwellTime.value = act_dt_ebic
+        act_dt_ebeam = self.scanner.dwellTime.value
+        logging.debug("EBIC will use dt = %s, e-beam will use dt = %s", act_dt_ebic, act_dt_ebeam)
+        assert act_dt_ebic <= act_dt_ebeam
+
+        # Start acquisition
+        expected_duration = res[0] * res[1] * act_dt_ebeam  * 1.1
+        self.ebic_data = None
+        self.ebeam_data = None
+        self.ebic_received = threading.Event()
+        self.ebeam_received = threading.Event()
+        self.ebic.data.subscribe(self.receive_ebic_data)
+        time.sleep(0.1)  # Gives a bit of time to be ready
+        self.sed.data.subscribe(self.receive_ebeam_data)
+
+        # Data should arrive approximately at the same time
+        self.ebeam_received.wait(expected_duration * 1.5)
+        self.ebic_received.wait(10)  # Gives a bit of margin to the EBIC to receive the data
+        assert self.ebeam_received.is_set() and self.ebic_received.is_set()
+
+        self.ebic_data.metadata[model.MD_PIXEL_SIZE] = self.ebeam_data.metadata[model.MD_PIXEL_SIZE]
+        self.ebic_data.metadata[model.MD_POS] = self.ebeam_data.metadata[model.MD_POS]
+        hdf5.export("test_ebeam.h5", [self.ebeam_data, self.ebic_data])
+        assert self.ebeam_data.shape == self.ebic_data.shape
+
+    def receive_ebic_data(self, df, d: model.DataArray):
+        logging.debug("Received EBIC data")
+        self.ebic_data = d
+        self.ebic_received.set()
+        df.unsubscribe(self.receive_ebic_data)
+
+    def receive_ebeam_data(self, df, d: model.DataArray):
+        logging.debug("Received e-beam data")
+        self.ebeam_data = d
+        self.ebeam_received.set()
+        df.unsubscribe(self.receive_ebeam_data)
 
 
 class TestMightyEBICDetector(unittest.TestCase):
@@ -50,149 +164,101 @@ class TestMightyEBICDetector(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        if not TEST_NOHW:
-            # The url used for testing the real HW may vary due to DHCP settings.
-            # If testing is done with the MightyEBIC Software on a VM, use this
-            # url -> "opc.tcp://192.168.56.2:4840/mightyebic/server/"
-            cls.ebic_det = ephemeron.MightyEBIC("EBIC Scan Controller",
-                                                "ebic-detector",
-                                                2,
-                                                "opc.tcp://192.168.56.2:4840/mightyebic/server/")
-        else:
-            # EBIC detector with a simulated server
-            cls.ebic_det = ephemeron.MightyEBIC("EBIC Scan Controller",
-                                                "ebic-detector",
-                                                2,
-                                                "fake")
-        cls.acquired_data = None
-        cls.dwell_time_values = [6e-6, 1e-5, 1.19e-5, 1.2e-5, 5e-5, 2e-2]
-        cls.resolution_values = [(140, 100), (300, 420), (2100, 2100)]
+        cls.ebic_det = ephemeron.MightyEBIC(**KWARGS_EBIC)
+        cls.acquired_data: Optional[model.DataArray] = None
+        cls.dwell_time_values = [cls.ebic_det.dwellTime.range[0], 6e-6, 10e-6, 11.9e-6, 12e-6, 50e-6, 1.995e-3, 1.996e-3]
+        cls.resolution_values = [(140, 100), (300, 420), (2100, 2000)]
 
     @classmethod
     def tearDownClass(cls):
         cls.ebic_det.terminate()
 
-    def test_scan_duration(self):
+    def test_dwell_time(self):
         """
-        Test to see if changing dependent scan properties will change the scan time estimation as well.
+        Test for setting the dwell time of the detector.
         """
-        base_st = 0.0
-
-        # TODO make a check for the accepted dt and the associated SPP
-        # and perhaps the amount to gain insight in the algorithm
-        # check a single dwell_time value with different resolutions
+        print(self.ebic_det.dwellTime.range)
         for dt in self.dwell_time_values:
-            for res_num, res in enumerate(self.resolution_values):
-                st_req = self.ebic_det._opc_client.calculate_scan_time(dt, res[0], res[1])
-                if res_num == 0:  # take the first scan time as base
-                    base_st = st_req
-                    # do a single check for return type
-                    self.assertTrue(isinstance(st_req, float))
-                else:
-                    self.assertGreater(st_req, base_st)
+            self.ebic_det.dwellTime.value = dt
+            self.assertLessEqual(self.ebic_det.dwellTime.value, dt)
 
-        # check a single resolution value with different dwell_time values
-        for res in self.resolution_values:
-            for dt_num, dt in enumerate(self.dwell_time_values):
-                st_req = self.ebic_det._opc_client.calculate_scan_time(dt, res[0], res[1])
-                if dt_num == 0:  # take the first scan time as base
-                    base_st = st_req
-                    # do a single check for return type
-                    self.assertTrue(isinstance(st_req, float))
-                else:
-                    self.assertGreater(st_req, base_st)
+        # Simulate disconnection
+        self.ebic_det._opc_server_sim.terminate()
+        time.sleep(1)
+        print("Starting new simulator")
+        self.ebic_det._opc_server_sim = MightyEBICSimulator(self.ebic_det._url, self.ebic_det)
+
+        for dt in self.dwell_time_values:
+            self.ebic_det.dwellTime.value = dt
+            self.assertLessEqual(self.ebic_det.dwellTime.value, dt)
 
     def test_acquisition(self):
         """
-        Test for running acquisitions for a list of set dwell times.
+        Test acquisitions with various dwell times and resolutions.
         """
-        # check if the scan controller is ready
-        self.assertEqual(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
+        # TODO: for now, this assumes the hardware pixel trigger is either sent separately, or always
+        # active. (For the simulator, it simulates as if is always active)
 
-        for dt in self.dwell_time_values:
+        for i, dt in enumerate(self.dwell_time_values):
             # set the resolution of the region of acquisition to 140 x 100, force it non-squared
-            self.ebic_det.resolution.value = (140, 100)
+            if dt < 1e-3:
+                res = (140, 500 + i)
+            else:
+                # Don't make it too long for the long dwell time
+                res = (100 + i, 100)
+            self.ebic_det.resolution.value = res
             self.ebic_det.dwellTime.value = dt
 
-            start = time.time()
-            self.acquired_data = self.ebic_det.data.get()
-            end = time.time()
-            self.assertGreater(end, start)
+            act_dt = self.ebic_det.dwellTime.value
+            logging.debug("Expected duration for %s px @ %s s: %s s", res, act_dt,
+                          res[0] * res[1] * act_dt)
 
-            # check if the state is changed to stopped, now we know there is data available
-            self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
-            self.assertIsNotNone(self.acquired_data)  # there should be data acquired
+            start_time = time.time()
+            da = self.ebic_det.data.get()
 
             # check if the data is in the right shape
-            self.assertEqual(self.acquired_data.shape, self.ebic_det.resolution.value)
-            self.assertTrue(self.acquired_data.dtype.type == numpy.float64)
+            self.assertEqual(da.shape[::-1], self.ebic_det.resolution.value)
+            self.assertEqual(da.dtype.type, numpy.float64)
+            self.assertGreater(da.metadata[model.MD_ACQ_DATE], start_time)  # Should be a tiny bit later
 
     def test_acquisition_stop(self):
-        # check if the scan controller is ready
-        self.assertEqual(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
-
         # set the resolution of the region of acquisition to 500 x 480, force it non-squared
         self.ebic_det.resolution.value = (500, 480)
+        self.ebic_det.dwellTime.value = 100e-6
+        # => ~20s
 
-        # start acquisition an acquisition threaded, to be able to stop it before it ends
-        start = time.time()
+        self.acquired_data = None
         self.ebic_det.data.subscribe(self.receive_ebic_data)
 
         # stop the acquisition after a few seconds
         time.sleep(4)
         self.ebic_det.data.unsubscribe(self.receive_ebic_data)
-        end = time.time()
-        self.assertGreater(end, start)
-
-        # check if the state is changed to stopped, now we know there is data available
-        self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
         self.assertIsNone(self.acquired_data)  # there should be no data acquired
+
+        # check if the state is changed to stopped
+        time.sleep(1)
+        self.assertEqual(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
 
     def test_request_very_high_resolution(self):
         """
         This test should fire a timeout exception in the acquisition thread which is handled.
-        Take the max res (4096, 3072) of the e-beam as resolution to scan.
+        Take the res (4096, 3072) of the e-beam as resolution to scan.
         """
-        # check if the scan controller is ready
-        self.assertEqual(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
+        # TODO: it seems the default of the server is to limit messages to 100Mb, which is just enough
+        # to pass one array at 4096x3072. If channel > 0, it will fail. If resolution is higher, it will fail.
 
         # set the resolution very high to force a time-out for the start method request on the server
         self.ebic_det.resolution.value = (4096, 3072)
+        self.ebic_det.dwellTime.value = self.ebic_det.dwellTime.range[0]
 
-        # start acquisition an acquisition threaded, to be able to stop it before it ends
-        start = time.time()
-
-        # this should fire a TimeoutException
-        self.ebic_det.data.subscribe(self.receive_ebic_data)
-        self.ebic_det._acquisition_thread.join()
-
-        end = time.time()
-        self.assertGreater(end, start)
+        da = self.ebic_det.data.get()
 
         # check if the data is in the right shape
-        self.assertIsNone(self.acquired_data)  # there should be no data acquired
-
-    def test_change_state(self):
-        """
-        Test for checking to change the state, this test is mainly for the simulated opcServer.
-        """
-        # check if the scan controller is ready
-        self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
-
-        self.ebic_det._opc_client.set_controller_state(STATE_NAME_TRIGGER)
-        self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_TRIGGER)
-        time.sleep(2)
-
-        self.ebic_det._opc_client.set_controller_state(STATE_NAME_BUSY)
-        self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_BUSY)
-        time.sleep(2)
-
-        # set the controller back to a ready state
-        self.ebic_det._opc_client.set_controller_state(STATE_NAME_IDLE)
-        self.assertTrue(self.ebic_det._opc_client.controller_state, ephemeron.STATE_NAME_IDLE)
+        self.assertEqual(da.shape[::-1], self.ebic_det.resolution.value)
+        self.assertEqual(da.dtype.type, numpy.float64)
 
     def receive_ebic_data(self, df, d):
-        pass
+        self.acquired_data = d
 
 
 if __name__ == "__main__":
