@@ -294,7 +294,7 @@ class EnzelAlignTab(Tab):
         """
         Sets the Z alignment mode with the correct streams, stream controllers, instructions and alignment controls.
         """
-        self.stream_bar_controller.pauseAllStreams()
+        self.stream_bar_controller.pauseStreams()
         self._set_top_and_bottom_stream_and_settings(self._FIB_view_and_control,
                                                      self._SEM_view_and_control)
 
@@ -353,7 +353,7 @@ class EnzelAlignTab(Tab):
         """
         Sets the SEM alignment mode with the correct streams, stream controllers, instructions and alignment controls.
         """
-        self.stream_bar_controller.pauseAllStreams()
+        self.stream_bar_controller.pauseStreams()
         self._set_top_and_bottom_stream_and_settings(self._SEM_view_and_control,
                                                      self._FIB_view_and_control)
 
@@ -424,7 +424,7 @@ class EnzelAlignTab(Tab):
         """
         Sets the FLM alignment mode with the correct streams, stream controllers, instructions and alignment controls.
         """
-        self.stream_bar_controller.pauseAllStreams()
+        self.stream_bar_controller.pauseStreams()
         self._set_top_and_bottom_stream_and_settings(self._FLM_view_and_control,
                                                      self._SEM_view_and_control)
 
@@ -485,7 +485,7 @@ class EnzelAlignTab(Tab):
             raise ValueError("The bottom stream is equal to the top stream, this isn't allowed in a 2*1 mode.")
 
         # Pause all streams
-        self.stream_bar_controller.pauseAllStreams()
+        self.stream_bar_controller.pauseStreams()
 
         self.tab_data_model.visible_views.value = [top['viewport'].view, bottom['viewport'].view]
 
@@ -545,6 +545,13 @@ class EnzelAlignTab(Tab):
         targets = (ALIGNMENT, THREE_BEAMS)
         guiutil.enable_tab_on_stage_position(self.button, self.posture_manager, targets,
                                              tooltip="Alignment can only be performed in the three beams mode")
+
+    def Show(self, show=True):
+        super().Show(show)
+
+        # pause streams when not displayed
+        if not show:
+            self.stream_bar_controller.pauseStreams()
 
     @classmethod
     def get_display_priority(cls, main_data):

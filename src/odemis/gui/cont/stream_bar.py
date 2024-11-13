@@ -1115,7 +1115,7 @@ class EnzelAlignmentStreamsBarController:
                 if updated:
                     logging.info("Activating the stream %s", activated_stream)
 
-    def pauseAllStreams(self):
+    def pauseStreams(self):
         """
         Pauses all the streams the StreamBarController controls
         """
@@ -1138,7 +1138,7 @@ class EnzelAlignmentStreamsBarController:
             if stream.is_active.value:
                 active_stream = stream
 
-        self.pauseAllStreams()
+        self.pauseStreams()
 
         # Refresh the streams one by one.
         for stream in streams:
