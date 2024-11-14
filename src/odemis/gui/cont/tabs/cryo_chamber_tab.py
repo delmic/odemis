@@ -942,8 +942,8 @@ class CryoChamberTab(Tab):
                 # Ask the user to create or load a project
                 box = wx.MessageDialog(
                     self.main_frame,
-                    message="Create or Load a Meteor Project?",
-                    caption="Meteor",
+                    message="Create or Load a project?",
+                    caption="Odemis Project",
                     style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
                 )
 
