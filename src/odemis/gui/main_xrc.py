@@ -562,6 +562,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.pnl_projects_header = xrc.XRCCTRL(self, "pnl_projects_header")
         self.pnl_projects = xrc.XRCCTRL(self, "pnl_projects")
         self.chk_ebeam_off = xrc.XRCCTRL(self, "chk_ebeam_off")
+        self.chk_beam_blank = xrc.XRCCTRL(self, "chk_beam_blank")
         self.txt_num_roas = xrc.XRCCTRL(self, "txt_num_roas")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
@@ -7309,6 +7310,13 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <object class="sizeritem">
                           <object class="wxCheckBox" name="chk_ebeam_off">
                             <label>Turn off e-beam after acquisition</label>
+                          </object>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxCheckBox" name="chk_beam_blank">
+                            <label>Turn off beam blanking in between fields</label>
                           </object>
                           <flag>wxALL|wxEXPAND</flag>
                           <border>10</border>

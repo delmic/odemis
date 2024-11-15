@@ -151,7 +151,7 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
 
 def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
             se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
-            spot_grid_thresh=0.5):
+            spot_grid_thresh=0.5, blank_beam=True):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -184,7 +184,8 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
                          if None the metadata will not be updated.
     :param spot_grid_thresh: (0<float<=1) Relative threshold on the minimum intensity of spots in the
         diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
-
+    :param blank_beam: (bool) If true the beam will be blanked during stage moves, if false the beam remains
+        un-blanked during stage moves.
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
                 (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
@@ -198,8 +199,8 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-                           se_detector, ebeam_focus, roa, path, username, pre_calibrations, save_full_cells, settings_obs,
-                           spot_grid_thresh, f)
+                           se_detector, ebeam_focus, roa, path, username, pre_calibrations, save_full_cells,
+                           settings_obs, spot_grid_thresh, blank_beam, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -216,9 +217,9 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-                 se_detector, ebeam_focus, roa, path, username,
-                 pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh, future):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, se_detector,
+                 ebeam_focus, roa, path, username, pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh,
+                 blank_beam, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -249,6 +250,8 @@ class AcquisitionTask(object):
                              integrated in the acquired ROA as metadata. If None the metadata will not be updated.
         :param spot_grid_thresh: (0<float<=1) Relative threshold on the minimum intensity of spots in the
             diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
+        :param blank_beam: (bool) If true the beam will be blanked during stage moves, if false the beam remains
+            un-blanked during stage moves.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
                             (model.DataArray): The acquisition data, which depends on the value of the
@@ -277,6 +280,7 @@ class AcquisitionTask(object):
         self._pre_calibrations_future = None
         self._settings_obs = settings_obs
         self._spot_grid_thresh = spot_grid_thresh
+        self._blank_beam = blank_beam
 
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
@@ -435,7 +439,9 @@ class AcquisitionTask(object):
             logging.debug("Acquiring field with index: %s", field_idx)
 
             self.move_stage_to_next_tile()  # move stage to next field image position
-            self._scanner.blanker.value = False  # unblank the beam
+            if self._blank_beam or field_idx == self._roa.field_indices[0]:
+                logging.debug("unblank the beam")
+                self._scanner.blanker.value = False  # unblank the beam
 
             prev_beam_shift = self._beamshift.shift.value
             if field_idx in beam_shift_indices or beam_shift_failed:
@@ -465,7 +471,9 @@ class AcquisitionTask(object):
                 #   -> check if finish megafield is called in finally when hitting here
                 raise TimeoutError("Timeout while waiting for field image.")
 
-            self._scanner.blanker.value = True  # blank the beam after the acquisition
+            if self._blank_beam:
+                logging.debug("blank the beam")
+                self._scanner.blanker.value = True  # blank the beam after the acquisition
             self._fields_remaining.discard(field_idx)
 
             # In case the acquisition was cancelled by a client, before the future returned, raise cancellation error.

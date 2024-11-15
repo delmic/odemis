@@ -540,6 +540,7 @@ class FastEMAcquiController(object):
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self.chk_ebeam_off = self._tab_panel.chk_ebeam_off
+        self.chk_beam_blank = self._tab_panel.chk_beam_blank
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
         self.save_full_cells = model.BooleanVA(
@@ -841,6 +842,7 @@ class FastEMAcquiController(object):
             f"and autofocus every {autofocus_period} sections."
         )
         username = self._main_data_model.current_user.value
+        blank_beam = not self.chk_beam_blank.IsChecked()
 
         total_t = 0
         project_names = list(self.project_roas.keys())
@@ -884,6 +886,7 @@ class FastEMAcquiController(object):
                     save_full_cells=self.save_full_cells.value,
                     settings_obs=self._main_data_model.settings_obs,
                     spot_grid_thresh=acqui_conf.spot_grid_threshold,
+                    blank_beam=blank_beam
                 )
                 # If this is the last ROA in the current project, set the dwell time for the next project
                 # on completion of current project's future
