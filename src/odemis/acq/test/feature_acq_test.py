@@ -51,9 +51,10 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
         )
         cls.streams = [fm_stream]
 
-        levels = generate_zlevels(cls.focus, (-5e-6, 5e-6), 1e-6)
-        cls.zlevels = {s: levels for s in cls.streams
-                         if isinstance(s, (FluoStream))}
+        cls.zparams = {"zmin": -5e-6, "zmax": 5e-6, "zstep": 1e-6}
+        cls.zlevels = generate_zlevels(focuser=cls.focus,
+                                       zrange=(cls.zparams["zmin"], cls.zparams["zmax"]),
+                                       zstep=cls.zparams["zstep"])
 
         # create some features
         focus_pos = cls.focus.position.value["z"]
@@ -92,7 +93,7 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
             focus=self.focus,
             streams=self.streams,
             filename=self.filename,
-            zlevels=self.zlevels,
+            zparams=self.zparams,
         )
 
         f.result() # wait for the task to finish
@@ -105,7 +106,7 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
         for filename in filenames:
             image = open_acquisition(filename)
             self.assertEqual(len(image), 1) # single-channel image
-            self.assertEqual(image[0].shape[2], len(self.zlevels[self.streams[0]])) # number of z-levels
+            self.assertEqual(image[0].shape[2], len(self.zlevels)) # number of z-levels
 
 
 if __name__ == "__main__":
