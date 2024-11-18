@@ -28,6 +28,8 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
+from typing import Dict, Any
+
 import numpy
 from odemis import model, dataio, util
 from odemis.acq import stitching, stream, acqmng
@@ -52,8 +54,8 @@ import wx
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.7"
-    __author__ = u"Éric Piel, Philip Winkler"
+    __version__ = "1.8"
+    __author__ = "Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed
@@ -785,40 +787,33 @@ class TileAcqPlugin(Plugin):
                    (mem_est / 1024 ** 3,))
             self._dlg.setAcquisitionInfo(txt, lvl=logging.ERROR)
 
-    def acquire(self, dlg):
-        main_data = self.main_app.main_data
-        str_ctrl = self._tab.streambar_controller
-        str_ctrl.pauseStreams()
-        dlg.pauseSettings()
-        self._unsubscribe_vas()
-
-        orig_pos = main_data.stage.position.value
+    def _acquire_tiles(self, ft, orig_pos):
         trep = (self.nx.value, self.ny.value)
         nb = trep[0] * trep[1]
-        # It's not a big deal if it was a bad guess as we'll use the actual data
-        # before the first move
+        # It's not a big deal if it was a bad guess as we'll use the actual data before the first move
         sfov = self._guess_smallest_fov()
         fn = self.filename.value
         exporter = dataio.find_fittest_converter(fn)
         fn_bs, fn_ext = udataio.splitext(fn)
+        fn_tile = None
 
         ss, stitch_ss = self._get_acq_streams()
-        end = self.estimate_time() + time.time()
 
-        ft = model.ProgressiveFuture(end=end)
-        self.ft = ft  # allows future to be canceled in show_dlg after closing window
-        ft.running_subf = model.InstantaneousFuture()
-        ft._task_state = RUNNING
-        ft._task_lock = threading.Lock()
-        ft.task_canceller = self._cancel_acquisition  # To allow cancelling while it's running
-        ft.set_running_or_notify_cancel()  # Indicate the work is starting now
-        dlg.showProgress(ft)
-
-        # For stitching only
         da_list = []  # for each position, a list of DataArrays
         i = 0
         prev_idx = [0, 0]
+
+        orig_hw_values: Dict[model.VigilantAttribute, Any] = {}  # VA -> value
         try:
+            # force external to all streams with emitters
+            for s in ss:
+                if (s.emitter
+                    and model.hasVA(s.emitter, "external")
+                    and s.emitter.external.value is None
+                   ):
+                    orig_hw_values[s.emitter.external] = s.emitter.external.value
+                    s.emitter.external.value = True
+
             for ix, iy in self._generate_scanning_indices(trep):
                 logging.debug("Acquiring tile %dx%d", ix, iy)
                 self._move_to_tile((ix, iy), orig_pos, sfov, prev_idx)
@@ -852,6 +847,38 @@ class TileAcqPlugin(Plugin):
                 if i == 0:
                     sfov = self._check_fov(das, sfov)
                 i += 1
+        finally:
+            # reset all external values
+            for va, value in orig_hw_values.items():
+                try:
+                    va.value = value
+                except Exception:
+                    logging.exception("Failed to restore VA %s to %s", va, value)
+
+        return da_list, fn_tile
+
+    def acquire(self, dlg):
+        main_data = self.main_app.main_data
+        str_ctrl = self._tab.streambar_controller
+        str_ctrl.pauseStreams()
+        dlg.pauseSettings()
+        self._unsubscribe_vas()
+
+        fn = self.filename.value
+        end = self.estimate_time() + time.time()
+
+        ft = model.ProgressiveFuture(end=end)
+        self.ft = ft  # allows future to be canceled in show_dlg after closing window
+        ft.running_subf = model.InstantaneousFuture()
+        ft._task_state = RUNNING
+        ft._task_lock = threading.Lock()
+        ft.task_canceller = self._cancel_acquisition  # To allow cancelling while it's running
+        ft.set_running_or_notify_cancel()  # Indicate the work is starting now
+        dlg.showProgress(ft)
+
+        try:
+            orig_pos = main_data.stage.position.value
+            da_list, last_tile_fn = self._acquire_tiles(ft, orig_pos)
 
             # Move stage to original position
             main_data.stage.moveAbs(orig_pos)
@@ -927,7 +954,7 @@ class TileAcqPlugin(Plugin):
                 # It's easier to know the last filename, and it's also the most
                 # interesting for the user, as if something went wrong (eg, focus)
                 # it's the tile the most likely to show it.
-                self.showAcquisition(fn_tile)
+                self.showAcquisition(last_tile_fn)
 
             # TODO: also export a full image (based on reported position, or based
             # on alignment detection)
