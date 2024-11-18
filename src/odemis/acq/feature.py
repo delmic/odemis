@@ -142,7 +142,11 @@ def load_project_data(path: str) -> dict:
     # load feature streams
     for f in features:
         # search dir for images matching f.name.value
-        stream_filenames = glob.glob(os.path.join(path, f"*{f.name.value}*.ome.tiff"))
+        stream_filenames = []
+        glob_path = os.path.join(path, f"*-{glob.escape(f.name.value)}-{{ext}}")
+        for ext in ["*.tif", "*.tiff", "*.h5"]:
+            stream_filenames.extend(glob.glob(glob_path.format(ext=ext)))
+
         for fname in stream_filenames:
             f.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
 
