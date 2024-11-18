@@ -1666,7 +1666,7 @@ class SparcStreamsController(StreamBarController):
     def addEBIC(self, **kwargs):
         main_data = self._main_data_model
 
-        if model.hasVA(main_data.ebic, "resolution"):
+        if model.hasVA(main_data.ebic, "resolution") and model.hasVA(main_data.ebic, "dwellTime"):
             ebic_stream = acqstream.IndependentEBICStream(
                 "EBIC",
                 main_data.ebic,

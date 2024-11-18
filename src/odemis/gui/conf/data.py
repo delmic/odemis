@@ -524,17 +524,12 @@ HW_SETTINGS_CONFIG = {
         },
     },
     "ebic-detector": {
-        "numberOfChannels": {
-            "label": "Number of channels",
-            "control_type": odemis.gui.CONTROL_COMBO,
-        },
         # For the "independent" detector type (otherwise, these VA's don't exist, so that has no effect)
         "resolution": {
             # It should not be changed directly, but via the emitter
             "control_type": odemis.gui.CONTROL_NONE,
         },
         "dwellTime": {
-            # It should not be changed directly, but via the emitter
             "control_type": odemis.gui.CONTROL_NONE,
         },
     },
