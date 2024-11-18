@@ -1498,7 +1498,7 @@ SCANNER_POS_MD = {model.MD_POS, model.MD_POS_COR, model.MD_PIXEL_SIZE, model.MD_
                   model.MD_SHEAR, model.MD_SHEAR_COR, model.MD_ROTATION, model.MD_ROTATION_COR}
 
 
-class IndependentEBICStream(FastScanningDetector):
+class IndependentEBICStream(EBICSettingsStream):
     """
     A special EBIC stream, typically with a EBIC (current) as a detector and its own scanner.
     It's physically very similar to the SEM stream, but as we want to select just a region
@@ -1513,22 +1513,36 @@ class IndependentEBICStream(FastScanningDetector):
         """
         See "Stream" for the basic parameters.
         :param emt_dataflow: a DataFlow that can be used to start/stop the emitter
-        :param emtvas: (inside kwargs) As for Stream, but don't put "resolution" or "scale".
+        :param emtvas: (inside kwargs) As for Stream, but *must* have "dwellTime", not "resolution" or "scale".
         """
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_EBIC
-        super().__init__(name, detector, dataflow, emitter, **kwargs)
-
-        self._emitter_dataflow = emt_dataflow
-        self._latest_emitter_md = {}  # the metadata of the emitter, to be copied onto the detector data
-        self._acq_start_lock = threading.Lock()  # To be taken when starting/stopping acquisition
-
         # The "independent" detector is independent if it has dwellTime and resolution
         assert model.hasVA(detector, "dwellTime")
         # When playing the stream, the .repetition VA is converted to .resolution on the emitter, so
         # normally they are equivalent. To be really certain the detector is synchronized with the emitter,
         # we use the "lower level" VA, which is the .resolution.
         assert model.hasVA(detector, "resolution")
+
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
+
+        self._emitter_dataflow = emt_dataflow
+        self._latest_emitter_md = {}  # the metadata of the emitter, to be copied onto the detector data
+        self._acq_start_lock = threading.Lock()  # To be taken when starting/stopping acquisition
+
+        # Change the standard dwell time setter to set both the detector and the emitter.
+        # And adjust the VA to ensure it is reflecting both limits.
+        if not hasattr(self, "emtDwellTime"):
+            raise ValueError("emtvas must contain 'dwellTime'")
+        self.emtDwellTime.setter = self._set_dwell_time
+        self.emtDwellTime.value = self.emtDwellTime.value  # Force an update
+        dt_rng = (max(self.emtDwellTime.range[0], self.detector.dwellTime.range[0]),
+                  min(self.emtDwellTime.range[1], self.detector.dwellTime.range[1]))
+        self.emtDwellTime.range = dt_rng
+
+    def _updateAcquisitionTime(self):
+        # Override standard method, as restarting the acquisition is more complicated on this stream.
+        if not self.is_active.value:
+            return
+        # We could try to call _restart_acquisition()... but for now it's simpler/safer to just not do it.
 
     def _onNewEmitterData(self, dataflow: model.DataFlow, data: model.DataArray) -> None:
         """
@@ -1590,6 +1604,7 @@ class IndependentEBICStream(FastScanningDetector):
                     self._dataflow.unsubscribe(self._onNewData)
 
                     self._dataflow.subscribe(self._onNewData)
+                    time.sleep(0.1)  # wait a bit, to ensure the detector is ready
                     self._emitter_dataflow.subscribe(self._onNewEmitterData)
         except Exception:
             logging.exception("Failed to restart the acquisition")
@@ -1600,8 +1615,8 @@ class IndependentEBICStream(FastScanningDetector):
         """
         if active:
             # Set the emitter to the right settings
-            self._onDwellTime(self._emitter.dwellTime.value)
-            self._onResolution(self._emitter.resolution.value)
+            self._onDwellTime(self._scanner.dwellTime.value)
+            self._onResolution(self._scanner.resolution.value)
 
         with self._acq_start_lock:
             super()._onActive(active)
@@ -1617,22 +1632,48 @@ class IndependentEBICStream(FastScanningDetector):
         super()._startAcquisition(future)
 
         # ...then start the emitter
+        time.sleep(0.1)  # wait a bit, to ensure the detector is ready
         self._emitter_dataflow.subscribe(self._onNewEmitterData)
 
-    def _onDwellTime(self, value: float):
-        """
-        Overrides the standard _onDwellTime to set the dwell time on the emitter as well.
-        """
-        if self.is_active.value:
-            self._detector.dwellTime.value = value
+    def _set_dwell_time(self, dt: float) -> float:
 
-            # It's fine to a have dwell time slightly shorter (it will wait a tiny bit after acquiring
-            # each pixel), but not longer.
-            if self._detector.dwellTime.value > value:
-                logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted",
-                                self._detector.name, value, self._detector.dwellTime.value)
+        dt = self._detector.dwellTime.clip(dt)
+        if not self.is_active.value:
+            # Nothing else to check (and no need to change the hardware)
+            return dt
 
-        super()._onDwellTime(value)
+        return self._set_hw_dwell_time(dt)
+
+    def _set_hw_dwell_time(self, dt: float) -> float:
+        # Update the detector, and read what it accepts (it should always return a value *smaller* or equal to the input)
+        self._detector.dwellTime.value = dt
+        # Read the accepted value
+        det_dt = self._detector.dwellTime.value
+        logging.debug("Updated detector dwell time to %s s", det_dt)
+
+        #  For anything else, we update the scanner dwell time to match it
+        self._scanner.dwellTime.value = det_dt
+        # Read the accepted value
+        emt_dt = self._scanner.dwellTime.value
+
+        # Increase the dwell time until it's larger
+        for i in range(10):
+            if emt_dt > det_dt + 0.1e-6:  # It has to be strictly longer, to make sure the EBIC detector is ready for next pixel
+                break
+            self._scanner.dwellTime.value = emt_dt + 0.1e-6 * (2 ** i)
+            emt_dt = self._scanner.dwellTime.value
+        else:
+            logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted vs %s s by emitter",
+                            self._detector.name, dt, det_dt, emt_dt)
+
+        # We report the emitter dwell time, which is the actual exposure of the pixels
+        return emt_dt
+
+    def _linkHwVAs(self):
+        super()._linkHwVAs()
+        emt_dt = self._set_hw_dwell_time(self.emtDwellTime.value)
+        logging.debug("Resetting dwell time to %s", emt_dt)  # DEBUG
+        self.emtDwellTime.value = emt_dt
 
     def _onResolution(self, value: Tuple[int, int]):
         """
