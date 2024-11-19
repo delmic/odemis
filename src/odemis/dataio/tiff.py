@@ -2015,7 +2015,7 @@ def _saveAsMultiTiffLT(
     # and add it too the head of the OME metadata
     if imagej:
         imagej_description = extract_imagej_metadata(sorted_groups[0][1])
-        ometxt = imagej_description + ometxt
+        ometxt = imagej_description.encode("utf-8") + ometxt
 
     # Write the OME metadata in the first image
     if ometxt:
