@@ -37,7 +37,7 @@ from odemis.dataio import tiff
 #  * read_thumbnail (callable): read the thumbnail(s) of a file
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
 #  support reading, then it has not read_data().
-_iomodules = ["tiff", "stiff", "hdf5", "png", "csv", "catmaid"]
+_iomodules = ["tiff", "stiff", "hdf5", "png", "csv", "catmaid", "ij_tiff"]
 __all__ = _iomodules + ["get_available_formats", "get_converter", "find_fittest_converter"]
 
 
