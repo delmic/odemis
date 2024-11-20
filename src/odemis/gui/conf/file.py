@@ -244,8 +244,8 @@ class AcquisitionConfig(Config):
         self.default.set("acquisition", "fn_ptn", u"{datelng}-{timelng}")
         self.default.set("acquisition", "fn_count", "0")
         self.default.set("acquisition", "overlap", "0.06")
-        self.default.set("acquisition", "autostig_period", "5")  # unit: number of ROA acquisitions
-        self.default.set("acquisition", "autofocus_period", "5")  # unit: number of ROA acquisitions
+        self.default.set("acquisition", "autostig_period", "0")  # unit: number of ROA acquisitions
+        self.default.set("acquisition", "autofocus_period", "0")  # unit: number of ROA acquisitions
         # Relative threshold on the minimum intensity of spots.
         self.default.set("acquisition", "spot_grid_threshold", "0.5")
 
