@@ -73,8 +73,8 @@
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_beam_blank">
-                            <label>Turn off beam blanking in between fields</label>
+                          <object class="wxCheckBox" name="chk_beam_blank_off">
+                            <label>Do not blank beam in between fields</label>
                           </object>
                           <flag>wxALL|wxEXPAND</flag>
                           <border>10</border>
