@@ -175,7 +175,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         self._current_scan_area = None  # l,t,r,b (int)
 
         # Start threading event for live update overlay
-        self._live_update_period = 2
+        self._live_update_period = 2  # s
         self._im_needs_recompute = threading.Event()
         self._init_thread(self._live_update_period)
 
@@ -2603,8 +2603,8 @@ class SEMMDStream(MultipleDetectorStream):
                 for i, s in enumerate(self._streams):
                     timeout = max(5.0, max_end_t - time.time())
                     if not self._acq_complete[i].wait(timeout):
-                        raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
-                                           % (self._emitter.translation.value, time.time() - max_end_t))
+                        raise TimeoutError("Acquisition of repetition stream at pos %s timed out after %g s"
+                                           % (self._emitter.translation.value, time.time() - start))
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
                     s._dataflow.unsubscribe(self._subscribers[i])
