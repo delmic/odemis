@@ -2529,7 +2529,7 @@ class SEMMDStream(MultipleDetectorStream):
                 for i, s in enumerate(self._streams):
                     timeout = max(0.1, max_end_t - time.time())
                     if not self._acq_complete[i].wait(timeout):
-                        raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
+                        raise TimeoutError("Acquisition of repetition stream at pos %s timed out after %g s"
                                            % (self._emitter.translation.value, time.time() - max_end_t))
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
