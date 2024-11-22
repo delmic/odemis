@@ -281,10 +281,15 @@ class AcquisitionTask(object):
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
 
-        path = fastem_util.create_image_dir("beam-shift-correction")
-        # The path should be [image-dir]/beam-shift-correction/[timestamp]/[roa-name]
-        self.path = os.path.join(path, self._roa.name.value)
-        os.makedirs(self.path, exist_ok=True)
+        beam_shift_path = fastem_util.create_image_dir("beam-shift-correction")
+        # If there is a project name the path will be
+        # [image-dir]/beam-shift-correction/[timestamp]/[project-name]/[roa-name]_[slice-idx]
+        # if there is no project name it will be
+        # [image-dir]/beam-shift-correction/[timestamp]/[roa-name]_[slice-idx]
+        self.beam_shift_path = os.path.join(beam_shift_path,
+                                            path if path else "",  # project-name or empty
+                                            f"{self._roa.name.value}_{self._roa.slice_index.value}")
+        os.makedirs(self.beam_shift_path, exist_ok=True)
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
@@ -453,7 +458,7 @@ class AcquisitionTask(object):
                     logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
                     # In case of failure save the ccd image
                     ccd_image = self._ccd.data.get(asap=False)
-                    fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
+                    fastem_util.save_image(self.beam_shift_path, f"{self.field_idx}_after.tiff", ccd_image)
                     beam_shift_failed = True
 
             dataflow.next(field_idx)  # acquire the next field image.
