@@ -1,3 +1,53 @@
+odemis (3.6.0-1) focal; urgency=medium
+
+  * New version: 3.6
+  * Main new changes and features:
+    - Only Ubuntu 20.04 and later is supported
+    - Major FAST-EM GUI redesign to support volume EM
+    - Enabled undo/redo for RoA shapes (FAST-EM)
+    - Support for chromatic aberration correction (METEOR)
+    - Enabled automatic acquisition at multiple features (METEOR/ENZEL)
+    - Improved OME-TIFF compatibility when saving files
+    - Introduced a dedicated exporter TIFF files compatible with ImageJ
+    - Added maximum intensity projection display mode to Z-stack streams (METEOR/ENZEL/SECOM)
+    - Support for SPARC acquisition using hardware trigger
+    - Support for SPARC acquisition using SEM stage scanning
+    - METEOR/ENZEL: support to reload a previous project data
+    - Added driver for Hamamatsu Streakcam C16910
+    - Added driver for Keysight 33600 waveform generators
+    - Added support for Andor Kymera 328i spectrograph
+  * Other improvements and bug fixes:
+    - Bug reporter now allows to attach extra files
+    - On screen notifications are better shown on Ubuntu 22.04
+    - Also store the type of the microscope in the acquisition metadata
+    - Introduced tool to manually select a microscope configuration to start
+    - Improved reliability when using multiple Andor spectrographs (SPARC)
+    - Option to override the default settings of the spectrograph autofocus (SPARC)
+    - Workaround for TFS stage sometime delayed stage position update
+    - Enabled user defined distance between focus positions for overview acquisition (METEOR)
+    - Possibility to select the stream used for Super Z localization (METEOR)
+    - Fix overview stream sometimes not shown after being aligned in the correlation tab (METEOR)
+    - Improved beamshift correction efficiency (FAST-EM)
+    - Optimised Piezomotor PMD401 driver for reduced stage movement time (FAST-EM)
+    - Updated Andor spectrograph handling in microscope file
+    - Added plugin for applying factory settings (FAST-EM)
+  * Improvements and bug fixes already present in the v3.5 branch:
+    - Stitching function again takes the SEM scan rotation into account for
+      imported SEM TIFF images. (METEOR/ENZEL)
+    - Correlation tab now assumes that imported RGB TIFFs are SEM data (METEOR)
+    - SPARCv1 alignment tab would provide fiber aligner buttons even if the
+      axes couldn't be controled by software. (SPARC)
+    - Avoid error messages in the GUI about "dead objects" sometimes when changing the stream settings.
+    - handle Omicron LedHUBs with odd characters in wavelength info (SECOM/METEOR)
+    - Setting a very small centre wavelength would sometimes incorrectly
+      leave the previous wavelength metadata (SPARC)
+    - Live detector tool image would not update if the image was bigger than
+      the screen
+    - spectrum_raw plugin shouldn't try to load in the Viewer (SPARC)
+    - Properly detect that the NI DAQ driver cannot be loaded
+
+ -- Thera Pals <pals@delmic.com>  Fri, 22 Nov 2024 13:13:48 +0100
+
 odemis (3.5.0-1) bionic; urgency=medium
 
   * New version: 3.5

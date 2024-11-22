@@ -121,16 +121,6 @@ debuild -S || exit 1
 
 dput ${PPA_NAME} ../odemis_${PVERSION}_source.changes
 
-# Also rebuild the package to "focal" (Ubuntu 20.04)
-# Just add to debian changelog
-dch -D focal -v ${PVERSION}focal1 "Rebuild for focal"
-
-debuild -S || exit 1
-# Immediately drop the changes
-git reset --hard HEAD
-
-dput ${PPA_NAME} ../odemis_${PVERSION}focal1_source.changes
-
 # Also rebuild the package to "jammy" (Ubuntu 22.04)
 # Just add to debian changelog
 dch -D jammy -v ${PVERSION}jammy1 "Rebuild for jammy"
