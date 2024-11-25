@@ -921,9 +921,11 @@ class FastEMProjectManagerPanel:
         value = value.strip()
         value = make_compliant_string(value)
         ctrl = self.active_project_ctrl
+        projects = list(ctrl.GetStrings())
         if value:
-            if value not in ctrl.GetStrings():
-                ctrl.Append(value)
+            if value not in projects:
+                projects.append(value)
+                ctrl.SetItems(sorted(projects))
                 self.tab_data.projects_tree.add_child(
                     FastEMTreeNode(value, NodeType.PROJECT)
                 )
@@ -975,26 +977,36 @@ class FastEMProjectManagerPanel:
             self.original_project = ctrl.GetValue().strip()
         # Name change, no need to clear grid
         elif evt.GetEventType() == wx.EVT_TEXT_ENTER.typeId:
-            if ctrl.GetStrings():
+            projects = list(ctrl.GetStrings())
+            if projects:
                 value = ctrl.GetValue().strip()
                 value = make_compliant_string(value)
-                if self.original_project and self.original_project in ctrl.GetStrings():
-                    if value and value not in ctrl.GetStrings():
-                        idx = ctrl.FindString(self.original_project)
-                        project_node = self.tab_data.projects_tree.find_node(
-                            self.original_project
-                        )
-                        project_node.rename(value)
-                        settings_data = self.tab_data.project_settings_data.value.pop(
-                            self.original_project
-                        )
-                        colour = self.project_shape_colour.pop(self.original_project)
-                        ctrl.SetString(idx, value)
-                        self.tab_data.project_settings_data.value[value] = settings_data
-                        self.project_shape_colour[value] = colour
-                        self.tab_data.current_project.value = value
-                        self.original_project = value
-                        return
+                if self.original_project and self.original_project in projects:
+                    if value:
+                        if value not in projects:
+                            idx = ctrl.FindString(self.original_project)
+                            project_node = self.tab_data.projects_tree.find_node(
+                                self.original_project
+                            )
+                            project_node.rename(value)
+                            settings_data = self.tab_data.project_settings_data.value.pop(
+                                self.original_project
+                            )
+                            colour = self.project_shape_colour.pop(self.original_project)
+                            projects[idx] = value
+                            # Sort the active project combobox items and projects tree
+                            ctrl.SetItems(sorted(projects))
+                            self.tab_data.projects_tree.sort_children_recursively()
+                            self.tab_data.project_settings_data.value[value] = settings_data
+                            self.project_shape_colour[value] = colour
+                            self.original_project = value
+                        else:
+                            wx.MessageBox(
+                                f"{value} exists in Active project list, switching to {value}.",
+                                "Info",
+                                wx.OK | wx.ICON_INFORMATION,
+                            )
+                            self.update_grid_for_project(value)
                 ctrl.SetValue(value)
                 self.tab_data.current_project.value = value
         elif evt.GetEventType() == wx.EVT_COMBOBOX.typeId:
