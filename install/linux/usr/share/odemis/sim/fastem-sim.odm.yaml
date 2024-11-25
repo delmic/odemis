@@ -1,4 +1,4 @@
-# Minimal configuration file to start the Fast-EM GUI
+# Minimal configuration file to start a simple Fast-EM backend without the ASM related functionality
 FASTEM-sim: {
     class: Microscope,
     role: mbsem,
