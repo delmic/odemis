@@ -495,7 +495,23 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             description.text = da0.metadata[model.MD_HW_NOTE]
 
         # light source must come before detector for valid ome-xml
-        if (model.MD_LIGHT_POWER in da0.metadata or
+        # meteor multi-channel lightsource
+        if model.MD_LIGHT_POWER in da0.metadata and (
+            model.MD_IN_WL in da0.metadata or model.MD_OUT_WL in da0.metadata
+        ):
+            # TODO: what is the best way to check if image is meteor?
+            # add a light source for each channel, as they can have different power
+            for gdid, gr in enumerate(g):
+
+                obj = ET.Element("LightEmittingDiode",
+                                    attrib={"ID": "LightSource:%d" % (did + gdid)})
+                if model.MD_LIGHT_POWER in gr.metadata:
+                    pwr = gr.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
+                    obj.attrib["Power"] = "%.15f" % pwr
+                    obj.attrib["PowerUnit"] = "mW"
+                light_sources.append(obj)
+
+        elif (model.MD_LIGHT_POWER in da0.metadata or
             model.MD_EBEAM_CURRENT in da0.metadata or
             model.MD_EBEAM_CURRENT_TIME in da0.metadata
            ):
@@ -1611,7 +1627,12 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
             # TODO: non-standard metadata, treat it differently for different detectors
             cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
-            if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
+
+            # support light source per channel (meteor)
+            if not (attrib and cot) and model.MD_LIGHT_POWER in da.metadata:
+                attrib["ID"] = "LightSource:%d" % (ifd + subid)
+                ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
+            elif attrib or cot or model.MD_LIGHT_POWER in da.metadata:
                 attrib["ID"] = "LightSource:%d" % ifd
                 ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
                 # This is a non-standard metadata, it defines the emitter, which
