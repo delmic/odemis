@@ -66,6 +66,10 @@ class FastEMROCOverlay(WorldSelectOverlay):
         # VA which states if the ROC is selected
         self.selected = model.BooleanVA(False)
         self._coordinates = coordinates
+        # The coordinates init value set in FastEMMainGUIData will set the initial value of p_start_pos
+        # and p_end_pos. The ROC rectangle is of fixed size which is the field size.
+        rect = self._coordinates.value
+        self._roc_size = (abs(rect[2] - rect[0]), abs(rect[3] - rect[1]))  # (x, y)
         self._coordinates.subscribe(self._on_coordinates, init=True)
 
     def _on_coordinates(self, coordinates):
@@ -92,15 +96,15 @@ class FastEMROCOverlay(WorldSelectOverlay):
                     self.start_drag()
                 # Don't allow editing or creating new selection, ROC has a fixed size
 
-            self._view_to_phys()
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active.value:
+            is_drawing_updated = False
             # Select region if clicked
-            self._view_to_phys()
+            self._phys_to_view()
             rect = self.get_physical_sel()
             if rect:
                 pos = self.cnvs.view_to_phys(
@@ -115,6 +119,8 @@ class FastEMROCOverlay(WorldSelectOverlay):
                 ) or (self.selection_mode == SEL_MODE_DRAG)
                 if self.selected.value:
                     self._coordinates.value = rect
+                    # The _coordinates subscriber callback _on_coordinates updates the cnvs drawing
+                    is_drawing_updated = True
 
             # Stop dragging
             # Don't use SelectionMixin._on_left_up, there is some confusion with editing the size of the region, which is
@@ -123,7 +129,8 @@ class FastEMROCOverlay(WorldSelectOverlay):
             self.selection_mode = SEL_MODE_NONE
             self.edit_hover = None
 
-            self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
+            if not is_drawing_updated:
+                self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
             self.cnvs.reset_default_cursor()
         WorldOverlay.on_left_up(self, evt)
 
@@ -144,20 +151,18 @@ class FastEMROCOverlay(WorldSelectOverlay):
                 self._view_to_phys()
                 minx, miny, maxx, maxy = self.get_physical_sel()
                 # Clip the ROC so that it stays within the sample bounding box
-                rect = self._coordinates.value
-                roc_size = (rect[2] - rect[0], rect[3] - rect[1])
                 if minx < self._sample_bbox[0]:
                     minx = self._sample_bbox[0]
-                    maxx = minx + roc_size[0]
+                    maxx = minx + self._roc_size[0]
                 elif maxx > self._sample_bbox[2]:
                     maxx = self._sample_bbox[2]
-                    minx = maxx - roc_size[0]
+                    minx = maxx - self._roc_size[0]
                 if miny < self._sample_bbox[1]:
                     miny = self._sample_bbox[1]
-                    maxy = miny + roc_size[1]
+                    maxy = miny + self._roc_size[1]
                 elif maxy > self._sample_bbox[3]:
                     maxy = self._sample_bbox[3]
-                    miny = maxy - roc_size[0]
+                    miny = maxy - self._roc_size[1]
                 self.set_physical_sel((minx, miny, maxx, maxy))
             self.cnvs.request_drawing_update()
         else:
