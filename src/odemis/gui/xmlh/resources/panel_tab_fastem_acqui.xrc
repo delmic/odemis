@@ -26,12 +26,14 @@
                       <fg>#7F7F7F</fg>
                       <size>400,700</size>
                       <flag>wxTOP|wxEXPAND</flag>
+                      <option>1</option>
                     </object>
                   </object>
                 </object>
                 <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
+              <option>1</option>
             </object>
             <object class="sizeritem">
               <object class="wxFlexGridSizer">

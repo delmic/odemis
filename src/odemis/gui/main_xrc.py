@@ -7268,12 +7268,14 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <fg>#7F7F7F</fg>
                       <size>400,700</size>
                       <flag>wxTOP|wxEXPAND</flag>
+                      <option>1</option>
                     </object>
                   </object>
                 </object>
                 <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
+              <option>1</option>
             </object>
             <object class="sizeritem">
               <object class="wxFlexGridSizer">
