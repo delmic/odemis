@@ -442,15 +442,18 @@ class CryoChamberTab(Tab):
             ans = box.ShowModal()  # Waits for the window to be closed
             return True
 
+        # stop the stream subscribers to prevent circular updates and timing issues
+        localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
+        correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName("meteor-correlation")
+        correlation_tab.correlation_controller._stop_streams_subscriber()
+        localization_tab._stop_streams_subscriber()
+
         # follow the order of the data loading in the localization tab
         # load overview streams
-        localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
         localization_tab.load_overview_data(data=proj_data["overviews"])
 
         # load features
         self.tab_data_model.main.features.value = proj_data["features"]
-        # TODO: feature streams don't have feature info saved in description, only in filename.
-        # we should insert the feature info into the description of the stream as well
 
         # load acquired streams
         f_streams = []
@@ -463,6 +466,11 @@ class CryoChamberTab(Tab):
         logging.debug(f"{len(self.tab_data_model.main.features.value)} features loaded.")
         logging.debug(f"{len(proj_data['overviews'])} overviews loaded.")
         logging.debug(f"{len(localization_tab.tab_data_model.streams.value)} streams loaded.")
+
+        # re-subscribe to stream updates
+        # NOTE: this must be called with wx.CallAfter force the call to happen after existing stream addition events
+        wx.CallAfter(localization_tab._start_streams_subscriber)
+        wx.CallAfter(correlation_tab.correlation_controller._start_streams_subscriber)
 
         return True
 
