@@ -855,7 +855,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_last_image(channel, wait_for_frame)
 
-    def start_acquisition(self, channel:str) -> None:
+    def start_acquisition(self, channel: str) -> None:
         """
         Start the acquisition of images.
         :param channel: (str) Name of one of the channels.
