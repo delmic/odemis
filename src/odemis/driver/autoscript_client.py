@@ -67,6 +67,15 @@ RESOLUTIONS = (
     (3072, 2048),
     (6144, 4096),
 )
+DETECTOR_RNG = ((768, 512), (6144, 4096))
+
+# imaging acquisition states
+IMAGING_STATE_IDLE = "Idle"
+IMAGING_STATE_RUNNING = "Running"
+IMAGING_STATE_PAUSED = "Paused"
+IMAGING_STATE_ERROR = "Error"
+
+
 
 # information on compatible versions
 debug_connection_info = f"""PYRO 5: {pkg_resources.get_distribution('Pyro5').version},
@@ -917,12 +926,12 @@ class SEM(model.HwComponent):
 
 #### AUTO FUNCTIONS
 
-    def run_auto_contrast_brightness(self, channel: str) -> None:
+    def run_auto_contrast_brightness(self, channel: str, parameters: Dict = {}) -> None:
         """Run auto contrast brightness function (blocking)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.run_auto_contrast_brightness(channel, parameters={})
+            self.server.run_auto_contrast_brightness(channel, parameters=parameters)
 
 
 #### MILLING CONTROL
@@ -1175,7 +1184,7 @@ class Scanner(model.Emitter):
         self._updateDepthOfField()
 
         if has_detector:
-            rng = ((768, 512), (6144, 4096))
+            rng = DETECTOR_RNG
             self._shape = (rng[1][0], rng[1][1])
             # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
             # == smallest size/ between two different ebeam positions
@@ -1250,7 +1259,7 @@ class Scanner(model.Emitter):
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
-    def _setScale(self, value):
+    def _setScale(self, value: Tuple[int, int]) -> Tuple[int, int]:
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
             the original pixel size. It will adapt the resolution to
@@ -1265,7 +1274,7 @@ class Scanner(model.Emitter):
 
         return value
 
-    def _setResolution(self, value: list) -> list:
+    def _setResolution(self, value: Tuple[int, int]) -> Tuple[int, int]:
         self.parent.set_resolution(value, self.channel)
         self._updateResolution() # to update scale -> pixelsize
         return value
@@ -1298,7 +1307,7 @@ class Scanner(model.Emitter):
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
-    def _setDwellTime(self, dwell_time):
+    def _setDwellTime(self, dwell_time: float) -> float:
         self.parent.set_dwell_time(dwell_time, channel=self.channel)
         return self.parent.get_dwell_time(self.channel)
 
@@ -1310,7 +1319,7 @@ class Scanner(model.Emitter):
         self.parent.set_beam_current(current, channel=self.channel)
         return self.parent.get_beam_current(self.channel)  # return the actual value used
 
-    def _setBlanker(self, blank: bool) -> bool:
+    def _setBlanker(self, blank: Optional[bool]) -> Union[None, bool]:
         """
         Parameters
         ----------
@@ -1332,19 +1341,19 @@ class Scanner(model.Emitter):
             self.parent.unblank_beam(self.channel)
         return self.parent.beam_is_blanked(self.channel)
 
-    def _setBeamShift(self, beam_shift):
+    def _setBeamShift(self, beam_shift: Tuple[float, float]) -> Tuple[float, float]:
         self.parent.set_beam_shift(x=beam_shift[0], y=beam_shift[1], channel=self.channel)
         return self.parent.get_beam_shift(self.channel)
 
-    def _setStigmator(self, stigmator):
+    def _setStigmator(self, stigmator: Tuple[float, float]) -> Tuple[float, float]:
         self.parent.set_stigmator(x=stigmator[0], y=stigmator[1], channel=self.channel)
         return self.parent.get_stigmator(self.channel)
 
-    def _setRotation(self, rotation):
+    def _setRotation(self, rotation: float) -> float:
         self.parent.set_scan_rotation(rotation, channel=self.channel)
         return self.parent.get_scan_rotation(self.channel)
 
-    def _setHorizontalFoV(self, fov):
+    def _setHorizontalFoV(self, fov: float) -> float:
         self.parent.set_field_of_view(fov, channel=self.channel)
         fov = self.parent.get_field_of_view(self.channel)
         mag = self._hfw_nomag / fov
@@ -1352,10 +1361,8 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
         return fov
 
-    def _onHorizontalFoV(self, fov):
+    def _onHorizontalFoV(self, fov: float):
         self._updateDepthOfField()
-        # the dwell time range is dependent on the magnification/horizontalFoV
-        self._updateDwellTimeRng()
         if self._has_detector:
             self._updatePixelSize()
 
@@ -1365,10 +1372,6 @@ class Scanner(model.Emitter):
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
-
-    def _updateDwellTimeRng(self):
-        """The dwell time range is dependent on the magnification/horizontalFoV, the range whenever the fov updates."""
-        self.dwellTime._set_range(self.parent.dwell_time_info(self.channel)["range"])
 
     def prepareForScan(self):
         """
@@ -1412,8 +1415,6 @@ class Detector(model.Detector):
         self._shape = (256,)  # Depth of the image
         self.data = SEMDataFlow(self)
         self.channel = channel
-
-
 
         if self.channel == "electron":
             self._scanner = self.parent._scanner
@@ -1570,8 +1571,8 @@ class Detector(model.Detector):
 
     def start_acquisition(self):
         """Start acquiring images"""
-        try: # TODO: remove
-            if self.parent.get_imaging_state(self._scanner.channel) == "Running":
+        try:
+            if self.parent.get_imaging_state(self._scanner.channel) == IMAGING_STATE_RUNNING:
                 logging.info(f"Imaging state is already running for channel {self._scanner.channel}")
                 return
         except Exception as e:
@@ -1581,8 +1582,8 @@ class Detector(model.Detector):
 
     def stop_acquisition(self, wait_for_frame: bool = True):
         """Stop acquiring images"""
-        try: # TODO: remove
-            if self.parent.get_imaging_state(self._scanner.channel) == "Idle":
+        try:
+            if self.parent.get_imaging_state(self._scanner.channel) == IMAGING_STATE_IDLE:
                 logging.info(f"Imaging state is already stopped for channel {self._scanner.channel}")
                 return
         except Exception as e:
@@ -1630,7 +1631,7 @@ class Detector(model.Detector):
         tend = time.time() + timeout
         t = time.time()
         logging.debug("Waiting for %g s:", tend - t)
-        while self.parent.get_imaging_state(self._scanner.channel) != "Idle":
+        while self.parent.get_imaging_state(self._scanner.channel) != IMAGING_STATE_IDLE:
             t = time.time()
             if t > tend:
                 raise TimeoutError("Acquisition timeout after %g s" % timeout)
@@ -1782,6 +1783,7 @@ class Chamber(model.Actuator):
             logging.warning("Couldn't read pressure value, assuming ambient pressure %s.", pressure)
 
     def terminate(self):
+        """Stop and clean up the chamber component."""
         self._polling_thread.cancel()
 
 
@@ -1820,7 +1822,7 @@ class Stage(model.Actuator):
     moving the TFS stage and updating the position.
     """
 
-    def __init__(self, name, role, parent, rng=None, **kwargs):
+    def __init__(self, name: str, role: str, parent: SEM, rng:Dict[str, Tuple[float]]=None, **kwargs):
         if rng is None:
             rng = {}
         stage_info = parent.stage_info()
@@ -1887,7 +1889,7 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
-    def _getPosition(self):
+    def _getPosition(self) -> Dict[str, float]:
         """Get position and translate the axes names to be Odemis compatible."""
         pos = self.parent.get_stage_position()
         pos["rx"] = pos.pop("t")
@@ -1901,7 +1903,7 @@ class Stage(model.Actuator):
                 pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
         return pos
 
-    def _moveTo(self, future, pos, rel=False, timeout=60):
+    def _moveTo(self, future: CancellableFuture, pos: Dict[str, float], rel: bool = False, timeout: int = 60):
         with future._moving_lock:
             try:
                 if future._must_stop.is_set():
@@ -1931,7 +1933,7 @@ class Stage(model.Actuator):
                 # Update the position, even if the move didn't entirely succeed
                 self._updatePosition()
 
-    def _doMoveRel(self, future: 'Future', shift: Dict[str, float]):
+    def _doMoveRel(self, future: CancellableFuture, shift: Dict[str, float]) -> None:
         """
         shift (dict): position in internal coordinates (ie, axes in the same
            direction as the hardware expects)
@@ -1940,7 +1942,7 @@ class Stage(model.Actuator):
         self._moveTo(future, shift, rel=True)
 
     @isasync
-    def move_vertical(self, pos: Dict[str, float]) -> 'Future':
+    def move_vertical(self, pos: Dict[str, float]) -> Union[model.InstantaneousFuture, CancellableFuture]:
         """Move the stage vertically in the chamber. This is non-blocking.
         From OpenFIBSEM"""
         theta = self.position.value["rx"] # tilt, in radians
@@ -1954,7 +1956,7 @@ class Stage(model.Actuator):
         return self.moveRel(stage_position)
 
     @isasync
-    def moveRel(self, shift: Dict[str, float]):
+    def moveRel(self, shift: Dict[str, float]) -> Union[model.InstantaneousFuture, CancellableFuture]:
         """
         Shift the stage the given position in meters. This is non-blocking.
         Throws an error when the requested position is out of range.
@@ -1980,7 +1982,7 @@ class Stage(model.Actuator):
         self._moveTo(future, pos, rel=False)
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos: Dict[str, float]) -> Union[model.InstantaneousFuture, CancellableFuture]:
         """
         Move the stage the given position in meters. This is non-blocking.
         Throws an error when the requested position is out of range.
@@ -2002,7 +2004,7 @@ class Stage(model.Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
-    def stop(self, axes=None):
+    def stop(self, axes=None) -> None:
         """Stop the movement of the stage."""
         self._executor.cancel()
         self.parent.stop_stage_movement()
@@ -2011,7 +2013,7 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
-    def _createFuture(self):
+    def _createFuture(self) -> CancellableFuture:
         """
         Return (CancellableFuture): a future that can be used to manage a move
         """
@@ -2022,7 +2024,7 @@ class Stage(model.Actuator):
         f.task_canceller = self._cancelCurrentMove
         return f
 
-    def _cancelCurrentMove(self, future):
+    def _cancelCurrentMove(self, future: CancellableFuture) -> bool:
         """
         Cancels the current move (both absolute or relative). Non-blocking.
         future (Future): the future to stop. Unused, only one future must be
