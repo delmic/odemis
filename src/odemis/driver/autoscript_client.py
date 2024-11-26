@@ -1186,7 +1186,7 @@ class Scanner(model.Emitter):
 
             # scanning resolution
             resolution = self.parent.get_resolution(self.channel)
-            res_choices = set(r for r in RESOLUTIONS)
+            res_choices = set(RESOLUTIONS)
             self.resolution = model.VAEnumerated(resolution, res_choices, unit="px" , setter=self._setResolution)
 
             # (float, float) as a ratio => how big is a pixel, compared to pixelSize
