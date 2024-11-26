@@ -835,7 +835,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_channel(channel)
 
-    def acquire_image(self, channel: str ) -> Tuple[numpy.ndarray, Dict[str, Any]]:
+    def acquire_image(self, channel: str) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
         Acquire an image from the detector (blocking).
         :param channel: (str) Name of one of the channels.
