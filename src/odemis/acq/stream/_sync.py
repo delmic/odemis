@@ -2429,7 +2429,7 @@ class SEMMDStream(MultipleDetectorStream):
             # only be known once we start acquiring. One way would be to set a synchronization, and
             # then subscribe all the detectors, and finally check the dwell time.
             px_time = self._adjustHardwareSettings()
-            if self._emitter.dwellTime.value != px_time:
+            if not almost_equal(self._emitter.dwellTime.value, px_time):
                 raise IOError("Expected hw dt = %f but got %f" % (px_time, self._emitter.dwellTime.value))
             spot_pos = self._getSpotPositions()
             pos_flat = spot_pos.reshape((-1, 2))  # X/Y together (X iterates first)
