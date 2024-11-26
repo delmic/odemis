@@ -615,7 +615,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_stigmator(x, y, channel)
 
-    def stigmator_info(self, channel: str):
+    def stigmator_info(self, channel: str) -> dict:
         """
         Returns the unit and range of the stigmator. This stigmator corrects for the astigmatism of the probe shape.
 
