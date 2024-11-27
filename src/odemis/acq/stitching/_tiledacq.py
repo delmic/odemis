@@ -551,11 +551,9 @@ class TiledAcquisitionTask(object):
         """Compute average time taken to complete tiled acquisition for one tile position"""
         observed_time = 0
         for k,v in self._save_time.items():
-            if len(v) > 0:
-                observed_time += numpy.mean(v)
-            else:
-                # Time is not recorded for each action yet
+            if not v:  # empty list => no history
                 return None
+            observed_time += numpy.mean(v)
         else:
             observed_time = None
         return observed_time
@@ -1128,7 +1126,7 @@ class AcquireOverviewTask(object):
         else:
             autofocus_time = 0
             if self._use_autofocus:
-                autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._det)
+                autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._det, self._focus, self.focus_rng)
             tiled_time = 0
             for area in self.areas:
                 tiled_time += estimateTiledAcquisitionTime(
@@ -1185,7 +1183,7 @@ class AcquireOverviewTask(object):
 
                     try:
                         focus_points_per_area = len(self._focus_points[idx])
-                        max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._det) * 3 + 1
+                        max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._det, self._focus, self.focus_rng) * 3 + 1
                         focus_points = self._future.running_subf.result(max_wait_t)
                     except TimeoutError:
                         logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
