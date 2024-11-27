@@ -883,7 +883,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.stop_acquisition(channel, wait_for_frame)
 
-    def get_imaging_state(self, channel:str) -> str:
+    def get_imaging_state(self, channel: str) -> str:
         """
         Get the state of the imaging scan device (Error, Idle, Running, Paused).
         :param channel: (str) Name of one of the channels.
