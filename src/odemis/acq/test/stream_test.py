@@ -59,6 +59,7 @@ SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 SPARC2STREAK_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 SPARC2_INDE_EBIC_CONFIG = CONFIG_PATH + "sim/sparc2-independent-ebic-sim.odm.yaml"
+SPARC2_FPLM_CONFIG = CONFIG_PATH + "sim/sparc2-fplm-sim.odm.yaml"
 TIME_CORRELATOR_CONFIG = CONFIG_PATH + "sim/sparc2-time-correlator-sim.odm.yaml"
 SPARC2_HWSYNC_CONFIG = CONFIG_PATH + "sim/sparc2-nidaq-sim.odm.yaml"
 
@@ -4009,6 +4010,123 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check last image in .raw has a time axis greater than 1  (last image is drift correction image)
         ar_drift = sas.raw[-1]  # drift correction image
         self.assertGreaterEqual(ar_drift.shape[-4], 2)
+
+
+class SPARC2TestCaseFPLM(unittest.TestCase):
+    """
+    This test case is specifically targeting the FPLM systems, with PL acquisition
+    """
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(SPARC2_FPLM_CONFIG)
+
+        # Find components
+        cls.microscope = model.getMicroscope()
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.spec = model.getComponent(role="spectrometer")
+        cls.spgp = model.getComponent(role="spectrograph")
+        cls.filter = model.getComponent(role="filter")
+        cls.light = model.getComponent(role="light")
+
+    def setUp(self):
+        self._images = []
+
+    def _on_image(self, im):
+        self._images.append(im)
+
+    def test_spec_light_ss(self):
+        """ Test SpectrumSettingsStream with a light source """
+        # Create the stream
+        specs = stream.SpectrumSettingsStream("test",
+                                              self.spec, self.spec.data, self.ebeam,
+                                              light=self.light,
+                                              detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+        specs.image.subscribe(self._on_image)
+
+        # shouldn't affect
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+        specs.repetition.value = (5, 6)
+
+        specs.detExposureTime.value = 0.3  # s
+
+        # Light has only one channel, so it's easy to handle
+        self.assertEqual(self.light.power.value, [0])  # Should start off
+        light_pwr = self.light.power.range[1][0]  # max
+        specs.power.value = light_pwr
+
+        # Start acquisition
+        specs.should_update.value = True
+        specs.is_active.value = True
+
+        time.sleep(2)
+        # The light should be on
+        self.assertEqual(self.light.power.value, [light_pwr])
+
+        specs.is_active.value = False
+
+        self.assertGreater(len(self._images), 0, "No spectrum received after 2s")
+        self.assertIsInstance(self._images[0], model.DataArray)
+        # .image should be a 1D spectrum
+        self.assertEqual(self._images[0].shape, (specs.detResolution.value[0],))
+
+        # The light should be off
+        self.assertEqual(self.light.power.value, [0])
+
+        specs.image.unsubscribe(self._on_image)
+
+    def test_acq_spec_light(self):
+        """
+        Test acquisition for Spectrometer with input light
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam,
+                                              light=self.light,
+                                              detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 2s
+        specs.detExposureTime.value = 0.3  # s
+        specs.repetition.value = (5, 6)
+        # exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        # Light has only one channel, so it's easy to handle
+        self.assertEqual(self.light.power.value, [0])  # Should start off
+        light_pwr = self.light.power.range[1][0]  / 2 # half the power
+        specs.power.value = light_pwr
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        time.sleep(2)  # Wait long enough so that it really started
+        # The light should be on
+        self.assertEqual(self.light.power.value, [light_pwr])
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+
+        # The light should be off
+        self.assertEqual(self.light.power.value, [0])
+
+        # There should be metadata about the light
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        spec_md = sp_da.metadata
+        self.assertAlmostEqual(spec_md[model.MD_LIGHT_POWER], light_pwr)
+        self.assertIsInstance(spec_md[model.MD_IN_WL], tuple)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
 
 class SPARC2TestCaseIndependentDetector(unittest.TestCase):
