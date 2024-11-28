@@ -151,6 +151,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             background=None
         )
 
+        # draw selection points on shape
+        self._draw_selection_points = False # TODO: make a changeable property
+
     def to_dict(self) -> dict:
         """
         Convert the necessary class attributes and its values to a dict.
@@ -478,7 +481,8 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
         ctx.set_dash([])
         ctx.set_line_width(1)
-        ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        # ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        ctx.set_source_rgba(*self.colour)
         ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
         ctx.fill()
         ctx.arc(mid_point12.x, mid_point12.y, 4, 0, 2 * math.pi)
@@ -533,7 +537,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             ctx.stroke()
 
             self._calc_edges()
-            self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
+
+            if self._draw_selection_points:
+                self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Side labels
             if self.selected.value:
