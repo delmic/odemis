@@ -203,6 +203,64 @@ def check_latest_package(
                 return latest_package
     return None
 
+def transfer_latest_package(client: 'SEM', data: bytes) -> None:
+    """
+    Transfer the latest xtadapter package.
+
+    Note:
+        Pyro has a 1 gigabyte message size limitation.
+        https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
+
+    :param data: The package's zip file data in bytes.
+
+    """
+    with client._proxy_access:
+        client.server._pyroClaimOwnership()
+        return client.server.transfer_latest_package(data)
+
+def check_and_transfer_latest_package(client: 'SEM') -> None:
+    """Check if a latest xtadapter package is available and then transfer it."""
+    try:
+        package = None
+        bitness = re.search(r"bitness:\s*([\da-z]+)", client._swVersion)
+        bitness = bitness.group(1) if bitness is not None else None # should this be 64 by default?
+        adapter = "xtadapter"
+        if "xttoolkit" in client._swVersion:
+            adapter = "fastem-xtadapter"
+        current_version = re.search(r"xtadapter:\s*([\d.]+)", client._swVersion)
+        current_version = current_version.group(1) if current_version is not None else None
+        if current_version is not None and bitness is not None:
+            package = check_latest_package(
+                directory=XT_INSTALL_DIR,
+                current_version=current_version,
+                adapter=adapter,
+                bitness=bitness,
+                is_zip=True,
+            )
+        if package is not None:
+            # Check if it's a proper zip file
+            zip_file = zipfile.ZipFile(package.path)
+            ret = zip_file.testzip()
+            zip_file.close()
+            if ret is None:
+                # Open the package's zip file as bytes and transfer them
+                with open(package.path, mode="rb") as f:
+                    data = f.read()
+                client.transfer_latest_package(data)
+                # Notify the user that a newer xtadpater version is available
+                notify2.init("Odemis")
+                update = notify2.Notification(
+                    "Update Delmic XT Adapter",
+                    "Newer version {} is available on ThermoFisher Support PC.\n\n"
+                    "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n"
+                    "2. Restart the Delmic XT Adapter to install it.".format(package.version))
+                update.set_urgency(notify2.URGENCY_NORMAL)
+                update.set_timeout(10000)  # 10 seconds
+                update.show()
+            else:
+                logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
+    except Exception:
+        logging.warning("Failure during transfer latest xtadapter package (non critical)", exc_info=True)
 
 class SEM(model.HwComponent):
     """
@@ -231,6 +289,9 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
+            if "adapter; autoscript" in self._swVersion:
+                raise HwError("The connected server is not an xt server, but an autoscript server. Please check the xt adapter configuration."
+                              "The server software version is '%s'." % self._swVersion)
             logging.debug(
                 f"Successfully connected to xtadapter with software version {self._swVersion} and "
                 f"hardware version {self._hwVersion}")
@@ -244,6 +305,7 @@ class SEM(model.HwComponent):
         # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
         self.check_and_transfer_latest_package()
+        # check_and_transfer_latest_package(self) # TODO: migrate to this shared version
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated
