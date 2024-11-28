@@ -25,6 +25,7 @@ import math
 import queue
 import threading
 import time
+from typing import Tuple
 
 from odemis import model
 from odemis.acq.stream import DataProjection, RGBSpatialProjection, Stream, StreamTree
@@ -431,7 +432,7 @@ class StreamView(View):
         shift = (view_pos[0] - prev_pos["x"], view_pos[1] - prev_pos["y"])
         return self.moveStageBy(shift)
 
-    def moveStageTo(self, pos):
+    def moveStageTo(self, pos: Tuple[float, float]):
         """
         Request an absolute move of the stage to a given position
 
@@ -441,7 +442,8 @@ class StreamView(View):
         if not self._stage:
             return None
 
-        move = self.clipToStageLimits({"x": pos[0], "y": pos[1]})
+        if isinstance(pos, tuple):
+            move = self.clipToStageLimits({"x": pos[0], "y": pos[1]})
 
         logging.debug("Requesting stage to move to %s mm in x direction and %s mm in y direction",
                       move["x"] * 1e3, move["y"] * 1e3)
@@ -732,6 +734,8 @@ class FeatureOverviewView(FeatureView):
         self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
+
+        # add stage-bare, convert-stage here, so we can convert the stage coordinates?
 
     def _on_stage_pos(self, pos):
         # we DON'T want to recenter the viewports whenever the stage moves

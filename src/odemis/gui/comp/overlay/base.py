@@ -333,8 +333,8 @@ class Overlay(metaclass=ABCMeta):
         """
         :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
         """
-
-        self.cnvs = cnvs
+        from odemis.gui.comp.miccanvas import DblMicroscopeCanvas # avoid circular import
+        self.cnvs: DblMicroscopeCanvas = cnvs
         self.labels = []
         self.canvas_padding = 10
 

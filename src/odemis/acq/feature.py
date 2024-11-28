@@ -1,3 +1,4 @@
+import copy
 import glob
 import json
 import logging
@@ -9,6 +10,8 @@ from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from typing import Dict, List, Tuple
 
+import yaml
+
 from odemis import model
 from odemis.acq.acqmng import (
     SettingsObserver,
@@ -18,7 +21,15 @@ from odemis.acq.acqmng import (
     estimateZStackAcquisitionTime,
 )
 from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
-from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
+from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
+from odemis.acq.milling.tasks import __file__ as milling_tasks_file
+from odemis.acq.move import (
+    FM_IMAGING,
+    MILLING,
+    POSITION_NAMES,
+    SEM_IMAGING,
+    MicroscopePostureManager,
+)
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream
 from odemis.dataio import find_fittest_converter
@@ -29,36 +40,118 @@ from odemis.util.driver import estimate_stage_movement_time
 from odemis.util.filename import create_filename
 
 # The current state of the feature
-FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
+FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
     "Active",
+    "Ready to Mill",
     "Rough Milled",
     "Polished",
     "Discarded",
 )
 
+# TODO: drift correction area for each feature?
+MILLING_TASKS_PATH = os.path.join(os.path.dirname(milling_tasks_file), "milling_tasks.yaml")
 
 class CryoFeature(object):
     """
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, stage_position: dict, fm_focus_position: dict, streams=None, milling_tasks=None):
         """
         :param name: (string) the feature name
-        :param x: (float) the X axis of the feature position
-        :param y: (float) the Y axis of the feature position
-        :param z: (float) the Z axis of the feature position
+        :param stage_position: (dict) the stage position of the feature (stage-bare)
+        :param fm_focus_position: (dict) the focus position of the feature
         :param streams: (List of StaticStream) list of acquired streams on this feature
         """
         self.name = model.StringVA(name)
-        # The 3D position of an interesting point in the site (Typically, the milling should happen around that
-        # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
+        self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare
+        self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
+        self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
+
+        if milling_tasks is None:
+            milling_tasks = load_milling_tasks(MILLING_TASKS_PATH)
+        self.milling_tasks: Dict[str, MillingTaskSettings] = milling_tasks
 
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()
 
+        # attributes for automated milling
+        self.path: str = None
+        self.reference_image: model.DataArray = None
+
+    def set_posture_position(self, posture: str, position: Dict[str, float]) -> None:
+        """
+        Set the stage position for the given posture.
+        :param posture: the posture to set the position for
+        :param position: the position to set
+        """
+        self.posture_positions[posture] = position
+
+    def get_posture_position(self, posture: str) -> Dict[str, float]:
+        """
+        Get the stage position for the given posture.
+        :param posture: the posture to get the position for
+        :return: the position for the given posture
+        """
+        return self.posture_positions.get(posture, None)
+
+    def save_milling_task_data(self,
+                               stage_position: Dict[str, float],
+                               path: str,
+                               reference_image: model.DataArray,
+                               milling_tasks: Dict[str, MillingTaskSettings] = None
+                               ) -> None:
+        """Assign the milling task data to the feature and save the reference image.
+        This information is required for the automated milling process.
+        :param stage_position: the stage position of the feature for milling
+        :param path: the path to save the feature data
+        :param reference_image: the reference image of the feature (FIB)
+        :param milling_tasks: the milling tasks for the feature (optional)
+        """
+
+        logging.info(f"Saving milling data for feature: {self.name.value}")
+
+        # assign the milling tasks
+        if milling_tasks is not None:
+            self.milling_tasks = copy.deepcopy(milling_tasks)
+
+        # create a directory for the feature data
+        self.path = path
+        os.makedirs(self.path, exist_ok=True)
+
+        # assign the reference image
+        self.reference_image = reference_image
+
+        # save the reference image to disk
+        filename = os.path.join(self.path, f"{self.name.value}-Reference-Alignment-FIB.ome.tiff") # TODO: check this for uniqueness? no, we want to overwrite
+        exporter = find_fittest_converter(filename)
+        exporter.export(filename, reference_image)
+
+        # save the milling position (it can be updated by the user)
+        self.set_posture_position(posture=MILLING, position=stage_position)
+
+        # set the feature status to ready to mill
+        self.status.value = FEATURE_READY_TO_MILL
+
+        logging.info(f"Milling tasks: {self.milling_tasks}, path: {self.path}, Reference image: {filename}")
+        logging.info(f"Stage position for milling: {self.get_posture_position(MILLING)}")
+        logging.info(f"Feature {self.name.value} is ready to mill.")
+
+def get_feature_position_at_posture(pm: MicroscopePostureManager, feature: CryoFeature, posture: int) -> Dict[str, float]:
+    """Get the feature position at the given posture, if it doesn't exist, create it."""
+    position = feature.get_posture_position(posture)
+
+    # if the position doesn't exist at that posture, create it
+    if position is None:
+        try:
+            logging.info(f"Feature position for {feature.name.value} at {posture} posture doesn't exist. Creating it.")
+            position = pm.to_posture(feature.stage_position.value, posture)
+            feature.set_posture_position(posture=posture, position=position)
+        except Exception as e:
+            logging.error(f"Error while converting feature position to {posture} posture: {e}")
+            return None
+    return position
 
 def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
@@ -68,8 +161,15 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
     flist = []
     for feature in features:
-        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+        feature_item = {'name': feature.name.value,
+                        'status': feature.status.value,
+                        'stage_position': feature.stage_position.value,
+                        'fm_focus_position': feature.fm_focus_position.value,
+                        'posture_positions': feature.posture_positions,
+                        "milling_tasks": {k: v.to_json() for k, v in feature.milling_tasks.items()},
+                        }
+        if feature.path:
+            feature_item['path'] = feature.path
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -84,14 +184,31 @@ class FeaturesDecoder(json.JSONDecoder):
 
     def object_hook(self, obj):
         # Either the object is the feature list or the feature objects inside it
-        if 'name' in obj:
-            pos = obj['pos']
-            feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
+        if 'name' in obj and 'status' in obj:
+            stage_position = obj['stage_position']
+            fm_focus_position = obj['fm_focus_position']
+            posture_positions = obj.get('posture_positions', {})
+            milling_task_json = obj.get('milling_tasks', {})
+            feature = CryoFeature(name=obj['name'],
+                                  stage_position=stage_position,
+                                  fm_focus_position=fm_focus_position
+                                  )
             feature.status.value = obj['status']
+            feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
+            feature.milling_tasks = {k: MillingTaskSettings.from_json(v) for k, v in milling_task_json.items()}
+            feature.path = obj.get('path', None)
+
+            # load the reference image
+            if feature.path:
+                filename = os.path.join(feature.path, f"{feature.name.value}-Reference-Alignment-FIB.ome.tiff")
+                if os.path.exists(filename):
+                    feature.reference_image = open_acquisition(filename)[0]
+                else:
+                    logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
-
+        return obj
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
@@ -152,6 +269,59 @@ def load_project_data(path: str) -> dict:
 
     return {"overviews": overview_data, "features": features}
 
+def import_features_from_autolamella(path: str) -> List[CryoFeature]:
+    """Import feature positions from an autolamella experiment and convert them to odemis features.
+    :param path: path to the autolamella experiment directory
+    :return: list of CryoFeature
+    """
+
+    with open(os.path.join(path, "experiment.yaml"), "r") as f:
+        exp = yaml.load(f, Loader=yaml.FullLoader)
+
+    # get the relevant components
+    pm = MicroscopePostureManager(model.getMicroscope())
+
+    cryo_features = []
+    for lamella in exp["positions"]:  # get the position
+        pos = lamella["state"]["microscope_state"]["stage_position"]
+        name = pos["name"]
+
+        # remap r->rz, t->rx
+        pos["rx"] = pos.pop("t")
+        pos["rz"] = pos.pop("r")
+
+        # apply raw coordinate system offset (x, y only) # TODO: can't be used like this with sample-stage, need to fix
+        # if hasattr(pm.stage, "_raw_offset"):
+        # pos["x"] += pm.stage._raw_offset["x"]
+        # pos["y"] += pm.stage._raw_offset["y"]
+
+        posture = pm.getCurrentPostureLabel(pos=pos)
+        logging.info(
+            f"Feature: {name}, pos: {pos}, Posture: {POSITION_NAMES[posture]}"
+        )  # stage-bare
+
+        # NOTE: for now, we should check this is in SEM Imaging and skip if not for safety
+        if posture != SEM_IMAGING:
+            logging.warning(
+                f"Cryo feature {name} is not in SEM Imaging posture, skipping."
+            )
+            continue
+
+        # create feature
+        # TODO: we need to handle this better, the focus may be anywhere? maybe use the active position?
+        focus_pos = model.getComponent(role="focus").position.value
+        cryo_feat = CryoFeature(
+            name=name,
+            stage_position=pos,
+            fm_focus_position=focus_pos,
+        )
+
+        cryo_feat.set_posture_position(SEM_IMAGING, pos)
+        cryo_feat.set_posture_position(FM_IMAGING, pm.to_posture(pos, FM_IMAGING))
+
+        cryo_features.append(cryo_feat)
+
+    return cryo_features
 
 def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
     """
@@ -168,6 +338,16 @@ def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
 
     return create_filename(path, ptn, ext, count="001")
 
+def _create_fibsem_filename(filename: str) -> str:
+    """
+    Create a filename for FIBSEM images.
+    :param filename: filename given by user
+    """
+    path_base, ext = splitext(filename)
+    path, basename = os.path.split(path_base)
+    ptn = f"{basename}-FIBSEM-{{cnt}}"
+
+    return create_filename(path, ptn, ext, count="001")
 
 # To handle the timeout error when the stage is not able to move to the desired position
 # It logs the message and raises the MoveError exception
@@ -319,21 +499,20 @@ class CryoFeatureAcquisitionTask(object):
             if conf >= self.autofocus_conf_level:
 
                 # update the feature focus position
-                pos = site.pos.value
-                site.pos.value = (pos[0], pos[1], foc_pos)  # NOTE: tuples cant do assignment so we need to replace the whole tuple
+                site.fm_focus_position.value = {"z": foc_pos}  # NOTE: tuples cant do assignment so we need to replace the whole tuple
                 logging.debug(f"auto focus succeeded at {site.name.value} with conf:{conf}. new focus position: {foc_pos}")
             else:
                 # if the confidence is low, restore the previous focus position
-                self._move_focus(site, {"z": site.pos.value[2]})
-                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.pos.value[2]}")
+                self._move_focus(site, site.fm_focus_position.value)
+                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.fm_focus_position.value}")
 
         except TimeoutError as e:
             logging.debug(f"Timed out during autofocus at {site.name.value}. {e}")
             self._future._running_subf.cancel()
 
             # restore the previous focus position
-            self._move_focus(site, {"z": site.pos.value[2]})
-            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.pos.value[2]}")
+            self._move_focus(site, site.fm_focus_position.value)
+            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.fm_focus_position.value}")
 
     def _move_to_site(self, site: CryoFeature):
         """
@@ -341,21 +520,17 @@ class CryoFeatureAcquisitionTask(object):
         :param site: The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        # NOTE: site.pos is a tuple of (stage_x, stage_y, objective_z) coordinates
-        stage_pos = {
-            "x": site.pos.value[0],
-            "y": site.pos.value[1],
-        }
-        focus_pos = {"z": site.pos.value[2]}
-        logging.debug(f"For feature {site.name.value} moving the stage to {stage_pos} m")
-        self._future.running_subf = self.stage.moveAbs(stage_pos)
+        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=FM_IMAGING)      # stage-bare
+        fm_focus_position = site.fm_focus_position.value
+        logging.debug(f"For feature {site.name.value} moving the stage to {stage_position}")
+        self._future.running_subf = self.stage.moveAbs(stage_position)
 
         # estimate the time to move the stage
         t = estimate_stage_movement_time(
             stage=self.stage,
             start_pos=self.stage.position.value,
-            end_pos=stage_pos,
-            axes=["x", "y"],
+            end_pos=stage_position,
+            axes=["x", "y", "z"],
             independent_axes=True,
         )
         t = t * 5 + 3 # adding extra margin
@@ -368,13 +543,13 @@ class CryoFeatureAcquisitionTask(object):
             )
 
         logging.debug(
-            "For feature %s moving the objective to %s m", site.name.value, focus_pos
+            "For feature %s moving the objective to %s m", site.name.value, fm_focus_position
         )
-        self._move_focus(site, focus_pos)
+        self._move_focus(site, fm_focus_position)
 
-    def _move_focus(self, site: CryoFeature, focus_pos: Dict[str, float]) -> None:
+    def _move_focus(self, site: CryoFeature, fm_focus_position: Dict[str, float]) -> None:
         """Move the focus to the given position."""
-        self._future.running_subf = self.focus.moveAbs(focus_pos)
+        self._future.running_subf = self.focus.moveAbs(fm_focus_position)
 
         # objective move shouldn't take longer than 2 seconds
         t = OBJECTIVE_WAIT_TIME * 2 # adding extra margin
@@ -419,15 +594,16 @@ class CryoFeatureAcquisitionTask(object):
         for f in self.features:
             if f.status.value == FEATURE_DEACTIVE:
                 continue
-            positions.append(f.pos.value)
+            positions.append(get_feature_position_at_posture(pm=self.pm,
+                                                             feature=f,
+                                                             posture=FM_IMAGING))
 
         stage_movement_time = 0
         for start, end in zip(positions[0:-1], positions[1:]):
             stage_movement_time += estimate_stage_movement_time(
                                     stage=self.stage,
-                                    start_pos={"x": start[0], "y": start[1]},
-                                    end_pos={"x": end[0], "y": end[1]},
-                                    axes=["x", "y"], independent_axes=True)
+                                    start_pos=start, end_pos=end,
+                                    axes=["x", "y", "z"], independent_axes=True)
 
         # add the time to wait for the stage to settle
         expected_stage_time = stage_movement_time + STAGE_WAIT_TIME * len(positions)
