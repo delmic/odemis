@@ -34,14 +34,16 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
-
+from enum import Enum
+from typing import Union
 import wx
 
 from odemis import dataio, model
 from odemis.acq import acqmng, stream
-from odemis.acq.feature import acquire_at_features, add_feature_info_to_filename
+from odemis.acq.feature import acquire_at_features, add_feature_info_to_filename, _create_fibsem_filename
 from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream
 from odemis.gui import conf
+from odemis.gui import model as guimod
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
     OverviewStreamAcquiController,
@@ -89,8 +91,10 @@ class CryoAcquiController(object):
 
     def __init__(self, tab_data, panel, tab):
         self._panel = panel
-        self._tab_data = tab_data
+        self._tab_data: guimod.CryoGUIData = tab_data
         self._tab = tab
+
+        self.acqui_mode = self._tab_data.acqui_mode
 
         self.overview_acqui_controller = OverviewStreamAcquiController(
             self._tab_data, self._tab
@@ -171,8 +175,19 @@ class CryoAcquiController(object):
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
 
         # advanced features toggle
-        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
-        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+
+        # hide z-stack controls for fibsem
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._panel.z_stack_chkbox.Hide()
+            self._panel.param_Zmin.Hide()
+            self._panel.param_Zmin_label.Hide()
+            self._panel.param_Zmax.Hide()
+            self._panel.param_Zmax_label.Hide()
+            self._panel.param_Zstep.Hide()
+            self._panel.param_Zstep_label.Hide()
+            self._panel.Layout()
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -251,8 +266,9 @@ class CryoAcquiController(object):
         Called when the acquisition process is
         done, failed or canceled
         """
-        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        local_tab.tab_data_model.select_current_position_feature()
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._tab.tab_data_model.select_current_position_feature()
+
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
@@ -307,7 +323,7 @@ class CryoAcquiController(object):
                        "zstep": self._tab_data.zStep.value}
 
         filename = self._filename.value
-        stage = self._tab_data.main.stage
+        stage = self._tab_data.main.stage_bare
         focus = self._tab_data.main.focus
         features = self._tab_data.main.features.value
 
@@ -382,9 +398,9 @@ class CryoAcquiController(object):
         """
         Shows the acquired image on the view
         """
-        # get the localization tab
-        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        local_tab.display_acquired_data(data)
+        # Q: do we want FIBSEM images to show in the localization tab?
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._tab.display_acquired_data(data)
 
     @call_in_wx_main
     def _on_export_data_done(self, future):
@@ -396,6 +412,21 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
+
+    def _create_cryo_filename(self, filename: str) -> str:
+        """
+        Create a filename for cryo images depending on mode.
+        :param filename: filename given by user
+        """
+        # TODO: consolidate the two methods into one
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
+                                        filename=filename)
+        else:
+            filename = _create_fibsem_filename(filename)
+
+        return filename
+
     def _export_data(self, data, thumb_nail):
         """
         Called to export the acquired data.
@@ -404,8 +435,7 @@ class CryoAcquiController(object):
         """
         filename = self._filename.value
         if data:
-            filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
-                                                 filename=filename)
+            filename = self._create_cryo_filename(filename)
             exporter = dataio.get_converter(self._config.last_format)
             exporter.export(filename, data, thumb_nail)
             logging.info(u"Acquisition saved as file '%s'.", filename)

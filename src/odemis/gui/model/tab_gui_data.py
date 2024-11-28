@@ -23,11 +23,11 @@ This file is part of Odemis.
 import logging
 import math
 from abc import ABCMeta
-from typing import Tuple
+from typing import Tuple, Dict
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature
+from odemis.acq.feature import CryoFeature, get_feature_position_at_posture
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -45,6 +45,7 @@ from odemis.gui.model._constants import (
     TOOL_POINT,
     TOOL_RO_ANCHOR,
     TOOL_ROA,
+    TOOL_RECTANGLE,
     TOOL_RULER,
     TOOL_SPOT,
     VIEW_LAYOUT_22,
@@ -64,7 +65,12 @@ from odemis.model import (
     VigilantAttribute,
 )
 from odemis.util.filename import create_filename, make_unique_name
+from odemis.acq.move import SEM_IMAGING, FM_IMAGING
 
+from enum import Enum
+class AcquiMode(Enum): # TODO: move to better place
+    FLM = 1
+    FIBSEM = 2
 
 class MicroscopyGUIData(metaclass=ABCMeta):
     """Contains all the data corresponding to a GUI tab.
@@ -246,16 +252,22 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
-    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None):
+    def add_new_feature(self, stage_position: Dict[str, float], fm_focus_position: Dict[str, float] = None, f_name: str = None):
         """
         Create a new feature and add it to the features list
         """
         if not f_name:
             existing_names = [f.name.value for f in self.main.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
-        if pos_z is None:
-            pos_z = self.main.focus.position.value['z']
-        feature = CryoFeature(f_name, pos_x, pos_y, pos_z)
+        if fm_focus_position is None:
+            fm_focus_position = self.main.focus.position.value
+        feature = CryoFeature(f_name, stage_position, fm_focus_position)
+
+        # set the posture position
+        pm = self.main.posture_manager
+        posture = pm.getCurrentPostureLabel(stage_position)
+        feature.set_posture_position(posture, stage_position)
+
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
         return feature
@@ -272,8 +284,11 @@ class CryoGUIData(MicroscopyGUIData):
         current_feature = self.main.currentFeature.value
 
         def dist_to_pos(feature):
-            return math.hypot(feature.pos.value[0] - current_position["x"],
-                              feature.pos.value[1] - current_position["y"])
+            pm = self.main.posture_manager
+            position = get_feature_position_at_posture(pm, feature, pm.current_posture.value)
+            pos = pm.to_sample_stage_from_stage_position(position)
+            return math.hypot(pos["x"] - current_position["x"],
+                              pos["y"] - current_position["y"])
 
 
         if current_feature and dist_to_pos(current_feature) <= self.ATOL_FEATURE_POS:
@@ -289,11 +304,10 @@ class CryoGUIData(MicroscopyGUIData):
             pass
 
         # No feature nearby => create a new one
-        feature = self.add_new_feature(current_position["x"], current_position["y"],
-                                       self.main.focus.position.value["z"])
-        logging.debug("New feature created at %s because none are close by.",
-                      (current_position["x"], current_position["y"]))
+        feature = self.add_new_feature(stage_position=current_position, fm_focus_position=self.main.focus.position.value)
+        logging.debug(f"New feature created at {current_position} because none are close by.")
         self.main.currentFeature.value = feature
+
 
 
 class CryoLocalizationGUIData(CryoGUIData):
@@ -338,6 +352,10 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
         self.zPos.clip_on_range = True
         self.streams.subscribe(self._on_stream_change, init=True)
+
+        self.view_posture = model.VigilantAttribute(FM_IMAGING)
+        self.acqui_mode = AcquiMode.FLM
+
 
         if main.stigmator:
             # stigmator should have a "MD_CALIB" containing a dict[float, dict],
@@ -384,6 +402,64 @@ class CryoLocalizationGUIData(CryoGUIData):
                     config.pj_last_path, config.fn_ptn,
                     config.last_extension,
                     config.fn_count)
+
+
+class CryoFIBSEMGUIData(CryoGUIData):
+    """ Represent an interface used to control the FIBSEM.
+    It it used for METEOR systems.
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
+        # the streams to acquire among all streams in .streams
+        self.acquisitionStreams = model.ListVA()
+        # the static overview map streams, among all streams in .streams
+        self.overviewStreams = model.ListVA()
+        # for the filename
+        config = conf.get_acqui_conf()
+        self.filename = model.StringVA(create_filename(
+            config.pj_last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count))
+        self.main.project_path.subscribe(self._on_project_path_change)
+
+        # these are required for the acquisition controller
+        self.zMin = model.FloatContinuous(
+            value=-10e-6, range=(-1000e-6, 0), unit="m")
+        self.zMax = model.FloatContinuous(
+            value=10e-6, range=(0, 1000e-6), unit="m")
+        self.zStep = model.FloatContinuous(
+            value=1e-6, range=(-100e-6, 100e-6), unit="m")
+        self.zStackActive = model.BooleanVA(value=False)
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+
+        # milling patterns
+        self.patterns = model.ListVA()
+
+        self.view_posture = model.VigilantAttribute(SEM_IMAGING)
+        self.acqui_mode = AcquiMode.FIBSEM
+
+    def _updateZParams(self):
+        pass
+
+    def _on_stream_change(self, _):
+        pass
+
+    def _on_project_path_change(self, _):
+        config = conf.get_acqui_conf()
+        self.filename.value = create_filename(
+                    config.pj_last_path, config.fn_ptn,
+                    config.last_extension,
+                    config.fn_count)
+
 
 
 class CryoCorrelationGUIData(CryoGUIData):
@@ -488,7 +564,12 @@ class CryoChamberGUIData(CryoGUIData):
 
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
+        self.view_posture = VigilantAttribute(FM_IMAGING)
+        self.main.posture_manager.current_posture.subscribe(self._on_posture_change, init=True)
 
+    def _on_posture_change(self, posture):
+        # sync the view posture with the current posture
+        self.view_posture.value = posture
 
 class AnalysisGUIData(MicroscopyGUIData):
     """

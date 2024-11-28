@@ -27,7 +27,7 @@ import math
 import os.path
 from builtins import str
 from concurrent.futures._base import CancelledError
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import odemis.gui.model as guimodel
 import wx
@@ -658,7 +658,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             save_dir = self.conf.pj_last_path
 
         # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
-        self.fibsem_mode = False # isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
+        self.fibsem_mode = isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
 
         # hide optical settings when in fibsem mode
         self.fp_settings_secom_optical.Show(not self.fibsem_mode)
@@ -794,10 +794,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # High overlap percentage is not required as the stitching is based only on stage position,
         # independent of the image content. It just needs to be big enough to make sure that even with some stage
         # imprecision, all the tiles will overlap or at worse be next to each other (i.e. , no space between tiles)
-        self.overlap = 0.10
+        self.overlap = 0.1
         try:
             if self.fibsem_mode:
-                self.stage = self._main_data_model.stage_bare
+                self.stage = self._main_data_model.stage
                 self.focuser = self._main_data_model.ebeam_focus
                 self.detector = self._main_data_model.sed
                 self.settings_obs = self._main_data_model.settings_obs
@@ -806,7 +806,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 # In FIBSEM mode, we don't have autofocus because of how the overview code currently works
                 self.autofocus_chkbox.Hide()
                 self.autofocus_roi_ckbox.value = False
-
+                self.focus_points_dist_ctrl.Hide()
+                self.focus_points_dist_lbl.Hide()
             else:
                 self.stage = self._main_data_model.stage
                 self.focuser = self._main_data_model.focus
@@ -821,9 +822,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 "y": self.stage.axes["y"].range
             }
 
-            stage_md = self.stage.getMetadata()
-            if imaging_range in stage_md:
-                self._tiling_rng.update(stage_md[imaging_range])
+            # tmp disable until consolidate to sem posture range
+            # stage_md = self.stage.getMetadata()
+            # if imaging_range in stage_md:
+                # self._tiling_rng.update(stage_md[imaging_range])
         except (KeyError, IndexError):
             raise ValueError(f"Failed to find stage {imaging_range} with x and y range")
 
@@ -881,6 +883,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
             if not isinstance(s, LiveStream):
                 continue
+            if self.fibsem_mode and not isinstance(s, SEMStream):
+                continue # only support sem streams atm (TODO: add once fib posture is supported)
 
             sc = self.streambar_controller.addStream(s, add_to_view=self._view)
             sc.stream_panel.show_remove_btn(True)
@@ -1405,18 +1409,24 @@ def ShowChamberFileDialog(parent, projectname):
     fn = dialog.GetFilename()
     return os.path.join(path, fn)
 
-def LoadProjectFileDialog(parent, projectname):
+def LoadProjectFileDialog(
+    parent: wx.Frame,
+    projectname: str,
+    message: str = "Choose a project directory to load",
+) -> Optional[str]:
     """
-    parent (wxframe): parent window
-    projectname (string): project name to propose by default
-    return (string or none): the project directory name to load (or the none if the user cancelled)
+    :param parent (wx.Frame): parent window
+    :param projectname (string): project name to propose by default
+    :param message (string): message to display in the dialog
+    :return (string or none): the project directory name to load (or the none if the user cancelled)
     """
     # current project name
-    dialog = wx.DirDialog(parent,
-                           message="Choose a project directory to load",
-                           defaultPath=projectname,
-                           style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
-                           )
+    dialog = wx.DirDialog(
+        parent,
+        message=message,
+        defaultPath=projectname,
+        style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
+    )
 
     # Show the dialog and check whether is was accepted or cancelled
     if dialog.ShowModal() != wx.ID_OK:
