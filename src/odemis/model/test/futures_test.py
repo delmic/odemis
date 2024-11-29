@@ -540,6 +540,122 @@ class TestProgressiveBatchFuture(unittest.TestCase):
         self.start = start
         self.end = end
 
+    def test_large_batch_future(self):
+        """Test ProgressiveBatchFuture with 500, 1000, and 2000 sub-futures."""
+        for num_futures in [500, 1000, 2000]:
+            with self.subTest(num_futures=num_futures):
+                # Create the ProgressiveFutures with estimated durations
+                fs = {}
+                for i in range(num_futures):
+                    f = ProgressiveFuture()
+                    f.task_canceller = self.cancel_task
+                    fs[f] = i % 10 + 1  # Cyclic duration estimates between 1 and 10 seconds
+
+                batch_future = ProgressiveBatchFuture(fs)
+                batch_future.add_update_callback(self.on_progress_update)
+
+                # Check the estimated time for the batch future
+                total_estimated_duration = sum(fs.values())
+                self.assertEqual(self.end - self.start, total_estimated_duration)
+
+                # Start a subset of futures
+                for i, f in enumerate(fs):
+                    if i < num_futures // 2:
+                        f.set_running_or_notify_cancel()
+                        f.set_progress(end=time.time() + (fs[f] / 2))  # Halfway through the task
+                        f.set_result(None)  # Mark future as done
+
+                # Verify the progress of the batch future
+                remaining_duration = sum(t for f, t in fs.items() if not f.done())
+                expected_end = time.time() + remaining_duration
+                self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+
+                # Complete all futures
+                for f in fs:
+                    if not f.done():
+                        f.set_running_or_notify_cancel()
+                        f.set_result(None)
+
+                # Verify batch future completion
+                self.assertTrue(batch_future.done())
+                self.assertIsNone(batch_future.result())
+
+    def test_large_batch_future_cancel(self):
+        """Test ProgressiveBatchFuture cancel with 500, 1000, and 2000 sub-futures after progress."""
+        for num_futures in [500, 1000, 2000]:
+            with self.subTest(num_futures=num_futures):
+                self.cancelled = 0
+                # Create the ProgressiveFutures with estimated durations
+                fs = {}
+                for i in range(num_futures):
+                    f = ProgressiveFuture()
+                    f.task_canceller = self.cancel_task
+                    fs[f] = i % 10 + 1  # Cyclic duration estimates between 1 and 10 seconds
+
+                batch_future = ProgressiveBatchFuture(fs)
+                batch_future.add_update_callback(self.on_progress_update)
+
+                # Start a subset of futures
+                for i, f in enumerate(fs):
+                    if i < num_futures // 2:
+                        f.set_running_or_notify_cancel()
+                        f.set_progress(end=time.time() + (fs[f] / 2))  # Halfway through the task
+
+                # Cancel the batch future after some progress
+                self.assertTrue(batch_future.cancel())
+
+                # Verify the batch future is cancelled
+                self.assertTrue(batch_future.cancelled())
+                for f in fs:
+                    self.assertTrue(f.cancelled())
+
+                with self.assertRaises(CancelledError):
+                    batch_future.result(timeout=5)
+
+                for f in fs:
+                    with self.assertRaises(CancelledError):
+                        f.result(timeout=5)
+
+    def test_large_batch_future_with_sub_future_cancel(self):
+        """
+        Test ProgressiveBatchFuture with 500, 1000, and 2000 sub-futures and first
+        sub-future cancel after progress.
+        """
+        for num_futures in [500, 1000, 2000]:
+            with self.subTest(num_futures=num_futures):
+                self.cancelled = 0
+                # Create the ProgressiveFutures with estimated durations
+                fs = {}
+                for i in range(num_futures):
+                    f = ProgressiveFuture()
+                    f.task_canceller = self.cancel_task
+                    fs[f] = i % 10 + 1  # Cyclic duration estimates between 1 and 10 seconds
+
+                batch_future = ProgressiveBatchFuture(fs)
+                batch_future.add_update_callback(self.on_progress_update)
+
+                # Start a subset of futures
+                for i, f in enumerate(fs):
+                    if i < num_futures // 2:
+                        f.set_running_or_notify_cancel()
+                        f.set_progress(end=time.time() + (fs[f] / 2))  # Halfway through the task
+
+                # Cancel the first future after some progress
+                first_future = list(fs.keys())[0]
+                self.assertTrue(first_future.cancel())
+
+                # Verify the batch future is cancelled
+                self.assertTrue(batch_future.cancelled())
+                for f in fs:
+                    self.assertTrue(f.cancelled())
+
+                with self.assertRaises(CancelledError):
+                    batch_future.result(timeout=5)
+
+                for f in fs:
+                    with self.assertRaises(CancelledError):
+                        f.result(timeout=5)
+
 
 if __name__ == "__main__":
     unittest.main()
