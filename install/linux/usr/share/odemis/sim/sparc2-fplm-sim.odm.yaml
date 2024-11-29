@@ -12,6 +12,31 @@
     affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
 
+# Input laser controlled via a DAQ MCC device
+"External Laser": {
+    class: pwrmccdaq.MCCDeviceLight,
+    role: light,
+    init: {
+        mcc_device: "fake",
+        ao_channels: [0],
+        do_channels: [7],
+        # 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        spectra: [[527.e-9, 531.e-9, 532.e-9, 533.e-9, 537.e-9]],
+        # Relation curve of voltage -> power, as linear segments
+        pwr_curve: [
+            {
+                # Voltage should be 0->5V, with max power specified as 100mW
+                0: 0, # V -> W
+                5: 0.1, # 100mW
+            },
+        ],
+        # di_channels port B 8-15 -> pin 32-39
+        # specified as [name, TLL_HIGH]
+        di_channels: {14: ["interlockTriggered", False]},
+    },
+    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+}
+
 "Power Control Unit": {
     class: powerctrl.PowerControlUnit,
     role: "power-control",
