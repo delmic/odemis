@@ -72,7 +72,7 @@ def _draw_microexpansion_pattern(image: model.DataArray, params: MicroexpansionP
     # get parameters
     width = params.width.value
     height = params.height.value
-    spacing = params.spacing.value
+    spacing = params.spacing.value / 2
     mx, my = params.center.value
 
     # position in metres from image centre
