@@ -44,6 +44,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
+METEOR_TFS2_CONFIG = CONFIG_PATH + "sim/meteor-tfs2-sim.odm.yaml"
 METEOR_ZEISS1_CONFIG = CONFIG_PATH + "sim/meteor-zeiss-sim.odm.yaml"
 METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
@@ -620,6 +621,65 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
+
+
+class TestMeteorTFS2Move(TestMeteorTFS1Move):
+    """
+    Test the MeteorPostureManager functions for TFS 2
+    """
+    MIC_CONFIG = METEOR_TFS2_CONFIG
+    ROTATION_AXES = {'rx', 'rz'}
+
+    def test_moving_in_grid1_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        super().test_moving_in_grid1_fm_imaging_area_after_loading()
+        linked_stage_before = self.linked_stage.position.value
+
+        # move in the same imaging mode using linked YM stage
+        old_stage_pos = self.stage.position.value
+        self.linked_stage.moveRel({"y": 1e-3}).result()
+        new_stage_pos = self.stage.position.value
+
+        # Check if stage moves in a constant FM imaging plane
+        self.assertAlmostEqual(self.linked_stage.position.value["z"], linked_stage_before["z"], places=5)
+
+        # check if the stage moves in the right direction with the given pre-tilt
+        beta = self.stage.getMetadata()[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+
+        estimated_beta = math.atan2(new_stage_pos["z"] - old_stage_pos["z"], new_stage_pos["y"] - old_stage_pos["y"])
+        # estimated beta depends on the flatness of the grid and how the shuttle was loaded in the grid
+        self.assertAlmostEqual(beta, estimated_beta, places=2, msg="The stage moved in the wrong direction in "
+                                                                   "the FM imaging grid 1 area.")
+
+    def test_log_linked_stage_positions(self):
+        # In simulator the Z of Meteor stage values are stable but not in hardware
+        # log values in hardware to check the stability of z in meteor stage
+        # Ideally the z of meteor stage should be same for different values in FM imaging
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to the fm imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area GRID 1
+        f = self.posture_manager.cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentGridLabel()
+        self.assertEqual(GRID_1, current_imaging_mode)
+
+        logging.debug("Stage position in GRID 1 x: %s y:%s, z:%s", self.linked_stage.position.value["x"],
+                      self.linked_stage.position.value["y"], self.linked_stage.position.value["z"])
+        # 0.6 mm radius is TFS millable area of one grid
+        for n in range(1, 7):
+            logging.debug("Moving y in Stage position in GRID 1 y: %s",
+                          self.linked_stage.position.value["y"] + 0.6e-03 / n)
+            self.linked_stage.moveAbs({"y": self.linked_stage.position.value["y"] + 0.6e-03 / n}).result()
+            logging.debug("Stage position in GRID 1 x: %s y:%s, z:%s", self.linked_stage.position.value["x"],
+                          self.linked_stage.position.value["y"], self.linked_stage.position.value["z"])
+
+    def test_unknown_label_at_initialization(self):
+        pass
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
