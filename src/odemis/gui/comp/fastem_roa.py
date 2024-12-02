@@ -20,7 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import threading
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy
 from scipy.ndimage import binary_fill_holes
@@ -151,12 +151,14 @@ class FastEMROA:
             else:
                 self.calculate_field_indices()
 
-    def estimate_acquisition_time(self):
+    def estimate_acquisition_time(self, acq_dwell_time: Optional[float] = None):
         """
         Computes the approximate time it will take to run the ROA (megafield) acquisition.
+
+        :param acq_dwell_time: (float or None) The acquisition dwell time.
         :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s.
         """
-        field_time = self._detector.frameDuration.value + 1.5  # there is about 1.5 seconds overhead per field
+        field_time = self._detector.getTotalFieldScanTime(acq_dwell_time) + 1.5  # there is about 1.5 seconds overhead per field
         tot_time = (len(self.field_indices) + 1) * field_time  # +1 because the first field is acquired twice
 
         return tot_time

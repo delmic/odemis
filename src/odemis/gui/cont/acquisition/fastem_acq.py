@@ -564,6 +564,7 @@ class FastEMAcquiController(object):
 
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
+        self.main_tab_data.project_settings_data.subscribe(self._on_update_acquisition_time)
         self.project_roas: Dict[str, Tuple[FastEMROA, NodeWindow]] = {}
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
@@ -683,14 +684,17 @@ class FastEMAcquiController(object):
                 return
             # Display acquisition time
             acq_time = 0
-            for roas in self.project_roas.values():
+            for project_name, roas in self.project_roas.items():
                 for roa_window in roas:
                     acq_time += estimate_acquisition_time(
                         roa_window[0],
-                        [
+                        pre_calibrations=[
                             Calibrations.OPTICAL_AUTOFOCUS,
                             Calibrations.IMAGE_TRANSLATION_PREALIGN,
                         ],
+                        acq_dwell_time=self.main_tab_data.project_settings_data.value[
+                            project_name
+                        ][DWELL_TIME_ACQUISITION],
                     )
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = "Estimated time is {}."
@@ -886,7 +890,10 @@ class FastEMAcquiController(object):
                     save_full_cells=self.save_full_cells.value,
                     settings_obs=self._main_data_model.settings_obs,
                     spot_grid_thresh=acqui_conf.spot_grid_threshold,
-                    blank_beam=blank_beam
+                    blank_beam=blank_beam,
+                    acq_dwell_time=self.main_tab_data.project_settings_data.value[
+                        project_name
+                    ][DWELL_TIME_ACQUISITION],
                 )
                 # If this is the last ROA in the current project, set the dwell time for the next project
                 # on completion of current project's future
@@ -910,7 +917,7 @@ class FastEMAcquiController(object):
                 self._on_roa_acquisition_done_sub_callback[roa] = roa_sub_callback
                 f.add_done_callback(roa_sub_callback)
 
-                t = estimate_acquisition_time(roa, pre_calibrations)
+                t = f.end_time - f.start_time
                 total_t += t
                 f.set_progress(start=time.time(), end=time.time() + total_t)
                 self._roa_future_connector.append(
