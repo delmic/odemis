@@ -6230,6 +6230,28 @@ class StaticStreamsTestCase(unittest.TestCase):
         new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
         self.assertRaises(ValueError, strUpd.update, new_da)
 
+    def test_static_2d_updatable_stream(self):
+        """Test Static2DUpdatableStream """
+        md = {
+            model.MD_BPP: 16,
+            model.MD_BINNING: (2, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1e-4, 1e-4),  # m/px
+            model.MD_EXP_TIME: 1,  # s
+            model.MD_IN_WL: (0, 0),  # m
+            model.MD_OUT_WL: 'pass-through',  # m
+            model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
+            model.MD_ROTATION: 0.1,  # rad
+            model.MD_SHEAR: 0,
+        }
+        str_updatable = stream.Static2DUpdatableStream("Test stream", None)
+        self.assertEqual(str_updatable.raw, [])
+        da = model.DataArray(numpy.zeros((256, 256), dtype=numpy.uint8), md)
+        str_updatable.update(da)
+        self.assertEqual(str_updatable.tint.value, (0, 0, 255))
+        str_updatable.tint.value = (255, 0, 0)
+        self.assertEqual(str_updatable.tint.value, (255, 0, 0))
+        self.assertEqual(str_updatable.raw[0].shape, (256, 256))
+
     def test_pixel_coordinates(self):
         """Test getPixelCoordinates and getRawValue"""
         md = {

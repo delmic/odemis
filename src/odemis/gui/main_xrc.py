@@ -1029,7 +1029,11 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_streakcam = xrc.XRCCTRL(self, "btn_align_streakcam")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
         self.btn_align_light_in = xrc.XRCCTRL(self, "btn_align_light_in")
+        self.btn_align_light_in_ar = xrc.XRCCTRL(self, "btn_align_light_in_ar")
         self.btn_align_tunnel_lens = xrc.XRCCTRL(self, "btn_align_tunnel_lens")
+        self.pnl_blanker_status = xrc.XRCCTRL(self, "pnl_blanker_status")
+        self.bmp_blanker_status = xrc.XRCCTRL(self, "bmp_blanker_status")
+        self.lbl_blanker_status = xrc.XRCCTRL(self, "lbl_blanker_status")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
         self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
@@ -1128,6 +1132,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_streak = xrc.XRCCTRL(self, "vp_align_streak")
         self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.vp_align_lens_ext = xrc.XRCCTRL(self, "vp_align_lens_ext")
+        self.vp_align_light = xrc.XRCCTRL(self, "vp_align_light")
+        self.vp_align_light_ar = xrc.XRCCTRL(self, "vp_align_light_ar")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_ebeam_blanker = xrc.XRCCTRL(self, "fp_settings_ebeam_blanker")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
@@ -12114,7 +12120,27 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>5,7</cellpos>
+                        <cellpos>5,8</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_light_in_ar">
+                          <icon>______img_icon_ico_fib_png</icon>
+                          <icon_on>______img_icon_ico_fib_green_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>LIGHT-IN AR</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,9</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_tunnel_lens">
@@ -12134,7 +12160,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>5,8</cellpos>
+                        <cellpos>5,10</cellpos>
                       </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
@@ -12151,6 +12177,29 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               </object>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_blanker_status">
+                <hidden>1</hidden>
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap" name="bmp_blanker_status">
+                      <bitmap>______img_icon_dialog_warning_png</bitmap>
+                    </object>
+                    <flag>wxRIGHT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_blanker_status">
+                      <label>Make sure the e-beam is blanked manually</label>
+                    </object>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <fg>#E5E5E5</fg>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_focus">
@@ -13990,6 +14039,16 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="LiveViewport" name="vp_align_light">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_align_light_ar">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -14866,6 +14925,32 @@ Y\xde\xc71aQt\x0d\x8a\xa5\x9a\xf9\x8eL\x19Mn%~\xe2\xafx>B\xd8c\xf9xy\xfc\
 \x8d\xeb*\xe51a\xab\x94\xc7\x84\xadR\x1e\x13\xb6J\xf9-\x98\xd4\xab$;\xcb\
 T\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    ______img_icon_dialog_warning_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
+\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
+\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
+\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
+[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
+\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
+\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
+-\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
+\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
+\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
+S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
+\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
+#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
+\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
+z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
+\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
+\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
+Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
+\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
+g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
+B`\x82'''
+
     ______img_icon_ico_chevron_up_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -14890,6 +14975,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_fib_green_png', bytearray(______img_icon_ico_fib_green_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_freespacetunnel_png', bytearray(______img_icon_ico_freespacetunnel_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_freespacetunnel_green_png', bytearray(______img_icon_ico_freespacetunnel_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
     __res.Load('memory:XRC/panel_tab_sparc2_align/panel_tab_sparc2_align_xrc')
 
