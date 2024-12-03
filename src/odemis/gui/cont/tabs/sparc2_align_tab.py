@@ -66,7 +66,7 @@ class Sparc2AlignTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.Sparc2AlignGUIData(main_data)
-        super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super().__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ALIGNMENT")
 
         # Typically the actuators are automatically referenced at back-end init.
@@ -161,6 +161,24 @@ class Sparc2AlignTab(Tab):
                  "stream_classes": acqstream.CameraStream,
                 }
             ),
+            (self.panel.vp_align_light,
+                {
+                    "name": "Light alignment wih CL Spot",
+                    "stream_classes": (
+                        acqstream.CameraStream,
+                        acqstream.Static2DUpdatableStream,
+                    ),
+                }
+            ),
+            (self.panel.vp_align_light_ar,
+                {
+                    "name": "Light alignment wih CL AR pattern",
+                    "stream_classes": (
+                        acqstream.CameraStream,
+                        acqstream.Static2DUpdatableStream,
+                    ),
+                }
+            ),
         ))
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
@@ -174,6 +192,8 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_ek.view.show_pixelvalue.value = False
         self.panel.vp_align_streak.view.show_pixelvalue.value = True
         self.panel.vp_align_lens_ext.view.show_pixelvalue.value = False
+        self.panel.vp_align_light.view.show_crosshair.value = False
+        self.panel.vp_align_light_ar.view.show_crosshair.value = False
 
         # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
         self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
@@ -204,8 +224,17 @@ class Sparc2AlignTab(Tab):
                                               main_data.sed.data, main_data.ebeam)
         spot_stream.should_update.value = True
         self._spot_stream = spot_stream
+        # This is the standard blanker, not to be confused with the fast blanker
+        # (as later defined on `main_data.ebeam_blanker`)
+        self._blanker = None
+
+        if model.hasVA(main_data.ebeam, "blanker"):
+            self._blanker = main_data.ebeam.blanker
 
         self._ccd_stream = None
+        self._ccd_stream_center = None
+        self._ccd_stream_light = None
+        self._ccd_stream_snapshot = None
         self._ccd_stream_ext = None  # used for the tunnel lens alignment, with the spectrograph-dedicated
         self._as_stream = None
         # The ccd stream panel entry object is kept as attribute
@@ -213,36 +242,95 @@ class Sparc2AlignTab(Tab):
         self._ccd_spe = None
         self._ccd_spe_ext = None
 
-        # TODO: do a similar procedure by creating an AR spectrum stream (???)
         if main_data.ccd:
             # Force the "temperature" VA to be displayed by making it a hw VA
             hwdetvas = set()
             if model.hasVA(main_data.ccd, "temperature"):
                 hwdetvas.add("temperature")
-            ccd_stream = acqstream.CameraStream(
-                                "Angle-resolved sensor",
-                                main_data.ccd,
-                                main_data.ccd.data,
-                                emitter=None,
-                                # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
-                                hwdetvas=hwdetvas,
-                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
-                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                         model.MD_ROTATION: 0},  # Force the CCD as-is
-                                acq_type=model.MD_AT_AR,  # For the merge slider icon
-                                )
-            self._setFullFoV(ccd_stream, (2, 2))
-            self._ccd_stream = ccd_stream
+            # Initialize ccd stream
+            ccd_args = [
+                "Angle-resolved sensor",
+                main_data.ccd,
+                main_data.ccd.data,
+            ]
 
-            self._ccd_spe = self._stream_controller.addStream(ccd_stream,
-                                add_to_view=self.panel.vp_align_lens.view)
-            self._ccd_spe.stream_panel.flatten()
-
-            self._addMoIEntries(self._ccd_spe.stream_panel)
-            ccd_stream.image.subscribe(self._onNewMoI)
+            ccd_kwargs = dict(
+                emitter=None,
+                hwdetvas=hwdetvas,
+                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
+                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                            model.MD_ROTATION: 0},  # Force the CCD as-is
+                acq_type=model.MD_AT_AR,  # For the merge slider icon
+            )
+            # We want separate streams so it's easier to obtain the respective last frame for the CL overlay in light
+            # align modes
+            self._ccd_stream = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "LENS" alignment
+            self._ccd_stream_center = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "CENTERING" alignment
 
             # To activate the SEM spot when the CCD plays
-            ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
+            self._ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
+            self._ccd_stream_center.should_update.subscribe(self._on_ccd_stream_play)
+
+            # Assign to views
+            self._ccd_spe = self._stream_controller.addStream(
+                self._ccd_stream, add_to_view=self.panel.vp_align_lens.view
+            )
+            self._ccd_center_spe = self._stream_controller.addStream(
+                self._ccd_stream_center, add_to_view=self.panel.vp_align_center.view
+            )
+
+            # Disable stream panel folding
+            self._ccd_spe.stream_panel.flatten()
+            self._ccd_center_spe.stream_panel.flatten()
+
+            # Settings for the lens alignment ccd stream
+            self._setFullFoV(self._ccd_stream , (2, 2))
+
+            self._addMoIEntries(self._ccd_spe.stream_panel)
+            self._ccd_stream.image.subscribe(self._onNewMoI)
+
+            # Settings for centering align mode.
+            self._setFullFoV(self._ccd_stream_center, (2, 2))
+
+            if "light-in-align" in tab_data.align_mode.choices:
+                # Shared ccd stream for regular "LIGHT IN" and "LIGHT IN AR" alignment
+                self._ccd_stream_light = acqstream.CameraStream(*ccd_args, **ccd_kwargs)
+                # Add stream to viewport and add controls to stream control panel
+                self._ccd_light_spe = self._stream_controller.addStream(
+                    self._ccd_stream_light, add_to_view=self.panel.vp_align_light.view,
+                )
+                if "light-in-align-ar" in tab_data.align_mode.choices:
+                    # Add stream to viewport but prevent duplicate controls
+                    self._stream_controller.addStream(
+                        self._ccd_stream_light, add_to_view=self.panel.vp_align_light_ar.view, visible=False
+                    )
+                # For FPLM, CL snapshots are added to the light in views
+                if tab_data.fplm_module_present:
+                    # Since FPLM has two light in modes, change the name of the original for better differentiation
+                    self.panel.btn_align_light_in.SetLabel("LIGHT-IN SPOT")
+                    # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it
+                    # will be updated in a later stage
+                    self._ccd_stream_spot_snapshot = acqstream.Static2DUpdatableStream(
+                        "CL Spot Snapshot",
+                        None,
+                        acq_type=model.MD_AT_ALIGN_OVERLAY,
+                    )
+                    self._ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                    self._stream_controller.addStream(
+                        self._ccd_stream_spot_snapshot, add_to_view=self.panel.vp_align_light.view, visible=False
+                    )
+
+                    # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it
+                    # will be updated in a later stage
+                    self._ccd_stream_ar_snapshot = acqstream.Static2DUpdatableStream(
+                        "CL AR Snapshot",
+                        None,
+                        acq_type=model.MD_AT_ALIGN_OVERLAY,
+                    )
+                    self._ccd_stream_ar_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                    self._stream_controller.addStream(
+                        self._ccd_stream_ar_snapshot, add_to_view=self.panel.vp_align_light_ar.view, visible=False
+                    )
         elif main_data.sp_ccd:
             # Hack: if there is no CCD, let's display at least the sp-ccd.
             # It might or not be useful. At least we can show the temperature.
@@ -405,7 +493,7 @@ class Sparc2AlignTab(Tab):
                 # Add the stream to the stream bar controller
                 # so that it's displayed with the default 0.3 merge ratio
                 self._stream_controller.addStream(focus_stream, visible=False,
-                                                  add_to_view=False)
+                                                  add_to_view=True)
 
                 # Remove the stream from the focused view initially
                 self.tab_data_model.focussedView.value.removeStream(focus_stream)
@@ -468,6 +556,8 @@ class Sparc2AlignTab(Tab):
             self._setFullFoV(ts_stream, (2, 2))
             self._ts_stream = ts_stream
 
+            # This is a special blanker for fast, often pulsed, beam blanking.
+            # Not to be confused with the `ebeam.blanker`, which is the standard slow blanker.
             if main_data.ebeam_blanker:
                 main_data.ebeam_blanker.power.subscribe(self._on_ebeam_blanker)
 
@@ -552,9 +642,6 @@ class Sparc2AlignTab(Tab):
             self.panel.vp_align_ek.show_ek_overlay()
 
         if "center-align" in tab_data.align_mode.choices:
-            # The center align view share the same CCD stream (and settings)
-            self.panel.vp_align_center.view.addStream(ccd_stream)
-
             # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
             self.mirror_ol = self.panel.vp_align_center.mirror_ol
             self.lens = main_data.lens
@@ -681,6 +768,7 @@ class Sparc2AlignTab(Tab):
             (panel.btn_align_fiber, "fiber-align"),
             (panel.btn_align_streakcam, "streak-align"),
             (panel.btn_align_light_in, "light-in-align"),
+            (panel.btn_align_light_in_ar, "light-in-align-ar"),
             (panel.btn_align_tunnel_lens, "tunnel-lens-align"),
         ))
 
@@ -694,6 +782,7 @@ class Sparc2AlignTab(Tab):
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
             "light-in-align": "light-in-align",
+            "light-in-align-ar": "light-in-align",
             "tunnel-lens-align": "tunnel-lens-align",
         }
         # Note: ActuatorController automatically hides the unnecessary alignment panels, based on the axes present.
@@ -747,20 +836,33 @@ class Sparc2AlignTab(Tab):
         Positions the mode buttons in a nice way: on one line if they fit,
          otherwise on two lines.
         """
-        # If 3 buttons or less, keep them all on a single line, otherwise,
-        # spread on two lines. (Works up to 6 buttons)
         btns = list(self._alignbtn_to_mode.keys())
+        gb_sizer = btns[0].Parent.GetSizer().GetChildren()[0].GetSizer()
+        # Update button sizes when content changed
+        gb_sizer.Layout()
+        # In the case of one button, don't show wthe button at all
         if len(btns) == 1:
             btns[0].Show(False)  # No other choice => no need to choose
             return
-        elif len(btns) == 4:
-            # Spread over two columns
+        # In the case of two or four buttons, put them in two columns
+        elif len(btns) in [2, 4]:
             width = 2
+        # In all other cases, try to see if they fit on three columns to perserve vertical space.
         else:
-            width = 3
+            btn_sizes = [b.Size[0] for b in btns]
+            # The final button size is not available on the button at this point (only after placing them into the
+            # grid). We still can apply the layouting logic to determine final size. When having more than one row, the
+            # size of the largest button in the column is applied to all the buttons in that column. Check if 3 columns
+            # are possible by summing the largest buttons per column.
+            max_col_widths = [max(btn_sizes[i::3]) for i in range(3)]
+            max_row_width = sum(max_col_widths)
+            available_row_width = gb_sizer.Size[0] - 2 * gb_sizer.HGap  # Also accounts for spacing
+            if max_row_width <= available_row_width:
+                width = 3
+            else:
+                width = 2
 
         # Position each button at the next position in the grid
-        gb_sizer = btns[0].Parent.GetSizer().GetChildren()[0].GetSizer()
         for i, btn in enumerate(btns):
             pos = (i // width, i % width)
             gb_sizer.SetItemPosition(btn, pos)
@@ -788,7 +890,7 @@ class Sparc2AlignTab(Tab):
         :param stream_cont: (Container aka StreamPanel)
 
         """
-        # the "MoI" value bellow the streams
+        # the "MoI" value below the streams
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
         tooltip_txt = "Moment of inertia at the center (smaller is better)"
         lbl_moi.SetToolTip(tooltip_txt)
@@ -877,6 +979,9 @@ class Sparc2AlignTab(Tab):
             logging.warning("Alignment mode changed while alignment tab not shown")
             return
 
+        # Disable blanker status message
+        self.panel.pnl_blanker_status.Show(False)
+
         # Disable controls/streams which are useless (to guide the user)
         self._stream_controller.pauseStreams()
         # Cancel autofocus (if it happens to run)
@@ -913,11 +1018,18 @@ class Sparc2AlignTab(Tab):
         if mode != "light-in-align":
             if main.spec_switch:
                 main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
-            if main.light_aligner:
-                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
         if mode != "tunnel-lens-align":
             if main.spec_ded_aligner:
                 main.spec_ded_aligner.position.unsubscribe(self._on_spec_ded_aligner_pos)
+        # For both the regular light-in mode as the light-in-ar mode.
+        if "light-in-align" not in mode:
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
+            # Turn off the blanker for non light-in modes. Keep auto blanking if active (=None),
+            # and unblank the beam when the blanker was currently explicitely activated.
+            if main.ebeam.blanker and main.ebeam.blanker.value:
+                # Only happens when blanker was set to True before
+                main.ebeam.blanker.value = False
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
@@ -938,6 +1050,7 @@ class Sparc2AlignTab(Tab):
                 self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
+
             self.panel.pnl_mirror.Show(True)
             self.panel.pnl_lens_mover.Show(True)
             self.panel.pnl_lens_mover.Enable(False)  # Will be enabled once the lens is at the correct place
@@ -1001,7 +1114,8 @@ class Sparc2AlignTab(Tab):
             f.add_done_callback(self._on_lens_switch_align_done)
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
-            self._ccd_stream.should_update.value = True
+            if self._ccd_stream_center:
+                self._ccd_stream_center.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(True)
             self.panel.pnl_mirror.Show(False)
@@ -1013,12 +1127,15 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_lens_tunnel.Show(False)
-            # If light-aligner available, allow to adjust it in this view too,
-            # as the lens 2 is active, which allows to further align the light input.
             if main.light_aligner:
                 self.panel.pnl_light_aligner.Show(True)
                 main.light_aligner.position.subscribe(self._onLightAlignPos)
-            else:
+
+            if (
+                not main.light_aligner
+                # For FPLM we don't show the aligner in this mode, even if available
+                or self.tab_data_model.fplm_module_present
+            ):
                 self.panel.pnl_light_aligner.Show(False)
 
             self.panel.pnl_moi_settings.Show(True)
@@ -1112,8 +1229,56 @@ class Sparc2AlignTab(Tab):
 
             self.panel.pnl_moi_settings.Show(False)
         elif mode == "light-in-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
-            self._ccd_stream.should_update.value = True
+            # FPLM specific codepath
+            if self.tab_data_model.fplm_module_present:
+                # For FPLM, the blanker should be enforced. Potentially also for other modes, which can be added later.
+                self.enforce_blanker()
+                if not self._ccd_stream.raw:
+                    logging.warning('Activate "LENS" mode first to display the CL Spot overlay stream')
+                else:
+                    # Eventhough the stream will be paused by now,
+                    # the raw should still contain the last obtained image,
+                    # due to order: detector pauses -> emitter pauses.
+                    self._ccd_stream_spot_snapshot.update(self._ccd_stream.raw[0])
+            self.tab_data_model.focussedView.value = self.panel.vp_align_light.view
+            # The spot stream is automatically stopped through `_on_ccd_stream_play`.
+            self._ccd_stream_light.should_update.value = True
+
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            if main.mirror:
+                self.panel.pnl_focus.Show(False)
+            else:
+                # If no mirror => ELIM => allow to focus, but only manually
+                self.panel.pnl_focus.Show(True)
+                self.panel.btn_autofocus.Enable(False)
+                self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_focus_ext.Show(False)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_light_aligner.Show(True)
+            self.panel.pnl_lens_tunnel.Show(False)
+            if main.spec_switch:
+                self.panel.pnl_spec_switch.Show(True)
+                self.panel.pnl_spec_switch.Enable(False)  # Wait until the spec-switch is engaged
+            else:
+                self.panel.pnl_spec_switch.Show(False)
+
+            self.panel.pnl_moi_settings.Show(False)
+            f.add_done_callback(self._on_light_in_align_done)
+        # This mode is only present for FPLM
+        elif mode == "light-in-align-ar":
+            self.enforce_blanker()
+            self.tab_data_model.focussedView.value = self.panel.vp_align_light_ar.view  # allows to see the focused slit line
+            self._ccd_stream_light.should_update.value = True
+            if not self._ccd_stream_center.raw:
+                logging.warning('Activate "CENTERING" mode first to display the CL Spot overlay stream')
+            else:
+                self._ccd_stream_ar_snapshot.update(self._ccd_stream_center.raw[0])
+
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(False)
@@ -1184,7 +1349,7 @@ class Sparc2AlignTab(Tab):
             pages.append("doc/sparc2_fiber.html")
         elif mode == "streak-align":
             pages.append("doc/sparc2_streakcam.html")
-        elif mode == "light-in-align":
+        elif mode in ("light-in-align", "light-in-align-ar"):
             # Several modules have this mode, but require different alignment procedure.
             # So we have to detect precisely which module is present (FSLM, FPLM, or ELIM).
             main = self.tab_data_model.main
@@ -1339,11 +1504,14 @@ class Sparc2AlignTab(Tab):
         # the SEM image in the original SEM software (by pausing the stream),
         # while still being able to move the mirror.
         ccdupdate = self._ccd_stream and self._ccd_stream.should_update.value
+        ccdcenterupdate = self._ccd_stream_center and self._ccd_stream_center.should_update.value
         ccdextupdate = self._ccd_stream_ext and self._ccd_stream_ext.should_update.value
         spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
         ekccdupdate = self._as_stream and self._as_stream.should_update.value
         streakccdupdate = self._ts_stream and self._ts_stream.should_update.value
-        self._spot_stream.is_active.value = any((ccdupdate, ccdextupdate, spcupdate, ekccdupdate, streakccdupdate))
+        self._spot_stream.is_active.value = any((
+            ccdupdate, ccdcenterupdate, ccdextupdate, spcupdate, ekccdupdate, streakccdupdate
+        ))
 
     def _filter_axes(self, axes):
         """
@@ -1417,7 +1585,7 @@ class Sparc2AlignTab(Tab):
                 detvas=get_local_vas(d, hw_settings_config),
                 forcemd={model.MD_POS: (0, 0),
                          model.MD_ROTATION: 0},
-                acq_type=model.MD_AT_SLIT,
+                acq_type=model.MD_AT_ALIGN_OVERLAY,
             )
             speclines.tint.value = odemis.gui.FOCUS_STREAM_COLOR
             # Show most of the image (compared to the standard 100/256 %), to see the potential faint parts of the line
@@ -2193,6 +2361,26 @@ class Sparc2AlignTab(Tab):
                 return 5
 
         return None
+
+    def enforce_blanker(self):
+        """
+        Makes sure the standard blanker is activated. For a system with
+        automatic blanking capabilities the blanker is set to None (which is auto), or
+        for a non-automatic system with blanker, the blanker is set to True.
+        If the system doesn't support blanking, a warning is shown.
+
+        Note: when changing alignment mode to a non light-in mode, the blanker is turned off via a different codepath.
+        """
+        if self._blanker:
+            # Enforce auto beam blanking when available. For a system with auto beam blanking,
+            # it probably already was set to the automatic mode, but set it anyway.
+            if None in getattr(self._blanker, "choices", {}):
+                self._blanker.value = None  # "None" means automatic mode
+            else:
+                self._blanker.value = True
+        else:
+            self.panel.pnl_blanker_status.Show(True)
+            logging.warning('Make sure the e-beam is blanked manually')
 
 
 class FocusPanelContainer:

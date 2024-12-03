@@ -31,6 +31,7 @@ import threading
 import time
 import weakref
 from collections.abc import Iterable
+from typing import List, Union
 
 import numpy
 try:
@@ -41,6 +42,8 @@ except ImportError:
 from odemis import model, util
 from odemis.acq import calibration
 from odemis.model import MD_POL_MODE, MD_POL_S0, MD_POS, VigilantAttribute
+from odemis.model._dataflow import DataArray
+from odemis.model._dataio import DataArrayShadow
 from odemis.util import almost_equal, conversion, find_closest, img, spectrum
 from ._base import POL_POSITIONS, POL_POSITIONS_RESULTS, Stream
 
@@ -155,16 +158,27 @@ class RGBStream(StaticStream):
         return raw
 
 
-class Static2DStream(StaticStream):
-    """
-    Stream containing one static image.
-    For testing and static images.
-    The static image could be 2D or a 3D stack of images with a z-index
-    """
-    def __init__(self, name, raw, *args, **kwargs):
+class Static2DStreamBase(StaticStream):
+    """Base class for Static2DStream"""
+    def __init__(self, name, raw: Union[DataArray, DataArrayShadow, None], *args, **kwargs):
         """
         Note: parameters are different from the base class.
-        raw (DataArray or DataArrayShadow): The data to display.
+
+        raw: The data to display. Can be initialized with None if a subclass
+          (e.g., Static2DUpdatableStream) will set the data at a later stage.
+        """
+        # Only call clean function when data is provided at initialization
+        if raw is not None:
+            raw = self._clean_raw(raw)
+        super().__init__(name, raw, *args, **kwargs)
+        self._set_tint_from_md()
+        self.tint.subscribe(self._onTint)
+
+    def _clean_raw(self, raw: Union[DataArray, DataArrayShadow]) -> List[DataArray]:
+        """
+        Makes sure the raw data is converted to a format that is compatible with a StaticStream.
+
+        raw: The data to clean.
         """
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
@@ -223,28 +237,18 @@ class Static2DStream(StaticStream):
 
         # Copy back the metadata
         raw[0].metadata = metadata
+        return raw
 
-        super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
-
+    def _set_tint_from_md(self):
+        if not self.raw:
+            return
+        metadata = self.raw[0].metadata
         # Colouration of the image
         if model.MD_USER_TINT in metadata:
             try:
                 self.tint.value = img.md_format_to_tint(metadata[model.MD_USER_TINT])
             except (ValueError, TypeError) as ex:
                 logging.warning("Failed to use tint '%s': %s.", metadata[model.MD_USER_TINT], ex)
-
-        self.tint.subscribe(self._onTint)
-
-    def _init_projection_vas(self):
-        ''' On Static2DStream, the projection is done on RGBSpatialProjection
-        '''
-        pass
-
-    def _init_thread(self):
-        ''' The thread for updating the image on Static2DStream resides on DataProjection
-            TODO remove this function when all the streams become projectionless
-        '''
-        pass
 
     def _on_zIndex(self, val):
         self._shouldUpdateHistogram()
@@ -262,13 +266,56 @@ class Static2DStream(StaticStream):
                     data = img.max_intensity_projection(data, axis=0)
                 else:
                     data = img.getYXFromZYX(data, self.zIndex.value)  # Remove extra dimensions (of length 1)
-        super(Static2DStream, self)._updateHistogram(data)
+        super()._updateHistogram(data)
 
     def _onTint(self, tint):
         """
         Store the new tint value as metadata
         """
+        if not self.raw:
+            return
         self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
+
+
+class Static2DStream(Static2DStreamBase):
+    """
+    Stream containing one static image.
+    For testing and static images.
+    The static image could be 2D or a 3D stack of images with a z-index
+    """
+    def _init_projection_vas(self):
+        '''
+        On Static2DStream, the projection is done on RGBSpatialProjection
+        '''
+        pass
+
+    def _init_thread(self):
+        '''
+        The thread for updating the image on Static2DStream resides on DataProjection
+        TODO remove this function when all the streams become projectionless
+        '''
+        pass
+
+
+class Static2DUpdatableStream(Static2DStreamBase):
+    """
+    Stream containing one static image.
+    The data can be updated via the `update` method.
+    For testing and static images.
+    The static image could be 2D or a 3D stack of images with a z-index
+    """
+    def update(self, raw: Union[DataArray, DataArrayShadow]):
+        """
+        Updates self.raw with new data
+
+        raw: The data to display. Overwrites existing data or sets data for a stream
+            that was initialized without data.
+        """
+
+        self.raw = self._clean_raw(raw)
+        self._updateHistogram()
+        self._set_tint_from_md()
+        self._shouldUpdateImage()
 
 
 class StaticSEMStream(Static2DStream):
@@ -281,6 +328,7 @@ class StaticSEMStream(Static2DStream):
             kwargs["acq_type"] = model.MD_AT_EM
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
+
 class StaticFIBStream(Static2DStream):
     """
     Same as a StaticStream, but considered a FIB stream
@@ -290,6 +338,7 @@ class StaticFIBStream(Static2DStream):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FIB
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
+
 
 class StaticCLStream(Static2DStream):
     """
@@ -964,6 +1013,7 @@ class StaticSpectrumStream(StaticStream):
 # updated. So we need to use the "old" way of directly computing the projection,
 # as for the live streams. Eventually, when DataProjection supports updated .raw,
 # we could simplify/merge the two stream classes.
+
 
 class RGBUpdatableStream(StaticStream):
     """

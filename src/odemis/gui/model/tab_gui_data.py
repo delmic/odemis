@@ -698,6 +698,7 @@ class EnzelAlignGUIData(ActuatorGUIData):
         self.step_size = model.FloatContinuous(1e-6, range=(50e-9,50e-6), unit="m")
         self.align_mode = StringEnumerated(Z_ALIGN, choices=set((Z_ALIGN, SEM_ALIGN, FLM_ALIGN)))
 
+
 class SparcAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)
@@ -747,6 +748,20 @@ class Sparc2AlignGUIData(ActuatorGUIData):
             if "lens-align" in amodes:
                 amodes.remove("lens-align")
 
+        # There is a special combination of components that indicates the potential presence of an FPLM module.
+        # Eventhough it's not a watertight detection method, it is convenient to store its result
+        # in a variable, so it can be reused later without the need of having to repeat the checks.
+        self.fplm_module_present = (
+            not main.spec_switch
+            and main.mirror
+            and main.light_aligner
+            and main.mirror.name in main.light_aligner.affects.value
+        )
+
+        if self.fplm_module_present:
+            amodes.remove("mirror-align")
+            amodes.append("light-in-align-ar")
+
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
@@ -793,6 +808,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if main.light_aligner is None:
             amodes.remove("light-in-align")
+
         else:
             if main.spec_switch:
                 # Check that the spec-selector has the right metadata
