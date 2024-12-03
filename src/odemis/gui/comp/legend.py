@@ -38,7 +38,7 @@ from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks, guess_sig_num_rng, find_first_last_finite_indices
 from odemis.model import (MD_AT_AR, MD_AT_CL, MD_AT_EK, MD_AT_EM, MD_AT_FLUO,
                           MD_AT_HISTORY, MD_AT_OVV_FULL, MD_AT_OVV_TILES,
-                          MD_AT_SLIT, MD_AT_SPECTRUM, MD_AT_TEMPORAL,
+                          MD_AT_ALIGN_OVERLAY, MD_AT_SPECTRUM, MD_AT_TEMPORAL,
                           MD_AT_TEMPSPECTRUM, MD_AT_FIB, MD_AT_EBIC)
 import wx
 
@@ -75,7 +75,7 @@ class InfoLegend(wx.Panel):
             MD_AT_HISTORY: img.getBitmap("icon/ico_blending_history.png"),
             MD_AT_CL: img.getBitmap("icon/ico_blending_opt.png"),
             MD_AT_FLUO: img.getBitmap("icon/ico_blending_opt.png"),
-            MD_AT_SLIT: img.getBitmap("icon/ico_blending_slit.png"),
+            MD_AT_ALIGN_OVERLAY: img.getBitmap("icon/ico_blending_slit.png"),
         }
 
         self.SetBackgroundColour(parent.GetBackgroundColour())

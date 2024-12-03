@@ -368,7 +368,8 @@ MIMAS_MODES = {
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
                'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus',
-               'streak-focus', 'light-in-align', 'tunnel-lens-align', 'spec-focus-ext'}
+               'streak-focus', 'light-in-align',
+               'tunnel-lens-align', 'spec-focus-ext'}
 
 
 class OneTaskExecutor(ThreadPoolExecutor):
