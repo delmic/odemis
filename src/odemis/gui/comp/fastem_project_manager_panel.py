@@ -283,9 +283,7 @@ class ProjectManagerImportExport:
         if sample_data is None:
             raise ValueError(f"The JSON file is not for {sample_type}")
         projects_data = sample_data.get("projects", {})
-        roa_shapes = []
-        section_shapes = []
-        ribbon_shapes = []
+        new_shapes = []
         import_data: List[ImportData] = []
 
         shapes = self.project_manager.tab_data.shapes.value
@@ -346,7 +344,7 @@ class ProjectManagerImportExport:
                         grid=roas_grid,
                     )
                 )
-                roa_shapes.append(roa_row.roa.shape)
+                new_shapes.append(roa_row.roa.shape)
                 project_colour.add(roa["roa"]["shape"]["colour"])
 
             # Add sections
@@ -367,7 +365,7 @@ class ProjectManagerImportExport:
                         grid=sections_grid,
                     )
                 )
-                section_shapes.append(section_row.roa.shape)
+                new_shapes.append(section_row.roa.shape)
                 project_colour.add(section["roa"]["shape"]["colour"])
 
             # Add ribbons
@@ -386,7 +384,7 @@ class ProjectManagerImportExport:
                         grid=ribbons_grid,
                     )
                 )
-                ribbon_shapes.append(ribbon_row.roa.shape)
+                new_shapes.append(ribbon_row.roa.shape)
                 project_colour.add(ribbon["roa"]["shape"]["colour"])
 
             if len(project_colour) == 1:
@@ -419,9 +417,7 @@ class ProjectManagerImportExport:
         start_time = time.time()
         if projects_data:
             # Update the shapes
-            shapes.extend(roa_shapes)
-            shapes.extend(section_shapes)
-            shapes.extend(ribbon_shapes)
+            shapes.extend(new_shapes)
             self.project_manager.tab_data.shapes._set_value(shapes, must_notify=False)
             self.project_manager.previous_shapes = set(shapes)
             # Update the active_project_ctrl combobox
