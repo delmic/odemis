@@ -1077,7 +1077,7 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
             ("max_projection", {
-                "label": "Max projection",
+                "label": "MIP",
                 "control_type": odemis.gui.CONTROL_CHECK,
                 "tooltip": "Merge all z-levels into a single image using Maximum Intensity Projection (MIP).",
             }),
