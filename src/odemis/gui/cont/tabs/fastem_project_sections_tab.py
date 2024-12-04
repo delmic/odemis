@@ -292,6 +292,33 @@ class FastEMProjectSectionsTab(Tab):
 
         self.panel.Bind(wx.EVT_SIZE, self._on_panel_size)
 
+    def create_grid(self) -> GridBase:
+        """
+        Creates and configures a new grid for displaying data.
+
+        :return: (GridBase) A configured instance of the grid.
+
+        Note:
+            The grid is not displayed immediately but is prepared for further manipulation
+            or data population before being shown.
+        """
+        grid = GridBase(self.panel, size=self.panel.Parent.Size)
+        grid.set_columns(self.columns)
+        grid.Hide()
+        return grid
+
+    def update_ribbons_grid(self, ribbons_grid):
+        """
+        Updates the ribbons grid and binds relevant event handlers.
+
+        :param ribbons_grid: (GridBase) The grid to be set as the ribbons grid.
+        """
+        self.ribbons_grid = ribbons_grid
+        self.ribbons_grid.Bind(
+            EVT_GRID_CELL_CHANGING, self._on_ribbon_grid_cell_changing
+        )
+        self.ribbons_grid.Bind(EVT_GRID_ROW_CHANGED, self._on_ribbon_row_changed)
+
     def _on_ribbon_grid_cell_changing(self, evt):
         """Handles changes in the ribbons grid cell values and updates the parent column in the section grid."""
         name_col = self.ribbons_grid.get_column_by_label(RibbonColumnNames.NAME.value)

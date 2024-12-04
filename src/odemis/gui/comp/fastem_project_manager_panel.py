@@ -25,7 +25,8 @@ import math
 import random
 from colorsys import hls_to_rgb, rgb_to_hls
 from functools import partial
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict
+import time
 
 import wx
 
@@ -34,7 +35,7 @@ from odemis.gui.comp import popup
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.file import AcquisitionConfig
-from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT
+from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT, GridBase, Row
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
 from odemis.gui.cont.tabs.fastem_project_ribbons_tab import (
     FastEMProjectRibbonsTab,
@@ -121,6 +122,32 @@ def generate_unique_color(existing_colors: List[str]) -> str:
             new_color_rgb = hls_to_rgb(*new_color_hls)
             new_color_hex = rgb_to_hex(new_color_rgb)
             return new_color_hex
+
+
+class ImportData:
+    """
+    This class is a data structure which encapsulates the relationship between a data row, its
+    corresponding tree node, the parent project node, and the grid where the data will be displayed.
+    It simplifies the handling of these elements when processing and importing project data.
+
+    :param row: (Row) The row object that holds the data to be added to the grid.
+    :param node: (FastEMTreeNode) The node representing the data in the project tree.
+    :param project_node: (FastEMTreeNode) The parent project node to which the `node` belongs.
+    :param grid: (GridBase) The grid to which the row data will be added.
+
+    """
+
+    def __init__(
+        self,
+        row: Row,
+        node: FastEMTreeNode,
+        project_node: FastEMTreeNode,
+        grid: GridBase,
+    ):
+        self.row = row
+        self.node = node
+        self.project_node = project_node
+        self.grid = grid
 
 
 class ProjectManagerImportExport:
@@ -256,6 +283,14 @@ class ProjectManagerImportExport:
         if sample_data is None:
             raise ValueError(f"The JSON file is not for {sample_type}")
         projects_data = sample_data.get("projects", {})
+        roa_shapes = []
+        section_shapes = []
+        ribbon_shapes = []
+        import_data: List[ImportData] = []
+
+        shapes = self.project_manager.tab_data.shapes.value
+        active_projects = list(self.project_manager.active_project_ctrl.GetStrings())
+        start_time = time.time()
 
         for project_name, project_data in projects_data.items():
             project_name = project_name.strip()
@@ -265,90 +300,142 @@ class ProjectManagerImportExport:
             project_settings = project_data.get("settings", None)
             if project_settings is None:
                 raise ValueError(f"{project_name} does not contain settings key")
-            # Add project to the combobox
-            active_project_ctrl = self.project_manager.active_project_ctrl
-            active_projects = active_project_ctrl.GetStrings()
-            if project_name in active_projects:
-                project_name = make_unique_name(project_name, active_projects)
-            active_project_ctrl.Append(project_name)
-            self.project_manager.tab_data.projects_tree.add_child(
-                FastEMTreeNode(project_name, NodeType.PROJECT)
-            )
-
-            project_colour = set()
-
             self.project_manager.tab_data.project_settings_data.value[project_name] = (
                 project_settings
             )
-            project_node = self.project_manager.tab_data.projects_tree.find_node(
-                project_name
+            # Create project node
+            if project_name in active_projects:
+                project_name = make_unique_name(project_name, active_projects)
+            active_projects.append(project_name)
+            project_node = FastEMTreeNode(project_name, NodeType.PROJECT)
+            self.project_manager.tab_data.projects_tree.add_child(
+                project_node, sort_order=False
             )
 
+            ribbons = project_data.get("ribbons", [])
+            sections = project_data.get("sections", [])
+            roas = project_data.get("roas", [])
+            project_colour = set()
+
+            # Initialize grids
+            ribbons_grid = self.project_manager.project_ribbons_tab.create_grid()
+            sections_grid = self.project_manager.project_sections_tab.create_grid()
+            roas_grid = self.project_manager.project_roas_tab.create_grid()
+            self.project_manager.project_grids_data[project_name] = {
+                FastEMProjectRibbonsTab.__name__: ribbons_grid,
+                FastEMProjectSectionsTab.__name__: sections_grid,
+                FastEMProjectROAsTab.__name__: roas_grid,
+            }
+            ribbons_grid.rows = [0] * len(ribbons)
+            sections_grid.rows = [0] * len(sections)
+            roas_grid.rows = [0] * len(roas)
+
             # Add ROAs
-            roa_rows = []
-            for roa in project_data.get("roas", []):
+            for roa in roas:
                 roa_row = ROARow.from_dict(roa, self.project_manager.tab_data)
-                roa_rows.append(roa_row)
-                project_colour.add(roa["roa"]["shape"]["colour"])
                 roa_node = FastEMTreeNode(
                     f"{roa_row.roa.name.value}_{roa_row.roa.slice_index.value}",
                     NodeType.ROA,
                     roa_row,
                 )
-                project_node.add_child(roa_node)
-                self.project_manager.tab_data.shapes.value.append(roa_row.roa.shape)
+                import_data.append(
+                    ImportData(
+                        row=roa_row,
+                        node=roa_node,
+                        project_node=project_node,
+                        grid=roas_grid,
+                    )
+                )
+                roa_shapes.append(roa_row.roa.shape)
+                project_colour.add(roa["roa"]["shape"]["colour"])
 
             # Add sections
-            sections_row = []
-            for section in project_data.get("sections", []):
+            for section in sections:
                 section_row = SectionRow.from_dict(
                     section, self.project_manager.tab_data
                 )
-                sections_row.append(section_row)
-                project_colour.add(section["roa"]["shape"]["colour"])
                 section_node = FastEMTreeNode(
                     f"{section_row.roa.name.value}_{section_row.roa.slice_index.value}",
                     NodeType.SECTION,
                     section_row,
                 )
-                project_node.add_child(section_node)
-                self.project_manager.tab_data.shapes.value.append(section_row.roa.shape)
+                import_data.append(
+                    ImportData(
+                        row=section_row,
+                        node=section_node,
+                        project_node=project_node,
+                        grid=sections_grid,
+                    )
+                )
+                section_shapes.append(section_row.roa.shape)
+                project_colour.add(section["roa"]["shape"]["colour"])
 
             # Add ribbons
-            for ribbon in project_data.get("ribbons", []):
+            for ribbon in ribbons:
                 ribbon_row = RibbonRow.from_dict(ribbon, self.project_manager.tab_data)
-                project_colour.add(ribbon["roa"]["shape"]["colour"])
                 ribbon_node = FastEMTreeNode(
                     f"{ribbon_row.roa.name.value}_{ribbon_row.roa.slice_index.value}",
                     NodeType.RIBBON,
                     ribbon_row,
                 )
-                project_node.add_child(ribbon_node)
-                self.project_manager.tab_data.shapes.value.append(ribbon_row.roa.shape)
+                import_data.append(
+                    ImportData(
+                        row=ribbon_row,
+                        node=ribbon_node,
+                        project_node=project_node,
+                        grid=ribbons_grid,
+                    )
+                )
+                ribbon_shapes.append(ribbon_row.roa.shape)
+                project_colour.add(ribbon["roa"]["shape"]["colour"])
 
             if len(project_colour) == 1:
-                self.project_manager.project_shape_colour[project_name] = (
-                    project_colour.pop()
+                self.project_manager.project_shape_colour[project_name] = project_colour.pop()
+            else:
+                logging.debug(
+                    "%s's shapes have more than one colour specified.", project_name
                 )
+        logging.debug(
+            f"Took {time.time() - start_time} s to create and gather all projects data."
+        )
 
-        # Set and notify the parent again to be reflected in FastEMProjectTreeCtrl
-        for roa_row in roa_rows:
-            if roa_row.parent_name.value != DEFAULT_PARENT:
-                roa_row.parent_name._set_value(
-                    roa_row.parent_name.value, must_notify=True
+        start_time = time.time()
+        # First gather the import data and later loop over functions which have wx.PostEvent triggering GUI changes
+        # TODO investigate if time can be saved here
+        for data in import_data:
+            data.grid.add_row(data.row)
+            data.project_node.add_child(data.node, sort_order=False)
+            if (
+                data.row.parent_name is not None
+                and data.row.parent_name.value != DEFAULT_PARENT
+            ):
+                data.row.parent_name._set_value(
+                    data.row.parent_name.value, must_notify=True
                 )
+        logging.debug(
+            f"Took {time.time() - start_time} s to add grid rows and children of all projects."
+        )
 
-        # Set and notify the parent again to be reflected in FastEMProjectTreeCtrl
-        for section_row in sections_row:
-            if section_row.parent_name.value != DEFAULT_PARENT:
-                section_row.parent_name._set_value(
-                    section_row.parent_name.value, must_notify=True
-                )
-
+        start_time = time.time()
         if projects_data:
+            # Update the shapes
+            shapes.extend(roa_shapes)
+            shapes.extend(section_shapes)
+            shapes.extend(ribbon_shapes)
+            self.project_manager.tab_data.shapes._set_value(shapes, must_notify=False)
+            self.project_manager.previous_shapes = set(shapes)
+            # Update the active_project_ctrl combobox
+            current_project = self.project_manager.tab_data.current_project.value
+            self.project_manager.active_project_ctrl.SetItems(sorted(active_projects))
+            self.project_manager.active_project_ctrl.SetValue(current_project)
+            # Sort the project tree in the end because of recursive nature of the function
+            self.project_manager.tab_data.projects_tree.sort_children_recursively()
+            # Refresh the viewports
             for viewport in self.project_manager.tab_data.viewports.value:
                 viewport.canvas.request_drawing_update()
-                viewport.canvas.Refresh()
+        logging.debug(
+            f"Took {time.time() - start_time} s to update shapes, necessary controls and refresh the viewports."
+        )
 
 
 class DetachedProjectManagerFrame(wx.Frame):
@@ -430,6 +517,10 @@ class FastEMProjectManagerPanel:
         self.tab_data.projects_tree.add_child(
             FastEMTreeNode(tab_data.current_project.value, NodeType.PROJECT)
         )
+        # A dict where key is the project name and value is the project grid's data,
+        # the project's grid data again is a dict where key is the name of the grid's
+        # tab and value is the grid object
+        self.project_grids_data: Dict[str, Dict[str, GridBase]] = {}
 
         self.projects_panel = SettingsPanel(
             panel.active_project_panel, size=panel.active_project_panel.Size
@@ -529,6 +620,11 @@ class FastEMProjectManagerPanel:
             self.project_settings_tab,
         )
 
+        self.project_grids_data[tab_data.current_project.value] = {
+            FastEMProjectRibbonsTab.__name__: self.project_ribbons_tab.grid,
+            FastEMProjectSectionsTab.__name__: self.project_sections_tab.grid,
+            FastEMProjectROAsTab.__name__: self.project_roas_tab.grid,
+        }
         self.project_shape_colour = {
             tab_data.current_project.value: FASTEM_PROJECT_COLOURS[0]
         }
@@ -863,12 +959,6 @@ class FastEMProjectManagerPanel:
             if shape in self._shape_points_sub_callback:
                 del self._shape_points_sub_callback[shape]
 
-    def clear_grid(self):
-        """Clears the grid for all project tabs (ribbons, sections, ROAs)."""
-        self.project_ribbons_tab.grid.clear()
-        self.project_sections_tab.grid.clear()
-        self.project_roas_tab.grid.clear()
-
     def update_project_shape_colour(self, project_name):
         """
         Updates or assigns a color to the shapes associated with a given project.
@@ -884,29 +974,47 @@ class FastEMProjectManagerPanel:
                 list(self.project_shape_colour.values())
             )
 
-    def update_grid_for_project(self, project_name):
+    @call_in_wx_main
+    def setup_grid_for_project(self, project_name):
         """
-        Updates the grid for a given project, populating it with the project's data.
+        Setup the grid for a given project, populating it with the project's data.
 
         :param project_name: (str) The name of the project to update the grid for.
         """
-        self.clear_grid()
-        project_node = self.tab_data.projects_tree.find_node(project_name)
-        ribbons = project_node.find_nodes_by_type(NodeType.RIBBON)
-        sections = project_node.find_nodes_by_type(NodeType.SECTION)
-        roas = project_node.find_nodes_by_type(NodeType.ROA)
-        self.project_ribbons_tab.grid.rows = [0] * len(ribbons)
-        self.project_sections_tab.grid.rows = [0] * len(sections)
-        self.project_roas_tab.grid.rows = [0] * len(roas)
-        for idx, roa in enumerate(roas):
-            roa.row.index = idx
-            self.project_roas_tab.grid.add_row(roa.row)
-        for idx, section in enumerate(sections):
-            section.row.index = idx
-            self.project_sections_tab.grid.add_row(section.row)
-        for idx, ribbon in enumerate(ribbons):
-            ribbon.row.index = idx
-            self.project_ribbons_tab.grid.add_row(ribbon.row)
+        self.project_ribbons_tab.grid.Hide()
+        self.project_sections_tab.grid.Hide()
+        self.project_roas_tab.grid.Hide()
+        if project_name:
+            if project_name in self.project_grids_data:
+                ribbons_grid = self.project_grids_data[project_name][
+                    FastEMProjectRibbonsTab.__name__
+                ]
+                sections_grid = self.project_grids_data[project_name][
+                    FastEMProjectSectionsTab.__name__
+                ]
+                roas_grid = self.project_grids_data[project_name][
+                    FastEMProjectROAsTab.__name__
+                ]
+            else:
+                ribbons_grid = self.project_ribbons_tab.create_grid()
+                sections_grid = self.project_sections_tab.create_grid()
+                roas_grid = self.project_roas_tab.create_grid()
+                self.project_grids_data[project_name] = {
+                    FastEMProjectRibbonsTab.__name__: ribbons_grid,
+                    FastEMProjectSectionsTab.__name__: sections_grid,
+                    FastEMProjectROAsTab.__name__: roas_grid,
+                }
+            self.project_ribbons_tab.grid = ribbons_grid
+            self.project_sections_tab.grid = sections_grid
+            self.project_roas_tab.grid = roas_grid
+            self.project_sections_tab.update_ribbons_grid(ribbons_grid)
+            self.project_roas_tab.update_sections_grid(sections_grid)
+            self.project_ribbons_tab.grid.Show()
+            self.project_sections_tab.grid.Show()
+            self.project_roas_tab.grid.Show()
+            self.project_ribbons_tab.grid.Refresh()
+            self.project_sections_tab.grid.Refresh()
+            self.project_roas_tab.grid.Refresh()
 
     def _on_active_project_add_button_ctrl(self, evt):
         """Handles the event when the '+' button is pressed, adding a new project."""
@@ -937,7 +1045,7 @@ class FastEMProjectManagerPanel:
                     wx.OK | wx.ICON_INFORMATION,
                 )
             ctrl.SetValue(value)
-            self.update_grid_for_project(value)
+            self.setup_grid_for_project(value)
             self.tab_data.current_project.value = value
 
     def _on_active_project_delete_button_ctrl(self, evt):
@@ -963,9 +1071,10 @@ class FastEMProjectManagerPanel:
             self.tab_data.projects_tree.delete_node(value)
             del self.tab_data.project_settings_data.value[value]
             del self.project_shape_colour[value]
+            del self.project_grids_data[value]
             ctrl.SetValue("")
+            self.setup_grid_for_project("")
             self.tab_data.current_project.value = ""
-            self.clear_grid()
 
     def _on_active_project(self, evt):
         """Handles changes in the active project, including selection and renaming."""
@@ -992,13 +1101,19 @@ class FastEMProjectManagerPanel:
                             settings_data = self.tab_data.project_settings_data.value.pop(
                                 self.original_project
                             )
-                            colour = self.project_shape_colour.pop(self.original_project)
+                            grids_data = self.project_grids_data.pop(
+                                self.original_project
+                            )
+                            colour = self.project_shape_colour.pop(
+                                self.original_project
+                            )
                             projects[idx] = value
                             # Sort the active project combobox items and projects tree
                             ctrl.SetItems(sorted(projects))
                             self.tab_data.projects_tree.sort_children_recursively()
                             self.tab_data.project_settings_data.value[value] = settings_data
                             self.project_shape_colour[value] = colour
+                            self.project_grids_data[value] = grids_data
                             self.original_project = value
                         else:
                             wx.MessageBox(
@@ -1006,13 +1121,13 @@ class FastEMProjectManagerPanel:
                                 "Info",
                                 wx.OK | wx.ICON_INFORMATION,
                             )
-                            self.update_grid_for_project(value)
+                            self.setup_grid_for_project(value)
                 ctrl.SetValue(value)
                 self.tab_data.current_project.value = value
         elif evt.GetEventType() == wx.EVT_COMBOBOX.typeId:
             value = ctrl.GetValue()
             if value != self.tab_data.current_project.value:
-                self.update_grid_for_project(value)
+                self.setup_grid_for_project(value)
                 self.tab_data.current_project.value = value
 
     @call_in_wx_main
