@@ -35,6 +35,7 @@ from odemis.gui.cont.tabs.tab import Tab
 
 class FastEMProjectSettingsTab(Tab):
     """A tab for managing project-specific settings."""
+
     def __init__(self, name, button, panel, main_frame, main_data, main_tab_data):
         """
         Initializes the FastEMProjectSettingsTab with the provided parameters.
@@ -74,7 +75,9 @@ class FastEMProjectSettingsTab(Tab):
         settings_data = self.main_tab_data.project_settings_data.value
         for project in settings_data.keys():
             settings_data[project][DWELL_TIME_ACQUISITION] = dwell_time
-        self.main_tab_data.project_settings_data.value = settings_data
+        self.main_tab_data.project_settings_data._set_value(
+            settings_data, must_notify=True
+        )
 
     def _on_current_project(self, current_project):
         """Updates the controls when the current project changes."""
@@ -122,9 +125,13 @@ class FastEMProjectSettingsTab(Tab):
             value = ctrl.GetValue()
             if entry == DWELL_TIME_ACQUISITION:
                 if len(self.main_tab_data.current_project.value) > 0:
-                    self.main_tab_data.project_settings_data.value[
-                        self.main_tab_data.current_project.value
-                    ][entry] = value
+                    settings_data = self.main_tab_data.project_settings_data.value
+                    settings_data[self.main_tab_data.current_project.value][
+                        entry
+                    ] = value
+                    self.main_tab_data.project_settings_data._set_value(
+                        settings_data, must_notify=True
+                    )
 
     def _bind_project_settings_control_events(self, ctrl, entry):
         """Binds the appropriate event handlers to the project settings controls."""

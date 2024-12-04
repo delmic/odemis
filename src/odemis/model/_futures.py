@@ -387,6 +387,14 @@ class ProgressiveFuture(CancellableFuture):
         self._end_time = end or (self._start_time + 0.1)
         self.add_done_callback(self.__on_done)
 
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @property
+    def end_time(self):
+        return self._end_time
+
     def __on_done(self, future):
         """
         Called when the future is over to report the update one last time
