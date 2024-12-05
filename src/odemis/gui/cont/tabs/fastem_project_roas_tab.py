@@ -336,6 +336,33 @@ class FastEMProjectROAsTab(Tab):
 
         self.panel.Bind(wx.EVT_SIZE, self._on_panel_size)
 
+    def create_grid(self) -> GridBase:
+        """
+        Creates and configures a new grid for displaying data.
+
+        :return: (GridBase) A configured instance of the grid.
+
+        Note:
+            The grid is not displayed immediately but is prepared for further manipulation
+            or data population before being shown.
+        """
+        grid = GridBase(self.panel, size=self.panel.Parent.Size)
+        grid.set_columns(self.columns)
+        grid.Hide()
+        return grid
+
+    def update_sections_grid(self, sections_grid):
+        """
+        Updates the sections grid and binds relevant event handlers.
+
+        :param sections_grid: (GridBase) The grid to be set as the sections grid.
+        """
+        self.sections_grid = sections_grid
+        self.sections_grid.Bind(
+            EVT_GRID_CELL_CHANGING, self._on_sections_grid_cell_changing
+        )
+        self.sections_grid.Bind(EVT_GRID_ROW_CHANGED, self._on_sections_row_changed)
+
     def _on_sections_grid_cell_changing(self, evt):
         """Handles changes in the sections grid cell values and updates the parent column in the ROA grid."""
         name_col = self.sections_grid.get_column_by_label(SectionColumnNames.NAME.value)
