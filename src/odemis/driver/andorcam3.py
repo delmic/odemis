@@ -227,16 +227,15 @@ class AndorCam3(model.DigitalCamera):
         try:
             self.Open(device)
         except Exception as exp:
-            logging.error("Failed to initialise Andor camera %d: %s", device, exp)
+            logging.error("Failed to initialise Andor camera %s: %s", device, exp)
             if isinstance(exp, ATError):
                 if exp.errno == 6: # OUTOFRANGE
-                    raise HwError("Failed to find Andor camera %d, check that it "
-                                  "is turned on and connected to the computer." %
-                                  device)
+                    raise HwError(f"Failed to find Andor camera {device}, check that it "
+                                  "is turned on and connected to the computer.")
                 elif exp.errno in (10, 17, 38):  # CONNECTION, COMM, DEVICEINUSE
-                    raise HwError("Failed to initialise camera %d, try "
+                    raise HwError(f"Failed to initialise camera {device}, try "
                                   "turning it off, waiting for 10 s and turning "
-                                  "it on again." % device)
+                                  "it on again.")
 
             raise
         if device is None:
@@ -915,7 +914,7 @@ class AndorCam3(model.DigitalCamera):
                 status_str = " (%s)" % (status,)
             else:
                 status_str = ""
-            logging.debug(u"Temp is %.2f°C%s", temp, status_str)
+            logging.debug(u"Temperature of %s is %.2f°C%s", self.name, temp, status_str)
         except ATError as exp:
             # This is a known error if the camera is turned off or disconnected.
             # We don't do anything, but at least we can hint the user something
@@ -1300,11 +1299,13 @@ class AndorCam3(model.DigitalCamera):
     # two gains. So it looks like x1, and just introduces a bit more noise. To
     # distinguish it from the normal x1, we put x1.1.
     # Regex -> gain factor
-    re_spagc = {r"1[12].*[Hh]igh\s+well": 20,
-                r"1[12].*[Ll]ow\s+noise": 1,
-                r"16.*[Ll]ow\s+noise": 1.1,
-                r"16.*[Hh]igh\s+dynamic": 1.1,
-                }
+    RE_GAIN_NAME_TO_FACTOR = {
+        r"1[12].*[Hh]igh\s+well": 20,
+        r"1[12].*[Hh]igh\s+speed": 20,
+        r"1[12].*[Ll]ow\s+noise": 1,
+        r"16.*[Ll]ow\s+noise": 1.1,
+        r"16.*[Hh]igh\s+dynamic": 1.1,
+    }
     def _getGains(self):
         """
         return (set of 0<floats or dict of 0<floats -> str): Available gain as
@@ -1321,21 +1322,23 @@ class AndorCam3(model.DigitalCamera):
             # "11-bit (low noise)" -> 1x
             # "16-bit (low noise & high well capacity)" -> 1.1x
             # Sona:
-            # "12-bit (low noise)" -> 20x
+            # "11-bit (high speed)" -> 20x
+            # "12-bit (low noise)" -> 1x
             # "16-bit (high dynamic range)" -> 1.1x
             av_gains = self.GetEnumStringImplemented(u"SimplePreAmpGainControl")
             logging.debug("Available gains: %s", av_gains)
             for idx, gs in enumerate(av_gains):
                 if gs is None:
                     continue
-                for pattern, gain in self.re_spagc.items():
+                for pattern, gain in self.RE_GAIN_NAME_TO_FACTOR.items():
                     if re.match(pattern, gs):
                         gains[gain] = gs
                         self._gain_to_idx[gain] = idx
                         break
                 else:
                     logging.warning("Unhandled gain %s", gs)
-        except ATError:
+        except ATError as ex:
+            logging.warning("Gain control not supported: %s", ex)
             return {1}
 
         return gains
