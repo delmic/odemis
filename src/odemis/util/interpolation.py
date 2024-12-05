@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import List
 
-import numpy as np
+import numpy
 from scipy import ndimage
 
 from odemis import model
@@ -36,7 +36,7 @@ def interpolate_z_stack(da: model.DataArray,
             raise ValueError(
                 f"Got shape {da.shape}, expected (1, 1, Z, Y, X)"
             )
-        da = np.squeeze(da, axis=(0, 1))
+        da = numpy.squeeze(da, axis=(0, 1))
 
     if da.ndim != 3:
         raise ValueError(f"data must be a ZYX array, but got {da.ndim}")
@@ -45,8 +45,8 @@ def interpolate_z_stack(da: model.DataArray,
     logging.info(f"Interpolating z-stack from {pixelsize_in:.2e} to {pixelsize_out:.2e} with method {method}")
     interpolated = z_interpolation(da, pixelsize_in, pixelsize_out, method=method)
 
-    # add back channel dimension
-    interpolated = np.expand_dims(interpolated, axis=(0, 1))
+    # add back channel dimension # Note: axis = (0, 1) not supported on 20.04
+    interpolated = numpy.expand_dims(numpy.expand_dims(interpolated, axis=0), axis=0) 
 
     # update metadata
     md = copy.deepcopy(da.metadata)
@@ -55,11 +55,11 @@ def interpolate_z_stack(da: model.DataArray,
     return model.DataArray(interpolated, md)
 
 def z_interpolation(
-    da: np.ndarray,
+    da: numpy.ndarray,
     original_z_size: float,
     target_z_size: float,
     method: str = "linear",
-) -> np.ndarray:
+) -> numpy.ndarray:
     """Interpolate a 3D image array along the z-axis using scipy's zoom function.
     :param da: 3D numpy array (ZYX)
     :param original_z_size: original pixel size in z-axis
