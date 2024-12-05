@@ -56,20 +56,9 @@ class TestAutofocus(unittest.TestCase):
     """
     Test autofocus functions
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-
-        try:
-            testing.start_backend(SECOM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SECOM_CONFIG)
 
         # find components by their role
         cls.ebeam = model.getComponent(role="e-beam")
@@ -83,17 +72,6 @@ class TestAutofocus(unittest.TestCase):
         # The good focus positions are at the start up positions
         cls._opt_good_focus = cls.focus.position.value["z"]
         cls._sem_good_focus = cls.efocus.position.value["z"]
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
-    def setUp(self):
-
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_measure_focus(self):
         """
@@ -159,20 +137,9 @@ class TestSparc2AutoFocus(unittest.TestCase):
         Test Sparc2Autofocus for sp-ccd
         backend : SPARC2_FOCUS_CONFIG
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-
-        try:
-            testing.start_backend(SPARC2_FOCUS_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_FOCUS_CONFIG)
 
         # find components by their role
         cls.ccd = model.getComponent(role="ccd")
@@ -197,21 +164,12 @@ class TestSparc2AutoFocus(unittest.TestCase):
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
         self.opm = acq.path.OpticalPathManager(model.getMicroscope())
 
         # Speed it up
         self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
         self.spccd.exposureTime.value = self.spccd.exposureTime.range[0]
-
 
     @timeout(1000)
     def test_one_det(self):
@@ -318,25 +276,15 @@ class TestSparc2AutoFocus(unittest.TestCase):
         # We expect an entry for each combination grating/detector
         self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
 
+
 class TestSparc2AutoFocus_2(unittest.TestCase):
     """
     Test Sparc2Autofocus for ccd
     backend : SPARC2_FOCUS_CONFIG
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-
-        try:
-            testing.start_backend(SPARC2_FOCUS_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_FOCUS_CONFIG)
 
         # find components by their role
         cls.ccd = model.getComponent(role="ccd")
@@ -353,20 +301,11 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
         self.opm = acq.path.OpticalPathManager(model.getMicroscope())
         # Speed it up
         self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
         self.spccd.exposureTime.value = self.spccd.exposureTime.range[0]
-
 
     @timeout(1000)
     def test_one_det(self):
@@ -446,25 +385,15 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
         # We expect an entry for each combination grating/detector
         self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
 
+
 class TestSparc2AutoFocus_3(unittest.TestCase):
     """
     Test Sparc2Autofocus for in case of 4 detectors
     backend : SPARC2_FOCUS2_CONFIG
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-
-        try:
-            testing.start_backend(SPARC2_FOCUS2_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_FOCUS2_CONFIG)
 
         # find components by their role
         cls.ccd = model.getComponent(role="ccd0")
@@ -481,20 +410,11 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
         self.opm = acq.path.OpticalPathManager(model.getMicroscope())
         # Speed it up
         self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
         self.spccd.exposureTime.value = self.spccd.exposureTime.range[0]
-
 
     @timeout(1000)
     def test_spectrograph(self):
@@ -541,20 +461,9 @@ class TestAutofocusSpectrometer(unittest.TestCase):
     """
     Test autofocus spectrometer function
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-
-        try:
-            testing.start_backend(SPARC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC_CONFIG)
 
         # find components by their role
         cls.ccd = model.getComponent(role="ccd")
@@ -567,16 +476,7 @@ class TestAutofocusSpectrometer(unittest.TestCase):
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
         # Speed it up
         self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
         self.spccd.exposureTime.value = self.spccd.exposureTime.range[0]
