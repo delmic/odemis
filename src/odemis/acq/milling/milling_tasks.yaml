@@ -9,9 +9,9 @@
   patterns:
     - name: 'Rough Trench'
       width: 1.2e-05
-      height: 6e-06
-      depth: 1.5e-06
-      spacing: 5e-06
+      height: 6.0e-06
+      depth: 1.0e-06
+      spacing: 5.0e-06
       center_x: 0
       center_y: 0
       pattern: 'trench'
@@ -25,9 +25,9 @@
     channel: 'ion'
   patterns:
     - name: 'Rough Trench 02'
-      width: 1e-05
-      height: 4e-06
-      depth: 1e-06
+      width: 1.0e-05
+      height: 4.0e-06
+      depth: 0.8e-06
       spacing: 1.5e-06
       center_x: 0
       center_y: 0
@@ -42,9 +42,9 @@
     channel: 'ion'
   patterns:
     - name: 'Polishing Trench 01'
-      width: 9e-06
-      height: 1e-06
-      depth: 0.8e-06
+      width: 9.0e-06
+      height: 1.0e-06
+      depth: 0.6e-06
       spacing: 6e-07
       center_x: 0
       center_y: 0
@@ -61,8 +61,8 @@
     - name: 'Polishing Trench 02'
       width: 8.5e-06
       height: 0.6e-06
-      depth: 1e-06
-      spacing: 3e-07
+      depth: 0.5e-06
+      spacing: 3.0e-07
       center_x: 0
       center_y: 0
       pattern: 'trench'
