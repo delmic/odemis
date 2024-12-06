@@ -576,10 +576,11 @@ class FastEMProjectManagerPanel:
 
         :param is_acquiring: (bool) Flag indicating if acquisition is in progress.
         """
-        self.panel.Enable(not is_acquiring)
-        self.toolbar.enable(not is_acquiring)
-        enable = self.tab_data.active_project_tab.value != self.project_settings_tab
-        self._enable_tools(enable)
+        enable_pnl = not is_acquiring
+        enable_btn = enable_pnl and self.tab_data.active_project_tab.value != self.project_settings_tab
+        self.panel.Enable(enable_pnl)
+        self.toolbar.enable(enable_pnl)
+        self._enable_tools(enable_btn)
 
     def _on_btn_export(self, _):
         """
@@ -692,13 +693,14 @@ class FastEMProjectManagerPanel:
 
         :param project: (str) The name of the currently selected project.
         """
-        enable = len(project) > 0
-        self.panel.btn_move_up.Enable(enable)
-        self.panel.btn_move_down.Enable(enable)
-        self.panel.btn_delete.Enable(enable)
-        self.panel.pnl_project_tabbuttons.Enable(enable)
-        self.panel.pnl_project_tabs.Enable(enable)
-        self._enable_tools(enable)
+        enable_pnl = len(project) > 0
+        enable_btn = enable_pnl and self.tab_data.active_project_tab.value != self.project_settings_tab
+        self.panel.pnl_project_tabbuttons.Enable(enable_pnl)
+        self.panel.pnl_project_tabs.Enable(enable_pnl)
+        self.panel.btn_move_up.Enable(enable_btn)
+        self.panel.btn_move_down.Enable(enable_btn)
+        self.panel.btn_delete.Enable(enable_btn)
+        self._enable_tools(enable_btn)
 
     def _on_shape_points(self, points, shape):
         """
