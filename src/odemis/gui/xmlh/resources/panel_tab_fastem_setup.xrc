@@ -258,7 +258,7 @@
                           </object>
                           <option>0</option>
                           <flag>wxTOP|wxBOTTOM|wxLEFT|wxFIXED_MINSIZE</flag>
-                          <border>18</border>
+                          <border>16</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxStaticText" name="lbl_calib">
@@ -274,7 +274,7 @@
                           </object>
                           <option>1</option>
                           <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                          <border>14</border>
+                          <border>12</border>
                         </object>
                       </object>
                     </object>
