@@ -57,7 +57,7 @@ class FastEMProjectSettingsTab(Tab):
         self.dwell_time_acquisition_ctrl = None
 
         self.project_settings = SettingsPanel(
-            panel, size=(panel.Parent.Size[0] / 2.5, panel.Parent.Size[1] / 1.5)
+            panel, size=(int(panel.Parent.Size[0] / 2.5), int(panel.Parent.Size[1] / 1.5))
         )
 
         self._create_project_settings_entries()
