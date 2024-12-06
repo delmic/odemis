@@ -33,7 +33,7 @@ import numpy
 import Pyro5.api
 import pkg_resources
 from Pyro5.errors import CommunicationError
-
+from scipy import ndimage
 from odemis import model
 from odemis import util
 from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
@@ -1535,6 +1535,7 @@ class Detector(model.Detector):
                     # Retrieve the image (scans image, blocks until the image is received)
                     # TODO: use the metadata from the image acquisition _md once it's available
                     image, _md = self.parent.acquire_image(self._scanner.channel)
+                    image = ndimage.median_filter(image, 3)  # median filter to remove noise
                     # non-blocking acquisition (disabled until hw testing)
                     # logging.debug("Starting one image acquisition")
 
