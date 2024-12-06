@@ -222,6 +222,7 @@
                     <border>10</border>
                   </object>
                 </object>
+                <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
