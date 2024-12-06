@@ -15,6 +15,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import copy
 import logging
+import queue
+import threading
 from abc import ABCMeta
 
 from odemis import model
@@ -140,6 +142,11 @@ class TestPicoBase(metaclass=ABCMeta):
         cls.dev.terminate()
         time.sleep(1)
 
+    def setUp(self):
+        # for receive_auto_unsub()
+        self._data = queue.Queue()
+        self.got_image = threading.Event()
+
     def test_simple(self):
         print(self.dev.getMetadata())
 
@@ -157,7 +164,7 @@ class TestPicoBase(metaclass=ABCMeta):
 
     def test_acquire_sub(self):
         """Test the subscription"""
-        dt = 1  # 1s
+        dt = 1  # s
         df = self.dev.data
         self.dev.dwellTime.value = dt
         exp_shape = self.dev.shape[-2::-1]
@@ -170,6 +177,140 @@ class TestPicoBase(metaclass=ABCMeta):
         self.assertGreater(self._cnt, 3)
         self.assertEqual(self._lastdata.shape, exp_shape)
         time.sleep(2)  # consider some time for resetting the shutters
+
+    def test_trigger(self):
+        """
+        Check that the synchronisation with softwareTrigger works.
+        Make it typical, by waiting for the data received, and then notifying
+        the software trigger again after a little while.
+        """
+        dt = 0.1
+        self.dev.dwellTime.value = dt
+        duration = dt * 1.1 + 0.1
+        numbert = 6
+        self.ccd_left = numbert
+        self.got_image.clear()
+        exp_shape = self.dev.shape[-2::-1]
+
+        self.dev.data.synchronizedOn(self.dev.softwareTrigger)
+        self.dev.data.subscribe(self.receive_auto_unsub)
+
+        # Wait for the image
+        for i in range(numbert):
+            self.got_image.clear()
+            self.dev.softwareTrigger.notify()
+            # wait for the image to be received
+            gi = self.got_image.wait(duration + 5)
+            self.assertTrue(gi, "image %d not received after %g s" % (i, duration + 5))
+            time.sleep(i * 1)  # wait a bit to simulate some processing
+
+        self.assertEqual(self.ccd_left, 0)
+        self.dev.data.synchronizedOn(None)
+
+        # Check nothing more is received
+        time.sleep(1)
+
+        self.assertEqual(self.ccd_left, 0)
+        for i in range(numbert):
+            self.assertFalse(self._data.empty())
+            d = self._data.get()
+            self.assertEqual(d.shape, exp_shape)
+
+        self.assertTrue(self._data.empty())
+
+        # check we can still get data normally
+        d = self.dev.data.get()
+        self.assertEqual(d.shape, exp_shape)
+
+    def test_trigger_cache(self):
+        """
+        Check that the synchronisation stores the previous triggers (if they arrive a little early)
+        """
+        dt = 0.1
+        self.dev.dwellTime.value = dt
+        duration = dt * 1.1 + 0.1
+        exp_shape = self.dev.shape[-2::-1]
+
+        self._data = queue.Queue()
+        numbert = 6
+        self.ccd_left = numbert
+
+        self.dev.data.synchronizedOn(self.dev.softwareTrigger)
+        self.dev.data.subscribe(self.receive_auto_unsub)
+
+        try:
+            # Send all the triggers at once
+            for i in range(numbert):
+                self.dev.softwareTrigger.notify()
+
+            for i in range(numbert):
+                # wait for the image to be received
+                try:
+                    self._data.get(timeout=duration + 5)
+                except queue.Empty:
+                    self.fail("No data %d received after %s s" % (i, duration))
+        finally:
+            self.dev.data.unsubscribe(self.receive_auto_unsub)
+
+        self.dev.data.synchronizedOn(None)
+
+        # check we can still get data normally
+        d = self.dev.data.get()
+        self.assertEqual(d.shape, exp_shape)
+
+    def test_trigger_removal(self):
+        """
+        Check that when the synchronisation is removed, the acquisition continues
+        """
+        dt = 0.1
+        self.dev.dwellTime.value = dt
+        duration = dt * 1.1 + 0.1
+        exp_shape = self.dev.shape[-2::-1]
+
+        self._data = queue.Queue()
+        numbert = 6
+        self.ccd_left = numbert
+
+        self.dev.data.synchronizedOn(self.dev.softwareTrigger)
+        self.dev.data.subscribe(self.receive_auto_unsub)
+
+        try:
+            # Get one image
+            self.dev.softwareTrigger.notify()
+            self._data.get(timeout=duration + 5)
+
+            # make sure it's waiting
+            time.sleep(duration + 1)
+            # Only one trigger -> only one image ever generated -> no more data
+            self.assertTrue(self._data.empty())
+
+            # Now, stop the synchronization -> from now on, we should receive the images, without
+            # having to send triggers.
+            self.dev.data.synchronizedOn(None)
+
+            # Check we receive the other images
+            for i in range(1, numbert):
+                # wait for the image to be received
+                try:
+                    self._data.get(timeout=duration + 5)
+                except queue.Empty:
+                    self.fail("No data %d received after %s s" % (i, duration))
+        finally:
+            self.dev.data.unsubscribe(self.receive_auto_unsub)
+
+        # check we can still get data normally
+        d = self.dev.data.get()
+        self.assertEqual(d.shape, exp_shape)
+
+    def receive_auto_unsub(self, df, d):
+        self.ccd_left -= 1
+        if self.ccd_left <= 0:
+            df.unsubscribe(self.receive_auto_unsub)
+
+        self.got_image.set()
+        self._data.put(d)
+        logging.debug("Received data %d of shape %s with mean %s, max %s",
+                      self.ccd_left, d.shape, d.mean(), d.max())
 
     def _on_det(self, df, data):
         self._cnt += 1
@@ -258,8 +399,12 @@ class TestPH330(TestPicoBase, unittest.TestCase):
         for child in cls.dev.children.value:
             if child.name == CONFIG_SYNC["name"]:
                 cls.det0 = child
+                child.triggerLevel.value = -50e-3
+                child.zeroCrossLevel.value = -10e-3
             elif child.name == CONFIG_DET1["name"]:
                 cls.det1 = child
+                child.triggerLevel.value = -50e-3
+                child.zeroCrossLevel.value = -10e-3
 
     @classmethod
     def tearDownClass(cls):

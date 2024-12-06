@@ -9,7 +9,7 @@ Edited on 9 Nov 2020
 @editor: Eric Liu
 @editor: Jacob Ng
 
-Copyright © 2016-2021 Éric Piel, Delmic
+Copyright © 2016-2024 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -19,27 +19,28 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 """
-# Support for the PicoQuant time-correlators: PicoHarp 300 and HydraHarp 400.
+# Support for the PicoQuant time-correlators: PicoHarp 300/330 and HydraHarp 400.
 # Both are connected via USB. They require a dedicated library to be installed
-# on the computer, libph300.so or libhh400.so .
+# on the computer, libph300.so, libph330.so, or libhh400.so .
 
-from ctypes import *
 import ctypes
-from typing import Tuple, Dict, Optional, List
-
-from decorator import decorator
+from ctypes import *
 import logging
 import math
-import numpy
-
-from odemis import model, util
-from odemis.model import HwError
-from odemis.util import TimeoutError
 import queue
 import random
 import threading
 import time
+from abc import ABCMeta
+from typing import Tuple, Dict, Optional, List, Union
 
+import numpy
+from Pyro4 import oneway
+from decorator import decorator
+
+from odemis import model, util
+from odemis.model import HwError
+from odemis.util import TimeoutError
 
 # Based on phdefin.h for PicoHarp 300 DLL
 PH_MAXDEVNUM = 8
@@ -386,6 +387,7 @@ class HHDLL(PicoDLL):
 GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
+GEN_UNSYNC = "U"  # Synchronisation stopped
 
 
 class TerminationRequested(Exception):
@@ -414,7 +416,291 @@ def autoretry(f, self, *args, **kwargs):
     return res
 
 
-class PH300(model.Detector):
+class PicoBase(model.Detector, metaclass=ABCMeta):
+    """
+    Base class for all the PicoQuant time-correlators drivers.
+    """
+
+    def __init__(self, name: str, role: str,
+                 dependencies: Optional[Dict[str, model.HwComponent]] = None,
+                 daemon: Optional["pyro4.Daemon"] = None,
+                 **kwargs):
+
+        super().__init__(name, role, daemon=daemon, dependencies=dependencies, **kwargs)
+        self._in_channels: List[int] = []
+
+        # Wrapper for the dataflow
+        self.data = BasicDataFlow(self)
+        self.softwareTrigger = model.Event()
+
+        # Queue to control the acquisition thread:
+        self._genmsg = queue.Queue()  # GEN_*
+        # Queue of all synchronization events received (typically max len 1)
+        self._old_triggers = []
+        self._generator = threading.Thread(target=self._acquire, name=f"{self.name} acquisition thread")
+        self._generator.start()
+
+    def terminate(self):
+        self.stop_generate()
+        if self._generator:
+            self._genmsg.put(GEN_TERM)
+            self._generator.join(5)
+            self._generator = None
+        self.CloseDevice()
+
+        for c in self.children.value:
+            c.terminate()
+
+        super().terminate()
+
+    # Acquisition methods
+    def start_generate(self):
+        self._genmsg.put(GEN_START)
+        if not self._generator.is_alive():
+            logging.warning("Restarting acquisition thread")
+            self._generator = threading.Thread(target=self._acquire, name=f"{self.name} acquisition thread")
+            self._generator.start()
+
+    def stop_generate(self):
+        self._genmsg.put(GEN_STOP)
+
+    def set_trigger(self, sync):
+        """
+        sync (bool): True if should be triggered
+        """
+        if sync:
+            logging.debug("Now set to software trigger")
+        else:
+            # Just to make sure to not wait forever for it
+            logging.debug("Sending unsynchronisation event")
+            self._genmsg.put(GEN_UNSYNC)
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        self._genmsg.put(time.time())
+
+    # The acquisition is based on an FSM that roughly looks like this:
+    # Event\State |   Stopped   |Ready for acq|  Acquiring |
+    #  START      |Ready for acq|     .       |     .      |
+    #  Trigger    |      .      | Acquiring   | (buffered) |
+    #  UNSYNC     |      .      | Acquiring   |     .      |
+    #  STOP       |      .      |  Stopped    | Stopped    |
+    #  TERM       |    Final    |   Final     |  Final     |
+    # If the acquisition is not synchronised, then the Trigger event in Ready for
+    # acq is considered as a "null" event: it's immediately switched to acquiring.
+
+    def _get_acq_msg(self, **kwargs) -> Union[str, float]:
+        """
+        Read one message from the acquisition queue
+        return (str): message
+        raises queue.Empty: if no message on the queue
+        """
+        msg = self._genmsg.get(**kwargs)
+        if msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_UNSYNC) or isinstance(msg, float):
+            logging.debug("Acq received message %s", msg)
+        else:
+            logging.warning("Acq received unexpected message %s", msg)
+        return msg
+
+    def _acq_wait_start(self):
+        """
+        Blocks until the acquisition should start.
+        Note: it expects that the acquisition is stopped.
+        raise TerminationRequested: if a terminate message was received
+        """
+        while True:
+            msg = self._get_acq_msg(block=True)
+            if msg == GEN_TERM:
+                raise TerminationRequested()
+            elif msg == GEN_START:
+                return
+
+            # Duplicate Stop or trigger
+            logging.debug("Skipped message %s as acquisition is stopped", msg)
+
+    def _acq_should_stop(self, timeout=None):
+        """
+        Indicate whether the acquisition should now stop or can keep running.
+        Note: it expects that the acquisition is running.
+        timeout (0<float or None): how long to wait to check (if None, don't wait)
+        return (bool): True if needs to stop, False if can continue
+        raise TerminationRequested: if a terminate message was received
+        """
+        try:
+            if timeout is None:
+                msg = self._get_acq_msg(block=False)
+            else:
+                msg = self._get_acq_msg(timeout=timeout)
+            if msg == GEN_STOP:
+                return True
+            elif msg == GEN_TERM:
+                raise TerminationRequested()
+            elif isinstance(msg, float):  # trigger
+                self._old_triggers.insert(0, msg)
+        except queue.Empty:
+            pass
+        return False
+
+    def _acq_wait_trigger(self):
+        """
+        Block until a trigger is received, or a stop message.
+        Note: it expects that the acquisition is running.
+        If the acquisition is not synchronised, it will immediately return
+        return (bool): True if needs to stop, False if a trigger is received
+        raise TerminationRequested: if a terminate message was received
+        """
+        if not self.data._sync_event:
+            # No synchronisation -> just check it shouldn't stop
+            return self._acq_should_stop()
+
+        try:
+            # Already some trigger received before?
+            trigger = self._old_triggers.pop()
+            logging.warning("Using late trigger")
+        except IndexError:
+            # Let's really wait
+            while True:
+                msg = self._get_acq_msg(block=True)
+                if msg == GEN_TERM:
+                    raise TerminationRequested()
+                elif msg == GEN_STOP:
+                    return True
+                elif msg == GEN_UNSYNC or isinstance(msg, float):  # trigger
+                    trigger = msg
+                    break
+                else: # Anything else shouldn't really happen
+                    logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
+
+        if trigger == GEN_UNSYNC:
+            logging.debug("End of synchronisation")
+        else:
+            logging.debug("Received trigger after %s s", time.time() - trigger)
+        return False
+
+    def _acq_wait_data(self, exp_tend, timeout=0):
+        """
+        Block until a data is received, or a stop message.
+        Note: it expects that the acquisition is running.
+        exp_tend (float): expected time the acquisition message is received
+        timeout (0<=float): how long to wait to check (use 0 to not wait)
+        return (bool): True if needs to stop, False if data is ready
+        raise TerminationRequested: if a terminate message was received
+        """
+        now = time.time()
+        ttimeout = now + timeout
+        while now <= ttimeout:
+            twait = max(1e-3, (exp_tend - now) / 2)
+            logging.debug("Waiting for %g s", twait)
+            if self._acq_should_stop(twait):
+                return True
+
+            # Is the data ready?
+            if self.CTCStatus():
+                logging.debug("Acq complete")
+                return False
+            now = time.time()
+
+        raise TimeoutError(f"Acquisition timeout after {timeout} s")
+
+    def _toggle_shutters(self, shutters, open):
+        """
+        Open/ close protection shutters.
+        shutters (list of string): the names of the shutters
+        open (boolean): True if shutters should open, False if they should close
+        """
+        fs = []
+        for sn in shutters:
+            axes = {}
+            logging.debug("Setting shutter %s to %s.", sn, open)
+            ax_name, closed_pos, open_pos = self._shutter_axes[sn]
+            shutter = self._shutters[sn]
+            if open:
+                axes[ax_name] = open_pos
+            else:
+                axes[ax_name] = closed_pos
+            try:
+                fs.append(shutter.moveAbs(axes))
+            except Exception as e:
+                logging.error("Toggling shutters failed with exception %s", e)
+        for f in fs:
+            f.result()
+
+    def _acquire(self):
+        """
+        Acquisition thread
+        Managed via the .genmsg Queue
+        """
+        try:
+            while True:
+                # Wait until we have a start (or terminate) message
+                self._acq_wait_start()
+                self._old_triggers = []  # discard all old triggers
+
+                # Open protection shutters
+                self._toggle_shutters(self._shutters.keys(), True)
+
+                # Keep acquiring
+                while True:
+                    self.ClearHistMem()
+
+                    # Wait for trigger (if synchronized)
+                    if self._acq_wait_trigger():
+                        # True = Stop requested
+                        break
+
+                    tacq = self.dwellTime.value
+                    tstart = time.time()
+
+                    logging.debug("Starting new acquisition")
+                    self.StartMeas(int(tacq * 1e3))
+
+                    # TODO: only allow to update the setting here (not during acq)
+                    md = self._metadata.copy()
+                    md[model.MD_ACQ_DATE] = tstart
+                    md[model.MD_DWELL_TIME] = tacq
+
+                    # Wait for the acquisition to be done or until a stop or
+                    # terminate message comes
+                    try:
+                        if self._acq_wait_data(tstart + tacq, timeout=tacq * 3 + 1):
+                            # Stop message received
+                            break
+                    except TimeoutError as ex:
+                        logging.error(ex)
+                        # TODO: try to reset the hardware?
+                        continue
+                    finally:
+                        # Must always be called, whether the measurement finished or not
+                        self.StopMeas()
+
+                    # Read data and pass it
+                    data = self.GetHistogram(self._in_channels[0])
+                    da = model.DataArray(data, md)
+                    self.data.notify(da)
+
+                    # TODO: warn if there was an overflow, using code like this?
+                    # flags = self.GetFlags()
+                    # if flags & HH_FLAG_OVERFLOW:
+                    #    logging.warning("Bin overflow. Consider decreasing input count")
+
+                logging.debug("Acquisition stopped")
+                self._toggle_shutters(self._shutters.keys(), False)
+
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception:
+            logging.exception("Failure in acquisition thread")
+        finally:
+            # In case of exception, make sure the shutters are closed
+            self._toggle_shutters(self._shutters.keys(), False)
+
+        logging.debug("Acquisition thread ended")
+
+
+class PH300(PicoBase):
     """
     Represents a PicoQuant PicoHarp 300.
     """
@@ -524,6 +810,9 @@ class PH300(model.Detector):
             else:
                 raise ValueError("Dependency %s not recognized, should be shutter0 or shutter1." % (name,))
 
+        # Add 1 channel, for compatibility with the PicoBase, although the PH300 only has 1 channel to read from
+        self._in_channels.append(0)
+
         # dwellTime = measurement duration
         dt_rng = (PH_ACQTMIN * 1e-3, PH_ACQTMAX * 1e-3)  # s
         self.dwellTime = model.FloatContinuous(1, dt_rng, unit="s")
@@ -568,24 +857,6 @@ class PH300(model.Detector):
         self._setPixelDuration(self.pixelDuration.value)
         self._setSyncOffset(self.syncOffset.value)
 
-        # Wrapper for the dataflow
-        self.data = BasicDataFlow(self)
-        # Note: Apparently, the hardware supports reading the data, while it's
-        # still accumulating (ie, the acquisition is still running).
-        # We don't support this feature for now, and if the user needs to see
-        # the data building up, it shouldn't be costly (in terms of overhead or
-        # noise) to just do multiple small acquisitions and do the accumulation
-        # in software.
-        # Alternatively, we could provide a second dataflow that sends the data
-        # while it's building up.
-
-        # Queue to control the acquisition thread:
-        self._genmsg = queue.Queue()
-        self._generator = threading.Thread(
-            target=self._acquire, name="PicoHarp300 acquisition thread"
-        )
-        self._generator.start()
-
     def _openDevice(self, sn=None):
         """
         sn (None or str): serial number
@@ -609,17 +880,7 @@ class PH300(model.Detector):
                 logging.info("Skipping device %d, with S/N %s", i, sn_str.value)
         else:
             # TODO: if a DeviceError happened indicate the error in the message
-            raise HwError("No PicoHarp300 found, check the device is turned on and connected to the computer")
-
-    def terminate(self):
-        self.stop_generate()
-        if self._generator:
-            self._genmsg.put(GEN_TERM)
-            self._generator.join(5)
-            self._generator = None
-        self.CloseDevice()
-
-        super().terminate()
+            raise HwError("No PicoHarp 300 found, check the device is turned on and connected to the computer")
 
     def CloseDevice(self):
         self._dll.CloseDevice(self._idx)
@@ -688,13 +949,14 @@ class PH300(model.Detector):
         assert channel in {0, 1}
         assert PH_DISCRMIN <= level <= PH_DISCRMAX
         assert PH_ZCMIN <= zc <= PH_ZCMAX
-        self._dll.SetInputCFD(self._idx, channel, level, zc)
+        with self._hw_access:
+            self._dll.SetInputCFD(self._idx, channel, level, zc)
 
     def SetSyncDiv(self, div):
         """
         Changes the divider of the sync input (channel 0). This allows to reduce
           the sync input rate so that the period is at least as long as the dead
-          time. In practice, on the PicoHarp300, this should be used whenever
+          time. In practice, on the PicoHarp 300, this should be used whenever
           the sync rate frequency is higher than 10MHz.
           Note: the count rate will need 100 ms to be valid again.
         div (1, 2, 4, or 8): input rate divider applied at channel 0
@@ -788,11 +1050,13 @@ class PH300(model.Detector):
         return ctcstatus.value > 0
 
     @autoretry
-    def GetHistogram(self, block=0):
+    def GetHistogram(self, channel: int = 0, block=0):
         """
+        :param channel: must be 0 (for compatibility with the PicoBase, only)
         block (0<=int): only useful if routing
         return numpy.array of shape (1, res): the histogram
         """
+        assert channel == 0
         buf = numpy.empty((1, PH_HISTCHAN), dtype=numpy.uint32)
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
 
@@ -868,194 +1132,6 @@ class PH300(model.Detector):
         self._metadata[model.MD_TIME_LIST] = tl
         return offset
 
-    # Acquisition methods
-    def start_generate(self):
-        self._genmsg.put(GEN_START)
-        if not self._generator.is_alive():
-            logging.warning("Restarting acquisition thread")
-            self._generator = threading.Thread(
-                target=self._acquire, name="PicoHarp300 acquisition thread"
-            )
-            self._generator.start()
-
-    def stop_generate(self):
-        self._genmsg.put(GEN_STOP)
-
-    def _get_acq_msg(self, **kwargs):
-        """
-        Read one message from the acquisition queue
-        return (str): message
-        raises queue.Empty: if no message on the queue
-        """
-        msg = self._genmsg.get(**kwargs)
-        if msg not in (GEN_START, GEN_STOP, GEN_TERM):
-            logging.warning("Acq received unexpected message %s", msg)
-        else:
-            logging.debug("Acq received message %s", msg)
-        return msg
-
-    def _acq_wait_start(self):
-        """
-        Blocks until the acquisition should start.
-        Note: it expects that the acquisition is stopped.
-        raise TerminationRequested: if a terminate message was received
-        """
-        while True:
-            msg = self._get_acq_msg(block=True)
-            if msg == GEN_TERM:
-                raise TerminationRequested()
-
-            # Check if there are already more messages on the queue
-            try:
-                msg = self._get_acq_msg(block=False)
-                if msg == GEN_TERM:
-                    raise TerminationRequested()
-            except queue.Empty:
-                pass
-
-            if msg == GEN_START:
-                return
-
-            # Duplicate Stop or trigger
-            logging.debug("Skipped message %s as acquisition is stopped", msg)
-
-    def _acq_should_stop(self, timeout=None):
-        """
-        Indicate whether the acquisition should now stop or can keep running.
-        Note: it expects that the acquisition is running.
-        timeout (0<float or None): how long to wait to check (if None, don't wait)
-        return (bool): True if needs to stop, False if can continue
-        raise TerminationRequested: if a terminate message was received
-        """
-        try:
-            if timeout is None:
-                msg = self._get_acq_msg(block=False)
-            else:
-                msg = self._get_acq_msg(timeout=timeout)
-            if msg == GEN_STOP:
-                return True
-            elif msg == GEN_TERM:
-                raise TerminationRequested()
-        except queue.Empty:
-            pass
-        return False
-
-    def _acq_wait_data(self, exp_tend, timeout=0):
-        """
-        Block until a data is received, or a stop message.
-        Note: it expects that the acquisition is running.
-        exp_tend (float): expected time the acquisition message is received
-        timeout (0<=float): how long to wait to check (use 0 to not wait)
-        return (bool): True if needs to stop, False if data is ready
-        raise TerminationRequested: if a terminate message was received
-        """
-        now = time.time()
-        ttimeout = now + timeout
-        while now <= ttimeout:
-            twait = max(1e-3, (exp_tend - now) / 2)
-            logging.debug("Waiting for %g s", twait)
-            if self._acq_should_stop(twait):
-                return True
-
-            # Is the data ready?
-            if self.CTCStatus():
-                logging.debug("Acq complete")
-                return False
-            now = time.time()
-
-        raise TimeoutError("Acquisition timeout after %g s")
-
-    def _toggle_shutters(self, shutters, open):
-        """
-        Open/ close protection shutters.
-        shutters (list of string): the names of the shutters
-        open (boolean): True if shutters should open, False if they should close
-        """
-        fs = []
-        for sn in shutters:
-            axes = {}
-            logging.debug("Setting shutter %s to %s.", sn, open)
-            ax_name, closed_pos, open_pos = self._shutter_axes[sn]
-            shutter = self._shutters[sn]
-            if open:
-                axes[ax_name] = open_pos
-            else:
-                axes[ax_name] = closed_pos
-            try:
-                fs.append(shutter.moveAbs(axes))
-            except Exception as e:
-                logging.error("Toggling shutters failed with exception %s", e)
-        for f in fs:
-            f.result()
-
-    def _acquire(self):
-        """
-        Acquisition thread
-        Managed via the .genmsg Queue
-        """
-        # TODO: support synchronized acquisition, so that it's possible to acquire
-        #   one image at a time, without opening/closing the shutters in-between.
-        #   See avantes for an example.
-        try:
-            while True:
-                # Wait until we have a start (or terminate) message
-                self._acq_wait_start()
-
-                # Open protection shutters
-                self._toggle_shutters(self._shutters.keys(), True)
-
-                # Keep acquiring
-                while True:
-                    tacq = self.dwellTime.value
-                    tstart = time.time()
-
-                    # TODO: only allow to update the setting here (not during acq)
-                    md = self._metadata.copy()
-                    md[model.MD_ACQ_DATE] = tstart
-                    md[model.MD_DWELL_TIME] = tacq
-
-                    # check if any message received before starting again
-                    if self._acq_should_stop():
-                        break
-
-                    logging.debug("Starting new acquisition")
-                    self.ClearHistMem()
-                    self.StartMeas(int(tacq * 1e3))
-
-                    # Wait for the acquisition to be done or until a stop or
-                    # terminate message comes
-                    try:
-                        if self._acq_wait_data(tstart + tacq, timeout=tacq * 3 + 1):
-                            # Stop message received
-                            break
-                        logging.debug("Acq complete")
-                    except TimeoutError as ex:
-                        logging.error(ex)
-                        # TODO: try to reset the hardware?
-                        continue
-                    finally:
-                        # Must always be called, whether the measurement finished or not
-                        self.StopMeas()
-
-                    # Read data and pass it
-                    data = self.GetHistogram()
-                    da = model.DataArray(data, md)
-                    self.data.notify(da)
-
-                logging.debug("Acquisition stopped")
-                self._toggle_shutters(self._shutters.keys(), False)
-
-        except TerminationRequested:
-            logging.debug("Acquisition thread requested to terminate")
-        except Exception:
-            logging.exception("Failure in acquisition thread")
-        else:  # code unreachable
-            logging.error("Acquisition thread ended without exception")
-        finally:
-            self._toggle_shutters(self._shutters.keys(), False)
-
-        logging.debug("Acquisition thread ended")
-
     @classmethod
     def scan(cls):
         """
@@ -1075,7 +1151,7 @@ class PH300(model.Detector):
                     logging.warning("Failure to open existing device %d: %s", i, ex)
                     # Still add it
 
-            dev.append(("PicoHarp 300", {"device": sn_str.value}))
+            dev.append(("PicoHarp 300", {"device": sn_str.value.decode("latin1")}))
 
         return dev
 
@@ -1095,7 +1171,7 @@ class PH330DLL(PicoDLL):
             raise
 
 
-class PH330(model.Detector):
+class PH330(PicoBase):
     """
     Represents a PicoQuant PicoHarp 330.
     The device has one explicit "sync" channel, and, depending on the exact configuration, 1 to 4
@@ -1125,13 +1201,8 @@ class PH330(model.Detector):
         :param shutter_axes: child role ("detector*") -> axis name, position when shutter is closed
          (ie protected), position when opened (receiving light). If provided, the shutter corresponding
          to the detector will be moved to the given positions when acquiring or not.
-        :param daemon:
+        :param daemon: used by the odemis back-end, see model.Component.
         """
-        # TODO: do we need to support multiple channels? Do we derive them from the children? Or
-        # do we get another parameter? How to provide the reading? A separate dataflow? (eg, data1, data2)
-        # Or a complete separate component with .data?
-        # Or the DataArray has an extra dimension corresponding to the channel?
-
         if dependencies is None:
             dependencies = {}
         if children is None:
@@ -1178,13 +1249,12 @@ class PH330(model.Detector):
             if not 0 <= num <= self._nchannels:
                 raise ValueError(f"Dependency {name} not recognized, should be shutter0 .. shutter{self._nchannels}.")
 
-            if ("shutter%s" % num) not in shutter_axes.keys():
+            if f"shutter{num}" not in shutter_axes.keys():
                 raise ValueError("'shutter%s' not found in shutter_axes" % num)
-            self._shutters["shutter%s" % num] = comp
+            self._shutters[f"shutter{num}"] = comp
 
         # Guess the channels to read, based on the "children" detectors configured, which are not sync
         # TODO: for now only the first channel is read into the DataFlow, but we should support multiple channels
-        self._in_channels: List[int] = []
         # Support up to 4 detectors for "raw" count rate reading, in addition to the sync signal.
         # detector0 should correspond to the sync signal
         for name, ckwargs in children.items():
@@ -1195,14 +1265,18 @@ class PH330(model.Detector):
             if not 0 <= num <= self._nchannels:
                 raise ValueError(f"Child {name} not recognized, should be detector0 .. detector{self._nchannels}.")
 
-            if ("shutter%s" % num) in dependencies:
-                shutter_name = "shutter%s" % num
+            if f"shutter{num}" in dependencies:
+                shutter_name = f"shutter{num}"
             else:
                 shutter_name = None
 
+            # Note: on the front panel, the signal channels are numbered 1 -> 4, and sync is takes
+            # the place of "channel 0". The "detector" children role follows the same numbering, with
+            # detector0 being "sync". However, the API has special calls for the "sync" and the signal
+            # channels are number 0 -> 3. So need to shift everything.
             # Channel = ID - 1, and special case for sync signal: None
             channel = None if num == 0 else num - 1
-            self._detectors[name] = RawDetector(channel=channel, parent=self,shutter_name=shutter_name,
+            self._detectors[name] = RawDetector(channel=channel, parent=self, shutter_name=shutter_name,
                                                 daemon=daemon, **ckwargs)
             self.children.value.add(self._detectors[name])
             if channel is not None:
@@ -1211,8 +1285,8 @@ class PH330(model.Detector):
         if not self._in_channels:
             raise ValueError("At least one input detector (child) should be provided")
         if len(self._in_channels) > 1:
-            logging.warning("Configured, with multiple channels (%s), but only channel %d will read during measurement",
-                            self._in_channels, self._in_channels[0])
+            logging.warning("Configured with multiple channels (%s), but only channel %d will read during measurement",
+                            self._in_channels, self._in_channels[0] + 1)
 
         # Reading the warnings only works after calling GetSyncRate/GetCountRate() once per channel,
         # so we do it here.
@@ -1222,7 +1296,9 @@ class PH330(model.Detector):
         warnings = self.GetWarnings()
         logging.debug("Warnings = 0x%x", warnings)
         if warnings & PH330_WARNING_USB20_SPEED_ONLY:
-            # In practice, for our use-case, we don't need high throughput, so it's fine to be on USB 2.0
+            # The device sort-of work on USB 2.0, and for our use-case, we don't need high throughput...
+            # BUT, StopMeas() is very slow on USB 2.0, (~ 2.5s, while it should take < 0.1s), so
+            # it is recommended to use USB 3.0+.
             logging.warning("Device is connected to USB 2.0, it would be faster if it was connected to USB 3.0+")
 
         # dwellTime = measurement duration
@@ -1264,14 +1340,6 @@ class PH330(model.Detector):
         self._setPixelDuration(self.pixelDuration.value)
         self._setSyncOffset(self.syncOffset.value)
 
-        # Wrapper for the dataflow
-        self.data = BasicDataFlow(self)
-
-        # Queue to control the acquisition thread:
-        self._genmsg = queue.Queue()
-        self._generator = threading.Thread(target=self._acquire, name="PicoHarp 330 acquisition thread")
-        self._generator.start()
-
     def _openDevice(self, sn=None):
         sn_str = create_string_buffer(8)
         for i in range(PH330_MAXDEVNUM):
@@ -1289,21 +1357,7 @@ class PH330(model.Detector):
             else:
                 logging.info("Skipping device %d, with S/N %s", i, sn_str.value)
         else:
-            raise HwError("No PicoHarp330 found, check the device is turned on and connected to the computer")
-
-    def terminate(self):
-        self.stop_generate()
-        if self._generator:
-            self._genmsg.put(GEN_TERM)
-            self._generator.join(5)
-            self._generator = None
-        self.CloseDevice()
-
-        # FIXME: do the same for the other devices
-        for c in self.children.value:
-            c.terminate()
-
-        super().terminate()
+            raise HwError("No PicoHarp 330 found, check the device is turned on and connected to the computer")
 
     def CloseDevice(self) -> None:
         self._dll.CloseDevice(self._idx)
@@ -1388,7 +1442,8 @@ class PH330(model.Detector):
         """
         assert PH330_CFDLVLMIN <= level <= PH330_CFDLVLMAX
         assert PH330_CFDZCMIN <= zerocross <= PH330_CFDZCMAX
-        self._dll.SetSyncCFD(self._idx, level, zerocross)
+        with self._hw_access:
+            self._dll.SetSyncCFD(self._idx, level, zerocross)
 
     def SetInputTrgMode(self, channel: int, mode: int) -> None:
         """
@@ -1419,13 +1474,14 @@ class PH330(model.Detector):
         assert 0 <= channel < self._nchannels
         assert PH330_CFDLVLMIN <= level <= PH330_CFDLVLMAX
         assert PH330_CFDZCMIN <= zerocross <= PH330_CFDZCMAX
-        self._dll.SetInputCFD(self._idx, channel, level, zerocross)
+        with self._hw_access:
+            self._dll.SetInputCFD(self._idx, channel, level, zerocross)
 
     def SetSyncDiv(self, div: int) -> None:
         """
         The sync divider must be used to keep the effective sync rate at values < 81 MHz.
         The sync divider should not be changed while a measurement is running.
-        :param div:
+        :param div: (1, 2, 4, .., SYNCDIVMAX)
         """
         assert PH330_SYNCDIVMIN <= div <= PH330_SYNCDIVMAX
         self._dll.SetSyncDiv(self._idx, div)
@@ -1527,6 +1583,7 @@ class PH330(model.Detector):
         self._dll.CTCStatus(self._idx, byref(ctcstatus))
         return ctcstatus.value > 0
 
+    @autoretry
     def SetHistoLen(self, lencode: int) -> int:
         """
         Set the histogram buffer size.
@@ -1585,195 +1642,8 @@ class PH330(model.Detector):
         self._metadata[model.MD_TIME_LIST] = tl
         return offset
 
-    # Acquisition methods
-    def start_generate(self):
-        self._genmsg.put(GEN_START)
-        if not self._generator.is_alive():
-            logging.warning("Restarting acquisition thread")
-            self._generator = threading.Thread(target=self._acquire,
-                                               name="PicoHarp 330 acquisition thread"
-                                               )
-            self._generator.start()
 
-    def stop_generate(self):
-        self._genmsg.put(GEN_STOP)
-
-    def _get_acq_msg(self, **kwargs):
-        """
-        Read one message from the acquisition queue
-        return (str): message
-        raises queue.Empty: if no message on the queue
-        """
-        msg = self._genmsg.get(**kwargs)
-        if msg not in (GEN_START, GEN_STOP, GEN_TERM):
-            logging.warning("Acq received unexpected message %s", msg)
-        else:
-            logging.debug("Acq received message %s", msg)
-        return msg
-
-    def _acq_wait_start(self):
-        """
-        Blocks until the acquisition should start.
-        Note: it expects that the acquisition is stopped.
-        raise TerminationRequested: if a terminate message was received
-        """
-        while True:
-            msg = self._get_acq_msg(block=True)
-            if msg == GEN_TERM:
-                raise TerminationRequested()
-
-            # Check if there are already more messages on the queue
-            try:
-                msg = self._get_acq_msg(block=False)
-                if msg == GEN_TERM:
-                    raise TerminationRequested()
-            except queue.Empty:
-                pass
-
-            if msg == GEN_START:
-                return
-
-            # Duplicate Stop or trigger
-            logging.debug("Skipped message %s as acquisition is stopped", msg)
-
-    def _acq_should_stop(self, timeout=None):
-        """
-        Indicate whether the acquisition should now stop or can keep running.
-        Note: it expects that the acquisition is running.
-        timeout (0<float or None): how long to wait to check (if None, don't wait)
-        return (bool): True if needs to stop, False if can continue
-        raise TerminationRequested: if a terminate message was received
-        """
-        try:
-            if timeout is None:
-                msg = self._get_acq_msg(block=False)
-            else:
-                msg = self._get_acq_msg(timeout=timeout)
-            if msg == GEN_STOP:
-                return True
-            elif msg == GEN_TERM:
-                raise TerminationRequested()
-        except queue.Empty:
-            pass
-        return False
-
-    def _acq_wait_data(self, exp_tend, timeout=0):
-        """
-        Block until a data is received, or a stop message.
-        Note: it expects that the acquisition is running.
-        exp_tend (float): expected time the acquisition message is received
-        timeout (0<=float): how long to wait to check (use 0 to not wait)
-        return (bool): True if needs to stop, False if data is ready
-        raise TerminationRequested: if a terminate message was received
-        """
-        now = time.time()
-        ttimeout = now + timeout
-        while now <= ttimeout:
-            twait = max(1e-3, (exp_tend - now) / 2)
-            logging.debug("Waiting for %g s", twait)
-            if self._acq_should_stop(twait):
-                return True
-
-            # Is the data ready?
-            if self.CTCStatus():
-                logging.debug("Acq complete")
-                return False
-            now = time.time()
-
-        raise TimeoutError("Acquisition timeout after %g s")
-
-    def _toggle_shutters(self, shutters, open):
-        """
-        Open/ close protection shutters.
-        shutters (list of string): the names of the shutters
-        open (boolean): True if shutters should open, False if they should close
-        """
-        fs = []
-        for sn in shutters:
-            axes = {}
-            logging.debug("Setting shutter %s to %s.", sn, open)
-            ax_name, closed_pos, open_pos = self._shutter_axes[sn]
-            shutter = self._shutters[sn]
-            if open:
-                axes[ax_name] = open_pos
-            else:
-                axes[ax_name] = closed_pos
-            try:
-                fs.append(shutter.moveAbs(axes))
-            except Exception as e:
-                logging.error("Toggling shutters failed with exception %s", e)
-        for f in fs:
-            f.result()
-
-    def _acquire(self):
-        """
-        Acquisition thread
-        Managed via the .genmsg Queue
-        """
-        # TODO: support synchronized acquisition, so that it's possible to acquire
-        #   one image at a time, without opening/closing the shutters in-between.
-        #   See avantes for an example.
-        try:
-            while True:
-                # Wait until we have a start (or terminate) message
-                self._acq_wait_start()
-
-                # Open protection shutters
-                self._toggle_shutters(self._shutters.keys(), True)
-
-                # Keep acquiring
-                while True:
-                    tacq = self.dwellTime.value
-                    tstart = time.time()
-
-                    # TODO: only allow to update the setting here (not during acq)
-                    md = self._metadata.copy()
-                    md[model.MD_ACQ_DATE] = tstart
-                    md[model.MD_DWELL_TIME] = tacq
-
-                    # check if any message received before starting again
-                    if self._acq_should_stop():
-                        break
-
-                    logging.debug("Starting new acquisition")
-                    self.ClearHistMem()
-                    self.StartMeas(int(tacq * 1e3))
-
-                    # Wait for the acquisition to be done or until a stop or
-                    # terminate message comes
-                    try:
-                        if self._acq_wait_data(tstart + tacq, timeout=tacq * 3 + 1):
-                            # Stop message received
-                            break
-                        logging.debug("Acq complete")
-                    except TimeoutError as ex:
-                        logging.error(ex)
-                        # TODO: try to reset the hardware?
-                        continue
-                    finally:
-                        # Must always be called, whether the measurement finished or not
-                        self.StopMeas()
-
-                    # Read data and pass it
-                    data = self.GetHistogram(self._in_channels[0])
-                    da = model.DataArray(data, md)
-                    self.data.notify(da)
-
-                logging.debug("Acquisition stopped")
-                self._toggle_shutters(self._shutters.keys(), False)
-
-        except TerminationRequested:
-            logging.debug("Acquisition thread requested to terminate")
-        except Exception:
-            logging.exception("Failure in acquisition thread")
-        finally:
-            # In case of exception, make sure the shutters are closed
-            self._toggle_shutters(self._shutters.keys(), False)
-
-        logging.debug("Acquisition thread ended")
-
-
-class HH400(model.Detector):
+class HH400(PicoBase):
     """
     Represents a PicoQuant HydraHarp 400.
     """
@@ -1865,9 +1735,9 @@ class HH400(model.Detector):
             except Exception:
                 raise ValueError("Dependency %s not recognized, should be shutter0 .. shutter8." % (name,))
             if 0 <= num <= HH_MAXINPCHAN:
-                if ("shutter%s" % num) not in shutter_axes.keys():
+                if f"shutter{num}" not in shutter_axes.keys():
                     raise ValueError("'shutter%s' not found in shutter_axes" % num)
-                self._shutters["shutter%s" % num] = comp
+                self._shutters[f"shutter{num}"] = comp
             else:
                 raise ValueError("Dependency %s not recognized, should be shutter0 .. shutter8." % (name,))
 
@@ -1881,8 +1751,8 @@ class HH400(model.Detector):
             if not 0 <= num <= HH_MAXINPCHAN:
                 raise ValueError(f"Child {name} not recognized, should be detector0 .. detector{HH_MAXINPCHAN}.")
 
-            if ("shutter%s" % num) in dependencies:
-                shutter_name = "shutter%s" % num
+            if f"shutter{num}" in dependencies:
+                shutter_name = f"shutter{num}"
             else:
                 shutter_name = None
 
@@ -1891,6 +1761,16 @@ class HH400(model.Detector):
             self._detectors[name] = RawDetector(channel=channel, parent=self,shutter_name=shutter_name,
                                                 daemon=daemon, **ckwargs)
             self.children.value.add(self._detectors[name])
+            if channel is not None:
+                self._in_channels.append(channel)
+
+        if not self._in_channels:
+            logging.warning("No one input detector (child) be provided, will use channel 1")
+            self._in_channels.append(0)
+
+        if len(self._in_channels) > 1:
+            logging.warning("Configured with multiple channels (%s), but only channel %d will read during measurement",
+                            self._in_channels, self._in_channels[0] + 1)
 
         # dwellTime = measurement duration
         dt_rng = (HH_ACQTMIN * 1e-3, HH_ACQTMAX * 1e-3)  # s
@@ -1954,26 +1834,6 @@ class HH400(model.Detector):
         )
         self._setSyncChannelOffset(self.syncChannelOffset.value)
 
-        # Make sure the device is synchronised and metadata is updated
-
-        # Wrapper for the dataflow
-        self.data = BasicDataFlow(self)
-        # Note: Apparently, the hardware supports reading the data, while it's
-        # still accumulating (ie, the acquisition is still running).
-        # We don't support this feature for now, and if the user needs to see
-        # the data building up, it shouldn't be costly (in terms of overhead or
-        # noise) to just do multiple small acquisitions and do the accumulation
-        # in software.
-        # Alternatively, we could provide a second dataflow that sends the data
-        # while it's building up.
-
-        # Queue to control the acquisition thread:
-        self._genmsg = queue.Queue()
-        self._generator = threading.Thread(
-            target=self._acquire, name="HydraHarp 400 acquisition thread"
-        )
-        self._generator.start()
-
     def _openDevice(self, sn=None):
         """
         sn (None or str): serial number
@@ -1998,18 +1858,7 @@ class HH400(model.Detector):
                 logging.info("Skipping device %d, with S/N %s", i, sn_str.value)
         else:
             # TODO: if a DeviceError happened indicate the error in the message
-            raise HwError(
-                "No HydraHarp400 found, check the device is turned on and connected to the computer"
-            )
-
-    def terminate(self):
-        model.Detector.terminate(self)
-        self.stop_generate()
-        if self._generator:
-            self._genmsg.put(GEN_TERM)
-            self._generator.join(5)
-            self._generator = None
-        self.CloseDevice()
+            raise HwError("No HydraHarp 400 found, check the device is turned on and connected to the computer")
 
     # General Functions
     # These functions work independent from any device.
@@ -2170,7 +2019,8 @@ class HH400(model.Detector):
         """
         assert HH_DISCRMIN <= level <= HH_DISCRMAX
         assert HH_ZCMIN <= zc <= HH_ZCMAX
-        self._dll.SetSyncCFD(self._idx, level, zc)
+        with self._hw_access:
+            self._dll.SetSyncCFD(self._idx, level, zc)
 
     def SetSyncChannelOffset(self, value):
         """
@@ -2190,7 +2040,8 @@ class HH400(model.Detector):
         """
         assert HH_DISCRMIN <= level <= HH_DISCRMAX
         assert HH_ZCMIN <= zc <= HH_ZCMAX
-        self._dll.SetInputCFD(self._idx, channel, level, zc)
+        with self._hw_access:
+            self._dll.SetInputCFD(self._idx, channel, level, zc)
 
     def SetInputChannelOffset(self, channel, value):
         """
@@ -2273,12 +2124,10 @@ class HH400(model.Detector):
         return actuallen.value
 
     @autoretry
-    def ClearHistMem(self, block):
+    def ClearHistMem(self):
         """
-        block (0 <= int): block number to clear
         """
-        assert 0 <= block
-        self._dll.ClearHistMem(self._idx, block)
+        self._dll.ClearHistMem(self._idx)
 
     def SetMeasControl(self, meascontrol, startedge, stopedge):
         """
@@ -2564,209 +2413,6 @@ class HH400(model.Detector):
         offset = offset_ns * 1e-9  # convert the round-down in ps back to s
         return offset
 
-    # Acquisition methods
-    def start_generate(self):
-        self._genmsg.put(GEN_START)
-        if not self._generator.is_alive():
-            logging.warning("Restarting acquisition thread")
-            self._generator = threading.Thread(
-                target=self._acquire, name="HydraHarp400 acquisition thread"
-            )
-            self._generator.start()
-
-    def stop_generate(self):
-        self._genmsg.put(GEN_STOP)
-
-    def _get_acq_msg(self, **kwargs):
-        """
-        Read one message from the acquisition queue
-        return (str): message
-        raises queue.Empty: if no message on the queue
-        """
-        msg = self._genmsg.get(**kwargs)
-        if msg not in (GEN_START, GEN_STOP, GEN_TERM):
-            logging.warning("Acq received unexpected message %s", msg)
-        else:
-            logging.debug("Acq received message %s", msg)
-        return msg
-
-    def _acq_wait_start(self):
-        """
-        Blocks until the acquisition should start.
-        Note: it expects that the acquisition is stopped.
-        raise TerminationRequested: if a terminate message was received
-        """
-        while True:
-            msg = self._get_acq_msg(block=True)
-            if msg == GEN_TERM:
-                raise TerminationRequested()
-
-            # Check if there are already more messages on the queue
-            try:
-                msg = self._get_acq_msg(block=False)
-                if msg == GEN_TERM:
-                    raise TerminationRequested()
-            except queue.Empty:
-                pass
-
-            if msg == GEN_START:
-                return
-
-            # Duplicate Stop or trigger
-            logging.debug("Skipped message %s as acquisition is stopped", msg)
-
-    def _acq_should_stop(self, timeout=None):
-        """
-        Indicate whether the acquisition should now stop or can keep running.
-        Note: it expects that the acquisition is running.
-        timeout (0<float or None): how long to wait to check (if None, don't wait)
-        return (bool): True if needs to stop, False if can continue
-        raise TerminationRequested: if a terminate message was received
-        """
-        try:
-            if timeout is None:
-                msg = self._get_acq_msg(block=False)
-            else:
-                msg = self._get_acq_msg(timeout=timeout)
-            if msg == GEN_STOP:
-                return True
-            elif msg == GEN_TERM:
-                raise TerminationRequested()
-        except queue.Empty:
-            pass
-        return False
-
-    def _acq_wait_data(self, exp_tend, timeout=0):
-        """
-        Block until a data is received, or a stop message.
-        Note: it expects that the acquisition is running.
-        exp_tend (float): expected time the acquisition message is received
-        timeout (0<=float): how long to wait to check (use 0 to not wait)
-        return (bool): True if needs to stop, False if data is ready
-        raise TerminationRequested: if a terminate message was received
-        """
-        now = time.time()
-        ttimeout = now + timeout
-        while now <= ttimeout:
-            twait = max(1e-3, (exp_tend - now) / 2)
-            logging.debug("Waiting for %g s", twait)
-            if self._acq_should_stop(twait):
-                return True
-
-            # Is the data ready?
-            if self.CTCStatus():
-                logging.debug("Acq complete")
-                return False
-            now = time.time()
-
-        raise TimeoutError("Acquisition timeout after %g s")
-
-    def _toggle_shutters(self, shutters, open):
-        """
-        Open/ close protection shutters.
-        shutters (list of string): the names of the shutters
-        open (boolean): True if shutters should open, False if they should close
-        """
-        fs = []
-        for sn in shutters:
-            axes = {}
-            logging.debug("Setting shutter %s to %s.", sn, open)
-            ax_name, closed_pos, open_pos = self._shutter_axes[sn]
-            shutter = self._shutters[sn]
-            if open:
-                axes[ax_name] = open_pos
-            else:
-                axes[ax_name] = closed_pos
-            try:
-                fs.append(shutter.moveAbs(axes))
-            except Exception as e:
-                logging.error("Toggling shutters failed with exception %s", e)
-        for f in fs:
-            f.result()
-
-    def _acquire(self):
-        """
-        Acquisition thread
-        Managed via the .genmsg Queue
-        """
-        # TODO: support synchronized acquisition, so that it's possible to acquire
-        #   one image at a time, without opening/closing the shutters in-between.
-        #   See avantes for an example.
-        try:
-            while True:
-                # Wait until we have a start (or terminate) message
-                self._acq_wait_start()
-
-                # Open protection shutters
-                self._toggle_shutters(self._shutters.keys(), True)
-
-                # Stop measurement if any bin fills up
-                self.SetStopOverflow(True, HH_STOPCNTMAX)
-                # Odemis waits a while to keep acquiring even after overflow
-                # Check for overflow at the end and log warning message
-
-                # Keep acquiring
-                while True:
-                    tacq = self.dwellTime.value
-                    tstart = time.time()
-
-                    # TODO: only allow to update the setting here (not during acq)
-                    md = self._metadata.copy()
-                    md[model.MD_ACQ_DATE] = tstart
-                    md[model.MD_DWELL_TIME] = tacq
-
-                    # check if any message received before starting again
-                    if self._acq_should_stop():
-                        break
-
-                    logging.debug("Starting new acquisition")
-                    self.ClearHistMem(0)
-                    self.StartMeas(int(tacq * 1e3))
-
-                    # Wait for the acquisition to be done or until a stop or
-                    # terminate message comes
-                    try:
-                        if self._acq_wait_data(tstart + tacq, timeout=tacq * 3 + 1):
-                            # Stop message received
-                            break
-                        logging.debug("Acq complete")
-                    except TimeoutError as ex:
-                        logging.error(ex)
-                        # TODO: try to reset the hardware?
-                        continue
-                    finally:
-                        # Must always be called, whether the measurement finished or not
-                        self.StopMeas()
-
-                    # Read data and pass it
-                    data = self.GetHistogram(0)
-                    da = model.DataArray(data, md)
-                    self.data.notify(da)
-                    # TODO: support multiple channels
-                    # data = []
-                    # for i in range(0, self._numinput):
-                    #     data.append( self.GetHistogram(i, 0) )
-                    #     da = model.DataArray(data, md)
-                    #     self.data.notify(da)
-
-                logging.debug("Acquisition stopped")
-                self._toggle_shutters(self._shutters.keys(), False)
-
-        except TerminationRequested:
-            logging.debug("Acquisition thread requested to terminate")
-        except Exception:
-            logging.exception("Failure in acquisition thread")
-        else:  # code unreachable
-            logging.error("Acquisition thread ended without exception")
-        finally:
-            self._toggle_shutters(self._shutters.keys(), False)
-
-        flags = self.GetFlags()
-        if flags & HH_FLAG_OVERFLOW > 0:
-            logging.warning("Bin overflow. Consider decreasing input count")
-
-        logging.debug("Acquisition thread ended")
-
     @classmethod
     def scan(cls):
         """
@@ -2786,7 +2432,7 @@ class HH400(model.Detector):
                     logging.warning("Failure to open existing device %d: %s", i, ex)
                     # Still add it
 
-            dev.append(("HydraHarp 400", {"device": sn_str.value}))
+            dev.append(("HydraHarp 400", {"device": sn_str.value.decode("latin1")}))
 
         return dev
 
@@ -2899,21 +2545,14 @@ class RawDetector(model.Detector):
         self.data.notify(img)
 
 
-class HH400RawDetector(RawDetector): # FIXME
-    """
-    Represents a raw detector (eg, APD, PMT) accessed via PicoQuant HydraHarp 400.
-    Cannot be directly created. It must be done via HH400 child.
-    Channel 0 corresponds to the sync channel.
-    """
-
-
 class BasicDataFlow(model.DataFlow):
-    def __init__(self, detector):
+    def __init__(self, detector: PicoBase):
         """
-        detector (PH300 or HH400): the detector that the dataflow corresponds to
+        detector: the detector that the dataflow corresponds to
         """
         model.DataFlow.__init__(self)
         self._detector = detector
+        self._sync_event = None  # synchronization Event
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
@@ -2921,6 +2560,28 @@ class BasicDataFlow(model.DataFlow):
 
     def stop_generate(self):
         self._detector.stop_generate()
+
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the DataFlow will start a new acquisition.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        The DataFlow can be synchronized only with one Event at a time.
+        """
+        super().synchronizedOn(event)
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self._detector)
+
+        self._sync_event = event
+        if self._sync_event:
+            self._detector.set_trigger(True)
+            self._sync_event.subscribe(self._detector)
+        else:
+            self._detector.set_trigger(False)
 
 
 # Only for testing/simulation purpose
@@ -3086,10 +2747,7 @@ class FakePHDLL:
             dur = min(10, self._last_acq_dur)
             maxval = max(1, int(2 ** 16 * (dur / 10)))  # 10 s -> full scale
 
-        # Old numpy doesn't support dtype argument for randint
-        ndbuffer[...] = numpy.random.randint(0, maxval + 1, PH_HISTCHAN).astype(
-            numpy.uint32
-        )
+        ndbuffer[...] = numpy.random.randint(0, maxval + 1, PH_HISTCHAN, dtype=numpy.uint32)
 
 
 class FakePH330DLL:
@@ -3410,7 +3068,7 @@ class FakeHHDLL:
         actuallen = _deref(p_actuallen, c_int)
         actuallen.value = HH_MAXHISTLEN
 
-    def HH_ClearHistMem(self, i, block):
+    def HH_ClearHistMem(self, i):
         self._last_acq_dur = None
 
     def HH_SetMeasControl(self, i, meascontrol, startedge, stopedge):
@@ -3450,10 +3108,7 @@ class FakeHHDLL:
             dur = min(10, self._last_acq_dur)
             maxval = max(1, int(2 ** 16 * (dur / 10)))  # 10 s -> full scale
 
-        # Old numpy doesn't support dtype argument for randint
-        ndbuffer[...] = numpy.random.randint(0, maxval + 1, HH_MAXHISTLEN).astype(
-            numpy.uint32
-        )
+        ndbuffer[...] = numpy.random.randint(0, maxval + 1, HH_MAXHISTLEN, dtype=numpy.uint32)
 
     def HH_GetResolution(self, i, p_resolution):
         resolution = _deref(p_resolution, c_double)
