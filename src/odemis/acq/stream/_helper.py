@@ -26,7 +26,7 @@ import math
 import time
 
 import numbers
-from typing import Tuple, Any, Dict
+from typing import Tuple, Any, Dict, Optional
 
 import numpy
 
@@ -723,8 +723,6 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])
 
-        # TODO: grating/cw as VAs (from the spectrometer)
-
         if self.light:
             # Current channel index to be used for channel's power update
             self._channel_idx = 0
@@ -735,33 +733,40 @@ class SpectrumSettingsStream(CCDSettingsStream):
                                                unit=self.light.power.unit)
             self.power.subscribe(self._onPower)
 
-    def _onPower(self, value):
+    def _onPower(self, power: float):
         """
         Update the light power with the current channel value if the stream is active/playing.
-        :param value (float): current channel value
+        :param power: new light power
         """
         if self.is_active.value:
-            pwr = list(self.light.power.range[0])
-            pwr[self._channel_idx] = value
-            self.light.power.value = pwr
+            self._setup_light(power)
 
-    def _onActive(self, active):
-        if active:
-            if self.light:
-                # Call _onPower to update the power of the light
-                self._onPower(self.power.value)
-            super()._onActive(active)
-        else:
-            super()._onActive(active)
+    # Overrides the (un)linkHwVAs methods, so that the MDStream also turn on/off the light during synchronized acquisition
+    def _linkHwVAs(self):
+        super()._linkHwVAs()
+        if self.light:
+            self._setup_light()
+
+    def _unlinkHwVAs(self):
+        if self.light:
             self._stop_light()
+        super()._unlinkHwVAs()
+
+    def _setup_light(self, ch_power: Optional[float] = None):
+        """
+        Sets the light power to the current value of the power VA.
+        :param ch_power: The power to set the light to. If None, the current value of the power VA is used.
+        """
+        if ch_power is None:
+            ch_power = self.power.value
+        pwr = list(self.light.power.range[0])  # Other channels should be off
+        pwr[self._channel_idx] = ch_power
+        self.light.power.value = pwr
 
     def _stop_light(self):
         """
-        Ensures the light is turned off (temporarily)
+        Ensures the light is turned off
         """
-        if self.light is None:
-            return
-
         # set the light power to the minimum of the range, in most cases this is 0.0
         self.light.power.value = self.light.power.range[0]
 
