@@ -327,6 +327,15 @@ FASTEM-sim: {
     },
     metadata: {
         USER: "fastem-user-1",
+        CALIB: {
+            # Flag which adjusts the dark/gain based on percntl_im_rng of the input image to fill the percntl_dyn_rng of the
+            # dynamic range, based on a field image corrected for intensity differences between cells with tissue.
+            "adjust_dark_gain_correction": True,
+            # List[int, int] min/max percentile of the input image that will be used to stretch to the min/max of the dynamic range.
+            "percntl_im_rng": [1, 99],
+            # List[int, int] min/max percentile of the dynamic range to which the histogram of the image will be stretched.
+            "percntl_dyn_rng": [10, 90],
+        },
     },
 }
 
