@@ -24,7 +24,7 @@ import math
 import queue
 import threading
 import time
-from concurrent.futures import CancelledError
+from concurrent.futures import CancelledError, Future
 from typing import Optional, Union, Dict, List, Tuple, Any
 
 import msgpack # only used for debug information
@@ -151,12 +151,14 @@ class SEM(model.HwComponent):
 
         if "sem-scanner" in children:
             kwargs = children["sem-scanner"]
-            self._scanner = Scanner(parent=self, daemon=daemon, channel="electron", has_detector=True, **kwargs)
+            has_detector = "sem-detector" in children
+            self._scanner = Scanner(parent=self, daemon=daemon, channel="electron", has_detector=has_detector, **kwargs)
             self.children.value.add(self._scanner)
 
         if "fib-scanner" in children:
             kwargs = children["fib-scanner"]
-            self._fib_scanner = Scanner(parent=self, daemon=daemon, channel="ion", has_detector=True, **kwargs)
+            has_detector = "fib-detector" in children
+            self._fib_scanner = Scanner(parent=self, daemon=daemon, channel="ion", has_detector=has_detector, **kwargs)
             self.children.value.add(self._fib_scanner)
 
         # create the stage child, if requested
@@ -1058,7 +1060,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_default_patterning_beam_type(channel)
 
-    def get_available_application_files(self) -> list:
+    def get_available_application_files(self) -> List[str]:
         """Returns: (list) the available application files."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1517,8 +1519,8 @@ class Detector(model.Detector):
                         md[model.MD_BEAM_FIELD_OF_VIEW] = self._scanner.horizontalFoV.value
                     if hasattr(self._scanner, "_acq_type"):
                         md[model.MD_ACQ_TYPE] = self._scanner._acq_type
-                    # TODO: these don't get saved with the image metadata...
-
+                    md[model.MD_ACQ_DATE] = time.time()
+                    md.update(self._metadata)
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
                     if hasattr(self._scanner, "dwellTime") and hasattr(self._scanner, "resolution"):
@@ -1536,9 +1538,9 @@ class Detector(model.Detector):
                     # Retrieve the image (scans image, blocks until the image is received)
                     # TODO: use the metadata from the image acquisition _md once it's available
                     image, _md = self.parent.acquire_image(self._scanner.channel)
+
                     # non-blocking acquisition (disabled until hw testing)
                     # logging.debug("Starting one image acquisition")
-
                     # # start the acquisition
                     # self.start_acquisition()
                     # # stop the acquisition at the end of the frame
@@ -1557,7 +1559,6 @@ class Detector(model.Detector):
                     # # Retrieve the image
                     # image = self.parent.get_last_image(self._scanner.channel, wait_for_frame=True)
 
-                    md.update(self._metadata)
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image.")
                     self.data.notify(da)
@@ -1591,7 +1592,6 @@ class Detector(model.Detector):
             pass
 
         self.parent.stop_acquisition(self._scanner.channel, wait_for_frame=wait_for_frame)
-
 
     def _acq_should_stop(self, timeout=None):
         """
@@ -1709,82 +1709,6 @@ class Detector(model.Detector):
         return self.parent.get_detector_type(self._scanner.channel)
 
     # TODO: add support for auto functions
-
-
-# Very approximate values
-PRESSURE_VENTED = 100e3  # Pa
-PRESSURE_PUMPED = 10e-3  # Pa
-
-
-class Chamber(model.Actuator):
-    """
-    Component representing the vacuum chamber. Changing the pressure is possible by moving the "vacuum" axis,
-    which accepts two position values: 0 for vented, 1 for vacuum.
-    """
-
-    def __init__(self, name, role, parent, **kwargs):
-        axes = {"vacuum": model.Axis(choices={PRESSURE_VENTED: "vented",
-                                              PRESSURE_PUMPED: "vacuum"})}
-        model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
-
-        self.position = model.VigilantAttribute({}, readonly=True)
-        info = self.parent.pressure_info()
-        self.pressure = model.FloatContinuous(info["range"][0], info["range"], readonly=True, unit=info["unit"])
-        self._refreshPressure()
-
-        self._polling_thread = util.RepeatingTimer(5, self._refreshPressure, "Pressure polling")
-        self._polling_thread.start()
-
-        self._executor = CancellableThreadPoolExecutor(max_workers=1)
-
-    def stop(self, axes=None):
-        self._executor.cancel()
-        if self._executor._queue:
-            logging.warning("Stopping the pumping/venting process is not supported.")
-
-    @isasync
-    def moveRel(self, shift):
-        raise NotImplementedError("Relative movements are not implemented for vacuum control. Use moveAbs instead.")
-
-    @isasync
-    def moveAbs(self, pos):
-        self._checkMoveAbs(pos)
-        return self._executor.submit(self._changePressure, pos["vacuum"])
-
-    def _changePressure(self, target):
-        """
-        target (0, 1): 0 for pumping to vacuum, 1 for venting the chamber
-        """
-        self._refreshPressure()
-        if target == self.position.value["vacuum"]:
-            logging.info("Chamber state already %s, doing nothing.", target)
-            return
-
-        if target == PRESSURE_PUMPED:
-            self.parent.pump()
-        else:
-            self.parent.vent()
-        self._refreshPressure()
-
-    def _refreshPressure(self):
-        # Position (vacuum state)
-        state = self.parent.get_chamber_state()
-        val = {"vacuum": PRESSURE_PUMPED if state == "vacuum" else PRESSURE_VENTED}
-        self.position._set_value(val, force_write=True)
-
-        # Pressure
-        pressure = self.parent.get_pressure()
-        if pressure != -1:  # -1 is returned when the chamber is vented
-            self.pressure._set_value(pressure, force_write=True)
-            logging.debug("Updated chamber pressure, %s Pa, vacuum state %s.", pressure, val["vacuum"])
-        else:
-            pressure = 100e3  # ambient pressure, Pa
-            self.pressure._set_value(pressure, force_write=True)
-            logging.warning("Couldn't read pressure value, assuming ambient pressure %s.", pressure)
-
-    def terminate(self):
-        """Stop and clean up the chamber component."""
-        self._polling_thread.cancel()
 
 
 class TerminationRequested(Exception):
@@ -1956,7 +1880,7 @@ class Stage(model.Actuator):
         return self.moveRel(stage_position)
 
     @isasync
-    def moveRel(self, shift: Dict[str, float]) -> Union[model.InstantaneousFuture, CancellableFuture]:
+    def moveRel(self, shift: Dict[str, float]) -> Future:
         """
         Shift the stage the given position in meters. This is non-blocking.
         Throws an error when the requested position is out of range.
@@ -1967,8 +1891,6 @@ class Stage(model.Actuator):
             Relative shift to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
             Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
-        if "coordinate_system" in shift:
-            shift.pop("coordinate_system") # tmp remove to get around _checkMoveRel limitations
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
@@ -1982,7 +1904,7 @@ class Stage(model.Actuator):
         self._moveTo(future, pos, rel=False)
 
     @isasync
-    def moveAbs(self, pos: Dict[str, float]) -> Union[model.InstantaneousFuture, CancellableFuture]:
+    def moveAbs(self, pos: Dict[str, float]) -> Future:
         """
         Move the stage the given position in meters. This is non-blocking.
         Throws an error when the requested position is out of range.
@@ -1993,8 +1915,6 @@ class Stage(model.Actuator):
             Absolute position to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
             Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
-        if "coordinate_system" in pos:
-            pos.pop("coordinate_system") # TODO: better integrate with _checkMove, assume always RAW?
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
