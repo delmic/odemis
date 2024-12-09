@@ -2228,5 +2228,19 @@ class SampleStage(model.Actuator):
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
+    @isasync
+    def move_vertical(self, pos: Dict[str, float]) -> 'Future':
+        """Move the stage vertically in the chamber. This is non-blocking.
+        From OpenFIBSEM"""
+        theta = self._stage_bare.position.value["rx"] # tilt, in radians
+        dx = pos.get("x", 0)
+        pdy = pos.get("y", 0)
+
+        dy = pdy * math.sin(theta)
+        dz = pdy / math.cos(theta)
+        stage_position = {"x": dx, "y": dy, "z": dz}
+        logging.debug(f"Moving stage vertically by: {stage_position}, theta: {theta}, pos: {pos}")
+        return self._stage_bare.moveRel(stage_position)
+
     def stop(self, axes=None):
         self._stage_bare.stop()

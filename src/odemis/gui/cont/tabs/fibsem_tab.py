@@ -308,7 +308,7 @@ class FibsemTab(Tab):
             dist_y = p_pos[1] - init_pos[1]
 
             logging.info(f"Moving stage vertically by: {dist_x}, {dist_y}")
-            f = self.pm.stage.move_vertical({"x": dist_x, "y": dist_y})
+            f = self.pm.sample_stage.move_vertical({"x": dist_x, "y": dist_y})
             f.result()
             return
 
