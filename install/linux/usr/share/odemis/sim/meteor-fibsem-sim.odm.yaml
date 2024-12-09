@@ -88,6 +88,34 @@ METEOR-FIBSEM-Sim: {
     },
 }
 
+# LinkedYZ and Meteor Stage are deprecated but can be used to simulate the old behavior
+"Linked YZ": {
+    class: actuator.ConvertStage,
+    role: null,
+    dependencies: {
+        "under": "Stage"
+    },
+    init: {
+      axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+      rotation: 0.6108652381980153, # rad , 35°
+    },
+}
+
+"Meteor Stage": {
+    class: actuator.MultiplexActuator,
+    role: meteor-stage,
+    dependencies: { "x": "Stage", "y": "Linked YZ", "z": "Linked YZ", },
+    init: {
+        axes_map: { "x": "x", "y": "x", "z": "y",},
+    },
+    affects: ["Camera", "EBeam"],
+    metadata: {
+        # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
+        POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-10.e-3, 20.e-3]}
+    },
+}
+
+
 "Light Source": {
     class: omicronxx.HubxX,
     role: light,

@@ -1844,6 +1844,12 @@ class Stage(model.Actuator):
             "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
         }
 
+        # When raw coordinate system is selected, in theory just z should change
+        # but in practice x and y change by a fixed offset. When raw coordinate system is used,
+        # offset correction is applied (in the later part of init)
+        # such that all axes apart from z, have same values
+        self._raw_offset = {"x": 0, "y": 0}
+
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
                                 **kwargs)
         # will take care of executing axis move asynchronously
@@ -1851,6 +1857,7 @@ class Stage(model.Actuator):
 
         self.position = model.VigilantAttribute({}, unit=stage_info["unit"],
                                                 readonly=True)
+        self._get_coordinate_system_offset() # to get the offset values for raw coordinate system
         self._updatePosition()
 
         # Refresh regularly the position
@@ -1866,12 +1873,31 @@ class Stage(model.Actuator):
             self._pos_poll.cancel()
             self._pos_poll = None
 
+    def _get_coordinate_system_offset(self):
+        """Calculate the offset values for raw coordinate system. The offset is the difference between the specimen (linked) and raw coordinate system."""
+        self.parent.set_default_stage_coordinate_system("SPECIMEN")
+        pos_linked = self._getPosition()
+        self.parent.set_default_stage_coordinate_system("RAW")
+        pos = self._getPosition()
+        for axis in self._raw_offset.keys():
+            self._raw_offset[axis] = pos_linked[axis] - pos[axis]
+        # the offset should only be in linear axes, it is not expected in rotational axes
+        if not all(pos[axis] == pos_linked[axis] for axis in ["rx", "rz"]):
+            logging.warning(
+                "During offset estimation in linear axes in raw coordinate system in x and y, unexpected offset is "
+                "found in rotation axes")
+        logging.debug(f"The offset values in x and y are {self._raw_offset} when stage is in the raw coordinate "
+                        f"system for raw stage coordinates: {pos}, linked stage coordinates: {pos_linked}")
+        
     def _updatePosition(self):
         """
         update the position VA
         """
         old_pos = self.position.value
         pos = self._getPosition()
+        # Apply the offset to the raw coordinates
+        pos["x"] += self._raw_offset["x"]
+        pos["y"] += self._raw_offset["y"]
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -1910,6 +1936,11 @@ class Stage(model.Actuator):
                 if rel:
                     logging.debug("Moving by shift {}".format(pos))
                 else:
+                    # apply the offset to the raw coordinates
+                    if "x" in pos.keys():
+                        pos["x"] -= self._raw_offset["x"]
+                    if "y" in pos.keys():
+                        pos["y"] -= self._raw_offset["y"]
                     logging.debug("Moving to position {}".format(pos))
 
                 if "rx" in pos.keys():
