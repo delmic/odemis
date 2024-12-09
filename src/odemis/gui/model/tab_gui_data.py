@@ -20,14 +20,17 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import copy
 import logging
 import math
 from abc import ABCMeta
-from typing import Tuple, Dict
+from enum import Enum
+from typing import Dict, Tuple
 
 import odemis.acq.stream as acqstream
 from odemis import model
 from odemis.acq.feature import CryoFeature, get_feature_position_at_posture
+from odemis.acq.move import FM_IMAGING, SEM_IMAGING, POSITION_NAMES
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -43,9 +46,9 @@ from odemis.gui.model._constants import (
     TOOL_LINE,
     TOOL_NONE,
     TOOL_POINT,
+    TOOL_RECTANGLE,
     TOOL_RO_ANCHOR,
     TOOL_ROA,
-    TOOL_RECTANGLE,
     TOOL_RULER,
     TOOL_SPOT,
     VIEW_LAYOUT_22,
@@ -65,9 +68,8 @@ from odemis.model import (
     VigilantAttribute,
 )
 from odemis.util.filename import create_filename, make_unique_name
-from odemis.acq.move import SEM_IMAGING, FM_IMAGING
 
-from enum import Enum
+
 class AcquiMode(Enum): # TODO: move to better place
     FLM = 1
     FIBSEM = 2
@@ -273,7 +275,7 @@ class CryoGUIData(MicroscopyGUIData):
                 md = self.main.focus.getMetadata()
                 fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
         feature = CryoFeature(f_name, stage_position, fm_focus_position)
-        feature.set_posture_position(posture, stage_position)
+        get_feature_position_at_posture(pm, feature, posture)
 
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
@@ -294,9 +296,9 @@ class CryoGUIData(MicroscopyGUIData):
             pm = self.main.posture_manager
             position = get_feature_position_at_posture(pm, feature, pm.current_posture.value)
             pos = pm.to_sample_stage_from_stage_position(position)
-            return math.hypot(pos["x"] - current_position["x"],
-                              pos["y"] - current_position["y"])
-
+            sample_stages_pos = pm.to_sample_stage_from_stage_position(current_position)
+            return math.hypot(pos["x"] - sample_stages_pos["x"],
+                              pos["y"] - sample_stages_pos["y"])
 
         if current_feature and dist_to_pos(current_feature) <= self.ATOL_FEATURE_POS:
             return  # We are already good, nothing else to do
@@ -310,10 +312,10 @@ class CryoGUIData(MicroscopyGUIData):
         except ValueError:  # raised by min() if no features at all
             pass
 
-        # No feature nearby => create a new one
+        # No feature nearby => create a new one # TODO: THIS IS BROKEN, creates feature too hgih??
+        current_position = copy.deepcopy(self.main.stage.position.value)
         feature = self.add_new_feature(stage_position=current_position) # FLAG: FEATURE_Z
         logging.debug(f"New feature created at {current_position} because none are close by.")
-        self.main.currentFeature.value = feature
 
 
 class CryoLocalizationGUIData(CryoGUIData):
