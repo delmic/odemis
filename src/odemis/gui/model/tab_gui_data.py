@@ -252,20 +252,27 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
-    def add_new_feature(self, stage_position: Dict[str, float], fm_focus_position: Dict[str, float] = None, f_name: str = None):
+    def add_new_feature(self, stage_position: Dict[str, float], fm_focus_position: Dict[str, float] = None, f_name: str = None) -> CryoFeature:
         """
         Create a new feature and add it to the features list
         """
+        # set the posture position
+        pm = self.main.posture_manager
+        posture = pm.getCurrentPostureLabel(stage_position)
+
         if not f_name:
             existing_names = [f.name.value for f in self.main.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
         if fm_focus_position is None:
-            fm_focus_position = self.main.focus.position.value
+            # if the focus position is not provided:
+            # at FM posture: use the current focus position
+            # otherwise: use the active focus position
+            if posture == FM_IMAGING:
+                fm_focus_position = self.main.focus.position.value
+            else:
+                md = self.main.focus.getMetadata()
+                fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
         feature = CryoFeature(f_name, stage_position, fm_focus_position)
-
-        # set the posture position
-        pm = self.main.posture_manager
-        posture = pm.getCurrentPostureLabel(stage_position)
         feature.set_posture_position(posture, stage_position)
 
         self.main.features.value.append(feature)
@@ -304,10 +311,9 @@ class CryoGUIData(MicroscopyGUIData):
             pass
 
         # No feature nearby => create a new one
-        feature = self.add_new_feature(stage_position=current_position, fm_focus_position=self.main.focus.position.value)
+        feature = self.add_new_feature(stage_position=current_position) # FLAG: FEATURE_Z
         logging.debug(f"New feature created at {current_position} because none are close by.")
         self.main.currentFeature.value = feature
-
 
 
 class CryoLocalizationGUIData(CryoGUIData):
