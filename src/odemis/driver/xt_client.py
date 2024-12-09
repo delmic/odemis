@@ -2327,8 +2327,13 @@ class Stage(model.Actuator):
                 self.parent.move_stage(pos, rel=rel)
                 time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
+                # Get the target position in absolute coordinates
+                if rel:
+                    target_pos = {ax: val + orig_pos[ax] for ax, val in pos.items()}
+                else:
+                    target_pos = pos
                 # Drop axes from the original position, which are not important because they have not moved
-                orig_pos = {a: orig_pos[a] for a, nv in pos.items() if nv != orig_pos[a]}
+                orig_pos = {a: orig_pos[a] for a, nv in target_pos.items() if nv != orig_pos[a]}
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2377,12 +2382,6 @@ class Stage(model.Actuator):
                 # code, as it would seem that the move didn't have any effect, and later on, after the position
                 # is eventually updated that the stage has moved unexpectedly. So, wait until the reported position is
                 # (1) not identical to the starting position and (2) not too far from the target position.
-
-                # Get the target position in absolute coordinates
-                if rel:
-                    target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
-                else:
-                    target_pos = {ax: pos[ax] for ax, val in orig_pos.items()}
 
                 # The stage is not moving anymore, but we still want to wait until the position has been updated
                 # TODO: base the timeout on stage movement time estimation, needs to be checked on hardware
