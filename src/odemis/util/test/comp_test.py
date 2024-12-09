@@ -247,6 +247,22 @@ class TestGenerateZlevels(unittest.TestCase):
         finally:
             self.focus.updateMetadata({model.MD_POS_ACTIVE_RANGE: {}})
 
+    def test_focus_outside_range(self):
+        # focus position above the absolute range
+        focus_range = self.focus.axes["z"].range
+        self.focus.moveAbsSync({"z": focus_range[1] + 100e-6})
+        zrange = (-50e-6, 50e-6)
+        zstep = 10e-6
+        with self.assertRaises(ValueError):
+            generate_zlevels(self.focus, zrange, zstep)
+
+        # focus position below the absolute range
+        self.focus.moveAbsSync({"z": focus_range[0] - 100e-6})
+        zrange = (-50e-6, 50e-6)
+        zstep = 10e-6
+        with self.assertRaises(ValueError):
+            generate_zlevels(self.focus, zrange, zstep)
+
 
 if __name__ == "__main__":
     unittest.main()
