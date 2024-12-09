@@ -138,12 +138,12 @@ class CryoFeature(object):
         logging.info(f"Stage position for milling: {self.get_posture_position(MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
-def get_feature_position_at_posture(pm: MicroscopePostureManager, feature: CryoFeature, posture: int) -> Dict[str, float]:
+def get_feature_position_at_posture(pm: MicroscopePostureManager, feature: CryoFeature, posture: int, recalculate: bool = False) -> Dict[str, float]:
     """Get the feature position at the given posture, if it doesn't exist, create it."""
     position = feature.get_posture_position(posture)
 
     # if the position doesn't exist at that posture, create it
-    if position is None:
+    if position is None or recalculate:
         try:
             logging.info(f"Feature position for {feature.name.value} at {posture} posture doesn't exist. Creating it.")
             position = pm.to_posture(feature.stage_position.value, posture)
@@ -309,7 +309,7 @@ def import_features_from_autolamella(path: str) -> List[CryoFeature]:
 
         # create feature
         # TODO: we need to handle this better, the focus may be anywhere? maybe use the active position?
-        focus_pos = model.getComponent(role="focus").position.value
+        focus_pos = model.getComponent(role="focus").getMetadata()[model.MD_FAV_POS_ACTIVE]
         cryo_feat = CryoFeature(
             name=name,
             stage_position=pos,

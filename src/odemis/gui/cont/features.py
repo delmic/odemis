@@ -142,9 +142,9 @@ class CryoFeatureController(object):
         if feature is None:
             logging.warning("No feature selected")
             return
-        self._move_to_posture(feature, MILLING)
+        self._move_to_posture(feature, MILLING, recalculate=True)
 
-    def _move_to_posture(self, feature: CryoFeature, posture: int):
+    def _move_to_posture(self, feature: CryoFeature, posture: int, recalculate: bool = False):
         """
         Move the stage to the current feature's position
         """
@@ -155,7 +155,10 @@ class CryoFeatureController(object):
             return
 
         # get the position at the posture
-        position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=posture)
+        position = get_feature_position_at_posture(pm=self.pm, 
+                                                   feature=feature, 
+                                                   posture=posture, 
+                                                   recalculate=recalculate)
 
         logging.info(f"Moving to {POSITION_NAMES[posture]} position: {position}")
 

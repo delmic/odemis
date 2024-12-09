@@ -42,6 +42,8 @@ from odemis.acq.feature import (
     FEATURE_DEACTIVE,
     FEATURE_POLISHED,
     FEATURE_ROUGH_MILLED,
+    FEATURE_ACTIVE,
+    FEATURE_READY_TO_MILL,
     CryoFeature,
 )
 from odemis.acq.milling.tasks import MillingTaskManager, MillingTaskSettings
@@ -175,6 +177,10 @@ class AutomatedMillingManager(object):
 
                 if feature.status.value == FEATURE_DEACTIVE:
                     logging.info(f"Skipping {feature.name.value} as it is deactivated.")
+                    continue
+
+                if feature.status.value == FEATURE_ACTIVE:
+                    logging.info(f"Skipping {feature.name.value} as it is not ready for milling.")
                     continue
 
                 self._future.msg = f"{feature.name.value}: Starting {self.current_workflow}"

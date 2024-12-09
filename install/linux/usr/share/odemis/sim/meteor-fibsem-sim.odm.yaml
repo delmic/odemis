@@ -6,15 +6,6 @@
 METEOR-FIBSEM-Sim: {
     class: Microscope,
     role: meteor,
-    children: [
-        "Meteor Stage",
-        "Optical Objective",
-        "Optical Focus",
-        "Light Source",
-        "Filter Wheel",
-        "Camera",
-        "FIBSEM"
-    ],
 }
 
 "FIBSEM": {

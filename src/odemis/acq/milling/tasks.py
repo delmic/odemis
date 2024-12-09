@@ -129,6 +129,8 @@ class MillingTaskManager:
         imaging_voltage = microscope.get_high_voltage(milling_channel)
         imaging_fov = microscope.get_field_of_view(milling_channel)
 
+        # TODO: acquire reference image at imaging settings
+
         # error management
         ce = False
         try:
@@ -140,6 +142,8 @@ class MillingTaskManager:
             microscope.set_beam_current(milling_current, milling_channel)
             microscope.set_field_of_view(milling_fov, milling_channel)
             microscope.set_patterning_mode(milling_mode)
+
+            # TODO: align the reference image at milling settings
 
             # draw milling patterns to microscope
             for pattern in settings.generate():
