@@ -1866,20 +1866,6 @@ class Stage(model.Actuator):
         self._moveTo(future, shift, rel=True)
 
     @isasync
-    def move_vertical(self, pos: Dict[str, float]) -> Union[model.InstantaneousFuture, CancellableFuture]:
-        """Move the stage vertically in the chamber. This is non-blocking.
-        From OpenFIBSEM"""
-        theta = self.position.value["rx"] # tilt, in radians
-        dx = pos.get("x", 0)
-        pdy = pos.get("y", 0)
-
-        dy = pdy * math.sin(theta)
-        dz = pdy / math.cos(theta)
-        stage_position = {"x": dx, "y": dy, "z": dz}
-        logging.debug(f"Moving stage vertically by: {stage_position}, theta: {theta}, pos: {pos}")
-        return self.moveRel(stage_position)
-
-    @isasync
     def moveRel(self, shift: Dict[str, float]) -> Future:
         """
         Shift the stage the given position in meters. This is non-blocking.
