@@ -137,6 +137,11 @@ class TiledAcquisitionTask(object):
 
         (self._nx, self._ny), self._starting_pos = self._getNumberOfTiles()
 
+        # save actual time take for tile acquisition, stage movement from one tile to another
+        # and stitching time for each tile. The keys tell the action, i.e. move or stitch and the time
+        # taken for the same action per each tile is saved as a list of floats
+        self._save_time: Dict[str, List[float]] = {}
+
         # To check and adjust the focus in between tiles
         if not isinstance(focusing_method, FocusingMethod):
             raise ValueError(f"focusing_method should be of type FocusingMethod, but got {focusing_method}")
@@ -503,6 +508,12 @@ class TiledAcquisitionTask(object):
         if remaining is None:
             remaining = self._nx * self._ny
 
+        # After the acquisition of first tile, correct the time taken for subsequent tiles based on time taken for
+        # previous tiles
+        time_per_tile = self._correct_tiled_acq_time()
+        if time_per_tile:
+            return time_per_tile * remaining
+
         acq_time = 0
         for stream in self._streams:
             # add 1s to account for stage/objective movement time in z direction
@@ -511,8 +522,8 @@ class TiledAcquisitionTask(object):
                 # Acquisition time for each stream will be multiplied by the number of zstack levels
                 zlevels = [item for item in self._zlevels if item is not None]
                 acq_stream_time *= len(zlevels)
-            # add 2 seconds to account for switching from one tile to next tile
-            acq_time += acq_stream_time + 2
+            acq_time += acq_stream_time
+        acq_time = acq_time * remaining
 
         # Estimate stitching time based on number of pixels in the overlapping part
         max_pxs = 0
@@ -521,15 +532,31 @@ class TiledAcquisitionTask(object):
                 pxs = sda.shape[0] * sda.shape[1]
                 if pxs > max_pxs:
                     max_pxs = pxs
+        stitch_time = (remaining * max_pxs * self._overlap) / self.STITCH_SPEED
 
-        stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / self.STITCH_SPEED
         try:
-            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed
+            # move_speed is a default speed but not an actual stage speed due to which
+            # extra time is added based on observed time taken to move stage from one tile position to another
+            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed + 0.3 * remaining
             # current tile is part of remaining, so no need to move there
         except ValueError:  # no current streams
             move_time = 0.5
 
-        return acq_time * remaining + move_time + stitch_time
+        logging.info(f"The computed time in seconds for tiled acquisition for {remaining} tiles for move is {move_time}, "
+                     f"stitch is {stitch_time}, acquisition is {acq_time}")
+
+        return acq_time + move_time + stitch_time
+
+    def _correct_tiled_acq_time(self):
+        """Compute average time taken to complete tiled acquisition for one tile position"""
+        observed_time = 0
+        for k,v in self._save_time.items():
+            if not v:  # empty list => no history
+                return None
+            observed_time += numpy.mean(v)
+        else:
+            observed_time = None
+        return observed_time
 
     def _save_tiles(self, ix, iy, das, stream_cube_id=None):
         """
@@ -643,14 +670,25 @@ class TiledAcquisitionTask(object):
         self._future.running_subf = self._stage.moveAbs(self._starting_pos)
         self._future.running_subf.result()
 
+        time_observers = {"acq", "stitch", "move", "save"}
+        self._save_time = {k: [] for k in time_observers}
+        # The increase in the number of scanning indices increase with overlap between tiles. The time take
+        # by stage to move to different indices also includes the time taken to move when scanning indices increase due
+        # to increase in overlap. This means stitching time is included when move time between tiles is observed.
+        # Hence, observed time due to stitching is set to zero
+        self._save_time["stitch"] = [0]
+        move_to_tile_start = None
         for ix, iy in self._generateScanningIndices((self._nx, self._ny)):
-            logging.debug("Acquiring tile %dx%d", ix, iy)
             self._moveToTile((ix, iy), prev_idx, self._sfov)
+            if move_to_tile_start:
+                self._save_time["move"].append(time.time() - move_to_tile_start)
             prev_idx = ix, iy
 
+            acquisition_start = time.time()
             if self._focus_points is not None:
                 self._refocus()
 
+            logging.debug("Acquiring tile %dx%d", ix, iy)
             das = self._getTileDAs(i, ix, iy)
 
             if i == 0:
@@ -661,14 +699,19 @@ class TiledAcquisitionTask(object):
                 # Check if the acquisition was not good enough, then adjusts focus of current tile and reacquires image
                 das = self._adjustFocus(das, i, ix, iy)
 
+            self._save_time["acq"].append(time.time() - acquisition_start)
+
             # Save the das on disk if a log path exists
+            save_tile_start = time.time()
             if self._log_path:
                 self._save_tiles(ix, iy, das)
 
             # Sort tiles (largest sem on first position)
             da_list.append(self._sortDAs(das, self._streams))
+            self._save_time["save"].append(time.time() - save_tile_start)
 
             i += 1
+            move_to_tile_start = time.time()
         return da_list
 
     def _get_z_on_focus_plane(self, x, y):
@@ -895,6 +938,7 @@ class TiledAcquisitionTask(object):
             raise
         finally:
             logging.info("Tiled acquisition ended")
+            logging.info(f"The actual time taken per tile for each action is {self._save_time}")
             with self._future._task_lock:
                 self._future._task_state = FINISHED
         return st_data
@@ -1082,7 +1126,7 @@ class AcquireOverviewTask(object):
         else:
             autofocus_time = 0
             if self._use_autofocus:
-                autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._det)
+                autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._det, self._focus, self.focus_rng)
             tiled_time = 0
             for area in self.areas:
                 tiled_time += estimateTiledAcquisitionTime(
@@ -1139,7 +1183,7 @@ class AcquireOverviewTask(object):
 
                     try:
                         focus_points_per_area = len(self._focus_points[idx])
-                        max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._det) * 3 + 1
+                        max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._det, self._focus, self.focus_rng) * 3 + 1
                         focus_points = self._future.running_subf.result(max_wait_t)
                     except TimeoutError:
                         logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
