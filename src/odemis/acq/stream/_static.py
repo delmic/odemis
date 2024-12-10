@@ -979,6 +979,10 @@ class RGBUpdatableStream(StaticStream):
         '''
         Returns cleaned raw data or raises error if raw is not RGB(A)
         '''
+        # Allow initialization with None for cases where we update data later on
+        if raw is None:
+            return raw
+
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
             raw = [raw.getData()]
@@ -986,11 +990,11 @@ class RGBUpdatableStream(StaticStream):
             raw = [raw]
 
         # Check it's RGB
-        for d in raw:
-            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
-            ci = dims.find("C")  # -1 if not found
-            if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
-                raise ValueError("Data must be RGB(A)")
+        # for d in raw:
+        #     dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        #     ci = dims.find("C")  # -1 if not found
+        #     if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
+        #         raise ValueError("Data must be RGB(A)")
         return raw
 
     def update(self, raw):
