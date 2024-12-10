@@ -190,7 +190,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_hardware_version()
 
-    def list_available_channels(self) -> list:
+    def list_available_channels(self) -> List[str]:
         """List all available channels
         :return: (list) of available channels.
         """
@@ -198,7 +198,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.list_available_channels()
 
-    def move_stage_absolute(self, position: dict) -> None:
+    def move_stage_absolute(self, position: Dict[str, float]) -> None:
         """ Move the stage the given position. This is blocking.
         :param position: dict, absolute position to move the stage to per axes.
             Axes are 'x', 'y', 'z', 't', 'r'.
@@ -208,7 +208,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.move_stage_absolute(position)
 
-    def move_stage_relative(self, position: dict) -> None:
+    def move_stage_relative(self, position: Dict[str, float]) -> None:
         """
         Move the stage by the given relative position. This is blocking.
         :param position: dict, relative position to move the stage to per axes in m.
@@ -224,7 +224,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.stop_stage_movement()
 
-    def get_stage_position(self) -> dict:
+    def get_stage_position(self) -> Dict[str, float]:
         """
         :return: (dict) the axes of the stage as keys with their corresponding position.
         """
@@ -232,7 +232,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_stage_position()
 
-    def stage_info(self):
+    def stage_info(self) -> Dict[str, Tuple[float]]:
         """Returns: (dict) the unit and range of the stage position."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -249,6 +249,14 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_default_stage_coordinate_system(coordinate_system)
+
+    def get_stage_coordinate_system(self) -> str:
+        """
+        Get the current stage coordinate system. (Raw, Specimen)
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_stage_coordinate_system()
 
     def home_stage(self):
         """Home stage asynchronously. This is non-blocking."""
@@ -1413,8 +1421,6 @@ class Detector(model.Detector):
         self.data = SEMDataFlow(self)
         self.channel = channel
 
-
-
         if self.channel == "electron":
             self._scanner = self.parent._scanner
         elif self.channel == "ion":
@@ -1970,7 +1976,6 @@ class Stage(model.Actuator):
         """
         # We don't check the target position fit the range, the autoscript-adapter will take care of that
         self._moveTo(future, shift, rel=True)
-
 
     @isasync
     def moveRel(self, shift: Dict[str, float]):
