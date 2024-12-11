@@ -162,6 +162,24 @@ class Sparc2AlignTab(Tab):
                  "stream_classes": acqstream.CameraStream,
                 }
             ),
+            (self.panel.vp_align_light_spot,
+                {
+                    "name": "Light alignment wih CL Spot",
+                    "stream_classes": (
+                        acqstream.CameraStream,
+                        acqstream.RGBUpdatableStream,
+                    ),
+                }
+            ),
+            (self.panel.vp_align_light_ar,
+                {
+                    "name": "Light alignment wih CL AR pattern",
+                    "stream_classes": (
+                        acqstream.CameraStream,
+                        acqstream.RGBUpdatableStream,
+                    ),
+                }
+            ),
         ))
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
@@ -221,57 +239,63 @@ class Sparc2AlignTab(Tab):
             hwdetvas = set()
             if model.hasVA(main_data.ccd, "temperature"):
                 hwdetvas.add("temperature")
-            ccd_stream = acqstream.CameraStream(
-                                "Angle-resolved sensor",
-                                main_data.ccd,
-                                main_data.ccd.data,
-                                emitter=None,
-                                # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
-                                hwdetvas=hwdetvas,
-                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
-                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                         model.MD_ROTATION: 0},  # Force the CCD as-is
-                                acq_type=model.MD_AT_AR,  # For the merge slider icon
-                                )
-            self._setFullFoV(ccd_stream, (2, 2))
-            self._ccd_stream = ccd_stream
+            # Initialize ccd stream
+            ccd_args = [
+                "Angle-resolved sensor",
+                main_data.ccd,
+                main_data.ccd.data,
+            ]
 
-            self._ccd_spe = self._stream_controller.addStream(ccd_stream,
-                                add_to_view=self.panel.vp_align_lens.view)
+            ccd_kwargs = dict(
+                emitter=None,
+                hwdetvas=hwdetvas,
+                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
+                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                            model.MD_ROTATION: 0},  # Force the CCD as-is
+                acq_type=model.MD_AT_AR,  # For the merge slider icon
+            )
+            # This stream is shown in four different alignment modes/views.
+            # Copy already initialized ccd stream. We want separate streams,
+            # so it's easier to obtain the respective last frame for the CL overlay
+            self._ccd_stream = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "LENS" alignment
+            self._ccd_stream_center = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "CENTERING" alignment
+            self._ccd_stream_light = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "LIGHT SPOT" and "LIGHT AR" alignment
+
+            # To activate the SEM spot when the CCD plays
+            self._ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
+            self._ccd_stream_center.should_update.subscribe(self._on_ccd_stream_play)
+            self._ccd_stream_light.should_update.subscribe(self._on_ccd_stream_play)
+
+            # Assign to views
+            self._ccd_spe = self._stream_controller.addStream(
+                self._ccd_stream, add_to_view=self.panel.vp_align_lens.view
+            )
+            self._ccd_center_spe = self._stream_controller.addStream(
+                self._ccd_stream_center, add_to_view=self.panel.vp_align_center.view
+            )
+            self._ccd_light_spot_spe = self._stream_controller.addStream(
+                self._ccd_stream_light, add_to_view=self.panel.vp_align_light_spot.view
+            )
+            self._ccd_light_ar_spe = self._stream_controller.addStream(
+                self._ccd_stream_light, add_to_view=self.panel.vp_align_light_ar.view
+            )
+
+            # Disable stream panel folding
             self._ccd_spe.stream_panel.flatten()
+            self._ccd_center_spe.stream_panel.flatten()
+            self._ccd_light_spot_spe.stream_panel.flatten()
+            self._ccd_light_ar_spe.stream_panel.flatten()
+
+            # Settings for the lens alignment ccd stream
+            self._setFullFoV(self._ccd_stream , (2, 2))
 
             self._addMoIEntries(self._ccd_spe.stream_panel)
-            ccd_stream.image.subscribe(self._onNewMoI)
+            self._ccd_stream.image.subscribe(self._onNewMoI)
 
-            # To activate the SEM spot when the CCD plays
-            ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
-
-            # Repeat for the centering align mode
-            ccd_stream_center = acqstream.CameraStream(
-                                "Angle-resolved sensor",
-                                main_data.ccd,
-                                main_data.ccd.data,
-                                emitter=None,
-                                # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
-                                hwdetvas=hwdetvas,
-                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
-                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                            model.MD_ROTATION: 0},  # Force the CCD as-is
-                                acq_type=model.MD_AT_AR,  # For the merge slider icon
-                                )
+            # Settings for centering align mode.
             # Change binning to differentiate from other stream
-            self._setFullFoV(ccd_stream_center, (4, 4))
-            self._ccd_stream_center = ccd_stream_center
+            self._setFullFoV(self._ccd_stream_center, (4, 4))
 
-            self._ccd_spe_center = self._stream_controller.addStream(ccd_stream_center,
-                                add_to_view=self.panel.vp_align_center.view)
-            self._ccd_spe_center.stream_panel.flatten()
-
-            self._addMoIEntries(self._ccd_spe_center.stream_panel)
-            ccd_stream_center.image.subscribe(self._onNewMoI)
-
-            # To activate the SEM spot when the CCD plays
-            ccd_stream_center.should_update.subscribe(self._on_ccd_stream_play)
         elif main_data.sp_ccd:
             # Hack: if there is no CCD, let's display at least the sp-ccd.
             # It might or not be useful. At least we can show the temperature.
@@ -302,22 +326,29 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_bkg_acquire.Show(False)
 
         ccd_focuser_ext = None
-        if ("light-in-align-spot" in tab_data.align_mode.choices or
-            "light-in-align-ar" in tab_data.align_mode.choices):
-            # This stream is a snapshot of the ccd_stream and therefore needs no initialization, since it will be
-            # updated in a later stage
-            ccd_stream_snapshot = acqstream.RGBUpdatableStream(
-                "CL Snapshot",
-                None
-            )
-            ccd_stream_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
-            self._ccd_stream_snapshot = ccd_stream_snapshot
-            # self._stream_controller.addStream(ccd_stream_snapshot, add_to_view=self.panel.vp_align_lens.view)
         if "light-in-align-spot" in tab_data.align_mode.choices:
-            # Initialize the raw data for the light align mode
-            self._ccd_stream_cl_spot_raw = None
-        if "light-in-align-ar" in tab_data.align_mode.choices:
-            self._ccd_stream_cl_ar_raw = None
+            # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
+            # updated in a later stage
+            ccd_stream_spot_snapshot = acqstream.RGBUpdatableStream(
+                "CL Spot Snapshot",
+                None,
+                acq_type=model.MD_AT_CL,
+            )
+            ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+            self._ccd_stream_spot_snapshot = ccd_stream_spot_snapshot
+            self._stream_controller.addStream(ccd_stream_spot_snapshot, add_to_view=self.panel.vp_align_light_spot.view)
+        if (
+            "light-in-align-ar" in tab_data.align_mode.choices):
+            # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
+            # updated in a later stage
+            ccd_stream_ar_snapshot = acqstream.RGBUpdatableStream(
+                "CL AR Snapshot",
+                None,
+                acq_type=model.MD_AT_CL,
+            )
+            ccd_stream_ar_snapshot.tint.value = (0, 255, 0)  # DEBUG
+            self._ccd_stream_ar_snapshot = ccd_stream_ar_snapshot
+            self._stream_controller.addStream(ccd_stream_ar_snapshot, add_to_view=self.panel.vp_align_light_ar.view)
 
         if "tunnel-lens-align" in tab_data.align_mode.choices:
             # if there is a favourite position, go to that position at init
@@ -946,8 +977,6 @@ class Sparc2AlignTab(Tab):
         if mode != "lens-align":
             if main.lens_mover:
                 main.lens_mover.position.unsubscribe(self._onLensPos)
-            if self._ccd_stream:
-                self._ccd_stream_cl_spot_raw = self._ccd_stream.raw[0]
         if mode != "lens2-align":
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
@@ -955,7 +984,6 @@ class Sparc2AlignTab(Tab):
             if main.light_aligner:
                 main.light_aligner.position.unsubscribe(self._onLightAlignPos)
         if mode != "light-in-align-spot":
-            self._stream_controller.removeStream(self._ccd_stream_snapshot)
             if main.spec_switch:
                 main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
             if main.light_aligner:
@@ -1156,15 +1184,12 @@ class Sparc2AlignTab(Tab):
 
             self.panel.pnl_moi_settings.Show(False)
         elif mode == "light-in-align-spot":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
-            self._ccd_stream.should_update.value = True
-            if self._ccd_stream_cl_spot_raw is None:
+            self.tab_data_model.focussedView.value = self.panel.vp_align_light_spot.view
+            self._ccd_stream_light.should_update.value = True
+            if not self._ccd_stream.raw:
                 logging.warning('Activate "LENS" mode first to display the CL Spot overlay stream')
             else:
-                self._ccd_stream_snapshot.update(self._ccd_stream_cl_spot_raw)
-                self._ccd_stream_cl_spot_spe = self._stream_controller.addStream(self._ccd_stream_snapshot,
-                    add_to_view=self.panel.vp_align_lens.view)
-                self._ccd_stream_cl_spot_spe.stream_panel.flatten()
+                self._ccd_stream_spot_snapshot.update(self._ccd_stream.raw[0])
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(False)
@@ -1191,12 +1216,12 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             f.add_done_callback(self._on_light_in_align_done)
         elif mode == "light-in-align-ar":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
-            self._ccd_stream_center.should_update.value = True
-            if self._ccd_stream_cl_ar_raw is None:
-                logging.warning('Activate "CENTERING" mode first to display the CL AR overlay stream')
+            self.tab_data_model.focussedView.value = self.panel.vp_align_light_ar.view  # allows to see the focused slit line
+            self._ccd_stream_light.should_update.value = True
+            if not self._ccd_stream_center.raw:
+                logging.warning('Activate "CENTERING" mode first to display the CL Spot overlay stream')
             else:
-                self._ccd_stream_snapshot.update(self._ccd_stream_cl_ar_raw)
+                self._ccd_stream_ar_snapshot.update(self._ccd_stream_center.raw[0])
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(False)
@@ -1409,12 +1434,13 @@ class Sparc2AlignTab(Tab):
         # while still being able to move the mirror.
         ccdupdate = self._ccd_stream and self._ccd_stream.should_update.value
         ccdcenterupdate = self._ccd_stream_center and self._ccd_stream_center.should_update.value
+        ccdlightupdate = self._ccd_stream_light and self._ccd_stream_light.should_update.value
         ccdextupdate = self._ccd_stream_ext and self._ccd_stream_ext.should_update.value
         spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
         ekccdupdate = self._as_stream and self._as_stream.should_update.value
         streakccdupdate = self._ts_stream and self._ts_stream.should_update.value
         self._spot_stream.is_active.value = any((
-            ccdupdate, ccdcenterupdate, ccdextupdate, spcupdate, ekccdupdate, streakccdupdate
+            ccdupdate, ccdcenterupdate, ccdlightupdate, ccdextupdate, spcupdate, ekccdupdate, streakccdupdate
         ))
 
     def _filter_axes(self, axes):

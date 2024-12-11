@@ -149,6 +149,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_streak = xrc.XRCCTRL(self, "vp_align_streak")
         self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.vp_align_lens_ext = xrc.XRCCTRL(self, "vp_align_lens_ext")
+        self.vp_align_light_spot = xrc.XRCCTRL(self, "vp_align_light_spot")
+        self.vp_align_light_ar = xrc.XRCCTRL(self, "vp_align_light_ar")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_ebeam_blanker = xrc.XRCCTRL(self, "fp_settings_ebeam_blanker")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
@@ -2232,6 +2234,16 @@ def __init_resources():
           </object>
           <object class="LiveViewport" name="vp_align_lens_ext">
             <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_align_light_spot">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_align_light_ar">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

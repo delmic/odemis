@@ -2067,6 +2067,16 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="LiveViewport" name="vp_align_light_spot">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_align_light_ar">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
