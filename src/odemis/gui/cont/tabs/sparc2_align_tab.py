@@ -227,6 +227,7 @@ class Sparc2AlignTab(Tab):
 
         self._ccd_stream = None
         self._ccd_stream_center = None
+        self._ccd_stream_light = None
         self._ccd_stream_snapshot = None
         self._ccd_stream_ext = None  # used for the tunnel lens alignment, with the spectrograph-dedicated
         self._as_stream = None
@@ -260,12 +261,10 @@ class Sparc2AlignTab(Tab):
             # so it's easier to obtain the respective last frame for the CL overlay
             self._ccd_stream = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "LENS" alignment
             self._ccd_stream_center = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "CENTERING" alignment
-            self._ccd_stream_light = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "LIGHT SPOT" and "LIGHT AR" alignment
 
             # To activate the SEM spot when the CCD plays
             self._ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
             self._ccd_stream_center.should_update.subscribe(self._on_ccd_stream_play)
-            self._ccd_stream_light.should_update.subscribe(self._on_ccd_stream_play)
 
             # Assign to views
             self._ccd_spe = self._stream_controller.addStream(
@@ -274,18 +273,10 @@ class Sparc2AlignTab(Tab):
             self._ccd_center_spe = self._stream_controller.addStream(
                 self._ccd_stream_center, add_to_view=self.panel.vp_align_center.view
             )
-            self._ccd_light_spot_spe = self._stream_controller.addStream(
-                self._ccd_stream_light, add_to_view=self.panel.vp_align_light_spot.view
-            )
-            self._ccd_light_ar_spe = self._stream_controller.addStream(
-                self._ccd_stream_light, add_to_view=self.panel.vp_align_light_ar.view
-            )
 
             # Disable stream panel folding
             self._ccd_spe.stream_panel.flatten()
             self._ccd_center_spe.stream_panel.flatten()
-            self._ccd_light_spot_spe.stream_panel.flatten()
-            # self._ccd_light_ar_spe.stream_panel.flatten()
 
             # Settings for the lens alignment ccd stream
             self._setFullFoV(self._ccd_stream , (2, 2))
@@ -297,6 +288,39 @@ class Sparc2AlignTab(Tab):
             # Change binning to differentiate from other stream
             self._setFullFoV(self._ccd_stream_center, (4, 4))
 
+            if ("light-in-align-spot" in tab_data.align_mode.choices and
+                "light-in-align-ar" in tab_data.align_mode.choices):
+                # Shared ccd stream for "LIGHT SPOT" and "LIGHT AR" alignment
+                self._ccd_stream_light = acqstream.CameraStream(*ccd_args, **ccd_kwargs)
+                self._ccd_stream_light.should_update.subscribe(self._on_ccd_stream_play)
+                # Add stream to viewport and add controls to stream control panel
+                self._ccd_light_spe = self._stream_controller.addStream(
+                    self._ccd_stream_light, add_to_view=self.panel.vp_align_light_spot.view
+                )
+                # Add stream to viewport but prevent duplicate controls
+                self._stream_controller.addStream(
+                    self._ccd_stream_light, add_to_view=self.panel.vp_align_light_ar.view, visible=False
+                )
+                # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
+                # updated in a later stage
+                self._ccd_stream_spot_snapshot = acqstream.Static2DUpdatableStream(
+                    "CL Spot Snapshot",
+                    None,
+                    acq_type=model.MD_AT_CL,
+                )
+                self._ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                self._stream_controller.addStream(
+                    self._ccd_stream_spot_snapshot, add_to_view=self.panel.vp_align_light_spot.view
+                )
+                # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
+                # updated in a later stage
+                self._ccd_stream_ar_snapshot = acqstream.Static2DUpdatableStream(
+                    "CL AR Snapshot",
+                    None,
+                    acq_type=model.MD_AT_CL,
+                )
+                self._ccd_stream_ar_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                self._stream_controller.addStream(self._ccd_stream_ar_snapshot, add_to_view=self.panel.vp_align_light_ar.view)
         elif main_data.sp_ccd:
             # Hack: if there is no CCD, let's display at least the sp-ccd.
             # It might or not be useful. At least we can show the temperature.
@@ -327,30 +351,6 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_bkg_acquire.Show(False)
 
         ccd_focuser_ext = None
-        if "light-in-align-spot" in tab_data.align_mode.choices:
-            # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
-            # updated in a later stage
-            ccd_stream_spot_snapshot = acqstream.Static2DUpdatableStream(
-                "CL Spot Snapshot",
-                None,
-                acq_type=model.MD_AT_CL,
-            )
-            ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
-            self._ccd_stream_spot_snapshot = ccd_stream_spot_snapshot
-            self._stream_controller.addStream(ccd_stream_spot_snapshot, add_to_view=self.panel.vp_align_light_spot.view)
-        if (
-            "light-in-align-ar" in tab_data.align_mode.choices):
-            # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
-            # updated in a later stage
-            ccd_stream_ar_snapshot = acqstream.Static2DUpdatableStream(
-                "CL AR Snapshot",
-                None,
-                acq_type=model.MD_AT_CL,
-            )
-            ccd_stream_ar_snapshot.tint.value = (0, 255, 0)  # DEBUG
-            self._ccd_stream_ar_snapshot = ccd_stream_ar_snapshot
-            self._stream_controller.addStream(ccd_stream_ar_snapshot, add_to_view=self.panel.vp_align_light_ar.view)
-
         if "tunnel-lens-align" in tab_data.align_mode.choices:
             # if there is a favourite position, go to that position at init
             if main_data.spec_ded_aligner:
