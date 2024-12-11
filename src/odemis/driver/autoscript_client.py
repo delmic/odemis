@@ -393,11 +393,11 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_scan_mode(channel)
 
-    def scan_mode_info(self, channel: str) -> Dict[str, str]:
-        """Returns: (dict) the available scanning modes"""
+    def scan_mode_info(self) -> List[str]:
+        """Returns: (list) the available scanning modes"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.scan_mode_info(channel)
+            return self.server.scan_mode_info()
 
     def set_spotsize(self, spotsize: float, channel: str) -> None:
         """
