@@ -7464,6 +7464,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                     <border>10</border>
                   </object>
                 </object>
+                <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
@@ -8136,7 +8137,7 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                           </object>
                           <option>0</option>
                           <flag>wxTOP|wxBOTTOM|wxLEFT|wxFIXED_MINSIZE</flag>
-                          <border>18</border>
+                          <border>16</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxStaticText" name="lbl_calib">
@@ -8152,7 +8153,7 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                           </object>
                           <option>1</option>
                           <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                          <border>14</border>
+                          <border>12</border>
                         </object>
                       </object>
                     </object>

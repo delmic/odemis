@@ -135,7 +135,7 @@ class FastEMSetupTab(Tab):
         )  # enable/disable button if calibrating
 
         # Acquisition controller
-        self._acquisition_controller = FastEMOverviewAcquiController(
+        self.overview_acq_controller = FastEMOverviewAcquiController(
             self.tab_data,
             self.main_tab_data,
             panel,
@@ -244,7 +244,7 @@ class FastEMSetupTab(Tab):
         enable = not mode
         self.active_scintillator_ctrl.Enable(enable)
         self.sem_stream_cont.stream_panel.Enable(enable)
-        self._acquisition_controller.overview_acq_panel.Enable(enable)
+        self.overview_acq_controller.overview_acq_panel.Enable(enable)
         self.btn_optical_autofocus.Enable(enable)
         self.btn_sem_autofocus.Enable(enable)
         self.btn_autobc.Enable(enable)

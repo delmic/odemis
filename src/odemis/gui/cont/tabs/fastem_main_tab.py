@@ -374,8 +374,14 @@ class FastEMMainTab(Tab):
             (-1, self.acquisition_tab.panel.Parent.GetSize().y)
         )
         self.setup_tab.panel.Layout()
+        self.setup_tab.active_scintillator_panel.Layout()
+        self.setup_tab.overview_acq_controller.overview_acq_panel.Layout()
+        self.setup_tab.calibration_controller.calibration_panel.Layout()
         self.acquisition_tab.panel.Layout()
         self.setup_tab.panel.Refresh()
+        self.setup_tab.active_scintillator_panel.Refresh()
+        self.setup_tab.overview_acq_controller.overview_acq_panel.Refresh()
+        self.setup_tab.calibration_controller.calibration_panel.Refresh()
         self.acquisition_tab.panel.Refresh()
 
     def _toggle_user_settings_panel(self, _):
