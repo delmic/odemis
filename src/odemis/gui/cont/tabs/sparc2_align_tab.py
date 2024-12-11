@@ -31,7 +31,6 @@ import time
 from concurrent.futures import CancelledError, Future
 from functools import partial
 
-import numpy
 import pkg_resources
 import wx
 from odemis.acq.stream_settings import StreamSettingsConfig
@@ -167,7 +166,7 @@ class Sparc2AlignTab(Tab):
                     "name": "Light alignment wih CL Spot",
                     "stream_classes": (
                         acqstream.CameraStream,
-                        acqstream.RGBUpdatableStream,
+                        acqstream.Static2DUpdatableStream,
                     ),
                 }
             ),
@@ -176,7 +175,7 @@ class Sparc2AlignTab(Tab):
                     "name": "Light alignment wih CL AR pattern",
                     "stream_classes": (
                         acqstream.CameraStream,
-                        acqstream.RGBUpdatableStream,
+                        acqstream.Static2DUpdatableStream,
                     ),
                 }
             ),
@@ -193,6 +192,8 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_ek.view.show_pixelvalue.value = False
         self.panel.vp_align_streak.view.show_pixelvalue.value = True
         self.panel.vp_align_lens_ext.view.show_pixelvalue.value = False
+        self.panel.vp_align_light_spot.view.show_crosshair.value = False
+        self.panel.vp_align_light_ar.view.show_crosshair.value = False
 
         # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
         self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
@@ -284,7 +285,7 @@ class Sparc2AlignTab(Tab):
             self._ccd_spe.stream_panel.flatten()
             self._ccd_center_spe.stream_panel.flatten()
             self._ccd_light_spot_spe.stream_panel.flatten()
-            self._ccd_light_ar_spe.stream_panel.flatten()
+            # self._ccd_light_ar_spe.stream_panel.flatten()
 
             # Settings for the lens alignment ccd stream
             self._setFullFoV(self._ccd_stream , (2, 2))
@@ -329,7 +330,7 @@ class Sparc2AlignTab(Tab):
         if "light-in-align-spot" in tab_data.align_mode.choices:
             # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
             # updated in a later stage
-            ccd_stream_spot_snapshot = acqstream.RGBUpdatableStream(
+            ccd_stream_spot_snapshot = acqstream.Static2DUpdatableStream(
                 "CL Spot Snapshot",
                 None,
                 acq_type=model.MD_AT_CL,
@@ -341,7 +342,7 @@ class Sparc2AlignTab(Tab):
             "light-in-align-ar" in tab_data.align_mode.choices):
             # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
             # updated in a later stage
-            ccd_stream_ar_snapshot = acqstream.RGBUpdatableStream(
+            ccd_stream_ar_snapshot = acqstream.Static2DUpdatableStream(
                 "CL AR Snapshot",
                 None,
                 acq_type=model.MD_AT_CL,
@@ -482,7 +483,7 @@ class Sparc2AlignTab(Tab):
                 # Add the stream to the stream bar controller
                 # so that it's displayed with the default 0.3 merge ratio
                 self._stream_controller.addStream(focus_stream, visible=False,
-                                                  add_to_view=False)
+                                                  add_to_view=True)
 
                 # Remove the stream from the focused view initially
                 self.tab_data_model.focussedView.value.removeStream(focus_stream)
