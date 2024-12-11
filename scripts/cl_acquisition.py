@@ -255,8 +255,8 @@ class Acquirer(object):
         self.escan.dwellTime.value = self.escan.dwellTime.clip(exp)
 
         # Configure the SEM to spot mode
-        self.escan.resolution.value = (1, 1)
         self.escan.scale.value = (1, 1)  # to be certain we can easily move the spot anywhere
+        self.escan.resolution.value = (1, 1)
         spot_pos = self.get_spot_positions()
         logging.debug("Generating %dx%d spots for %g s",
                       spot_pos.shape[1], spot_pos.shape[0], exp)
