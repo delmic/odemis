@@ -25,21 +25,24 @@ import queue
 import threading
 import time
 from concurrent.futures import CancelledError, Future
-from typing import Optional, Union, Dict, List, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-import msgpack # only used for debug information
+import msgpack  # only used for debug information
 import msgpack_numpy
 import numpy
-import Pyro5.api
 import pkg_resources
+import Pyro5.api
 from Pyro5.errors import CommunicationError
 
-from odemis import model
-from odemis import util
-from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
-                          DataArray, HwError, ProgressiveFuture,
-                          StringEnumerated, isasync)
+from odemis import model, util
 from odemis.driver.xt_client import check_and_transfer_latest_package
+from odemis.model import (
+    CancellableFuture,
+    CancellableThreadPoolExecutor,
+    DataArray,
+    HwError,
+    isasync,
+)
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -74,8 +77,6 @@ IMAGING_STATE_IDLE = "Idle"
 IMAGING_STATE_RUNNING = "Running"
 IMAGING_STATE_PAUSED = "Paused"
 IMAGING_STATE_ERROR = "Error"
-
-
 
 # information on compatible versions
 debug_connection_info = f"""PYRO 5: {pkg_resources.get_distribution('Pyro5').version},
@@ -201,7 +202,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_hardware_version()
 
-    def list_available_channels(self) -> list:
+    def list_available_channels(self) -> List[str]:
         """List all available channels
         :return: (list) of available channels.
         """
@@ -209,9 +210,9 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.list_available_channels()
 
-    def move_stage_absolute(self, position: dict) -> None:
+    def move_stage_absolute(self, position: Dict[str, float]) -> None:
         """ Move the stage the given position. This is blocking.
-        :param position: dict, absolute position to move the stage to per axes.
+        :param position: absolute position to move the stage to per axes.
             Axes are 'x', 'y', 'z', 't', 'r'.
             The unit is meters for axes 'x', 'y' and 'z', and radians for axes 't', 'r'.
         """
@@ -219,10 +220,10 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.move_stage_absolute(position)
 
-    def move_stage_relative(self, position: dict) -> None:
+    def move_stage_relative(self, position: Dict[str, float]) -> None:
         """
         Move the stage by the given relative position. This is blocking.
-        :param position: dict, relative position to move the stage to per axes in m.
+        :param position: relative position to move the stage to per axes in m.
             Axes are 'x', 'y', 'z', 'r', 't'. The units are meters for x, y, z and radians for r, t.
         """
         with self._proxy_access:
@@ -235,15 +236,15 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.stop_stage_movement()
 
-    def get_stage_position(self) -> dict:
+    def get_stage_position(self) -> Dict[str, float]:
         """
-        :return: (dict) the axes of the stage as keys with their corresponding position.
+        :return: the axes of the stage as keys with their corresponding position.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_stage_position()
 
-    def stage_info(self):
+    def stage_info(self) -> Dict[str, Dict[str, Union[str, Tuple[float, float]]]]:
         """Returns: (dict) the unit and range of the stage position."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -255,7 +256,7 @@ class SEM(model.HwComponent):
         Raw: raw stage coordinates use the stage's encoder positions
         Specimen: specimen coordinates use the linked-z coordinate system (which is based on
                     the SEM working distance)
-        :param coordinate_system: (str) Name of the coordinate system to set as default.
+        :param coordinate_system: Name of the coordinate system to set as default.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -267,8 +268,8 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.home_stage()
 
-    def is_homed(self):
-        """Returns: (bool) True if the stage is homed and False otherwise."""
+    def is_homed(self) -> bool:
+        """Returns: True if the stage is homed and False otherwise."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.is_homed()
@@ -283,9 +284,9 @@ class SEM(model.HwComponent):
             is_linked = self.server.link(state)
             return is_linked
 
-    def is_linked(self):
+    def is_linked(self) -> bool:
         """
-        Returns: (bool) True if Z follows free working distance.
+        Returns: True if Z follows free working distance.
         When Z follows FWD and Z-axis of stage moves, FWD is updated to keep image in focus.
         """
         with self._proxy_access:
@@ -293,7 +294,6 @@ class SEM(model.HwComponent):
             return self.server.is_linked()
 
 #### CHAMBER CONTROL
-
     def pump(self):
         """Pump the microscope's chamber. Note that pumping takes some time. This is blocking."""
         with self._proxy_access:
@@ -322,8 +322,8 @@ class SEM(model.HwComponent):
             finally:
                 self.server._pyroTimeout = 30  # seconds
 
-    def get_chamber_state(self):
-        """Returns: (str) the vacuum state of the microscope chamber to see if it is pumped or vented,
+    def get_chamber_state(self) -> str:
+        """return: the vacuum state of the microscope chamber to see if it is pumped or vented,
         possible states: "vacuum", "vented", "prevac", "pumping", "venting","vacuum_error" """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -336,14 +336,13 @@ class SEM(model.HwComponent):
             pressure = self.server.get_pressure()
             return pressure
 
-    def pressure_info(self):
-        """Returns (dict): the unit and range of the pressure."""
+    def pressure_info(self) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """Returns: the unit and range of the pressure."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.pressure_info()
 
 ##### BEAM CONTROL
-
     def set_external_scan_mode(self, channel: str) -> None:
         """Set the external scan mode."""
         self.set_scan_mode(mode="external", channel=channel, value=None)
@@ -389,58 +388,58 @@ class SEM(model.HwComponent):
     def get_scan_mode(self, channel: str) -> str:
         """
         Get the scan mode.
-        :param channel: (str) Name of the channel to get the scan mode for.
-        :return: (str) Name of set scan mode, one of: unknown, external, full_frame, spot, or line.
+        :param channel: Name of the channel to get the scan mode for.
+        :return: Name of set scan mode, one of: unknown, external, full_frame, spot, or line.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_scan_mode(channel)
 
-    def scan_mode_info(self, channel: str) -> Dict[str, str]:
-        """Returns: (dict) the available scanning modes"""
+    def scan_mode_info(self) -> List[str]:
+        """Returns: the available scanning modes"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.scan_mode_info(channel)
+            return self.server.scan_mode_info()
 
     def set_spotsize(self, spotsize: float, channel: str) -> None:
         """
         Setting the spot size of the selected beam.
-        :param spotsize: (float) the spot size of the beam in meters.
-        :param channel: (str) Name of the channel to set the spot size for.
+        :param spotsize: the spot size of the beam in meters.
+        :param channel: Name of the channel to set the spot size for.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_spotsize(spotsize, channel)
 
     def get_spotsize(self, channel: str) -> float:
-        """Returns: (float) the current spotsize of the selected beam (unitless)."""
+        """Returns: the current spotsize of the selected beam (unitless)."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_spotsize(channel)
 
-    def spotsize_info(self, channel: str) -> dict:
-        """Returns: (dict) the unit and range of the spotsize. Unit is None means the spotsize is unitless."""
+    def spotsize_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """Returns: the unit and range of the spotsize. Unit is None means the spotsize is unitless."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.spotsize_info(channel)
 
     def set_dwell_time(self, dwell_time: float, channel: str) -> None:
         """
-        :param dwell_time: (float) the dwell time in seconds.
-        :param channel: (str) Name of the channel to set the dwell time for.
+        :param dwell_time: the dwell time in seconds.
+        :param channel: Name of the channel to set the dwell time for.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_dwell_time(dwell_time, channel)
 
     def get_dwell_time(self, channel: str) -> float:
-        """Returns: (float) the dwell time in seconds."""
+        """return: the dwell time in seconds."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_dwell_time(channel)
 
-    def dwell_time_info(self, channel: str) -> dict:
-        """Returns: (dict) range of the dwell time and corresponding unit."""
+    def dwell_time_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """:return: range of the dwell time and corresponding unit."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.dwell_time_info(channel)
@@ -448,8 +447,8 @@ class SEM(model.HwComponent):
     def set_field_of_view(self, field_of_view: float, channel: str) -> None:
         """
         Set the field of view.
-        :param field_of_view: (float) the field of view in meters.
-        :param channel: (str) Name of the channel to set the field of view for.
+        :param field_of_view: the field of view in meters.
+        :param channel: Name of the channel to set the field of view for.
         :return: None
         """
         with self._proxy_access:
@@ -458,15 +457,15 @@ class SEM(model.HwComponent):
 
     def get_field_of_view(self, channel: str) -> float:
         """
-        :param channel: (str) Name of the channel to get the field of view for.
-        :return: (float) the field of view in meters.
+        :param channel: Name of the channel to get the field of view for.
+        :return: the field of view in meters.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_field_of_view(channel)
 
-    def field_of_view_info(self, channel: str) -> dict:
-        """Returns: (dict) the scanning size unit and range."""
+    def field_of_view_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """returns the scanning size unit and range."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.field_of_view_info(channel)
@@ -474,21 +473,21 @@ class SEM(model.HwComponent):
     def set_high_voltage(self, voltage: float, channel: str) -> None:
         """
         Set the high voltage.
-        :param voltage: (float) the high voltage in volt.
-        :param channel: (str) Name of the channel to set the high voltage for.
+        :param voltage: the high voltage in volt.
+        :param channel: Name of the channel to set the high voltage for.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_high_voltage(voltage, channel)
 
     def get_high_voltage(self, channel: str) -> float:
-        """:return (float) the high voltage in volt."""
+        """:return the high voltage in volt."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_high_voltage(channel)
 
-    def high_voltage_info(self, channel: str) -> dict:
-        """:return (dict) the unit and range of the high voltage."""
+    def high_voltage_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """:return the unit and range of the high voltage."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.high_voltage_info(channel)
@@ -496,21 +495,21 @@ class SEM(model.HwComponent):
     def set_beam_current(self, current: float, channel:str) -> None:
         """
         Set the beam current.
-        :param current: (float) the beam current in ampere.
-        :param channel: (str) Name of the channel to set the beam current for.
+        :param current: the beam current in ampere.
+        :param channel: Name of the channel to set the beam current for.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_beam_current(current, channel)
 
     def get_beam_current(self, channel: str) -> float:
-        """Returns: (float) the beam current in ampere."""
+        """Returns: the beam current in ampere."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_beam_current(channel)
 
     def beam_current_info(self, channel: str) -> dict:
-        """Returns: (dict) the unit and range of the beam current."""
+        """Returns: the unit and range of the beam current."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_current_info(channel)
@@ -528,21 +527,21 @@ class SEM(model.HwComponent):
             self.server.unblank_beam(channel)
 
     def beam_is_blanked(self, channel: str) -> bool:
-        """return: (bool) True if the beam is blanked and False if the beam is not blanked."""
+        """return:  True if the beam is blanked and False if the beam is not blanked."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_is_blanked(channel)
 
     def beam_is_installed(self, channel: str) -> bool:
-        """return: (bool) True if the beam is installed and False if the beam is not installed."""
+        """return: True if the beam is installed and False if the beam is not installed."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_is_installed(channel)
 
     def get_working_distance(self, channel: str) -> float:
-        """Returns: (float) the working distance in meters.
-        :param channel: (str) Name of the channel to get the free working distance for.
-        :return: (float) the working distance in meters.
+        """Returns: the working distance in meters.
+        :param channel: Name of the channel to get the free working distance for.
+        :return: the working distance in meters.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -551,32 +550,32 @@ class SEM(model.HwComponent):
     def set_working_distance(self, working_distance: float, channel: str) -> None:
         """
         Set the working distance.
-        :param working_distance: (float) the free working distance in meters.
-        :param channel: (str) Name of the channel to set the free working distance for.
+        :param working_distance: the free working distance in meters.
+        :param channel: Name of the channel to set the free working distance for.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_working_distance(working_distance, channel)
 
-    def working_distance_info(self, channel: str) -> dict:
+    def working_distance_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
         """Returns the unit and range of the working distance.
-        :param channel: (str) Name of the channel to get the free working distance for.
-        :return: (dict) the unit and range of the working distance."""
+        :param channel: Name of the channel to get the free working distance for.
+        :return: the unit and range of the working distance."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.working_distance_info(channel)
 
-    def get_beam_shift(self, channel: str) -> tuple:
-        """Returns: (float) the current beam shift (DC coils position) x and y values in meters."""
+    def get_beam_shift(self, channel: str) -> Tuple[float, float]:
+        """Returns: the current beam shift (DC coils position) x and y values in meters."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_beam_shift(channel))
 
     def set_beam_shift(self, x: float, y: float, channel: str) -> None:
         """Set the beam shift values in metrers (absolute movement).
-        :param x: (float) the x value of the beam shift in meters.
-        :param y: (float) the y value of the beam shift in meters.
-        :param channel: (str) Name of the channel to set the beam shift for.
+        :param x: the x value of the beam shift in meters.
+        :param y: the y value of the beam shift in meters.
+        :param channel: Name of the channel to set the beam shift for.
         :return None
         """
         with self._proxy_access:
@@ -585,28 +584,28 @@ class SEM(model.HwComponent):
 
     def move_beam_shift(self, x: float, y: float, channel: str) -> None:
         """Move the beam shift values in meters (relative movement).
-        :param x_shift: (float) the x value of the beam shift in meters.
-        :param y_shift: (float) the y value of the beam shift in meters.
-        :param channel: (str) Name of the channel to move the beam shift for.
+        :param x_shift: the x value of the beam shift in meters.
+        :param y_shift: the y value of the beam shift in meters.
+        :param channel: Name of the channel to move the beam shift for.
         :return None"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.move_beam_shift(x, y, channel)
 
-    def beam_shift_info(self, channel: str) -> dict:
-        """Returns: (dict) the unit and xy-range of the beam shift
-        :param channel: (str) Name of the channel to get the beam shift for.
-        :return: (dict) the unit and xy-range of the beam shift.
+    def beam_shift_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """Returns: the unit and xy-range of the beam shift
+        :param channel: Name of the channel to get the beam shift for.
+        :return: the unit and xy-range of the beam shift.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_shift_info(channel)
 
-    def get_stigmator(self, channel: str) -> tuple:
+    def get_stigmator(self, channel: str) -> Tuple[float, float]:
         """
         Retrieves the current stigmator x and y values.
         This stigmator corrects for the astigmatism of the probe shape.
-        :param channel: str, name of the channel
+        :param channel: name of the channel
         :return: tuple, (x, y) current stigmator values, unitless
         """
         with self._proxy_access:
@@ -617,16 +616,16 @@ class SEM(model.HwComponent):
         """
         Set the current stigmator x and y values.
         This stigmator corrects for the astigmatism of the probe shape.
-        :param x: float, the x value of the stigmator, unitless
-        :param y: float, the y value of the stigmator, unitless
-        :param channel: str, name of the channel
+        :param x: the x value of the stigmator, unitless
+        :param y: the y value of the stigmator, unitless
+        :param channel: name of the channel
         :return None
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_stigmator(x, y, channel)
 
-    def stigmator_info(self, channel: str) -> dict:
+    def stigmator_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
         """
         Returns the unit and range of the stigmator. This stigmator corrects for the astigmatism of the probe shape.
 
@@ -641,27 +640,27 @@ class SEM(model.HwComponent):
             return self.server.stigmator_info(channel)
 
     def get_scan_rotation(self, channel: str) -> float:
-        """Returns: (float) the current rotation value in rad."""
+        """Returns: the current rotation value in rad."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_scan_rotation(channel)
 
-    def set_scan_rotation(self, rotation: float, channel: str):
+    def set_scan_rotation(self, rotation: float, channel: str) -> None:
         """Set the current rotation value in rad."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_scan_rotation(rotation, channel)
 
-    def scan_rotation_info(self, channel: str) -> dict:
-        """Returns: (dict) the unit and range of the rotation."""
+    def scan_rotation_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
+        """Returns: the unit and range of the rotation."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.scan_rotation_info(channel)
 
-    def set_resolution(self, resolution: list, channel: str) -> None:
+    def set_resolution(self, resolution: Tuple[int, int], channel: str) -> None:
         """
         Set the resolution of the image.
-        :param resolution: (tuple) The resolution of the image in pixels as (width, height).
+        :param resolution: The resolution of the image in pixels as (width, height).
             Options: (768, 512), (1536, 1024), (3072, 2048), (6144, 4096).
             Technically can be anything, but not all modes are supported for non-standard res
         """
@@ -675,7 +674,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_resolution(channel))
 
-    def resolution_info(self, channel: str) -> dict:
+    def resolution_info(self, channel: str) -> Dict[str, Union[str, Tuple[int, int]]]:
         """Returns the unit and range of the resolution of the image."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -684,8 +683,8 @@ class SEM(model.HwComponent):
     def set_beam_power(self, state: bool, channel: str) -> None:
         """
         Turn the beam on or off.
-        :param state: (bool) True to turn the beam on and False to turn the beam off.
-        :param channel: (str) Name of the channel to turn the beam on or off for.
+        :param state: True to turn the beam on and False to turn the beam off.
+        :param channel: Name of the channel to turn the beam on or off for.
         :return None
         """
         with self._proxy_access:
@@ -699,12 +698,11 @@ class SEM(model.HwComponent):
             return self.server.beam_is_on(channel)
 
 #### DETECTOR CONTROL
-
     def set_detector_mode(self, mode: str, channel: str) -> None:
         """
         Set the mode of the detector.
-        :param mode: (str) Name of the mode to set the detector to.
-        :param channel: (str) Name of one of the channels.
+        :param mode: Name of the mode to set the detector to.
+        :param channel: Name of one of the channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -713,14 +711,14 @@ class SEM(model.HwComponent):
     def get_detector_mode(self, channel: str) -> str:
         """
         Get the mode of the detector.
-        :param channel: (str) Name of one of the channels.
-        :return: (str) Name of the mode the detector is set to.
+        :param channel: Name of one of the channels.
+        :return: Name of the mode the detector is set to.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_detector_mode(channel)
 
-    def detector_mode_info(self, channel: str) -> dict:
+    def detector_mode_info(self, channel: str) -> Dict[str, List[str]]:
         """Returns the mode of the detector."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -729,8 +727,8 @@ class SEM(model.HwComponent):
     def set_detector_type(self, detector_type: str, channel: str) -> None:
         """
         Set the type of the detector.
-        :param detector_type: (str) Name of the type to set the detector to.
-        :param channel: (str) Name of one of the channels.
+        :param detector_type: Name of the type to set the detector to.
+        :param channel: Name of one of the channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -739,24 +737,24 @@ class SEM(model.HwComponent):
     def get_detector_type(self, channel: str) -> str:
         """
         Get the type of the detector.
-        :param channel: (str) Name of one of the channels.
-        :return: (str) Name of the type the detector is set to.
+        :param channel: Name of one of the channels.
+        :return: Name of the type the detector is set to.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_detector_type(channel)
 
-    def detector_type_info(self, channel: str) -> dict:
+    def detector_type_info(self, channel: str) -> Dict[str, List[str]]:
         """Returns the type of the detector."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.detector_type_info(channel)
 
-    def set_contrast(self, contrast: float, channel: str):
+    def set_contrast(self, contrast: float, channel: str) -> None:
         """
         Set the contrast of the scanned image to a specified factor.
-        :param contrast: (float) Value the contrast should be set to as a factor between 0 and 1.
-        :param channel: (str) Name of one of the channels.
+        :param contrast: Value the contrast should be set to as a factor between 0 and 1.
+        :param channel: Name of one of the channels.
 
         """
         with self._proxy_access:
@@ -766,24 +764,24 @@ class SEM(model.HwComponent):
     def get_contrast(self, channel: str) -> float:
         """
         Get the contrast of the scanned image.
-        :param channel: (str) Name of one of the channels.
-        :return: (float) Returns value of current contrast as a factor between 0 and 1.
+        :param channel: Name of one of the channels.
+        :return: Returns value of current contrast as a factor between 0 and 1.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_contrast(channel)
 
-    def contrast_info(self, channel: str) -> dict:
+    def contrast_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
         """Returns the contrast unit [-] and range [0, 1]."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.contrast_info(channel)
 
-    def set_brightness(self, brightness: float, channel: str):
+    def set_brightness(self, brightness: float, channel: str) -> None:
         """
         Set the brightness of the scanned image to a specified factor.
-        :param brightness: (float) Value the brightness should be set to as a factor between 0 and 1.
-        :param channel: (str) Name of one of the channels.
+        :param brightness: Value the brightness should be set to as a factor between 0 and 1.
+        :param channel: Name of one of the channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -792,38 +790,28 @@ class SEM(model.HwComponent):
     def get_brightness(self, channel: str) -> float:
         """
         Get the brightness of the scanned image.
-        :param channel_name: (str) Name of one of the channels.
-        :return: (float) Returns value of current brightness as a factor between 0 and 1.
+        :param channel_name: Name of one of the channels.
+        :return: Returns value of current brightness as a factor between 0 and 1.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_brightness(channel)
 
-    def brightness_info(self, channel: str) -> dict:
+    def brightness_info(self, channel: str) -> Dict[str, Union[str, Tuple[float, float]]]:
         """Returns the brightness unit [-] and range [0, 1]."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.brightness_info(channel)
 
-    def get_detector_state(self, channel: str) -> str:
-        """
-        Get the state of the detector.
-        :param channel: (str) Name of one of the channels.
-        :return: (str) Name of the state the detector is set to.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.get_detector_state(channel)
-
 #### IMAGING CONTROL
     def get_active_view(self) -> int:
-        """Returns: (int) the active view."""
+        """Returns: the active view."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_active_view()
 
     def get_active_device(self) -> int:
-        """Returns: (int) the active device."""
+        """Returns: the active device."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_active_device()
@@ -849,18 +837,18 @@ class SEM(model.HwComponent):
     def acquire_image(self, channel: str) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
         Acquire an image from the detector (blocking).
-        :param channel: (str) Name of one of the channels.
-        :return: (numpy.ndarray) the acquired image.
+        :param channel: Name of one of the channels.
+        :return: the acquired image and metadata.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.acquire_image(channel)
 
-    def get_last_image(self, channel: str, wait_for_frame: bool = True) -> numpy.ndarray:
+    def get_last_image(self, channel: str, wait_for_frame: bool = True) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
         Get the last acquired image from the detector.
-        :param channel: (str) Name of one of the channels.
-        :return: (numpy.ndarray) the last acquired image.
+        :param channel: Name of one of the channels.
+        :return: the last acquired image and metadata.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -869,7 +857,7 @@ class SEM(model.HwComponent):
     def start_acquisition(self, channel: str) -> None:
         """
         Start the acquisition of images.
-        :param channel: (str) Name of one of the channels.
+        :param channel: Name of one of the channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -878,8 +866,8 @@ class SEM(model.HwComponent):
     def stop_acquisition(self, channel: str, wait_for_frame: bool = True) -> None:
         """
         Stop the acquisition of images.
-        :param channel: (str) Name of one of the channels.
-        :param wait_for_frame: (bool) If True, the function will wait until the current frame is acquired.
+        :param channel: Name of one of the channels.
+        :param wait_for_frame: If True, the function will wait until the current frame is acquired.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -888,8 +876,8 @@ class SEM(model.HwComponent):
     def get_imaging_state(self, channel: str) -> str:
         """
         Get the state of the imaging scan device (Error, Idle, Running, Paused).
-        :param channel: (str) Name of one of the channels.
-        :return: (str) Name of the state the imaging device is set to.
+        :param channel: Name of one of the channels.
+        :return: Name of the state the imaging device is set to.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -898,9 +886,9 @@ class SEM(model.HwComponent):
     def set_scanning_filter(self, channel: str, filter_type: int, n_frames: int = 1) -> None:
         """
         Set the scanning filter for the detector.
-        :param channel: (str) Name of one of the channels.
-        :param filter_type: (int) Type of the filter to set [1: None, 2: Averaging, 3: Integrating]
-        :param n_frames: (int) Number of frames to average over.
+        :param channel: Name of one of the channels.
+        :param filter_type: Type of the filter to set [1: None, 2: Averaging, 3: Integrating]
+        :param n_frames: Number of frames to average over.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -909,8 +897,8 @@ class SEM(model.HwComponent):
     def get_scanning_filter(self, channel: str) -> Dict[str, int]:
         """
         Get the scanning filter for the detector.
-        :param channel: (str) Name of one of the channels.
-        :return: (dict) the scanning filter type (filter_type) and number of frames (n_frames).
+        :param channel: Name of one of the channels.
+        :return: the scanning filter type (filter_type) and number of frames (n_frames).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -919,70 +907,70 @@ class SEM(model.HwComponent):
     def get_scanning_filter_info(self, channel: str) -> List[str]:
         """
         Get the available scanning filters for the detector.
-        :param channel: (str) Name of one of the detector channels.
-        :return: (list) the available scanning filters for the channel
+        :param channel: Name of one of the detector channels.
+        :return: the available scanning filters for the channel
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_scanning_filter_info(channel)
 
 #### AUTO FUNCTIONS
-
     def run_auto_contrast_brightness(self, channel: str, parameters: Dict = {}) -> None:
         """Run auto contrast brightness function (blocking)
+        :param channel: Name of one of the channels.
+        :param parameters: (dict) Dictionary containing the parameters
+        :return: None
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.run_auto_contrast_brightness(channel, parameters=parameters)
 
-
 #### MILLING CONTROL
-
-    def create_rectangle(self, parameters: dict) -> dict:
+    def create_rectangle(self, parameters: Dict[str, Union[str, int, float]]) -> Dict[str, int]:
         """
         Create a rectangle milling pattern.
-        :param parameters: (dict) Dictionary containing the pattern parameters.
-        :return: (dict) Dictionary containing the pattern parameters.
+        :param parameters: Dictionary containing the pattern parameters.
+        :return: Dictionary containing pattern id and estimated time.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.create_rectangle(parameters)
 
-    def create_cleaning_cross_section(self, parameters: dict) -> dict:
+    def create_cleaning_cross_section(self, parameters: Dict[str, Union[str, int, float]]) -> Dict[str, int]:
         """
         Create a cleaning cross section milling pattern.
-        :param parameters: (dict) Dictionary containing the pattern parameters.
-        :return: (dict) Dictionary containing the pattern parameters.
+        :param parameters: Dictionary containing the pattern parameters.
+        :return: Dictionary containing pattern id and estimated time.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.create_cleaning_cross_section(parameters)
 
-    def create_regular_cross_section(self, parameters: dict) -> dict:
+    def create_regular_cross_section(self, parameters: Dict[str, Union[str, int, float]]) -> Dict[str, int]:
         """
         Create a regular cross section milling pattern.
-        :param parameters: (dict) Dictionary containing the pattern parameters.
-        :return: (dict) Dictionary containing the pattern parameters.
+        :param parameters: Dictionary containing the pattern parameters.
+        :return: Dictionary containing pattern id and estimated time.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.create_regular_cross_section(parameters)
 
-    def create_line(self, parameters: dict) -> dict:
+    def create_line(self, parameters: Dict[str, Union[str, int, float]]) -> Dict[str, int]:
         """
         Create a line milling pattern.
-        :param parameters: (dict) Dictionary containing the pattern parameters.
-        :return: (dict) Dictionary containing the pattern parameters.
+        :param parameters: Dictionary containing the pattern parameters.
+        :return: Dictionary containing pattern id and estimated time.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.create_line(parameters)
 
-    def create_circle(self, parameters: dict) -> dict:
+    def create_circle(self, parameters: Dict[str, Union[str, int, float]]) -> Dict[str, int]:
         """
         Create a circle milling pattern.
-        :param parameters: (dict) Dictionary containing the pattern parameters.
-        :return: (dict) Dictionary containing the pattern parameters.
+        :param parameters: Dictionary containing the pattern parameters.
+        :return: Dictionary containing pattern id and estimated time.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1019,13 +1007,13 @@ class SEM(model.HwComponent):
             self.server.resume_milling()
 
     def get_patterning_state(self) -> str:
-        """Returns: (str) the state of the patterning."""
+        """Returns: the state of the patterning."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_patterning_state()
 
     def get_patterning_mode(self) -> str:
-        """Returns: (str) the mode of the patterning."""
+        """Returns: the mode of the patterning. (Serial, Parallel)"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_patterning_mode()
@@ -1045,7 +1033,7 @@ class SEM(model.HwComponent):
     def set_default_application_file(self, application_file: str = "Si") -> None:
         """
         Set the default application file.
-        :param application_file: (str) Name of the default application file.
+        :param application_file: Name of the default application file.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1054,20 +1042,20 @@ class SEM(model.HwComponent):
     def set_default_patterning_beam_type(self, channel: str) -> None:
         """
         Set the default patterning beam type.
-        :param channel: (str) Name of one of the channels.
+        :param channel: Name of one of the channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_default_patterning_beam_type(channel)
 
     def get_available_application_files(self) -> List[str]:
-        """Returns: (list) the available application files."""
+        """Returns: the available application files."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_available_application_files()
 
     def estimate_milling_time(self) -> float:
-        """Returns: (float) the estimated milling time for drawn patterns."""
+        """Returns: the estimated milling time for currently drawn patterns."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.estimate_milling_time()
@@ -1081,14 +1069,23 @@ class Scanner(model.Emitter):
     setter also updates another value if needed.
     """
 
-    def __init__(self, name: str, role: str, parent: SEM, hfw_nomag: float, channel: str, has_detector: bool=False, **kwargs):
+    def __init__(
+        self,
+        name: str,
+        role: str,
+        parent: SEM,
+        hfw_nomag: float,
+        channel: str,
+        has_detector: bool = False,
+        **kwargs,
+    ):
         """
-        :param name (str): name of the Scanner
-        :param role (str): role of the Scanner
-        :param parent (SEM): parent of the Scanner
-        :param hfw_nomag (float): horizontal field width at nominal magnification
-        :param channel (str): name of the electron channel
-        :param has_detector (bool): True if a Detector is also controlled. In this case,
+        :param name: name of the Scanner
+        :param role: role of the Scanner
+        :param parent: parent of the Scanner
+        :param hfw_nomag: horizontal field width at nominal magnification
+        :param channel: name of the electron channel
+        :param has_detector: True if a Detector is also controlled. In this case,
           the .resolution, .scale and associated VAs will be provided too.
         """
         self.parent: SEM  # for type hinting
@@ -1223,7 +1220,7 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
-    def _updateSettings(self):
+    def _updateSettings(self) -> None:
         """
         Read all the current settings from the SEM and reflects them on the VAs
         """
@@ -1281,10 +1278,10 @@ class Scanner(model.Emitter):
         self._updateResolution() # to update scale -> pixelsize
         return value
 
-    def _onScale(self, s):
+    def _onScale(self, s) -> None:
         self._updatePixelSize()
 
-    def _updateResolution(self):
+    def _updateResolution(self) -> None:
         """
         To be called to read the server resolution and update the corresponding VAs
         """
@@ -1294,7 +1291,7 @@ class Scanner(model.Emitter):
             self.scale._value = scale  # To not call the setter
             self.scale.notify(scale)
 
-    def _updatePixelSize(self):
+    def _updatePixelSize(self) -> None:
         """
         Update the pixel size using the horizontalFoV.
         """
@@ -1325,12 +1322,12 @@ class Scanner(model.Emitter):
         """
         Parameters
         ----------
-        blank (bool or None): True if the the electron beam should blank, False if it should be unblanked,
+        blank: True if the the electron beam should blank, False if it should be unblanked,
             None if it should be blanked/unblanked automatically.
 
         Returns
         -------
-        (bool or None): True if the the beam is blanked, False if it is unblanked. See Notes for edge case,
+        True if the the beam is blanked, False if it is unblanked. See Notes for edge case,
             None if it should be blanked/unblanked automatically.
 
         """
@@ -1363,32 +1360,31 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
         return fov
 
-    def _onHorizontalFoV(self, fov: float):
+    def _onHorizontalFoV(self, fov: float) -> None:
         self._updateDepthOfField()
         if self._has_detector:
             self._updatePixelSize()
 
-    def _updateDepthOfField(self):
+    def _updateDepthOfField(self) -> None:
         fov = self.horizontalFoV.value
         # Formula was determined by experimentation
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
 
-    def prepareForScan(self):
+    def prepareForScan(self) -> None:
         """
         Make sure the beam is unblanked when the blanker is in 'auto' mode before starting to scan.
         """
         if self.blanker.value is None:
             self.parent.unblank_beam(self.channel)
 
-    def finishScan(self):
+    def finishScan(self) -> None:
         """
         Make sure the beam is blanked when the blanker is in 'auto' mode at the end of scanning.
         """
         if self.blanker.value is None:
             self.parent.blank_beam(self.channel)
-
 
 
 class Detector(model.Detector):
@@ -1400,10 +1396,10 @@ class Detector(model.Detector):
 
     def __init__(self, name: str, role: str, parent: SEM, channel: str, **kwargs):
         """
-        :param name (str): name of the Detector
-        :param role (str): role of the Detector
-        :param parent (SEM): parent of the Detector
-        :param channel (str): name of the acquistion channel (electron, ion)
+        :param name: name of the Detector
+        :param role: role of the Detector
+        :param parent: parent of the Detector
+        :param channel: name of the acquistion channel (electron, ion)
         :param kwargs: additional keyword arguments
         """
         # The acquisition is based on a FSM that roughly looks like this:
@@ -1462,14 +1458,14 @@ class Detector(model.Detector):
         # this makes it pretty annoying to do anything on that side, and error prone.
         # disabling this until a better solution is found
 
-    def terminate(self):
+    def terminate(self) -> None:
         if self._generator:
             self.stop_generate()
             self._genmsg.put(GEN_TERM)
             self._generator.join(5)
             self._generator = None
 
-    def start_generate(self):
+    def start_generate(self) -> None:
         self._genmsg.put(GEN_START)
         if not self._generator or not self._generator.is_alive():
             logging.info("Starting acquisition thread")
@@ -1477,12 +1473,12 @@ class Detector(model.Detector):
                                                name="autoscript acquisition thread")
             self._generator.start()
 
-    def stop_generate(self):
+    def stop_generate(self) -> None:
         self.stop_acquisition(wait_for_frame=False)
         self._genmsg.put(GEN_STOP)
         # TODO: add a cancel once scanning is asynchronous
 
-    def _acquire(self):
+    def _acquire(self) -> None:
         """
         Acquisition thread
         Managed via the ._genmsg Queue
@@ -1570,7 +1566,7 @@ class Detector(model.Detector):
         finally:
             self._generator = None
 
-    def start_acquisition(self):
+    def start_acquisition(self) -> None:
         """Start acquiring images"""
         try:
             if self.parent.get_imaging_state(self._scanner.channel) == IMAGING_STATE_RUNNING:
@@ -1581,7 +1577,7 @@ class Detector(model.Detector):
             pass
         self.parent.start_acquisition(self._scanner.channel)
 
-    def stop_acquisition(self, wait_for_frame: bool = True):
+    def stop_acquisition(self, wait_for_frame: bool = True) -> None:
         """Stop acquiring images"""
         try:
             if self.parent.get_imaging_state(self._scanner.channel) == IMAGING_STATE_IDLE:
@@ -1593,7 +1589,7 @@ class Detector(model.Detector):
 
         self.parent.stop_acquisition(self._scanner.channel, wait_for_frame=wait_for_frame)
 
-    def _acq_should_stop(self, timeout=None):
+    def _acq_should_stop(self, timeout: Optional[int] = None) -> bool:
         """
         Indicate whether the acquisition should now stop or can keep running.
         Non blocking.
@@ -1619,13 +1615,13 @@ class Detector(model.Detector):
             logging.warning("Skipped message: %s", msg)
             return False
 
-    def _acq_wait_data(self, timeout=0):
+    def _acq_wait_data(self, timeout: int = 0) -> bool:
         """
         Block until data or a stop message is received.
         Note: it expects that the acquisition is running.
 
         timeout (0<=float): how long to wait to check (use 0 to not wait)
-        return (bool): True if needs to stop, False if data is ready
+        return: True if needs to stop, False if data is ready
         raise TerminationRequested: if a terminate message was received
         """
         tend = time.time() + timeout
@@ -1658,10 +1654,10 @@ class Detector(model.Detector):
             # Duplicate Stop
             logging.debug("Skipped message %s as acquisition is stopped", msg)
 
-    def _get_acq_msg(self, **kwargs):
+    def _get_acq_msg(self, **kwargs) -> str:
         """
         Read one message from the acquisition queue
-        return (str): message
+        return: message
         raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
@@ -1671,7 +1667,7 @@ class Detector(model.Detector):
             logging.warning("Acq received unexpected message %s", msg)
         return msg
 
-    def _updateSettings(self):
+    def _updateSettings(self) -> None:
         """
         Reads all the current settings from the Detector and reflects them on the VAs
         """
@@ -1692,11 +1688,11 @@ class Detector(model.Detector):
             self.mode._value = detector_mode
             self.mode.notify(detector_mode)
 
-    def _setBrightness(self, brightness):
+    def _setBrightness(self, brightness: float) -> float:
         self.parent.set_brightness(brightness, self._scanner.channel)
         return self.parent.get_brightness(self._scanner.channel)
 
-    def _setContrast(self, contrast):
+    def _setContrast(self, contrast: float) -> float:
         self.parent.set_contrast(contrast, self._scanner.channel)
         return self.parent.get_contrast(self._scanner.channel)
 
