@@ -1417,6 +1417,8 @@ class Sparc2AlignTab(Tab):
                 acq_type=model.MD_AT_SLIT,
             )
             speclines.tint.value = odemis.gui.FOCUS_STREAM_COLOR
+            # Show most of the image (compared to the standard 100/256 %), to see the potential faint parts of the line
+            speclines.auto_bc_outliers.value = 0.001  # %
             # Fixed values, known to work well for autofocus
             speclines.detExposureTime.value = speclines.detExposureTime.clip(0.1)
             self._setFullFoV(speclines, (2, 16))
