@@ -299,12 +299,17 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_checkbox_control(self, label_text, value=True, conf=None):
+    def add_checkbox_control(self, label_text, value=True, pos_col=1, span=wx.DefaultSpan, conf=None):
         """ Add a checkbox to the settings panel
 
         :param label_text: (str) Label text to display
         :param value: (bool) Value to display (True == checked)
         :param conf: (None or dict) Dictionary containing parameters for the control
+        :param pos_col: (int) The column index in the grid layout where the checkbox will be placed.
+                        For example:
+                        - `pos_col=0` positions the checkbox in the first column.
+                        - `pos_col=1` positions it in the second column.
+        :param span: (tuple) the row and column spanning attributes of items in a GridBagSizer.
 
         """
         if conf is None:
@@ -312,7 +317,7 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = wx.CheckBox(self, wx.ID_ANY, style=wx.ALIGN_RIGHT | wx.NO_BORDER, **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, pos_col), span=span,
                           flag=wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         value_ctrl.SetValue(value)
 
