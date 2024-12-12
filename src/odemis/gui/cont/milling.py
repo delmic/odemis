@@ -31,7 +31,7 @@ import logging
 import os
 from concurrent.futures import CancelledError
 from datetime import datetime
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import wx
 
@@ -54,6 +54,7 @@ from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
     VigilantAttributeConnector,
 )
+from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_DEACTIVE, CryoFeature
 from odemis.util import is_point_in_rect, units
 
 # yellow, cyan, magenta, lime, orange, hotpink
@@ -511,9 +512,56 @@ class AutomatedMillingController:
         for i in range(self._panel.workflow_task_chk_list.GetCount()):
             self._panel.workflow_task_chk_list.Check(i)
 
-
         self._panel.btn_run_automated_milling.Bind(wx.EVT_BUTTON, self._run_automated_milling)
         self._panel.btn_automated_milling_cancel.Bind(wx.EVT_BUTTON, self._cancel_automated_milling)
+
+        # connect features to chklistbox
+        self._tab_data.main.features.subscribe(self._update_features, init=True)
+        self._panel.workflow_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
+        self._panel.workflow_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
+
+    @call_in_wx_main
+    def _update_selected_feature(self, evt: wx.Event):
+
+        # TODO: disable multi-selection?
+        # get the index of selected item
+        index = self._panel.workflow_features_chk_list.GetSelection()
+        f = self._tab_data.main.features.value[index]
+        logging.debug(f"Feature {f.name.value} selected.")
+        self._tab_data.main.currentFeature.value = f
+
+    def _update_checked_features(self, evt: wx.Event):
+        index = evt.GetInt()
+        disabled_features_indexes = [i for i, f in enumerate(self._tab_data.main.features.value) if f.status.value in [FEATURE_ACTIVE, FEATURE_DEACTIVE]]
+
+        # Prevent the change
+        if index in disabled_features_indexes:
+            self._panel.workflow_features_chk_list.Check(index, False)
+            f = self._tab_data.main.features.value[index]
+            disabled_txt = f"{f.name.value} is not ready for milling. Please prepare the feature first."
+            wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
+
+    def _update_feature_status(self, feature: CryoFeature):
+
+        self._update_features(self._tab_data.main.features.value)
+
+    @call_in_wx_main
+    def _update_features(self, features: List[CryoFeature]):
+        """
+        Sync the features with the cklistbox
+        """
+
+        # clear the list
+        self._panel.workflow_features_chk_list.Clear()
+        for i, f in enumerate(features):
+            txt = f"{f.name.value} ({f.status.value})"
+            self._panel.workflow_features_chk_list.Append(txt)
+
+            check = False if f.status.value in [FEATURE_ACTIVE, FEATURE_DEACTIVE] else True
+            self._panel.workflow_features_chk_list.Check(i, check)
+
+            # subscribe to the feature status, so we can update the list
+            f.status.subscribe(self._update_feature_status, init=False)
 
     def _run_automated_milling(self, evt: wx.Event):
 
@@ -525,19 +573,36 @@ class AutomatedMillingController:
         self._tab_data.main.is_acquiring.value = True
         self._tab_data.main.is_milling.value = True
 
+        # filter the features list, so only the checked ones are used
         features = self._tab_data.main.features.value
+        features = [f for i, f in enumerate(features) if self._panel.workflow_features_chk_list.IsChecked(i)]
         stage = self._tab_data.main.stage_bare
         sem_stream = self._tab.sem_stream
         fib_stream = self._tab.fib_stream
 
-        logging.warning(f"Running automated milling for features: {features}")
+        logging.warning(f"Running automated milling for {len(features)} features: {features}")
 
         # tmp: add the path to the features, as it's not saved in the feature
         for feature in features:
             feature.path = os.path.join(self.conf.pj_last_path, feature.name.value)
 
-        task_list = [task for task in self.task_list if self._panel.workflow_task_chk_list.IsChecked(self.task_list.index(task))]
+        task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")
+
+        # dialog to confirm the milling
+        task_names = ", ".join([t.name for t in task_list])
+        dlg = wx.MessageDialog(
+            self._panel,
+            f"Start workflows ({task_names}) for {len(features)} features?",
+            "Start Automated Milling",
+            wx.YES_NO | wx.ICON_QUESTION,
+        )
+
+        # TODO: add estimated time to the dialog, gui
+
+        if dlg.ShowModal() == wx.ID_NO:
+            self._on_automation_done(None)
+            return
 
         self.automation_future: model.ProgressiveFuture = run_automated_milling(
                                     features=features,

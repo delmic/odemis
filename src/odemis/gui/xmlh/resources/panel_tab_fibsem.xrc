@@ -922,6 +922,18 @@
                           <bg>#555555</bg>
                             <object class="wxBoxSizer" name="automation_sizer">
                               <object class="sizeritem">
+                                <object class="wxCheckListBox" name="workflow_features_chk_list">
+                                  <content></content>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                </object>
+                                <option>1</option>
+                                <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
                                 <object class="wxCheckListBox" name="workflow_task_chk_list">
                                   <content></content>
                                   <font>

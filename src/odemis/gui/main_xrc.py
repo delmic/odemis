@@ -760,6 +760,7 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
         self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
         self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
+        self.workflow_features_chk_list = xrc.XRCCTRL(self, "workflow_features_chk_list")
         self.workflow_task_chk_list = xrc.XRCCTRL(self, "workflow_task_chk_list")
         self.btn_run_automated_milling = xrc.XRCCTRL(self, "btn_run_automated_milling")
         self.txt_automated_milling_est_time = xrc.XRCCTRL(self, "txt_automated_milling_est_time")
@@ -9336,6 +9337,18 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <fg>#1A1A1A</fg>
                           <bg>#555555</bg>
                             <object class="wxBoxSizer" name="automation_sizer">
+                              <object class="sizeritem">
+                                <object class="wxCheckListBox" name="workflow_features_chk_list">
+                                  <content/>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                </object>
+                                <option>1</option>
+                                <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
                               <object class="sizeritem">
                                 <object class="wxCheckListBox" name="workflow_task_chk_list">
                                   <content/>
