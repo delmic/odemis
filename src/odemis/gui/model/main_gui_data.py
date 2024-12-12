@@ -32,7 +32,7 @@ from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
 from odemis.acq.move import MicroscopePostureManager
-from odemis.gui import FG_COLOUR_WARNING, conf
+from odemis.gui import conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
 from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
@@ -703,22 +703,32 @@ class FastEMMainGUIData(MainGUIData):
                     raise ValueError("Unknown scintillator shape dimensions")
 
                 scintillator = Scintillator(number=int(scintillator_number), shape=shape)
-                for calibration_name in [CALIBRATION_1, CALIBRATION_2, CALIBRATION_3]:
+                for calibration_name in (CALIBRATION_1, CALIBRATION_2, CALIBRATION_3):
                     calibration = FastEMCalibration(name=calibration_name)
+                    xmin = position[0] - 0.5 * sz[0]
+                    xmax = position[0] + 0.5 * sz[0]
+                    ymin = position[1] + 0.5 * sz[1]
+                    ymax = position[1] - 0.5 * sz[1]
                     if calibration_name == CALIBRATION_1:
+                        number = 1
+                        colour = "#648FFF"  # blue
                         calibration.sequence.value = calib_1_calibrations
-                    elif calibration_name in [CALIBRATION_2, CALIBRATION_3]:
-                        if calibration_name == CALIBRATION_2:
-                            colour = FG_COLOUR_WARNING
-                            calibration.sequence.value = calib_2_calibrations
-                        elif calibration_name == CALIBRATION_3:
-                            colour = "#00ff00"  # green
-                            calibration.sequence.value = calib_3_calibrations
-                        xmin = position[0] - 0.5 * sz[0]
-                        ymin = position[1] + 0.5 * sz[1]
-                        xmax = position[0] + 0.5 * sz[0]
-                        ymax = position[1] - 0.5 * sz[1]
-                        calibration.region = FastEMROC(str(scintillator_number), coordinates=(xmin, ymin, xmax, ymax), colour=colour)
+                        # overlay location left on init
+                        xmin -= sz[0]
+                        xmax -= sz[0]
+                    elif calibration_name == CALIBRATION_2:
+                        number = 2
+                        colour = "#FFB000"  # orange
+                        calibration.sequence.value = calib_2_calibrations
+                        # overlay location middle on init
+                    elif calibration_name == CALIBRATION_3:
+                        number = 3
+                        colour = "#DC267F"  # pink
+                        calibration.sequence.value = calib_3_calibrations
+                        # overlay location right on init
+                        xmin += sz[0]
+                        xmax += sz[0]
+                    calibration.region = FastEMROC(str(number), coordinates=(xmin, ymin, xmax, ymax), colour=colour)
                     scintillator.calibrations[calibration_name] = calibration
                 self.samples.value[sample_type].scintillators[scintillator_number] = scintillator
 

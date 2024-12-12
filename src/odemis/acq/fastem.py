@@ -97,7 +97,6 @@ class FastEMCalibration(object):
         self.region = None  # FastEMROC
         self.is_done = model.BooleanVA(False)  # states if the calibration was done successfully or not
         self.sequence = model.ListVA([])  # list of calibrations that need to be run sequencially
-        self.button = None
         self.shape = None  # FastEMROCOverlay
         self.is_done.subscribe(self._on_done)
 
