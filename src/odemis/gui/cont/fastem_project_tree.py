@@ -182,12 +182,12 @@ class FastEMTreeNode:
         if self._on_change_callback:
             self._on_change_callback(NodeChangeType.NAME_CHANGE, self)
 
-    def add_child(self, child, sort_order: bool = True):
+    def add_child(self, child, sort: bool = True):
         """
         Adds a child node to the current node.
 
         :param child: (FastEMTreeNode) The child node to add.
-        :param sort_order: (bool) Sort the order of FastEMTreeNode's children.
+        :param sort: (bool) Sort the order of FastEMTreeNode's children.
         :raises ValueError: If the child type is not allowed under the current node's type.
         """
         if self.can_have_child(child.type):
@@ -195,26 +195,26 @@ class FastEMTreeNode:
             child.parent_node = self  # Set child's parent node to current node
             if self._on_change_callback:
                 self._on_change_callback(NodeChangeType.ADD_CHILD, child)
-                if sort_order:
+                if sort:
                     self.sort_children_recursively()
         else:
             raise ValueError(
                 f"Cannot add child of type {child.type} to parent of type {self.type}"
             )
 
-    def remove_child(self, child, sort_order: bool = True):
+    def remove_child(self, child, sort: bool = True):
         """
         Removes a child node from the current node.
 
         :param child: (FastEMTreeNode) The child node to remove.
-        :param sort_order: (bool) Sort the order of FastEMTreeNode's children.
+        :param sort: (bool) Sort the order of FastEMTreeNode's children.
         :raises ValueError: If the child is not found in the current node's children.
         """
         if child in self.children:
             self.children.remove(child)
             if self._on_change_callback:
                 self._on_change_callback(NodeChangeType.REMOVE_CHILD, child)
-                if sort_order:
+                if sort:
                     self.sort_children_recursively()
         else:
             raise ValueError("Child not found in the node's children")

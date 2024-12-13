@@ -23,10 +23,11 @@ import json
 import logging
 import math
 import random
-from colorsys import hls_to_rgb, rgb_to_hls
-from functools import partial
-from typing import List, Tuple, Union, Dict
 import time
+from colorsys import hls_to_rgb, rgb_to_hls
+from dataclasses import dataclass
+from functools import partial
+from typing import Dict, List, Tuple, Union
 
 import wx
 
@@ -124,7 +125,8 @@ def generate_unique_color(existing_colors: List[str]) -> str:
             return new_color_hex
 
 
-class ImportData:
+@dataclass
+class ImportRowData:
     """
     This class is a data structure which encapsulates the relationship between a data row, its
     corresponding tree node, the parent project node, and the grid where the data will be displayed.
@@ -136,18 +138,10 @@ class ImportData:
     :param grid: (GridBase) The grid to which the row data will be added.
 
     """
-
-    def __init__(
-        self,
-        row: Row,
-        node: FastEMTreeNode,
-        project_node: FastEMTreeNode,
-        grid: GridBase,
-    ):
-        self.row = row
-        self.node = node
-        self.project_node = project_node
-        self.grid = grid
+    row: Row
+    node: FastEMTreeNode
+    project_node: FastEMTreeNode
+    grid: GridBase
 
 
 class ProjectManagerImportExport:
@@ -284,7 +278,7 @@ class ProjectManagerImportExport:
             raise ValueError(f"The JSON file is not for {sample_type}")
         projects_data = sample_data.get("projects", {})
         new_shapes = []
-        import_data: List[ImportData] = []
+        import_data: List[ImportRowData] = []
 
         shapes = self.project_manager.tab_data.shapes.value
         active_projects = list(self.project_manager.active_project_ctrl.GetStrings())
@@ -307,7 +301,7 @@ class ProjectManagerImportExport:
             active_projects.append(project_name)
             project_node = FastEMTreeNode(project_name, NodeType.PROJECT)
             self.project_manager.tab_data.projects_tree.add_child(
-                project_node, sort_order=False
+                project_node, sort=False
             )
 
             ribbons = project_data.get("ribbons", [])
@@ -319,11 +313,11 @@ class ProjectManagerImportExport:
             ribbons_grid = self.project_manager.project_ribbons_tab.create_grid()
             sections_grid = self.project_manager.project_sections_tab.create_grid()
             roas_grid = self.project_manager.project_roas_tab.create_grid()
-            self.project_manager.project_grids_data[project_name] = {
-                FastEMProjectRibbonsTab.__name__: ribbons_grid,
-                FastEMProjectSectionsTab.__name__: sections_grid,
-                FastEMProjectROAsTab.__name__: roas_grid,
-            }
+            self.project_manager.project_grids_data[project_name] = (
+                ribbons_grid,
+                sections_grid,
+                roas_grid,
+            )
             ribbons_grid.rows = [0] * len(ribbons)
             sections_grid.rows = [0] * len(sections)
             roas_grid.rows = [0] * len(roas)
@@ -337,7 +331,7 @@ class ProjectManagerImportExport:
                     roa_row,
                 )
                 import_data.append(
-                    ImportData(
+                    ImportRowData(
                         row=roa_row,
                         node=roa_node,
                         project_node=project_node,
@@ -358,7 +352,7 @@ class ProjectManagerImportExport:
                     section_row,
                 )
                 import_data.append(
-                    ImportData(
+                    ImportRowData(
                         row=section_row,
                         node=section_node,
                         project_node=project_node,
@@ -377,7 +371,7 @@ class ProjectManagerImportExport:
                     ribbon_row,
                 )
                 import_data.append(
-                    ImportData(
+                    ImportRowData(
                         row=ribbon_row,
                         node=ribbon_node,
                         project_node=project_node,
@@ -399,10 +393,9 @@ class ProjectManagerImportExport:
 
         start_time = time.time()
         # First gather the import data and later loop over functions which have wx.PostEvent triggering GUI changes
-        # TODO investigate if time can be saved here
         for data in import_data:
-            data.grid.add_row(data.row)
-            data.project_node.add_child(data.node, sort_order=False)
+            data.grid.add_row(data.row, autosize=False)
+            data.project_node.add_child(data.node, sort=False)
             if (
                 data.row.parent_name is not None
                 and data.row.parent_name.value != DEFAULT_PARENT
@@ -426,6 +419,10 @@ class ProjectManagerImportExport:
             self.project_manager.active_project_ctrl.SetValue(current_project)
             # Sort the project tree in the end because of recursive nature of the function
             self.project_manager.tab_data.projects_tree.sort_children_recursively()
+            # Resize the grid columns once at the end to save time
+            ribbons_grid.AutoSizeColumns()
+            sections_grid.AutoSizeColumns()
+            roas_grid.AutoSizeColumns()
             # Refresh the viewports
             for viewport in self.project_manager.tab_data.viewports.value:
                 viewport.canvas.request_drawing_update()
@@ -514,9 +511,8 @@ class FastEMProjectManagerPanel:
             FastEMTreeNode(tab_data.current_project.value, NodeType.PROJECT)
         )
         # A dict where key is the project name and value is the project grid's data,
-        # the project's grid data again is a dict where key is the name of the grid's
-        # tab and value is the grid object
-        self.project_grids_data: Dict[str, Dict[str, GridBase]] = {}
+        # the project's grid data is a tuple of ribbons, sections, roas grid
+        self.project_grids_data: Dict[str, Tuple[GridBase, GridBase, GridBase]] = {}
 
         self.projects_panel = SettingsPanel(
             panel.active_project_panel, size=panel.active_project_panel.Size
@@ -616,11 +612,11 @@ class FastEMProjectManagerPanel:
             self.project_settings_tab,
         )
 
-        self.project_grids_data[tab_data.current_project.value] = {
-            FastEMProjectRibbonsTab.__name__: self.project_ribbons_tab.grid,
-            FastEMProjectSectionsTab.__name__: self.project_sections_tab.grid,
-            FastEMProjectROAsTab.__name__: self.project_roas_tab.grid,
-        }
+        self.project_grids_data[tab_data.current_project.value] = (
+            self.project_ribbons_tab.grid,
+            self.project_sections_tab.grid,
+            self.project_roas_tab.grid,
+        )
         self.project_shape_colour = {
             tab_data.current_project.value: FASTEM_PROJECT_COLOURS[0]
         }
@@ -982,24 +978,16 @@ class FastEMProjectManagerPanel:
         self.project_roas_tab.grid.Hide()
         if project_name:
             if project_name in self.project_grids_data:
-                ribbons_grid = self.project_grids_data[project_name][
-                    FastEMProjectRibbonsTab.__name__
-                ]
-                sections_grid = self.project_grids_data[project_name][
-                    FastEMProjectSectionsTab.__name__
-                ]
-                roas_grid = self.project_grids_data[project_name][
-                    FastEMProjectROAsTab.__name__
-                ]
+                ribbons_grid, sections_grid, roas_grid = self.project_grids_data[project_name]
             else:
                 ribbons_grid = self.project_ribbons_tab.create_grid()
                 sections_grid = self.project_sections_tab.create_grid()
                 roas_grid = self.project_roas_tab.create_grid()
-                self.project_grids_data[project_name] = {
-                    FastEMProjectRibbonsTab.__name__: ribbons_grid,
-                    FastEMProjectSectionsTab.__name__: sections_grid,
-                    FastEMProjectROAsTab.__name__: roas_grid,
-                }
+                self.project_grids_data[project_name] = (
+                    ribbons_grid,
+                    sections_grid,
+                    roas_grid,
+                )
             self.project_ribbons_tab.grid = ribbons_grid
             self.project_sections_tab.grid = sections_grid
             self.project_roas_tab.grid = roas_grid
