@@ -28,6 +28,8 @@ from typing import Tuple
 import odemis.acq.stream as acqstream
 from odemis import model
 from odemis.acq.feature import CryoFeature
+from odemis.acq.stream import StaticFluoStream
+from odemis.acq.target import Target
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -188,7 +190,7 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         # Current tool selected (from the toolbar)
         tools = {TOOL_NONE, TOOL_RULER}  # TOOL_ZOOM, TOOL_ROI}
-        if main.time_correlator: # FLIM
+        if main.time_correlator:  # FLIM
             tools.add(TOOL_ROA)
 
             self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
@@ -240,6 +242,7 @@ class CryoGUIData(MicroscopyGUIData):
     """
     Represents an interface for handling cryo microscopes.
     """
+
     def __init__(self, main):
         if not main.is_viewer and main.role not in ("enzel", "meteor", "mimas"):
             raise ValueError(
@@ -260,6 +263,64 @@ class CryoGUIData(MicroscopyGUIData):
         self.main.currentFeature.value = feature
         return feature
 
+    def add_new_fm_fiducial(self, coordinates: Tuple[float, float, float], type: str, index: int,
+                            fm_focus_position: float, size: float = None):
+        fm_fiducial = Target(coordinates, type, index, fm_focus_position, size)
+        self.main.fm_fiducials.value.append(fm_fiducial)
+        self.main.currentTarget.value = fm_fiducial
+        return fm_fiducial
+
+    def add_new_fib_fiducial(self, coordinates: Tuple[float, float], type: str, index: int, fm_focus_position: float):
+        fib_fiducial = Target(coordinates, type, index, fm_focus_position)
+        self.main.fib_fiducials.value.append(fib_fiducial)
+        self.main.currentTarget.value = fib_fiducial
+        return fib_fiducial
+
+    def add_new_fm_roi(self, coordinates: Tuple[float, float, float, float], type: str, index: int,
+                       fm_focus_position: float, size: float = None):
+        fm_roi = Target(coordinates, type, index, fm_focus_position, size)
+        self.main.fm_rois.value.append(fm_roi)
+        self.main.currentTarget.value = fm_roi
+        return fm_roi
+
+    # stream information needed to make it add new targets generalized, maybe not needed
+    def add_new_target(self, x, y, z=None, t_name=None):
+        #     if not t_name:
+        #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
+        #         t_name = make_unique_name("1", existing_names)
+        z = None
+
+        fm_focus_position = self.main.focus.position.value['z']
+        existing_names = [str(f.index.value) for f in self.main.targets.value]
+        if self.focussedView.value.name.value == "FLM Overview":
+            t_name = make_unique_name("FM-1", existing_names)
+            # TOdo only static stream which is selected
+            for s in self.streams.value:
+                if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                    z = s.zIndex.value
+                    self.main.fm_fiducial_index.value += 1
+                    target = Target(x, y, z, name=t_name, type="Fiducial",
+                                    index=self.main.fm_fiducial_index.value, fm_focus_position=fm_focus_position)
+                    break
+        elif self.focussedView.value.name.value == "SEM Overview":
+            t_name = make_unique_name("FIB-1", existing_names)
+            self.main.fib_fiducial_index.value += 1
+            target = Target(x, y, z=0, name=t_name, type="Fiducial", index=self.main.fib_fiducial_index.value,
+                            fm_focus_position=fm_focus_position)
+        else:
+            raise ValueError("Invalid selected view")
+
+        if self.focussedView.value.name.value == "FLM Overview" and z is None:
+            # TOOL NONE in the calling function
+            logging.error("No z-index found in the given streams. Please select a stream with z-index.")
+            return
+        # same target structure for subscribing in overlay
+        # name to choose which grid, and good names to display on the streams and row name in grid target dictionary, identifier
+
+        self.main.targets.value.append(target)
+        self.main.currentTarget.value = target
+        return target
+
     # Todo: find the right margin
     ATOL_FEATURE_POS = 0.1e-3  # m
 
@@ -274,7 +335,6 @@ class CryoGUIData(MicroscopyGUIData):
         def dist_to_pos(feature):
             return math.hypot(feature.pos.value[0] - current_position["x"],
                               feature.pos.value[1] - current_position["y"])
-
 
         if current_feature and dist_to_pos(current_feature) <= self.ATOL_FEATURE_POS:
             return  # We are already good, nothing else to do
@@ -294,6 +354,31 @@ class CryoGUIData(MicroscopyGUIData):
         logging.debug("New feature created at %s because none are close by.",
                       (current_position["x"], current_position["y"]))
         self.main.currentFeature.value = feature
+
+    def select_current_position_target(self):
+        """
+        Given current stream position, either select one of the targets closest to
+          the position or create a new one with the position.
+        """
+        current_position = self.main.stage.position.value  # ?? check correlation.py
+        current_target = self.main.currentTarget.value
+
+        def dist_to_pos(target):
+            return math.hypot(target.coordinates.value[0] - current_position["x"],
+                              target.coordinates.value[1] - current_position["y"])
+
+        if current_target and dist_to_pos(current_target) <= self.ATOL_FEATURE_POS:
+            return
+
+            # Find the closest feature... and check it's actually close by
+        try:
+            closest = min(self.main.targets.value, key=dist_to_pos)
+            if dist_to_pos(closest) <= self.ATOL_FEATURE_POS:
+                self.main.currentTarget.value = closest
+                return
+        except ValueError:  # raised by min() if no targets at all
+            pass
+            self.main.currentTarget.value = None
 
 
 class CryoLocalizationGUIData(CryoGUIData):
@@ -381,9 +466,9 @@ class CryoLocalizationGUIData(CryoGUIData):
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()
         self.filename.value = create_filename(
-                    config.pj_last_path, config.fn_ptn,
-                    config.last_extension,
-                    config.fn_count)
+            config.pj_last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count)
 
 
 class CryoCorrelationGUIData(CryoGUIData):
@@ -397,7 +482,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         super().__init__(main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
 
@@ -405,7 +490,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         self.selected_stream = model.VigilantAttribute(None)
 
         # for export tool
-        self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
@@ -413,6 +498,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
     acquire signal. It allows fine control of the shape and density of the scan.
     It is specifically made for the SPARC system.
     """
+
     def __init__(self, main):
         assert main.microscope is not None
         MicroscopyGUIData.__init__(self, main)
@@ -421,8 +507,8 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         self.tool.choices = {
             TOOL_NONE,
-            #TOOL_ZOOM,
-            #TOOL_ROI,
+            # TOOL_ZOOM,
+            # TOOL_ROI,
             TOOL_ROA,
             TOOL_RO_ANCHOR,
             TOOL_RULER,
@@ -465,6 +551,8 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         self.pcdActive = model.BooleanVA(False, readonly=(main.pcd is None))
 
         # TODO: VA for autofocus procedure mode needs to be connected in the tab
+
+
 #         self.autofocus_active = BooleanVA(False)
 
 
@@ -477,6 +565,8 @@ class ChamberGUIData(MicroscopyGUIData):
         # TODO: VA for autofocus procedure mode needs to be connected in the tab.
         # It's not really recommended (and there is no toolbar button), but it's
         # possible to change the focus, and the menu is there, so why not.
+
+
 #         self.autofocus_active = BooleanVA(False)
 
 
@@ -496,6 +586,7 @@ class AnalysisGUIData(MicroscopyGUIData):
     it represents all the data present in a specific file.
     All the streams should be StaticStreams
     """
+
     def __init__(self, main):
         MicroscopyGUIData.__init__(self, main)
         self._conf = get_general_conf()
@@ -505,7 +596,7 @@ class AnalysisGUIData(MicroscopyGUIData):
 
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed
-        self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
 
         # The current file being used for calibration. It is set to u""
         # when no calibration is used. They are directly synchronised with the
@@ -515,8 +606,8 @@ class AnalysisGUIData(MicroscopyGUIData):
         temporalspec_bck_file = self._conf.get("calibration", "temporalspec_bck_file")
         angularspec_bck_file = self._conf.get("calibration", "angularspec_bck_file")
         spec_file = self._conf.get("calibration", "spec_file")
-        self.ar_cal = StringVA(ar_file) # a unicode
-        self.spec_bck_cal = StringVA(spec_bck_file) # a unicode
+        self.ar_cal = StringVA(ar_file)  # a unicode
+        self.spec_bck_cal = StringVA(spec_bck_file)  # a unicode
         self.temporalspec_bck_cal = StringVA(temporalspec_bck_file)  # a unicode
         self.angularspec_bck_cal = StringVA(angularspec_bck_file)
         self.spec_cal = StringVA(spec_file)  # a unicode
@@ -575,6 +666,7 @@ class ActuatorGUIData(MicroscopyGUIData):
     also display one or more views, but it's not required.
     => Used for the SECOM and SPARC(v2) alignment tabs
     """
+
     def __init__(self, main):
         assert main.microscope is not None
         MicroscopyGUIData.__init__(self, main)
@@ -628,9 +720,9 @@ class ActuatorGUIData(MicroscopyGUIData):
                 self.stepsizes[ss] = FloatContinuous(v, r)
 
                 all_axn = set(getattr(main, an).axes.keys())
-                if axn is None: # take all of them
+                if axn is None:  # take all of them
                     axn = all_axn
-                else: # take only the one listed
+                else:  # take only the one listed
                     axn &= all_axn
 
                 for a in axn:
@@ -695,8 +787,9 @@ class EnzelAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_VERTICAL, choices={VIEW_LAYOUT_VERTICAL})
-        self.step_size = model.FloatContinuous(1e-6, range=(50e-9,50e-6), unit="m")
+        self.step_size = model.FloatContinuous(1e-6, range=(50e-9, 50e-6), unit="m")
         self.align_mode = StringEnumerated(Z_ALIGN, choices=set((Z_ALIGN, SEM_ALIGN, FLM_ALIGN)))
+
 
 class SparcAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
@@ -728,10 +821,10 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         # Mode values are different from the modes of the OpticalPathManager
         amodes = [
-                  "lens-align", "mirror-align", "lens2-align", "center-align",
-                  "ek-align", "streak-align", "fiber-align", "light-in-align",
-                  "tunnel-lens-align",
-                 ]
+            "lens-align", "mirror-align", "lens2-align", "center-align",
+            "ek-align", "streak-align", "fiber-align", "light-in-align",
+            "tunnel-lens-align",
+        ]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -752,23 +845,23 @@ class Sparc2AlignGUIData(ActuatorGUIData):
             # This is different from the polePosition of the lens, which is in
             # pixels from the top-left corner of the AR image.
             self.polePositionPhysical = model.TupleContinuous((0, 0),
-                                           ((-1, -1), (1, 1)), unit="m",
-                                           cls=(int, float),
-                                           setter=self._setPolePosPhysical)
+                                                              ((-1, -1), (1, 1)), unit="m",
+                                                              cls=(int, float),
+                                                              setter=self._setPolePosPhysical)
 
             main.lens.polePosition.subscribe(self._onPolePosCCD, init=True)
 
             if main.isAngularSpectrumSupported():
                 self.mirrorPositionTopPhys = model.TupleContinuous((100e-6, 0),
-                                           ((-1e18, -1e18), (1e18, 1e18)), unit="m",
-                                           cls=(int, float),
-                                           setter=self._setMirrorPosTopPhysical
-                                           )
+                                                                   ((-1e18, -1e18), (1e18, 1e18)), unit="m",
+                                                                   cls=(int, float),
+                                                                   setter=self._setMirrorPosTopPhysical
+                                                                   )
                 self.mirrorPositionBottomPhys = model.TupleContinuous((-100e-6, 0),
-                                           ((-1e18, -1e18), (1e18, 1e18)), unit="m",
-                                           cls=(int, float),
-                                           setter=self._setMirrorPosBottomPhysical
-                                           )
+                                                                      ((-1e18, -1e18), (1e18, 1e18)), unit="m",
+                                                                      cls=(int, float),
+                                                                      setter=self._setMirrorPosBottomPhysical
+                                                                      )
 
                 main.lens.mirrorPositionTop.subscribe(self._onMirrorPosTopCCD, init=True)
                 main.lens.mirrorPositionBottom.subscribe(self._onMirrorPosBottomCCD, init=True)
@@ -828,7 +921,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         return pxs[0] / b[0], pxs[1] / b[1]
 
-    def _posToCCD(self, posphy, absolute: bool=True, clip: bool=True):
+    def _posToCCD(self, posphy, absolute: bool = True, clip: bool = True):
         """
         Convert position from physical coordinates to CCD coordinates (top-left
          pixel is 0, 0).
@@ -861,7 +954,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         return posccd
 
-    def _posToPhysical(self, posccd, absolute: bool=True):
+    def _posToPhysical(self, posccd, absolute: bool = True):
         """
         Convert position from CCD coordinates to physical coordinates.
         Note: it conciders the physical origin to be at the center of the CCD.
