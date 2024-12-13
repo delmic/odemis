@@ -35,7 +35,8 @@ MAX_WIDTH = 2000  # px
 PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
 DEFAULT_MAGNIFICATION = 40
 PIXEL_SIZE = PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION
-
+PITCH = 3.2e-6
+MIN_DIST_SPOTS = int(0.75 * PITCH / PIXEL_SIZE)
 
 class VideoDisplayerGrid(VideoDisplayer):
     """
@@ -68,6 +69,7 @@ class VideoDisplayerGrid(VideoDisplayer):
                 AffineTransform,
                 sigma=1.45,
                 threshold_rel=self.acqui_conf.spot_grid_threshold,
+                min_distance=MIN_DIST_SPOTS,
             )
             grid = unit_gridpoints(self.gridsize, mode="ji")
             self.app.spots = tform_ji.apply(grid)

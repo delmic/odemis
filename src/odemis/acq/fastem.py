@@ -292,6 +292,15 @@ class AcquisitionTask(object):
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
 
+        # Calculate the expected minimum distance between spots in the grid on the diagnostic camera
+        detector_md = detector.getMetadata()
+        ccd_md = ccd.getMetadata()
+        self._exp_pitch_m = detector_md.get(model.MD_CALIB, {}).get("pitch", 3.2e-6)  # m
+        lens_mag = ccd_md.get(model.MD_LENS_MAG)
+        ccd_px_size = ccd_md.get(model.MD_SENSOR_PIXEL_SIZE)
+        exp_pitch_px = self._exp_pitch_m * lens_mag / ccd_px_size[0]
+        self._min_dist_spots = int(0.75 * exp_pitch_px)
+
         beam_shift_path = fastem_util.create_image_dir("beam-shift-correction")
         # If there is a project name the path will be
         # [image-dir]/beam-shift-correction/[timestamp]/[project-name]/[roa-name]_[slice-idx]
@@ -457,8 +466,8 @@ class AcquisitionTask(object):
                 logging.debug(f"Will run beam shift correction for field index {field_idx}")
                 try:
                     new_beam_shift = self.correct_beam_shift()
-                    # The difference in x or y should not be larger than 2 micrometers
-                    if any(map(lambda n, p: abs(n - p) > 2e-6, new_beam_shift, prev_beam_shift)):
+                    # The difference in x or y should not be larger than half a pitch
+                    if any(map(lambda n, p: abs(n - p) > 0.5 * self._exp_pitch_m, new_beam_shift, prev_beam_shift)):
                         raise ValueError(
                             f"Difference in beam shift is larger than 2 µm, therefore it most likely failed. "
                             f"Previous beam shift: {prev_beam_shift}, new beam shift: {new_beam_shift}"
@@ -663,7 +672,9 @@ class AcquisitionTask(object):
         # asap=False: wait until new image is acquired (don't read from buffer)
         ccd_image = self._ccd.data.get(asap=False)
         tform, error = estimate_grid_orientation_from_img(ccd_image, (8, 8), SimilarityTransform, sigma,
-                                                          threshold_rel=self._spot_grid_thresh)
+                                                          threshold_rel=self._spot_grid_thresh,
+                                                          min_distance=self._min_dist_spots,
+                                                          )
         logging.debug(f"Found center of grid at {tform.translation}, error: {error}.")
 
         # Determine the shift of the spots, by subtracting the good multiprobe position from the average (center)
