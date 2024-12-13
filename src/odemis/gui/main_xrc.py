@@ -374,6 +374,14 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
         self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
+        self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
+        self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
+        self.load_points = xrc.XRCCTRL(self, "load_points")
+        self.add_fiducial = xrc.XRCCTRL(self, "add_fiducial")
+        self.add_roi = xrc.XRCCTRL(self, "add_roi")
+        self.table_grid = xrc.XRCCTRL(self, "table_grid")
+        self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
+        self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
         self.lbl_instructions_correlation = xrc.XRCCTRL(self, "lbl_instructions_correlation")
@@ -3791,6 +3799,61 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
+                      <object class="FoldPanelItem" name="fp_correlation_panel">
+                        <object class="wxPanel" name="pnl_correlation">
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxButton" name="load_points">
+                                <label>Load Points</label>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxButton" name="add_fiducial">
+                                <label>Add Fiducial</label>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxButton" name="add_roi">
+                                <label>Add RoI</label>
+                              </object>
+                            </object>
+                            <!-- Points Table (wxListCtrl) -->
+                            <object class="sizeritem">
+                              <object class="wxGrid" name="table_grid">
+                                <style>wxWANTS_CHARS</style>
+                              </object>
+                            </object>
+<!--                            <flag>wxALIGN_LEFT</flag>-->
+<!--                            <orient>wxVERTICAL</orient>-->
+
+
+                    <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <!-- Add Delete Button -->
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_row">
+                                    <icon>______img_icon_ico_trash_png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                </object>
+                                <!-- Z-targeting button -->
+                                <object class="sizeritem">
+                                  <object class="wxButton" name="btn_z_targeting">
+                                    <label>Z Targeting</label>
+                                    <enabled>1</enabled>  <!-- Initially disabled -->
+                                  </object>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                            </object>
+                          </object>
+                        </object>
+                        </object>
                       <object class="FoldPanelItem" name="fp_meteor_correlation">
                         <object class="wxPanel" name="pnl_meteor_correlation">
                           <object class="wxBoxSizer">
@@ -4043,6 +4106,15 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 \x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    ______img_icon_ico_trash_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x04\x00\x00\x00\
+\xb5\xfa7\xea\x00\x00\x00>IDAT(\xcfc` \x01\xb41\xfcd\xf8\x0f\xc4-\xb8\x14\
+\xfcd\x10\x02\x92B\x0c?0\xa5\xfec\x85hJ\xf0\xf3\xc1\x02\xe8x\x18*\x80\x84\
+"\x0c`\x09\xcd\x16p<\xc0\xe0O\x86f\x06\xaa\x01\x00\x07s?\xea["x\xa5\x00\
+\x00\x00\x00IEND\xaeB`\x82'''
+
     ______img_icon_ico_export_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -4081,6 +4153,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/panel_tab_correlation_xrc', bytearray(panel_tab_correlation_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_export_png', bytearray(______img_icon_ico_export_png))
     __res.Load('memory:XRC/panel_tab_correlation/panel_tab_correlation_xrc')
 

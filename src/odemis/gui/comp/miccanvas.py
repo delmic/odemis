@@ -52,7 +52,7 @@ from odemis.gui.comp.canvas import (
     BitmapCanvas,
 )
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
-from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, CryoCorrelationPointsOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMScintillatorOverlay
@@ -144,6 +144,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.dicho_overlay = None
         self.gadget_overlay = None
         self.cryofeature_overlay = None
+        self.cryotarget_overlay = None
 
         # play/pause icon
         self.play_overlay = PlayIconOverlay(self)
@@ -270,6 +271,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.cryofeature_overlay = CryoFeatureOverlay(self, tab_data)
             self.add_world_overlay(self.cryofeature_overlay)
             self.cryofeature_overlay.active.value = True
+
+            self.cryotarget_overlay = CryoCorrelationPointsOverlay(self, tab_data)
+            self.add_world_overlay(self.cryotarget_overlay)
+            self.cryotarget_overlay.active.value = True
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 

@@ -33,6 +33,7 @@ import wx
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
+from odemis.gui.model import TOOL_FEATURE
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
@@ -467,3 +468,341 @@ class CorrelationController(object):
 
         # move the stream using the correlation position offset
         self._move_stream(dx=dx, dy=dy, dr=0, dpx=0)
+
+
+class CorrelationPointsController(object):
+    # adding new target
+    # deleting target
+    # moving target
+    # z targeting
+    # grid operations
+    # correlation target structure there
+    #convert target attributes into a vas
+    # add keys controls
+    # deal with projected markers at the end, add_new
+
+    # on double click -- the selected -not used
+
+    #self.active
+    #status_change
+    # how to talk to the projected data (should be there in the grid but cannot be changed, except, fib marker)
+    # add correlation
+    def __init__(self, tab_data, panel, tab, viewports):
+        """
+        :param tab_data: (MicroscopyGUIData) the representation of the microscope GUI
+        :param panel: (wx._windows.Panel) the panel containing the UI controls
+        :param tab: (Tab) the tab which should show the data
+        :param viewports: (ViewPorts) the tab view ports
+        """
+
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._panel = panel
+        self._tab = tab
+        self._viewports = viewports
+
+        self._panel.fp_correlation_streams.Show(True)
+
+
+        # Access the correlation points table (wxListCtrl)
+        self.grid = panel.table_grid
+
+        # Access the stream selector (for FIB/FM selection)
+        # self.stream_selector = panel.stream_selector
+
+        # Access the Z-targeting button
+        self.z_targeting_btn = panel.btn_z_targeting
+        self.z_targeting_btn.Enable(False)  # Initially disable the Z-targeting button
+
+        self.delete_btn = panel.btn_delete_row
+        self.load_btn = panel.load_points
+
+        # Bind events for stream selector and Z-targeting
+        # self.stream_selector.Bind(wx.EVT_COMBOBOX, self.on_stream_change)
+        self.z_targeting_btn.Bind(wx.EVT_BUTTON, self.on_z_targeting)
+
+        self.grid.Bind(wx.grid.EVT_GRID_CELL_CHANGING, self.on_cell_changing)
+        self.grid.Bind(wx.grid.EVT_GRID_CELL_CHANGED, self.on_row_selected)
+
+        # Initialize the table for displaying points
+
+        # self.load_btn.Bind(wx.EVT_BUTTON, self.on_load_points)
+        # self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete_row)
+        self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
+        self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
+
+
+        self.grid.CreateGrid(1, 5)  # TODO make variables
+
+        # Hide the default row labels (serial numbers)
+        self.grid.SetRowLabelSize(0)
+
+        # Set column labels for correlation points
+        self.grid.SetColLabelValue(0, "type")
+        self.grid.SetColLabelValue(1, "X")
+        self.grid.SetColLabelValue(2, "Y")
+        self.grid.SetColLabelValue(3, "Z")
+        self.grid.SetColLabelValue(4, "index")
+        # Enable cell editing
+        self.grid.EnableEditing(True)
+
+        # Auto-size columns
+        # self.grid.AutoSizeColumns()
+
+        self._populate_table()
+
+        panel.fp_correlation_panel.Show(True)
+        # Show the main frame
+        # self.main_frame.Show()
+        for vp in self._viewports:
+            vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
+
+    def _on_target_changes(self, targets: list) -> None:
+        self._populate_table()
+
+    def on_char(self, evt: wx.Event) -> None:
+        """handle key presses
+        :param evt: (wx.Event) the event"""
+
+        # event data
+        key = evt.GetKeyCode()
+        shift_mod = evt.ShiftDown()
+
+        # pass through event, if not a valid correlation key or enabled
+        valid_keys = [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN]
+        if key not in valid_keys:
+            evt.Skip()
+            return
+
+        if shift_mod:
+            # add fiducials if up
+            # add pois if down (only for FLM)
+            if key == wx.WXK_UP:
+                if self._tab_data_model.focussedView.value.name.value == "FLM Overview" or self._tab_data_model.focussedView.value.name.value == "SEM Overview":
+                    self._tab_data_model.tool.value = TOOL_FEATURE
+            elif key == wx.WXK_DOWN:
+                if self._tab_data_model.focussedView.value == "FLM Overview":
+                    self._tab_data_model.tool.value = TOOL_FEATURE
+            # Static Fluo Stream
+
+        ### CONTROLS ##############################
+        # SHIFT + LEFT CLICK -> MOVE_TO_POSITION
+        # LEFT, RIGHT -> TRANSLATION X
+        # UP, DOWN -> TRANSLATION Y
+        # SHIFT + LEFT, RIGHT -> ROTATION
+        # SHIFT + UP, DOWN -> SCALE
+        # ###########################################
+        # dx, dy, dr, dpx  = 0, 0, 0, 0
+        #
+        # # correlation control modifiers
+        # if shift_mod:
+        #     dr = math.radians(self._panel.dr_step_cntrl.GetValue())
+        #     dpx = self._panel.dpx_step_cntrl.GetValue() / 100
+        # else:
+        #     dx = dy = self._panel.dxy_step_cntrl.GetValue()
+        #
+        # logging.debug(f"key: {key}, shift: {shift_mod}")
+        # logging.debug(f"dx: {dx}, dy: {dy}, dr: {dr}, dpx: {dpx}")
+        #
+        # if key == wx.WXK_LEFT:
+        #     self._move_stream(-dx, 0, -dr, 0)
+        # elif key == wx.WXK_RIGHT:
+        #     self._move_stream(dx, 0, dr, 0)
+        # elif key == wx.WXK_UP:
+        #     self._move_stream(0, dy, 0, dpx)
+        # elif key == wx.WXK_DOWN:
+        #     self._move_stream(0, -dy, 0, -dpx)
+
+    def on_load_points(self, event):
+        """
+        Add a new point (Index, X, Y, Z) to the grid.
+        """
+        new_point = ["6", "15.0", "25.1", "35.3"]  # Example new point, could be loaded from a file
+        new_row = self.grid.GetNumberRows()
+        self.grid.AppendRows(1)  # Add a new row
+
+        for col, value in enumerate(new_point):
+            self.grid.SetCellValue(new_row, col, value)
+
+    def on_delete_row(self, event):
+        """
+        Delete the currently selected row.
+        """
+        selected_rows = self.grid.GetSelectedRows()
+        # row_evt = event.GetRow()
+        if selected_rows:
+            # for col in range(self.grid.GetNumberCols()):
+            #     self.grid.SetCellBackgroundColour(selected_rows[0], col, wx.RED)
+            for row in selected_rows:
+                self.grid.DeleteRows(pos=row, numRows=1, updateLabels=True)
+
+                # delete the from targets list by checking the row label which is same as the target name
+                for target in self._main_data_model.main.targets.value:
+                    if target.name.value == self.grid.GetRowLabelValue(row):
+                        self._main_data_model.main.targets.value.remove(target)
+                        break
+
+    def on_cell_changing(self, event):
+        col = event.GetCol()
+        new_value = event.GetString()
+        col_name = self.grid.GetColLabelValue(col)
+        # self._main_data_model.currentTarget =
+        if col_name == "type":
+            wx.MessageBox("Type cannot be changed", "Invalid Input", wx.OK | wx.ICON_ERROR)
+            event.Veto()
+            return
+        elif col_name == "index":
+            try:
+                int(new_value)
+            except ValueError:
+                wx.MessageBox("Index must be a int!", "Invalid Input", wx.OK | wx.ICON_ERROR)
+                event.Veto()  # Prevent the change
+                return
+        elif col_name in ["X", "Y", "Z"]:
+            try:
+                float(new_value)
+            except ValueError:
+                wx.MessageBox("X, Y, Z values must be a float!", "Invalid Input", wx.OK | wx.ICON_ERROR)
+                event.Veto()  # Prevent the change
+                return
+
+        event.Skip()  # Allow the change if validation passes
+
+    def on_row_selected(self, event):
+
+        col = event.GetCol()
+        if col == 0:  # Index column was changed
+            self.reorder_table()
+
+    def _on_current_target_changes(self, target):
+        """
+        Enable or disable buttons based on stream selection.
+        When FM is selected, the Z-targeting button is enabled.
+        When FIB is selected, the Z-targeting button is disabled.
+        """
+        pass
+        # if target:
+        #     if "FM" in target.name.value:
+        #         self.z_targeting_btn.Enable(True)
+        #     else:
+        #         self.z_targeting_btn.Enable(False)
+
+    def on_z_targeting(self, event):
+        """
+        Handle Z-targeting when the Z-targeting button is clicked.
+        This will update the Z value in the table and change the color based on success.
+        """
+        selected_row = self.table.GetFirstSelected()
+        if selected_row == -1:
+            return  # No row selected
+
+        # Simulate Z-targeting (replace this with actual Z-targeting logic)
+        success = self.perform_z_targeting()
+
+        if success:
+            z_value = self.get_z_target_value()  # Get the Z-targeting result
+            self.table.SetItem(selected_row, 3, str(z_value))
+            self.table.SetItemTextColour(selected_row, wx.Colour(0, 255, 0))  # Green for success
+        else:
+            previous_z_value = self.table.GetItemText(selected_row, 3)
+            self.table.SetItemTextColour(selected_row, wx.Colour(255, 0, 0))  # Red for failure
+
+    def perform_z_targeting(self) -> bool:
+        """ Simulate a Z-targeting success/failure. Replace with actual Z-targeting logic. """
+        return True  # Simulating success for now
+
+    def get_z_target_value(self) -> float:
+        """ Return the simulated Z-targeting value. Replace with real value. """
+        return 42.0  # Example Z-value for demonstration
+
+    def _populate_table(self):
+        """
+        Populates the wxListCtrl with initial values (if any).
+        You can customize this method to load saved data or start with an empty table.
+        """
+
+
+
+        # from target list, add 0,1,2 to x y z
+        # the row label is the target.name with type being the target.type
+        # set the index from 1 and increment, separately for target.type in Fiducials and RegionOfInterests with Z none and RegionOfInterests with Z
+        # set the index from 1 and increment, separately for target.type in Fiducials and RegionOfInterests with Z none and RegionOfInterests with Z
+
+        for i, target in enumerate(self._tab_data_model.main.targets.value):
+            # row = self.grid.GetNumberRows()
+            self.grid.AppendRows(1)
+            self.grid.SetRowLabelValue(i, target.name.value)
+            self.grid.SetCellValue(i, 1, str(target.coordinates.value[0]))
+            self.grid.SetCellValue(i, 2, str(target.coordinates.value[1]))
+            self.grid.SetCellValue(i, 4, str(target.index.value))
+
+            if target.type.value == "Fiducial":
+                if target.coordinates.value[2]:
+                    self.grid.SetCellValue(i, 0, "FM")
+                    self.grid.SetCellValue(i, 3, str(target.coordinates.value[2]))
+                else:
+                    self.grid.SetCellValue(i, 0, "FIB")
+                    self.grid.SetCellValue(i, 3, "")
+            elif target.type.value == "RegionOfInterest":
+                self.grid.SetCellValue(i, 0, "POI")
+
+
+        # Ensure the rows are in order of the Index
+        # self.reorder_table()
+
+
+        # Ensure only one row can be selected at a time
+        # self.grid.SetSelectionMode(wx.grid.wxGridSelectRows)
+
+        # # Clear any existing rows
+        # self.table.DeleteAllItems()
+        #
+        # # Add initial dummy data (replace this with actual data if available)
+        # self.add_table_data(0, 10.0, 20.0, 30.0)
+        # self.add_table_data(1, 15.0, 25.0, None)
+
+    def reorder_table(self):
+        """
+        Sorts the rows by 'Index' column. If an index exists, replace the row.
+        """
+        rows_data = []
+        for row in range(self.grid.GetNumberRows()):
+            # use the column label "Index" instead of the hard-coded
+            index_val = self.grid.GetCellValue(row, 4)
+            row_data = [self.grid.GetCellValue(row, col) for col in range(self.grid.GetNumberCols())]
+            rows_data.append((index_val, row_data))
+
+        # Sort rows by Index (first element in the tuple)
+        rows_data.sort(key=lambda x: int(x[0]))
+
+        # Repopulate the grid with sorted data
+        for i, (index, row_data) in enumerate(rows_data):
+            for col in range(self.grid.GetNumberCols()):
+                self.grid.SetCellValue(i, col, row_data[col])
+
+    # TODO not used
+    # Todo add type in the list?
+    # def save_table_to_csv(self):
+    #     """
+    #     Save the data from both FIB and FM tables to a CSV file.
+    #     """
+    #     with open('correlation_points.csv', 'w', newline='') as csvfile:
+    #         writer = csv.writer(csvfile)
+    #         # Write the header
+    #         writer.writerow(["Index", "X", "Y", "Z"])
+    #
+    #         # Write FIB points
+    #         for row in range(self.table_fib.GetItemCount()):
+    #             index = self.table_fib.GetItemText(row, 0)
+    #             x = self.table_fib.GetItemText(row, 1)
+    #             y = self.table_fib.GetItemText(row, 2)
+    #             z = self.table_fib.GetItemText(row, 3)
+    #             writer.writerow([index, x, y, z])
+    #
+    #         # Write FM points
+    #         for row in range(self.table_fm.GetItemCount()):
+    #             index = self.table_fm.GetItemText(row, 0)
+    #             x = self.table_fm.GetItemText(row, 1)
+    #             y = self.table_fm.GetItemText(row, 2)
+    #             z = self.table_fm.GetItemText(row, 3)
+    #             writer.writerow([index, x, y, z])
