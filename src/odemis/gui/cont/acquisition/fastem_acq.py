@@ -197,6 +197,7 @@ class FastEMOverviewAcquiController(object):
         )
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
         self._main_tab_data.focussedView.subscribe(self._on_focussed_view)
+        self._tab_data_model.is_calibrating.subscribe(self._on_is_calibrating)
 
     def _on_contrast_ctrl(self, evt):
         ctrl = evt.GetEventObject()
@@ -316,6 +317,15 @@ class FastEMOverviewAcquiController(object):
             True
             if self._tab_data_model.is_optical_autofocus_done.value
             and self._main_tab_data.focussedView.value
+            else False
+        )
+
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
+    def _on_is_calibrating(self, mode):
+        self.btn_acquire.Enable(
+            True
+            if self._tab_data_model.is_optical_autofocus_done.value
+            and self._main_tab_data.focussedView.value and not mode
             else False
         )
 
