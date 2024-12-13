@@ -632,6 +632,9 @@ class TestHelperMicroscope(TestMicroscope):
                 cls.chamber = child
 
     # Disable tests for anything related to the detector
+    def test_set_dwell_time(self):
+        self.skipTest("No detector to test.")
+
     def test_acquire(self):
         self.skipTest("No detector to test.")
 
