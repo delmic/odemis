@@ -270,7 +270,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             ctx.paint()
 
 
-class CryoCorrelationPointsOverlay(WorldOverlay):#, DragMixin):
+class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
     """ Overlay for showing the correlation points between two streams """
     # adding new target
     # deleting target
@@ -291,7 +291,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay):#, DragMixin):
         :param tab_data: (model.MicroscopyGUIData) tab data model
         """
         WorldOverlay.__init__(self, cnvs)
-        # DragMixin.__init__(self)
+        DragMixin.__init__(self)
         self.tab_data = tab_data
         self._mode = MODE_SHOW_FEATURES
 
@@ -350,6 +350,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay):#, DragMixin):
         Note: if the canvas doesn't allow drag, move to a random position is not
         allowed, *but* move to a feature is still allowed.
         """
+        evt.Skip()
         pass
         # not moving the canvas on double click
         # if self.active:
@@ -381,18 +382,19 @@ class CryoCorrelationPointsOverlay(WorldOverlay):#, DragMixin):
                 if target:
                     # move/drag the selected target
                     self._selected_target = target
-                    # DragMixin._on_left_down(self, evt)
+                    DragMixin._on_left_down(self, evt)
+                    # self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # create new target based on the physical position then disable the target tool
                     p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                     self.tab_data.add_new_target(p_pos[0], p_pos[1]) #TODO
-                    self._selected_tool_va.value = TOOL_NONE
+                    # self._selected_tool_va.value = TOOL_NONE
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
                 evt.Skip()
         else:
-            super().on_left_down(evt)
+            WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """
@@ -401,12 +403,15 @@ class CryoCorrelationPointsOverlay(WorldOverlay):#, DragMixin):
         """
         if self.active:
             evt.Skip()
-            # if self.left_dragging:
-            #     if self._selected_target:
-            #         self._update_selected_target_position(evt.Position)
-            #     DragMixin._on_left_up(self, evt)
-            # else:
-            #     evt.Skip()
+            if self.left_dragging:
+                if self._selected_target:
+                    self._update_selected_target_position(evt.Position)
+                DragMixin._on_left_up(self, evt)
+                # self.clear_drag()
+                # self.cnvs.update_drawing()
+                # self.cnvs.reset_dynamic_cursor()
+            else:
+                evt.Skip()
         else:
             WorldOverlay.on_left_up(self, evt)
 
@@ -443,12 +448,12 @@ class CryoCorrelationPointsOverlay(WorldOverlay):#, DragMixin):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
         if self.active:
             v_pos = evt.Position
-            # if self.dragging:
-            #     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-            #     p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-            #     self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], self._selected_target.coordinates.value[2]))
-            #     self.cnvs.update_drawing()
-            #     return
+            if self.dragging:
+                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], self._selected_target.coordinates.value[2]))
+                self.cnvs.update_drawing()
+                return
             target = self._detect_point_inside_target(v_pos)
             if target:
                 self._hover_target = target
