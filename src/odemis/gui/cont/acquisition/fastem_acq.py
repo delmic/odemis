@@ -36,7 +36,7 @@ import time
 from builtins import str
 from concurrent.futures._base import CancelledError
 from functools import partial
-from typing import Dict, Tuple, List, Callable
+from typing import Callable, Dict, List, Tuple
 
 import wx
 
@@ -44,9 +44,15 @@ from odemis import dataio, model
 from odemis.acq import align, fastem, stream
 from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import estimate_acquisition_time, FastEMCalibration
+from odemis.acq.fastem import FastEMCalibration, estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_EDIT
+from odemis.gui import (
+    FG_COLOUR_BLIND_BLUE,
+    FG_COLOUR_BLIND_ORANGE,
+    FG_COLOUR_BLIND_PINK,
+    FG_COLOUR_DIS,
+    FG_COLOUR_EDIT,
+)
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.fastem_user_settings_panel import (
     DWELL_TIME_ACQUISITION,
@@ -1115,36 +1121,38 @@ class FastEMCalibrationController:
             CALIBRATION_1, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_1_lbl.SetToolTip(
-            "Optical path and pattern calibrations: Calibrating and "
+            "Optical path and pattern calibrations (blue square): Calibrating and "
             "focusing the optical path and the multiprobe pattern. "
-            "Calibrating the scanning orientation and distance."
+            "Calibrating the scanning orientation and distance. "
+            "Place the blue square on empty part of "
+            "scintillator without a tissue."
         )
         self._calib_1.SetName(CALIBRATION_1)
-        self._calib_1_lbl.SetForegroundColour("#648FFF")  # blue
+        self._calib_1_lbl.SetForegroundColour(FG_COLOUR_BLIND_BLUE)
         self._calib_2_lbl, self._calib_2 = self.calibration_panel.add_checkbox_control(
             CALIBRATION_2, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_2_lbl.SetToolTip(
             "Dark offset and digital gain calibration (orange square): "
             "Correcting between cell images for differences in "
-            "background noise and homogenizing across amplification differences."
-            " Place the region of calibration (ROC) orange square on empty part of "
-            " scintillator without a tissue."
+            "background noise and homogenizing across amplification differences. "
+            "Place the region of calibration (ROC) orange square on empty part of "
+            "scintillator without a tissue."
         )
         self._calib_2.SetName(CALIBRATION_2)
-        self._calib_2_lbl.SetForegroundColour("#FFB000")  # orange
+        self._calib_2_lbl.SetForegroundColour(FG_COLOUR_BLIND_ORANGE)
         self._calib_3_lbl, self._calib_3 = self.calibration_panel.add_checkbox_control(
             CALIBRATION_3, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_3_lbl.SetToolTip(
-            "Cell image calibration (green square): Fine-tuning the cell "
+            "Cell image calibration (pink square): Fine-tuning the cell "
             "image size and the cell image orientation in respect to the "
             "scanning direction. Stitching of cell images into a single "
-            "field image. Place the region of calibration (ROC) green square on tissue "
+            "field image. Place the region of calibration (ROC) pink square on tissue "
             "of interest."
         )
         self._calib_3.SetName(CALIBRATION_3)
-        self._calib_3_lbl.SetForegroundColour("#DC267F")  # pink
+        self._calib_3_lbl.SetForegroundColour(FG_COLOUR_BLIND_PINK)
 
         self.btn_calib = self._tab_panel.btn_calib
         self.btn_cancel_calib = self._tab_panel.btn_cancel_calib
@@ -1152,7 +1160,7 @@ class FastEMCalibrationController:
         self.lbl_calib = self._tab_panel.lbl_calib
         self.bmp_calib_status_warn = self._tab_panel.bmp_calib_status_warn
         self.bmp_calib_status_info = self._tab_panel.bmp_calib_status_info
-        self.has_calib_failed = False
+        self.failed_calib = None
         # List of calibration number (str) which have been cancelled, needed to update the
         # calibration text for cancelled calibrations
         self.cancelled_calib: List[str] = []
@@ -1183,30 +1191,42 @@ class FastEMCalibrationController:
         """
         Update UI based on the current focused view.
 
-        This function checks the calibration status for the scintillator associated
-        with the currently focused view. It enables or disables calibration controls
-        and updates the calibration status text based on the current state.
+        The function enables or disables calibration controls and updates the
+        calibration status text based on the current focused view.
         """
-        if view:
-            calib_1_done, calib_2_done, calib_3_done = self.get_calibration_status(view)
-            # Flow of calibration is _calib_1 -> _calib_2 -> _calib_3
-            # _calib_2 depends on _calib_1, _calib_3 depends on _calib_2
-            self._calib_2.Enable(
-                (self._calib_1.IsEnabled() and self._calib_1.IsChecked())
-                or calib_1_done
-            )
-            self._calib_3.Enable(
-                (self._calib_2.IsEnabled() and self._calib_2.IsChecked())
-                or calib_2_done
-            )
-            self.btn_calib.Enable(
-                (self._calib_1.IsEnabled() and self._calib_1.IsChecked())
-                or (self._calib_2.IsEnabled() and self._calib_2.IsChecked())
-                or (self._calib_3.IsEnabled() and self._calib_3.IsChecked())
-            )
-            self._update_calibration_text_based_on_status(
-                calib_1_done, calib_2_done, calib_3_done
-            )
+        # Reset the previous cancelled calibration number (str) if any
+        self.cancelled_calib.clear()
+        self._update_calibration_controls(view)
+
+    def _update_calibration_controls(self, view):
+        """
+        Update the calibration controls for a given scintillator view.
+
+        :param view: (StreamView or None) The view object representing the scintillator view.
+        """
+        if self._tab_data_model.is_calibrating.value or view is None:
+            return
+
+        calib_1_done, calib_2_done, calib_3_done = self.get_calibration_status(view)
+        # Flow of calibration is _calib_1 -> _calib_2 -> _calib_3
+        # _calib_2 depends on _calib_1, _calib_3 depends on _calib_2
+        self._calib_1.Enable(True)
+        calib_2_possible = self._calib_1.IsChecked() or calib_1_done
+        self._calib_2.Enable(calib_2_possible)
+        if not calib_2_possible:
+            self._calib_2.SetValue(False)
+        calib_3_possible = self._calib_2.IsChecked() or calib_2_done
+        self._calib_3.Enable(calib_3_possible)
+        if not calib_3_possible:
+            self._calib_3.SetValue(False)
+        self.btn_calib.Enable(
+            self._calib_1.IsChecked()
+            or self._calib_2.IsChecked()
+            or self._calib_3.IsChecked()
+        )
+        self._update_calibration_text_based_on_status(
+            calib_1_done, calib_2_done, calib_3_done
+        )
 
     def get_calibration_status(self, view) -> Tuple[bool, bool, bool]:
         """
@@ -1248,7 +1268,19 @@ class FastEMCalibrationController:
         if calib_3_done:
             txt.append("3")
 
-        if txt:
+        # Order of showing calibration text, failure > cancel > success
+        if self.failed_calib:
+            self._update_calibration_text(
+                f"{self.failed_calib} failed", lvl=logging.WARN
+            )
+            self.failed_calib = None
+        elif self.cancelled_calib:
+            txt = ", ".join(self.cancelled_calib)
+            self._update_calibration_text(
+                f"Calibration {txt} cancelled", lvl=logging.WARN
+            )
+            self.cancelled_calib.clear()
+        elif txt:
             txt = ", ".join(txt)
             self._update_calibration_text(f"Calibration {txt} successful", logging.INFO)
         else:
@@ -1256,32 +1288,14 @@ class FastEMCalibrationController:
 
     def on_calibrate_cbox(self, evt):
         """
-        Start or cancel the calibration when the button is triggered.
+        Update the calibration controls when the checkbox is triggered.
         :param evt: (GenButtonEvent) Button triggered.
         """
         cbox = evt.GetEventObject()
         if not cbox:
             return
         current_view = self._main_tab_data.focussedView.value
-        calib_1_done, calib_2_done, calib_3_done = self.get_calibration_status(
-            current_view
-        )
-        # Flow of calibration is _calib_1 -> _calib_2 -> _calib_3
-        # _calib_2 depends on _calib_1, _calib_3 depends on _calib_2
-        self._calib_2.Enable(
-            (self._calib_1.IsEnabled() and self._calib_1.IsChecked()) or calib_1_done
-        )
-        self._calib_3.Enable(
-            (self._calib_2.IsEnabled() and self._calib_2.IsChecked()) or calib_2_done
-        )
-        self.btn_calib.Enable(
-            (self._calib_1.IsEnabled() and self._calib_1.IsChecked())
-            or (self._calib_2.IsEnabled() and self._calib_2.IsChecked())
-            or (self._calib_3.IsEnabled() and self._calib_3.IsChecked())
-        )
-        self._update_calibration_text_based_on_status(
-            calib_1_done, calib_2_done, calib_3_done
-        )
+        self._update_calibration_controls(current_view)
 
     def on_run(self, evt):
         """
@@ -1298,7 +1312,7 @@ class FastEMCalibrationController:
             fs = {}
             total_t = 0
             scintillator_num = int(focussed_view.name.value)
-            self.has_calib_failed = False
+            self.failed_calib = None
             calib_names = []
 
             # make sure the run/tab buttons are disabled
@@ -1315,11 +1329,16 @@ class FastEMCalibrationController:
             self._tab_panel.Layout()
 
             # Flow of calibration is _calib_1 -> _calib_2 -> _calib_3
-            if self._calib_1.IsEnabled() and self._calib_1.IsChecked():
+            calib_1_done, calib_2_done, _ = self.get_calibration_status(focussed_view)
+            if self._calib_1.IsChecked():
                 calib_names.append(CALIBRATION_1)
-            if self._calib_2.IsEnabled() and self._calib_2.IsChecked():
+            if self._calib_2.IsChecked() and (
+                CALIBRATION_1 in calib_names or calib_1_done
+            ):
                 calib_names.append(CALIBRATION_2)
-            if self._calib_3.IsEnabled() and self._calib_3.IsChecked():
+            if self._calib_3.IsChecked() and (
+                CALIBRATION_2 in calib_names or calib_2_done
+            ):
                 calib_names.append(CALIBRATION_3)
 
             for calib_name in calib_names:
@@ -1412,14 +1431,13 @@ class FastEMCalibrationController:
             calibration.is_done.value = False
             logging.debug("Calibration step %s cancelled.", calib_name)
         except Exception as ex:
-            self.has_calib_failed = True
+            self.failed_calib = calib_name
             if calib_name == CALIBRATION_1:
                 # is_calib_1_done VA for calibration 1 in the main data model needs to be set first
                 # before is_done VA. is_calib_1_done VA is helpful because Calibration 1 is not
                 # scintillator specific
                 self._main_data_model.is_calib_1_done.value = False
             calibration.is_done.value = False
-            self._update_calibration_text(f"{calib_name} failed", lvl=logging.WARN)
             logging.exception(
                 "Calibration step %s failed with exception: %s.",
                 calib_name,
@@ -1441,43 +1459,46 @@ class FastEMCalibrationController:
         self._tab_panel.Layout()
         self.acq_future = None
         self._fs_connector = None
+        focussed_view = self._main_tab_data.focussedView.value
 
         try:
             future.result()
-            # Update calibration text
-            focussed_view = self._main_tab_data.focussedView.value
-            calib_1_done, calib_2_done, calib_3_done = self.get_calibration_status(
-                focussed_view
-            )
-            self._update_calibration_text_based_on_status(
-                calib_1_done, calib_2_done, calib_3_done
-            )
             logging.debug("Calibrations done.")
         except CancelledError:
-            # If a calibration has failed, all remaining calibrations and acq_future will be
-            # cancelled later, use has_calib_failed flag to make sure failure and not cancelled
-            # is shown in the calibration text
-            if not self.has_calib_failed:
-                # Update calibration text
-                txt = ", ".join(self.cancelled_calib)
-                self._update_calibration_text(
-                    f"Calibration {txt} cancelled", lvl=logging.WARN
-                )  # update label to indicate cancelling
             logging.debug("Calibrations cancelled.")
         finally:
             self._tab_data_model.is_calibrating.value = False
             self._tab_panel.btn_acq.Enable(
                 True
                 if self._tab_data_model.is_optical_autofocus_done.value
-                and self._main_tab_data.focussedView.value
+                and focussed_view
                 else False
             )
             self._on_calibration_done_sub_callback.clear()
 
+            calib_1_done, calib_2_done, _ = self.get_calibration_status(focussed_view)
+            if focussed_view:
+                current_sample = self._main_data_model.current_sample.value
+                scintillator_num = int(focussed_view.name.value)
+                scintillator = current_sample.scintillators[scintillator_num]
+                calib_3 = scintillator.calibrations[CALIBRATION_3]
+                # if calibration 1 is not successful, fail calibrations for all scintillators
+                if not calib_1_done:
+                    for scintillator in current_sample.scintillators.values():
+                        calib_1 = scintillator.calibrations[CALIBRATION_1]
+                        calib_2 = scintillator.calibrations[CALIBRATION_2]
+                        calib_3 = scintillator.calibrations[CALIBRATION_3]
+                        calib_1.is_done.value = False
+                        calib_2.is_done.value = False
+                        calib_3.is_done.value = False
+                # if calibration 2 is not successful, fail calibration 3 for the current scintillator
+                if not calib_2_done:
+                    calib_3.is_done.value = False
+
     @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
     def _update_calibration_text(self, text: str, lvl=None):
         """
-        Update the calibration status panel controls.
+        Update the calibration status panel controls and status text.
         :param text: (str) A message to be displayed.
         :param lvl: The logging level to show/hide the status
         """
@@ -1491,8 +1512,7 @@ class FastEMCalibrationController:
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_calibrating(self, mode):
         """
-        Enable or disable the calibration buttons, depending on whether
-        a calibration is already ongoing or not.
+        Update the calibration controls, depending on whether a calibration is already ongoing or not.
         :param mode: (bool) Whether the system is currently calibrating or not calibrating.
         """
         # system is currently calibrating
@@ -1502,35 +1522,8 @@ class FastEMCalibrationController:
             self._calib_3.Enable(False)
             self.btn_calib.Enable(False)
             return
-        # system is currently not calibrating
-        current_sample = self._main_data_model.current_sample.value
         focussed_view = self._main_tab_data.focussedView.value
-        scintillator_num = int(focussed_view.name.value)
-        scintillator = current_sample.scintillators[scintillator_num]
-        calib_3 = scintillator.calibrations[CALIBRATION_3]
-        calib_1_done, calib_2_done, _ = self.get_calibration_status(focussed_view)
-        # Flow of calibration is _calib_1 -> _calib_2 -> _calib_3
-        # _calib_2 depends on _calib_1, _calib_3 depends on _calib_2
-        self._calib_1.Enable(True)
-        self._calib_2.Enable(
-            (self._calib_1.IsEnabled() and self._calib_1.IsChecked()) or calib_1_done
-        )
-        self._calib_3.Enable(
-            (self._calib_2.IsEnabled() and self._calib_2.IsChecked()) or calib_2_done
-        )
-        self.btn_calib.Enable(True)
-        # if calibration 1 is not successful, fail calibrations for all scintillators
-        if not calib_1_done:
-            for scintillator in current_sample.scintillators.values():
-                calib_1 = scintillator.calibrations[CALIBRATION_1]
-                calib_2 = scintillator.calibrations[CALIBRATION_2]
-                calib_3 = scintillator.calibrations[CALIBRATION_3]
-                calib_1.is_done.value = False
-                calib_2.is_done.value = False
-                calib_3.is_done.value = False
-        # if calibration 2 is not successful, fail calibration 3 for the current scintillator
-        if not calib_2_done:
-            calib_3.is_done.value = False
+        self._update_calibration_controls(focussed_view)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):

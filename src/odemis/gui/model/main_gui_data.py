@@ -32,7 +32,12 @@ from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
 from odemis.acq.move import MicroscopePostureManager
-from odemis.gui import conf
+from odemis.gui import (
+    FG_COLOUR_BLIND_BLUE,
+    FG_COLOUR_BLIND_ORANGE,
+    FG_COLOUR_BLIND_PINK,
+    conf,
+)
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
 from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
@@ -711,23 +716,23 @@ class FastEMMainGUIData(MainGUIData):
                     ymax = position[1] - 0.5 * sz[1]
                     if calibration_name == CALIBRATION_1:
                         number = 1
-                        colour = "#648FFF"  # blue
+                        colour = FG_COLOUR_BLIND_BLUE
                         calibration.sequence.value = calib_1_calibrations
                         # overlay location left on init
-                        xmin -= sz[0]
-                        xmax -= sz[0]
+                        xmin -= 1.2 * sz[0]
+                        xmax -= 1.2 * sz[0]
                     elif calibration_name == CALIBRATION_2:
                         number = 2
-                        colour = "#FFB000"  # orange
+                        colour = FG_COLOUR_BLIND_ORANGE
                         calibration.sequence.value = calib_2_calibrations
                         # overlay location middle on init
                     elif calibration_name == CALIBRATION_3:
                         number = 3
-                        colour = "#DC267F"  # pink
+                        colour = FG_COLOUR_BLIND_PINK
                         calibration.sequence.value = calib_3_calibrations
                         # overlay location right on init
-                        xmin += sz[0]
-                        xmax += sz[0]
+                        xmin += 1.2 * sz[0]
+                        xmax += 1.2 * sz[0]
                     calibration.region = FastEMROC(str(number), coordinates=(xmin, ymin, xmax, ymax), colour=colour)
                     scintillator.calibrations[calibration_name] = calibration
                 self.samples.value[sample_type].scintillators[scintillator_number] = scintillator

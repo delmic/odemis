@@ -305,7 +305,10 @@ class SettingsPanel(wx.Panel):
         :param label_text: (str) Label text to display
         :param value: (bool) Value to display (True == checked)
         :param conf: (None or dict) Dictionary containing parameters for the control
-        :param pos_col: (int) the position of the column.
+        :param pos_col: (int) The column index in the grid layout where the checkbox will be placed.
+                        For example:
+                        - `pos_col=0` positions the checkbox in the first column.
+                        - `pos_col=1` positions it in the second column.
         :param span: (tuple) the row and column spanning attributes of items in a GridBagSizer.
 
         """
