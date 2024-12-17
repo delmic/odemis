@@ -559,6 +559,9 @@ class Sparc2AlignTab(Tab):
             self.mirror_ol = self.panel.vp_align_center.mirror_ol
             self.lens = main_data.lens
             self.lens.focusDistance.subscribe(self._onMirrorDimensions, init=True)
+            self.lens.holeDiameter.subscribe(self._onMirrorDimensions)
+            self.lens.parabolaF.subscribe(self._onMirrorDimensions)
+            self.lens.xMax.subscribe(self._onMirrorDimensions)
             self.mirror_ol.set_hole_position(tab_data.polePositionPhysical)
             self.panel.vp_align_center.show_mirror_overlay()
 
@@ -1921,7 +1924,7 @@ class Sparc2AlignTab(Tab):
         self._txt_ss.SetValue(u"%.4f %%" % (ss * 100,))
 
     @call_in_wx_main
-    def _onMirrorDimensions(self, focusDistance):
+    def _onMirrorDimensions(self, _):
         try:
             self.mirror_ol.set_mirror_dimensions(self.lens.parabolaF.value,
                                                  self.lens.xMax.value,
