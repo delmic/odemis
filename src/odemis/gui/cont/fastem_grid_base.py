@@ -380,8 +380,13 @@ class GridBase(Grid):
         else:
             evt.Skip()
 
-    def update_row(self, row: Row):
-        """Updates the specified row with new values and editors."""
+    def update_row(self, row: Row, autosize: bool = True):
+        """
+        Updates the specified row with new values and editors.
+
+        :param row: The Row object to add.
+        :param autosize: If True the size of the columns will be adjusted to the row data.
+        """
         for col in self.columns:
             if col.editor_cls != type(self.GetCellEditor(row.index, col.index)):
                 editor = col.editor_cls(**col.editor_args)
@@ -393,7 +398,8 @@ class GridBase(Grid):
                     )
             value = row.get_value(col.label)
             self.SetCellValue(row.index, col.index, str(value))
-        self.AutoSizeColumns()
+        if autosize:
+            self.AutoSizeColumns()
 
     def set_columns(self, columns: List[Column]):
         """
@@ -440,11 +446,12 @@ class GridBase(Grid):
         else:
             self.DeselectRow(row.index)
 
-    def add_row(self, row: Row):
+    def add_row(self, row: Row, autosize: bool = True):
         """
         Adds a new row to the grid.
 
         :param row: The Row object to add.
+        :param autosize: If True the size of the columns will be adjusted to the row data.
         """
         if len(row.data.keys()) != self.GetNumberCols():
             raise ValueError("Row data length does not match number of columns")
@@ -463,7 +470,7 @@ class GridBase(Grid):
         row_shape_selected_sub_callback = partial(self._on_row_shape_selected, row=row)
         self._row_shape_selected_sub_callback[row] = row_shape_selected_sub_callback
         row.roa.shape.selected.subscribe(row_shape_selected_sub_callback)
-        self.update_row(row)
+        self.update_row(row, autosize)
         event = RowChangedEvent(self.GetId(), row.index)
         wx.PostEvent(self, event)
 
