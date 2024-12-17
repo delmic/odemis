@@ -68,7 +68,6 @@ class StreamBar(wx.Panel):
         acq.stream.MonochromatorSettingsStream,
         acq.stream.CameraCountStream,
         acq.stream.ScannedTCSettingsStream,
-        acq.stream.IndependentEBICStream,
     )
 
     def __init__(self, *args, **kwargs):
