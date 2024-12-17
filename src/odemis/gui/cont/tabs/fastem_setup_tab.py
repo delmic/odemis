@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 from concurrent.futures import CancelledError
+from typing import Optional
 
 import wx
 
@@ -38,7 +39,7 @@ from odemis.gui.cont.stream import FastEMStreamController
 from odemis.gui.cont.stream_bar import FastEMStreamsBarController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
-from odemis.model import getVAs
+from odemis.model import getVAs, ProgressiveFuture
 
 
 class FastEMSetupTab(Tab):
@@ -126,8 +127,12 @@ class FastEMSetupTab(Tab):
         # TODO The below line should be uncommented once autostigmation is working
         # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 
+        # At the start of an autofunction, the stream updates are paused.
+        # Use the `stream_should_update` flag to store the current value of `semStream.should_update` VA
+        # before starting the autofunction. Once the autofunction is complete, reset the value of
+        # `semStream.should_update` VA back to `True` if it was previously playing.
         self.stream_should_update = False
-        self.autobc_future = None
+        self.autobc_future: Optional[ProgressiveFuture] = None
 
         # For Optical Autofocus calibration
         self.tab_data.main.is_acquiring.subscribe(
@@ -273,12 +278,12 @@ class FastEMSetupTab(Tab):
                 self.tab_data.semStream.should_update.value = True
 
     def _on_btn_sem_autofocus(self, _):
-        # Disable other calibration buttons
-        # TODO also disable btn_autostigmation once autostigmation is working
         if self.tab_data.is_calibrating.value:
             fastem._executor.cancel()
             return
 
+        # Disable other calibration buttons
+        # TODO also disable btn_autostigmation once autostigmation is working
         self.btn_optical_autofocus.Enable(False)
         self.btn_autobc.Enable(False)
         self.calibration_controller.calibration_panel.Enable(False)
@@ -335,12 +340,12 @@ class FastEMSetupTab(Tab):
                 self.tab_data.semStream.should_update.value = True
 
     def _on_btn_autobc(self, _):
-        # Disable other calibration buttons
-        # TODO also disable btn_autostigmation once autostigmation is working
         if self.autobc_future is not None and self.tab_data.is_calibrating.value:
             self.autobc_future.cancel()
             return
 
+        # Disable other calibration buttons
+        # TODO also disable btn_autostigmation once autostigmation is working
         self.btn_optical_autofocus.Enable(False)
         self.btn_sem_autofocus.Enable(False)
         self.calibration_controller.calibration_panel.Enable(False)
@@ -385,7 +390,6 @@ class FastEMSetupTab(Tab):
             if self.stream_should_update:
                 self.tab_data.semStream.should_update.value = True
 
-    @call_in_wx_main
     def _on_btn_autostigmation(self, _):
         # Disable other calibration buttons
         self.btn_optical_autofocus.Enable(False)
