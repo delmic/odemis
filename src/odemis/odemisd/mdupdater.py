@@ -21,7 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import collections
 import logging
-import numpy
+from typing import Optional, Tuple, Dict
+
 from odemis import model
 
 
@@ -54,6 +55,10 @@ class MetadataUpdater(model.Component):
         # All the components already observed
         # str -> set of str: name of affecting component -> names of affected
         self._observed = collections.defaultdict(set)
+
+        # To handle monochromator (aka detectors), which are affected both by the spectrograph and the filter
+        self._det_to_spectrograph : Dict[str, model.HwComponent] = {}  # Detector name -> Spectrograph that affects that detector
+        self._det_to_filter : Dict[str, model.HwComponent] = {}  # Detector name -> Filter that affects that detector
 
         microscope.alive.subscribe(self._onAlive, init=True)
 
@@ -102,9 +107,11 @@ class MetadataUpdater(model.Component):
                     # update the emitted light wavelength
                     observed = self.observeLight(a, d)
                 elif a.role and a.role.startswith("spectrograph"):  # spectrograph-XXX too
+                    self._det_to_spectrograph[dn] = a
                     # update the output wavelength range
                     observed = self.observeSpectrograph(a, d)
                 elif a.role in ("cl-filter", "filter"):
+                    self._det_to_filter[dn] = a
                     # update the output wavelength range
                     observed = self.observeFilter(a, d)
                 elif a.role == "quarter-wave-plate":
@@ -298,25 +305,100 @@ class MetadataUpdater(model.Component):
 
         return True
 
+    def getMonochromatorBandwidth(self, spectrograph) -> Optional[Tuple[float, float]]:
+        """
+        Get the bandwidth of the monochromator based on the spectrograph settings.
+        :param spectrograph: a spectrograph component
+        :return: the bandwidth of the monochromator (min, max) in m, or None if not available
+        """
+        if spectrograph is None:
+            return None
+
+        # For monochomators, we need to know the minimum and maximum wavelength
+        # detected based on the spectrograph settings. => Update MD_OUT_WL
+        pos = spectrograph.position.value
+        if 'slit-monochromator' not in pos:
+            logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
+            wl = pos["wavelength"]
+            if wl < 10e-9:
+                return None
+            return (wl, wl)
+        else:
+            width = pos['slit-monochromator']
+            bandwidth = spectrograph.getOpeningToWavelength(width)  # always a tuple
+            return bandwidth
+
+    def getFilterBandwidth(self, filter) -> Optional[Tuple[float, float]]:
+        """
+        Get the bandwidth of the filter based on the filter settings.
+        :param filter: a (light) "filter" (wheel) component (should have a "band" axis)
+        :return: the bandwidth of the filter (min, max) in m, or None if not available
+        """
+        if filter is None:
+            return None
+
+        pos = filter.position.value
+        bandwidth = filter.axes["band"].choices[pos["band"]]
+        if bandwidth == model.BAND_PASS_THROUGH:
+            return None
+        elif not isinstance(bandwidth, (tuple, list)) and all(isinstance(v, float) for v in bandwidth):
+            logging.info("Invalid filter (%s) bandwidth: %s", filter.name, bandwidth)
+            return None
+
+        return bandwidth
+
+    def updateOutWLFilterAndSpectrograph(self, comp_affected: model.HwComponent,
+                                         filter: Optional[model.HwComponent],
+                                         spectrograph: Optional[model.HwComponent]) -> None:
+        """
+        Update MD_OUT_WL as intersection of the filter and the spectrograph configuration.
+        :param comp_affected: Detector component affected by the filter and the spectrograph.
+        Its metadata will be updated.
+        :param filter: a (light) filter-(wheel) component (should have a "band" axis)
+        :param spectrograph: a spectrograph component (should have a "wavelength" axis)
+        Only used if the detector has the role "monochromator".
+        """
+        if comp_affected.role in  ("ccd", "sp-ccd", "spectrometer"):
+            # The spectrograph affects them via the WL_LIST, so no need to care to use it for MD_OUT_WL here
+            if filter is None:
+                return
+            pos = filter.position.value
+            bandwidth = filter.axes["band"].choices[pos["band"]]
+        else:
+            if comp_affected.role == "monochromator":
+                spec_bandwidth = self.getMonochromatorBandwidth(spectrograph)
+            else:
+                spec_bandwidth = None
+
+            filter_bandwidth = self.getFilterBandwidth(filter)
+
+            if spec_bandwidth is None:
+                bandwidth = filter_bandwidth
+            elif filter_bandwidth is None:
+                bandwidth = spec_bandwidth
+            else:  # Both not None => take the intersection
+                bandwidth = (max(spec_bandwidth[0], filter_bandwidth[0]),
+                             min(spec_bandwidth[1], filter_bandwidth[1]))
+                if bandwidth[0] > bandwidth[1]:
+                    # In theory, that should me that the detector receives not light. Maybe that's true,
+                    # but it's not helpful to store as metadata. It might also be that the filter is not
+                    # one we think. So let's just use the spectrograph bandwidth.
+                    logging.warning("No intersection between filter %s and spectrograph %s, will use spectrograph bandwidth",
+                                    filter_bandwidth, spec_bandwidth)
+                    bandwidth = spec_bandwidth
+
+            logging.debug("Updating %s with intersection of filter %s and spectrograph %s -> %s",
+                          comp_affected.name, filter_bandwidth, spec_bandwidth, bandwidth)
+
+        comp_affected.updateMetadata({model.MD_OUT_WL: bandwidth})
+
     def observeSpectrograph(self, spectrograph, comp_affected):
 
         if comp_affected.role == "monochromator":
-            # For monochomators, we need to know the minimum and maximum wavelength
-            # detected based on the spectrograph settings. => Update MD_OUT_WL
-            if 'slit-monochromator' not in spectrograph.axes:
-                logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
-
-                def updateOutWLRange(pos, comp_affected=comp_affected):
-                    wl = pos["wavelength"]
-                    md = {model.MD_OUT_WL: (wl, wl)}
-                    comp_affected.updateMetadata(md)
-
-            else:
-                def updateOutWLRange(pos, sp=spectrograph, comp_affected=comp_affected):
-                    width = pos['slit-monochromator']
-                    bandwidth = sp.getOpeningToWavelength(width)
-                    md = {model.MD_OUT_WL: bandwidth}
-                    comp_affected.updateMetadata(md)
+            def updateOutWLRange(pos, sp=spectrograph, comp_affected=comp_affected):
+                self.updateOutWLFilterAndSpectrograph(comp_affected,
+                                                      self._det_to_filter.get(comp_affected.name),
+                                                      sp)
 
             spectrograph.position.subscribe(updateOutWLRange, init=True)
             self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
@@ -345,16 +427,20 @@ class MetadataUpdater(model.Component):
             spectrograph.position.subscribe(updateWavelengthList, init=True)
             self._onTerminate.append((spectrograph.position.unsubscribe, (updateWavelengthList,)))
         else:
-            False
+            return False
 
         return True
 
     def observeFilter(self, filter, comp_affected):
-        # FIXME: If a monochromator + spectrograph, which MD_OUT_WL to pick?
         # update any affected component
         def updateOutWLRange(pos, fl=filter, comp_affected=comp_affected):
-            wl_out = fl.axes["band"].choices[pos["band"]]
-            comp_affected.updateMetadata({model.MD_OUT_WL: wl_out})
+            spec = self._det_to_spectrograph.get(comp_affected.name)
+            if spec:
+                self.updateOutWLFilterAndSpectrograph(comp_affected, fl, spec)
+            else: # Just copy-paste the filter info as-is
+                wl_out = fl.axes["band"].choices[pos["band"]]
+                comp_affected.updateMetadata({model.MD_OUT_WL: wl_out})
+
             # apply lateral chromatic correction to align with the reference channel
             apply_transform = fl.getMetadata().get(model.MD_CHROMATIC_COR, None)
             if apply_transform:
