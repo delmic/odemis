@@ -826,8 +826,7 @@ def estimateTiledAcquisitionTime(stream, stage, area, dwell_time=None):
 
     :param stream: (SEMstream) The stream used for the acquisition.
     :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
-        The x and y axes are aligned with the x and y axes of the ebeam scanner. UNUSED: Can be used to take
-        speed of axes into account for time estimation.
+        The x and y axes are aligned with the x and y axes of the ebeam scanner.
     :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region
         in the sample carrier coordinate system.
     :param dwell_time: (float) A user input dwell time to be used instead of the stream emitter's dwell time
@@ -845,18 +844,39 @@ def estimateTiledAcquisitionTime(stream, stage, area, dwell_time=None):
     area_size = (acquisition_area[2] - acquisition_area[0],
                  acquisition_area[3] - acquisition_area[1])
     # number of tiles
-    nx = math.ceil(abs(area_size[0] / fov[0]))
-    ny = math.ceil(abs(area_size[1] / fov[1]))
+    nx = math.ceil(abs(area_size[0] / fov[0]))  # Number of tiles horizontally
+    ny = math.ceil(abs(area_size[1] / fov[1]))  # Number of tiles vertically
 
-    # add some overhead per tile for e.g. stage movement
-    overhead = 1  # [s]
-    # time per tile
+    # Time for tile acquisition
     dwell_time_value = dwell_time if dwell_time is not None else stream.emitter.dwellTime.value
-    acq_time_tile = res[0] * res[1] * dwell_time_value + overhead  # [s]
-    # time for total overview image
-    acq_time_overview = nx * ny * acq_time_tile  # [s]
+    acq_time_tile = res[0] * res[1] * dwell_time_value
 
-    return acq_time_overview
+    # Total acquisition time for imaging (all tiles)
+    overview_acq_time = nx * ny * acq_time_tile
+
+    # Stage movement time calculations
+    stage_speed_x = stage.speed.value['x']  # Speed of stage in x-direction [m/s]
+    stage_speed_y = stage.speed.value['y']  # Speed of stage in y-direction [m/s]
+
+    # Horizontal movement: Total time for moving across rows
+    time_x_per_row = (nx - 1) * (fov[0] / stage_speed_x)  # Moving (nx - 1) times per row
+    time_x = time_x_per_row * ny  # Repeated for each row
+
+    # Vertical movement: Time for repositioning to the next row
+    time_y_per_move = (fov[1] / stage_speed_y)  # Moving vertically between rows
+    time_y = time_y_per_move * (ny - 1)  # Moving (ny - 1) times
+
+    # Total stage movement time
+    stage_time = time_x + time_y
+
+    # Add overhead per tile
+    overhead_per_tile = 2  # [s]
+    overhead = nx * ny * overhead_per_tile
+
+    # Combine imaging time, stage time, and overhead
+    total_time = overview_acq_time + stage_time + overhead
+
+    return total_time
 
 
 class OverviewAcquisition(object):
