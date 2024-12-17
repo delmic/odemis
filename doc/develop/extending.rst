@@ -205,8 +205,6 @@ Open the *Anaconda prompt* and type::
 Download, install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_,
 and pick the "Visual C++ build tools". Install also the pre-selected options.
 
-..
-   Note that previously, one had to install pylibtiff via pip: `pip install libtiff`
 
 Final steps
 """""""""""
@@ -344,11 +342,7 @@ with the python version (3.6.13) on which Odemis has been well tested.
    prompt the following command:
    ``pip install https://github.com/delmic/Pyro4/archive/master.zip``.
 
-#. Download bitarray‑1.6.1‑cp36‑cp36m‑win_amd64.whl (or ‑win32.whl) from http://www.lfd.uci.edu/~gohlke/pythonlibs/#bitarray ,
-   and pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl (or -win32.whl) from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff.
-   and install them with a single command ``pip install bitarray‑1.6.1‑cp36‑cp36m‑win_amd64.whl pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl``
-   (or ``pip install bitarray‑1.6.1‑cp36‑cp36m‑win32.whl pylibtiff‑0.4.2‑cp36‑cp36m‑win32.whl`` based on your system type).
-   
+
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
 Note that you may need to navigate to the Documents/Odemis/src folder to be able to import from odemis.
 
