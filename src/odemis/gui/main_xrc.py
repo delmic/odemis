@@ -800,8 +800,13 @@ class xrcpnl_tab_localization(wx.Panel):
         self.txt_cryosecom_left_time = xrc.XRCCTRL(self, "txt_cryosecom_left_time")
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
-        self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
+        self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
+        self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
+        self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
+        self.acquire_features_chk_list = xrc.XRCCTRL(self, "acquire_features_chk_list")
         self.chk_use_autofocus_acquire_features = xrc.XRCCTRL(self, "chk_use_autofocus_acquire_features")
+        self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
+        self.txt_acquire_features_est_time = xrc.XRCCTRL(self, "txt_acquire_features_est_time")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
         self.btn_mill_active_features = xrc.XRCCTRL(self, "btn_mill_active_features")
         self.txt_milling_est_time = xrc.XRCCTRL(self, "txt_milling_est_time")
@@ -9519,11 +9524,56 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                               <border>10</border>
                             </object>
+                            <orient>wxVERTICAL</orient>
+                          <border>10</border>
+                          </object>
+                          <size>400,-1</size>
+                          <bg>#333333</bg>
+                          <style>wxBORDER_NONE</style>
+                        </object>
+                        <label>ACQUISITIONS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_automation">
+                        <label>AUTOMATION</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <object class="wxPanel" name="pnl_automation">
+                          <object class="wxBoxSizer" name="automation_sizer">
+                            <object class="sizeritem">
+                              <object class="wxCheckListBox" name="acquire_features_chk_list">
+                                <content/>
+                                <font>
+                                  <size>10</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
+                                <label>AutoFocus before acquiring at features</label>
+                                <fg>#E5E5E5</fg>
+                                <checked>0</checked>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT</flag>
+                              <border>15</border>
+                            </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_acquire_features">
                                 <height>48</height>
-                                <face_colour>def</face_colour>
+                                <face_colour>blue</face_colour>
                                 <label>ACQUIRE AT FEATURES</label>
+                                <icon>______img_icon_ico_acqui_png</icon>    
                                 <font>
                                   <size>14</size>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -9538,28 +9588,22 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
-                                <label>AutoFocus before acquiring at features</label>
+                              <object class="wxStaticText" name="txt_acquire_features_est_time">
+                                <label>Estimated time ...</label>
                                 <fg>#E5E5E5</fg>
-                                <checked>0</checked>
-                                <flag>wxVERTICAL</flag>
+                                <hidden>1</hidden>
+                                <orient>wxALIGN_CENTRE</orient>
                                 <border>10</border>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
                               </object>
-                              <border>10</border>
+                              <flag>wxLEFT</flag>
+                              <border>15</border>
                             </object>
                             <orient>wxVERTICAL</orient>
-                          <border>10</border>
                           </object>
-                          <size>400,-1</size>
-                          <bg>#333333</bg>
-                          <style>wxBORDER_NONE</style>
                         </object>
-                        <label>ACQUISITIONS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
                       </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_cryosecom_acquired">

@@ -805,11 +805,56 @@
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                               <border>10</border>
                             </object>
+                            <orient>wxVERTICAL</orient>
+                          <border>10</border>
+                          </object>
+                          <size>400,-1</size>
+                          <bg>#333333</bg>
+                          <style>wxBORDER_NONE</style>
+                        </object>
+                        <label>ACQUISITIONS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_automation">
+                        <label>AUTOMATION</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <object class="wxPanel" name="pnl_automation">
+                          <object class="wxBoxSizer" name="automation_sizer">
+                            <object class="sizeritem">
+                              <object class="wxCheckListBox" name="acquire_features_chk_list">
+                                <content></content>
+                                <font>
+                                  <size>10</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
+                                <label>AutoFocus before acquiring at features</label>
+                                <fg>#E5E5E5</fg>
+                                <checked>0</checked>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT</flag>
+                              <border>15</border>
+                            </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_acquire_features">
                                 <height>48</height>
-                                <face_colour>def</face_colour>
+                                <face_colour>blue</face_colour>
                                 <label>ACQUIRE AT FEATURES</label>
+                                <icon>../../img/icon/ico_acqui.png</icon>    
                                 <font>
                                   <size>14</size>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -824,28 +869,22 @@
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
-                                <label>AutoFocus before acquiring at features</label>
+                              <object class="wxStaticText" name="txt_acquire_features_est_time">
+                                <label>Estimated time ...</label>
                                 <fg>#E5E5E5</fg>
-                                <checked>0</checked>
-                                <flag>wxVERTICAL</flag>
+                                <hidden>1</hidden>
+                                <orient>wxALIGN_CENTRE</orient>
                                 <border>10</border>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
                               </object>
-                              <border>10</border>
+                              <flag>wxLEFT</flag>
+                              <border>15</border>
                             </object>
                             <orient>wxVERTICAL</orient>
-                          <border>10</border>
                           </object>
-                          <size>400,-1</size>
-                          <bg>#333333</bg>
-                          <style>wxBORDER_NONE</style>
                         </object>
-                        <label>ACQUISITIONS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
                       </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_cryosecom_acquired">
