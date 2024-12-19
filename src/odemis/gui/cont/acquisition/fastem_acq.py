@@ -36,7 +36,7 @@ import time
 from builtins import str
 from concurrent.futures._base import CancelledError
 from functools import partial
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import wx
 
@@ -44,7 +44,7 @@ from odemis import dataio, model
 from odemis.acq import align, fastem, stream
 from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import FastEMCalibration, estimate_acquisition_time
+from odemis.acq.fastem import FastEMCalibration, ROASkipped, estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
@@ -52,6 +52,8 @@ from odemis.gui import (
     FG_COLOUR_BLIND_PINK,
     FG_COLOUR_DIS,
     FG_COLOUR_EDIT,
+    FG_COLOUR_ERROR,
+    FG_COLOUR_WARNING,
 )
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.fastem_user_settings_panel import (
@@ -539,6 +541,36 @@ class FastEMAcquiController(object):
             EVT_TREE_NODE_CHANGE, self._on_project_tree_node_change
         )
 
+        # Setup the controls
+        self.acq_panel = SettingsPanel(
+            self._tab_panel.pnl_acq, size=(400, 140)
+        )
+        autostig_lbl, self.autostig_period = self.acq_panel.add_int_field(
+            "Autostigmation period", value=0,
+            pos_col=2, span=(1, 1), conf={"min_val": 0, "max_val": 1000}
+        )
+        autostig_lbl.SetToolTip(
+            "Period for which to run autostigmation, if the value is 5 it should run for "
+            "ROAs with index 0, 5, 10, etc."
+        )
+        autofocus_lbl, self.autofocus_period = self.acq_panel.add_int_field(
+            "Autofocus period", value=0,
+            pos_col=2, span=(1, 1), conf={"min_val": 0, "max_val": 1000}
+        )
+        autofocus_lbl.SetToolTip(
+            "Period for which to run autofocus, if the value is 5 it should run for "
+            "ROAs with index 0, 5, 10, etc."
+        )
+        _, self.chk_beam_blank_off = self.acq_panel.add_checkbox_control(
+            "Do not blank beam in between fields", value=False, pos_col=2, span=(1, 1)
+        )
+        _, self.chk_stop_acq_on_failure = self.acq_panel.add_checkbox_control(
+            "Stop acquisition on failure", value=True, pos_col=2, span=(1, 1)
+        )
+        _, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
+            "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
+        )
+
         # ROA count
         self.roa_count = 0
         self._tab_panel.txt_num_roas.SetValue("0")
@@ -555,8 +587,6 @@ class FastEMAcquiController(object):
         self.txt_num_roas = self._tab_panel.txt_num_roas
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
-        self.chk_ebeam_off = self._tab_panel.chk_ebeam_off
-        self.chk_beam_blank_off = self._tab_panel.chk_beam_blank_off
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
         self.save_full_cells = model.BooleanVA(
@@ -576,7 +606,7 @@ class FastEMAcquiController(object):
         self._roa_future_connector = []
         self._on_roa_acquisition_done_sub_callback = {}
         self._set_next_project_dwell_time_sub_callback = {}
-        self._open_folder_sub_callback = {}
+        self._status_text_callback = {}
 
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
@@ -802,7 +832,7 @@ class FastEMAcquiController(object):
         self._roa_future_connector.clear()
         self._set_next_project_dwell_time_sub_callback.clear()
         self._on_roa_acquisition_done_sub_callback.clear()
-        self._open_folder_sub_callback.clear()
+        self._status_text_callback.clear()
         self._main_data_model.is_acquiring.value = False
 
         if text is not None:
@@ -849,20 +879,19 @@ class FastEMAcquiController(object):
         # Read the period with which to run autostigmation and autofocus, if the value is 5 it should run for
         # ROAs with index 0, 5, 10, etc., if the value is 0 it should never run autostigmation
         acqui_conf = AcquisitionConfig()
-        autostig_period = (
-            math.inf if acqui_conf.autostig_period == 0 else acqui_conf.autostig_period
-        )
-        autofocus_period = (
-            math.inf
-            if acqui_conf.autofocus_period == 0
-            else acqui_conf.autofocus_period
-        )
+        autostig_period = self.autostig_period.GetValue()
+        if autostig_period == 0:
+            autostig_period = math.inf
+        autofocus_period = self.autofocus_period.GetValue()
+        if autofocus_period == 0:
+            autofocus_period = math.inf
         logging.debug(
             f"Will run autostigmation every {autostig_period} sections "
             f"and autofocus every {autofocus_period} sections."
         )
         username = self._main_data_model.current_user.value
         blank_beam = not self.chk_beam_blank_off.IsChecked()
+        stop_acq_on_failure = self.chk_stop_acq_on_failure.IsChecked()
 
         total_t = 0
         project_names = list(self.project_roas.keys())
@@ -879,6 +908,9 @@ class FastEMAcquiController(object):
             for idx, roa_window in enumerate(roas):
                 roa = roa_window[0]
                 window = roa_window[1]
+                window.status_text.SetForegroundColour(FG_COLOUR_DIS)
+                window.status_text.SetLabelText("Open")
+                window.Layout()
                 pre_calib = pre_calibrations.copy()
                 if idx == 0:
                     pass
@@ -907,6 +939,7 @@ class FastEMAcquiController(object):
                     settings_obs=self._main_data_model.settings_obs,
                     spot_grid_thresh=acqui_conf.spot_grid_threshold,
                     blank_beam=blank_beam,
+                    stop_acq_on_failure=stop_acq_on_failure,
                     acq_dwell_time=self.main_tab_data.project_settings_data.value[
                         project_name
                     ][DWELL_TIME_ACQUISITION],
@@ -1041,23 +1074,38 @@ class FastEMAcquiController(object):
                 self.asm_service_path,
             )
 
+    @call_in_wx_main
     def on_roa_acquisition_done(self, future, path, window):
         """
-        Callback called when a ROA acquisition is finished (either successfully or
-        failed)
+        Callback called when a ROA acquisition is finished (either successfully,
+        cancelled or failed)
         """
+        def update_status(text: str, color: str, bind_callback: Optional[Callable] = None):
+            window.status_text.SetForegroundColour(color)
+            window.status_text.SetLabelText(text)
+            if window in self._status_text_callback:
+                old_callback = self._status_text_callback.pop(window)
+                window.status_text.Unbind(wx.EVT_LEFT_UP, old_callback)
+            if bind_callback:
+                self._status_text_callback[window] = bind_callback
+                window.status_text.Bind(wx.EVT_LEFT_UP, bind_callback)
+
         try:
-            future.result()
-            window.open_text.SetForegroundColour(FG_COLOUR_EDIT)
-            open_folder_sub_callback = partial(self._open_folder, path=path)
-            self._open_folder_sub_callback[window] = open_folder_sub_callback
-            window.open_text.Bind(wx.EVT_LEFT_UP, open_folder_sub_callback)
+            _, ex = future.result()
+            if isinstance(ex, ROASkipped):
+                update_status("Skipped", FG_COLOUR_ERROR)
+            elif ex is None:
+                update_status("Open", FG_COLOUR_EDIT, partial(self._open_folder, path=path))
+            # If any other exception is returned and not raised it is still considered as a failure
+            else:
+                update_status("Failed", FG_COLOUR_ERROR)
+        except CancelledError:
+            update_status("Cancelled", FG_COLOUR_WARNING)
         except Exception:
-            window.open_text.SetForegroundColour(FG_COLOUR_DIS)
-            if window in self._open_folder_sub_callback:
-                open_folder_sub_callback = self._open_folder_sub_callback[window]
-                window.open_text.Unbind(wx.EVT_LEFT_UP, open_folder_sub_callback)
-                del self._open_folder_sub_callback[window]
+            update_status("Failed", FG_COLOUR_ERROR)
+        finally:
+            window.Layout()
+            window.Refresh()
 
     def on_cancel(self, evt):
         """
