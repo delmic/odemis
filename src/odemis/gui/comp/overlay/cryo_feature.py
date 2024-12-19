@@ -342,33 +342,34 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         # for f in features:
         #     f.status.subscribe(self._on_status_change)
 
-    def on_dbl_click(self, evt):
-        """
-        Handle double click:
-        If it's under a feature: move the stage to the feature position,
-        otherwise, move the stage to the selected position.
-        Note: if the canvas doesn't allow drag, move to a random position is not
-        allowed, *but* move to a feature is still allowed.
-        """
-        evt.Skip()
-        pass
-        # not moving the canvas on double click
-        # if self.active:
-        #     v_pos = evt.Position
-        #     target = self._detect_point_inside_target(v_pos)
-        #     if target:
-        #         coordinates = target.coordinates.value
-        #         logging.info(f"moving to target index and type {target.index.value} and {target.type.value}")
-        #         # self.cnvs.view.moveStageTo((pos[0], pos[1]))
-        #         self.tab_data.main.currentTarget.value = target
-        #     else:
-        #         # Move to selected point (if normally allowed to move)
-        #         if CAN_DRAG in self.cnvs.abilities:
-        #             WorldOverlay.on_dbl_click(self, evt)
-        #         else:
-        #             super().on_dbl_click(evt)
-        # else:
-        #     super().on_dbl_click(evt)
+    # def on_dbl_click(self, evt):
+    #     """
+    #     Handle double click:
+    #     If it's under a feature: move the stage to the feature position,
+    #     otherwise, move the stage to the selected position.
+    #     Note: if the canvas doesn't allow drag, move to a random position is not
+    #     allowed, *but* move to a feature is still allowed.
+    #     """
+    #     # evt.Skip()
+    #     # pass
+    #     # not moving the canvas on double click
+    #     if self.active:
+    #         v_pos = evt.Position
+    #         target = self._detect_point_inside_target(v_pos)
+    #         if target:
+    #             coordinates = target.coordinates.value
+    #             logging.info(f"moving to target index and type {target.index.value} and {target.type.value}")
+    #             # self.cnvs.view.moveStageTo((pos[0], pos[1]))
+    #             self.tab_data.main.currentTarget.value = target
+    #         else:
+    #             # Move to selected point (if normally allowed to move)
+    #             # if CAN_DRAG in self.cnvs.abilities:
+    #             #     WorldOverlay.on_dbl_click(self, evt)
+    #             # else:
+    #             #     super().on_dbl_click(evt)
+    #             super().on_dbl_click(evt)
+    #     else:
+    #         super().on_dbl_click(evt)
 
     def on_left_down(self, evt):
         """
@@ -383,6 +384,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                     # move/drag the selected target
                     self._selected_target = target
                     DragMixin._on_left_down(self, evt)
+                    # self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
                     # self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # create new target based on the physical position then disable the target tool
@@ -392,6 +394,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
+                # self._selected_target = target
                 evt.Skip()
         else:
             WorldOverlay.on_left_down(self, evt)
@@ -402,16 +405,18 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         otherwise let the canvas handle the event when the overlay is active.
         """
         if self.active:
-            evt.Skip()
+            # evt.Skip()
             if self.left_dragging:
                 if self._selected_target:
                     self._update_selected_target_position(evt.Position)
+                # evt.Skip()
                 DragMixin._on_left_up(self, evt)
                 # self.clear_drag()
                 # self.cnvs.update_drawing()
                 # self.cnvs.reset_dynamic_cursor()
             else:
                 evt.Skip()
+            self._selected_tool_va.value = TOOL_NONE
         else:
             WorldOverlay.on_left_up(self, evt)
 
@@ -421,9 +426,9 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         :param v_pos: (int, int) the coordinates in the view
         """
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-        self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], self._selected_target.coordinates.value[2]))
+        # todo
+        self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], 0)) #Todo
         # Reset the selected tool to signal end of target moving operation
-        self._selected_target = None
         self._selected_tool_va.value = TOOL_NONE
         self.cnvs.update_drawing()
 
@@ -451,7 +456,8 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             if self.dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], self._selected_target.coordinates.value[2]))
+                # self._selected_target = self.tab_data.main.currentTarget.value
+                self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], 0)) # TODO self._selected_target.coordinates.value[2]))
                 self.cnvs.update_drawing()
                 return
             target = self._detect_point_inside_target(v_pos)
