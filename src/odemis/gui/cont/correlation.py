@@ -677,6 +677,7 @@ class CorrelationPointsController(object):
 
         # get the row label and select the current target based on the row label
         # todo should happen before the event is triggered
+        # TODO index when changes cannot be more than the number of max indices in the list
         # row_label = self.grid.GetRowLabelValue(event.GetRow())
         # self._tab_data_model.main.currentTarget.value = [t for t in self._tab_data_model.main.targets.value
         #                                                  if t.name.value == row_label][0]
@@ -719,7 +720,10 @@ class CorrelationPointsController(object):
     def on_row_selected(self, event):
 
         col = event.GetCol()
-        if col == 0:  # Index column was changed
+        # col_ind = self.grid.GetColIndex("Index")
+        # col_name = self.grid.GetColLabelValue(col)
+        # TODO
+        if col == 4:  # Index column was changed
             self.reorder_table()
 
     @call_in_wx_main
@@ -904,20 +908,31 @@ class CorrelationPointsController(object):
         """
         Sorts the rows by 'Index' column. If an index exists, replace the row.
         """
-        rows_data = []
-        for row in range(self.grid.GetNumberRows()):
-            # use the column label "Index" instead of the hard-coded
-            index_val = self.grid.GetCellValue(row, 4)
-            row_data = [self.grid.GetCellValue(row, col) for col in range(self.grid.GetNumberCols())]
-            rows_data.append((index_val, row_data))
+        # when index is changed, reorder the table, such that index is in increasing order, rows with same indices
+        # have poi (target type Region of Intered) , fm fiducial (tartget type fidcuial and FM in name) and then fib fiducial4
+        # get the rows from column label index and reorder
+        # get the rows from column label index and reorder
+        rows = self.grid.GetNumberRows()
+        if rows == 0:
+            return
 
-        # Sort rows by Index (first element in the tuple)
-        rows_data.sort(key=lambda x: int(x[0]))
+        # Get the column index for the 'Index' column
+        col_ind = 4  #self.grid.GetColIndex("Index")
+        col_type = 0    #self.grid.GetColIndex("type")
+        # Get the data from the grid
+        data = []
+        for row in range(self.grid.GetNumberRows()):
+            row_data = [self.grid.GetCellValue(row, col) for col in range(self.grid.GetNumberCols())]
+            data.append(row_data)
+
+        # Sort the data by the Index first, and then by Type in case of a tie
+        # Index column: 1, Type column: 2
+        data.sort(key=lambda x: (x[col_ind], x[col_type]))
 
         # Repopulate the grid with sorted data
-        for i, (index, row_data) in enumerate(rows_data):
-            for col in range(self.grid.GetNumberCols()):
-                self.grid.SetCellValue(i, col, row_data[col])
+        for row, row_data in enumerate(data):
+            for col, value in enumerate(row_data):
+                self.grid.SetCellValue(row, col, str(value))
 
     # TODO not used
     # Todo add type in the list?
