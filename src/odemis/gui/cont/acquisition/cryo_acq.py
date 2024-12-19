@@ -383,11 +383,7 @@ class CryoAcquiController(object):
 
     def _get_selected_features(self):
         """Get the selected features from the checklist."""
-        features = [
-            f
-            for i, f in enumerate(self._tab_data.main.features.value)
-            if self._panel.acquire_features_chk_list.IsChecked(i)
-        ]
+           features = [self._tab_data.main.features.value[i] for i in self._panel.acquire_features_chk_list.CheckedItems]
         return features
 
     def _refresh_current_feature_data(self):
