@@ -141,10 +141,15 @@ def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: fl
         raise KeyError(f"The focus actuator {focuser} does not have z axis")
 
     focuser_pos = focuser.position.value["z"]
+    focuser_rng = focuser.axes["z"].range
+    if (focuser_pos > focuser_rng[1]) or (focuser_pos < focuser_rng[0]):
+        raise ValueError(f"The current focus position {focuser_pos} is outside focus range {focuser_rng}. "
+                         f"The focus position should be inside the range.")
+
     zrange_abs = (zrange[0] + focuser_pos, zrange[1] + focuser_pos)
 
     # Get the range from the axis range + extra limit POS_ACTIVE_RANGE
-    focuser_rng = focuser.axes["z"].range
+
     sw_rng = focuser.getMetadata().get(model.MD_POS_ACTIVE_RANGE)
     if sw_rng and "z" in sw_rng:
         focuser_rng = (max(focuser_rng[0], sw_rng["z"][0]),
