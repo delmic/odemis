@@ -154,130 +154,8 @@ class RGBStream(StaticStream):
                 raise ValueError("Data must be RGB(A)")
         return raw
 
-
-class Static2DStream(StaticStream):
-    """
-    Stream containing one static image.
-    For testing and static images.
-    The static image could be 2D or a 3D stack of images with a z-index
-    """
-    def __init__(self, name, raw, *args, **kwargs):
-        """
-        Note: parameters are different from the base class.
-        raw (DataArray or DataArrayShadow): The data to display.
-        """
-        # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
-        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
-            raw = [raw.getData()]
-        else:
-            raw = [raw]
-
-        metadata = copy.copy(raw[0].metadata)
-
-        # If there are 5 dims in CTZYX, eliminate CT and only take spatial dimensions
-        if raw[0].ndim >= 3:
-            dims = metadata.get(model.MD_DIMS, "CTZYX"[-raw[0].ndim::])
-            if dims[-3:] != "ZYX":
-                logging.warning("Metadata has %s dimensions, which may be invalid.", dims)
-            if len(raw[0].shape) == 5:
-                if any(x > 1 for x in raw[0].shape[:2]):
-                    logging.error("Higher dimensional data is being discarded.")
-                raw[0] = raw[0][0, 0]
-            elif len(raw[0].shape) == 4:
-                if any(x > 1 for x in raw[0].shape[:1]):
-                    logging.error("Higher dimensional data is being discarded.")
-                raw[0] = raw[0][0]
-
-            # Squash the Z dimension if it's empty
-            if  raw[0].shape[0] == 1:
-                raw[0] = raw[0][0, :, :]
-            metadata[model.MD_DIMS] = "CTZYX"[-raw[0].ndim::]
-
-        # Define if z-index should be created.
-        if len(raw[0].shape) == 3 and metadata[model.MD_DIMS] == "ZYX":
-            try:
-                pxs = metadata[model.MD_PIXEL_SIZE]
-                pos = metadata[model.MD_POS]
-                if len(pxs) < 3:
-                    assert len(pxs) == 2
-                    logging.warning(u"Metadata for 3D data invalid. Using default pixel size 10µm")
-                    pxs = (pxs[0], pxs[1], 10e-6)
-                    metadata[model.MD_PIXEL_SIZE] = pxs
-
-                if len(pos) < 3:
-                    assert len(pos) == 2
-                    pos = (pos[0], pos[1], 0)
-                    metadata[model.MD_POS] = pos
-                    logging.warning(u"Metadata for 3D data invalid. Using default centre position 0")
-
-            except KeyError:
-                raise ValueError("Pixel size or position are missing from metadata")
-            # Define a z-index
-            self.zIndex = model.IntContinuous(0, (0, raw[0].shape[0] - 1))
-            self.zIndex.subscribe(self._on_zIndex)
-
-            # option to see all z-levels at the same time using a maximum intensity projection (MIP)
-            # TODO: add support for other types of projections (max, min, avg, sum, ...)
-            self.max_projection = model.BooleanVA(False)
-            self.max_projection.subscribe(self._on_max_projection)
-
-        # Copy back the metadata
-        raw[0].metadata = metadata
-
-        super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
-
-        # Colouration of the image
-        if model.MD_USER_TINT in metadata:
-            try:
-                self.tint.value = img.md_format_to_tint(metadata[model.MD_USER_TINT])
-            except (ValueError, TypeError) as ex:
-                logging.warning("Failed to use tint '%s': %s.", metadata[model.MD_USER_TINT], ex)
-
-        self.tint.subscribe(self._onTint)
-
-    def _init_projection_vas(self):
-        ''' On Static2DStream, the projection is done on RGBSpatialProjection
-        '''
-        pass
-
-    def _init_thread(self):
-        ''' The thread for updating the image on Static2DStream resides on DataProjection
-            TODO remove this function when all the streams become projectionless
-        '''
-        pass
-
-    def _on_zIndex(self, val):
-        self._shouldUpdateHistogram()
-
-    def _on_max_projection(self, _):
-        self._shouldUpdateHistogram()
-
-    def _updateHistogram(self, data=None):
-        if data is None and model.hasVA(self, "zIndex"):
-            data = self.raw[0]
-            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-
-            if dims == "ZYX" and data.ndim == 3:
-                if hasattr(self, "max_projection") and self.max_projection.value:
-                    data = img.max_intensity_projection(data, axis=0)
-                else:
-                    data = img.getYXFromZYX(data, self.zIndex.value)  # Remove extra dimensions (of length 1)
-        super(Static2DStream, self)._updateHistogram(data)
-
-    def _onTint(self, tint):
-        """
-        Store the new tint value as metadata
-        """
-        self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
-
-
-class Static2DUpdatableStream(StaticStream):
-    """
-    TODO
-    Stream containing one static image.
-    For testing and static images.
-    The static image could be 2D or a 3D stack of images with a z-index
-    """
+class StaticStreamMixin(StaticStream):
+    """Mixin for Static2DStream derivatives"""
     def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
@@ -388,6 +266,32 @@ class Static2DUpdatableStream(StaticStream):
         if not self.raw:
             return
         self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
+
+class Static2DStream(StaticStream):
+    """
+    Stream containing one static image.
+    For testing and static images.
+    The static image could be 2D or a 3D stack of images with a z-index
+    """
+
+    def _init_projection_vas(self):
+        ''' On Static2DStream, the projection is done on RGBSpatialProjection
+        '''
+        pass
+
+    def _init_thread(self):
+        ''' The thread for updating the image on Static2DStream resides on DataProjection
+            TODO remove this function when all the streams become projectionless
+        '''
+        pass
+
+class Static2DUpdatableStream(StaticStream):
+    """
+    Stream containing one static image.
+    The data can be updated via the `update` method.
+    For testing and static images.
+    The static image could be 2D or a 3D stack of images with a z-index
+    """
 
     def update(self, raw):
         """

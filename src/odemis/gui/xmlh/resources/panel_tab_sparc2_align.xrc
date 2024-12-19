@@ -33,8 +33,9 @@
                         <flag>wxEXPAND</flag>
                         <cellpos>5,0</cellpos>
                       </object>
-                      <!-- <object class="sizeritem">
+                      <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_mirror">
+                          <hidden>1</hidden>
                           <icon>../../img/icon/ico_mirror.png</icon>
                           <icon_on>../../img/icon/ico_mirror_green.png</icon_on>
                           <height>48</height>
@@ -52,7 +53,7 @@
                         </object>
                         <flag>wxEXPAND</flag>
                         <cellpos>5,1</cellpos>
-                      </object> -->
+                      </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_centering">
                           <icon>../../img/icon/ico_ang.png</icon>
@@ -228,6 +229,27 @@
               </object>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_blanker_status">
+                <hidden>1</hidden>
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap" name="bmp_blanker_status">
+                      <bitmap>../../img/icon/dialog_warning.png</bitmap>
+                    </object>
+                    <flag>wxRIGHT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_blanker_status">
+                      <label>Make sure the e-beam is blanked manually</label>
+                    </object>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <fg>#E5E5E5</fg>
+              </object>
             </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_focus">
@@ -2136,7 +2158,6 @@
                             </XRCED>
                           </object>
                           <flag>wxALL</flag>
-                          <border>10</border>
                         </object>
                       </object>
                       <bg>#333333</bg>
@@ -2146,6 +2167,7 @@
                       </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
+                    <border>30</border>
                   </object>
                   <object class="sizeritem">
                     <object class="wxHtmlWindow" name="html_moi_doc">

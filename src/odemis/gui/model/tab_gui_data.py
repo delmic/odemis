@@ -698,6 +698,7 @@ class EnzelAlignGUIData(ActuatorGUIData):
         self.step_size = model.FloatContinuous(1e-6, range=(50e-9,50e-6), unit="m")
         self.align_mode = StringEnumerated(Z_ALIGN, choices=set((Z_ALIGN, SEM_ALIGN, FLM_ALIGN)))
 
+
 class SparcAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)

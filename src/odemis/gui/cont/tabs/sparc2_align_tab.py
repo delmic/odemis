@@ -66,7 +66,7 @@ class Sparc2AlignTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.Sparc2AlignGUIData(main_data)
-        super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super().__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ALIGNMENT")
 
         # Typically the actuators are automatically referenced at back-end init.
@@ -225,6 +225,14 @@ class Sparc2AlignTab(Tab):
         spot_stream.should_update.value = True
         self._spot_stream = spot_stream
 
+        self._blanker = None
+        # Only set the blanker when auto blanking is available, so we can enforce it later.
+        # It could be enforced here, but it could potentially be overwritten just before switching
+        # to a light mode, which is a risk.
+        if (model.hasVA(main_data.ebeam, "blanker") and
+            None in getattr(main_data.ebeam.blanker, "choices", {})):
+            self._blanker = main_data.ebeam.blanker
+
         self._ccd_stream = None
         self._ccd_stream_center = None
         self._ccd_stream_light = None
@@ -288,11 +296,11 @@ class Sparc2AlignTab(Tab):
             # Change binning to differentiate from other stream
             self._setFullFoV(self._ccd_stream_center, (4, 4))
 
+            # We always use these in conjunction
             if ("light-in-align-spot" in tab_data.align_mode.choices and
                 "light-in-align-ar" in tab_data.align_mode.choices):
                 # Shared ccd stream for "LIGHT SPOT" and "LIGHT AR" alignment
                 self._ccd_stream_light = acqstream.CameraStream(*ccd_args, **ccd_kwargs)
-                self._ccd_stream_light.should_update.subscribe(self._on_ccd_stream_play)
                 # Add stream to viewport and add controls to stream control panel
                 self._ccd_light_spe = self._stream_controller.addStream(
                     self._ccd_stream_light, add_to_view=self.panel.vp_align_light_spot.view
@@ -312,6 +320,7 @@ class Sparc2AlignTab(Tab):
                 self._stream_controller.addStream(
                     self._ccd_stream_spot_snapshot, add_to_view=self.panel.vp_align_light_spot.view
                 )
+
                 # This stream is a snapshot of the ccd_stream and therefore needs no data initialization, since it will be
                 # updated in a later stage
                 self._ccd_stream_ar_snapshot = acqstream.Static2DUpdatableStream(
@@ -951,6 +960,9 @@ class Sparc2AlignTab(Tab):
             logging.warning("Alignment mode changed while alignment tab not shown")
             return
 
+        # Disable blanker status message
+        self.panel.pnl_blanker_status.Show(False)
+
         # Disable controls/streams which are useless (to guide the user)
         self._stream_controller.pauseStreams()
         # Cancel autofocus (if it happens to run)
@@ -981,9 +993,6 @@ class Sparc2AlignTab(Tab):
         if mode != "lens2-align":
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
-        if mode != "center-align":
-            if main.light_aligner:
-                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
         if mode != "light-in-align-spot":
             if main.spec_switch:
                 main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
@@ -1086,14 +1095,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_lens_tunnel.Show(False)
-            # If light-aligner available, allow to adjust it in this view too,
-            # as the lens 2 is active, which allows to further align the light input.
-            if main.light_aligner:
-                self.panel.pnl_light_aligner.Show(True)
-                main.light_aligner.position.subscribe(self._onLightAlignPos)
-            else:
-                self.panel.pnl_light_aligner.Show(False)
-
+            self.panel.pnl_light_aligner.Show(False)
             self.panel.pnl_moi_settings.Show(True)
             # Shows the "Acquire/remove background" button, so that if a background has been previously
             # acquired it can be removed. As the optical path is changed, the background can easily
@@ -1185,12 +1187,17 @@ class Sparc2AlignTab(Tab):
 
             self.panel.pnl_moi_settings.Show(False)
         elif mode == "light-in-align-spot":
+            self.enforce_blanker()
             self.tab_data_model.focussedView.value = self.panel.vp_align_light_spot.view
             self._ccd_stream_light.should_update.value = True
             if not self._ccd_stream.raw:
                 logging.warning('Activate "LENS" mode first to display the CL Spot overlay stream')
             else:
+                # Eventhough the stream will be paused by now,
+                # the raw should still contain the last obtained image,
+                # due to order: detector pauses -> emitter pauses.
                 self._ccd_stream_spot_snapshot.update(self._ccd_stream.raw[0])
+
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(False)
@@ -1217,12 +1224,17 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             f.add_done_callback(self._on_light_in_align_done)
         elif mode == "light-in-align-ar":
+            self.enforce_blanker()
             self.tab_data_model.focussedView.value = self.panel.vp_align_light_ar.view  # allows to see the focused slit line
             self._ccd_stream_light.should_update.value = True
             if not self._ccd_stream_center.raw:
                 logging.warning('Activate "CENTERING" mode first to display the CL Spot overlay stream')
             else:
+                # Eventhough the stream will be paused by now,
+                # the raw should still contain the last obtained image,
+                # due to order: detector pauses -> emitter pauses.
                 self._ccd_stream_ar_snapshot.update(self._ccd_stream_center.raw[0])
+
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(False)
@@ -1292,7 +1304,7 @@ class Sparc2AlignTab(Tab):
             pages.append("doc/sparc2_fiber.html")
         elif mode == "streak-align":
             pages.append("doc/sparc2_streakcam.html")
-        elif mode == "light-in-align-spot":
+        elif mode in ("light-in-align-spot", "light-in-align-ar"):
             # Several modules have this mode, but require different alignment procedure.
             # So we have to detect precisely which module is present (FSLM, FPLM, or ELIM).
             main = self.tab_data_model.main
@@ -1435,13 +1447,12 @@ class Sparc2AlignTab(Tab):
         # while still being able to move the mirror.
         ccdupdate = self._ccd_stream and self._ccd_stream.should_update.value
         ccdcenterupdate = self._ccd_stream_center and self._ccd_stream_center.should_update.value
-        ccdlightupdate = self._ccd_stream_light and self._ccd_stream_light.should_update.value
         ccdextupdate = self._ccd_stream_ext and self._ccd_stream_ext.should_update.value
         spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
         ekccdupdate = self._as_stream and self._as_stream.should_update.value
         streakccdupdate = self._ts_stream and self._ts_stream.should_update.value
         self._spot_stream.is_active.value = any((
-            ccdupdate, ccdcenterupdate, ccdlightupdate, ccdextupdate, spcupdate, ekccdupdate, streakccdupdate
+            ccdupdate, ccdcenterupdate, ccdextupdate, spcupdate, ekccdupdate, streakccdupdate
         ))
 
     def _filter_axes(self, axes):
@@ -2268,6 +2279,18 @@ class Sparc2AlignTab(Tab):
                 return 5
 
         return None
+
+    def enforce_blanker(self):
+        # At instantiation of self._blanker, auto compatibility was checked, therefore
+        # we can set it to auto (= None) here.
+        if self._blanker:
+            self._blanker.value = None
+        else:
+            # Don't support the non-auto blanker path, since auto should be
+            # supported on all FPLM systems in production.
+            # Show the warning anyway, to be safe.
+            self.panel.pnl_blanker_status.Show(True)
+            logging.warning('Make sure the e-beam is blanked manually')
 
 
 class FocusPanelContainer:
