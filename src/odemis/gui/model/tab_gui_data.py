@@ -291,7 +291,7 @@ class CryoGUIData(MicroscopyGUIData):
         z = None
 
         fm_focus_position = self.main.focus.position.value['z']
-        existing_names = [str(f.index.value) for f in self.main.targets.value]
+        existing_names = [str(f.name.value) for f in self.main.targets.value]
         if self.focussedView.value.name.value == "FLM Overview":
             t_name = make_unique_name("FM-1", existing_names)
             # TOdo only static stream which is selected
