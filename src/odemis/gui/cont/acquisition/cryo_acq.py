@@ -184,7 +184,7 @@ class CryoAcquiController(object):
         self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
         self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
 
-        # connect features to chklistbox
+        # connect features to checklist
         self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
         self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
 
