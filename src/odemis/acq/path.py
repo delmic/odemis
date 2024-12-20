@@ -291,7 +291,21 @@ SPARC2_MODES = {
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
-            'light-in-align': (r"ccd.*",
+            'light-in-align-spot': (r"ccd.*",
+                {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'filter': {'band': BAND_PASS_THROUGH},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
+                 'slit-in-big': {'x': 'on'},  # fully opened
+                 # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   #'z': "MD:" + model.MD_FAV_POS_ACTIVE
+                                   },
+                }),
+
+            'light-in-align-ar': (r"ccd.*",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
@@ -368,7 +382,7 @@ MIMAS_MODES = {
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
                'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus',
-               'streak-focus', 'light-in-align', 'tunnel-lens-align', 'spec-focus-ext'}
+               'streak-focus', 'light-in-align-spot', 'tunnel-lens-align', 'spec-focus-ext'}
 
 
 class OneTaskExecutor(ThreadPoolExecutor):
