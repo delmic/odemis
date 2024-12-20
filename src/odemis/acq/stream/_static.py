@@ -154,8 +154,9 @@ class RGBStream(StaticStream):
                 raise ValueError("Data must be RGB(A)")
         return raw
 
-class StaticStreamMixin(StaticStream):
-    """Mixin for Static2DStream derivatives"""
+
+class Static2DStreamBase(StaticStream):
+    """Base class for Static2DStream"""
     def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
@@ -267,12 +268,15 @@ class StaticStreamMixin(StaticStream):
             return
         self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
 
-class Static2DStream(StaticStream):
+
+class Static2DStream(Static2DStreamBase):
     """
     Stream containing one static image.
     For testing and static images.
     The static image could be 2D or a 3D stack of images with a z-index
     """
+    def __init__(self, name, raw, *args, **kwargs):
+        super().__init__(name, raw, *args, **kwargs)
 
     def _init_projection_vas(self):
         ''' On Static2DStream, the projection is done on RGBSpatialProjection
@@ -285,13 +289,16 @@ class Static2DStream(StaticStream):
         '''
         pass
 
-class Static2DUpdatableStream(StaticStream):
+
+class Static2DUpdatableStream(Static2DStreamBase):
     """
     Stream containing one static image.
     The data can be updated via the `update` method.
     For testing and static images.
     The static image could be 2D or a 3D stack of images with a z-index
     """
+    def __init__(self, name, raw, *args, **kwargs):
+        super().__init__(name, raw, *args, **kwargs)
 
     def update(self, raw):
         """
@@ -314,6 +321,7 @@ class StaticSEMStream(Static2DStream):
             kwargs["acq_type"] = model.MD_AT_EM
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
+
 class StaticFIBStream(Static2DStream):
     """
     Same as a StaticStream, but considered a FIB stream
@@ -323,6 +331,7 @@ class StaticFIBStream(Static2DStream):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FIB
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
+
 
 class StaticCLStream(Static2DStream):
     """
@@ -997,6 +1006,7 @@ class StaticSpectrumStream(StaticStream):
 # updated. So we need to use the "old" way of directly computing the projection,
 # as for the live streams. Eventually, when DataProjection supports updated .raw,
 # we could simplify/merge the two stream classes.
+
 
 class RGBUpdatableStream(StaticStream):
     """
