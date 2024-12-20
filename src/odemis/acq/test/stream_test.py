@@ -2908,9 +2908,9 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
-        streaks.detExposureTime.value = 0.01  # 10ms
+        streaks.detExposureTime.value = 0.1  # 100ms
         # Disable the protections
-        streaks.detMCPGain.value = 10
+        streaks.detMCPGain.value = 5
         streaks.detShutter.value = False
 
         # # TODO use fixed repetition value -> set ROI?
@@ -3068,11 +3068,13 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
                                                         self.ebeam, self.streak_unit, self.streak_delay,
                                                         detvas={"readoutRate", "binning", "resolution"},
-                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
 
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
         sems.emtDwellTime.value = 1e-06
 
         # set a baseline, which does not effect data, but needed later to verify baseline is handled correctly
@@ -3170,11 +3172,13 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
                                                         self.ebeam, self.streak_unit, self.streak_delay,
                                                         detvas={"readoutRate", "binning", "resolution"},
-                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
 
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
+        streaks.detMCPGain.value = 10
+        streaks.detShutter.value = False
         sems.emtDwellTime.value = 1e-06
 
         # set stream VAs

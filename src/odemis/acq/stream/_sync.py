@@ -3127,6 +3127,7 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
 
         self._raw.extend(data)
 
+STREAK_CCD_INTENSITY_MAX_PX_COUNT = 10  # px, max number of pixels allowed above the threshold
 
 class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     """
@@ -3142,12 +3143,40 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         :param future: Current future running for the whole acquisition.
         """
         try:
+            # Compute the max safe intensity value, based on the exposure time
+            if self._integrationTime:
+                # calculate exposure time to be set on detector
+                exp = self._integrationTime.value / self._integrationCounts.value  # get the exp time from stream
+                exp = self._ccd.exposureTime.clip(exp)  # set the exp time on the HW VA
+            else:
+                # stream has exposure time
+                exp = self._sccd._getDetectorVA("exposureTime").value  # s
+
+            # Clip to the maximum value of the detector, otherwise we might never detect high intensity
+            # for long exposure times. Should be defined on the streak-ccd.metadata[MD_CALIB]["intensity_limit"]
+            # as count/s.
+            max_det_value = self._ccd.shape[2] - 1
+            ccd_md = self._ccd.getMetadata()
+
+            intensity_limit_cps = ccd_md.get(model.MD_CALIB, {}).get("intensity_limit", 40000)
+            self._intensity_limit_cpf = min(intensity_limit_cps * exp, max_det_value)  # counts/frame
+            logging.debug("Streak CCD intensity threshold set to %s counts/frame", self._intensity_limit_cpf)
+
             das, error = super()._runAcquisition(future)
         finally:
             # Make sure the streak-cam is protected
             self._sccd._suspend()
 
         return das, error
+
+    def _acquireImage(self, n, px_idx, img_time, sem_time,
+                      tot_num, leech_nimg, extra_time, future):
+        # overrides the default _acquireImage to check the light intensity after every image from the
+        # CCD, even when using integration time.
+        super()._acquireImage(n, px_idx, img_time, sem_time, tot_num, leech_nimg, extra_time, future)
+        ccd_data = self._acq_data[self._ccd_idx][-1]
+
+        self._check_light_intensity(ccd_data)
 
     def _assembleLiveData(self, n: int, raw_data: model.DataArray,
                           px_idx: Tuple[int, int], px_pos: Tuple[float, float],
@@ -3185,6 +3214,21 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         # Detector image has a shape of (time, lambda)
         raw_data = raw_data.T  # transpose to (lambda, time)
         self._live_data[n][pol_idx][:, :, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_res, temp_res)
+
+    def _check_light_intensity(self, raw_data):
+        """
+        Check if the light intensity is too high or too low.
+        :param raw_data: CCD image (non-integrated)
+        """
+        # If there are more than N pixels above the threshold, it's a sign that the signal is too
+        # strong => raise an exception to stop the acquisition
+        num_high_px = numpy.sum(raw_data > self._intensity_limit_cpf)
+        if num_high_px > STREAK_CCD_INTENSITY_MAX_PX_COUNT:
+            # For safety, immediately protect the camera, although it will be done after raising the
+            # exception anyway.
+            self._sccd._suspend()
+            raise ValueError(f"Light intensity too high ({num_high_px} px > {self._intensity_limit_cpf}), stopping acquisition. "
+                             "Adjust using: odemis update-metadata streak-ccd CALIB '{intensity_limit: ...}'.")
 
 
 class SEMARMDStream(SEMCCDMDStream):
