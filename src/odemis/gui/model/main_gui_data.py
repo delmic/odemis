@@ -733,7 +733,9 @@ class FastEMMainGUIData(MainGUIData):
                         # overlay location right on init
                         xmin += 1.2 * sz[0]
                         xmax += 1.2 * sz[0]
-                    calibration.region = FastEMROC(str(number), coordinates=(xmin, ymin, xmax, ymax), colour=colour)
+                    calibration.region = FastEMROC(name=str(number),
+                                                   scintillator_number=int(scintillator_number),
+                                                   coordinates=(xmin, ymin, xmax, ymax), colour=colour)
                     scintillator.calibrations[calibration_name] = calibration
                 self.samples.value[sample_type].scintillators[scintillator_number] = scintillator
 
