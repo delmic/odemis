@@ -826,6 +826,10 @@ def _updateMDFromOME(root, das):
                     mdc[model.MD_EBEAM_VOLTAGE] = float(d_settings.attrib["Voltage"])
                 except (KeyError, ValueError):
                     pass
+                try:
+                    mdc[model.MD_BASELINE] = float(d_settings.attrib["Offset"])
+                except (KeyError, ValueError):
+                    pass
 
             # Get light source info
             ls_settings = che.find("LightSourceSettings")
@@ -1425,11 +1429,6 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         ose = ET.SubElement(ime, "ObjectiveSettings",
                             attrib={"ID": "Objective:%d" % ifd})
 
-    if model.MD_BASELINE in globalMD:
-        # add ref to Objective
-        dse = ET.SubElement(ime, "DetectorSettings",
-                            attrib={"ID": "Detector:%d" % ifd,
-                                    "Offset": "%.15f" % globalMD[model.MD_BASELINE]})
 
     # store the rotation, shear and extra settings in the StructuredAnnotations
     # as they are non-standard metadata
@@ -1658,6 +1657,8 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             if model.MD_EBEAM_VOLTAGE in da.metadata:
                 # Schema only mentions PMT, but we use it for the e-beam too
                 attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_VOLTAGE] # V
+            if model.MD_BASELINE in da.metadata:
+                attrib["Offset"] = "%.15f" % da.metadata[model.MD_BASELINE]
 
             if attrib:
                 # detector of the group has the same id as first IFD of the group

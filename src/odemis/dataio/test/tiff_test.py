@@ -2159,7 +2159,8 @@ class TestTiffIO(unittest.TestCase):
                 model.MD_EXP_TIME: 1.2,  # s
                 model.MD_IN_WL: (500e-9, 522e-9),  # m
                 model.MD_OUT_WL: (400e-9, 450e-9),  # m
-                model.MD_LIGHT_POWER: 0.140,  # W
+                model.MD_LIGHT_POWER: 0.140,  # W,
+                model.MD_BASELINE: 400.0,
             },
             {model.MD_SW_VERSION: "1.0-test",
                 model.MD_HW_NAME: "fake hw",
@@ -2173,6 +2174,7 @@ class TestTiffIO(unittest.TestCase):
                 model.MD_IN_WL: (590e-9, 620e-9),  # m
                 model.MD_OUT_WL: (520e-9, 550e-9),  # m
                 model.MD_LIGHT_POWER: 0.240,  # W
+                model.MD_BASELINE: 400.0,
             },
             {model.MD_SW_VERSION: "1.0-test",
                 model.MD_HW_NAME: "fake hw",
@@ -2186,6 +2188,7 @@ class TestTiffIO(unittest.TestCase):
                 model.MD_IN_WL: (600e-9, 630e-9),  # m
                 model.MD_OUT_WL: (620e-9, 650e-9),  # m
                 model.MD_LIGHT_POWER: 0.350,  # W
+                model.MD_BASELINE: 400.0,
             },
             ]
         # create second group metadata (different position/lightpower)

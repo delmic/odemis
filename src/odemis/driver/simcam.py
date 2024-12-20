@@ -130,7 +130,8 @@ class Camera(model.DigitalCamera):
 
         self._metadata = {model.MD_HW_NAME: "FakeCam",
                           model.MD_SENSOR_PIXEL_SIZE: spxs,
-                          model.MD_DET_TYPE: model.MD_DT_INTEGRATING}
+                          model.MD_DET_TYPE: model.MD_DT_INTEGRATING,
+                          model.MD_BASELINE: 100}
 
         try:
             focuser = dependencies["focus"]
