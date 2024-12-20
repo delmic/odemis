@@ -97,7 +97,6 @@ class FastEMCalibration(object):
         self.region = None  # FastEMROC
         self.is_done = model.BooleanVA(False)  # states if the calibration was done successfully or not
         self.sequence = model.ListVA([])  # list of calibrations that need to be run sequencially
-        self.button = None
         self.shape = None  # FastEMROCOverlay
         self.is_done.subscribe(self._on_done)
 
@@ -115,15 +114,17 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
+    def __init__(self, name: str, scintillator_number: int, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
         """
         :param name: (str) Name of the region of calibration (ROC).
+        :param scintillator_number: (int) The scintillator number of the region of calibration (ROC).
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
                             ROC in [m]. The coordinates are in the sample carrier coordinate system, which
                             corresponds to the component with role='stage'.
         :param colour: The colour of the region of calibration (ROC).
         """
         self.name = model.StringVA(name)
+        self.scintillator_number = model.IntVA(scintillator_number)
         self.coordinates = model.TupleContinuous(coordinates,
                                                  range=((-1, -1, -1, -1), (1, 1, 1, 1)),
                                                  cls=(int, float),
