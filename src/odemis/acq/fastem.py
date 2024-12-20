@@ -84,6 +84,11 @@ SETTINGS_SELECTION = {
 }
 
 
+class ROASkipped(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
 class FastEMCalibration(object):
     """
     A class containing FastEM calibration related attributes.
@@ -97,7 +102,6 @@ class FastEMCalibration(object):
         self.region = None  # FastEMROC
         self.is_done = model.BooleanVA(False)  # states if the calibration was done successfully or not
         self.sequence = model.ListVA([])  # list of calibrations that need to be run sequencially
-        self.button = None
         self.shape = None  # FastEMROCOverlay
         self.is_done.subscribe(self._on_done)
 
@@ -115,15 +119,17 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
+    def __init__(self, name: str, scintillator_number: int, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
         """
         :param name: (str) Name of the region of calibration (ROC).
+        :param scintillator_number: (int) The scintillator number of the region of calibration (ROC).
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
                             ROC in [m]. The coordinates are in the sample carrier coordinate system, which
                             corresponds to the component with role='stage'.
         :param colour: The colour of the region of calibration (ROC).
         """
         self.name = model.StringVA(name)
+        self.scintillator_number = model.IntVA(scintillator_number)
         self.coordinates = model.TupleContinuous(coordinates,
                                                  range=((-1, -1, -1, -1), (1, 1, 1, 1)),
                                                  cls=(int, float),
@@ -153,7 +159,7 @@ def estimate_acquisition_time(roa, pre_calibrations=None, acq_dwell_time: Option
 
 def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
             se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
-            spot_grid_thresh=0.5, blank_beam=True, acq_dwell_time: Optional[float] = None):
+            spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, acq_dwell_time: Optional[float] = None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -188,6 +194,8 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
         diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
     :param blank_beam: (bool) If true the beam will be blanked during stage moves, if false the beam remains
         un-blanked during stage moves.
+    :param stop_acq_on_failure: (bool) If true the acquisition will be stopped based on the raised exception,
+        if false the acquisition will be skipped on failure.
     :param acq_dwell_time: (float or None) The acquisition dwell time.
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
@@ -203,7 +211,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
                            se_detector, ebeam_focus, roa, path, username, pre_calibrations, save_full_cells,
-                           settings_obs, spot_grid_thresh, blank_beam, f)
+                           settings_obs, spot_grid_thresh, blank_beam, stop_acq_on_failure, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -222,7 +230,7 @@ class AcquisitionTask(object):
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, se_detector,
                  ebeam_focus, roa, path, username, pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh,
-                 blank_beam, future):
+                 blank_beam, stop_acq_on_failure, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -255,6 +263,8 @@ class AcquisitionTask(object):
             diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
         :param blank_beam: (bool) If true the beam will be blanked during stage moves, if false the beam remains
             un-blanked during stage moves.
+        :param stop_acq_on_failure: (bool) If true the acquisition will be stopped based on the raised exception,
+            if false the acquisition will be skipped on failure.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
                             (model.DataArray): The acquisition data, which depends on the value of the
@@ -284,7 +294,10 @@ class AcquisitionTask(object):
         self._settings_obs = settings_obs
         self._spot_grid_thresh = spot_grid_thresh
         self._blank_beam = blank_beam
+        self._stop_acq_on_failure = stop_acq_on_failure
         self._total_roa_time = 0
+        # flag which when set to True can be used to force returns the run() function and skip the acquisition
+        self._skip_roa_acq = False
         if isinstance(future, model.ProgressiveFuture):
             self._total_roa_time = future.end_time - future.start_time
 
@@ -351,6 +364,10 @@ class AcquisitionTask(object):
 
         if self._pre_calibrations:
             self.pre_calibrate(self._pre_calibrations)
+        # If during pre-calibration the _skip_roa_acq flag was set to True
+        # force return and skip the acquisition
+        if self._skip_roa_acq:
+            return self.megafield, ROASkipped(f"Skipped the ROA {self._roa.shape.name.value}")
 
         # set the sub-directories (<user>/<project-name>/<roa-name>)
         self._detector.filename.value = os.path.join(self._username, self._path, self._roa.name.value)
@@ -400,13 +417,16 @@ class AcquisitionTask(object):
             raise
 
         except Exception as ex:
-            # Check if any field images have already been acquired; if not => just raise the exception.
-            if len(self._fields_remaining) == len(self._roa.field_indices):
-                raise
-            # If image data was already acquired, just log a warning.
-            logging.warning("Exception during roa acquisition (after some data has already been acquired).",
-                            exc_info=True)
-            exception = ex  # let the caller handle the exception
+            if self._stop_acq_on_failure:
+                # Check if any field images have already been acquired; if not => just raise the exception.
+                if len(self._fields_remaining) == len(self._roa.field_indices):
+                    raise
+                # If image data was already acquired, just log a warning.
+                logging.warning("Exception during roa acquisition (after some data has already been acquired).",
+                                exc_info=True)
+                exception = ex  # let the caller handle the exception
+            else:
+                exception = ROASkipped(f"Skipped the ROA {self._roa.shape.name.value}")
 
         finally:
             # Remove references to the megafield once the acquisition is finished/cancelled.
@@ -540,7 +560,10 @@ class AcquisitionTask(object):
                     raise
                 except Exception as err:
                     if i == 2:
-                        raise ValueError(f"Pre-calibrations failed 3 times, with error {err}")
+                        if self._stop_acq_on_failure:
+                            raise ValueError(f"Pre-calibrations failed 3 times, with error {err}")
+                        else:
+                            self._skip_roa_acq = True
                     else:
                         logging.warning(f"Pre-calibration failed for ROA {self._roa.shape.name.value} with error {err}, "
                                         f"will try again.")

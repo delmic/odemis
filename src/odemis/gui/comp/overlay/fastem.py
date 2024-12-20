@@ -181,10 +181,11 @@ class FastEMROCOverlay(WorldSelectOverlay):
             b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
             b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
             b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
-            pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)  # bottom left
+            pos = Vec(b_end_pos.x - 8, b_end_pos.y + 8)  # bottom left
 
             self.position_label.pos = pos
             self.position_label.text = "%s" % self.label
+            self.position_label.background = (0, 0, 0)  # black
             self.position_label.colour = self.colour
             self._write_labels(ctx)
 

@@ -561,8 +561,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.pnl_projects_header = xrc.XRCCTRL(self, "pnl_projects_header")
         self.pnl_projects = xrc.XRCCTRL(self, "pnl_projects")
-        self.chk_ebeam_off = xrc.XRCCTRL(self, "chk_ebeam_off")
-        self.chk_beam_blank_off = xrc.XRCCTRL(self, "chk_beam_blank_off")
+        self.pnl_acq = xrc.XRCCTRL(self, "pnl_acq")
         self.txt_num_roas = xrc.XRCCTRL(self, "txt_num_roas")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
@@ -656,12 +655,16 @@ class xrcpnl_tab_fastem_setup(wx.Panel):
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
         self.lbl_acq_estimate = xrc.XRCCTRL(self, "lbl_acq_estimate")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.btn_cancel_acq = xrc.XRCCTRL(self, "btn_cancel_acq")
         self.btn_acq = xrc.XRCCTRL(self, "btn_acq")
         self.pnl_calib = xrc.XRCCTRL(self, "pnl_calib")
         self.pnl_calib_status = xrc.XRCCTRL(self, "pnl_calib_status")
-        self.gauge_calib = xrc.XRCCTRL(self, "gauge_calib")
+        self.bmp_calib_status_info = xrc.XRCCTRL(self, "bmp_calib_status_info")
+        self.bmp_calib_status_warn = xrc.XRCCTRL(self, "bmp_calib_status_warn")
         self.lbl_calib = xrc.XRCCTRL(self, "lbl_calib")
+        self.gauge_calib = xrc.XRCCTRL(self, "gauge_calib")
+        self.btn_cancel_calib = xrc.XRCCTRL(self, "btn_cancel_calib")
+        self.btn_calib = xrc.XRCCTRL(self, "btn_calib")
 
 
 
@@ -7310,18 +7313,13 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_ebeam_off">
-                            <label>Turn off e-beam after acquisition</label>
+                          <object class="wxPanel" name="pnl_acq">
+                            <bg>#333333</bg>
+                            <fg>#7F7F7F</fg>
+                            <size>400,140</size>
+                            <flag>wxTOP|wxEXPAND</flag>
+                            <option>1</option>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_beam_blank_off">
-                            <label>Do not blank beam in between fields</label>
-                          </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxFlexGridSizer">
@@ -8060,7 +8058,7 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                               <border>16</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_cancel">
+                              <object class="ImageTextButton" name="btn_cancel_acq">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
                                 <label>Cancel</label>
@@ -8120,43 +8118,116 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                   </object>
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_calib_status">
-                      <fg>#7F7F7F</fg>
                       <bg>#333333</bg>
-                      <size>400,40</size>
                       <object class="wxBoxSizer">
+                        <bg>#333333</bg>
+                        <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxGauge" name="gauge_calib">
-                            <size>250,10</size>
-                            <range>100</range>
-                            <value>0</value>
-                            <hidden>1</hidden>
-                            <style>wxGA_SMOOTH</style>
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_calib_status_info">
+                                  <bitmap>______img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_calib_status_warn">
+                                  <bitmap>______img_icon_dialog_warning_png</bitmap>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_calib">
+                                  <label>No calibration run</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                            <bg>#333333</bg>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <option>0</option>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxFIXED_MINSIZE</flag>
-                          <border>16</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_calib">
-                            <fg>#DDDDDD</fg>
-                            <label>No calibration run</label>
-                            <font>
-                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <option>1</option>
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
                           <border>12</border>
                         </object>
+                        <object class="sizeritem">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="gauge_calib">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>16</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_cancel_calib">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Cancel</label>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_calib">
+                            <bg>#333333</bg>
+                            <height>48</height>
+                            <face_colour>blue</face_colour>
+                            <label>RUN</label>
+                            <fg>#FFFFFF</fg>
+                            <font>
+                              <size>15</size>
+                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
                       </object>
+                      <bg>#333333</bg>
                     </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
                   </object>
                 </object>
                 <bg>#4D4D4D</bg>

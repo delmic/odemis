@@ -234,8 +234,8 @@ class TestFastEMROA(unittest.TestCase):
         ymax = res_y * px_size_y * y_fields
         coordinates = (0, 0, xmax, ymax)  # in m, don't change
         polygon = [(0, 0), (0, ymax - px_size_y), (xmax - px_size_x, 0)]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -392,8 +392,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -439,8 +439,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -485,8 +485,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -531,8 +531,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -587,8 +587,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -654,8 +654,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -771,7 +771,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                           self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                           save_full_cells=False, settings_obs=None, spot_grid_thresh=0.5,
-                                          blank_beam=True, future=None)
+                                          blank_beam=True, stop_acq_on_failure=True, future=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -859,7 +859,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                           self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                           save_full_cells=False, settings_obs=None, spot_grid_thresh=0.5,
-                                          blank_beam=True, future=None)
+                                          blank_beam=True, stop_acq_on_failure=True, future=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -944,7 +944,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                       save_full_cells=True, settings_obs=None, spot_grid_thresh=0.5, blank_beam=True,
-                                      future=None)
+                                      stop_acq_on_failure=True, future=None)
 
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
@@ -1026,7 +1026,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                       save_full_cells=False, settings_obs=None, spot_grid_thresh=0.5, blank_beam=True,
-                                      future=None)
+                                      stop_acq_on_failure=True, future=None)
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
 
@@ -1085,7 +1085,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                       save_full_cells=False, settings_obs=None, spot_grid_thresh=0.5, blank_beam=True,
-                                      future=None)
+                                      stop_acq_on_failure=True, future=None)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
@@ -1144,7 +1144,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                           self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                           save_full_cells=False, settings_obs=None, spot_grid_thresh=0.5,
-                                          blank_beam=True, future=None)
+                                          blank_beam=True, stop_acq_on_failure=True, future=None)
 
             pos_first_tile_actual = task.get_pos_first_tile()
 
@@ -1177,7 +1177,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                       save_full_cells=False, settings_obs=settings_obs, spot_grid_thresh=0.5,
-                                      blank_beam=True, future=None)
+                                      blank_beam=True, stop_acq_on_failure=True, future=None)
 
         # Test that _create_acquisition_metadata() sets the settings from the selection
         acquisition_md = task._create_acquisition_metadata()
@@ -1202,8 +1202,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
 
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
         roa = FastEMROA(shape=MockEditableShape(),
@@ -1224,7 +1224,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path="test-path", username="default",
                                       pre_calibrations=None, save_full_cells=False, settings_obs=settings_obs,
-                                      spot_grid_thresh=0.5, blank_beam=True, future=Mock())
+                                      spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, future=Mock())
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (6400, 6400))
 
@@ -1233,7 +1233,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path="test-path", username="default",
                                       pre_calibrations=None, save_full_cells=True, settings_obs=settings_obs,
-                                      spot_grid_thresh=0.5, blank_beam=True, future=Mock())
+                                      spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, future=Mock())
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (7200, 7200))
 
@@ -1255,7 +1255,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path=None, username="default", pre_calibrations=None,
                                       save_full_cells=False, settings_obs=None, spot_grid_thresh=0.5, blank_beam=True,
-                                      future=None)
+                                      stop_acq_on_failure=True, future=None)
         # When n_beamshifts=1, the beamshift correction should be applied for every field.
         # Therefore, the calculated indices should match the original field indices.
         beam_shift_indices = task._calculate_beam_shift_cor_indices(n_beam_shifts=1)
@@ -1368,8 +1368,8 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
     def test_save_full_cells(self):
         """Test saving fields with cell images of 900x900 px instead of 800x800 px"""
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         points = [(0, 0), (0.000001, 0), (0.000001, 0.000001), (0, 0.000001)]
 
         roa = FastEMROA(shape=MockEditableShape(),
@@ -1390,7 +1390,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path="test-path", username="default",
                                       pre_calibrations=None, save_full_cells=False, settings_obs=None,
-                                      spot_grid_thresh=0.5, blank_beam=True, future=Mock())
+                                      spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, future=Mock())
 
         # image_received should be called as a side effect of calling data.next, this signals that the data is received
         def _image_received(*args, **kwargs):
@@ -1407,7 +1407,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.scan_stage, self.ccd, self.beamshift, self.lens, self.se_detector,
                                       self.ebeam_focus, roa, path="test-path", username="default",
                                       pre_calibrations=None, save_full_cells=True, settings_obs=None,
-                                      spot_grid_thresh=0.5, blank_beam=True, future=Mock())
+                                      spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, future=Mock())
 
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (7200, 7200))
