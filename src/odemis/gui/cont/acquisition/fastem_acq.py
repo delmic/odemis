@@ -749,7 +749,7 @@ class FastEMAcquiController(object):
                 roa = roa_window[0]
                 roc = roa.roc_2.value
                 if roc.coordinates.value == stream.UNDEFINED_ROI or not roc.parameters:
-                    undefined.add(roc.name.value)
+                    undefined.add(roc.scintillator_number.value)
         return sorted(undefined)
 
     def _get_undefined_calibrations_3(self):
@@ -762,7 +762,7 @@ class FastEMAcquiController(object):
                 roa = roa_window[0]
                 roc = roa.roc_3.value
                 if roc.coordinates.value == stream.UNDEFINED_ROI or not roc.parameters:
-                    undefined.add(roc.name.value)
+                    undefined.add(roc.scintillator_number.value)
         return sorted(undefined)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
