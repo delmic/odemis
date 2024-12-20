@@ -265,6 +265,21 @@ class FastEMProjectRibbonsTab(Tab):
 
         self.panel.Bind(wx.EVT_SIZE, self._on_panel_size)
 
+    def create_grid(self) -> GridBase:
+        """
+        Creates and configures a new grid for displaying data.
+
+        :return: (GridBase) A configured instance of the grid.
+
+        Note:
+            The grid is not displayed immediately but is prepared for further manipulation
+            or data population before being shown.
+        """
+        grid = GridBase(self.panel, size=self.panel.Parent.Size)
+        grid.set_columns(self.columns)
+        grid.Hide()
+        return grid
+
     def Show(self, show=True):
         super().Show(show)
 
