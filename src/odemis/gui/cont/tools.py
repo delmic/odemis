@@ -169,6 +169,20 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move feature"
         ),
+    model.TOOL_REGION_OF_INTEREST:
+        ModeTool(
+            "btn_feature_toolbox_icon",
+            model.TOOL_REGION_OF_INTEREST,
+            model.TOOL_NONE,
+            "Create/Move region of interest"
+        ),
+    model.TOOL_FIDUCIAL:
+        ModeTool(
+            "btn_feature_toolbox_icon",
+            model.TOOL_FIDUCIAL,
+            model.TOOL_NONE,
+            "Create/Move fiducial"
+        ),
     model.TOOL_RECTANGLE:
         ModeTool(
             "btn_rectangle",

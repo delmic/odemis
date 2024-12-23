@@ -33,7 +33,7 @@ import wx
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
-from odemis.gui.model import TOOL_FEATURE
+from odemis.gui.model import TOOL_FEATURE, TOOL_FIDUCIAL
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
@@ -539,11 +539,30 @@ class CorrelationPointsController(object):
         self.grid.SetRowLabelSize(0)
 
         # Set column labels for correlation points
+        # Set the data type and if the column can be edited
         self.grid.SetColLabelValue(0, "type")
+        attr = wx.grid.GridCellAttr()
+        attr.SetReadOnly(True)
+        self.grid.SetColAttr(0, attr)
         self.grid.SetColLabelValue(1, "X")
         self.grid.SetColLabelValue(2, "Y")
         self.grid.SetColLabelValue(3, "Z")
         self.grid.SetColLabelValue(4, "index")
+
+        # Set column 1 (Index) as an integer column
+        int_renderer = wx.grid.GridCellNumberRenderer()
+        int_attr = wx.grid.GridCellAttr()
+        int_attr.SetRenderer(int_renderer)
+        self.grid.SetColAttr(4, int_attr)
+
+        # Set columns 2, 3, and 4 (X, Y, Z Coordinates) as float columns with 2 decimal places
+        float_renderer = wx.grid.GridCellFloatRenderer(precision=3)
+        float_attr = wx.grid.GridCellAttr()
+        float_attr.SetRenderer(float_renderer)
+
+        self.grid.SetColAttr(1, float_attr)
+        self.grid.SetColAttr(2, float_attr)
+        self.grid.SetColAttr(3, float_attr)
         # Enable cell editing
         self.grid.EnableEditing(True)
 
@@ -574,7 +593,8 @@ class CorrelationPointsController(object):
 
         # event data
         key = evt.GetKeyCode()
-        shift_mod = evt.ShiftDown()
+        # shift_mod = evt.ShiftDown()
+        ctrl_mode = evt.ControlDown()
 
         # pass through event, if not a valid correlation key or enabled
         valid_keys = [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN]
@@ -582,15 +602,17 @@ class CorrelationPointsController(object):
             evt.Skip()
             return
 
-        if shift_mod:
+        if ctrl_mode:
             # add fiducials if up
             # add pois if down (only for FLM)
             if key == wx.WXK_UP:
                 if self._tab_data_model.focussedView.value.name.value == "FLM Overview" or self._tab_data_model.focussedView.value.name.value == "SEM Overview":
-                    self._tab_data_model.tool.value = TOOL_FEATURE
+                    self._tab_data_model.tool.value = TOOL_FIDUCIAL
+                    self._tab_data_model.main.selected_target_type.value = "Fiducial"  # in tad data ? TODO
             elif key == wx.WXK_DOWN:
-                if self._tab_data_model.focussedView.value == "FLM Overview":
-                    self._tab_data_model.tool.value = TOOL_FEATURE
+                if self._tab_data_model.focussedView.value.name.value == "FLM Overview":
+                    self._tab_data_model.tool.value = TOOL_FIDUCIAL   # POI
+                    self._tab_data_model.main.selected_target_type.value = "RegionOfInterest"  # in tad data ? TODO
             # Static Fluo Stream
 
         ### CONTROLS ##############################
@@ -735,6 +757,7 @@ class CorrelationPointsController(object):
                 # get the row index from row label which is target name
                 # row_index = self.grid.get_row_index(target.name.value)
                 self.grid.SelectRow(row)
+                self.reorder_table()
                 break
 
         if self._tab_data_model.main.currentTarget.value and not self.current_target_coordinate_subscription:
@@ -808,6 +831,9 @@ class CorrelationPointsController(object):
                     self.grid.SetCellValue(current_row_count, 3, "")
             elif target.type.value == "RegionOfInterest":
                 self.grid.SetCellValue(current_row_count, 0, "POI")
+
+        # self.grid.Layout()
+        self._panel.Layout()
 
 
         # if target:

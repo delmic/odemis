@@ -41,6 +41,7 @@ from odemis.gui.model._constants import (
     STATE_ON,
     TOOL_DICHO,
     TOOL_FEATURE,
+    TOOL_FIDUCIAL,
     TOOL_LABEL,
     TOOL_LINE,
     TOOL_NONE,
@@ -284,7 +285,7 @@ class CryoGUIData(MicroscopyGUIData):
         return fm_roi
 
     # stream information needed to make it add new targets generalized, maybe not needed
-    def add_new_target(self, x, y, z=None, t_name=None):
+    def add_new_target(self, x, y, type, z=None, t_name=None):
         #     if not t_name:
         #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
         #         t_name = make_unique_name("1", existing_names)
@@ -293,19 +294,34 @@ class CryoGUIData(MicroscopyGUIData):
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
         if self.focussedView.value.name.value == "FLM Overview":
-            t_name = make_unique_name("FM-1", existing_names)
-            # TOdo only static stream which is selected
-            for s in self.streams.value:
-                if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                    z = s.zIndex.value
-                    self.main.fm_fiducial_index.value += 1
-                    target = Target(x, y, z, name=t_name, type="Fiducial",
-                                    index=self.main.fm_fiducial_index.value, fm_focus_position=fm_focus_position)
-                    break
+            if type == "Fiducial":
+                t_name = make_unique_name("FM-1", existing_names)
+                # Parse through the existing names. find total elements with FM in the name
+                index = sum(1 for name in existing_names if "FM" in name)
+                # TOdo only static stream which is selected
+                for s in self.streams.value:
+                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        # self.main.fm_fiducial_index.value += 1
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index= index + 1, fm_focus_position=fm_focus_position)
+                        break
+            elif type == "POI":
+                t_name = make_unique_name("POI-1", existing_names)
+                index = sum(1 for name in existing_names if "POI" in name)
+                # TOdo only static stream which is selected
+                for s in self.streams.value:
+                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        # self.main.fm_fiducial_index.value += 1
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index=index + 1, fm_focus_position=fm_focus_position)
+                        break
         elif self.focussedView.value.name.value == "SEM Overview":
             t_name = make_unique_name("FIB-1", existing_names)
-            self.main.fib_fiducial_index.value += 1
-            target = Target(x, y, z=0, name=t_name, type="Fiducial", index=self.main.fib_fiducial_index.value,
+            index = sum(1 for name in existing_names if "FIB" in name)
+            # self.main.fib_fiducial_index.value += 1
+            target = Target(x, y, z=0, name=t_name, type=type, index=index+1,
                             fm_focus_position=fm_focus_position)
         else:
             raise ValueError("Invalid selected view")
@@ -482,7 +498,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         super().__init__(main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
 
