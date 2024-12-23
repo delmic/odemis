@@ -268,9 +268,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.line_overlay = SpectrumLineSelectOverlay(self)
 
         if guimodel.TOOL_FEATURE in tools_possible:
-            # self.cryofeature_overlay = CryoFeatureOverlay(self, tab_data)
-            # self.add_world_overlay(self.cryofeature_overlay)
-            # self.cryofeature_overlay.active.value = True
+            self.cryofeature_overlay = CryoFeatureOverlay(self, tab_data)
+            self.add_world_overlay(self.cryofeature_overlay)
+            self.cryofeature_overlay.active.value = True
+
+        if guimodel.TOOL_FIDUCIAL in tools_possible:
+            # make two canvases, one for SEM and one for FM overview
 
             self.cryotarget_overlay = CryoCorrelationPointsOverlay(self, tab_data)
             self.add_world_overlay(self.cryotarget_overlay)

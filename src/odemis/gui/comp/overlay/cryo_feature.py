@@ -35,7 +35,7 @@ from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTargets
-from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
+from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST
 
 MODE_EDIT_FEATURES = 1
 MODE_SHOW_FEATURES = 2
@@ -272,7 +272,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
 class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
     """ Overlay for showing the correlation points between two streams """
+    # _label.pos
+    # column
+    # reorder for new targets is not working
+    # swap indices in the table
+    # .layout for grid refresh
+    # delte should delete overlay
     # adding new target
+    # fm targets should be in FM, same for FIB
     # deleting target
     # moving target
     # z targeting
@@ -296,14 +303,21 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         self._mode = MODE_SHOW_FEATURES
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
+        # self._selected_type = "Fiducial"
         if self._selected_tool_va:
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
-        self._feature_icons = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/feature_active_unselected.png'))}
+        self._feature_icons = {"Fiducial": cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/fiducial_unselected.png')),
+        "RegionOfInterest": cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/poi_unselected.png')),
+        "ProjectedFiducial": cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/projected_unselected.png'))}
 
-        self._feature_icons_selected = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/feature_active_selected.png'))}
+        self._feature_icons_selected = {"Fiducial": cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/fiducial_selected.png')),
+        "RegionOfInterest": cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/poi_selected.png'))}
 
         if not hasattr(self.tab_data.main, "targets"):
             raise ValueError("CryoTargetsOverlay requires target VA.")
@@ -316,10 +330,37 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         self._hover_target = None
         self._label = self.add_label("")
 
+        # for vp in self.tab_data.views:
+        #     vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
+    #
+    # def on_char(self, evt):
+    #     # event data
+    #     key = evt.GetKeyCode()
+    #     # shift_mod = evt.ShiftDown()
+    #     ctrl_mode = evt.ControlDown()
+    #
+    #     # pass through event, if not a valid correlation key or enabled
+    #     valid_keys = [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN]
+    #     if key not in valid_keys:
+    #         evt.Skip()
+    #         return
+    #
+    #     if ctrl_mode:
+    #         # add fiducials if up
+    #         # add pois if down (only for FLM)
+    #         if key == wx.WXK_UP:
+    #             if self.tab_data.focussedView.value.name.value == "FLM Overview" or self._tab_data_model.focussedView.value.name.value == "SEM Overview":
+    #                 self.tab_data.tool.value = TOOL_FIDUCIAL
+    #                 self._selected_type = "Fiducial"
+    #         elif key == wx.WXK_DOWN:
+    #             if self.tab_data.focussedView.value == "FLM Overview":
+    #                 self.tab_data.tool.value = TOOL_FIDUCIAL
+    #                 self._selected_type = "RegionOfInterest"# POI
+
     def _on_tool(self, selected_tool):
         """ Update the feature mode (show or edit) when the overlay is active and tools change"""
         if self.active:
-            if selected_tool == TOOL_FEATURE:
+            if selected_tool == TOOL_FIDUCIAL:
                 self._mode = MODE_EDIT_FEATURES
             else:
                 self._mode = MODE_SHOW_FEATURES
@@ -389,7 +430,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 else:
                     # create new target based on the physical position then disable the target tool
                     p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1]) #TODO
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value) #TODO
                     # self._selected_tool_va.value = TOOL_NONE
             else:
                 if target:
@@ -411,9 +452,9 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                     self._update_selected_target_position(evt.Position)
                 # evt.Skip()
                 DragMixin._on_left_up(self, evt)
-                # self.clear_drag()
-                # self.cnvs.update_drawing()
-                # self.cnvs.reset_dynamic_cursor()
+                self.clear_drag()
+                self.cnvs.update_drawing()
+                self.cnvs.reset_dynamic_cursor()
             else:
                 evt.Skip()
             self._selected_tool_va.value = TOOL_NONE
@@ -429,7 +470,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         # todo
         self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], 0)) #Todo
         # Reset the selected tool to signal end of target moving operation
-        self._selected_tool_va.value = TOOL_NONE
+        # self._selected_tool_va.value = TOOL_NONE
         self.cnvs.update_drawing()
 
     def _detect_point_inside_target(self, v_pos):
@@ -453,7 +494,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
         if self.active:
             v_pos = evt.Position
-            if self.dragging:
+            if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 # self._selected_target = self.tab_data.main.currentTarget.value
@@ -479,6 +520,13 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         if not self.show:
             return
 
+
+        # Check if the current view is "FLM Overview"
+        # if hasattr(self.tab_data, "focussedView"):
+        #     current_view = self.tab_data.focussedView.value.name.value
+        #     if current_view != "SEM Overview":
+        #         return
+
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
             coordinates = target.coordinates.value
@@ -494,10 +542,10 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             # Show proper feature icon based on selected target + status
             try:
                 if target is self.tab_data.main.currentTarget.value:
-                    set_icon(self._feature_icons_selected[FEATURE_ACTIVE])
+                    set_icon(self._feature_icons_selected[target.type.value])
                     # set_icon(self._feature_icons_selected[target.status.value])
                 else:
-                    set_icon(self._feature_icons[FEATURE_ACTIVE])
+                    set_icon(self._feature_icons[target.type.value])
                     # set_icon(self._feature_icons[target.status.value])
             except KeyError:
                 raise
