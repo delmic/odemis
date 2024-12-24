@@ -329,6 +329,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         self._selected_target = None
         self._hover_target = None
         self._label = self.add_label("")
+        self.current_target_coordinate_subscription = False
 
         # for vp in self.tab_data.views:
         #     vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
@@ -368,7 +369,16 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
     def _on_current_target_va(self, _):
         # Redraw when the current feature is changed, as it's displayed differently
         wx.CallAfter(self.cnvs.request_drawing_update)
+        if self.tab_data.main.currentTarget.value and not self.current_target_coordinate_subscription:
+            self.tab_data.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
+                                                                                init=True)
+            self.current_target_coordinate_subscription = True
+            # subscribe only once
 
+    # @call_in_wx_main
+    def _on_current_coordinates_changes(self, coordinates):
+        # Redraw when the current feature is changed, as it's displayed differently
+        wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_target_changes(self, features):
         # Redraw if a feature is added/removed
