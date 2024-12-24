@@ -769,6 +769,7 @@ class CorrelationPointsController(object):
     def _on_current_coordinates_changes(self, coordinates):
         target = self._tab_data_model.main.currentTarget.value
         existing_target =  False
+        self.current_target_coordinate_subscription = False
         # existing_names = [t.name.value for t in self._tab_data_model.main.targets.value]
         # if existing_names and target.name.value in existing_names:
         for row in range(self.grid.GetNumberRows()):
