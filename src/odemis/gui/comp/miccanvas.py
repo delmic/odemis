@@ -52,7 +52,8 @@ from odemis.gui.comp.canvas import (
     BitmapCanvas,
 )
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
-from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, CryoCorrelationPointsOverlay
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, CryoCorrelationPointsOverlay, \
+    CryoCorrelationFmPointsOverlay, CryoCorrelationFibPointsOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMScintillatorOverlay
@@ -275,9 +276,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if guimodel.TOOL_FIDUCIAL in tools_possible:
             # make two canvases, one for SEM and one for FM overview
 
-            self.cryotarget_overlay = CryoCorrelationPointsOverlay(self, tab_data)
-            self.add_world_overlay(self.cryotarget_overlay)
-            self.cryotarget_overlay.active.value = True
+
+            # self.add_world_overlay(self.cryotarget_fm_overlay)
+            self.cryotarget_fib_overlay = CryoCorrelationFibPointsOverlay(self, tab_data)
+            self.cryotarget_fm_overlay = CryoCorrelationFmPointsOverlay(self, tab_data)
+            self.add_world_overlay(self.cryotarget_fib_overlay)
+            # self.cryotarget_overlay.active.value = True
+            self.add_world_overlay(self.cryotarget_fm_overlay)
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 

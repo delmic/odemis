@@ -326,7 +326,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             raise ValueError("CryoFeatureOverlay requires currentTarget VA.")
         self.tab_data.main.currentTarget.subscribe(self._on_current_target_va, init=True)
 
-        self._selected_target = None
+        # self._selected_target = None
         self._hover_target = None
         self._label = self.add_label("")
         self.current_target_coordinate_subscription = False
@@ -530,13 +530,14 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 else:
                     return
                 #     self.cnvs.reset_dynamic_cursor()
-                self._hover_target = None
+                # self._hover_target = None
             WorldOverlay.on_motion(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
         Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
         """
+        return
         if not self.show:
             return
 
@@ -578,3 +579,108 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 self._label.draw(ctx)
 
             ctx.paint()
+
+class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """
+        Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
+        """
+        if not self.show:
+            return
+
+
+        # Check if the current view is "FLM Overview"
+        # if hasattr(self.tab_data, "focussedView"):
+        #     current_view = self.tab_data.focussedView.value.name.value
+        #     if current_view != "SEM Overview":
+        #         return
+
+        # Show each target icon and label if applicable
+        for target in self.tab_data.main.targets.value:
+            if "FM" in target.name.value or "POI" in target.name.value:
+                coordinates = target.coordinates.value
+                half_size_offset = self.cnvs.get_half_buffer_size()
+
+                # convert physical position to buffer 'world' coordinates
+                bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center, self.cnvs.scale,
+                                                    offset=half_size_offset)
+
+                def set_icon(feature_icon):
+                    ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
+
+                # Show proper feature icon based on selected target + status
+                try:
+                    if target is self.tab_data.main.currentTarget.value:
+                        set_icon(self._feature_icons_selected[target.type.value])
+                        self._label.text = target.name.value  # str(target.index.value)
+                        self._label.pos = (bpos[0], bpos[1])
+                        self._label.draw(ctx)
+                        # set_icon(self._feature_icons_selected[target.status.value])
+                    else:
+                        set_icon(self._feature_icons[target.type.value])
+                        # set_icon(self._feature_icons[target.status.value])
+                except KeyError:
+                    raise
+                    # logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
+
+                # if target is self._hover_target:
+                #     # show target name on hover
+                #     self._label.text = target.name.value #  str(target.index.value)
+                #     self._label.pos = (bpos[0], bpos[1])
+                #     self._label.draw(ctx)
+
+                ctx.paint()
+
+
+class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """
+        Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
+        """
+        if not self.show:
+            return
+
+        # Check if the current view is "FLM Overview"
+        # if hasattr(self.tab_data, "focussedView"):
+        #     current_view = self.tab_data.focussedView.value.name.value
+        #     if current_view != "SEM Overview":
+        #         return
+
+        # Show each target icon and label if applicable
+        for target in self.tab_data.main.targets.value:
+            if "FIB" in target.name.value:# or "Projected" in target.name.value:
+                coordinates = target.coordinates.value
+                half_size_offset = self.cnvs.get_half_buffer_size()
+
+                # convert physical position to buffer 'world' coordinates
+                bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
+                                                    self.cnvs.scale,
+                                                    offset=half_size_offset)
+
+                def set_icon(feature_icon):
+                    ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
+
+                # Show proper feature icon based on selected target + status
+                try:
+                    if target is self.tab_data.main.currentTarget.value:
+                        set_icon(self._feature_icons_selected[target.type.value])
+                        self._label.text = target.name.value  # str(target.index.value)
+                        self._label.pos = (bpos[0], bpos[1])
+                        self._label.draw(ctx)
+                        # set_icon(self._feature_icons_selected[target.status.value])
+                    else:
+                        set_icon(self._feature_icons[target.type.value])
+                        # set_icon(self._feature_icons[target.status.value])
+                except KeyError:
+                    raise
+                    # logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
+
+                # if target is self._hover_target:
+                #     # show target name on hover
+                #     self._label.text = target.name.value  # str(target.index.value)
+                #     self._label.pos = (bpos[0], bpos[1])
+                #     self._label.draw(ctx)
+
+                ctx.paint()
