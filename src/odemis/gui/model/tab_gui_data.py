@@ -306,7 +306,7 @@ class CryoGUIData(MicroscopyGUIData):
                         target = Target(x, y, z, name=t_name, type=type,
                                         index= index + 1, fm_focus_position=fm_focus_position)
                         break
-            elif type == "POI":
+            elif type == "RegionOfInterest":
                 t_name = make_unique_name("POI-1", existing_names)
                 index = sum(1 for name in existing_names if "POI" in name)
                 # TOdo only static stream which is selected
