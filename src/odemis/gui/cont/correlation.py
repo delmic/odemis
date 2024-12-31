@@ -598,8 +598,8 @@ class CorrelationPointsController(object):
         # how to do calculation if things rapidly change than the calculation speed
 
         if self._tab_data_model.focussedView.value.name.value == "SEM Overview":
-            self._tab_data_model.tool.value = TOOL_FIDUCIAL
             self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
+            self._tab_data_model.tool.value = TOOL_FIDUCIAL
 
     def on_char(self, evt: wx.Event) -> None:
         """handle key presses
@@ -621,12 +621,14 @@ class CorrelationPointsController(object):
             # add pois if down (only for FLM)
             if key == wx.WXK_UP:
                 if self._tab_data_model.focussedView.value.name.value == "FLM Overview" or self._tab_data_model.focussedView.value.name.value == "SEM Overview":
+                    self._tab_data_model.main.selected_target_type.value = "Fiducial"
                     self._tab_data_model.tool.value = TOOL_FIDUCIAL
-                    self._tab_data_model.main.selected_target_type.value = "Fiducial"  # in tad data ? TODO
+                      # in tad data ? TODO
             elif key == wx.WXK_DOWN:
                 if self._tab_data_model.focussedView.value.name.value == "FLM Overview":
+                    self._tab_data_model.main.selected_target_type.value = "RegionOfInterest"
                     self._tab_data_model.tool.value = TOOL_FIDUCIAL   # POI
-                    self._tab_data_model.main.selected_target_type.value = "RegionOfInterest"  # in tad data ? TODO
+                      # in tad data ? TODO
             # Static Fluo Stream
 
         ### CONTROLS ##############################
