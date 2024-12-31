@@ -376,12 +376,12 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
         self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
         self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
-        self.load_points = xrc.XRCCTRL(self, "load_points")
+        self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
         self.add_fiducial = xrc.XRCCTRL(self, "add_fiducial")
         self.add_roi = xrc.XRCCTRL(self, "add_roi")
         self.table_grid = xrc.XRCCTRL(self, "table_grid")
         self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
-        self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
+        self.btn_refractive_index = xrc.XRCCTRL(self, "btn_refractive_index")
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
         self.lbl_instructions_correlation = xrc.XRCCTRL(self, "lbl_instructions_correlation")
@@ -3807,8 +3807,8 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="wxButton" name="load_points">
-                                <label>Load Points</label>
+                              <object class="wxButton" name="btn_z_targeting">
+                                <label>Z Targeting</label>
                               </object>
                             </object>
                             <object class="sizeritem">
@@ -3843,8 +3843,8 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                 </object>
                                 <!-- Z-targeting button -->
                                 <object class="sizeritem">
-                                  <object class="wxButton" name="btn_z_targeting">
-                                    <label>Z Targeting</label>
+                                  <object class="wxButton" name="btn_refractive_index">
+                                    <label>Refractive Index</label>
                                     <enabled>1</enabled>  <!-- Initially disabled -->
                                   </object>
                                 </object>

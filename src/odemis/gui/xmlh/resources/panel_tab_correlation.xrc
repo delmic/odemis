@@ -261,8 +261,8 @@
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="wxButton" name="load_points">
-                                <label>Load Points</label>
+                              <object class="wxButton" name="btn_z_targeting">
+                                <label>Z Targeting</label>
                               </object>
                             </object>
                             <object class="sizeritem">
@@ -297,8 +297,8 @@
                                 </object>
                                 <!-- Z-targeting button -->
                                 <object class="sizeritem">
-                                  <object class="wxButton" name="btn_z_targeting">
-                                    <label>Z Targeting</label>
+                                  <object class="wxButton" name="btn_refractive_index">
+                                    <label>Refractive Index</label>
                                     <enabled>1</enabled>  <!-- Initially disabled -->
                                   </object>
                                 </object>

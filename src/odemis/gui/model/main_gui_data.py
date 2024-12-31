@@ -363,7 +363,7 @@ class MainGUIData(object):
                 self.currentFeature = model.VigilantAttribute(None)
                 self.targets = model.ListVA()
                 self.currentTarget = model.VigilantAttribute(None)
-                self.selected_target_type = model.StringEnumerated("Fiducial", {"Fiducial", "RegionOfInterest", "ProjectedFiducial", "ProjectedRegionOfInterest"})
+                self.selected_target_type = model.StringEnumerated("Fiducial", {"Fiducial", "RegionOfInterest", "ProjectedFiducial", "ProjectedRegionOfInterest", "SurfaceFiducial"})
                 # self.fm_fiducial_index = model.IntVA(0)
                 # self.fib_fiducial_index = model.IntVA(0)
                 # self.fm_poi_index = model.IntVA(0)

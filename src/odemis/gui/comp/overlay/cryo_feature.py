@@ -312,6 +312,8 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         "RegionOfInterest": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_unselected.png')),
         "ProjectedFiducial": cairo.ImageSurface.create_from_png(
+            guiimg.getStream('/icon/projected_unselected.png')),
+        "SurfaceFiducial": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/projected_unselected.png'))}
 
         self._feature_icons_selected = {"Fiducial": cairo.ImageSurface.create_from_png(
@@ -394,89 +396,24 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         # for f in features:
         #     f.status.subscribe(self._on_status_change)
 
-    # def on_dbl_click(self, evt):
-    #     """
-    #     Handle double click:
-    #     If it's under a feature: move the stage to the feature position,
-    #     otherwise, move the stage to the selected position.
-    #     Note: if the canvas doesn't allow drag, move to a random position is not
-    #     allowed, *but* move to a feature is still allowed.
-    #     """
-    #     # evt.Skip()
-    #     # pass
-    #     # not moving the canvas on double click
-    #     if self.active:
-    #         v_pos = evt.Position
-    #         target = self._detect_point_inside_target(v_pos)
-    #         if target:
-    #             coordinates = target.coordinates.value
-    #             logging.info(f"moving to target index and type {target.index.value} and {target.type.value}")
-    #             # self.cnvs.view.moveStageTo((pos[0], pos[1]))
-    #             self.tab_data.main.currentTarget.value = target
-    #         else:
-    #             # Move to selected point (if normally allowed to move)
-    #             # if CAN_DRAG in self.cnvs.abilities:
-    #             #     WorldOverlay.on_dbl_click(self, evt)
-    #             # else:
-    #             #     super().on_dbl_click(evt)
-    #             super().on_dbl_click(evt)
-    #     else:
-    #         super().on_dbl_click(evt)
 
     def on_left_down(self, evt):
         """
         Handle mouse left click down: Create/Move feature if feature tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        if self.active:
-            v_pos = evt.Position
-            target = self._detect_point_inside_target(v_pos)
-            if self._mode == MODE_EDIT_FEATURES:
-                if target:
-                    # move/drag the selected target
-                    self.tab_data.main.currentTarget.value = target
-                    self._selected_target = target
-                    DragMixin._on_left_down(self, evt)
-                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                else:
-                    # create new target based on the physical position then disable the target tool
-                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value) #TODO
-                    # self._selected_tool_va.value = TOOL_NONE
-
-            else:
-                if target:
-                    self.tab_data.main.currentTarget.value = target
-                # self._selected_target = target
-                # self._selected_tool_va.value = TOOL_NONE
-                # STOP THE DRAGGING of the canvas
-                evt.Skip()
-                # WorldOverlay.on_left_down(self, evt)
-        else:
-            WorldOverlay.on_left_down(self, evt)
+        pass
 
     def on_left_up(self, evt):
         """
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        if self.active:
-            # evt.Skip()
-            DragMixin._on_left_up(self, evt)
-            self.clear_drag()
-            self.cnvs.update_drawing()
-            self.cnvs.reset_dynamic_cursor()
-            if self.left_dragging:
+        pass
 
-                if self._selected_target:
-                    self._update_selected_target_position(evt.Position)
-
-                # evt.Skip()
-            else:
-                WorldOverlay.on_left_up(self, evt)
-            self._selected_tool_va.value = TOOL_NONE
-        else:
-            WorldOverlay.on_left_up(self, evt)
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
+        pass
 
     def _update_selected_target_position(self, v_pos):
         """
@@ -506,32 +443,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             fvsp = self.cnvs.phys_to_view(coordinates, offset)
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                 return target
-
-    def on_motion(self, evt):
-        """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        if self.active:
-            v_pos = evt.Position
-            if self.left_dragging:
-                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                DragMixin._on_motion(self, evt)
-                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                # self._selected_target = self.tab_data.main.currentTarget.value
-                self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], 0)) # TODO self._selected_target.coordinates.value[2]))
-                self.cnvs.update_drawing()
-                return
-            target = self._detect_point_inside_target(v_pos)
-            if target:
-                # self._hover_target = target
-                # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
-                return
-            else:
-                if self._mode == MODE_EDIT_FEATURES:
-                    self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
-                else:
-                    return
-                #     self.cnvs.reset_dynamic_cursor()
-                # self._hover_target = None
-            WorldOverlay.on_motion(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
@@ -581,6 +492,92 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             ctx.paint()
 
 class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
+
+    def on_left_down(self, evt):
+        """
+        Handle mouse left click down: Create/Move feature if feature tool is toggled,
+        otherwise let the canvas handle the event (for proper dragging)
+        """
+        if self.active:
+            v_pos = evt.Position
+            target = self._detect_point_inside_target(v_pos)
+            if self._mode == MODE_EDIT_FEATURES:
+                if target:
+                    # move/drag the selected target
+                    self.tab_data.main.currentTarget.value = target
+                    self._selected_target = target
+                    DragMixin._on_left_down(self, evt)
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                else:
+                    # create new target based on the physical position then disable the target tool
+                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                    # if self.tab_data.main.selected_target_type is None:
+                    #     self.tab_data.main.selected_target_type.value = "Fiducial"
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1],
+                                                 type=self.tab_data.main.selected_target_type.value)  # TODO
+                    # self._selected_tool_va.value = TOOL_NONE
+
+            else:
+                if target:
+                    self.tab_data.main.currentTarget.value = target
+                # self._selected_target = target
+                # self._selected_tool_va.value = TOOL_NONE
+                # STOP THE DRAGGING of the canvas
+                evt.Skip()
+                # WorldOverlay.on_left_down(self, evt)
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        """
+        Handle mouse click left up: Move the selected target to the designated point,
+        otherwise let the canvas handle the event when the overlay is active.
+        """
+        if self.active:
+            # evt.Skip()
+            DragMixin._on_left_up(self, evt)
+            self.clear_drag()
+            self.cnvs.update_drawing()
+            self.cnvs.reset_dynamic_cursor()
+            if self.left_dragging:
+
+                if self._selected_target:
+                    self._update_selected_target_position(evt.Position)
+
+                # evt.Skip()
+            else:
+                WorldOverlay.on_left_up(self, evt)
+            self._selected_tool_va.value = TOOL_NONE
+            self.tab_data.main.selected_target_type.value = "Fiducial"
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
+        if self.active:
+            v_pos = evt.Position
+            if self.left_dragging:
+                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                DragMixin._on_motion(self, evt)
+                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                # self._selected_target = self.tab_data.main.currentTarget.value
+                self._selected_target.coordinates.value = tuple(
+                    (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
+                self.cnvs.update_drawing()
+                return
+            target = self._detect_point_inside_target(v_pos)
+            if target:
+                # self._hover_target = target
+                # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
+                return
+            else:
+                if self._mode == MODE_EDIT_FEATURES:
+                    self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
+                else:
+                    return
+                #     self.cnvs.reset_dynamic_cursor()
+                # self._hover_target = None
+            WorldOverlay.on_motion(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
@@ -635,6 +632,116 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
 class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
+    # def __init__(self, cnvs, tab_data):
+    #     CryoCorrelationPointsOverlay.__init__(self, cnvs, tab_data)
+
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
+        if self.active:
+            v_pos = evt.Position
+            if self.left_dragging:
+                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                DragMixin._on_motion(self, evt)
+                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+                    self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                        (p_pos[0], p_pos[1], 0))
+                # self._selected_target = self.tab_data.main.currentTarget.value
+                else:
+                    self._selected_target.coordinates.value = tuple((p_pos[0], p_pos[1], 0)) # TODO self._selected_target.coordinates.value[2]))
+                self.cnvs.update_drawing()
+                return
+            target = self._detect_point_inside_target(v_pos)
+            if target or self.tab_data.fib_surface_fiducial :
+                # self._hover_target = target
+                # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
+                return
+            else:
+                if self._mode == MODE_EDIT_FEATURES:
+                    self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
+                else:
+                    return
+                #     self.cnvs.reset_dynamic_cursor()
+                # self._hover_target = None
+            WorldOverlay.on_motion(self, evt)
+
+    def on_left_down(self, evt):
+        """
+        Handle mouse left click down: Create/Move feature if feature tool is toggled,
+        otherwise let the canvas handle the event (for proper dragging)
+        """
+        if self.active:
+            v_pos = evt.Position
+            target = self._detect_point_inside_target(v_pos)
+            if self._mode == MODE_EDIT_FEATURES:
+                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+                    # add/modify fib_surface_fiducial
+                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                    if self.tab_data.fib_surface_fiducial is not None:
+                        # self._selected_target =  self.tab_data.fib_surface_fiducial
+                        # DragMixin._on_left_down(self, evt)
+                        # self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                        self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                            (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
+                        # self.cnvs.update_drawing()
+                        self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                    else:
+                        self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value)
+                elif target:
+                    # move/drag the selected target
+                    self.tab_data.main.currentTarget.value = target
+                    self._selected_target = target
+                    DragMixin._on_left_down(self, evt)
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                else:
+                    # create new target based on the physical position then disable the target tool
+                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                    # if self.tab_data.main.selected_target_type is None:
+                    #     self.tab_data.main.selected_target_type.value = "Fiducial"
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value) #TODO
+                    # self._selected_tool_va.value = TOOL_NONE
+
+            else:
+                if target:
+                    self.tab_data.main.currentTarget.value = target
+                # self._selected_target = target
+                # self._selected_tool_va.value = TOOL_NONE
+                # STOP THE DRAGGING of the canvas
+                evt.Skip()
+                # WorldOverlay.on_left_down(self, evt)
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        """
+        Handle mouse click left up: Move the selected target to the designated point,
+        otherwise let the canvas handle the event when the overlay is active.
+        """
+        if self.active:
+            # evt.Skip()
+            DragMixin._on_left_up(self, evt)
+            self.clear_drag()
+            self.cnvs.update_drawing()
+            self.cnvs.reset_dynamic_cursor()
+            if self.left_dragging:
+                #TODO separate concerns if and else are not looking for same conditiond
+                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+                    p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+                    self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                        (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
+                    self.cnvs.update_drawing()
+
+                elif self._selected_target:
+                    self._update_selected_target_position(evt.Position)
+
+                # evt.Skip()
+            else:
+                WorldOverlay.on_left_up(self, evt)
+            self._selected_tool_va.value = TOOL_NONE
+            self.tab_data.main.selected_target_type.value = "Fiducial"
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
         Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
@@ -684,3 +791,16 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 #     self._label.draw(ctx)
 
                 ctx.paint()
+
+        if self.tab_data.fib_surface_fiducial:
+            coordinates = self.tab_data.fib_surface_fiducial.coordinates.value
+            half_size_offset = self.cnvs.get_half_buffer_size()
+            bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
+                                                self.cnvs.scale,
+                                                offset=half_size_offset)
+
+            def set_icon(feature_icon):
+                ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
+
+            set_icon(self._feature_icons[ self.tab_data.fib_surface_fiducial.type.value])
+            ctx.paint()

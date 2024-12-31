@@ -34,6 +34,8 @@ import wx
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
+
+from odemis.acq.target import Target
 from odemis.gui.model import TOOL_FEATURE, TOOL_FIDUCIAL
 
 import odemis.acq.stream as acqstream
@@ -508,8 +510,12 @@ class CorrelationPointsController(object):
         self.z_targeting_btn = panel.btn_z_targeting
         self.z_targeting_btn.Enable(False)  # Initially disable the Z-targeting button
 
+        # Access the Refractive Index correction
+        self.refractive_index_btn = panel.btn_refractive_index
+        # self.fib_surface_fiducial: Target = None
+        self.refractive_index_btn.Bind(wx.EVT_BUTTON, self.on_refractive_index)
+
         self.delete_btn = panel.btn_delete_row
-        self.load_btn = panel.load_points
 
         # Bind events for stream selector and Z-targeting
         # self.stream_selector.Bind(wx.EVT_COMBOBOX, self.on_stream_change)
@@ -585,6 +591,15 @@ class CorrelationPointsController(object):
     # def _on_target_changes(self, targets: list) -> None:
     #     pass
     #     # self._populate_table()
+
+    def on_refractive_index(self, evt):
+        # only one target that keeps on changing, at the end if do correlation possible,
+        # rerun the correlation calculation (call decorator)
+        # how to do calculation if things rapidly change than the calculation speed
+
+        if self._tab_data_model.focussedView.value.name.value == "SEM Overview":
+            self._tab_data_model.tool.value = TOOL_FIDUCIAL
+            self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
 
     def on_char(self, evt: wx.Event) -> None:
         """handle key presses
@@ -821,22 +836,25 @@ class CorrelationPointsController(object):
         existing_target =  False
         # existing_names = [t.name.value for t in self._tab_data_model.main.targets.value]
         # if existing_names and target.name.value in existing_names:
-        for row in range(self.grid.GetNumberRows()):
-        # if target and target.name.value in [self.grid.GetRowLabelValue(row) for row in range(self.grid.GetNumberRows())]:
-        # get selected row index and type
-            if self.selected_target_in_grid(target, row):
-            # if target and self.grid.GetRowLabelValue(row) == target.name.value:
-                # get the row index from row label which is target name
-                # row_index = self.grid.get_row_index(target.name.value)
-                self.grid.SelectRow(row)
-                self.grid.SetCellValue(row, GridColumns.X.value, str(target.coordinates.value[0]))
-                self.grid.SetCellValue(row, GridColumns.Y.value, str(target.coordinates.value[1]))
-                if target.coordinates.value[2]:
-                    self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
-                # self.grid.SetCellValue(row, 4, str(target.index.value))
-                existing_target = True
-                # else if a new target is added which is not present in target list, add it in the grid
-        if target and not existing_target:
+
+        # for row in range(self.grid.GetNumberRows()):
+        # # if target and target.name.value in [self.grid.GetRowLabelValue(row) for row in range(self.grid.GetNumberRows())]:
+        # # get selected row index and type
+        #     if self.selected_target_in_grid(target, row):
+        #     # if target and self.grid.GetRowLabelValue(row) == target.name.value:
+        #         # get the row index from row label which is target name
+        #         # row_index = self.grid.get_row_index(target.name.value)
+        #         self.grid.SelectRow(row)
+        #         self.grid.SetCellValue(row, GridColumns.X.value, str(target.coordinates.value[0]))
+        #         self.grid.SetCellValue(row, GridColumns.Y.value, str(target.coordinates.value[1]))
+        #         if target.coordinates.value[2]:
+        #             self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
+        #         # self.grid.SetCellValue(row, 4, str(target.index.value))
+        #         existing_target = True
+        #         # else if a new target is added which is not present in target list, add it in the grid
+
+        if target: # and not existing_target:
+
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
             self.grid.AppendRows(1)

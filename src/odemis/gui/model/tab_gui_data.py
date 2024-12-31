@@ -285,57 +285,57 @@ class CryoGUIData(MicroscopyGUIData):
         return fm_roi
 
     # stream information needed to make it add new targets generalized, maybe not needed
-    def add_new_target(self, x, y, type, z=None, t_name=None):
-        #     if not t_name:
-        #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
-        #         t_name = make_unique_name("1", existing_names)
-        z = None
-
-        fm_focus_position = self.main.focus.position.value['z']
-        existing_names = [str(f.name.value) for f in self.main.targets.value]
-        if self.focussedView.value.name.value == "FLM Overview":
-            if type == "Fiducial":
-                t_name = make_unique_name("FM-1", existing_names)
-                # Parse through the existing names. find total elements with FM in the name
-                index = sum(1 for name in existing_names if "FM" in name)
-                # TOdo only static stream which is selected
-                for s in self.streams.value:
-                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        # self.main.fm_fiducial_index.value += 1
-                        target = Target(x, y, z, name=t_name, type=type,
-                                        index= index + 1, fm_focus_position=fm_focus_position)
-                        break
-            elif type == "RegionOfInterest":
-                t_name = make_unique_name("POI-1", existing_names)
-                index = sum(1 for name in existing_names if "POI" in name)
-                # TOdo only static stream which is selected
-                for s in self.streams.value:
-                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        # self.main.fm_fiducial_index.value += 1
-                        target = Target(x, y, z, name=t_name, type=type,
-                                        index=index + 1, fm_focus_position=fm_focus_position)
-                        break
-        elif self.focussedView.value.name.value == "SEM Overview":
-            t_name = make_unique_name("FIB-1", existing_names)
-            index = sum(1 for name in existing_names if "FIB" in name)
-            # self.main.fib_fiducial_index.value += 1
-            target = Target(x, y, z=0, name=t_name, type=type, index=index+1,
-                            fm_focus_position=fm_focus_position)
-        else:
-            raise ValueError("Invalid selected view")
-
-        if self.focussedView.value.name.value == "FLM Overview" and z is None:
-            # TOOL NONE in the calling function
-            logging.error("No z-index found in the given streams. Please select a stream with z-index.")
-            return
-        # same target structure for subscribing in overlay
-        # name to choose which grid, and good names to display on the streams and row name in grid target dictionary, identifier
-
-        self.main.targets.value.append(target)
-        self.main.currentTarget.value = target
-        return target
+    # def add_new_target(self, x, y, type, z=None, t_name=None):
+    #     #     if not t_name:
+    #     #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
+    #     #         t_name = make_unique_name("1", existing_names)
+    #     z = None
+    #
+    #     fm_focus_position = self.main.focus.position.value['z']
+    #     existing_names = [str(f.name.value) for f in self.main.targets.value]
+    #     if self.focussedView.value.name.value == "FLM Overview":
+    #         if type == "Fiducial":
+    #             t_name = make_unique_name("FM-1", existing_names)
+    #             # Parse through the existing names. find total elements with FM in the name
+    #             index = sum(1 for name in existing_names if "FM" in name)
+    #             # TOdo only static stream which is selected
+    #             for s in self.streams.value:
+    #                 if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+    #                     z = s.zIndex.value
+    #                     # self.main.fm_fiducial_index.value += 1
+    #                     target = Target(x, y, z, name=t_name, type=type,
+    #                                     index= index + 1, fm_focus_position=fm_focus_position)
+    #                     break
+    #         elif type == "RegionOfInterest":
+    #             t_name = make_unique_name("POI-1", existing_names)
+    #             index = sum(1 for name in existing_names if "POI" in name)
+    #             # TOdo only static stream which is selected
+    #             for s in self.streams.value:
+    #                 if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+    #                     z = s.zIndex.value
+    #                     # self.main.fm_fiducial_index.value += 1
+    #                     target = Target(x, y, z, name=t_name, type=type,
+    #                                     index=index + 1, fm_focus_position=fm_focus_position)
+    #                     break
+    #     elif self.focussedView.value.name.value == "SEM Overview":
+    #         t_name = make_unique_name("FIB-1", existing_names)
+    #         index = sum(1 for name in existing_names if "FIB" in name)
+    #         # self.main.fib_fiducial_index.value += 1
+    #         target = Target(x, y, z=0, name=t_name, type=type, index=index+1,
+    #                         fm_focus_position=fm_focus_position)
+    #     else:
+    #         raise ValueError("Invalid selected view")
+    #
+    #     if self.focussedView.value.name.value == "FLM Overview" and z is None:
+    #         # TOOL NONE in the calling function
+    #         logging.error("No z-index found in the given streams. Please select a stream with z-index.")
+    #         return
+    #     # same target structure for subscribing in overlay
+    #     # name to choose which grid, and good names to display on the streams and row name in grid target dictionary, identifier
+    #
+    #     self.main.targets.value.append(target)
+    #     self.main.currentTarget.value = target
+    #     return target
 
     # Todo: find the right margin
     ATOL_FEATURE_POS = 0.1e-3  # m
@@ -507,7 +507,85 @@ class CryoCorrelationGUIData(CryoGUIData):
 
         # for export tool
         self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+        self.fib_surface_fiducial: Target = None
 
+    def add_new_target(self, x, y, type, z=None, t_name=None):
+        #     if not t_name:
+        #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
+        #         t_name = make_unique_name("1", existing_names)
+        z = None
+
+        fm_focus_position = self.main.focus.position.value['z']
+        existing_names = [str(f.name.value) for f in self.main.targets.value]
+        if self.focussedView.value.name.value == "FLM Overview":
+            if type == "Fiducial":
+                t_name = make_unique_name("FM-1", existing_names)
+                # Parse through the existing names. find total elements with FM in the name
+                index = sum(1 for name in existing_names if "FM" in name)
+                # TOdo only static stream which is selected
+                for s in self.streams.value:
+                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        # self.main.fm_fiducial_index.value += 1
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index= index + 1, fm_focus_position=fm_focus_position)
+                        break
+            elif type == "RegionOfInterest":
+                t_name = make_unique_name("POI-1", existing_names)
+                index = sum(1 for name in existing_names if "POI" in name)
+                # TOdo only static stream which is selected
+                for s in self.streams.value:
+                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        # self.main.fm_fiducial_index.value += 1
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index=index + 1, fm_focus_position=fm_focus_position)
+                        break
+        elif self.focussedView.value.name.value == "SEM Overview":
+            if type == "SurfaceFiducial":
+            # self.main.fib_fiducial_index.value += 1
+                target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
+                                fm_focus_position=fm_focus_position)
+                self.fib_surface_fiducial = target
+                return target
+            t_name = make_unique_name("FIB-1", existing_names)
+            index = sum(1 for name in existing_names if "FIB" in name)
+            # self.main.fib_fiducial_index.value += 1
+            target = Target(x, y, z=0, name=t_name, type=type, index=index+1,
+                            fm_focus_position=fm_focus_position)
+
+        else:
+            raise ValueError("Invalid selected view")
+
+        if self.focussedView.value.name.value == "FLM Overview" and z is None:
+            # TOOL NONE in the calling function
+            logging.error("No z-index found in the given streams. Please select a stream with z-index.")
+            return
+        # same target structure for subscribing in overlay
+        # name to choose which grid, and good names to display on the streams and row name in grid target dictionary, identifier
+
+        self.main.targets.value.append(target)
+        self.main.currentTarget.value = target
+        return target
+
+    # def add_new_target(self, x, y, type, z=None, t_name=None):
+    #     #     if not t_name:
+    #     #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
+    #     #         t_name = make_unique_name("1", existing_names)
+    #     target = None
+    #     fm_focus_position = self.main.focus.position.value['z']
+    #     if self.focussedView.value.name.value == "SEM Overview" and type == "SurfaceFiducial":
+    #         # self.main.fib_fiducial_index.value += 1
+    #         target = Target(x, y, z=0, name=t_name, type=type, index=1,
+    #                         fm_focus_position=fm_focus_position)
+    #     else:
+    #         raise ValueError("Invalid selected view")
+    #
+    #     # same target structure for subscribing in overlay
+    #     # name to choose which grid, and good names to display on the streams and row name in grid target dictionary, identifier
+    #
+    #     self.fib_surface_fiducial = target
+    #     return target
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
