@@ -42,6 +42,8 @@ MODE_SHOW_FEATURES = 2
 FEATURE_DIAMETER = 30  # pixels
 FEATURE_ICON_CENTER = 17  # pixels
 
+MODE_EDIT_REFRACTIVE_INDEX = 3
+
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     """ Overlay for handling showing interesting features of cryo projects """
@@ -311,7 +313,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             guiimg.getStream('/icon/fiducial_unselected.png')),
         "RegionOfInterest": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_unselected.png')),
-        "ProjectedFiducial": cairo.ImageSurface.create_from_png(
+        "ProjectedPoints": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/projected_unselected.png')),
         "SurfaceFiducial": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/projected_unselected.png'))}
@@ -364,7 +366,10 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         """ Update the feature mode (show or edit) when the overlay is active and tools change"""
         if self.active:
             if selected_tool == TOOL_FIDUCIAL:
-                self._mode = MODE_EDIT_FEATURES
+                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+                    self._mode = MODE_EDIT_REFRACTIVE_INDEX
+                else:
+                    self._mode = MODE_EDIT_FEATURES
             else:
                 self._mode = MODE_SHOW_FEATURES
 
@@ -643,7 +648,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 DragMixin._on_motion(self, evt)
                 p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+                if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
                         (p_pos[0], p_pos[1], 0))
                 # self._selected_target = self.tab_data.main.currentTarget.value
@@ -673,21 +678,17 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         if self.active:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
-            if self._mode == MODE_EDIT_FEATURES:
-                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
+                if self.tab_data.fib_surface_fiducial:
                     # add/modify fib_surface_fiducial
-                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    if self.tab_data.fib_surface_fiducial is not None:
-                        # self._selected_target =  self.tab_data.fib_surface_fiducial
-                        # DragMixin._on_left_down(self, evt)
-                        # self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                        self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
-                            (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
-                        # self.cnvs.update_drawing()
-                        self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                    else:
-                        self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value)
-                elif target:
+                    self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                        (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                else:
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value)
+            elif self._mode == MODE_EDIT_FEATURES:
+                if target:
                     # move/drag the selected target
                     self.tab_data.main.currentTarget.value = target
                     self._selected_target = target
@@ -695,7 +696,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # create new target based on the physical position then disable the target tool
-                    p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                    # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                     # if self.tab_data.main.selected_target_type is None:
                     #     self.tab_data.main.selected_target_type.value = "Fiducial"
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value) #TODO
@@ -725,16 +726,14 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             self.cnvs.reset_dynamic_cursor()
             if self.left_dragging:
                 #TODO separate concerns if and else are not looking for same conditiond
-                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
+                if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
                         (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
                     self.cnvs.update_drawing()
-
-                elif self._selected_target:
-                    self._update_selected_target_position(evt.Position)
-
-                # evt.Skip()
+                else:
+                    if self._selected_target:
+                        self._update_selected_target_position(evt.Position)
             else:
                 WorldOverlay.on_left_up(self, evt)
             self._selected_tool_va.value = TOOL_NONE
