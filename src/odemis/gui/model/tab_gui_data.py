@@ -23,7 +23,7 @@ This file is part of Odemis.
 import logging
 import math
 from abc import ABCMeta
-from typing import Tuple
+from typing import Tuple, List
 
 import odemis.acq.stream as acqstream
 from odemis import model
@@ -508,6 +508,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         # for export tool
         self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
         self.fib_surface_fiducial: Target = None
+        self.projected_points: List[Target] = []
 
     def add_new_target(self, x, y, type, z=None, t_name=None):
         #     if not t_name:

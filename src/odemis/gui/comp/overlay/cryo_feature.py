@@ -369,6 +369,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
                     self._mode = MODE_EDIT_REFRACTIVE_INDEX
                 else:
+                    # TODO how to restrict the type as per the mode ?
                     self._mode = MODE_EDIT_FEATURES
             else:
                 self._mode = MODE_SHOW_FEATURES
@@ -680,6 +681,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             target = self._detect_point_inside_target(v_pos)
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
+                # Todo what does mode do
                 if self.tab_data.fib_surface_fiducial:
                     # add/modify fib_surface_fiducial
                     self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
@@ -802,4 +804,19 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
 
             set_icon(self._feature_icons[ self.tab_data.fib_surface_fiducial.type.value])
+            ctx.paint()
+
+        for target in self.tab_data.projected_points:
+            coordinates = target.coordinates.value
+            half_size_offset = self.cnvs.get_half_buffer_size()
+
+            # convert physical position to buffer 'world' coordinates
+            bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
+                                                self.cnvs.scale,
+                                                offset=half_size_offset)
+
+            def set_icon(feature_icon):
+                ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
+
+            set_icon(self._feature_icons[target.type.value])
             ctx.paint()
