@@ -598,8 +598,30 @@ class CorrelationPointsController(object):
         # how to do calculation if things rapidly change than the calculation speed
 
         if self._tab_data_model.focussedView.value.name.value == "SEM Overview":
+            # pass
             self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
-            self._tab_data_model.tool.value = TOOL_FIDUCIAL
+            self._tab_data_model.tool.value = TOOL_FIDUCIAL   # TODO should not select this (confusing)
+
+        # correlation_status = True
+        self.do_correlation()
+
+    def do_correlation(self):
+        # type the text
+        for target in self._tab_data_model.main.targets.value:
+            if "FIB" in target.name.value:
+                # deep copy of target such that type can be changed without changing the target
+                target_copy = copy.deepcopy(target)
+                target_copy.type.value = "ProjectedPoints"
+                self._tab_data_model.projected_points.append(target_copy)
+
+        # for vp in self._viewports:
+        #     if vp.view.name.value == "SEM Overview":
+        #         vp.canvas.draw()
+
+
+
+        # self._tab_data_model.main.selected_target_type.value = "ProjectedPoints"
+        # self._tab_data_model.tool.value = TOOL_FIDUCIAL
 
     def on_char(self, evt: wx.Event) -> None:
         """handle key presses
