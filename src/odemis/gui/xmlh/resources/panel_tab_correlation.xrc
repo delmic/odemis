@@ -262,17 +262,7 @@
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
                               <object class="wxButton" name="btn_z_targeting">
-                                <label>Z Targeting</label>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxButton" name="add_fiducial">
-                                <label>Add Fiducial</label>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxButton" name="add_roi">
-                                <label>Add RoI</label>
+                                <label>Refine Z</label>
                               </object>
                             </object>
                             <!-- Points Table (wxListCtrl) -->
@@ -305,6 +295,15 @@
                                 <orient>wxHORIZONTAL</orient>
                               </object>
                             </object>
+                                                                <object class="sizeritem">
+                                      <object class="wxStaticText" name="txt_correlation_rms">
+                                        <label>Correlation RMS Deviation :  </label>
+                                        <fg>#E5E5E5</fg>
+                                        <hidden>1</hidden>
+                                      </object>
+                                      <flag>wxLEFT</flag>
+                                                                </object>
+
                           </object>
                         </object>
                         </object>

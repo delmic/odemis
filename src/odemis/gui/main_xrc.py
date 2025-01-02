@@ -377,11 +377,10 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
         self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
         self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
-        self.add_fiducial = xrc.XRCCTRL(self, "add_fiducial")
-        self.add_roi = xrc.XRCCTRL(self, "add_roi")
         self.table_grid = xrc.XRCCTRL(self, "table_grid")
         self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
         self.btn_refractive_index = xrc.XRCCTRL(self, "btn_refractive_index")
+        self.txt_correlation_rms = xrc.XRCCTRL(self, "txt_correlation_rms")
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
         self.lbl_instructions_correlation = xrc.XRCCTRL(self, "lbl_instructions_correlation")
@@ -3808,17 +3807,7 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
                               <object class="wxButton" name="btn_z_targeting">
-                                <label>Z Targeting</label>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxButton" name="add_fiducial">
-                                <label>Add Fiducial</label>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxButton" name="add_roi">
-                                <label>Add RoI</label>
+                                <label>Refine Z</label>
                               </object>
                             </object>
                             <!-- Points Table (wxListCtrl) -->
@@ -3851,6 +3840,15 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                 <orient>wxHORIZONTAL</orient>
                               </object>
                             </object>
+                                                                <object class="sizeritem">
+                                      <object class="wxStaticText" name="txt_correlation_rms">
+                                        <label>Correlation RMS Deviation :  </label>
+                                        <fg>#E5E5E5</fg>
+                                        <hidden>1</hidden>
+                                      </object>
+                                      <flag>wxLEFT</flag>
+                                                                </object>
+
                           </object>
                         </object>
                         </object>
