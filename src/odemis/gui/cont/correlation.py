@@ -25,6 +25,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import copy
 import logging
 import math
+import threading
+import time
 from enum import Enum
 from typing import List
 
@@ -587,6 +589,11 @@ class CorrelationPointsController(object):
         for vp in self._viewports:
             vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
+        self.latest_change = None           # Holds the latest change
+        self.lock = threading.Lock()        # Lock to synchronize access to changes
+        self.is_processing = False          # To track if the function is currently processing
+        self.process_thread = None          # The thread handling the change
+
     # @call_in_wx_main
     # def _on_target_changes(self, targets: list) -> None:
     #     pass
@@ -603,10 +610,49 @@ class CorrelationPointsController(object):
             self._tab_data_model.tool.value = TOOL_FIDUCIAL   # TODO should not select this (confusing)
 
         # correlation_status = True
-        self.do_correlation()
+        self.latest_change = True
+        self.queue_latest_change()
 
+    def queue_latest_change(self):
+        """
+        This method is called when there's an input change.
+        If there's a change already being processed, it will cancel it and process the latest change.
+        """
+        with self.lock:  # Ensure thread-safe access to latest_change
+            self.latest_change = True # Overwrite with the latest change
+
+            if self.is_processing:  # If a process is running, it will handle the latest change.
+                logging.warning("Multipoint Correlation is running. It will handle the latest change.")
+                return
+
+            # Start processing the latest change in a separate thread
+            self.process_thread = threading.Thread(target=self.process_latest_change)
+            self.process_thread.start()
+
+    def process_latest_change(self):
+        """
+        Processes only the latest change. If a new change comes in, it will only process that.
+        """
+        while True:
+            with self.lock:
+                if not self.latest_change:
+                    break  # No more changes to process
+
+                self.latest_change = False  # Clear the latest change to indicate it's being processed
+                self.is_processing = True
+
+            # Process the change (simulate long processing)
+            # TODO add logging commands
+            self.do_correlation()
+
+            with self.lock:
+                self.is_processing = False  # Mark that processing is complete
+
+    # @call_in_wx_main
     def do_correlation(self):
         # type the text
+        time.sleep(5) #Will slow down
+        self._tab_data_model.projected_points = []
         for target in self._tab_data_model.main.targets.value:
             if "FIB" in target.name.value:
                 # deep copy of target such that type can be changed without changing the target
@@ -614,9 +660,9 @@ class CorrelationPointsController(object):
                 target_copy.type.value = "ProjectedPoints"
                 self._tab_data_model.projected_points.append(target_copy)
 
-        # for vp in self._viewports:
-        #     if vp.view.name.value == "SEM Overview":
-        #         vp.canvas.draw()
+        for vp in self._viewports:
+            if vp.view.name.value == "SEM Overview":
+                vp.canvas.update_drawing()
 
 
 
@@ -822,6 +868,8 @@ class CorrelationPointsController(object):
             self.current_target_coordinate_subscription = True
             # subscribe only once
 
+
+
     @call_in_wx_main
     def _on_current_coordinates_changes(self, coordinates):
         target = self._tab_data_model.main.currentTarget.value
@@ -841,6 +889,11 @@ class CorrelationPointsController(object):
                 self.grid.SetCellValue(row, GridColumns.Y.value, str(target.coordinates.value[1]))
                 if target.coordinates.value[2]:
                     self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
+
+                # correlation_status = True
+                # TODO is it a good way?
+                self.latest_change = True
+                self.queue_latest_change()
 
     @call_in_wx_main
     def _on_target_changes(self, targets):
