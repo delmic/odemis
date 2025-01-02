@@ -589,6 +589,8 @@ class CorrelationPointsController(object):
         for vp in self._viewports:
             vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
+        self.correlation_txt = panel.txt_correlation_rms
+        self.correlation_txt.Show(True)
         self.latest_change = None           # Holds the latest change
         self.lock = threading.Lock()        # Lock to synchronize access to changes
         self.is_processing = False          # To track if the function is currently processing
@@ -623,6 +625,7 @@ class CorrelationPointsController(object):
 
             if self.is_processing:  # If a process is running, it will handle the latest change.
                 logging.warning("Multipoint Correlation is running. It will handle the latest change.")
+                self.correlation_txt.SetLabel("Correlation RMS Deviation :  Calculating...")
                 return
 
             # Start processing the latest change in a separate thread
@@ -646,6 +649,7 @@ class CorrelationPointsController(object):
             self.do_correlation()
 
             with self.lock:
+                self.correlation_txt.SetLabel("Correlation RMS Deviation :  Result")
                 self.is_processing = False  # Mark that processing is complete
 
     # @call_in_wx_main
