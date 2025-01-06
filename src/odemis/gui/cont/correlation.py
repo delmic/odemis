@@ -86,6 +86,59 @@ def convert_rgb_to_sem(rgb_stream: RGBStream) -> StaticSEMStream:
 
     return sem_stream
 
+class CorrelationMetadata:
+    """
+    Required image metadata for correlation calculation, alternatively use data directly.
+    """
+    def __init__(self, fib_image_shape: List[int], fib_pixel_size: List[float], fm_image_shape: List[int], fm_pixel_size: List[float]):
+        self.fib_image_shape = fib_image_shape
+        self.fib_pixel_size = fib_pixel_size
+        self.fm_image_shape = fm_image_shape
+        self.fm_pixel_size = fm_pixel_size
+
+# class CorrelationTargets:
+#     def __init__(self, targets: List[Target], projected_targets: List[Target], fib_surface_fiducial: Target,
+#                  fib_stream: StaticSEMStream, fm_streams: List[StaticFluoStream],
+#                  image_metadata: CorrelationMetadata,
+#                  correlation_result: float = None, refractive_index_correction: bool = True,
+#                  superz: StaticFluoStream = None):
+#         self.targets = targets
+#         self.projected_targets = projected_targets
+#         self.correlation_result = correlation_result
+#         self.fib_surface_fiducial = fib_surface_fiducial
+#         self.refractive_index_correction = refractive_index_correction
+#         # self.fm_roi = fm_roi
+#         # self.fm_fiducials = fm_fiducials
+#         # self.fib_fiducials = fib_fiducials
+#         # self.fib_roi = fib_roi
+#         self.fib_stream = fib_stream
+#         self.fm_streams = fm_streams
+#         self.superz = superz
+#         self.image_metadata = image_metadata
+
+class CorrelationTarget:
+    def __init__(self):
+        self.fm_pois : List[Target] = []
+        self.fm_fiducials : List[Target] = []
+        self.fib_fiducials : List[Target] = []
+        self.fib_surface_fiducial : Target = None
+
+        self.correlation_result: float = None
+        self.refractive_index_correction: bool = True
+        self.fib_projected_pois: List[Target] = []
+        self.fib_projected_fiducials: List[Target] = []
+
+        self.fib_stream :StaticSEMStream = None
+        self.fm_streams: List[StaticFluoStream] = []
+        self.superz: StaticFluoStream = None
+        self.image_metadata: CorrelationMetadata = None
+
+    def reset_attributes(self):
+        # rest of the attributes is set to none except the streams
+        self.correlation_result = None
+        self.fib_projected_pois = None
+        self.fib_projected_fiducials = None
+
 class CorrelationController(object):
 
     def __init__(self, tab_data, panel, tab, viewports):
@@ -483,6 +536,7 @@ class GridColumns(Enum):
     Index = 4 # Column for "index"
 
 
+DEBUG = False
 class CorrelationPointsController(object):
 
     def __init__(self, tab_data, panel, tab, viewports):
@@ -577,9 +631,18 @@ class CorrelationPointsController(object):
         # self.grid.AutoSizeColumns()
 
         # self._populate_table()
+        # TODO make sure before initializing this class, feature ans feature status is fixed ? (Controller)
+        if DEBUG:
+            self.correlation_target = CorrelationTarget()
+        else:
+            self.correlation_target = None
+        # self._tab_data_model.main.currentFeature.correlation_targets[self._tab_data_model.main.currentFeature.status.value] = CorrelationTarget()
+        # self.correlation_target = self._tab_data_model.main.currentFeature.correlation_targets[self._tab_data_model.main.currentFeature.status.value]
+
         self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
         self.current_target_coordinate_subscription = False
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
+        self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface, init=True)
         # if self._tab_data_model.main.currentTarget:
         #     self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes, init=True)
 
@@ -601,6 +664,73 @@ class CorrelationPointsController(object):
     #     pass
     #     # self._populate_table()
 
+    # initialize correlation target class in the current feature, once the minimum requirements
+    # make sure it is not initialized multiple times
+    # add correlation target as an attribute in cryo feature, no need of VA
+    # make an update function, which updates the specific parts of the class when changed
+
+    def update_feature_correlation_target(self, surface_fiducial = False):
+
+        if not self.correlation_target:
+            return
+
+        if surface_fiducial:
+            # todo check if it has a value
+            fib_surface_fiducial = self._tab_data_model.fib_surface_point.value
+            self.correlation_target.fib_surface_fiducial = fib_surface_fiducial
+        else:
+        # if True:
+            fib_fiducials = []
+            fm_fiducials = []
+            fm_pois = []
+            # fib_surface_fiducial = None
+            for target in self._tab_data_model.main.targets.value:
+                if "FIB" in target.name.value:
+                    fib_fiducials.append(target)
+                elif "FM" in target.name.value:
+                    fm_fiducials.append(target)
+                elif "POI" in target.name.value:
+                    fm_pois.append(target)
+            if fib_fiducials:
+                fib_fiducials.sort(key=lambda x: x.index.value)
+                self.correlation_target.fib_fiducials = fib_fiducials
+            if fm_fiducials:
+                fm_fiducials.sort(key=lambda x: x.index.value)
+                self.correlation_target.fm_fiducials = fm_fiducials
+            if fm_pois:
+                fm_pois.sort(key=lambda x: x.index.value)
+                self.correlation_target.fm_pois = fm_pois
+
+
+        self.correlation_target.reset_attributes()
+
+
+    def check_correlation_conditions(self):
+        if not DEBUG:
+            if not self._tab_data_model.main.currentFeature.value:
+                return False
+            elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
+                self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
+                self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
+
+
+        if self.correlation_target:
+            if not DEBUG:
+                if len(self.correlation_target.fib_fiducials) >= 4 and len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) > 0 and self.correlation_target.fib_surface_fiducial:
+                    return True
+                else:
+                    return False
+            else:
+                if len(self.correlation_target.fib_fiducials) >= 1 and len(self.correlation_target.fm_fiducials) >= 1 and self.correlation_target.fib_surface_fiducial:
+                    return True
+                else:
+                    return False
+        else:
+            return False
+
+
+
+
     def on_refractive_index(self, evt):
         # only one target that keeps on changing, at the end if do correlation possible,
         # rerun the correlation calculation (call decorator)
@@ -610,10 +740,11 @@ class CorrelationPointsController(object):
             # pass
             self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
             self._tab_data_model.tool.value = TOOL_FIDUCIAL   # TODO should not select this (confusing)
+            # self.update_feature_correlation_target(surface_fiducial=True)
 
-        # correlation_status = True
-        self.latest_change = True
-        self.queue_latest_change()
+        # if self.check_correlation_conditions():
+        #     self.latest_change = True
+        #     self.queue_latest_change()
 
     def queue_latest_change(self):
         """
@@ -873,6 +1004,17 @@ class CorrelationPointsController(object):
             # subscribe only once
 
 
+    def _on_current_fib_surface(self, fib_surface_fiducial):
+        #todo can be done in intialization
+        if self._tab_data_model.fib_surface_point.value:
+            self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface, init=True)
+
+    def _on_current_coordinates_fib_surface(self, coordinates):
+        self.update_feature_correlation_target(surface_fiducial=True)
+
+        if self.check_correlation_conditions():
+            self.latest_change = True
+            self.queue_latest_change()
 
     @call_in_wx_main
     def _on_current_coordinates_changes(self, coordinates):
@@ -894,10 +1036,12 @@ class CorrelationPointsController(object):
                 if target.coordinates.value[2]:
                     self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
 
-                # correlation_status = True
-                # TODO is it a good way?
+                self.update_feature_correlation_target()
+
+            if self.check_correlation_conditions():
                 self.latest_change = True
                 self.queue_latest_change()
+
 
     @call_in_wx_main
     def _on_target_changes(self, targets):

@@ -271,27 +271,3 @@ class CorrelationTab(Tab):
             return 1
         else:
             return None
-
-
-class CorrelationMetadata:
-    """
-    Required image metadata for correlation calculation, alternatively use data directly.
-    """
-    def __init__(self, fib_image_shape: List[int], fib_pixel_size: List[float], fm_image_shape: List[int], fm_pixel_size: List[float]):
-        self.fib_image_shape = fib_image_shape
-        self.fib_pixel_size = fib_pixel_size
-        self.fm_image_shape = fm_image_shape
-        self.fm_pixel_size = fm_pixel_size
-
-class CorrelationTargets:
-    def __init__(self, fm_roi: List[Target], fm_fiducials: List[Target], fib_fiducials: List[Target],
-                 fib_roi: List[Target], fib_stream: StaticSEMStream, fm_streams: List[StaticFluoStream],
-                 image_metadata: CorrelationMetadata, superz: StaticFluoStream = None):
-        self.fm_roi = fm_roi
-        self.fm_fiducials = fm_fiducials
-        self.fib_fiducials = fib_fiducials
-        self.fib_roi = fib_roi
-        self.fib_stream = fib_stream
-        self.fm_streams = fm_streams
-        self.superz = superz
-        self.image_metadata = image_metadata

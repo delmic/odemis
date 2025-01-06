@@ -487,6 +487,7 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.fn_count)
 
 
+DEBUG = False
 class CryoCorrelationGUIData(CryoGUIData):
     """ Represent an interface used to correlate multiple streams together.
 
@@ -504,11 +505,11 @@ class CryoCorrelationGUIData(CryoGUIData):
 
         # the streams to correlate among all streams in .streams
         self.selected_stream = model.VigilantAttribute(None)
+        self.fib_surface_point = model.VigilantAttribute(None)
+        self.projected_points: List[Target] = []
 
         # for export tool
         self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
-        self.fib_surface_fiducial: Target = None
-        self.projected_points: List[Target] = []
 
     def add_new_target(self, x, y, type, z=None, t_name=None):
         #     if not t_name:
@@ -525,29 +526,38 @@ class CryoCorrelationGUIData(CryoGUIData):
                 index = sum(1 for name in existing_names if "FM" in name)
                 # TOdo only static stream which is selected
                 for s in self.streams.value:
-                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        # self.main.fm_fiducial_index.value += 1
+                    if DEBUG and s:
+                        z = 10
                         target = Target(x, y, z, name=t_name, type=type,
-                                        index= index + 1, fm_focus_position=fm_focus_position)
+                                        index=index + 1, fm_focus_position=fm_focus_position)
+                        break
+                    elif isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index=index + 1, fm_focus_position=fm_focus_position)
                         break
             elif type == "RegionOfInterest":
                 t_name = make_unique_name("POI-1", existing_names)
                 index = sum(1 for name in existing_names if "POI" in name)
                 # TOdo only static stream which is selected
                 for s in self.streams.value:
-                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        # self.main.fm_fiducial_index.value += 1
+                    if DEBUG and s:
+                        z = 10
                         target = Target(x, y, z, name=t_name, type=type,
                                         index=index + 1, fm_focus_position=fm_focus_position)
                         break
+                    elif isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index=index + 1, fm_focus_position=fm_focus_position)
+                        break
+
         elif self.focussedView.value.name.value == "SEM Overview":
             if type == "SurfaceFiducial":
             # self.main.fib_fiducial_index.value += 1
                 target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
                                 fm_focus_position=fm_focus_position)
-                self.fib_surface_fiducial = target
+                self.fib_surface_point.value = target
                 return target
             t_name = make_unique_name("FIB-1", existing_names)
             index = sum(1 for name in existing_names if "FIB" in name)
