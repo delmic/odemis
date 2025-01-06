@@ -37,6 +37,7 @@ import wx
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
 
+from odemis.acq.feature import save_features
 from odemis.acq.target import Target
 from odemis.gui.model import TOOL_FEATURE, TOOL_FIDUCIAL
 
@@ -703,6 +704,8 @@ class CorrelationPointsController(object):
 
 
         self.correlation_target.reset_attributes()
+
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
 
     def check_correlation_conditions(self):
