@@ -1,4 +1,5 @@
 import glob
+import itertools
 import json
 import logging
 import math
@@ -70,10 +71,44 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     :return: list of JSON serializable features
     """
     flist = []
+    correlation_targets = {}
     for feature in features:
+        # todo make a new function
+        # TODO add stream names and other values
+        for key, ct_class in feature.correlation_targets.items():
+            correlation_targets[key] = {}
+            all_targets = []
+            correlation_targets[key]['coordinates'] = []
+            correlation_targets[key]['index'] = []
+            correlation_targets[key]['type'] = []
+            correlation_targets[key]['name'] = []
+            correlation_targets[key]['fm_focus_position'] = []
+            if ct_class.fm_fiducials:
+                all_targets.append(ct_class.fm_fiducials)
+            if ct_class.fm_pois:
+                all_targets.append(ct_class.fm_pois)
+            if ct_class.fib_fiducials:
+                all_targets.append(ct_class.fib_fiducials)
+            if ct_class.fib_projected_fiducials:
+                all_targets.append(ct_class.fib_projected_fiducials)
+            if ct_class.fib_projected_pois:
+                all_targets.append(ct_class.fib_projected_pois)
+            if ct_class.fib_surface_fiducial:
+                all_targets.append(ct_class.fib_surface_fiducial)
+            # serialize all_targets
+            all_targets = list(itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
+            for target in all_targets:
+                correlation_targets[key]['coordinates'].append(target.coordinates.value)
+                correlation_targets[key]['index'].append(target.index.value)
+                correlation_targets[key]['type'].append(target.type.value)
+                correlation_targets[key]['name'].append(target.name.value)
+                correlation_targets[key]['fm_focus_position'].append(target.fm_focus_position.value)
+
         feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+                        'status': feature.status.value, 'correlation_targets': correlation_targets}
         flist.append(feature_item)
+        # add correlation targets which is a dictionary to the json fil
+
     return {'feature_list': flist}
 
 
