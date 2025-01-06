@@ -58,6 +58,9 @@ class CryoFeature(object):
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()
+        # TODO why VA, can it be no VA, maybe for saving
+        # TODO add status ?
+        self.correlation_targets = {}
 
 
 def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:

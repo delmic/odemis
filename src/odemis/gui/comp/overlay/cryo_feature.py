@@ -34,7 +34,6 @@ from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_DEACTIVE,
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
-from odemis.gui.cont.tabs.correlation_tab import CorrelationTargets
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST
 
 MODE_EDIT_FEATURES = 1
@@ -650,7 +649,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 DragMixin._on_motion(self, evt)
                 p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                    self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                    self.tab_data.fib_surface_point.value.coordinates.value = tuple(
                         (p_pos[0], p_pos[1], 0))
                 # self._selected_target = self.tab_data.main.currentTarget.value
                 else:
@@ -658,7 +657,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 self.cnvs.update_drawing()
                 return
             target = self._detect_point_inside_target(v_pos)
-            if target or self.tab_data.fib_surface_fiducial :
+            if target or self.tab_data.fib_surface_point.value :
                 # self._hover_target = target
                 # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
                 return
@@ -682,9 +681,9 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                 # Todo what does mode do
-                if self.tab_data.fib_surface_fiducial:
+                if self.tab_data.fib_surface_point.value:
                     # add/modify fib_surface_fiducial
-                    self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                    self.tab_data.fib_surface_point.value.coordinates.value = tuple(
                         (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
@@ -730,7 +729,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 #TODO separate concerns if and else are not looking for same conditiond
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-                    self.tab_data.fib_surface_fiducial.coordinates.value = tuple(
+                    self.tab_data.fib_surface_point.value.coordinates.value = tuple(
                         (p_pos[0], p_pos[1], 0))  # TODO self._selected_target.coordinates.value[2]))
                     self.cnvs.update_drawing()
                 else:
@@ -793,8 +792,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
                 ctx.paint()
 
-        if self.tab_data.fib_surface_fiducial:
-            coordinates = self.tab_data.fib_surface_fiducial.coordinates.value
+        if self.tab_data.fib_surface_point.value:
+            coordinates = self.tab_data.fib_surface_point.value.coordinates.value
             half_size_offset = self.cnvs.get_half_buffer_size()
             bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
                                                 self.cnvs.scale,
@@ -803,7 +802,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             def set_icon(feature_icon):
                 ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
 
-            set_icon(self._feature_icons[ self.tab_data.fib_surface_fiducial.type.value])
+            set_icon(self._feature_icons[ self.tab_data.fib_surface_point.value.type.value])
             ctx.paint()
 
         for target in self.tab_data.projected_points:
