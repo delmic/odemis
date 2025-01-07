@@ -504,12 +504,12 @@ class TiledAcquisitionTask(object):
 
         acq_time = 0
         for stream in self._streams:
-            # add 1s to account for stage/objective movement time in z direction
-            acq_stream_time = acqmng.estimateTime([stream]) + 1
-            if stream.focuser is not None and len(self._zlevels) > 1:
-                # Acquisition time for each stream will be multiplied by the number of zstack levels
-                zlevels = [item for item in self._zlevels if item is not None]
-                acq_stream_time *= len(zlevels)
+            acq_stream_time = acqmng.estimateTime([stream])
+            # Acquisition time for each stream will be multiplied by the number of zstack levels
+            zlevels = [item for item in self._zlevels if item is not None]
+            if stream.focuser is not None and len(zlevels):
+                # add 1s to account for stage/objective movement time in z direction
+                acq_stream_time = (acq_stream_time + 1) * len(zlevels)
             # add 2 seconds to account for switching from one tile to next tile
             acq_time += acq_stream_time + 2
 
