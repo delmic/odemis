@@ -1,9 +1,11 @@
 import copy
 import logging
+import math
 import os
 
 import wx
 
+from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -11,6 +13,7 @@ from odemis.acq.feature import (
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
     CryoFeature,
+    calculate_stage_tilt_from_milling_angle,
     get_feature_position_at_posture,
     save_features,
 )
@@ -142,6 +145,22 @@ class CryoFeatureController(object):
         if feature is None:
             logging.warning("No feature selected")
             return
+
+        # TODO: disable buttons if no feature selected
+        # set the milling angle
+        milling_angle = math.radians(self._panel.param_feature_milling_angle.GetValue())
+        # print(f"milling_angle2: {milling_angle2}")
+        # milling_angle = math.radians(18) # TODO: add ui element to set this
+        pre_tilt = self.pm.stage.getMetadata()[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+        stage_tilt = calculate_stage_tilt_from_milling_angle(milling_angle=milling_angle, 
+                                                             pre_tilt=pre_tilt, 
+                                                             column_tilt=math.radians(52))
+
+        # update the metadata of the stage
+        self.pm.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': stage_tilt}})
+        logging.info(f"MILLING ANGLE: {milling_angle}, Pre-tilt: {pre_tilt}, Stage tilt: {stage_tilt}")
+        logging.info(f"Updated Stage metadata: {self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]}")
+
         self._move_to_posture(feature, MILLING, recalculate=True)
 
     def _move_to_posture(self, feature: CryoFeature, posture: int, recalculate: bool = False):

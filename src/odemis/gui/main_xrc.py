@@ -719,6 +719,7 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.btn_create_move_feature = xrc.XRCCTRL(self, "btn_create_move_feature")
         self.cmb_feature_status = xrc.XRCCTRL(self, "cmb_feature_status")
         self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
+        self.param_feature_milling_angle = xrc.XRCCTRL(self, "param_feature_milling_angle")
         self.btn_feature_move_to_mill = xrc.XRCCTRL(self, "btn_feature_move_to_mill")
         self.btn_feature_save_position = xrc.XRCCTRL(self, "btn_feature_save_position")
         self.btn_feature_save_tasks = xrc.XRCCTRL(self, "btn_feature_save_tasks")
@@ -8730,15 +8731,50 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_feature_move_to_mill">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Move To MILL</label>
-                                    <style>wxALIGN_CENTRE</style>
+                                  <object class="wxStaticText">
+                                    <label>Milling Angle</label>
+                                    <fg>#DDDDDD</fg>
+                                    <border>10</border>
                                   </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
                                 </object>
+                              <object class="sizeritem">
+                                <object class="UnitFloatCtrl" name="param_feature_milling_angle">
+                                  <size>122,16</size>
+                                  <value>18</value>
+                                  <key_step>0.01</key_step>
+                                  <min>0</min>
+                                  <max>35</max>
+                                  <unit>deg</unit>
+                                  <scale>linear</scale>
+                                  <accuracy>4</accuracy>
+                                  <font>
+                                    <size>8</size>
+                                    <encoding>UTF-8</encoding>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxTOP</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="ImageTextButton" name="btn_feature_move_to_mill">
+                                  <height>24</height>
+                                  <bg>#000000</bg>
+                                  <label>Move To MILL</label>
+                                  <style>wxALIGN_CENTRE</style>
+                                </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>52</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_feature_save_position">
                                     <height>24</height>

@@ -737,3 +737,18 @@ def acquire_at_features(
     executeAsyncTask(future, task.run)
 
     return future
+
+def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: int = math.radians(52)) -> float:
+    """Calculate the stage tilt from the milling angle and the pre-tilt.
+    :param milling_angle: the milling angle in radians
+    :param pre_tilt: the pre-tilt in radians
+    :param column_tilt: the column tilt in radians (default TFS = 52deg)
+    :return: the stage tilt in radians
+    """
+    # Equation:
+    # MillingAngle = 90 - ColumnTilt + StageTilt - PreTilt
+    # StageTilt = MillingAngle + PreTilt + ColumnTilt - 90
+
+    # calculate the stage tilt from the milling angle and the pre-tilt
+    stage_tilt = milling_angle + pre_tilt + column_tilt - math.radians(90)
+    return stage_tilt
