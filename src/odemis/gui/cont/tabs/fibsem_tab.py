@@ -21,19 +21,30 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import collections
 import logging
+
 import wx
 
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
-from odemis.gui import conf
-
+import odemis.gui.util as guiutil
 from odemis import model
-from odemis.gui.cont.stream_bar import CryoStreamsController, CryoFIBAcquiredStreamsController
+from odemis.acq.move import FIB_IMAGING, MILLING, SEM_IMAGING
+from odemis.acq.stream import (
+    FIBStream,
+    LiveStream,
+    SEMStream,
+    StaticFIBStream,
+    StaticSEMStream,
+)
+from odemis.gui import conf
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.features import CryoFeatureController
+from odemis.gui.cont.stream_bar import (
+    CryoFIBAcquiredStreamsController,
+    CryoStreamsController,
+)
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.acq.stream import LiveStream, SEMStream, FIBStream, StaticSEMStream, StaticFIBStream
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
@@ -193,6 +204,8 @@ class FibsemTab(Tab):
         self.pm = self.tab_data_model.main.posture_manager
         panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
 
+        # TODO: replace with current_posture?
+        self.main_data.stage.position.subscribe(self._on_stage_pos, init=True)
 
     def _on_view(self, view):
         """Hide/Disable milling controls when fib view is not selected"""
@@ -304,31 +317,31 @@ class FibsemTab(Tab):
             init_pos = self.fib_stream.raw[0].metadata[model.MD_POS]
 
             # get difference between p_pos and init_pos
-            dist_x = p_pos[0] - init_pos[0]
-            dist_y = p_pos[1] - init_pos[1]
+            dx = p_pos[0] - init_pos[0]
+            dy = p_pos[1] - init_pos[1]
 
-            logging.info(f"Moving stage vertically by: {dist_x}, {dist_y}")
-            f = self.pm.sample_stage.move_vertical({"x": dist_x, "y": dist_y})
+            logging.info(f"Moving stage vertically by: {dx}, {dy}")
+            f = self.pm.sample_stage.move_vertical({"x": dx, "y": dy})
             f.result()
             return
 
         # super event passthrough
         active_canvas.on_left_down(evt)
 
-    # def _on_stage_pos(self, pos):
-    #     """
-    #     Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
-    #     :param pos: (dict str->float or None) updated position of the stage
-    #     """
-    #     guiutil.enable_tab_on_stage_position(
-    #         self.button,
-    #         self.main_data.posture_manager,
-    #         self._allowed_targets,
-    #         tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
-    #     )
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        guiutil.enable_tab_on_stage_position(
+            button=self.button,
+            posture_manager=self.pm,
+            target=[SEM_IMAGING, MILLING, FIB_IMAGING],
+            tooltip="FIBSEM tab is only available at SEM position"
+        )
 
     def terminate(self):
-        # self._stage.position.unsubscribe(self._on_stage_pos)
+        self.main_data.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
