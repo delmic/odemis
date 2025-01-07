@@ -234,8 +234,8 @@ class TestFastEMROA(unittest.TestCase):
         ymax = res_y * px_size_y * y_fields
         coordinates = (0, 0, xmax, ymax)  # in m, don't change
         polygon = [(0, 0), (0, ymax - px_size_y), (xmax - px_size_x, 0)]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -392,8 +392,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -439,8 +439,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -485,8 +485,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -531,8 +531,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -587,8 +587,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -654,8 +654,8 @@ class TestFastEMAcquisition(unittest.TestCase):
             (coordinates[0], coordinates[3]),  # xmin, ymax
             (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         roa_name = "test_megafield_id"
         roa = FastEMROA(shape=MockEditableShape(),
                         main_data=self.main_data,
@@ -1202,8 +1202,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
 
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
         roa = FastEMROA(shape=MockEditableShape(),
@@ -1368,8 +1368,8 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
     def test_save_full_cells(self):
         """Test saving fields with cell images of 900x900 px instead of 800x800 px"""
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roc_2 = fastem.FastEMROC("roc_2", 0, coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", 0, coordinates)
         points = [(0, 0), (0.000001, 0), (0.000001, 0.000001), (0, 0.000001)]
 
         roa = FastEMROA(shape=MockEditableShape(),
