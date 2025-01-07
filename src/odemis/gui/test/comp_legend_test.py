@@ -69,7 +69,7 @@ class LegendTestCase(test.GuiTestCase):
         test.gui_loop(0.5)
 
         t = threading.Thread(target=set_range)
-        t.setDaemon(True)  # To automatically end when this main thread ends
+        t.daemon = True  # To automatically end when this main thread ends
         t.start()
 
         for i in range(30):  # Fail after 30s not yet finished
