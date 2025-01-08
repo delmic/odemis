@@ -24,32 +24,54 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
-from concurrent.futures import CancelledError
 import logging
 import math
 import os.path
+from concurrent.futures import CancelledError
+from typing import Tuple
+
 import wx
+import yaml
 
-from odemis.gui import conf
-from odemis.gui.util.wx_adapter import fix_static_text_clipping
-from odemis.gui.win.acquisition import ShowChamberFileDialog, LoadProjectFileDialog
-from odemis.model import InstantaneousFuture
-from odemis.util.filename import guess_pattern, create_projectname
-
-from odemis import model
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
-from odemis.acq.feature import load_project_data, import_features_from_autolamella
-from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
-    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS
+from odemis import model
+from odemis.acq.feature import import_features_from_autolamella, load_project_data
+from odemis.acq.move import (
+    ALIGNMENT,
+    COATING,
+    FM_IMAGING,
+    GRID_1,
+    GRID_2,
+    LOADING,
+    LOADING_PATH,
+    MILLING,
+    POSITION_NAMES,
+    SEM_IMAGING,
+    THREE_BEAMS,
+    UNKNOWN,
+)
 from odemis.acq.stream import StaticStream
-from odemis.gui.comp.buttons import BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS, BTN_TOGGLE_COMPLETE
-from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui import conf
+from odemis.gui.comp.buttons import (
+    BTN_TOGGLE_COMPLETE,
+    BTN_TOGGLE_OFF,
+    BTN_TOGGLE_PROGRESS,
+)
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
+from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import AxisConnector, VigilantAttributeConnector
+from odemis.gui.util.wx_adapter import fix_static_text_clipping
+from odemis.gui.win.acquisition import (
+    LoadProjectFileDialog,
+    SelectFileDialog,
+    ShowChamberFileDialog,
+)
+from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
+from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
 
 
@@ -101,7 +123,11 @@ class CryoChamberTab(Tab):
         main_frame.Bind(wx.EVT_MENU, self._import_features_from_autolamella, id=main_frame.menu_item_import_from_autolamella.GetId())
         if self._role == 'meteor':
             main_frame.menu_item_import_from_autolamella.Enable(True)
-
+        
+        # enable import from 3dct for correlation
+        main_frame.Bind(wx.EVT_MENU, self._import_features_from_3dct, id=main_frame.menu_item_import_from_3dct.GetId())
+        if self._role == 'meteor':
+            main_frame.menu_item_import_from_3dct.Enable(True)
 
         self._current_posture = UNKNOWN  # position of the sample (regularly updated)
         self._target_posture = None  # when moving, move POSITION to be reached, otherwise None
@@ -478,22 +504,62 @@ class CryoChamberTab(Tab):
         return True
 
     def _import_features_from_autolamella(self, _):
-            """Import features from autolamella experiment."""
+        """Import features from autolamella experiment."""
 
-            # select an autolamella directory to load
-            path = LoadProjectFileDialog(parent=self.panel,
-                                        projectname=self.conf.pj_last_path,
-                                        message="Select AutoLamella Project Directory to load")
+        # select an autolamella directory to load
+        path = LoadProjectFileDialog(parent=self.panel,
+                                    projectname=self.conf.pj_last_path,
+                                    message="Select AutoLamella Project Directory to load")
 
-            if path is None: # Cancelled
-                return
+        if path is None: # Cancelled
+            return
 
-            # load features from autolamella experiment
-            cryo_features = import_features_from_autolamella(path)
+        # load features from autolamella experiment
+        cryo_features = import_features_from_autolamella(path)
 
-            # add the features to the current features list
-            logging.info(f"Imported {len(cryo_features)} features from autolamella experiment.")
-            self.tab_data_model.main.features.value.extend(cryo_features)
+        # add the features to the current features list
+        logging.info(f"Imported {len(cryo_features)} features from autolamella experiment.")
+        self.tab_data_model.main.features.value.extend(cryo_features)
+
+    def _import_features_from_3dct(self, _):
+        def parse_3dct_yaml_file(path: str) -> Tuple[float, float]:
+            """Parse the 3DCT yaml file and extract the point of interest (POI) 
+            in microscope image coordinates (um). Convert the coordinates to metres.
+            Note: only the first POI is extracted.
+            :param path: Path to the 3DCT yaml file."""
+            with open(path, "r") as f:
+                data = yaml.safe_load(f)
+
+            # extract poi from data
+            poi = data["correlation"]["output"]["poi"]
+
+            # get point in microscope image coordinates (um)
+            pt_um = poi[0]["px_um"]
+
+            # convert to metres
+            pt = pt_um[0] * 1e-6, pt_um[1] * 1e-6
+
+            return pt
+
+        # load 3dct position
+        path = SelectFileDialog(parent=self.panel, 
+                                message="Select 3DCT Position File to load", 
+                                default_path=self.conf.pj_last_path)
+        
+        if path is None: # Cancelled
+            logging.warning("No 3DCT position file selected, exiting.")
+            return
+        
+        # load yaml file
+        try:
+            pt = parse_3dct_yaml_file(path)
+        except Exception as e:
+            logging.error(f"Failed to load 3DCT position file: {e}")
+            return
+
+        # redraw milling position
+        fibsem_tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
+        fibsem_tab.milling_task_controller.draw_milling_tasks(pos=pt, convert_pos=False)
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):

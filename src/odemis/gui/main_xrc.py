@@ -232,6 +232,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_import_from_autolamella = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_import_from_autolamella"))
+        self.menu_item_import_from_3dct = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_import_from_3dct"))
         self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
@@ -2711,6 +2712,13 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
         </object>
         <object class="wxMenuItem" name="menu_item_import_from_autolamella">
           <label>Import Features from AutoLamella</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_import_from_3dct">
+          <label>Import Milling Position from 3DCT</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
@@ -9493,7 +9501,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                             <assign_var>1</assign_var>
                           </XRCED>
                           </object>
-
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>

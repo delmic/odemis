@@ -31,7 +31,7 @@ import logging
 import os
 from concurrent.futures import CancelledError
 from datetime import datetime
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
 
 import wx
 
@@ -304,11 +304,12 @@ class MillingTaskController:
     # -> workflow tab is probably easier to use for this purpose
 
     @call_in_wx_main
-    def draw_milling_tasks(self, pos: Tuple[float, float] = None):
+    def draw_milling_tasks(self, pos: Optional[Tuple[float, float]] = None, convert_pos: bool = True):
         """Redraw all milling tasks on the canvas. Clears the rectangles_overlay first, 
         and then redraws all the patterns. If pos is given, the patterns are drawn at that position, 
         otherwise they are drawn at the existing positions. 
         :param pos: the position to draw the patterns at (Optional)
+        :param convert_pos: whether to convert the position to the centre of the image coordinate (pattern coordinate system)
         """
         self.rectangles_overlay.clear()
         self.rectangles_overlay.clear_labels()
@@ -336,10 +337,11 @@ class MillingTaskController:
 
         # convert the position to the centre of the image coordinate (pattern coordinate system)
         if isinstance(pos, tuple):
-            ppos = _get_pattern_centre(pos, self.acq_cont.stream)
+            if convert_pos:
+                pos = _get_pattern_centre(pos, self.acq_cont.stream)
             for task_name, task in self.milling_tasks.items():
                 for pattern in task.patterns:
-                    pattern.center.value = ppos # image centre
+                    pattern.center.value = pos # image centre
 
         # redraw all patterns
         for i, (task_name, task) in enumerate(self.milling_tasks.items()):
