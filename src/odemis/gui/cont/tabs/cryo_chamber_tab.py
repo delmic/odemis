@@ -28,14 +28,13 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
-from typing import Tuple
 
 import wx
-import yaml
 
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
+from odemis.acq.align.tdct import parse_3dct_yaml_file
 from odemis.acq.feature import import_features_from_autolamella, load_project_data
 from odemis.acq.move import (
     ALIGNMENT,
@@ -522,24 +521,6 @@ class CryoChamberTab(Tab):
         self.tab_data_model.main.features.value.extend(cryo_features)
 
     def _import_features_from_3dct(self, _):
-        def parse_3dct_yaml_file(path: str) -> Tuple[float, float]:
-            """Parse the 3DCT yaml file and extract the point of interest (POI) 
-            in microscope image coordinates (um). Convert the coordinates to metres.
-            Note: only the first POI is extracted.
-            :param path: Path to the 3DCT yaml file."""
-            with open(path, "r") as f:
-                data = yaml.safe_load(f)
-
-            # extract poi from data
-            poi = data["correlation"]["output"]["poi"]
-
-            # get point in microscope image coordinates (um)
-            pt_um = poi[0]["px_um"]
-
-            # convert to metres
-            pt = pt_um[0] * 1e-6, pt_um[1] * 1e-6
-
-            return pt
 
         # load 3dct position
         path = SelectFileDialog(parent=self.panel, 
