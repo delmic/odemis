@@ -31,20 +31,23 @@ import logging
 import os
 from concurrent.futures import CancelledError
 from datetime import datetime
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import wx
 
 import odemis.acq.stream as acqstream
 from odemis import model
 from odemis.acq import millmng
-from odemis.acq.feature import MILLING_TASKS_PATH
+from odemis.acq.feature import (
+    FEATURE_ACTIVE,
+    FEATURE_DEACTIVE,
+    MILLING_TASKS_PATH,
+    CryoFeature,
+)
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
 from odemis.acq.millmng import MillingWorkflowTask, run_automated_milling
-from odemis.gui.comp.milling import (
-    MillingTaskPanel,
-)
+from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
@@ -54,7 +57,6 @@ from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
     VigilantAttributeConnector,
 )
-from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_DEACTIVE, CryoFeature
 from odemis.util import is_point_in_rect, units
 
 # yellow, cyan, magenta, lime, orange, hotpink
@@ -124,6 +126,10 @@ class MillingTaskController:
         self._tab_data = tab_data
         self._panel = tab_panel
         self._tab = tab
+
+        if hasattr(self._tab, "_feature_panel_controller"):
+            from odemis.gui.cont.features import CryoFeatureController
+            self.feature_controller: CryoFeatureController = self._tab._feature_panel_controller
 
         # self.stream = tab.fib_stream  # fib stream
         self.acq_cont = tab._acquired_stream_controller
@@ -362,6 +368,9 @@ class MillingTaskController:
 
         # validate the patterns
         self._on_shapes_update(self.rectangles_overlay._shapes.value)
+
+        # auto save the milling tasks on the feature
+        self.feature_controller.save_milling_tasks(self.milling_tasks, self.selected_tasks.value)
 
         return
 

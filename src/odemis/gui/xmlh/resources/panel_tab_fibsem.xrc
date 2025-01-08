@@ -362,20 +362,10 @@
                                   <object class="ImageTextButton" name="btn_feature_save_position">
                                     <height>24</height>
                                     <bg>#000000</bg>
-                                    <label>Save Position</label>
+                                    <label>Save Milling Position And Reference Image</label>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_feature_save_tasks">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Save Milling Tasks</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                  <flag>wxLEFT</flag>
+                                  <flag>wxALL wxEXPAND</flag>
                                   <border>10</border>
                                 </object>
                               <orient>wxHORIZONTAL</orient>

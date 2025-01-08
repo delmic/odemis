@@ -4,7 +4,7 @@ import math
 import os
 
 import wx
-
+from typing import Dict, List
 from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
@@ -17,6 +17,7 @@ from odemis.acq.feature import (
     get_feature_position_at_posture,
     save_features,
 )
+from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.move import (
     FM_IMAGING,
     MILLING,
@@ -86,11 +87,9 @@ class CryoFeatureController(object):
         if fibsem_mode:
             self._panel.btn_feature_move_to_mill.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
-            self._panel.btn_feature_save_tasks.Bind(wx.EVT_BUTTON, self.save_milling_tasks)
 
             # self._panel.btn_feature_move_to_mill.Show(LICENCE_MILLING_ENABLED)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
-            self._panel.btn_feature_save_tasks.Show(LICENCE_MILLING_ENABLED)
 
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,
@@ -154,8 +153,6 @@ class CryoFeatureController(object):
         # TODO: disable buttons if no feature selected
         # set the milling angle
         milling_angle = math.radians(self._panel.param_feature_milling_angle.GetValue())
-        # print(f"milling_angle2: {milling_angle2}")
-        # milling_angle = math.radians(18) # TODO: add ui element to set this
         pre_tilt = self.pm.stage.getMetadata()[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
         stage_tilt = calculate_stage_tilt_from_milling_angle(milling_angle=milling_angle, 
                                                              pre_tilt=pre_tilt, 
@@ -229,22 +226,19 @@ class CryoFeatureController(object):
         self._tab_data_model.main.currentFeature.value = None
         self._tab_data_model.main.currentFeature.value = feature
 
-    def save_milling_tasks(self, evt: wx.Event):
+    def save_milling_tasks(self, 
+                    milling_tasks: Dict[str, MillingTaskSettings], 
+                    selected_milling_tasks: List[str]) -> None:
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature is None:
             logging.warning("No feature selected")
             return
-
-        milling_controller = self._tab.milling_task_controller
-        milling_tasks = milling_controller.milling_tasks
-        selected_milling_tasks = milling_controller.selected_tasks.value
 
         # filter out the selected tasks
         milling_tasks = {k: v for k, v in milling_tasks.items() if k in selected_milling_tasks}
 
         feature.milling_tasks = copy.deepcopy(milling_tasks)
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
-        # TODO: automatically save the milling tasks when changed...
 
     # TODO: pattern size not updating
     # TODO: selected tasks not working in ui

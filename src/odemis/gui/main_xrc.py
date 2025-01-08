@@ -723,7 +723,6 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.param_feature_milling_angle = xrc.XRCCTRL(self, "param_feature_milling_angle")
         self.btn_feature_move_to_mill = xrc.XRCCTRL(self, "btn_feature_move_to_mill")
         self.btn_feature_save_position = xrc.XRCCTRL(self, "btn_feature_save_position")
-        self.btn_feature_save_tasks = xrc.XRCCTRL(self, "btn_feature_save_tasks")
         self.lbl_stage_position = xrc.XRCCTRL(self, "lbl_stage_position")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.fp_secom_streams = xrc.XRCCTRL(self, "fp_secom_streams")
@@ -8788,20 +8787,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                   <object class="ImageTextButton" name="btn_feature_save_position">
                                     <height>24</height>
                                     <bg>#000000</bg>
-                                    <label>Save Position</label>
+                                    <label>Save Milling Position And Reference Image</label>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_feature_save_tasks">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Save Milling Tasks</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                  <flag>wxLEFT</flag>
+                                  <flag>wxALL wxEXPAND</flag>
                                   <border>10</border>
                                 </object>
                               <orient>wxHORIZONTAL</orient>
