@@ -60,7 +60,21 @@ from odemis.gui.util.widgets import (
 from odemis.util import is_point_in_rect, units
 
 # yellow, cyan, magenta, lime, orange, hotpink
-MILLING_COLOURS = ["#FFFF00", "#00FFFF", "#FF00FF", "#00FF00", "#FFA500", "#FF69B4"]
+MILLING_COLOURS_CYCLE = ["#FFFF00", "#00FFFF", "#FF00FF", "#00FF00", "#FFA500", "#FF69B4"]
+MILLING_COLOURS_CANONICAL = {
+    "Rough Milling 01": "#FFFF00",
+    "Rough Milling 02": "#00FFFF",
+    "Polishing 01": "#FF00FF",
+    "Polishing 02": "#00FF00",
+    "Microexpansion": "#FFA500",
+    "Fiducial": "#FF69B4",
+}
+
+def _get_milling_colour(task_name: str, idx: int) -> str:
+    """Get the colour based on the task name or index"""
+    if task_name in MILLING_COLOURS_CANONICAL:
+        return MILLING_COLOURS_CANONICAL[task_name]
+    return MILLING_COLOURS_CYCLE[idx % len(MILLING_COLOURS_CYCLE)]
 
 def _get_pattern_centre(pos: Tuple[float, float], stream: acqstream.Stream) -> Tuple[float, float]:
     """Convert the position to the centre of the image coordinate (pattern coordinate system)"""
@@ -84,6 +98,7 @@ def _to_physical_position(pos: Tuple[float, float], stream: acqstream.Stream) ->
 
     return center_x, center_y
 
+# TODO: support other shapes
 def rectangle_pattern_to_shape(canvas,
                         stream: acqstream.Stream,
                         pattern: RectanglePatternParameters,
@@ -139,7 +154,6 @@ class MillingTaskController:
         self.pm = self._tab_data.main.posture_manager
         self.conf = get_acqui_conf()
 
-
         # load the milling tasks
         self.milling_tasks = load_milling_tasks(MILLING_TASKS_PATH) # TODO: move to main_data
         self._default_milling_tasks = copy.deepcopy(self.milling_tasks)
@@ -162,8 +176,7 @@ class MillingTaskController:
         self.selected_tasks.subscribe(self.draw_milling_tasks, init=True)
         # self.selected_tasks.subscribe(self._update_mill_btn, init=True)
 
-        # NOTE: when the feature is changed, the milling tasks should be updated
-        # therefore, we should remove these panels, and create new ones with connectors.
+        # create the panels for the milling tasks
         self._create_panels()
 
         # By default, all widgets are hidden => show button + estimated time at initialization
@@ -278,6 +291,8 @@ class MillingTaskController:
             p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
             logging.debug(f"shift + control pressed, mouse_pos: {pos}, phys_pos: {p_pos}")
 
+            # TODO: validate if click is outside image bounds, don't move the pattern
+            # TODO: validate whether the pattern is within the image bounds before moving it
             # move selected stream to position
             self.draw_milling_tasks(p_pos)
             return
@@ -321,14 +336,20 @@ class MillingTaskController:
         self.rectangles_overlay.clear_labels()
         tasks_to_draw = self.selected_tasks.value
 
-        # if there are tasks_to_draw that aren't in the milling tasks, add them from _default
-        # for task_name in tasks_to_draw:
-        #     t1 = list(self.milling_tasks.keys())
-        #     if task_name not in self.milling_tasks:
-        #         self.milling_tasks[task_name] = copy.deepcopy(self._default_milling_tasks[task_name])
-        #         # match the center to the first tasks' center
-        #         if t1:
-        #             self.milling_tasks[task_name].patterns[0].center.value = self.milling_tasks[t1[0]].patterns[0].center.value
+        # if there are tasks_to_draw that aren't in the milling tasks, add them from default
+        existing_tasks = list(self.milling_tasks.keys())
+        for task_name in tasks_to_draw:
+            if task_name not in existing_tasks:
+                logging.debug(
+                    f"Task {task_name} not found in milling tasks, but requested, adding from default."
+                )
+                self.milling_tasks[task_name] = copy.deepcopy(
+                    self._default_milling_tasks[task_name]
+                )
+                # match the center to the first tasks' center
+                self.milling_tasks[task_name].patterns[0].center.value = (
+                    self.milling_tasks[existing_tasks[0]].patterns[0].center.value
+                )
 
         # stream
         if not self.milling_tasks:
@@ -351,7 +372,6 @@ class MillingTaskController:
 
         # redraw all patterns
         for i, (task_name, task) in enumerate(self.milling_tasks.items()):
-            colour = MILLING_COLOURS[i % len(MILLING_COLOURS)]
             if task_name not in tasks_to_draw:
                 continue
             for pattern in task.patterns:
@@ -362,7 +382,7 @@ class MillingTaskController:
                                             canvas=self.canvas,
                                             stream=self.acq_cont.stream,
                                             pattern=pshape,
-                                            colour=colour,
+                                            colour=_get_milling_colour(task_name, i),
                                             name=name)
                     self.rectangles_overlay.add_shape(shape)
 
@@ -385,7 +405,6 @@ class MillingTaskController:
 
         checked_indices = self._panel.milling_task_chk_list.GetCheckedItems()
         self.selected_tasks.value = [self._panel.milling_task_chk_list.GetString(i) for i in checked_indices]
-        # TODO: migrate to using client data instead of dict -> index?
 
     @call_in_wx_main
     def _run_milling(self, evt: wx.Event):
