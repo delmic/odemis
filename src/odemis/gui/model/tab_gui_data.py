@@ -289,7 +289,7 @@ class CryoGUIData(MicroscopyGUIData):
         Given current stage position, either select one of the features closest to
           the position or create a new one with the position.
         """
-        current_position = self.main.stage.position.value
+        current_position = self.main.stage_bare.position.value
         current_feature = self.main.currentFeature.value
 
         def dist_to_pos(feature):
@@ -297,6 +297,7 @@ class CryoGUIData(MicroscopyGUIData):
             position = get_feature_position_at_posture(pm, feature, pm.current_posture.value)
             pos = pm.to_sample_stage_from_stage_position(position)
             sample_stages_pos = pm.to_sample_stage_from_stage_position(current_position)
+            # Note: we can get the sample stage position direction from: self.stage.position.value
             return math.hypot(pos["x"] - sample_stages_pos["x"],
                               pos["y"] - sample_stages_pos["y"])
 
@@ -312,9 +313,9 @@ class CryoGUIData(MicroscopyGUIData):
         except ValueError:  # raised by min() if no features at all
             pass
 
-        # No feature nearby => create a new one # TODO: THIS IS BROKEN, creates feature too hgih??
-        current_position = copy.deepcopy(self.main.stage.position.value)
-        feature = self.add_new_feature(stage_position=current_position) # FLAG: FEATURE_Z
+        # No feature nearby => create a new one
+        current_position = copy.deepcopy(self.main.stage_bare.position.value)
+        feature = self.add_new_feature(stage_position=current_position)
         logging.debug(f"New feature created at {current_position} because none are close by.")
 
 
