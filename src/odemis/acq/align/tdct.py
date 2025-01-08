@@ -19,12 +19,58 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 import sys
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import numpy
 import yaml
 
 from odemis import model
+
+
+def convert_das_to_numpy_stack(das: List[model.DataArray]) -> numpy.ndarray:
+    """Convert a list of DataArrays to a numpy stack."""
+    arr = []
+    for da in das:
+        if isinstance(da, model.DataArrayShadow):
+            da = da.getData()
+        
+        if da.ndim == 5: # model.DataArray is always 5D
+            da = da[0, 0, :, :, :]
+        arr.append(da)
+
+    return numpy.stack(arr, axis=0)
+
+def get_optimized_z_guass(das: List[model.DataArray], x: int, y: int, z: int, show: bool = False) -> Tuple[float, float, float]:
+    """Get the best fitting z-coordinate for the given x, y coordinates. Supports multi-channel images.
+    :param das: the data arrays (one per channels)
+    :param x: the x-coordinate
+    :param y: the y-coordinate
+    :param z: the z-coordinate (initial guess)
+    :param show: show the plot for debugging
+    :return: the z-coordinate and the corresponding correlation value"""
+    prev_z = z
+    prev_x, prev_y = x, y
+
+    # tmp: until we have a better solution for installation
+    sys.path.append("/home/patrick/development/openfibsem/3DCT")
+    sys.path.append("/home/patrick/development/openfibsem/3DCT/tdct")
+    from tdct.util import multi_channel_get_z_guass
+
+    # fm_image  must be 4D np.ndarray with shape (channels, z, y, x)
+    fm_image = convert_das_to_numpy_stack(das)
+
+    try:
+        # getzGauss can fail, so we need to catch the exception
+        zval, z, _ = multi_channel_get_z_guass(image=fm_image, x=x, y=y, show=show)
+        logging.info(f"Using Z-Gauss optimisation: {z}, previous z: {prev_z}")
+        
+    except RuntimeError as e:
+        logging.warning(f"Error in z-gauss optimisation: {e}, using previous z: {prev_z}")
+        z = prev_z
+        x, y = prev_x, prev_y
+    
+    return z
+
 
 def run_tdct_correlation(fib_coords: numpy.ndarray, 
                            fm_coords: numpy.ndarray, 
