@@ -1,5 +1,6 @@
 
 import logging
+import math
 import os
 import threading
 import time
@@ -13,7 +14,8 @@ from autolamella.protocol.validation import (
     MILL_ROUGH_KEY,
 )
 from fibsem import utils
-from fibsem.milling import FibsemMillingStage, mill_stages, estimate_total_milling_time
+from fibsem.microscopes.odemis_microscope import OdemisMicroscope
+from fibsem.milling import FibsemMillingStage, estimate_total_milling_time, mill_stages
 from fibsem.milling.patterning.patterns2 import (
     BasePattern,
     MicroExpansionPattern,
@@ -21,8 +23,8 @@ from fibsem.milling.patterning.patterns2 import (
     TrenchPattern,
 )
 from fibsem.structures import FibsemMillingSettings, Point
+from fibsem.utils import load_microscope_configuration
 from odemis import model
-
 from odemis.acq.milling.patterns import (
     MicroexpansionPatternParameters,
     MillingPatternParameters,
@@ -34,6 +36,26 @@ from odemis.acq.milling.tasks import (
     MillingTaskSettings,
 )
 from odemis.util import executeAsyncTask
+
+def create_openfibsem_microscope() -> OdemisMicroscope:
+    """Create an openfibsem microscope instance with the current microscope configuration."""
+
+    # TODO: extract the rest of the required metadata
+
+    # stage metadata
+    stage_bare = model.getComponent(role="stage-bare")
+    stage_md = stage_bare.getMetadata()
+    pre_tilt = stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+    rotation_reference = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rz"]
+
+    # loads the default config
+    config = load_microscope_configuration()
+    config.system.stage.shuttle_pre_tilt = math.degrees(pre_tilt)
+    config.system.stage.rotation_reference = math.degrees(rotation_reference)
+    config.system.stage.rotation_180 = math.degrees(rotation_reference + math.pi)
+    microscope = OdemisMicroscope(config.system)
+    
+    return microscope
 
 def convert_pattern(p: MillingPatternParameters) -> BasePattern:
     """Convert from an odemis pattern to an openfibsem pattern"""
@@ -98,10 +120,14 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> FibsemMillingSta
     )
     return milling_stage
 
-def convert_milling_tasks_to_milling_stages(milling_tasks: Dict[str, MillingTaskSettings]) -> List[FibsemMillingStage]:
+def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List[FibsemMillingStage]:
     """Convert from odemis milling tasks to openfibsem milling stages"""
     milling_stages = []
-    for task_name, task in milling_tasks.items():
+
+    if isinstance(milling_tasks, dict):
+        milling_tasks = list(milling_tasks.values())
+
+    for task in milling_tasks:
         milling_stage = convert_task_to_milling_stage(task)
         milling_stages.append(milling_stage)
 
@@ -134,6 +160,11 @@ class OpenFIBSEMMillingTaskManager:
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
         """
+        # create microscope connection
+        self.microscope = create_openfibsem_microscope()
+        self.microscope._last_imaging_settings.path = os.getcwd()   # TODO: resolve the path issue
+        
+        # convert the tasks to milling stages
         self.tasks = tasks
         self.milling_stages = convert_milling_tasks_to_milling_stages(self.tasks)
 
@@ -166,17 +197,11 @@ class OpenFIBSEMMillingTaskManager:
         """
         return estimate_total_milling_time(self.milling_stages)
 
-    def run_milling(self):
+    def run_milling(self, stage: FibsemMillingStage):
         """Run the milling tasks via openfibsem"""
 
-        microscope, settings = utils.setup_session()            # TODO: think of a simpler way to connect this without requiring configuration.yaml
-        # for this, we can probably just get the info directly, 
-        # QUERY: which System settings are required?
-        # QUERY: get the system settings from the microscope metadata?
-        microscope._last_imaging_settings.path = os.getcwd()    # TODO: resolve the path issue
-
-        mill_stages(microscope, self.milling_stages) # TODO: put this in subf
-        # when cancel is called, stop_milling will exit the loop 
+        mill_stages(self.microscope, [stage]) # TODO: put this in subf
+        # when cancel is called, stop_milling will exit the loop
         # note: only exits the current milling stage... need to exit the whole milling process
 
     def run(self):
@@ -186,7 +211,13 @@ class OpenFIBSEMMillingTaskManager:
         self._future._task_state = RUNNING
 
         try:
-            self.run_milling()
+            for stage in self.milling_stages:
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
+
+                logging.info(f"Running milling stage: {stage.name}")
+                self.run_milling(stage=stage)
         except CancelledError:
             logging.debug("Stopping because milling was cancelled")
             raise
@@ -199,7 +230,7 @@ class OpenFIBSEMMillingTaskManager:
 
 def run_milling_tasks_openfibsem(tasks: List[MillingTaskSettings]) -> futures.Future:
     """
-    Run multiple milling tasks in order.
+    Run multiple milling tasks in order via openfibsem.
     :param tasks: List of milling tasks to be executed in order.
     :return: ProgressiveFuture
     """

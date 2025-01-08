@@ -58,6 +58,7 @@ from odemis.dataio import find_fittest_converter
 from odemis.util import executeAsyncTask
 from odemis.util.dataio import open_acquisition
 
+# TODO: replace with run_milling_tasks_openfibsem
 def run_milling_tasks(tasks: List[MillingTaskSettings]) -> futures.Future:
     """
     Run multiple milling tasks in order.
