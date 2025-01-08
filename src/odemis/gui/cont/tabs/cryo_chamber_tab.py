@@ -454,8 +454,11 @@ class CryoChamberTab(Tab):
         localization_tab.load_overview_data(data=proj_data["overviews"])
 
         # load sem overview streams
-        fibsem_tab: Tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
-        fibsem_tab.load_overview_data(data=proj_data["overviews"]) # filters to only semstatic streams
+        try:
+            fibsem_tab: Tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
+            fibsem_tab.load_overview_data(data=proj_data["overviews"]) # filters to only semstatic streams
+        except Exception:
+            logging.warning("Unable to find FIBSEM tab. Likely disabled by licence.")
 
         # load features
         self.tab_data_model.main.features.value = proj_data["features"]

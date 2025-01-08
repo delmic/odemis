@@ -35,7 +35,7 @@ from odemis.acq.milling.tasks import (
 )
 from odemis.util import executeAsyncTask
 
-def _convert_pattern(p: MillingPatternParameters) -> BasePattern:
+def convert_pattern(p: MillingPatternParameters) -> BasePattern:
     """Convert from an odemis pattern to an openfibsem pattern"""
     if isinstance(p, RectanglePatternParameters):
         return _convert_rectangle_pattern(p)
@@ -76,8 +76,8 @@ def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> Micro
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
 
-def _convert_milling_settings(s: MillingSettings2) -> FibsemMillingSettings:
-
+def convert_milling_settings(s: MillingSettings2) -> FibsemMillingSettings:
+    """Convert from an odemis milling settings to an openfibsem milling settings"""
     return FibsemMillingSettings(
         milling_current=s.current.value,
         milling_voltage=s.voltage.value,
@@ -86,10 +86,10 @@ def _convert_milling_settings(s: MillingSettings2) -> FibsemMillingSettings:
     )
 
 # task converter
-def _convert_task_to_milling_stage(task: MillingTaskSettings) -> FibsemMillingStage:
-
-    s = _convert_milling_settings(task.milling)
-    p = _convert_pattern(task.patterns[0])
+def convert_task_to_milling_stage(task: MillingTaskSettings) -> FibsemMillingStage:
+    """Convert from an odemis milling task to an openfibsem milling stage"""
+    s = convert_milling_settings(task.milling)
+    p = convert_pattern(task.patterns[0])
 
     milling_stage = FibsemMillingStage(
         name=task.name,
@@ -98,10 +98,11 @@ def _convert_task_to_milling_stage(task: MillingTaskSettings) -> FibsemMillingSt
     )
     return milling_stage
 
-def _convert_milling_tasks_to_milling_stages(milling_tasks: Dict[str, MillingTaskSettings]) -> List[FibsemMillingStage]:
+def convert_milling_tasks_to_milling_stages(milling_tasks: Dict[str, MillingTaskSettings]) -> List[FibsemMillingStage]:
+    """Convert from odemis milling tasks to openfibsem milling stages"""
     milling_stages = []
     for task_name, task in milling_tasks.items():
-        milling_stage = _convert_task_to_milling_stage(task)
+        milling_stage = convert_task_to_milling_stage(task)
         milling_stages.append(milling_stage)
 
     return milling_stages
@@ -121,7 +122,7 @@ def _convert_milling_stages_to_workflow(milling_stages: List[FibsemMillingStage]
     return milling_workflow
 
 def convert_milling_tasks_to_workflow(milling_tasks: Dict[str, MillingTaskSettings]) -> Dict[str, List[FibsemMillingStage]]:
-    milling_stages = _convert_milling_tasks_to_milling_stages(milling_tasks)
+    milling_stages = convert_milling_tasks_to_milling_stages(milling_tasks)
     return _convert_milling_stages_to_workflow(milling_stages)
 
 
@@ -134,7 +135,7 @@ class OpenFIBSEMMillingTaskManager:
         :param tasks: The milling tasks to run (in order)
         """
         self.tasks = tasks
-        self.milling_stages = _convert_milling_tasks_to_milling_stages(self.tasks)
+        self.milling_stages = convert_milling_tasks_to_milling_stages(self.tasks)
 
         self._future = future
         if future is not None:
@@ -170,11 +171,13 @@ class OpenFIBSEMMillingTaskManager:
 
         microscope, settings = utils.setup_session()            # TODO: think of a simpler way to connect this without requiring configuration.yaml
         # for this, we can probably just get the info directly, 
+        # QUERY: which System settings are required?
+        # QUERY: get the system settings from the microscope metadata?
         microscope._last_imaging_settings.path = os.getcwd()    # TODO: resolve the path issue
 
         mill_stages(microscope, self.milling_stages) # TODO: put this in subf
         # when cancel is called, stop_milling will exit the loop 
-        # note: only extits the current milling stage... need to exit the whole milling process
+        # note: only exits the current milling stage... need to exit the whole milling process
 
     def run(self):
         """

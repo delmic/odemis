@@ -26,6 +26,7 @@ from odemis.acq.move import (
 )
 from odemis.dataio.tiff import export
 from odemis.gui import model as guimod
+from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.model import TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -86,6 +87,10 @@ class CryoFeatureController(object):
             self._panel.btn_feature_move_to_mill.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
             self._panel.btn_feature_save_tasks.Bind(wx.EVT_BUTTON, self.save_milling_tasks)
+
+            # self._panel.btn_feature_move_to_mill.Show(LICENCE_MILLING_ENABLED)
+            self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
+            self._panel.btn_feature_save_tasks.Show(LICENCE_MILLING_ENABLED)
 
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,

@@ -38,6 +38,7 @@ from odemis.acq.stream import (
     StaticSEMStream,
 )
 from odemis.gui import conf
+from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.stream_bar import (
@@ -49,8 +50,6 @@ from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
 
-# milling feature flag
-MILLING_ENABLED = True
 
 class FibsemTab(Tab):
 
@@ -211,13 +210,13 @@ class FibsemTab(Tab):
         """Hide/Disable milling controls when fib view is not selected"""
         # is_fib_view = issubclass(view.stream_classes, FIBStream)
         is_fib_view = view == self.panel.vp_secom_br.view
-        self.panel.fp_milling.Show(is_fib_view and MILLING_ENABLED)
+        self.panel.fp_milling.Show(is_fib_view and LICENCE_MILLING_ENABLED)
         # TODO: activate the corresponding channel on xtui
 
         live = issubclass(view.stream_classes, LiveStream)
         self.panel.fp_secom_streams.Show(live)
         self.panel.fp_acquisitions.Show(live)
-        self.panel.fp_automation.Show(not live)
+        self.panel.fp_automation.Show(not live and LICENCE_MILLING_ENABLED)
         self.panel.fp_acquired.Show(not live)
 
     @property
@@ -349,7 +348,7 @@ class FibsemTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         has_fibsem = any([c.role == "fibsem" for c in model.getComponents()])
-        if main_data.role == "meteor" and has_fibsem:
+        if main_data.role == "meteor" and has_fibsem and LICENCE_FIBSEM_ENABLED:
             return 2
         else:
             return None
