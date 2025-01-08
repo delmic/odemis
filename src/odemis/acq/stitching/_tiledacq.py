@@ -65,6 +65,7 @@ SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 
 DEFAULT_FOV = (100e-6, 100e-6) # m
+STITCH_SPEED = 1e8  # px/s
 
 class FocusingMethod(Enum):
     NONE = 0  # Never auto-focus
@@ -492,8 +493,6 @@ class TiledAcquisitionTask(object):
 
         return mem_sufficient, mem_est
 
-    STITCH_SPEED = 1e8  # px/s
-
     def estimateTime(self, remaining=None):
         """
         Estimates duration for acquisition and stitching.
@@ -522,7 +521,7 @@ class TiledAcquisitionTask(object):
                 if pxs > max_pxs:
                     max_pxs = pxs
 
-        stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / self.STITCH_SPEED
+        stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / STITCH_SPEED
         try:
             move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed
             # current tile is part of remaining, so no need to move there
