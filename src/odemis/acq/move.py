@@ -850,7 +850,7 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         self.required_keys.add(model.MD_FAV_MILL_POS_ACTIVE)
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(required_keys=self.required_keys)
-        self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT, "SEM-Eucentric-Focus"})
+        self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT}) # TODO: add "SEM-Eucentric-Focus"
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
@@ -2200,7 +2200,7 @@ class SampleStage(model.Actuator):
             try:
                 ebeam_focus = model.getComponent(role="ebeam-focus")
                 # get the eucentric focus position from the metadata
-                self.sem_eucentric_focus = self._stage_bare.getMetadata()[model.MD_CALIB]["SEM-Eucentric-Focus"]
+                self.sem_eucentric_focus = self._stage_bare.getMetadata()[model.MD_CALIB].get("SEM-Eucentric-Focus", 7.0e-3)
                 f = ebeam_focus.moveAbs({"z": self.sem_eucentric_focus})
                 f.result()
             except Exception as e:
