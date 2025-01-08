@@ -60,7 +60,6 @@ from odemis.util import is_point_in_rect, units
 # yellow, cyan, magenta, lime, orange, hotpink
 MILLING_COLOURS = ["#FFFF00", "#00FFFF", "#FF00FF", "#00FF00", "#FFA500", "#FF69B4"]
 
-
 def _get_pattern_centre(pos: Tuple[float, float], stream: acqstream.Stream) -> Tuple[float, float]:
     """Convert the position to the centre of the image coordinate (pattern coordinate system)"""
     # get the center of the image, center of the pattern
@@ -83,6 +82,37 @@ def _to_physical_position(pos: Tuple[float, float], stream: acqstream.Stream) ->
 
     return center_x, center_y
 
+def rectangle_pattern_to_shape(canvas,
+                        stream: acqstream.Stream,
+                        pattern: RectanglePatternParameters,
+                        colour: str = "#FFFF00",
+                        name: str = None) -> EditableShape:
+    """Convert a rectangle pattern to a shape"""
+    rect = RectangleOverlay(cnvs=canvas, colour = colour)
+    width = pattern.width.value
+    height = pattern.height.value
+    x, y = _to_physical_position(pattern.center.value, stream) # image coordinates -> physical coordinates
+    if name is not None:
+        rect.name.value = name
+
+    # RectangleEditingMixin (point layout)
+    # 1  -  2
+    # |     |
+    # 4  -  3
+
+    rect.p_point1 = Vec(x - width / 2, y + height / 2)
+    rect.p_point2 = Vec(x + width / 2, y + height / 2)
+    rect.p_point3 = Vec(x + width / 2, y - height / 2)
+    rect.p_point4 = Vec(x - width / 2, y - height / 2)
+
+    # required for initialisation?
+    rect._phys_to_view()
+    rect._points = rect.get_physical_sel()
+    rect.points.value = rect._points
+
+    # rect.set_rotation(math.radians(45)) #  TODO: how to rotate the shape?
+
+    return rect
 
 class MillingTaskController:
     def __init__(self, tab_data, tab_panel, tab):
@@ -170,9 +200,9 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        _register_params = ["width", "height", "depth", "spacing"] # TODO: add milling params
+        pattern_parameters = ["width", "height", "depth", "spacing"] # TODO: add milling params
         # milling params: current, voltage, field of view, mode
-        _milling_params = ["current"]
+        milling_parameters = ["current"]
 
         for task_name, task in self.milling_tasks.items():
 
@@ -189,7 +219,7 @@ class MillingTaskController:
             self.controls[task_name]["panel"] = panel
 
             # pattern parameters
-            for param in _register_params:
+            for param in pattern_parameters:
                 _va_connector = VigilantAttributeConnector(
                     getattr(parameters, param),
                     panel.ctrl_dict[param],
@@ -201,7 +231,7 @@ class MillingTaskController:
                 getattr(parameters, param).subscribe(self._on_patterns)
 
             # milling parameters
-            for param in _milling_params:
+            for param in milling_parameters:
                 _va_connector = VigilantAttributeConnector(
                     getattr(milling, param),
                     panel.ctrl_dict[param],
@@ -274,41 +304,12 @@ class MillingTaskController:
     # -> workflow tab is probably easier to use for this purpose
 
     @call_in_wx_main
-    def draw_milling_tasks(self, pos: tuple = None):
-
-        def rectangle_pattern_to_shape(canvas,
-                              stream: acqstream.Stream,
-                              pattern: RectanglePatternParameters,
-                              colour: str = "#FFFF00",
-                              name: str = None) -> EditableShape:
-            """Convert a rectangle pattern to a shape"""
-            rect = RectangleOverlay(cnvs=canvas, colour = colour)
-            width = pattern.width.value
-            height = pattern.height.value
-            x, y = _to_physical_position(pattern.center.value, stream) # image coordinates -> physical coordinates
-            if name is not None:
-                rect.name.value = name
-
-
-            # RectangleEditingMixin (point layout)
-            # 1  -  2
-            # |     |
-            # 4  -  3
-
-            rect.p_point1 = Vec(x - width / 2, y + height / 2)
-            rect.p_point2 = Vec(x + width / 2, y + height / 2)
-            rect.p_point3 = Vec(x + width / 2, y - height / 2)
-            rect.p_point4 = Vec(x - width / 2, y - height / 2)
-
-            # required for initialisation?
-            rect._phys_to_view()
-            rect._points = rect.get_physical_sel()
-            rect.points.value = rect._points
-
-            # rect.set_rotation(math.radians(45)) #  TODO: how to rotate the shape?
-
-            return rect
-
+    def draw_milling_tasks(self, pos: Tuple[float, float] = None):
+        """Redraw all milling tasks on the canvas. Clears the rectangles_overlay first, 
+        and then redraws all the patterns. If pos is given, the patterns are drawn at that position, 
+        otherwise they are drawn at the existing positions. 
+        :param pos: the position to draw the patterns at (Optional)
+        """
         self.rectangles_overlay.clear()
         self.rectangles_overlay.clear_labels()
         tasks_to_draw = self.selected_tasks.value
@@ -323,8 +324,6 @@ class MillingTaskController:
         #             self.milling_tasks[task_name].patterns[0].center.value = self.milling_tasks[t1[0]].patterns[0].center.value
 
         # stream
-
-
         if not self.milling_tasks:
             return
 
@@ -348,7 +347,7 @@ class MillingTaskController:
             if task_name not in tasks_to_draw:
                 continue
             for pattern in task.patterns:
-                # logging.warning(f"{task_name}: {pattern.to_json()}")
+                # logging.debug(f"{task_name}: {pattern.to_json()}")
                 for j, pshape in enumerate(pattern.generate()):
                     name = task_name if j == 0 else None
                     shape = rectangle_pattern_to_shape(

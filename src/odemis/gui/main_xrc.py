@@ -8812,7 +8812,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
+                                <border>10</border>
+                                <style>wxALIGN_CENTRE</style>
                               </object>
+                              <flag>wxEXPAND</flag>
                             </object>
                             <flag>wxALIGN_RIGHT</flag>
                             <orient>wxVERTICAL</orient>
@@ -9412,33 +9415,36 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <object class="sizeritem">
-                                    <object class="ImageTextButton" name="btn_run_automated_milling">
-                                      <height>24</height>
-                                      <bg>#000000</bg>
-                                      <label>RUN AUTOMATED MILLING</label>
-                                      <style>wxALIGN_CENTRE</style>
-                                    </object>
-                                    <flag>wxLEFT</flag>
-                                    <border>10</border>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="wxStaticText" name="txt_automated_milling_est_time">
-                                      <label>Estimated time ...</label>
-                                      <fg>#E5E5E5</fg>
-                                   </object>
-                                  </object>
+                                <object class="ImageTextButton" name="btn_run_automated_milling">
+                                  <icon>______img_icon_ico_sem_png</icon>
+                                  <height>48</height>
+                                  <face_colour>blue</face_colour>
+                                  <label>RUN AUTOMATED MILLING</label>
+                                  <fg>#FFFFFF</fg>
+                                  <font>
+                                    <size>15</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <style>wxALIGN_CENTRE</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
-                                <orient>wxHORIZONTAL</orient>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
                               </object>
-
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="txt_automated_milling_est_time">
+                                  <label>Estimated time ...</label>
+                                  <fg>#E5E5E5</fg>
+                                </object>
+                              </object>
                               <!-- Add a gauge, a label and a cancel button to a boxsizer below -->
                               <object class="sizeritem">
                                 <object class="wxBoxSizer">
                                   <object class="sizeritem">
                                     <object class="wxGauge" name="gauge_automated_milling">
-                                      <size>-1,10</size>
+                                      <!-- <size>-1,10</size> -->
                                       <range>100</range>
                                       <value>0</value>
                                       <style>wxGA_SMOOTH</style>
@@ -9466,16 +9472,18 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                       </object>
                                     <border>10</border>
                                   </object>
+                                <flag>wxALL|wxEXPAND</flag>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
                               <object class="sizeritem">
-                                  <object class="wxStaticText" name="txt_automated_milling_status">
-                                    <label/>
-                                    <fg>#E5E5E5</fg>
-                                    <border>10</border>
-                                  </object>
+                                <object class="wxStaticText" name="txt_automated_milling_status">
+                                  <label/>
+                                  <fg>#E5E5E5</fg>
+                                  <border>10</border>
                                 </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                              </object>
                               <orient>wxVERTICAL</orient>
                               <flag>wxEXPAND</flag>
                               <border>20</border>
