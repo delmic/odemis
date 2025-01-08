@@ -2195,14 +2195,16 @@ class SampleStage(model.Actuator):
 
         # update the SEM focus position when the stage is moved to compensate for linked behavior
         # TODO: update the self.sem_eucentric_focus when the user manually focuses.
-        try:
-            ebeam_focus = model.getComponent(role="ebeam-focus")
-            # get the eucentric focus position from the metadata
-            self.sem_eucentric_focus = self._stage_bare.getMetadata()[model.MD_CALIB]["SEM-Eucentric-Focus"]
-            f = ebeam_focus.moveAbs({"z": self.sem_eucentric_focus})
-            f.result()
-        except Exception as e:
-            logging.error("Failed to update ebeam-focus with new position: %s", e)
+        LINKED_SEM_FOCUS_COMPENSATION = False
+        if LINKED_SEM_FOCUS_COMPENSATION:
+            try:
+                ebeam_focus = model.getComponent(role="ebeam-focus")
+                # get the eucentric focus position from the metadata
+                self.sem_eucentric_focus = self._stage_bare.getMetadata()[model.MD_CALIB]["SEM-Eucentric-Focus"]
+                f = ebeam_focus.moveAbs({"z": self.sem_eucentric_focus})
+                f.result()
+            except Exception as e:
+                logging.error("Failed to update ebeam-focus with new position: %s", e)
 
     def _updateSpeed(self, dep_speed):
         """
