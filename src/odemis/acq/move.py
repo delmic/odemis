@@ -850,7 +850,7 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         self.required_keys.add(model.MD_FAV_MILL_POS_ACTIVE)
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(required_keys=self.required_keys)
-        self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT})
+        self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT, "SEM-Eucentric-Focus"})
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
@@ -2192,6 +2192,17 @@ class SampleStage(model.Actuator):
                         )
             except Exception as e:
                 logging.error("Failed to update %s with new position: %s", a, e)
+
+        # update the SEM focus position when the stage is moved to compensate for linked behavior
+        # TODO: update the self.sem_eucentric_focus when the user manually focuses.
+        try:
+            ebeam_focus = model.getComponent(role="ebeam-focus")
+            # get the eucentric focus position from the metadata
+            self.sem_eucentric_focus = self._stage_bare.getMetadata()[model.MD_CALIB]["SEM-Eucentric-Focus"]
+            f = ebeam_focus.moveAbs({"z": self.sem_eucentric_focus})
+            f.result()
+        except Exception as e:
+            logging.error("Failed to update ebeam-focus with new position: %s", e)
 
     def _updateSpeed(self, dep_speed):
         """

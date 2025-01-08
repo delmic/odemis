@@ -81,7 +81,8 @@ METEOR-FIBSEM-Sim: {
         # Mirroring values between SEM - METEOR
         POS_COR: [0.0253126, 0.0024916],
         CALIB: {"version": "tfs_2", 
-                "Sample pre-tilt":  0.6108652381980153},  # 35°
+                "Sample pre-tilt":  0.6108652381980153, # 35°
+                "SEM-Eucentric-Focus": 7.0e-3},  # aqulios=7.0e-3, hydra=4.0e-3
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
         FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session  
