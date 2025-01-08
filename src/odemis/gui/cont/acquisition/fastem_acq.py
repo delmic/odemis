@@ -561,14 +561,25 @@ class FastEMAcquiController(object):
             "Period for which to run autofocus, if the value is 5 it should run for "
             "ROAs with index 0, 5, 10, etc."
         )
-        _, self.chk_beam_blank_off = self.acq_panel.add_checkbox_control(
+        chk_beam_blank_off_lbl, self.chk_beam_blank_off = self.acq_panel.add_checkbox_control(
             "Do not blank beam in between fields", value=False, pos_col=2, span=(1, 1)
         )
-        _, self.chk_stop_acq_on_failure = self.acq_panel.add_checkbox_control(
+        chk_beam_blank_off_lbl.SetToolTip(
+            "Reduces the acquisition time by keeping the e-beam active between fields instead "
+            "of blanking it."
+        )
+        chk_stop_acq_on_failure_lbl, self.chk_stop_acq_on_failure = self.acq_panel.add_checkbox_control(
             "Stop acquisition on failure", value=True, pos_col=2, span=(1, 1)
         )
-        _, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
+        chk_stop_acq_on_failure_lbl.SetToolTip(
+            "Stop the entire acquisition if a ROA acquisition fails. If unselected, skip the failed ROA "
+            "and continue the acquisition for subsequent ROAs."
+        )
+        chk_ebeam_off_lbl, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
             "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
+        )
+        chk_ebeam_off_lbl.SetToolTip(
+            "Automatically turned off the e-beam after acquisition is complete."
         )
 
         # ROA count
