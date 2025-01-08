@@ -264,6 +264,10 @@ class CryoFeatureController(object):
         if self.acqui_mode is guimod.AcquiMode.FLM:
             self._panel.ctrl_feature_z.Enable(enable)
             self._panel.btn_use_current_z.Enable(enable)
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._panel.param_feature_milling_angle.Enable(enable)
+            self._panel.btn_feature_move_to_mill.Enable(enable)
+            self._panel.btn_feature_save_position.Enable(enable)
 
     def _update_feature_cmb_list(self):
         """
