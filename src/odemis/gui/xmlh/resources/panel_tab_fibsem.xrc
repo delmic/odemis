@@ -383,6 +383,22 @@
                               <flag>wxLEFT|wxTOP</flag>
                               <border>10</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_stage_position">
+                                <label>Stage Position</label>
+                                <fg>#FFFFFF</fg>
+                                <font>
+                                  <size>8</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                                <border>10</border>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxEXPAND</flag>
+                            </object>
                             <flag>wxALIGN_RIGHT</flag>
                             <orient>wxVERTICAL</orient>
                           </object>

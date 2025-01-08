@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import collections
 import logging
+import math
 
 import wx
 
@@ -29,7 +30,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, SEM_IMAGING
+from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -338,6 +339,14 @@ class FibsemTab(Tab):
             target=[SEM_IMAGING, MILLING, FIB_IMAGING],
             tooltip="FIBSEM tab is only available at SEM position"
         )
+
+        # update stage pos label
+        rx = math.degrees(pos["rx"])
+        rz = math.degrees(pos["rz"])
+        posture = self.pm.current_posture.value
+        pos_name = POSITION_NAMES[posture] # TODO: add support for MILL posture in PM
+        txt = f"Stage Posture: {pos_name}, rotation: {rz:.2f}° tilt: {rx:.2f}°"
+        self._feature_panel_controller._panel.lbl_stage_position.SetLabel(txt)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)

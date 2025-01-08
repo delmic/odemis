@@ -244,6 +244,7 @@ class CryoFeatureController(object):
 
         feature.milling_tasks = copy.deepcopy(milling_tasks)
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        # TODO: automatically save the milling tasks when changed...
 
     # TODO: pattern size not updating
     # TODO: selected tasks not working in ui
