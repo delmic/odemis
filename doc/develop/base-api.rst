@@ -262,7 +262,7 @@ Each listener has a separate queue, which ensures it will never miss the fact an
         It must have a :py:func:`onEvent` method, which will be called every
         time the event is triggered.
         
-        This is typically called by the :py:meth:`DataFlow.synchronisedOn` method.
+        This is typically called by the :py:meth:`DataFlow.synchronizedOn` method.
 
     .. py:method:: unsubscribe(object)
 
