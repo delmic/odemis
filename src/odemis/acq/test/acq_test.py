@@ -234,6 +234,7 @@ class SECOMTestCase(unittest.TestCase):
         st = stream.StreamTree(streams=[s1, s2])
         f = acqmng.acquire(st.getProjections(), settings_obs=settings_obs)
         data, e = f.result()
+        self.assertIsNone(e)
         for s in data:
             self.assertTrue(model.MD_EXTRA_SETTINGS in s.metadata, "Stream %s didn't save extra metadata." % s)
         self.assertEqual(data[0].metadata[model.MD_EXTRA_SETTINGS][self.ccd.name]['binning'], [(2, 2), 'px'])
@@ -339,7 +340,8 @@ class SPARCTestCase(unittest.TestCase):
         specs2.detExposureTime.value = 0.05
 
         f = acqmng.acquire([sps, sps2], settings_obs)
-        data = f.result()
+        data, exp = f.result()
+        self.assertIsNone(exp)
 
         spec1_data = data[0][1]
         spec2_data = data[0][3]
