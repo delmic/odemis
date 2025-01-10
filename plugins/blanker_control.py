@@ -23,7 +23,7 @@ see http://www.gnu.org/licenses/.
 # or put it back to automatic (ie, disabled only when the SEM stream is active).
 
 import logging
-from typing import Any
+from typing import Any, Union
 
 import wx
 
@@ -32,16 +32,16 @@ from odemis.gui.plugin import Plugin
 from odemis.gui.util import call_in_wx_main
 
 BLANKER_TO_MENU = {
-    None: "Automatic",
-    True: "Enabled",  # No e-beam
-    False: "Disabled",
+    None: "Automatic",  # e-beam only if scan is active
+    True: "Enabled",  # no e-beam
+    False: "Disabled",  # e-beam
 }
 MENU_PATH = "Acquisition/E-beam blanker"
 
 
 class BlankerControlPlugin(Plugin):
     name = "E-beam Blanker Control"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
@@ -50,7 +50,7 @@ class BlankerControlPlugin(Plugin):
 
         # Is there an e-beam? Which has blanker control?
         main_data = self.main_app.main_data
-        if not main_data.ebeam or not model.hasVA("ebeam", "blanker"):
+        if not main_data.ebeam or not model.hasVA(main_data.ebeam, "blanker"):
             logging.info("%s plugin cannot load as the microscope has no e-beam blanker",
                          self.name)
             return
@@ -58,7 +58,10 @@ class BlankerControlPlugin(Plugin):
         blanker = main_data.ebeam.blanker
         # Add either a check menu if just on/off, or a radio menu if there are 3 states
         try:
-            blanker_choices = blanker.choices
+            blanker_choices : Union[set, dict] = blanker.choices
+            if isinstance(blanker_choices, dict):
+                # If it's a dict, it's a mapping value -> user-friendly name. => Just keep the values
+                blanker_choices = blanker_choices.keys()
         except AttributeError:
             # No choices => it's probably just a BooleanVA
             # There is no explicit way to check, so we just check whether the value is a boolean
