@@ -36,7 +36,7 @@ CONFIG_LIGHT_DEVICE = {
                 "name": "Laser Hub", "role": "light",
                 "mcc_device": None,
                 "ao_channels": [0, 1],
-                "do_channels": [5, 6],
+                "do_channels": [5, 6], # pins 26 & 27
                 "spectra": [
                     [592.e-9, 593.e-9, 594.e-9, 595.e-9, 596.e-9],
                     [592.e-9, 593.e-9, 594.e-9, 595.e-9, 596.e-9]],
@@ -49,7 +49,11 @@ CONFIG_LIGHT_DEVICE = {
                         0: 0,
                         5: 0.06,  # 60mW light emitter
                     }],
-                "di_channels": {10: ["interlockTriggered", False], 11: ["mirrorParked", False]},
+                # Simulator connects to the first 8 channels <-> last 8 channels.
+                # Setting the power to 0.0 will change the DO ports 5 or 6, which will affect
+                # the DI ports 13 or 14.
+                # For hardware testing, connect pins 26 and 27 with 37 and 38 respectively on the board.
+                "di_channels": {13: ["interlockTriggered", False], 14: ["mirrorParked", True]},
 }
 
 
@@ -97,12 +101,9 @@ class TestMCCDeviceLight(unittest.TestCase):
         Test for the instantiation of a basic MCC device with a DI status activated.
         Checks for registered VA's, polling status thread and channel selection.
         Tests trigger of VA status by using a TTL signal from a DO to a specific DI.
-        For this test to work with real HW, connect pin 26 and 27 with 34 and 35
+        For this test to work with real HW, connect pins 26 and 27 with pins 37 and 38
         respectively on the board.
         """
-        if TEST_NOHW:
-            self.skipTest("This test case does not make sense without the real HW.")
-
         self._create_device()
 
         # check if the interlockTriggered VA is registered properly
@@ -127,19 +128,18 @@ class TestMCCDeviceLight(unittest.TestCase):
 
         # check the status of the DI channels before triggering
         self.assertFalse(self.mcc_device.interlockTriggered.value)
-        self.assertFalse(self.mcc_device.mirrorParked.value)
+        self.assertTrue(self.mcc_device.mirrorParked.value)
 
         # check the old bit status
         old_bit_status = self.mcc_device.device.DIn(0x04)
 
         # set the power back to zero, this should trigger both of the DI channels
-        self.mcc_device.power.value[0] = self.mcc_device.power.range[0][0]
-        self.mcc_device.power.value[1] = self.mcc_device.power.range[0][1]
+        self.mcc_device.power.value = self.mcc_device.power.range[0]
         time.sleep(0.15)  # wait a little longer than the tread interval
 
         # check the status of the DI channels after triggering
         self.assertTrue(self.mcc_device.interlockTriggered.value)
-        self.assertTrue(self.mcc_device.interlockTriggered.value)
+        self.assertFalse(self.mcc_device.mirrorParked.value)
 
         # check if the bit status is now the new bit status
         new_bit_status = self.mcc_device.device.DIn(0x04)
