@@ -2217,20 +2217,9 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
     This test case is specifically targeting the use of a stage wrapper to
     enable stage scanning with the SEM sample stage.
     """
-    # The hardware is very similar to the SPARCv1, so just check special behaviour
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC2_4SPEC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_4SPEC_CONFIG)
 
         # Find CCD & SEM components
         cls.microscope = model.getMicroscope()
@@ -2241,16 +2230,6 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         cls.scan_stage = model.getComponent(role="scan-stage")
         cls.sem_stage = model.getComponent(role="stage")
         cls.ebic = model.getComponent(role="ebic-detector")
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_scan_stage_wrapper(self):
         """
@@ -2265,6 +2244,9 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
                                               self.ebeam,
                                               sstage=self.scan_stage)
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs_sstage])
+
+        # Move back the stage to the center
+        self.sem_stage.moveAbsSync({"x": 0.0, "y": 0.0})
 
         # set stage scanning to true
         specs_sstage.useScanStage.value = True
@@ -2378,7 +2360,7 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         f = self.sem_stage.moveAbs({"x": xrng_stage[0], "y": yrng_stage[0]})
         f.result()
 
-        # now go to the top left corner and create a rectangular shaped ROI with out of range dimensions
+        # now go to the top left corner and create a rectangular shaped ROI with out-of-range dimensions
         specs_sstage.roi.value = (0, 0, 0.02, 0.025)
         specs_sstage.repetition.value = (4, 6)
 
@@ -2388,6 +2370,9 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         # ROI goes outside the scan stage range
         with self.assertRaises(ValueError):
             f.result()
+
+        # Move back the stage to the center
+        self.sem_stage.moveAbsSync({"x": 0.0, "y": 0.0})
 
     def on_done(self, _):
         logging.debug("On done called")
