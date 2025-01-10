@@ -68,6 +68,12 @@ class SparcAcquiController(object):
         self._tab_panel = tab_panel
         self._streambar_controller = streambar_controller
         self._interlockTriggered = False  # local/private bool to track interlock status
+        if self._main_data_model.ebeam and model.hasVA(self._main_data_model.ebeam, "blanker"):
+            # blanker state before interlock (to restore it when interlock is reset)
+            self._ebeam_blanker = self._main_data_model.ebeam.blanker
+            self._pre_interlock_blanker = self._ebeam_blanker.value
+        else:
+            self._ebeam_blanker = None
 
         if model.hasVA(self._main_data_model.light, "interlockTriggered"):
             # subscribe to the VA and initialize the warning status
@@ -230,19 +236,33 @@ class SparcAcquiController(object):
             # if the value did not change in respect to the previous value
             return
 
-        logging.warning(f"Interlock status changed from {not value} -> "
-                        f"{value}")
+        logging.warning(f"Interlock status changed from {not value} -> {value}")
 
+        ebeam_str = ""  # to be added to the message if the e-beam blanker is forced
         if value:
+            # The laser is connected electronically to the interlock, so nothing to do in software.
+            # For the e-beam (to protect the user from X-rays), we force the blanker.
+            if self._ebeam_blanker:
+                self._pre_interlock_blanker = self._ebeam_blanker.value
+                self._ebeam_blanker.value = True
+                ebeam_str = "and e-beam "
+
             popup.show_message(wx.GetApp().main_frame,
                                title="Laser safety",
-                               message=f"Laser was suspended automatically due to interlock trigger.",
+                               message=f"Laser {ebeam_str}were suspended automatically due to interlock trigger.",
                                timeout=10.0,
                                level=logging.WARNING)
         else:
+            # Reactivate the e-beam blanker, but only if it is still active (otherwise, it's a sign
+            # that the user is manually handling it)
+            if self._ebeam_blanker and self._ebeam_blanker.value:
+                self._ebeam_blanker.value = self._pre_interlock_blanker
+                if self._pre_interlock_blanker != True:
+                    ebeam_str = " E-beam blanker was reactivated."
+
             popup.show_message(wx.GetApp().main_frame,
                                title="Laser safety",
-                               message=f"Laser interlock trigger is reset to normal.",
+                               message=f"Laser interlock trigger is reset to normal.{ebeam_str}",
                                timeout=10.0,
                                level=logging.WARNING)
 
