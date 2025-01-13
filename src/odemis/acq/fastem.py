@@ -345,6 +345,7 @@ class AcquisitionTask(object):
         :raise:
             Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
         """
+        exception = None
         eff_field_size = (int((1 - self._roa.overlap) * self._multibeam.resolution.value[0]),
                           int((1 - self._roa.overlap) * self._multibeam.resolution.value[1]))
         self._detector.updateMetadata({model.MD_FIELD_SIZE: eff_field_size})
@@ -367,7 +368,9 @@ class AcquisitionTask(object):
         # If during pre-calibration the _skip_roa_acq flag was set to True
         # force return and skip the acquisition
         if self._skip_roa_acq:
-            return self.megafield, ROASkipped(f"Skipped the ROA {self._roa.shape.name.value}")
+            exception = ROASkipped(f"Skipped the ROA {self._roa.shape.name.value} due to pre-calibration failure.")
+            logging.warning("%s", exception)
+            return self.megafield, exception
 
         # set the sub-directories (<user>/<project-name>/<roa-name>)
         self._detector.filename.value = os.path.join(self._username, self._path, self._roa.name.value)
@@ -381,7 +384,6 @@ class AcquisitionTask(object):
         if self._settings_obs:
             self._create_acquisition_metadata()
 
-        exception = None
         dataflow = self._detector.data
 
         try:
@@ -426,7 +428,10 @@ class AcquisitionTask(object):
                                 exc_info=True)
                 exception = ex  # let the caller handle the exception
             else:
-                exception = ROASkipped(f"Skipped the ROA {self._roa.shape.name.value}")
+                exception = ROASkipped(
+                    f"Skipped the ROA {self._roa.shape.name.value} due to acquisition failure with exception: {ex}"
+                )
+                logging.warning("%s", exception)
 
         finally:
             # Remove references to the megafield once the acquisition is finished/cancelled.
