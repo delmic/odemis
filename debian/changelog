@@ -1,3 +1,33 @@
+odemis (3.6.1-1) focal; urgency=medium
+
+  * New version 3.6.1
+  * Main bug fixes:
+     - Sort the items of Fast EM active project's combobox.
+     - Sort the Fast EM combobox items and projects tree on project name change event
+     - Fast EM fix stack overflow python error for ProgressiveBatchFuture having large number of sub-futures
+     - Fast EM project pnl and btn enabling in current_project and is_acquiring va callbacks
+     - Fast EM manually create immersion mode checkbox to control the gridbag sizer's position and span
+     - Fast EM gui changes to make it compatible with ubuntu 22
+     - Fast EM Make the beamshift correction save path unique
+     - Fix stage switching equations in Meteor Tescan posture manager
+     - Correct the check to find which axes are requested to move in Meteor.
+     - Meteor prevent circular updates and sync issues when loading overview data
+     - Meteor store power correctly for each channel in metadata
+     - Meteor change label for max intensity projection
+     - tileacq: don't switch external mode between each tile
+     - SPARC alignment of tunnel lens did not save the aligned position
+     - SpectrumSettingsStream with light component didn't turn light on during acquisition (SPARC)
+     - andorcam3 improve temperature message
+     - andorcam3: fix sona missed one gain
+     - SPARC acq: handle floating point error in comparison
+     - SPARC alignment slit overlay highlight low signal
+     - SPARC limit how quickly turnOnLight() acquires images
+     - SPARC gui: alignment tab: update mirror shape whenever needed
+     - SPARC gui: time estimation should be updated when drift correction is adjusted
+     - SPARC: fix plugin blanker_control never started
+
+ -- Thera Pals <pals@delmic.com>  Tue, 14 Jan 2025 10:40:40 +0100
+
 odemis (3.6.0-1) focal; urgency=medium
 
   * New version: 3.6
