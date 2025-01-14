@@ -455,6 +455,8 @@ class CryoFIBSEMGUIData(CryoGUIData):
 
         self.view_posture = model.VigilantAttribute(SEM_IMAGING)
         self.acqui_mode = AcquiMode.FIBSEM
+        self.is_sem_active_view: bool = False
+        self.is_fib_active_view: bool = False
 
     def _updateZParams(self):
         pass

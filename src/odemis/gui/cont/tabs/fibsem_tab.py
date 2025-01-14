@@ -214,6 +214,16 @@ class FibsemTab(Tab):
         self.panel.fp_milling.Show(is_fib_view and LICENCE_MILLING_ENABLED)
         # TODO: activate the corresponding channel on xtui
 
+        self.tab_data_model.is_sem_active_view = view == self.panel.vp_secom_tl.view
+        self.tab_data_model.is_fib_active_view = view == self.panel.vp_secom_tr.view
+        if hasattr(self, "_acquisition_controller"):
+            txt = "ACQUIRE"
+            if self.tab_data_model.is_sem_active_view:
+                txt = "ACQUIRE SEM"
+            if self.tab_data_model.is_fib_active_view:
+                txt = "ACQUIRE FIB"
+            self._acquisition_controller._panel.btn_cryosecom_acquire.SetLabel(txt)
+
         live = issubclass(view.stream_classes, LiveStream)
         self.panel.fp_secom_streams.Show(live)
         self.panel.fp_acquisitions.Show(live)

@@ -746,6 +746,25 @@
                               <flag>wxALL|wxEXPAND</flag>
                               <border>10</border>
                             </object>
+                              <object class="sizeritem">
+                                <object class="ImageTextButton" name="btn_acquire_all">
+                                  <icon>../../img/icon/ico_acqui.png</icon>
+                                  <height>48</height>
+                                  <face_colour>blue</face_colour>
+                                  <label>ACQUIRE BOTH</label>
+                                  <fg>#FFFFFF</fg>
+                                  <font>
+                                    <size>15</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <style>wxALIGN_CENTRE</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_acquire_overview">
                                 <height>48</height>

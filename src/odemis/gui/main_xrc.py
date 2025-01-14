@@ -743,6 +743,7 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.gauge_cryosecom_acq = xrc.XRCCTRL(self, "gauge_cryosecom_acq")
         self.txt_cryosecom_left_time = xrc.XRCCTRL(self, "txt_cryosecom_left_time")
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
+        self.btn_acquire_all = xrc.XRCCTRL(self, "btn_acquire_all")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
         self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
         self.chk_use_autofocus_acquire_features = xrc.XRCCTRL(self, "chk_use_autofocus_acquire_features")
@@ -9171,6 +9172,25 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               <flag>wxALL|wxEXPAND</flag>
                               <border>10</border>
                             </object>
+                              <object class="sizeritem">
+                                <object class="ImageTextButton" name="btn_acquire_all">
+                                  <icon>______img_icon_ico_acqui_png</icon>
+                                  <height>48</height>
+                                  <face_colour>blue</face_colour>
+                                  <label>ACQUIRE BOTH</label>
+                                  <fg>#FFFFFF</fg>
+                                  <font>
+                                    <size>15</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <style>wxALIGN_CENTRE</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_acquire_overview">
                                 <height>48</height>

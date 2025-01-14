@@ -33,7 +33,7 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
 import wx
 
@@ -44,7 +44,14 @@ from odemis.acq.feature import (
     acquire_at_features,
     add_feature_info_to_filename,
 )
-from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream
+from odemis.acq.stream import (
+    BrightfieldStream,
+    FIBStream,
+    FluoStream,
+    SEMStream,
+    StaticStream,
+    Stream,
+)
 from odemis.gui import conf
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
@@ -121,7 +128,7 @@ class CryoAcquiController(object):
         self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
         self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
-        self._zlevels = {}  # type: dict[Stream, list[float]]
+        self._zlevels: Dict[Stream, List[float]] = {}
 
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
@@ -162,8 +169,12 @@ class CryoAcquiController(object):
         self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
         self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
 
-        # hide z-stack controls for fibsem
+        # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
+            self._panel.streams_chk_list.Hide()
+
+            # hide the zstack settings
             self._panel.z_stack_chkbox.Hide()
             self._panel.param_Zmin.Hide()
             self._panel.param_Zmin_label.Hide()
@@ -186,6 +197,7 @@ class CryoAcquiController(object):
 
         # disable while acquiring
         self._panel.btn_cryosecom_acquire.Enable(not is_acquiring)
+        # self._panel.btn_acquire_all.Enable(not is_acquiring)
         self._panel.txt_cryosecom_est_time.Show(not is_acquiring)
         self._panel.btn_cryosecom_change_file.Enable(not is_acquiring)
         self._panel.btn_acquire_overview.Enable(not is_acquiring)
@@ -206,7 +218,23 @@ class CryoAcquiController(object):
         # update the layout
         self._panel.Layout()
 
-    def _on_acquire(self, _):
+    def _get_acqui_streams(self, evt: wx.Event) -> List[stream.Stream]:
+        """
+        Get the acquisition streams based on the acqui mode, 
+        button pressed, and the current view
+        """
+        acq_streams = self._acquiStreams.value
+        sender = evt.GetEventObject()
+        if (self.acqui_mode is guimod.AcquiMode.FIBSEM and
+                sender == self._panel.btn_cryosecom_acquire):
+            if self._tab_data.is_sem_active_view:
+                acq_streams = [s for s in acq_streams if isinstance(s, SEMStream)]
+            if self._tab_data.is_fib_active_view:
+                acq_streams = [s for s in acq_streams if isinstance(s, FIBStream)]
+        logging.debug(f"Acquisition streams: {acq_streams}")
+        return acq_streams
+
+    def _on_acquire(self, evt: wx.Event):
         """
         called when the button "acquire" is pressed
         """
@@ -221,15 +249,18 @@ class CryoAcquiController(object):
         # until after the acquisition starts
         self._tab.streambar_controller.pauseStreams()
 
+        # get the streams to acquire (depending on mode, btn, ...)        
+        acq_streams = self._get_acqui_streams(evt)
+
         # acquire the data
         if self._zStackActive.value:
             self._on_zstack()  # update the zlevels with the current focus position
             self._acq_future = acqmng.acquireZStack(
-                self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
+                acq_streams, self._zlevels, self._tab_data.main.settings_obs)
 
         else:  # no zstack
             self._acq_future = acqmng.acquire(
-                self._acquiStreams.value, self._tab_data.main.settings_obs)
+                acq_streams, self._tab_data.main.settings_obs)
 
         logging.info("Acquisition started")
 
