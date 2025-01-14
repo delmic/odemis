@@ -172,6 +172,8 @@ class CryoAcquiController(object):
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
+            self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
+            self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
             self._panel.streams_chk_list.Hide()
 
             # hide the zstack settings
@@ -197,7 +199,6 @@ class CryoAcquiController(object):
 
         # disable while acquiring
         self._panel.btn_cryosecom_acquire.Enable(not is_acquiring)
-        # self._panel.btn_acquire_all.Enable(not is_acquiring)
         self._panel.txt_cryosecom_est_time.Show(not is_acquiring)
         self._panel.btn_cryosecom_change_file.Enable(not is_acquiring)
         self._panel.btn_acquire_overview.Enable(not is_acquiring)
@@ -208,6 +209,9 @@ class CryoAcquiController(object):
         self._panel.param_Zmin.Enable(not is_acquiring and self._zStackActive.value)
         self._panel.param_Zmax.Enable(not is_acquiring and self._zStackActive.value)
         self._panel.param_Zstep.Enable(not is_acquiring and self._zStackActive.value)
+
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._panel.btn_acquire_all.Enable(not is_acquiring)
 
         # disable the streams settings while acquiring
         if is_acquiring:
@@ -387,6 +391,14 @@ class CryoAcquiController(object):
             self._tab_data.main.currentFeature.value = None
             self._tab_data.main.currentFeature.value = f
 
+    def _on_chkbox_save_acquisition(self, evt: wx.Event):
+
+        # toggle file controls when saving is enabled
+        enable = self._panel.chkbox_save_acquisition.IsChecked()
+        self._panel.lbl_filename.Enable(enable)
+        self._panel.txt_filename.Enable(enable)
+        self._panel.btn_cryosecom_change_file.Enable(enable)
+
     def _reset_acquisition_gui(self, text=None, state=None):
         """
         Resets some GUI widgets for the next acquisition
@@ -451,8 +463,12 @@ class CryoAcquiController(object):
         data (DataArray): the returned data/images from the future
         thumb_nail (DataArray): the thumbnail of the views
         """
+        auto_save: bool = True
+        if hasattr(self._panel, "chkbox_save_acquisition"):
+            auto_save = self._panel.chkbox_save_acquisition.IsChecked()
+
         base_filename = self._filename.value
-        if data:
+        if data and auto_save:
             # get the exporter
             exporter = dataio.get_converter(self._config.last_format)
 
@@ -478,7 +494,7 @@ class CryoAcquiController(object):
                 self._config.fn_count,
             )
         else:
-            logging.debug("Not saving into file '%s' as there is no data", filename)
+            logging.debug("Not saving into file '%s' as there is no data", base_filename)
 
         return data
 

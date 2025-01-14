@@ -598,11 +598,25 @@
                               <border>9</border>
                             </object>
                             <object class="sizeritem">
+                              <object class="wxCheckBox" name="chkbox_save_acquisition">
+                                <label>Auto Save Acquisition</label>
+                                <fg>#E5E5E5</fg>
+                                <checked>0</checked>
+                                <flag>wxTOP</flag>
+                                <border>25</border>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                                <flag>wxALL|wxEXPAND</flag>
+                              </object>
+                              <border>25</border>
+                            </object>
+                            <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="wxFlexGridSizer">
                                     <object class="sizeritem">
-                                      <object class="wxStaticText">
+                                      <object class="wxStaticText" name="lbl_filename">
                                         <label>Filename</label>
                                         <fg>#E5E5E5</fg>
                                       </object>

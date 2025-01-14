@@ -736,6 +736,8 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.param_Zstep = xrc.XRCCTRL(self, "param_Zstep")
         self.param_Zmax_label = xrc.XRCCTRL(self, "param_Zmax_label")
         self.param_Zmax = xrc.XRCCTRL(self, "param_Zmax")
+        self.chkbox_save_acquisition = xrc.XRCCTRL(self, "chkbox_save_acquisition")
+        self.lbl_filename = xrc.XRCCTRL(self, "lbl_filename")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_cryosecom_change_file = xrc.XRCCTRL(self, "btn_cryosecom_change_file")
         self.btn_cryosecom_acquire = xrc.XRCCTRL(self, "btn_cryosecom_acquire")
@@ -9024,13 +9026,29 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               <border>9</border>
                             </object>
                             <object class="sizeritem">
+                              <object class="wxCheckBox" name="chkbox_save_acquisition">
+                                <label>Auto Save Acquisition</label>
+                                <fg>#E5E5E5</fg>
+                                <checked>0</checked>
+                                <flag>wxTOP</flag>
+                                <border>10</border>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                                <flag>wxALL|wxEXPAND</flag>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="wxFlexGridSizer">
                                     <object class="sizeritem">
-                                      <object class="wxStaticText">
+                                      <object class="wxStaticText" name="lbl_filename">
                                         <label>Filename</label>
                                         <fg>#E5E5E5</fg>
+                                        <!-- <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED> -->
                                       </object>
                                       <flag>wxTOP</flag>
                                       <border>4</border>
