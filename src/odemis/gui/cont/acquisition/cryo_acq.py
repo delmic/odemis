@@ -33,6 +33,7 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
+from typing import Optional, List, Dict
 
 import wx
 
@@ -396,32 +397,48 @@ class CryoAcquiController(object):
         self._display_acquired_data(data)
 
 
-    def _create_cryo_filename(self, filename: str) -> str:
+    def _create_cryo_filename(self, filename: str, acq_type: Optional[str] = None) -> str:
         """
         Create a filename for cryo images depending on mode.
         :param filename: filename given by user
         """
-        # TODO: consolidate the two methods into one
+        acq_map: Dict[str, str] = {
+            model.MD_AT_EM: "SEM", 
+            model.MD_AT_FIB: "FIB"
+        }    
         if self.acqui_mode is guimod.AcquiMode.FLM:
             filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
                                         filename=filename)
         else:
-            filename = _create_fibsem_filename(filename)
+            filename = _create_fibsem_filename(filename, acq_map[acq_type])
 
         return filename
 
-    def _export_data(self, data, thumb_nail):
+    def _export_data(self, data: List[model.DataArray], thumb_nail):
         """
         Called to export the acquired data.
         data (DataArray): the returned data/images from the future
         thumb_nail (DataArray): the thumbnail of the views
         """
-        filename = self._filename.value
+        base_filename = self._filename.value
         if data:
-            filename = self._create_cryo_filename(filename)
+            # get the exporter
             exporter = dataio.get_converter(self._config.last_format)
-            exporter.export(filename, data, thumb_nail)
-            logging.info(u"Acquisition saved as file '%s'.", filename)
+
+            # export fib/sem data as separate images
+            if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+                for d in data:                       
+                    filename = self._create_cryo_filename(base_filename, 
+                                                          d.metadata[model.MD_ACQ_TYPE])
+                    exporter.export(filename, d, thumb_nail)
+            else:
+                # export fm channels as single image
+                filename = self._create_cryo_filename(base_filename)
+                exporter.export(filename, data, thumb_nail)
+                logging.info(u"Acquisition saved as file '%s'.", filename)      
+
+            # TODO: make saving fibsem data optional
+            # TODO: investigate using Cntrl + S to save?
             # update the filename
             self._filename.value = create_filename(
                 self._config.pj_last_path,

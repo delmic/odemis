@@ -338,14 +338,16 @@ def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
 
     return create_filename(path, ptn, ext, count="001")
 
-def _create_fibsem_filename(filename: str) -> str:
+def _create_fibsem_filename(filename: str, acq_type: str) -> str:
     """
     Create a filename for FIBSEM images.
     :param filename: filename given by user
+    :param acq_type: the type of acquisition (FIB or SEM)
+    :return: the created filename
     """
     path_base, ext = splitext(filename)
     path, basename = os.path.split(path_base)
-    ptn = f"{basename}-FIBSEM-{{cnt}}"
+    ptn = f"{basename}-{acq_type}-{{cnt}}"
 
     return create_filename(path, ptn, ext, count="001")
 
