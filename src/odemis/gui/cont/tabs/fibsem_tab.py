@@ -311,9 +311,9 @@ class FibsemTab(Tab):
             self.panel.vp_secom_bl.canvas.fit_to_bbox(bbox)
 
         # sync overview streams with correlation tab
-        if len(streams) > 0 and self.main_data.role == "meteor":
-            correlation_tab = self.main_data.getTabByName("meteor-correlation")
-            correlation_tab.correlation_controller.add_streams(streams)
+        # if len(streams) > 0 and self.main_data.role == "meteor":
+            # correlation_tab = self.main_data.getTabByName("meteor-correlation")
+            # correlation_tab.correlation_controller.add_streams(streams)
 
     def on_dbl_click(self, evt):
 
@@ -351,12 +351,31 @@ class FibsemTab(Tab):
         )
 
         # update stage pos label
+        from odemis.util import units
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
         posture = self.pm.current_posture.value
         pos_name = POSITION_NAMES[posture] # TODO: add support for MILL posture in PM
-        txt = f"Stage Posture: {pos_name}, rotation: {rz:.2f}° tilt: {rx:.2f}°"
-        self._feature_panel_controller._panel.lbl_stage_position.SetLabel(txt)
+        self._feature_panel_controller._panel.lbl_stage_position.Hide()#.SetLabel(txt)
+
+        # TODO: move this to legend.py
+        r = units.readable_str(units.round_significant(rz, 3))
+        t = units.readable_str(units.round_significant(rx, 3))
+        txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
+
+        self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
+        self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
+        self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
+        # get localisation tab
+        # if ltab is None:
+        try:
+            ltab  = self.main_data.getTabByName("cryosecom-localization")
+            if ltab:
+                ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
+                ltab.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
+                ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
+        except:
+            pass
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
