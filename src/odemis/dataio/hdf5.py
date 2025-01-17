@@ -788,7 +788,8 @@ def read_metadata(pdgroup, c_index, md, name, md_key, converter, bad_states=(ST_
 
         state = _h5svi_get_state(ds)
         if state and (state[c_index] in bad_states):
-            raise ValueError("State %d indicate that metadata is not useful" % state[c_index])
+            logging.debug("State %d indicates that metadata is not useful", state[c_index])
+            return
 
         # special case
         if md_key in (model.MD_IN_WL, model.MD_OUT_WL):
