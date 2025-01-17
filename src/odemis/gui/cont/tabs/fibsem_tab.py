@@ -136,7 +136,7 @@ class FibsemTab(Tab):
         hwemtvas = set()
         hwdetvas = set()
 
-        hwemt_vanames = ("beamCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
+        hwemt_vanames = ("probeCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
         hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
         for vaname in model.getVAs(electron_beam):
             if vaname in hwemt_vanames:
@@ -161,8 +161,6 @@ class FibsemTab(Tab):
 
         hwemtvas = set()
         hwdetvas = set()
-        # hwemt_vanames = ("beamCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
-        # hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
         for vaname in model.getVAs(ion_beam):
             if vaname in hwemt_vanames:
                 hwemtvas.add(vaname)
