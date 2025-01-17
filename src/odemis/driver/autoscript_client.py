@@ -1240,6 +1240,10 @@ class Scanner(model.Emitter):
             if voltage != self.accelVoltage.value:
                 self.accelVoltage._value = voltage
                 self.accelVoltage.notify(voltage)
+            beam_current = self.parent.get_beam_current(self.channel)
+            if beam_current != self.beamCurrent.value:
+                self.beamCurrent._value = beam_current
+                self.beamCurrent.notify(beam_current)
             beam_shift = self.parent.get_beam_shift(self.channel)
             if beam_shift != self.shift.value:
                 self.shift._value = beam_shift
