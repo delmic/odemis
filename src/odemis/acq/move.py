@@ -311,6 +311,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE]
         stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE]
+        stage_milling = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
         if pos is None:
             pos = self.stage.position.value
         # Check the stage is near the loading position
@@ -319,6 +320,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         if isInRange(pos, stage_fm_imaging_rng, self.linear_axes):
             return FM_IMAGING
         if isInRange(pos, stage_sem_imaging_rng, self.linear_axes):
+            if isNearPosition(pos, stage_milling, self.rotational_axes, atol_rotation=math.radians(5)):
+                logging.warning(f"Milling Pos: {stage_milling}, Pos: {pos}, AT MILLING")
+                return MILLING
             return SEM_IMAGING
         # None of the above -> unknown position
         return UNKNOWN
@@ -332,6 +336,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             return stage_md[model.MD_FAV_FM_POS_ACTIVE]
         elif posture == LOADING:
             return stage_md[model.MD_FAV_POS_DEACTIVE]
+        elif posture == MILLING:
+            return stage_md[model.MD_FAV_MILL_POS_ACTIVE]
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -415,6 +421,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         # sem imaging
         self._transforms[SEM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix(invert=True)
         self._inv_transforms[SEM_IMAGING] =  numpy.linalg.inv(self._transforms[SEM_IMAGING])
+
+        self._transforms[MILLING] = self._transforms[SEM_IMAGING]
+        self._inv_transforms[MILLING] = self._inv_transforms[SEM_IMAGING]
 
         # add unknown as same as SEM IMAGING
         self._transforms[UNKNOWN] = self._transforms[SEM_IMAGING]
@@ -522,6 +531,10 @@ class MeteorPostureManager(MicroscopePostureManager):
                 FM_IMAGING: self._transformFromSEMToMeteor,
                 MILLING: self._transform_from_sem_to_milling,
             },
+            MILLING: {
+                SEM_IMAGING: self._transform_from_milling_to_sem,
+                FM_IMAGING: self._transform_from_milling_to_fm,
+            },
             UNKNOWN: {
                 UNKNOWN: lambda x: x
          }
@@ -552,6 +565,18 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         return position
 
+    def _transform_from_milling_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from milling to sem imaging position"
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        # the only difference is the tilt axes assuming eucentricity
+        position = pos.copy()
+        position.update(self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE])
+
+        return position
+
     def _transform_from_fm_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from fm imaging to milling position"
@@ -561,6 +586,16 @@ class MeteorPostureManager(MicroscopePostureManager):
         # simple chain of fm->sem->milling
         sem_pos = self._transformFromMeteorToSEM(pos)
         return self._transform_from_sem_to_milling(sem_pos)
+
+    def _transform_from_milling_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from milling to fm imaging position"
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        # simple chain of milling->sem->fm
+        sem_pos = self._transform_from_milling_to_sem(pos)
+        return self._transformFromSEMToMeteor(sem_pos)
 
 
 class MeteorTFS1PostureManager(MeteorPostureManager):
@@ -619,6 +654,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             elif target_pos_lbl == SEM_IMAGING:
                 end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
 
+        elif current_position == MILLING:
+            if target_pos_lbl == SEM_IMAGING:
+                end_pos = self._transform_from_milling_to_sem(self.stage.position.value)
+            elif target_pos_lbl == FM_IMAGING:
+                end_pos = self._transform_from_milling_to_fm(self.stage.position.value)
+
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
@@ -638,7 +679,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
         grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
         grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-        if current_pos_label == SEM_IMAGING:
+        if current_pos_label in [SEM_IMAGING, MILLING]:
             distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
             distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
             return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1

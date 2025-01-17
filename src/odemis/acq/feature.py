@@ -145,7 +145,7 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager, feature: CryoF
     # if the position doesn't exist at that posture, create it
     if position is None or recalculate:
         try:
-            logging.info(f"Feature position for {feature.name.value} at {posture} posture doesn't exist. Creating it.")
+            logging.info(f"Feature position for {feature.name.value} at {POSITION_NAMES[posture]} posture doesn't exist. Creating it.")
             position = pm.to_posture(feature.stage_position.value, posture)
             feature.set_posture_position(posture=posture, position=position)
         except Exception as e:
