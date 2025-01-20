@@ -86,6 +86,12 @@ jobs:
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/util/test/img_test.py --verbose
+    
+    - name: Run tests from odemis.util.interpolation
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/interpolation_test.py --verbose
 
     - name: Run tests from odemis.util.linalg
       if: ${{ !cancelled() }}
