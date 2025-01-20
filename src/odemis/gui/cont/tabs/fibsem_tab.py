@@ -39,6 +39,7 @@ from odemis.acq.stream import (
     StaticSEMStream,
 )
 from odemis.gui import conf
+from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF
 from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.features import CryoFeatureController
@@ -49,6 +50,7 @@ from odemis.gui.cont.stream_bar import (
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
+from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 
 
@@ -204,6 +206,7 @@ class FibsemTab(Tab):
 
         # TODO: replace with current_posture?
         self.main_data.stage.position.subscribe(self._on_stage_pos, init=True)
+        self.panel = panel
 
     def _on_view(self, view):
         """Hide/Disable milling controls when fib view is not selected"""
@@ -349,24 +352,22 @@ class FibsemTab(Tab):
         )
 
         # update stage pos label
-        from odemis.util import units
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
         posture = self.pm.current_posture.value
         pos_name = POSITION_NAMES[posture] # TODO: add support for MILL posture in PM
-        self._feature_panel_controller._panel.lbl_stage_position.Hide()#.SetLabel(txt)
 
         # TODO: move this to legend.py
         r = units.readable_str(units.round_significant(rz, 3))
         t = units.readable_str(units.round_significant(rx, 3))
         txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
 
-        self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
-        self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
-        self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
         # get localisation tab
         # if ltab is None:
         try:
+            self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
+            self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
+            self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
             ltab  = self.main_data.getTabByName("cryosecom-localization")
             if ltab:
                 ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
@@ -374,6 +375,14 @@ class FibsemTab(Tab):
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
         except:
             pass
+
+        # update the stage position buttons
+        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
+        self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+        if posture == SEM_IMAGING:
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
+        if posture == MILLING:
+            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
