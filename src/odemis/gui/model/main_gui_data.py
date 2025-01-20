@@ -301,6 +301,7 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
+            has_fibsem = any([c.role == "fibsem" for c in components])
             if self.role in ("secom", "delphi", "enzel"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role in ("secom", "enzel"):
@@ -310,8 +311,9 @@ class MainGUIData(object):
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus"]
                 # add additional roles when fibsem control enabled
-                if any([c.role == "fibsem" for c in components]):
-                    required_roles += ["e-beam", "se-detector", "ion-beam", "se-detector-ion"]
+                if has_fibsem:
+                    required_roles += ["e-beam", "se-detector", "ebeam-focus", 
+                                       "ion-beam", "se-detector-ion", "ion-focus"]
             elif self.role == "mimas":
                 required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):
@@ -322,7 +324,7 @@ class MainGUIData(object):
             elif self.role == "mbsem":
                 required_roles += ["e-beam", "stage"]
 
-            if microscope.name in ["METEOR TFSv2", "METEOR-FIBSEM-Sim"] and self.role == "meteor":
+            if self.role == "meteor" and has_fibsem: # TODO: better check for new pm instead of fibsem
                 # remove stage from required roles for METEOR TFSv2, use sample_stage instead
                 required_roles.remove("stage")
 
