@@ -13,7 +13,6 @@ from odemis.acq.feature import (
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
     CryoFeature,
-    calculate_stage_tilt_from_milling_angle,
     get_feature_position_at_posture,
     save_features,
 )
@@ -85,10 +84,7 @@ class CryoFeatureController(object):
         if fm_mode:
             self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
         if fibsem_mode:
-            self._panel.btn_feature_move_to_mill.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
-
-            # self._panel.btn_feature_move_to_mill.Show(LICENCE_MILLING_ENABLED)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
 
     def _on_btn_create_move_feature(self, _):
@@ -145,32 +141,6 @@ class CryoFeatureController(object):
 
         return
 
-    def _move_to_milling_position(self, evt: wx.Event):
-        feature: CryoFeature = self._tab_data_model.main.currentFeature.value
-        if feature is None:
-            logging.warning("No feature selected")
-            return
-
-        # set the milling angle
-        milling_angle = math.radians(self._panel.param_feature_milling_angle.GetValue())
-        pre_tilt = self.pm.stage.getMetadata()[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
-        stage_tilt = calculate_stage_tilt_from_milling_angle(milling_angle=milling_angle,
-                                                             pre_tilt=pre_tilt,
-                                                             column_tilt=math.radians(52))
-
-        # update the metadata of the stage
-        current_md = self.pm.stage.getMetadata()
-        self.pm.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': stage_tilt, 
-                                                                     "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
-        logging.info(f"MILLING ANGLE: {milling_angle}, Pre-tilt: {pre_tilt}, Stage tilt: {stage_tilt}")
-        logging.info(f"Updated Stage metadata: {self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]}")
-
-        self._move_to_posture(feature, MILLING, recalculate=True)
-
-        # only change the tilt of the stage, don't do the rest
-        # current position -> milling tilt
-        # change go to feature to go to the current posture (SEM or MILL)
-        # the only thing that can update the milling position is go to feature while at milling, or save milling position?
 
     def _move_to_posture(self, feature: CryoFeature, posture: int, recalculate: bool = False):
         """
@@ -271,8 +241,6 @@ class CryoFeatureController(object):
             self._panel.ctrl_feature_z.Enable(enable)
             self._panel.btn_use_current_z.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-            self._panel.param_feature_milling_angle.Enable(enable)
-            self._panel.btn_feature_move_to_mill.Enable(enable)
             self._panel.btn_feature_save_position.Enable(enable)
 
     def _update_feature_cmb_list(self):

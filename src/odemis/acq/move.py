@@ -642,6 +642,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 elif current_position == SEM_IMAGING:
                     fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
                 end_pos = fm_target_pos
+            elif target_pos_lbl == MILLING:
+                end_pos = self._transform_from_sem_to_milling(self.stage.position.value)
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
                 sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
@@ -846,7 +848,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING):
                 # save rotation and tilt in SEM before switching to FM imaging
                 # to restore rotation and tilt while switching back from FM -> SEM
                 if current_label == SEM_IMAGING and target == FM_IMAGING:
@@ -966,6 +968,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 elif current_position == SEM_IMAGING:
                     fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
                 end_pos = fm_target_pos
+            elif target_pos_lbl == MILLING:
+                end_pos = self._transform_from_sem_to_milling(self.stage.position.value)
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
                 sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
@@ -977,7 +981,11 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
             elif target_pos_lbl == SEM_IMAGING:
                 end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
-
+        elif current_position == MILLING:
+            if target_pos_lbl == SEM_IMAGING:
+                end_pos = self._transform_from_milling_to_sem(self.stage.position.value)
+            # elif target_pos_lbl == FM_IMAGING:
+                # end_pos = self._transform_from_milling_to_fm(self.stage.position.value)
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
@@ -2298,3 +2306,18 @@ class SampleStage(model.Actuator):
 
     def stop(self, axes=None):
         self._stage_bare.stop()
+
+def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: int = math.radians(52)) -> float:
+    """Calculate the stage tilt from the milling angle and the pre-tilt.
+    :param milling_angle: the milling angle in radians
+    :param pre_tilt: the pre-tilt in radians
+    :param column_tilt: the column tilt in radians (default TFS = 52deg)
+    :return: the stage tilt in radians
+    """
+    # Equation:
+    # MillingAngle = 90 - ColumnTilt + StageTilt - PreTilt
+    # StageTilt = MillingAngle + PreTilt + ColumnTilt - 90
+
+    # calculate the stage tilt from the milling angle and the pre-tilt
+    stage_tilt = milling_angle + pre_tilt + column_tilt - math.radians(90)
+    return stage_tilt

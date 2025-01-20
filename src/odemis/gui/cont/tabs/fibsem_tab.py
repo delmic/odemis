@@ -30,7 +30,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING
+from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING, calculate_stage_tilt_from_milling_angle
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -208,6 +208,11 @@ class FibsemTab(Tab):
         self.main_data.stage.position.subscribe(self._on_stage_pos, init=True)
         self.panel = panel
 
+        self.pm = self.tab_data_model.main.posture_manager
+        self.panel.ctrl_milling_angle.SetValue(18) # TODO: use MD_FAV_MILL_POS_ACTIVE
+        self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
+        self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
+
     def _on_view(self, view):
         """Hide/Disable milling controls when fib view is not selected"""
         # is_fib_view = issubclass(view.stream_classes, FIBStream)
@@ -383,6 +388,42 @@ class FibsemTab(Tab):
             self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
         if posture == MILLING:
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+
+        self.panel.Layout()
+
+    def _move_to_milling_position(self, evt: wx.Event):
+
+        # set the milling angle
+        milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
+        pre_tilt = self.pm.stage.getMetadata()[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+        stage_tilt = calculate_stage_tilt_from_milling_angle(milling_angle=milling_angle,
+                                                             pre_tilt=pre_tilt,
+                                                             column_tilt=math.radians(52))
+
+        # update the metadata of the stage
+        current_md = self.pm.stage.getMetadata()
+        self.pm.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': stage_tilt, 
+                                                                     "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
+        logging.info(f"MILLING ANGLE: {milling_angle}, Pre-tilt: {pre_tilt}, Stage tilt: {stage_tilt}")
+        logging.info(f"Updated Stage metadata: {self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]}")
+
+        # self._move_to_posture(feature, MILLING, recalculate=True)
+
+        # TODO: update milling angle, when control changes...
+
+        f = self.pm.cryoSwitchSamplePosition(MILLING)
+        f.result()
+
+
+        # only change the tilt of the stage, don't do the rest
+        # current position -> milling tilt
+        # change go to feature to go to the current posture (SEM or MILL)
+        # the only thing that can update the milling position is go to feature while at milling, or save milling position?
+
+    def _move_to_sem(self, evt: wx.Event):
+
+        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)

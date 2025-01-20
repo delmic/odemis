@@ -314,51 +314,6 @@
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Milling Angle</label>
-                                    <fg>#DDDDDD</fg>
-                                    <border>10</border>
-                                  </object>
-                                </object>
-                              <object class="sizeritem">
-                                <object class="UnitFloatCtrl" name="param_feature_milling_angle">
-                                  <size>122,16</size>
-                                  <value>18</value>
-                                  <key_step>0.01</key_step>
-                                  <min>0</min>
-                                  <max>35</max>
-                                  <unit>deg</unit>
-                                  <scale>linear</scale>
-                                  <accuracy>4</accuracy>
-                                  <font>
-                                    <size>8</size>
-                                    <encoding>UTF-8</encoding>
-                                  </font>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxTOP</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="ImageTextButton" name="btn_feature_move_to_mill">
-                                  <height>24</height>
-                                  <bg>#000000</bg>
-                                  <label>Move To MILL</label>
-                                  <style>wxALIGN_CENTRE</style>
-                                </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>52</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxLEFT|wxTOP</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_feature_save_position">
                                     <height>24</height>
                                     <bg>#000000</bg>
@@ -394,58 +349,105 @@
                         <object class="wxPanel" name="pnl_stage_position">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
-                            <!-- Add two buttons horizontally laid out -->
-                          <object class="wxGridBagSizer">
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="ProgressRadioButton" name="btn_switch_sem_imaging">
-                                <icon>../../img/icon/ico_sem.png</icon>
-                                <icon_progress>../../img/icon/ico_sem_orange.png</icon_progress>
-                                <icon_on>../../img/icon/ico_sem_green.png</icon_on>
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>SEM IMAGING</label>
-                                <fg>#1A1A1A</fg>
-                                <font>
-                                  <size>11</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
-                                <hidden>0</hidden>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
+                              <object class="wxGridBagSizer">
+                                <object class="sizeritem">
+                                  <object class="ProgressRadioButton" name="btn_switch_sem_imaging">
+                                    <icon>../../img/icon/ico_sem.png</icon>
+                                    <icon_progress>../../img/icon/ico_sem_orange.png</icon_progress>
+                                    <icon_on>../../img/icon/ico_sem_green.png</icon_on>
+                                    <height>48</height>
+                                    <face_colour>def</face_colour>
+                                    <label>SEM IMAGING</label>
+                                    <fg>#1A1A1A</fg>
+                                    <font>
+                                      <size>11</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <hidden>0</hidden>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxALL|wxEXPAND</flag>
+                                  <border>10</border>
+                                  <cellpos>0,0</cellpos>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ProgressRadioButton" name="btn_switch_milling">
+                                    <icon>../../img/icon/ico_milling.png</icon>
+                                    <icon_progress>../../img/icon/ico_milling_orange.png</icon_progress>
+                                    <icon_on>../../img/icon/ico_milling_green.png</icon_on>
+                                    <height>48</height>
+                                    <face_colour>def</face_colour>
+                                    <label>MILLING</label>
+                                    <fg>#1A1A1A</fg>
+                                    <font>
+                                      <size>11</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <hidden>0</hidden>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxALL|wxEXPAND</flag>
+                                  <border>10</border>
+                                  <cellpos>0,1</cellpos>
+                                </object>
+                                <vgap>5</vgap>
+                                <hgap>20</hgap>
                               </object>
-                              <flag>wxALL|wxEXPAND</flag>
-												      <border>10</border>
-												      <cellpos>0,0</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ProgressRadioButton" name="btn_switch_milling">
-                                <icon>../../img/icon/ico_milling.png</icon>
-                                <icon_progress>../../img/icon/ico_milling_orange.png</icon_progress>
-                                <icon_on>../../img/icon/ico_milling_green.png</icon_on>
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>MILLING</label>
-                                <fg>#1A1A1A</fg>
-                                <font>
-                                  <size>11</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
-                                <hidden>0</hidden>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
+                                <object class="wxBoxSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_milling_angle">
+                                      <label>Milling Angle</label>
+                                      <fg>#BFBFBF</fg>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                      <font>
+                                        <size>10</size>
+                                        <encoding>UTF-8</encoding>
+                                      </font>
+                                    </object>
+                                    <flag>wxTOP|wxLEFT</flag>
+                                    <border>25</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="UnitFloatCtrl" name="ctrl_milling_angle">
+                                      <size>-1,20</size>
+                                      <value>10</value>
+                                      <accuracy>3</accuracy>
+                                      <key_step>0.1</key_step>
+                                      <unit>°</unit>
+                                      <scale>linear</scale>
+                                      <accuracy>2</accuracy>
+                                      <font>
+                                        <size>10</size>
+                                        <encoding>UTF-8</encoding>
+                                      </font>
+                                      <style>wxBORDER_NONE</style>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <orient>wxEXPAND</orient>
+                                    <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+                                    <border>25</border>
+                                  </object>
+                                  <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <flag>wxALIGN_CENTRE</flag>
                               </object>
-                              <flag>wxALL|wxEXPAND</flag>
-												      <border>10</border>
-												      <cellpos>0,1</cellpos>
                             </object>
-                            <vgap>5</vgap>
-											      <hgap>20</hgap>
                           </object>
-                        </object>
                       </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
