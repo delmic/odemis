@@ -729,13 +729,6 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_acquisitions = xrc.XRCCTRL(self, "fp_acquisitions")
         self.streams_chk_list = xrc.XRCCTRL(self, "streams_chk_list")
-        self.z_stack_chkbox = xrc.XRCCTRL(self, "z_stack_chkbox")
-        self.param_Zmin_label = xrc.XRCCTRL(self, "param_Zmin_label")
-        self.param_Zmin = xrc.XRCCTRL(self, "param_Zmin")
-        self.param_Zstep_label = xrc.XRCCTRL(self, "param_Zstep_label")
-        self.param_Zstep = xrc.XRCCTRL(self, "param_Zstep")
-        self.param_Zmax_label = xrc.XRCCTRL(self, "param_Zmax_label")
-        self.param_Zmax = xrc.XRCCTRL(self, "param_Zmax")
         self.chkbox_save_acquisition = xrc.XRCCTRL(self, "chkbox_save_acquisition")
         self.lbl_filename = xrc.XRCCTRL(self, "lbl_filename")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
@@ -8865,7 +8858,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
                               <border>10</border>
                             </object>
-                            <object class="sizeritem">
+                            <!-- <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="wxCheckBox" name="z_stack_chkbox">
@@ -9024,19 +9017,20 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               <option>0</option>
                               <flag>wxTOP</flag>
                               <border>9</border>
-                            </object>
+                            </object> -->
                             <object class="sizeritem">
                               <object class="wxCheckBox" name="chkbox_save_acquisition">
                                 <label>Auto Save Acquisition</label>
                                 <fg>#E5E5E5</fg>
                                 <checked>0</checked>
                                 <flag>wxTOP</flag>
-                                <border>10</border>
+                                <border>25</border>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                                 <flag>wxALL|wxEXPAND</flag>
                               </object>
+                              <border>25</border>
                             </object>
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
@@ -9046,9 +9040,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                       <object class="wxStaticText" name="lbl_filename">
                                         <label>Filename</label>
                                         <fg>#E5E5E5</fg>
-                                        <!-- <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED> -->
                                       </object>
                                       <flag>wxTOP</flag>
                                       <border>4</border>

@@ -439,17 +439,6 @@ class CryoFIBSEMGUIData(CryoGUIData):
             config.fn_count))
         self.main.project_path.subscribe(self._on_project_path_change)
 
-        # these are required for the acquisition controller
-        self.zMin = model.FloatContinuous(
-            value=-10e-6, range=(-1000e-6, 0), unit="m")
-        self.zMax = model.FloatContinuous(
-            value=10e-6, range=(0, 1000e-6), unit="m")
-        self.zStep = model.FloatContinuous(
-            value=1e-6, range=(-100e-6, 100e-6), unit="m")
-        self.zStackActive = model.BooleanVA(value=False)
-        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
-        self.zPos.clip_on_range = True
-
         # milling patterns
         self.patterns = model.ListVA()
 
@@ -457,12 +446,6 @@ class CryoFIBSEMGUIData(CryoGUIData):
         self.acqui_mode = AcquiMode.FIBSEM
         self.is_sem_active_view: bool = False
         self.is_fib_active_view: bool = False
-
-    def _updateZParams(self):
-        pass
-
-    def _on_stream_change(self, _):
-        pass
 
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()

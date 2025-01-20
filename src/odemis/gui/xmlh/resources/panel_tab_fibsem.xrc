@@ -437,7 +437,7 @@
                               <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
                               <border>10</border>
                             </object>
-                            <object class="sizeritem">
+                            <!-- <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="wxCheckBox" name="z_stack_chkbox">
@@ -596,7 +596,7 @@
                               <option>0</option>
                               <flag>wxTOP</flag>
                               <border>9</border>
-                            </object>
+                            </object> -->
                             <object class="sizeritem">
                               <object class="wxCheckBox" name="chkbox_save_acquisition">
                                 <label>Auto Save Acquisition</label>

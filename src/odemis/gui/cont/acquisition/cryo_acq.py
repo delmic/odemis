@@ -97,7 +97,10 @@ class CryoAcquiController(object):
         # VA's
         self._filename = self._tab_data.filename
         self._acquiStreams = self._tab_data.acquisitionStreams
-        self._zStackActive = self._tab_data.zStackActive
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._zStackActive = self._tab_data.zStackActive
+        else:
+            self._zStackActive = model.BooleanVA(False)
 
         # Find the function pattern without detecting the count
         self._config.fn_ptn, _ = guess_pattern(self._filename.value, detect_count=False)
@@ -107,7 +110,6 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_left_time.Hide()
         self._panel.txt_cryosecom_est_time.Show()
         self._panel.btn_cryosecom_acqui_cancel.Hide()
-        self._panel.Layout()
 
         # bind events (buttons, checking, ...) with callbacks
         # for "ACQUIRE" button
@@ -123,51 +125,50 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
-        # for the z parameters widgets
-        self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
-        self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
-        self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
-
+        
         self._zlevels: Dict[Stream, List[float]] = {}
 
-        # callbacks of VA's
+        # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
-        self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
-        self._tab_data.zMin.subscribe(self._on_z_min, init=True)
-        self._tab_data.zMax.subscribe(self._on_z_max, init=True)
-        self._tab_data.zStep.subscribe(self._on_z_step, init=True)
         self._tab_data.streams.subscribe(self._on_streams_change, init=True)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
-
-        # VA's connector
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zStackActive,
-            value_ctrl=self._panel.z_stack_chkbox,
-            events=wx.EVT_CHECKBOX,
-        )
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zMin,
-            value_ctrl=self._panel.param_Zmin,
-            events=wx.EVT_COMMAND_ENTER,
-        )
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zMax,
-            value_ctrl=self._panel.param_Zmax,
-            events=wx.EVT_COMMAND_ENTER,
-        )
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zStep,
-            value_ctrl=self._panel.param_Zstep,
-            events=wx.EVT_COMMAND_ENTER,
-        )
-
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
+        
+        if self.acqui_mode is guimod.AcquiMode.FLM:        
+            # for the z parameters widgets
+            self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
+            self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
+            self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
-        # advanced features toggle
-        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
-        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+            # VA's
+            self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
+            self._tab_data.zMin.subscribe(self._on_z_min, init=True)
+            self._tab_data.zMax.subscribe(self._on_z_max, init=True)
+            self._tab_data.zStep.subscribe(self._on_z_step, init=True)
+
+            # VA's connector
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zStackActive,
+                value_ctrl=self._panel.z_stack_chkbox,
+                events=wx.EVT_CHECKBOX,
+            )
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zMin,
+                value_ctrl=self._panel.param_Zmin,
+                events=wx.EVT_COMMAND_ENTER,
+            )
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zMax,
+                value_ctrl=self._panel.param_Zmax,
+                events=wx.EVT_COMMAND_ENTER,
+            )
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zStep,
+                value_ctrl=self._panel.param_Zstep,
+                events=wx.EVT_COMMAND_ENTER,
+            )
 
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
@@ -176,15 +177,12 @@ class CryoAcquiController(object):
             self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
             self._panel.streams_chk_list.Hide()
 
-            # hide the zstack settings
-            self._panel.z_stack_chkbox.Hide()
-            self._panel.param_Zmin.Hide()
-            self._panel.param_Zmin_label.Hide()
-            self._panel.param_Zmax.Hide()
-            self._panel.param_Zmax_label.Hide()
-            self._panel.param_Zstep.Hide()
-            self._panel.param_Zstep_label.Hide()
-            self._panel.Layout()
+        # advanced features toggle
+        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+
+        # refresh the GUI
+        self._panel.Layout()
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -202,13 +200,15 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.Show(not is_acquiring)
         self._panel.btn_cryosecom_change_file.Enable(not is_acquiring)
         self._panel.btn_acquire_overview.Enable(not is_acquiring)
-        self._panel.btn_acquire_features.Enable(not is_acquiring)
-        self._panel.z_stack_chkbox.Enable(not is_acquiring)
         self._panel.streams_chk_list.Enable(not is_acquiring)
-        self._panel.chk_use_autofocus_acquire_features.Enable(not is_acquiring)
-        self._panel.param_Zmin.Enable(not is_acquiring and self._zStackActive.value)
-        self._panel.param_Zmax.Enable(not is_acquiring and self._zStackActive.value)
-        self._panel.param_Zstep.Enable(not is_acquiring and self._zStackActive.value)
+        
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.btn_acquire_features.Enable(not is_acquiring)
+            self._panel.z_stack_chkbox.Enable(not is_acquiring)
+            self._panel.chk_use_autofocus_acquire_features.Enable(not is_acquiring)
+            self._panel.param_Zmin.Enable(not is_acquiring and self._zStackActive.value)
+            self._panel.param_Zmax.Enable(not is_acquiring and self._zStackActive.value)
+            self._panel.param_Zstep.Enable(not is_acquiring and self._zStackActive.value)
 
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._panel.btn_acquire_all.Enable(not is_acquiring)
