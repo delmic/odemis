@@ -31,12 +31,17 @@ from typing import Dict, Union
 
 import numpy
 import scipy
+import numpy as np
 
 from odemis import model, util
 from odemis.model import isasync
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
 from odemis.util.transform import RigidTransform
+
+# feature flags
+USE_3D_TRANSFORMS = True
+USE_SCAN_ROTATION = True
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -342,7 +347,11 @@ class MeteorPostureManager(MicroscopePostureManager):
                                                                  pre_tilt=pre_tilt,
                                                                  column_tilt=math.radians(52))
             return {"rx": rx, "rz": md["rz"]}
-        
+    
+    def get_pre_tilt(self):
+        stage_md = self.stage.getMetadata()
+        return stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
@@ -438,6 +447,52 @@ class MeteorPostureManager(MicroscopePostureManager):
         # Offset between origins of the coordinate systems
         self._O = numpy.array(translation, dtype=float)
 
+        ###### 3D TRANSFORMS ######
+
+        if not USE_3D_TRANSFORMS:
+            return
+
+        r = self._metadata[model.MD_ROTATION_COR]
+        ebeam = model.getComponent(role='e-beam')
+        sr = ebeam.rotation.value
+        # TODO: check fib rotation matches...
+        ion_beam = model.getComponent(role='ion-beam')
+        ion_beam_rotation = ion_beam.rotation.value
+        if not numpy.isclose(sr, ion_beam_rotation, atol=ATOL_ROTATION_POS):
+            raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_beam_rotation}") 
+
+        # rotation around x axis
+        # FM TRANSFORM
+        tf = np.array([[1, 0, 0], 
+                    [0, np.cos(r), -np.sin(r)], 
+                    [0, np.sin(r), np.cos(r)]])
+        # SEM TRANSFORM
+        tf_inv = np.linalg.inv(tf)
+
+        if not USE_SCAN_ROTATION:
+            sr = 0
+
+        # apply scan rotation (rotation around z axis of sample-stage)
+        self._sr_matrix = np.array([[np.cos(sr), 0, 0], 
+                                [0, np.cos(sr), 0], 
+                                [0, 0, 1]])
+        self._sr_matrix_inv = np.linalg.inv(self._sr_matrix)
+
+        logging.info(f"Transform Matrix: {tf}")
+        logging.info(f"Scan Rotation Matrix: {self._sr_matrix}")
+
+        tf_sr = tf.dot(self._sr_matrix)
+        tf_inv_sr = self._sr_matrix_inv.dot(tf_inv)
+
+        self._transforms2 = {FM_IMAGING: tf, 
+                             SEM_IMAGING: tf_inv_sr, 
+                             MILLING: tf_inv_sr, 
+                             UNKNOWN: tf_inv_sr}
+        self._inv_transforms2 = {FM_IMAGING: tf_inv, 
+                                 SEM_IMAGING: tf_sr, 
+                                 MILLING: tf_sr, 
+                                 UNKNOWN: tf_sr}
+
     def _convert_to_sample_stage_from_stage(self, pos_dep, absolute=True):
         # Object lens position vector
         Q = numpy.array(pos_dep, dtype=float)
@@ -472,6 +527,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         Note: from sample-stage -> stage-bare (for relative movements)
         :param pos: move dict with axis values (x, y, z) in the original axes. not all axes are required
         :return: move dict with original axis values  in the dependant axes"""
+        if USE_3D_TRANSFORMS:
+            return self.from_sample_stage_to_stage_movement2(pos)
         # Convert position dict from original axes to dependant axes
         vpos = self._get_pos_vector({"x": pos.get("y", 0), "y": pos.get("z", 0)}, absolute=False)
 
@@ -479,26 +536,22 @@ class MeteorPostureManager(MicroscopePostureManager):
         new_pos = pos.copy()
         new_pos.update(vpos)
 
-        #  if scan rotation, invert x, y
-        # if posture in [SEM_IMAGING, MILLING]:
-            # print("Inverting x, y")
-        # new_pos["x"] = -new_pos["x"]
-        # new_pos["y"] = -new_pos["y"]
         return new_pos
 
-    def from_sample_stage_to_stage_position(self, pos: Dict[str, float], posture: int = None) -> Dict[str, float]:
+    def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
         """Convert position dict from the sample-stage axes to the stage axes
         Note: from sample-stage -> stage-bare
         :param pos: position dict with all axis values (x, y) in the original axes
         :param posture: (int) the posture of the stage
         :return: position dict with all axis values (x, y) in the dependant axes
         """
+        if USE_3D_TRANSFORMS:
+            return self.from_sample_stage_to_stage_position2(pos)
         # Convert position dict from original axes to dependant axes
         vpos = self._get_pos_vector({"x": pos["y"], "y": pos["z"]}, absolute=True)
 
         # add rx, rz (orientation)
-        if posture is None:
-            posture = self.getCurrentPostureLabel()
+        posture = self.getCurrentPostureLabel()
         orientation = self.get_posture_orientation(posture)
 
         # return the new position
@@ -506,9 +559,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         new_pos.update(orientation)
         new_pos.update(vpos)
 
-        # if scan rotation, invert x, y
-        # new_pos["x"] = -new_pos["x"]
-        # new_pos["y"] = -new_pos["y"]
         return new_pos
 
     def to_sample_stage_from_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
@@ -517,6 +567,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: position dict with all axis values (x, y, z) in the dependent axes
         :return: position dict with all axis values (x, y, z) in the original axes
         """
+        if USE_3D_TRANSFORMS:
+            return self.to_sample_stage_from_stage_position2(pos)
+
         # Convert position dict from dependant axes to original axes
         vpos = self._convert_to_sample_stage_from_stage([pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
         # remap vpos x, y -> stage y, z
@@ -525,9 +578,57 @@ class MeteorPostureManager(MicroscopePostureManager):
         new_pos = pos.copy()
         new_pos.update(vpos)
 
-        # new_pos["x"] = -new_pos["x"]
-        # new_pos["y"] = -new_pos["y"]
         return new_pos
+
+    def from_sample_stage_to_stage_movement2(self, pos: Dict[str, float]) -> Dict[str, float]:
+        q = np.array([pos.get("x", 0), pos.get("y", 0), pos.get("z", 0)])
+        # inverse transform
+        # pinv = np.dot(q, sr_matrix_inv).dot(inv_transforms[SEM_IMAGING])
+        posture = self.current_posture.value
+        pinv = np.dot(q, self._inv_transforms2[posture])
+
+        ppos = pos.copy()
+        ppos["x"] = pinv[0]
+        ppos["y"] = pinv[1]
+        ppos["z"] = pinv[2]
+        return ppos
+
+    def from_sample_stage_to_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
+        
+        q = np.array([pos["x"], pos["y"], pos["z"]])
+        # inverse transform
+        # pinv = np.dot(q, sr_matrix_inv).dot(inv_transforms[SEM_IMAGING])
+        # add rx, rz (orientation)
+        posture = self.getCurrentPostureLabel()
+        orientation = self.get_posture_orientation(posture)
+
+        pinv = np.dot(q, self._inv_transforms2[posture])
+
+        ppos = pos.copy()
+        ppos["x"] = pinv[0]
+        ppos["y"] = pinv[1]
+        ppos["z"] = pinv[2]
+        ppos.update(orientation) # QUERY: why not just use the orientation from the current position?
+        return ppos
+
+    def to_sample_stage_from_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from the sample stage coordinate system to the 
+        stage position coordinate system using 3D transform.
+        """
+
+        p = np.array([pos["x"], pos["y"], pos["z"]])
+
+        # q = np.dot(p, transforms[SEM_IMAGING]).dot(sr_matrix)
+        posture = self.current_posture.value
+        q = np.dot(p, self._transforms2[posture])
+
+        qpos = pos.copy()
+        qpos["x"] = q[0]
+        qpos["y"] = q[1]
+        qpos["z"] = q[2]
+
+        return qpos
+
 
     def to_posture(self, pos: Dict[str, float], posture: int) -> Dict[str, float]:
         """Convert a stage position dict to the given posture
