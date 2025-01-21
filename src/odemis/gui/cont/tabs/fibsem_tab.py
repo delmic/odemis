@@ -363,15 +363,14 @@ class FibsemTab(Tab):
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
         posture = self.pm.current_posture.value
-        pos_name = POSITION_NAMES[posture] # TODO: add support for MILL posture in PM
+        pos_name = POSITION_NAMES[posture]
 
         # TODO: move this to legend.py
         r = units.readable_str(units.round_significant(rz, 3))
         t = units.readable_str(units.round_significant(rx, 3))
         txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
 
-        # get localisation tab
-        # if ltab is None:
+        # update the stage position label
         try:
             self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
             self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
@@ -379,9 +378,9 @@ class FibsemTab(Tab):
             ltab  = self.main_data.getTabByName("cryosecom-localization")
             if ltab:
                 ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
-                ltab.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-        except:
+                ltab.view_controller.viewports[3].bottom_legend.set_stage_pos_label(txt)
+        except Exception as e:
             pass
 
         # update the stage position buttons
