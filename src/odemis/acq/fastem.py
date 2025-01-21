@@ -299,6 +299,7 @@ class AcquisitionTask(object):
         lens_mag = ccd_md.get(model.MD_LENS_MAG)
         ccd_px_size = ccd_md.get(model.MD_SENSOR_PIXEL_SIZE)
         exp_pitch_px = self._exp_pitch_m * lens_mag / ccd_px_size[0]
+        # 0.75 is a safety factor to allow for some variation in spot positions
         self._min_dist_spots = int(0.75 * exp_pitch_px)
 
         beam_shift_path = fastem_util.create_image_dir("beam-shift-correction")

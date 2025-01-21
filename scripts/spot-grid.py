@@ -35,8 +35,10 @@ MAX_WIDTH = 2000  # px
 PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
 DEFAULT_MAGNIFICATION = 40
 PIXEL_SIZE = PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION
-PITCH = 3.2e-6
-MIN_DIST_SPOTS = int(0.75 * PITCH / PIXEL_SIZE)
+DEFAULT_PITCH = 3.2e-6
+# 0.75 is a safety factor to allow for some variation in spot positions
+MIN_DIST_SPOTS = int(0.75 * DEFAULT_PITCH / PIXEL_SIZE)
+
 
 class VideoDisplayerGrid(VideoDisplayer):
     """
@@ -44,16 +46,19 @@ class VideoDisplayerGrid(VideoDisplayer):
     It should be pretty much platform independent.
     """
 
-    def __init__(self, title="Live image", size=(640, 480), gridsize=None, pixel_size=PIXEL_SIZE):
+    def __init__(self, title="Live image", size=(640, 480), gridsize=None, pixel_size=PIXEL_SIZE,
+                 min_dist_spots=MIN_DIST_SPOTS):
         """
         Displays the window on the screen
         size (2-tuple int,int): X and Y size of the window at initialisation
         pixel_size (float): pixel size in m
+        min_dist_spots (int): minimum distance between spots in pixels
         Note that the size of the window automatically adapts afterwards to the
         coming pictures
         """
         self.app = ImageWindowApp(title, size, pixel_size)
         self.gridsize = (8, 8) if gridsize is None else gridsize
+        self.min_dist_spots = min_dist_spots
         self.acqui_conf = AcquisitionConfig()
 
     def new_image(self, data):
@@ -69,7 +74,7 @@ class VideoDisplayerGrid(VideoDisplayer):
                 AffineTransform,
                 sigma=1.45,
                 threshold_rel=self.acqui_conf.spot_grid_threshold,
-                min_distance=MIN_DIST_SPOTS,
+                min_distance=self.min_dist_spots,
             )
             grid = unit_gridpoints(self.gridsize, mode="ji")
             self.app.spots = tform_ji.apply(grid)
@@ -246,7 +251,7 @@ class StaticImageDataFlow(model.DataFlow):
         self.notify(self._detector.array)
 
 
-def live_display(ccd, dataflow, pixel_size, kill_ccd=True, gridsize=None):
+def live_display(ccd, dataflow, pixel_size, kill_ccd=True, gridsize=None, min_dist_spots=MIN_DIST_SPOTS):
     """
     Acquire an image from one (or more) dataflow and display it with a spot grid overlay.
     ccd: a camera object
@@ -254,9 +259,11 @@ def live_display(ccd, dataflow, pixel_size, kill_ccd=True, gridsize=None):
     pixel_size (float): pixel size in m
     kill_ccd: True if it is required to terminate the ccd after closing the window
     gridsize: size of the grid of spots.
+    min_dist_spots: minimum distance between spots in pixels
     """
     # create a window
-    window = VideoDisplayerGrid("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize, pixel_size)
+    window = VideoDisplayerGrid("Live from %s.%s" % (ccd.role, "data"), ccd.resolution.value, gridsize, pixel_size,
+                                min_dist_spots)
     im_passer = ImagePasser()
     t = threading.Thread(target=image_update, args=(im_passer, window))
     t.daemon = True
@@ -295,6 +302,8 @@ def main(args):
                         help="size of the grid of spots in x y, default 8 8")
     parser.add_argument("--magnification", dest="magnification", type=float,
                         help="magnification (typically 40 or 50)")
+    parser.add_argument("--pitch", dest="pitch", type=float, default=None,
+                        help="pitch in meters (typically 3.2e-6)")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int, choices=[0, 1, 2],
                         default=0, help="set verbosity level (0-2, default = 0)")
     options = parser.parse_args(args[1:])
@@ -329,21 +338,36 @@ def main(args):
         logging.warning("No magnification specified, falling back to %s.", magnification)
     pixel_size = PIXEL_SIZE_SAMPLE_PLANE / magnification
 
+    if not options.pitch:
+        try:
+            mppc = model.getComponent(role="mppc")
+            mppc_md = mppc.getMetadata()
+            pitch = mppc_md.get(model.MD_CALIB, {}).get("pitch", 3.2e-6)
+        except Exception as ex:
+            logging.debug("Failed to read pitch from mppc, ex: %s", ex)
+            pitch = DEFAULT_PITCH
+    else:
+        pitch = options.pitch
+
+    # 0.75 is a safety factor to allow for some variation in spot positions
+    min_dist_spots = int(0.75 * pitch / pixel_size)
+
     if options.filename:
         logging.info("Will process image file %s" % options.filename)
         converter = dataio.find_fittest_converter(options.filename, default=None, mode=os.O_RDONLY)
         data = converter.read_data(options.filename)[0]
         fakeccd = StaticCCD(options.filename, "fakeccd", data)
-        live_display(fakeccd, fakeccd.data, pixel_size, gridsize=options.gridsize)
+        live_display(fakeccd, fakeccd.data, pixel_size, gridsize=options.gridsize, min_dist_spots=min_dist_spots)
     elif options.role:
         if get_backend_status() != BACKEND_RUNNING:
             raise ValueError("Backend is not running while role command is specified.")
         ccd = model.getComponent(role=options.role)
-        live_display(ccd, ccd.data, pixel_size, kill_ccd=False, gridsize=options.gridsize)
+        live_display(ccd, ccd.data, pixel_size, kill_ccd=False, gridsize=options.gridsize,
+                     min_dist_spots=min_dist_spots)
     else:
         ccd = ueye.Camera("camera", "ccd", device=None)
         ccd.SetFrameRate(2)
-        live_display(ccd, ccd.data, pixel_size, gridsize=options.gridsize)
+        live_display(ccd, ccd.data, pixel_size, gridsize=options.gridsize, min_dist_spots=min_dist_spots)
     return 0
 
 

@@ -335,6 +335,7 @@ FASTEM-sim: {
             "percntl_im_rng": [1, 99],
             # List[int, int] min/max percentile of the dynamic range to which the histogram of the image will be stretched.
             "percntl_dyn_rng": [10, 90],
+            "pitch": 3.2e-6  # float [m], the expected pitch between two beamlets in meters
         },
     },
 }
@@ -366,7 +367,7 @@ FASTEM-sim: {
     class: static.OpticalLens,
     role: lens,
     init: {
-        mag: 60, # ratio, magnifying; higher magnification is a stronger simulated blur
+        mag: 40, # ratio, magnifying; higher magnification is a stronger simulated blur
         na: 0.95,  # numerical aperture
         ri: 1,  # refractive index
     },
