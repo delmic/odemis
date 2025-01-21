@@ -86,6 +86,7 @@ class CryoFeatureController(object):
         if fibsem_mode:
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
+            self.pm.current_posture.subscribe(self._on_posture_change)
 
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,
@@ -186,6 +187,12 @@ class CryoFeatureController(object):
 
         stream = self._tab.fib_stream # the fib stream
 
+        # acquire a new fib image for reference
+        from odemis.acq import acqmng
+        self._acq_future = acqmng.acquire(
+                [stream], self._tab_data_model.main.settings_obs)
+        self._acq_future.result()
+
         if stream.raw is None:
             logging.warning(f"No FIB image available to save for {feature.name.value}")
             return
@@ -228,6 +235,12 @@ class CryoFeatureController(object):
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans == wx.ID_OK
 
+    def _on_posture_change(self, posture: int):
+        if posture not in SUPPORTED_POSTURES:
+            logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
+            return
+        self._enable_feature_ctrls(True)
+
     def _enable_feature_ctrls(self, enable: bool):
         """
         Enables/disables the feature controls
@@ -241,7 +254,12 @@ class CryoFeatureController(object):
             self._panel.ctrl_feature_z.Enable(enable)
             self._panel.btn_use_current_z.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-            self._panel.btn_feature_save_position.Enable(enable)
+            current_posture = self.pm.getCurrentPostureLabel()
+            # TODO: check if current position is near the feature position, if not, disable and show warning to user
+            # TODO: acquire a new fib image for the reference, dont use the existing.
+            self._panel.btn_feature_save_position.Enable(enable and current_posture == MILLING)
+            if current_posture is not MILLING:
+                self._panel.btn_feature_save_position.SetToolTip("Move to the milling posture to save the position.")
 
     def _update_feature_cmb_list(self):
         """
@@ -338,6 +356,7 @@ class CryoFeatureController(object):
         # if FIBSEM mode, and milling tasks are available,, re-draw
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._tab.milling_task_controller.set_milling_tasks(feature.milling_tasks)
+            # self._panel.Layout()
 
     def _on_feature_focus_pos(self, fm_focus_position: dict):
         # Set the feature Z ctrl with the focus position

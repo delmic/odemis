@@ -25,18 +25,18 @@ import logging
 import math
 import threading
 from abc import abstractmethod
-from concurrent.futures import CancelledError
-from concurrent.futures._base import CANCELLED, RUNNING, FINISHED
+from concurrent.futures import CancelledError, Future
+from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 from typing import Dict, Union
 
 import numpy
 import scipy
 
 from odemis import model, util
-from odemis.util import executeAsyncTask
-from odemis.util.driver import ATOL_ROTATION_POS, isNearPosition, isInRange
-from odemis.util.transform import RigidTransform
 from odemis.model import isasync
+from odemis.util import executeAsyncTask
+from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
+from odemis.util.transform import RigidTransform
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -311,7 +311,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE]
         stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE]
-        stage_milling = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+        stage_milling = self.get_posture_orientation(MILLING)
         if pos is None:
             pos = self.stage.position.value
         # Check the stage is near the loading position
@@ -321,7 +321,6 @@ class MeteorPostureManager(MicroscopePostureManager):
             return FM_IMAGING
         if isInRange(pos, stage_sem_imaging_rng, self.linear_axes):
             if isNearPosition(pos, stage_milling, self.rotational_axes, atol_rotation=math.radians(5)):
-                logging.warning(f"Milling Pos: {stage_milling}, Pos: {pos}, AT MILLING")
                 return MILLING
             return SEM_IMAGING
         # None of the above -> unknown position
@@ -337,8 +336,13 @@ class MeteorPostureManager(MicroscopePostureManager):
         elif posture == LOADING:
             return stage_md[model.MD_FAV_POS_DEACTIVE]
         elif posture == MILLING:
-            return stage_md[model.MD_FAV_MILL_POS_ACTIVE]
-
+            md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+            pre_tilt = stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+            rx = calculate_stage_tilt_from_milling_angle(milling_angle=md["rx"],
+                                                                 pre_tilt=pre_tilt,
+                                                                 column_tilt=math.radians(52))
+            return {"rx": rx, "rz": md["rz"]}
+        
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
@@ -418,6 +422,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         self._transforms[FM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix()
         self._inv_transforms[FM_IMAGING] = numpy.linalg.inv(self._transforms[FM_IMAGING])
 
+        # we need to migrate to 3D transformations
+
         # sem imaging
         self._transforms[SEM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix(invert=True)
         self._inv_transforms[SEM_IMAGING] =  numpy.linalg.inv(self._transforms[SEM_IMAGING])
@@ -472,6 +478,12 @@ class MeteorPostureManager(MicroscopePostureManager):
         # return the new position
         new_pos = pos.copy()
         new_pos.update(vpos)
+
+        #  if scan rotation, invert x, y
+        # if posture in [SEM_IMAGING, MILLING]:
+            # print("Inverting x, y")
+        # new_pos["x"] = -new_pos["x"]
+        # new_pos["y"] = -new_pos["y"]
         return new_pos
 
     def from_sample_stage_to_stage_position(self, pos: Dict[str, float], posture: int = None) -> Dict[str, float]:
@@ -493,6 +505,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         new_pos = pos.copy()
         new_pos.update(orientation)
         new_pos.update(vpos)
+
+        # if scan rotation, invert x, y
+        # new_pos["x"] = -new_pos["x"]
+        # new_pos["y"] = -new_pos["y"]
         return new_pos
 
     def to_sample_stage_from_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
@@ -508,6 +524,9 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         new_pos = pos.copy()
         new_pos.update(vpos)
+
+        # new_pos["x"] = -new_pos["x"]
+        # new_pos["y"] = -new_pos["y"]
         return new_pos
 
     def to_posture(self, pos: Dict[str, float], posture: int) -> Dict[str, float]:
@@ -561,7 +580,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         # the only difference is the tilt axes assuming eucentricity
         position = pos.copy()
-        position.update(self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE])
+        position.update(self.get_posture_orientation(MILLING))
 
         return position
 
@@ -2263,7 +2282,7 @@ class SampleStage(model.Actuator):
         self.speed._set_value(dep_speed, force_write=True)
 
     @isasync
-    def moveRel(self, shift: Dict[str, float], **kwargs):
+    def moveRel(self, shift: Dict[str, float], **kwargs) -> Future:
         """
         :param shift: The relative shift to be made
         :param **kwargs: Mostly there to support "update" argument
@@ -2274,7 +2293,7 @@ class SampleStage(model.Actuator):
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
     @isasync
-    def moveAbs(self, pos: Dict[str, float], **kwargs):
+    def moveAbs(self, pos: Dict[str, float], **kwargs) -> Future:
         """
         :param pos: The absolute position to be moved to
         :param **kwargs: Mostly there to support "update" argument
@@ -2291,7 +2310,7 @@ class SampleStage(model.Actuator):
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     @isasync
-    def move_vertical(self, pos: Dict[str, float]) -> 'Future':
+    def move_vertical(self, pos: Dict[str, float]) -> Future:
         """Move the stage vertically in the chamber. This is non-blocking.
         From OpenFIBSEM"""
         theta = self._stage_bare.position.value["rx"] # tilt, in radians

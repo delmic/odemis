@@ -242,7 +242,7 @@ class MillingTaskController:
                 _va_connector = VigilantAttributeConnector(
                     getattr(parameters, param),
                     panel.ctrl_dict[param],
-                    events=wx.EVT_TEXT_ENTER,
+                    events=wx.EVT_COMMAND_ENTER,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
 
@@ -254,7 +254,7 @@ class MillingTaskController:
                 _va_connector = VigilantAttributeConnector(
                     getattr(milling, param),
                     panel.ctrl_dict[param],
-                    events=wx.EVT_TEXT_ENTER,
+                    events=wx.EVT_COMMAND_ENTER,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
 
@@ -320,6 +320,7 @@ class MillingTaskController:
         self.selected_tasks.subscribe(self.draw_milling_tasks, init=True)
 
         self._create_panels()
+        self._panel.Layout()
     # NOTE: we should add the bottom right viewport as the feature viewport, to show the saved reference image and the milling patterns
     # it's too confusing to hav the 'live' view and the 'saved' view in the same viewport
     # -> workflow tab is probably easier to use for this purpose
@@ -537,7 +538,8 @@ class AutomatedMillingController:
 
         # automated milling tasks
         self.task_list = [MillingWorkflowTask.RoughMilling, MillingWorkflowTask.Polishing]
-        self._panel.workflow_task_chk_list.SetItems([task.name for task in self.task_list])
+        pretty_task_names = ["Rough Milling", "Polishing"]
+        self._panel.workflow_task_chk_list.SetItems([task for task in pretty_task_names])
         for i in range(self._panel.workflow_task_chk_list.GetCount()):
             self._panel.workflow_task_chk_list.Check(i)
 
@@ -620,9 +622,10 @@ class AutomatedMillingController:
 
         # dialog to confirm the milling
         task_names = ", ".join([t.name for t in task_list])
+        ftxt = f"{len(features)} features?" if len(features) > 1 else f"{features[0].name.value}?"
         dlg = wx.MessageDialog(
             self._panel,
-            f"Start workflows ({task_names}) for {len(features)} features?",
+            f"Start workflows ({task_names}) for {ftxt}",
             "Start Automated Milling",
             wx.YES_NO | wx.ICON_QUESTION,
         )

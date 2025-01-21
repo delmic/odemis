@@ -30,7 +30,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING, calculate_stage_tilt_from_milling_angle
+from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -208,8 +208,10 @@ class FibsemTab(Tab):
         self.main_data.stage.position.subscribe(self._on_stage_pos, init=True)
         self.panel = panel
 
-        self.pm = self.tab_data_model.main.posture_manager
-        self.panel.ctrl_milling_angle.SetValue(18) # TODO: use MD_FAV_MILL_POS_ACTIVE
+        rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rx"]
+        self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
+        self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
+        self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
         self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
 
@@ -344,6 +346,7 @@ class FibsemTab(Tab):
         # super event passthrough
         active_canvas.on_left_down(evt)
 
+    @call_in_wx_main
     def _on_stage_pos(self, pos):
         """
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
@@ -391,39 +394,35 @@ class FibsemTab(Tab):
 
         self.panel.Layout()
 
-    def _move_to_milling_position(self, evt: wx.Event):
-
-        # set the milling angle
-        milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
-        pre_tilt = self.pm.stage.getMetadata()[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
-        stage_tilt = calculate_stage_tilt_from_milling_angle(milling_angle=milling_angle,
-                                                             pre_tilt=pre_tilt,
-                                                             column_tilt=math.radians(52))
+    def _update_milling_angle(self, evt: wx.Event):
 
         # update the metadata of the stage
+        milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
         current_md = self.pm.stage.getMetadata()
-        self.pm.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': stage_tilt, 
+        self.pm.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': milling_angle,
                                                                      "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
-        logging.info(f"MILLING ANGLE: {milling_angle}, Pre-tilt: {pre_tilt}, Stage tilt: {stage_tilt}")
-        logging.info(f"Updated Stage metadata: {self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]}")
 
-        # self._move_to_posture(feature, MILLING, recalculate=True)
+        md = self.pm.get_posture_orientation(MILLING)
+        stage_tilt = md["rx"]
+        self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
+                                                 f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
 
-        # TODO: update milling angle, when control changes...
+        self._on_stage_pos(self.pm.stage.position.value)
+
+    def _move_to_milling_position(self, evt: wx.Event):
+        logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
 
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
-
-        # only change the tilt of the stage, don't do the rest
-        # current position -> milling tilt
-        # change go to feature to go to the current posture (SEM or MILL)
-        # the only thing that can update the milling position is go to feature while at milling, or save milling position?
+        self._on_stage_pos(self.pm.stage.position.value)
 
     def _move_to_sem(self, evt: wx.Event):
 
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
+
+        self._on_stage_pos(self.pm.stage.position.value)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)

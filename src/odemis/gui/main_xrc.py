@@ -8739,9 +8739,15 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_feature_save_position">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Save Milling Position And Reference Image</label>
+                                  <icon>______img_icon_ico_save_png</icon>
+                                    <height>48</height>
+                                    <face_colour>blue</face_colour>
+                                    <label>SAVE POSITION</label>
+                                    <fg>#FFFFFF</fg>
+                                    <font>
+                                      <size>12</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
                                   <flag>wxALL wxEXPAND</flag>
@@ -8828,8 +8834,8 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               </object>
                             </object>
                             <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
                                     <object class="wxStaticText" name="lbl_milling_angle">
                                       <label>Milling Angle</label>
                                       <fg>#BFBFBF</fg>
@@ -9626,6 +9632,27 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 "\x0c`\x09\xcd\x16p<\xc0\xe0O\x86f\x06\xaa\x01\x00\x07s?\xea["x\xa5\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
 
+    ______img_icon_ico_save_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x04\x00\x00\x00\
+\xb5\xfa7\xea\x00\x00\x00 cHRM\x00\x00z&\x00\x00\x80\x84\x00\x00\xfa\x00\
+\x00\x00\x80\xe8\x00\x00u0\x00\x00\xea`\x00\x00:\x98\x00\x00\x17p\x9c\xba\
+Q<\x00\x00\x00\x02bKGD\x00\xff\x87\x8f\xcc\xbf\x00\x00\x00\x07tIME\x07\xe8\
+\x08\x02\x0c!3\x96\xef=\x94\x00\x00\x00\xd8IDAT(\xcf\x8d\xd11J\x03Q\x10\
+\xc6\xf1\xdf[\x17"\x12W\xd3(1\xc1Nkm"\xb6\xa2M\x0e\xe0\x19\xac\xbc\x88`\
+gk\xadg\xb0\xb2\x10/a\x13\x8c X,\xa4\x88\x84\x15\x9fE\x9e\xbbha\x1c\x18\
+x\xcc\xfcg\xbe\x99y,\xb0%P\xd8T\xa9\xb0lM\xa6+\x9a5P\xe1\xd6\xd8\x198r\xe5\
+\xdc\xb3;{\xf3d\x86\x8eC=]\xb0\xaaoK\xdf\xb1\xeb9\x92\x81\xcf\xe4\x8c\xdc\
+\xfb\x00\xfb.\x14\xe4\xb5\xd0PD\x909I\x91]\xeb&\x0d00\xf8\xb5@\x14\xbe%\
+\xfe\xb0\xa6\xc3\xab\x99\x80\xa8e\xa3)\xcc\xd3.c\xa7^\x12\xd0sc\xfb\x27\
+\x10L=yK\xb1w\xd3F\xe2\x9f3\x04m;Vj\x89vS\x9c\xa3\xf4\xe0\xc0e}\xfd\x96\
+\xcaH\xe6QIH\xbf\xd1\x11\xd2\x9b(\x82\xd2d\xd1\x00\xf8\x02\xa53-\x1b^\x9e\
+*\xa9\x00\x00\x00%tEXtdate:create\x002024-08-02T12:33:35+00:00\x8d\x0dl\
+o\x00\x00\x00%tEXtdate:modify\x002024-08-02T12:33:35+00:00\xfcP\xd4\xd3\
+\x00\x00\x00(tEXtdate:timestamp\x002024-08-02T12:33:51+00:00\x99e\xd8\x98\
+\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     ______img_icon_ico_sem_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -9917,6 +9944,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/panel_tab_fibsem_xrc', bytearray(panel_tab_fibsem_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/______img_icon_ico_save_png', bytearray(______img_icon_ico_save_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/______img_icon_ico_sem_orange_png', bytearray(______img_icon_ico_sem_orange_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fibsem/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))

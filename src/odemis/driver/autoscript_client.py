@@ -1262,6 +1262,10 @@ class Scanner(model.Emitter):
                 if dwell_time != self.dwellTime.value:
                     self.dwellTime._value = dwell_time
                     self.dwellTime.notify(dwell_time)
+                res = self.parent.get_resolution(self.channel)
+                if res != self.resolution.value:
+                    self.resolution._value = res
+                    self.resolution.notify(res)
                 self._updateResolution()
 
             voltage = self.parent.get_high_voltage(self.channel)

@@ -315,9 +315,15 @@
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_feature_save_position">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Save Milling Position And Reference Image</label>
+                                  <icon>../../img/icon/ico_save.png</icon>
+                                    <height>48</height>
+                                    <face_colour>blue</face_colour>
+                                    <label>SAVE POSITION</label>
+                                    <fg>#FFFFFF</fg>
+                                    <font>
+                                      <size>12</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
                                   <flag>wxALL wxEXPAND</flag>
@@ -404,8 +410,8 @@
                               </object>
                             </object>
                             <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
                                     <object class="wxStaticText" name="lbl_milling_angle">
                                       <label>Milling Angle</label>
                                       <fg>#BFBFBF</fg>
