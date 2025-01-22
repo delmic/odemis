@@ -101,4 +101,3 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(milling_task_settings_from_json.patterns[0].depth.value, trench_pattern.depth.value)
         self.assertEqual(milling_task_settings_from_json.patterns[0].spacing.value, trench_pattern.spacing.value)
         self.assertEqual(milling_task_settings_from_json.patterns[0].center.value, trench_pattern.center.value)
-
