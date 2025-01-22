@@ -25,7 +25,7 @@ import math
 import queue
 import threading
 import time
-from typing import Tuple
+from typing import Tuple, Dict
 
 from odemis import model
 from odemis.acq.stream import DataProjection, RGBSpatialProjection, Stream, StreamTree
@@ -452,7 +452,7 @@ class StreamView(View):
         f.add_done_callback(self._on_stage_move_done)
         return f
 
-    def clipToStageLimits(self, pos):
+    def clipToStageLimits(self, pos: Tuple[float, float]) -> Dict[str, float]:
         """
         Clip current position in x/y direction to the maximum allowed stage limits.
 
@@ -734,8 +734,6 @@ class FeatureOverviewView(FeatureView):
         self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
-
-        # add stage-bare, convert-stage here, so we can convert the stage coordinates?
 
     def _on_stage_pos(self, pos):
         # we DON'T want to recenter the viewports whenever the stage moves
