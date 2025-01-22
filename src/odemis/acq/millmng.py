@@ -29,7 +29,7 @@ import logging
 import os
 import threading
 import time
-from concurrent import futures
+from concurrent.futures import Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from enum import Enum
 from typing import Dict, List
@@ -59,7 +59,7 @@ from odemis.util import executeAsyncTask
 from odemis.util.dataio import open_acquisition
 
 # TODO: replace with run_milling_tasks_openfibsem
-def run_milling_tasks(tasks: List[MillingTaskSettings]) -> futures.Future:
+def run_milling_tasks(tasks: List[MillingTaskSettings]) -> Future:
     """
     Run multiple milling tasks in order.
     :param tasks: List of milling tasks to be executed in order.
@@ -146,7 +146,7 @@ class AutomatedMillingManager(object):
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
 
-    def cancel(self, future: 'Future') -> bool:
+    def cancel(self, future: Future) -> bool:
         """
         Canceler of milling task.
         :param future: the future that will be executing the task
@@ -274,7 +274,7 @@ class AutomatedMillingManager(object):
         # new_image = numpy.roll(new_image, [x, y], axis=[0, 1])
         # print(f"Shifted image by {x}, {y} pixels")
 
-        align_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Pre-Alignment-FIB.ome.tiff").replace(" ", "-") # TODO: make unique?
+        align_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Pre-Alignment-FIB.ome.tiff".replace(" ", "-")) # TODO: make unique?
         self._exporter.export(align_filename, new_image)
 
         align_reference_image(ref_image, new_image, scanner=self.ion_beam)
@@ -284,7 +284,7 @@ class AutomatedMillingManager(object):
         data, _ = self._future.running_subf.result()
         new_image = data[0]
 
-        align_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Post-Alignment-FIB.ome.tiff").replace(" ", "-") # TODO: make unique?
+        align_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Post-Alignment-FIB.ome.tiff".replace(" ", "-")) # TODO: make unique?
         self._exporter.export(align_filename, new_image)
 
     def _acquire_reference_images(self, feature: CryoFeature) -> None:
@@ -299,8 +299,8 @@ class AutomatedMillingManager(object):
         sem_image, fib_image = data
 
         # save images
-        sem_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Finished-SEM.ome.tiff").replace(" ", "-") # TODO: make unique
-        fib_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Finished-FIB.ome.tiff").replace(" ", "-") # TODO: make unique
+        sem_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Finished-SEM.ome.tiff".replace(" ", "-")) # TODO: make unique
+        fib_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Finished-FIB.ome.tiff".replace(" ", "-")) # TODO: make unique
         self._exporter.export(sem_filename, sem_image)
         self._exporter.export(fib_filename, fib_image)
 
@@ -310,7 +310,7 @@ def run_automated_milling(features: List[CryoFeature],
                           sem_stream: SEMStream,
                           fib_stream: FIBStream,
                           task_list: List[MillingWorkflowTask],
-                          ) -> futures.Future:
+                          ) -> Future:
     """
     Automatically mill and image a list of features.
 
@@ -332,7 +332,7 @@ def run_automated_milling(features: List[CryoFeature],
 
     # set the progress of the future
     total_duration = len(task_list) * len(features) * 30
-    future.set_end_time(time.time() + total_duration)
+    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate
 
     # assign the acquisition task to the future
     executeAsyncTask(future, amm.run)

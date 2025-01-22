@@ -2,34 +2,43 @@ import logging
 import os
 import threading
 import time
-from concurrent import futures
-from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from concurrent.futures._base import (
+    CANCELLED,
+    FINISHED,
+    RUNNING,
+    CancelledError,
+    Future,
+)
 from typing import Dict, List
 
 import yaml
 from odemis import model
+from odemis.acq.acqmng import acquire
 from odemis.acq.milling.patterns import (
     MillingPatternParameters,
     RectanglePatternParameters,
     pattern_generator,
 )
+from odemis.acq.stream import FIBStream
 
 class MillingSettings2:
     """Represents milling settings for a single milling task"""
 
-    def __init__(self, current: float, voltage: float, field_of_view: float, mode: str = "Serial", channel: str = "ion"):
+    def __init__(self, current: float, voltage: float, field_of_view: float, mode: str = "Serial", channel: str = "ion", align: bool = True):
         self.current = model.FloatContinuous(current, unit="A", range=(20e-12, 120e-9))  # TODO: migrate to float enum after testing
         self.voltage = model.FloatContinuous(voltage, unit="V", range=(0, 30e3))         # TODO: migrate to float enum after testing
         self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(50e-06, 960e-06))
         self.mode = model.StringEnumerated(mode, choices=set(["Serial", "Parallel"]))
         self.channel = model.StringEnumerated(channel, choices=set(["ion"])) # TODO: add support for electron milling
+        self.align = model.BooleanVA(align) # align at the milling current 
 
     def to_json(self) -> dict:
         return {"current": self.current.value,
                 "voltage": self.voltage.value,
                 "field_of_view": self.field_of_view.value,
                 "mode": self.mode.value,
-                "channel": self.channel.value}
+                "channel": self.channel.value,
+                "align": self.align.value}
 
     @staticmethod
     def from_json(data: dict) -> "MillingSettings2":
@@ -37,7 +46,9 @@ class MillingSettings2:
                                 voltage=data["voltage"],
                                 field_of_view=data["field_of_view"],
                                 mode=data.get("mode", "Serial"),
-                                channel=data.get("channel", "ion"))
+                                channel=data.get("channel", "ion"),
+                                align=data.get("align", True)
+                                )
 
     def __repr__(self):
         return f"{self.to_json()}"
@@ -75,7 +86,7 @@ class MillingTaskSettings:
 class MillingTaskManager:
     """This class manages running milling tasks."""
 
-    def __init__(self, future: futures.Future, tasks: List[MillingTaskSettings]):
+    def __init__(self, future: Future, tasks: List[MillingTaskSettings]):
         """
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
@@ -84,12 +95,25 @@ class MillingTaskManager:
         self.microscope = model.getComponent(role="fibsem")
         self.tasks = tasks
 
+        # for reference image alignment,
+        self.ion_beam = model.getComponent(role="ion-beam")
+        self.ion_det = model.getComponent(role="se-detector-ion")
+        self.ion_focus = model.getComponent(role="ion-focus")
+
+        self.fib_stream = FIBStream(
+            name="FIB",
+            detector=self.ion_det,
+            dataflow=self.ion_det.data,
+            emitter=self.ion_beam,
+            focuser=self.ion_focus,
+        )
+
         self._future = future
         if future is not None:
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
 
-    def cancel(self, future: "Future") -> bool:
+    def cancel(self, future: Future) -> bool:
         """
         Canceler of acquisition task.
         :param future: the future that will be executing the task
@@ -123,27 +147,40 @@ class MillingTaskManager:
         milling_fov = settings.milling.field_of_view.value
         milling_channel = settings.milling.channel.value
         milling_mode = settings.milling.mode.value
+        align_at_milling_current = settings.milling.align.value
 
         # get initial imaging settings
         imaging_current = microscope.get_beam_current(milling_channel)
         imaging_voltage = microscope.get_high_voltage(milling_channel)
         imaging_fov = microscope.get_field_of_view(milling_channel)
 
-        # TODO: acquire reference image at imaging settings
+        # TODO: move this func to .align module
+        from odemis.acq.millmng import align_reference_image
 
         # error management
-        ce = False
+        e, ce = False, False
         try:
+
+            # acquire a reference image at the imaging settings
+            if align_at_milling_current:
+                self._future.running_subf = acquire([self.fib_stream])
+                data, _ = self._future.running_subf.result()
+                ref_image = data[0]
 
             # set the milling state
             microscope.clear_patterns()
             microscope.set_default_patterning_beam_type(milling_channel)
             microscope.set_high_voltage(milling_voltage, milling_channel)
             microscope.set_beam_current(milling_current, milling_channel)
-            microscope.set_field_of_view(milling_fov, milling_channel)
+            # microscope.set_field_of_view(milling_fov, milling_channel)
             microscope.set_patterning_mode(milling_mode)
 
-            # TODO: align the reference image at milling settings
+            # acquire a new image at the milling settings and align
+            if align_at_milling_current:
+                self._future.running_subf = acquire([self.fib_stream])
+                data, _ = self._future.running_subf.result()
+                new_image = data[0]
+                align_reference_image(ref_image, new_image, self.ion_beam)
 
             # draw milling patterns to microscope
             for pattern in settings.generate():
@@ -185,6 +222,8 @@ class MillingTaskManager:
             microscope.set_active_view(2)
             microscope.clear_patterns()
 
+            if e:
+                raise e
             if ce:
                 raise ce # future excepts error to be raised
         return

@@ -221,7 +221,7 @@ class MillingTaskController:
         self.controls: Dict[str, MillingTaskPanel] = {}
         pattern_parameters = ["width", "height", "depth", "spacing"] # TODO: add milling params
         # milling params: current, voltage, field of view, mode
-        milling_parameters = ["current"]
+        milling_parameters = ["current", "align", "mode"]
 
         for task_name, task in self.milling_tasks.items():
 
@@ -231,7 +231,9 @@ class MillingTaskController:
             # add the panel to the sizer
             panel = MillingTaskPanel(self._panel, task=task)
             self._panel.pnl_patterns._panel_sizer.Add(
-                panel, border=10, flag=wx.EXPAND, proportion=1
+                panel, border=10,
+                flag=wx.EXPAND,
+                proportion=1
             )
 
             self.controls[task_name] = {}
@@ -251,12 +253,21 @@ class MillingTaskController:
 
             # milling parameters
             for param in milling_parameters:
+                val = getattr(milling, param)
+                evt = wx.EVT_COMMAND_ENTER
+                if isinstance(val, model.BooleanVA):
+                    evt = wx.EVT_CHECKBOX
+                if isinstance(val, model.StringEnumerated):
+                    evt = wx.EVT_COMBOBOX
                 _va_connector = VigilantAttributeConnector(
-                    getattr(milling, param),
+                    val,
                     panel.ctrl_dict[param],
-                    events=wx.EVT_COMMAND_ENTER,
+                    events=evt,
                 )
                 self.controls[task_name][f"{param}_connector"] = _va_connector
+
+                # VA connector, bind events
+                getattr(milling, param).subscribe(self._on_patterns)
 
         self._panel.pnl_patterns.Layout()
         self._panel.Layout()
