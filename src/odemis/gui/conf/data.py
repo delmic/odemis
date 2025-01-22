@@ -771,6 +771,116 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
         },
     },
+    "meteor" : {
+        "e-beam":
+        OrderedDict((
+            ("accelVoltage", {
+                "label": "Accel. Voltage",
+                "tooltip": "Accelerating voltage",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+            }),
+            ("probeCurrent", {
+                "label": "Beam Current",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "type": "float",
+                "scale": "linear",
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("horizontalFoV", {
+                "label": "Field of View",
+                "tooltip": "Horizontal Field Width",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.hfw_choices,
+            }),
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Pixel integration time",
+                "type": "float",
+                "accuracy": 3,
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("scale", {
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("resolution", {
+                "label": "Resolution",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": None, 
+                "accuracy": None,  # never simplify the numbers
+            }),
+        )),
+        "ion-beam":
+        OrderedDict((
+            ("accelVoltage", {
+                "label": "Accel. Voltage",
+                "tooltip": "Accelerating voltage",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+            }),
+            ("probeCurrent", {
+                "label": "Beam Current",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "type": "float",
+                "scale": "linear",
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("resolution", {
+                "label": "Resolution",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": None,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Pixel integration time",
+                "type": "float",
+                "accuracy": 3,
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("horizontalFoV", {
+                "label": "Field of View",
+                "tooltip": "Horizontal Field Width",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.hfw_choices,
+            }),
+            ("scale", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+
+        )),
+        "se-detector":
+        OrderedDict((
+            ("brightness", {
+                "label": "Brightness",
+            }),
+            ("contrast", {
+                "label": "Contrast",
+            }),
+            ("detector_mode", {
+                "label": "Detector Mode",
+            }),
+            ("detector_type", {
+                "label": "Detector Type",
+            }),
+        )),
+        "se-detector-ion":
+        OrderedDict((
+            ("brightness", {
+                "label": "Brightness",
+            }),
+            ("contrast", {
+                "label": "Contrast",
+            }),
+            ("detector_mode", {
+                "label": "Detector Mode",
+            }),
+            ("detector_type", {
+                "label": "Detector Type",
+            }),
+        )),
+    }
 }
 
 # The sparc-simplex is identical to the sparc

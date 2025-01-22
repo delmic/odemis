@@ -23,11 +23,12 @@ This file is part of Odemis.
 import logging
 import math
 from abc import ABCMeta
-from typing import Tuple
+from enum import Enum
+from typing import Dict, Tuple
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature
+from odemis.acq.move import FM_IMAGING, SEM_IMAGING
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -339,6 +340,9 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.zPos.clip_on_range = True
         self.streams.subscribe(self._on_stream_change, init=True)
 
+        self.view_posture = model.VigilantAttribute(FM_IMAGING)
+        self.acqui_mode = AcquiMode.FLM
+
         if main.stigmator:
             # stigmator should have a "MD_CALIB" containing a dict[float, dict],
             # where the key is the stigmator angle (rad), and the value contains
@@ -384,6 +388,46 @@ class CryoLocalizationGUIData(CryoGUIData):
                     config.pj_last_path, config.fn_ptn,
                     config.last_extension,
                     config.fn_count)
+
+
+class CryoFIBSEMGUIData(CryoGUIData):
+    """ Represent an interface used to control the FIBSEM.
+    It it used for METEOR systems.
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
+        # the streams to acquire among all streams in .streams
+        self.acquisitionStreams = model.ListVA()
+        # the static overview map streams, among all streams in .streams
+        self.overviewStreams = model.ListVA()
+        # for the filename
+        config = conf.get_acqui_conf()
+        self.filename = model.StringVA(create_filename(
+            config.pj_last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count))
+        self.main.project_path.subscribe(self._on_project_path_change)
+
+        self.view_posture = model.VigilantAttribute(SEM_IMAGING)
+        self.acqui_mode = AcquiMode.FIBSEM
+        self.is_sem_active_view: bool = False
+        self.is_fib_active_view: bool = False
+
+    def _on_project_path_change(self, _):
+        config = conf.get_acqui_conf()
+        self.filename.value = create_filename(
+                    config.pj_last_path, config.fn_ptn,
+                    config.last_extension,
+                    config.fn_count)
+
 
 
 class CryoCorrelationGUIData(CryoGUIData):
@@ -488,6 +532,7 @@ class CryoChamberGUIData(CryoGUIData):
 
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
+        self.view_posture = VigilantAttribute(FM_IMAGING)
 
 
 class AnalysisGUIData(MicroscopyGUIData):
