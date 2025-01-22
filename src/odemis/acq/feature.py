@@ -501,7 +501,7 @@ class CryoFeatureAcquisitionTask(object):
             if conf >= self.autofocus_conf_level:
 
                 # update the feature focus position
-                site.fm_focus_position.value = {"z": foc_pos}  # NOTE: tuples cant do assignment so we need to replace the whole tuple
+                site.fm_focus_position.value = {"z": foc_pos}
                 logging.debug(f"auto focus succeeded at {site.name.value} with conf:{conf}. new focus position: {foc_pos}")
             else:
                 # if the confidence is low, restore the previous focus position
@@ -522,7 +522,7 @@ class CryoFeatureAcquisitionTask(object):
         :param site: The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=FM_IMAGING)      # stage-bare
+        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=FM_IMAGING) # stage-bare
         fm_focus_position = site.fm_focus_position.value
         logging.debug(f"For feature {site.name.value} moving the stage to {stage_position}")
         self._future.running_subf = self.stage.moveAbs(stage_position)
