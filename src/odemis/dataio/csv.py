@@ -276,7 +276,10 @@ def _export_angular_spectrum_data(data: model.DataArray, filename:str):
     headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
     rows = [(t,) + tuple(d) for t, d in zip(angle_range, data)]
 
-    with open(filename, 'w') as fd:
+    # Specifically set newline to an empty string, as described in the official documentation,
+    # as can be read here: https://docs.python.org/3/library/csv.html#csv.reader.
+    # This is more consistent since it overrides deviating operating system behavior.
+    with open(filename, 'w', newline='') as fd:
         csv_writer = csv.writer(fd)
         csv_writer.writerow(headers)
         csv_writer.writerows(rows)
