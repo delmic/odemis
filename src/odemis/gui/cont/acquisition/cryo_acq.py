@@ -35,12 +35,13 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 from typing import Dict, List, Optional
 
-
 import wx
 
 from odemis import dataio, model
 from odemis.acq import acqmng, stream
 from odemis.acq.feature import (
+    FEATURE_DEACTIVE,
+    CryoFeature,
     _create_fibsem_filename,
     acquire_at_features,
     add_feature_info_to_filename,
@@ -53,7 +54,6 @@ from odemis.acq.stream import (
     StaticStream,
     Stream,
 )
-
 from odemis.gui import conf
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
@@ -111,13 +111,14 @@ class CryoAcquiController(object):
         self._panel.gauge_cryosecom_acq.Hide()
         self._panel.txt_cryosecom_left_time.Hide()
         self._panel.txt_cryosecom_est_time.Show()
-        self._panel.txt_acquire_features_est_time.Show()
         self._panel.btn_cryosecom_acqui_cancel.Hide()
 
         # bind events (buttons, checking, ...) with callbacks
         # for "ACQUIRE" button
         self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
-        self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.txt_acquire_features_est_time.Show()
+            self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
         # for "change..." button
         self._panel.btn_cryosecom_change_file.Bind(
             wx.EVT_BUTTON, self._on_btn_change
@@ -128,7 +129,7 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
-        
+
         self._zlevels: Dict[Stream, List[float]] = {}
 
         # common VA's
@@ -138,8 +139,8 @@ class CryoAcquiController(object):
         # to check/uncheck items (?)
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
-        
-        if self.acqui_mode is guimod.AcquiMode.FLM:        
+
+        if self.acqui_mode is guimod.AcquiMode.FLM:
             # for the z parameters widgets
             self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
             self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
@@ -181,19 +182,15 @@ class CryoAcquiController(object):
             self._panel.streams_chk_list.Hide()
 
         # advanced features toggle
-        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
-        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
+            self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
 
         # refresh the GUI
         self._panel.Layout()
-        self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
-        self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
-
-        # advanced features toggle
-        self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
-        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
-        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
-
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -617,6 +614,9 @@ class CryoAcquiController(object):
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            return 
+
         # estimate the total time for acquiring at features
         features = self._get_selected_features()
         if not features:
@@ -811,6 +811,9 @@ class CryoAcquiController(object):
         ENABLED_AUTOFOCUS_TOOLTIP = "Automatically focus at each feature before acquiring."
         DISABLED_TOOLTIP = "Acquire features is disabled because no features are selected."
 
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            return
+
         if features:
             self._panel.btn_acquire_features.Enable()
             self._panel.btn_acquire_features.SetToolTip(ENABLED_TOOLTIP)
@@ -859,6 +862,11 @@ class CryoAcquiController(object):
         """
         Sync the features with the checklistbox
         """
+
+        # only available in the FLM mode
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            return
+
         # clear the list
         self._panel.acquire_features_chk_list.Clear()
 

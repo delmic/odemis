@@ -749,8 +749,6 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_all = xrc.XRCCTRL(self, "btn_acquire_all")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
-        self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
-        self.chk_use_autofocus_acquire_features = xrc.XRCCTRL(self, "chk_use_autofocus_acquire_features")
         self.fp_acquired = xrc.XRCCTRL(self, "fp_acquired")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
         self.fp_milling = xrc.XRCCTRL(self, "fp_milling")
@@ -4388,7 +4386,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												<border>10</border>
 												<cellpos>0,1</cellpos>
 											</object>
-																						<object class="sizeritem">
+											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_milling">
 													<icon>______img_icon_ico_milling_png</icon>
 													<icon_progress>______img_icon_ico_milling_orange_png</icon_progress>
@@ -9561,37 +9559,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                               </object>
                               <option>0</option>
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_acquire_features">
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>ACQUIRE AT FEATURES</label>
-                                <font>
-                                  <size>14</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
-                                <label>Use AutoFocus</label>
-                                <fg>#E5E5E5</fg>
-                                <checked>0</checked>
-                                <flag>wxVERTICAL</flag>
-                                <border>10</border>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
                               <border>10</border>
                             </object>
                             <orient>wxVERTICAL</orient>

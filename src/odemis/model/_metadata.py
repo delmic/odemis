@@ -88,7 +88,7 @@ MD_EBEAM_SPOT_DIAM = MD_BEAM_SPOT_DIAM
 # FIB-SEM metadata
 # position of the stage (in m or rad) for each axis in the chamber (raw hardware values)
 MD_STAGE_POSITION_RAW = "Stage position raw"  # dict of str -> float,
-MD_SAMPLE_PRE_TILT = "pre-tilt"  # (rad) pre-tilt of the sample stage / shuttle (tilt)
+MD_SAMPLE_PRE_TILT = "Sample pre-tilt"  # (rad) pre-tilt of the sample stage / shuttle (tilt)
 
 MD_STREAK_TIMERANGE = "Streak Time Range"  # (s) Time range for one streak/sweep
 MD_STREAK_MCPGAIN = "Streak MCP Gain"  # (int) Multiplying gain for microchannel plate
