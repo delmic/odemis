@@ -203,7 +203,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         """
         # re-calculate the position for all postures
         self._selected_feature.stage_position.value = self._view_to_stage_pos(v_pos)
-        self._selected_feature.posture_positions[self.view_posture] = self._selected_feature.stage_position.value
+        # use current_posture instead of view_posture to support milling posture
+        self._selected_feature.posture_positions[self.pm.current_posture.value] = self._selected_feature.stage_position.value
 
         # ask user to recalculate the feature position for all other postures
         self._update_other_postures()

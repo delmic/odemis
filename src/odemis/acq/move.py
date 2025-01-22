@@ -59,8 +59,13 @@ POSITION_NAMES = {
     FM_IMAGING: "FM IMAGING",
     GRID_1: "GRID 1",
     GRID_2: "GRID 2",
-    THREE_BEAMS: "THREE BEAMS"
+    THREE_BEAMS: "THREE BEAMS",
+    FIB_IMAGING: "FIB_IMAGING"
 }
+
+# TODO: MILLING->MILLING move
+# MILLING-FM
+# FM-MILLING
 
 RTOL_PROGRESS = 0.3
 # Compensation factor for a rotational move to take the same amount of time as a linear move

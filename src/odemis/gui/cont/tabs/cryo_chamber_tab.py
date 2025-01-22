@@ -45,6 +45,7 @@ from odemis.acq.move import (
     LOADING,
     LOADING_PATH,
     MILLING,
+    FIB_IMAGING,
     POSITION_NAMES,
     SEM_IMAGING,
     THREE_BEAMS,
@@ -198,8 +199,12 @@ class CryoChamberTab(Tab):
                     raise ValueError(f"Focuser {fmd_key} metadata ({fmd_value}) does not have the required axes {required_axis}.")
 
             # the meteor buttons
-            self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                                  GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
+            self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging,
+                                  FM_IMAGING: self.panel.btn_switch_fm_imaging,
+                                  MILLING: self.panel.btn_switch_milling,
+                                  FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                                  GRID_2: self.panel.btn_switch_grid2, 
+                                  GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
 
             # show load project button
@@ -226,6 +231,8 @@ class CryoChamberTab(Tab):
         # Event binding for position control
         for btn in self.position_btns.values():
             btn.Show()
+            if btn == self.panel.btn_switch_fib_imaging:
+                btn.Hide()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
@@ -873,8 +880,8 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [FM_IMAGING, SEM_IMAGING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING]
+                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
