@@ -67,6 +67,9 @@ from odemis.model import (
 )
 from odemis.util.filename import create_filename, make_unique_name
 
+class AcquiMode(Enum):
+    FLM = 1
+    FIBSEM = 2
 
 class MicroscopyGUIData(metaclass=ABCMeta):
     """Contains all the data corresponding to a GUI tab.
