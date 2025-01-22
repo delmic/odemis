@@ -8,15 +8,15 @@ Copyright © 2019-2021 Thera Pals, Delmic
 
 This file is part of Odemis.
 
-Delmic Acquisition Software is free software: you can redistribute it and/or modify it under the terms of the GNU
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
 General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your
 option) any later version.
 
-Delmic Acquisition Software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
 the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 more details.
 
-You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see
+You should have received a copy of the GNU General Public License along with Odemis. If not, see
 http://www.gnu.org/licenses/.
 """
 import logging
@@ -212,6 +212,7 @@ def transfer_latest_package(client: 'SEM', data: bytes) -> None:
         https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
 
     :param data: The package's zip file data in bytes.
+
 
     """
     with client._proxy_access:
@@ -1423,15 +1424,6 @@ class Scanner(model.Emitter):
         self._hfw_nomag = hfw_nomag
         self._has_detector = has_detector
 
-        dwell_time_info = self.parent.dwell_time_info()
-        self.dwellTime = model.FloatContinuous(
-            self.parent.get_dwell_time(),
-            dwell_time_info["range"],
-            unit=dwell_time_info["unit"],
-            setter=self._setDwellTime)
-        # when the range has changed, clip the current dwell time value to the new range
-        self.dwellTime.clip_on_range = True
-
         voltage_info = self.parent.ht_voltage_info()
         init_voltage = numpy.clip(self.parent.get_ht_voltage(), voltage_info['range'][0], voltage_info['range'][1])
         self.accelVoltage = model.FloatContinuous(
@@ -1496,6 +1488,15 @@ class Scanner(model.Emitter):
         self._updateDepthOfField()
 
         if has_detector:
+            dwell_time_info = self.parent.dwell_time_info()
+            self.dwellTime = model.FloatContinuous(
+                self.parent.get_dwell_time(),
+                dwell_time_info["range"],
+                unit=dwell_time_info["unit"],
+                setter=self._setDwellTime)
+            # when the range has changed, clip the current dwell time value to the new range
+            self.dwellTime.clip_on_range = True
+
             rng = self.parent.resolution_info()["range"]
             self._shape = (rng["x"][1], rng["y"][1])
             # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
@@ -1549,12 +1550,11 @@ class Scanner(model.Emitter):
             # when external is False i.e. the scan mode is 'full_frame'.
             # If external is True i.e. the scan mode is 'external' the dwellTime and resolution are
             # disabled and hence no need to reflect settings on the VAs.
-            if not self.external.value:
+            if self._has_detector and not self.external.value:
                 dwell_time = self.parent.get_dwell_time()
                 if dwell_time != self.dwellTime.value:
                     self.dwellTime._value = dwell_time
                     self.dwellTime.notify(dwell_time)
-                if self._has_detector:
                     self._updateResolution()
             voltage = self.parent.get_ht_voltage()
             v_range = self.accelVoltage.range
@@ -1654,10 +1654,10 @@ class Scanner(model.Emitter):
 
     def _setBlanker(self, blank: Union[bool, None]) -> Union[bool, None]:
         """
-        :param blank: True if the the electron beam should blank, False if it should be unblanked,
+        :param blank: True if the electron beam should blank, False if it should be unblanked,
             None if it should be blanked/unblanked automatically. Only useful when using the Detector or the
             XTTKDetector component. Not useful when operating the SEM in external mode.
-        :return: True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case,
+        :return: True if the electron beam is blanked, False if it is unblanked. See Notes for edge case,
             None if it should be blanked/unblanked automatically.
         """
         if blank is None:
@@ -1692,9 +1692,9 @@ class Scanner(model.Emitter):
 
     def _onHorizontalFoV(self, fov: float) -> None:
         self._updateDepthOfField()
-        # the dwell time range is dependent on the magnification/horizontalFoV
-        self._updateDwellTimeRng()
         if self._has_detector:
+            # the dwell time range is dependent on the magnification/horizontalFoV
+            self._updateDwellTimeRng()
             self._updatePixelSize()
 
     def _updateDepthOfField(self) -> None:
@@ -1726,11 +1726,11 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
         # The dwellTime and scale VA setter can only reflect changes on the SEM server side (parent)
         # after the external VA is set to False i.e. 'full_frame'
-        if not external:
+        if not external and self._has_detector:
             if self.dwellTime.value != self.parent.get_dwell_time():
                 # Set the VA value again to reflect changes on the parent
                 self.dwellTime.value = self.dwellTime.value
-            if hasattr(self, "resolution") and self.resolution.value != tuple(self.parent.get_resolution()):
+            if self.resolution.value != tuple(self.parent.get_resolution()):
                 # Set the VA value again to reflect changes on the parent
                 self.scale.value = self.scale.value
         return external
@@ -2389,8 +2389,13 @@ class Stage(model.Actuator):
                 self.parent.move_stage(pos, rel=rel)
                 time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
+                # Get the target position in absolute coordinates
+                if rel:
+                    target_pos = {ax: val + orig_pos[ax] for ax, val in pos.items()}
+                else:
+                    target_pos = pos
                 # Drop axes from the original position, which are not important because they have not moved
-                orig_pos = {a: orig_pos[a] for a, nv in pos.items() if nv != orig_pos[a]}
+                orig_pos = {a: orig_pos[a] for a, nv in target_pos.items() if nv != orig_pos[a]}
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2439,12 +2444,6 @@ class Stage(model.Actuator):
                 # code, as it would seem that the move didn't have any effect, and later on, after the position
                 # is eventually updated that the stage has moved unexpectedly. So, wait until the reported position is
                 # (1) not identical to the starting position and (2) not too far from the target position.
-
-                # Get the target position in absolute coordinates
-                if rel:
-                    target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
-                else:
-                    target_pos = {ax: pos[ax] for ax, val in orig_pos.items()}
 
                 # The stage is not moving anymore, but we still want to wait until the position has been updated
                 # TODO: base the timeout on stage movement time estimation, needs to be checked on hardware

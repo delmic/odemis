@@ -662,12 +662,16 @@ class xrcpnl_tab_fastem_setup(wx.Panel):
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
         self.lbl_acq_estimate = xrc.XRCCTRL(self, "lbl_acq_estimate")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.btn_cancel_acq = xrc.XRCCTRL(self, "btn_cancel_acq")
         self.btn_acq = xrc.XRCCTRL(self, "btn_acq")
         self.pnl_calib = xrc.XRCCTRL(self, "pnl_calib")
         self.pnl_calib_status = xrc.XRCCTRL(self, "pnl_calib_status")
-        self.gauge_calib = xrc.XRCCTRL(self, "gauge_calib")
+        self.bmp_calib_status_info = xrc.XRCCTRL(self, "bmp_calib_status_info")
+        self.bmp_calib_status_warn = xrc.XRCCTRL(self, "bmp_calib_status_warn")
         self.lbl_calib = xrc.XRCCTRL(self, "lbl_calib")
+        self.gauge_calib = xrc.XRCCTRL(self, "gauge_calib")
+        self.btn_cancel_calib = xrc.XRCCTRL(self, "btn_cancel_calib")
+        self.btn_calib = xrc.XRCCTRL(self, "btn_calib")
 
 
 
@@ -910,8 +914,13 @@ class xrcpnl_tab_localization(wx.Panel):
         self.txt_cryosecom_left_time = xrc.XRCCTRL(self, "txt_cryosecom_left_time")
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
-        self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
+        self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
+        self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
+        self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
+        self.acquire_features_chk_list = xrc.XRCCTRL(self, "acquire_features_chk_list")
         self.chk_use_autofocus_acquire_features = xrc.XRCCTRL(self, "chk_use_autofocus_acquire_features")
+        self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
+        self.txt_acquire_features_est_time = xrc.XRCCTRL(self, "txt_acquire_features_est_time")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
         self.btn_mill_active_features = xrc.XRCCTRL(self, "btn_mill_active_features")
         self.txt_milling_est_time = xrc.XRCCTRL(self, "txt_milling_est_time")
@@ -7808,6 +7817,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                     <border>10</border>
                   </object>
                 </object>
+                <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
@@ -8403,7 +8413,7 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                               <border>16</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_cancel">
+                              <object class="ImageTextButton" name="btn_cancel_acq">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
                                 <label>Cancel</label>
@@ -8463,43 +8473,116 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                   </object>
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_calib_status">
-                      <fg>#7F7F7F</fg>
                       <bg>#333333</bg>
-                      <size>400,40</size>
                       <object class="wxBoxSizer">
+                        <bg>#333333</bg>
+                        <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxGauge" name="gauge_calib">
-                            <size>250,10</size>
-                            <range>100</range>
-                            <value>0</value>
-                            <hidden>1</hidden>
-                            <style>wxGA_SMOOTH</style>
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_calib_status_info">
+                                  <bitmap>______img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_calib_status_warn">
+                                  <bitmap>______img_icon_dialog_warning_png</bitmap>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_calib">
+                                  <label>No calibration run</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                            <bg>#333333</bg>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <option>0</option>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxFIXED_MINSIZE</flag>
-                          <border>18</border>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                          <border>12</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_calib">
-                            <fg>#DDDDDD</fg>
-                            <label>No calibration run</label>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="gauge_calib">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>16</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_cancel_calib">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Cancel</label>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_calib">
+                            <bg>#333333</bg>
+                            <height>48</height>
+                            <face_colour>blue</face_colour>
+                            <label>RUN</label>
+                            <fg>#FFFFFF</fg>
                             <font>
+                              <size>15</size>
                               <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                             </font>
-                            <style>wxALIGN_RIGHT</style>
+                            <style>wxALIGN_CENTRE</style>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
-                          <option>1</option>
-                          <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                          <border>14</border>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
                         </object>
                       </object>
+                      <bg>#333333</bg>
                     </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
                   </object>
                 </object>
                 <bg>#4D4D4D</bg>
@@ -11394,11 +11477,56 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                               <border>10</border>
                             </object>
+                            <orient>wxVERTICAL</orient>
+                          <border>10</border>
+                          </object>
+                          <size>400,-1</size>
+                          <bg>#333333</bg>
+                          <style>wxBORDER_NONE</style>
+                        </object>
+                        <label>ACQUISITIONS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_automation">
+                        <label>AUTOMATION</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <object class="wxPanel" name="pnl_automation">
+                          <object class="wxBoxSizer" name="automation_sizer">
+                            <object class="sizeritem">
+                              <object class="wxCheckListBox" name="acquire_features_chk_list">
+                                <content/>
+                                <font>
+                                  <size>10</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
+                                <label>AutoFocus before acquiring at features</label>
+                                <fg>#E5E5E5</fg>
+                                <checked>0</checked>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT</flag>
+                              <border>15</border>
+                            </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_acquire_features">
                                 <height>48</height>
-                                <face_colour>def</face_colour>
+                                <face_colour>blue</face_colour>
                                 <label>ACQUIRE AT FEATURES</label>
+                                <icon>______img_icon_ico_acqui_png</icon>    
                                 <font>
                                   <size>14</size>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -11413,28 +11541,22 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxCheckBox" name="chk_use_autofocus_acquire_features">
-                                <label>AutoFocus before acquiring at features</label>
+                              <object class="wxStaticText" name="txt_acquire_features_est_time">
+                                <label>Estimated time ...</label>
                                 <fg>#E5E5E5</fg>
-                                <checked>0</checked>
-                                <flag>wxVERTICAL</flag>
+                                <hidden>1</hidden>
+                                <orient>wxALIGN_CENTRE</orient>
                                 <border>10</border>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
                               </object>
-                              <border>10</border>
+                              <flag>wxLEFT</flag>
+                              <border>15</border>
                             </object>
                             <orient>wxVERTICAL</orient>
-                          <border>10</border>
                           </object>
-                          <size>400,-1</size>
-                          <bg>#333333</bg>
-                          <style>wxBORDER_NONE</style>
                         </object>
-                        <label>ACQUISITIONS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
                       </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_cryosecom_acquired">

@@ -559,6 +559,9 @@ class Sparc2AlignTab(Tab):
             self.mirror_ol = self.panel.vp_align_center.mirror_ol
             self.lens = main_data.lens
             self.lens.focusDistance.subscribe(self._onMirrorDimensions, init=True)
+            self.lens.holeDiameter.subscribe(self._onMirrorDimensions)
+            self.lens.parabolaF.subscribe(self._onMirrorDimensions)
+            self.lens.xMax.subscribe(self._onMirrorDimensions)
             self.mirror_ol.set_hole_position(tab_data.polePositionPhysical)
             self.panel.vp_align_center.show_mirror_overlay()
 
@@ -912,6 +915,9 @@ class Sparc2AlignTab(Tab):
                 main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
             if main.light_aligner:
                 main.light_aligner.position.unsubscribe(self._onLightAlignPos)
+        if mode != "tunnel-lens-align":
+            if main.spec_ded_aligner:
+                main.spec_ded_aligner.position.unsubscribe(self._on_spec_ded_aligner_pos)
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
@@ -1154,6 +1160,7 @@ class Sparc2AlignTab(Tab):
             self.panel.cmb_focus_detectors_ext.SetSelection(0)
 
             self.panel.pnl_moi_settings.Show(False)
+            f.add_done_callback(self._on_tunnel_lens_align_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 
@@ -1309,6 +1316,19 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_m_fibaligner_y.Enable(True)
         self.panel.btn_p_fibaligner_y.Enable(True)
 
+    def _on_tunnel_lens_align_done(self, f):
+        """
+        Called when the optical path move of tunnel lens align is finished
+        """
+        # Has no effect now, as OPM future are not cancellable (but it makes the
+        # code more future-proof)
+        if f.cancelled():
+            return
+        logging.debug("Tunnel lens alignment mode ready")
+
+        if self.tab_data_model.main.spec_ded_aligner:
+            self.tab_data_model.main.spec_ded_aligner.position.subscribe(self._on_spec_ded_aligner_pos)
+
     def _on_ccd_stream_play(self, _):
         """
         Called when the ccd_stream.should_update or speccnt_stream.should_update VA changes.
@@ -1400,6 +1420,8 @@ class Sparc2AlignTab(Tab):
                 acq_type=model.MD_AT_SLIT,
             )
             speclines.tint.value = odemis.gui.FOCUS_STREAM_COLOR
+            # Show most of the image (compared to the standard 100/256 %), to see the potential faint parts of the line
+            speclines.auto_bc_outliers.value = 0.001  # %
             # Fixed values, known to work well for autofocus
             speclines.detExposureTime.value = speclines.detExposureTime.clip(0.1)
             self._setFullFoV(speclines, (2, 16))
@@ -1902,7 +1924,7 @@ class Sparc2AlignTab(Tab):
         self._txt_ss.SetValue(u"%.4f %%" % (ss * 100,))
 
     @call_in_wx_main
-    def _onMirrorDimensions(self, focusDistance):
+    def _onMirrorDimensions(self, _):
         try:
             self.mirror_ol.set_mirror_dimensions(self.lens.parabolaF.value,
                                                  self.lens.xMax.value,
@@ -2037,6 +2059,26 @@ class Sparc2AlignTab(Tab):
         except Exception as ex:
             logging.error("spec-ded-aligner initialisation move failed: %s", ex)
 
+    def _on_spec_ded_aligner_pos(self, pos):
+        """
+        Called when the spec-ded-aligner is moved (and the tunnel align mode is active),
+          for updating the MD_FAV_POS_ACTIVE
+        """
+        if self.tab_data_model.main.tab.value != self:
+            # Should never happen, but for safety, we double check
+            logging.warning("Received active spec-ded-aligner position while outside of alignment tab")
+            return
+
+        # Update the axis which are supposed to be recorded: the ones already in MD_FAV_POS_ACTIVE
+        aligner = self.tab_data_model.main.spec_ded_aligner
+        fib_fav_pos = aligner.getMetadata().get(model.MD_FAV_POS_ACTIVE, {})
+        for axis, p in pos.items():
+            if axis in fib_fav_pos:
+                fib_fav_pos[axis] = p
+
+        logging.debug("Updating the active spec-ded-aligner position to %s", fib_fav_pos)
+        aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: fib_fav_pos})
+
     @call_in_wx_main
     def _on_ebeam_blanker(self, blanked: bool) -> None:
         """
@@ -2130,6 +2172,8 @@ class Sparc2AlignTab(Tab):
                 main.fibaligner.position.unsubscribe(self._onFiberPos)
             if main.light_aligner:
                 main.light_aligner.position.unsubscribe(self._onLightAlignPos)
+            if main.spec_ded_aligner:
+                main.spec_ded_aligner.position.unsubscribe(self._on_spec_ded_aligner_pos)
             # Also fit to content now, so that next time the tab is displayed, it's ready
             self.panel.vp_align_lens.canvas.fit_view_to_content()
 

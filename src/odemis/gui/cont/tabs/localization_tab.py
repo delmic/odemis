@@ -28,6 +28,7 @@ import logging
 import numpy
 import wx
 
+from typing import List
 from odemis.gui import conf
 from odemis.gui.cont.features import CryoFeatureController
 
@@ -284,7 +285,7 @@ class LocalizationTab(Tab):
         return vpv
 
     @call_in_wx_main
-    def load_overview_data(self, data):
+    def load_overview_data(self, data: List[model.DataArray]):
         # Create streams from data
         streams = data_to_static_streams(data)
         bbox = (None, None, None, None)  # ltrb in m
@@ -444,6 +445,12 @@ class LocalizationTab(Tab):
         # refit the latest acquired feature so that the new data is fully visible in the
         # acquired view even when the user had moved around/zoomed in
         self.panel.vp_secom_tr.canvas.fit_view_to_content()
+
+    def _stop_streams_subscriber(self):
+        self.tab_data_model.streams.unsubscribe(self._on_acquired_streams)
+
+    def _start_streams_subscriber(self):
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
     def _on_acquisition(self, is_acquiring):
         # When acquiring, the tab is automatically disabled and should be left as-is

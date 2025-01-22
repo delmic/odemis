@@ -58,8 +58,6 @@ from odemis.gui.comp.overlay.sample_background import SampleBackgroundOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.img import getBitmap
 from odemis.gui.model import (
-    CALIBRATION_2,
-    CALIBRATION_3,
     CHAMBER_UNKNOWN,
     CHAMBER_VACUUM,
     CryoChamberGUIData,
@@ -907,15 +905,14 @@ class FastEMMainViewport(MicroscopeViewport):
         # Add the scintillator background overlay
         self.canvas.add_background_overlay(self.scintillator)
 
-        # Add CALIBRATION_2 and CALIBRATION_3 boxes
-        for name, calib in self.scintillator.calibrations.items():
-            if name in [CALIBRATION_2, CALIBRATION_3]:
-                calib.shape = self.canvas.add_calibration_shape(
-                    calib.region.coordinates,
-                    calib.region.name.value,
-                    self.scintillator.shape.get_bbox(),
-                    calib.region.colour
-                )
+        # Add calibration boxes
+        for calib in self.scintillator.calibrations.values():
+            calib.shape = self.canvas.add_calibration_shape(
+                calib.region.coordinates,
+                calib.region.name.value,
+                self.scintillator.shape.get_bbox(),
+                calib.region.colour
+            )
 
         # Show a crosshair where the stage is
         self.cpol = CurrentPosCrossHairOverlay(self.canvas)

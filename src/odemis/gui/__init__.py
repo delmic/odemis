@@ -45,6 +45,9 @@ FG_COLOUR_ERROR = "#DD3939"      # Error text colour
 FG_COLOUR_RADIO_INACTIVE = "#111111"      # Text colour on radio button when inactive
 FG_COLOUR_RADIO_ACTIVE = "#106090"        # Text colour on radio button when active (same as BORDER_COLOUR_FOCUS)
 FG_COLOUR_BUTTON = "#999999"
+FG_COLOUR_BLIND_BLUE = "#648FFF"    # Colour-blind-friendly blue; choosen from IBM Design Library
+FG_COLOUR_BLIND_ORANGE = "#FFB000"  # Colour-blind-friendly orange; choosen from IBM Design Library
+FG_COLOUR_BLIND_PINK = "#DC267F"    # Colour-blind-friendly pink; choosen from IBM Design Library
 
 # Border colours for the viewports
 BORDER_COLOUR_FOCUS = "#127BA6"

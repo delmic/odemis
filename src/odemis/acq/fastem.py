@@ -26,6 +26,7 @@ import math
 import os
 import threading
 import time
+from typing import Optional
 from concurrent.futures import CancelledError
 
 import numpy
@@ -96,7 +97,6 @@ class FastEMCalibration(object):
         self.region = None  # FastEMROC
         self.is_done = model.BooleanVA(False)  # states if the calibration was done successfully or not
         self.sequence = model.ListVA([])  # list of calibrations that need to be run sequencially
-        self.button = None
         self.shape = None  # FastEMROCOverlay
         self.is_done.subscribe(self._on_done)
 
@@ -114,15 +114,17 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
+    def __init__(self, name: str, scintillator_number: int, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
         """
         :param name: (str) Name of the region of calibration (ROC).
+        :param scintillator_number: (int) The scintillator number of the region of calibration (ROC).
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
                             ROC in [m]. The coordinates are in the sample carrier coordinate system, which
                             corresponds to the component with role='stage'.
         :param colour: The colour of the region of calibration (ROC).
         """
         self.name = model.StringVA(name)
+        self.scintillator_number = model.IntVA(scintillator_number)
         self.coordinates = model.TupleContinuous(coordinates,
                                                  range=((-1, -1, -1, -1), (1, 1, 1, 1)),
                                                  cls=(int, float),
@@ -131,7 +133,7 @@ class FastEMROC(object):
         self.colour = colour
 
 
-def estimate_acquisition_time(roa, pre_calibrations=None):
+def estimate_acquisition_time(roa, pre_calibrations=None, acq_dwell_time: Optional[float] = None):
     """
     Computes the approximate time it will take to run the ROA (megafield) acquisition including pre-calibrations
     if specified.
@@ -139,10 +141,11 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
     :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
     :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA acquisition.
                              Default is None.
+    :param acq_dwell_time: (float or None) The acquisition dwell time.
 
     :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s including pre-calibrations.
     """
-    tot_time = roa.estimate_acquisition_time()
+    tot_time = roa.estimate_acquisition_time(acq_dwell_time)
     if pre_calibrations:
         tot_time += estimate_calibration_time(pre_calibrations)
 
@@ -151,7 +154,7 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
 
 def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
             se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
-            spot_grid_thresh=0.5, blank_beam=True):
+            spot_grid_thresh=0.5, blank_beam=True, acq_dwell_time: Optional[float] = None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -186,6 +189,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
         diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
     :param blank_beam: (bool) If true the beam will be blanked during stage moves, if false the beam remains
         un-blanked during stage moves.
+    :param acq_dwell_time: (float or None) The acquisition dwell time.
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
                 (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
@@ -193,7 +197,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
 
     """
 
-    est_dur = estimate_acquisition_time(roa, pre_calibrations)
+    est_dur = estimate_acquisition_time(roa, pre_calibrations, acq_dwell_time)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # TODO: pass path through attribute on ROA instead of argument?
@@ -281,6 +285,9 @@ class AcquisitionTask(object):
         self._settings_obs = settings_obs
         self._spot_grid_thresh = spot_grid_thresh
         self._blank_beam = blank_beam
+        self._total_roa_time = 0
+        if isinstance(future, model.ProgressiveFuture):
+            self._total_roa_time = future.end_time - future.start_time
 
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
@@ -333,13 +340,10 @@ class AcquisitionTask(object):
         self._detector.updateMetadata({model.MD_SLICE_IDX: self._roa.slice_index.value})
         self._detector.updateMetadata({model.MD_USER: self._username})
 
-        # Get the estimated time for the roa.
-        total_roa_time = estimate_acquisition_time(self._roa, self._pre_calibrations)
-
         # No need to set the start time of the future: it's automatically done when setting its state to running.
         logging.info(
             "Starting acquisition of ROA %s, with expected duration of %f s, %s by %s fields and overlap %s.",
-            self._roa.shape.name.value, total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1,
+            self._roa.shape.name.value, self._total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1,
             self._roa.overlap,
         )
 

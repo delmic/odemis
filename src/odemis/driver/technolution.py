@@ -30,6 +30,7 @@ import queue
 import re
 import threading
 import time
+from typing import Optional
 from io import BytesIO
 from urllib.parse import urlparse
 
@@ -1764,17 +1765,20 @@ class MPPC(model.Detector):
 
         return cellDarkOffset
 
-    def getTotalLineScanTime(self):
+    def getTotalLineScanTime(self, acq_dwell_time: Optional[float] = None):
         """
         Calculate the time for scanning one line (row) of pixels in a single field image including over-scanned
         pixels (cell complete resolution) and flyback time (time the descanner needs to move back to the start
         position for the next line scan).
+
+        :param acq_dwell_time: (float or None) The acquisition dwell time.
         :return: (float) Estimated time to scan a single line including overscanned pixels and the flyback
                  time in seconds.
         """
         descanner = self.parent._mirror_descanner
         scanner = self.parent._ebeam_scanner
-        acq_dwell_time = scanner.dwellTime.value
+        if acq_dwell_time is None:
+            acq_dwell_time = scanner.dwellTime.value
 
         resolution_x = self.cellCompleteResolution.value[0]
         line_scan_time = acq_dwell_time * resolution_x
@@ -1800,14 +1804,16 @@ class MPPC(model.Detector):
         # Total line scan time is the period of the calibration signal.
         return numpy.round(line_scan_time + flyback_time, 9)  # Round to prevent floating point errors
 
-    def getTotalFieldScanTime(self):
+    def getTotalFieldScanTime(self, acq_dwell_time: Optional[float] = None):
         """
         Calculate the time for scanning a single field image including over-scanned pixels (cell complete resolution)
         and flyback time (time the descanner needs to move back to the start position for the next line scan).
+
+        :param acq_dwell_time: (float or None) The acquisition dwell time.
         :return: (float) Estimated time to scan a single field image including over-scanned pixels and the flyback
                  time in seconds.
         """
-        line_scan_time = self.getTotalLineScanTime()
+        line_scan_time = self.getTotalLineScanTime(acq_dwell_time)
         resolution_y = self.cellCompleteResolution.value[1]
         field_scan_time = line_scan_time * resolution_y
 

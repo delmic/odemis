@@ -387,6 +387,14 @@ class ProgressiveFuture(CancellableFuture):
         self._end_time = end or (self._start_time + 0.1)
         self.add_done_callback(self.__on_done)
 
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @property
+    def end_time(self):
+        return self._end_time
+
     def __on_done(self, future):
         """
         Called when the future is over to report the update one last time
@@ -512,12 +520,16 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         self.futures = futures
         start = time.time()  # start time of the batch future
         super().__init__(start=start, end=start + sum(self.futures.values()))
-        self.set_running_or_notify_cancel()
         self.task_canceller = self._cancel_all  # takes care of cancelling the task (=all sub-futures)
+        # Use this flag to make sure the ProgressiveBatchFuture's cancel is only called once in case any of its sub-future
+        # raises an exception or CancelledError in its done callback.
+        self._is_cancel_triggered = False
 
         for f in self.futures:
             f.add_update_callback(self._on_future_update)  # called whenever set_progress of a sub-future is called
             f.add_done_callback(self._on_future_done)  # called when a sub-future is done
+
+        self.set_running_or_notify_cancel()
 
     def _on_future_update(self, f, start, end):
         """
@@ -548,18 +560,19 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         """
         self.set_progress(end=self._estimate_end())  # set the progress for batch future (all futures not done yet)
 
-        # Set exception if future failed and cancel all other sub-futures
-        try:
-            ex = f.exception()  # raises CancelledError if cancelled, otherwise returns error
-            if ex:
-                self.cancel()
-                self.set_exception(ex)
-                return
-        except CancelledError:
-            if self.cancel():  # if cancelling works
-                return
-            else:
-                self.set_exception(CancelledError())  # if cancelling fails
+        # If an exception occurs or CancelledError is raised for a sub-future, cancel the ProgressiveBatchFuture and
+        # all its sub-futures. The cancelling of ProgressiveBatchFuture only needs to be called once because the
+        # task_canceller cancels all the sub-futures which are not finished yet.
+        if not self._is_cancel_triggered:
+            try:
+                ex = f.exception()  # raises CancelledError if cancelled, otherwise returns error
+                if ex:
+                    self.cancel()
+                    self.set_exception(ex)
+                    return
+            except CancelledError:
+                if not self.cancel():
+                    self.set_exception(CancelledError())
                 return
 
         # If everything is fine:
@@ -591,6 +604,7 @@ class ProgressiveBatchFuture(ProgressiveFuture):
             True: If all sub-futures, that were not yet finished, are successfully cancelled.
             False: If no sub-future was left that could be cancelled.
         """
+        self._is_cancel_triggered = True
         fs = [f for f in self.futures if not f.done()]  # get all futures not finished yet
         logging.debug("Canceling %s futures.", len(fs))
         if not fs:

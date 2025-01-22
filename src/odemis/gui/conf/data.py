@@ -409,8 +409,9 @@ HW_SETTINGS_CONFIG = {
             ("MCPGain", {
                 "control_type": odemis.gui.CONTROL_INT,
                 "label": "MCP gain",
-                "tooltip": u"Microchannel plate gain of the streak unit.\n"
-                           u"Be careful when setting the gain while operating the camera in focus-mode.",
+                "tooltip": "Microchannel plate gain of the streak unit.\n"
+                           "Be careful when setting the gain while operating the camera in focus-mode.\n"
+                           "Only increase the gain while the stream is playing.",
                 "key_step": 1,
             }),
             ("shutter", {
@@ -1200,7 +1201,7 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
             ("max_projection", {
-                "label": "Max projection",
+                "label": "MIP",
                 "control_type": odemis.gui.CONTROL_CHECK,
                 "tooltip": "Merge all z-levels into a single image using Maximum Intensity Projection (MIP).",
             }),

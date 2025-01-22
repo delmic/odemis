@@ -670,7 +670,7 @@ class DigitalCamera(Detector, metaclass=ABCMeta):
 
         try:
             # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
-            dof = (l * ri) / na ** 2 + (ri * pxs_sensor) / (mag - na)
+            dof = (l * ri) / na ** 2 + (ri * pxs_sensor) / (mag * na)
             try:
                 self.depthOfField._set_value(dof, force_write=True)
             except (IndexError, TypeError):

@@ -35,6 +35,7 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 from typing import Dict, List, Optional
 
+
 import wx
 
 from odemis import dataio, model
@@ -52,6 +53,7 @@ from odemis.acq.stream import (
     StaticStream,
     Stream,
 )
+
 from odemis.gui import conf
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
@@ -109,6 +111,7 @@ class CryoAcquiController(object):
         self._panel.gauge_cryosecom_acq.Hide()
         self._panel.txt_cryosecom_left_time.Hide()
         self._panel.txt_cryosecom_est_time.Show()
+        self._panel.txt_acquire_features_est_time.Show()
         self._panel.btn_cryosecom_acqui_cancel.Hide()
 
         # bind events (buttons, checking, ...) with callbacks
@@ -183,6 +186,14 @@ class CryoAcquiController(object):
 
         # refresh the GUI
         self._panel.Layout()
+        self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
+        self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
+
+        # advanced features toggle
+        self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
+        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -344,7 +355,25 @@ class CryoAcquiController(object):
         filename = self._filename.value
         stage = self._tab_data.main.stage_bare
         focus = self._tab_data.main.focus
-        features = self._tab_data.main.features.value
+        acq_streams = self._acquiStreams.value
+        features = self._get_selected_features()
+        acq_time = self._get_acq_time()
+
+        # estimate the total time
+        est_time = round(acq_time * len(features))
+        est_time_readable = units.readable_time(est_time, full=False)
+
+        # dialog to confirm the acquisition
+        dlg = wx.MessageDialog(
+            self._panel,
+            f"Acquire {len(acq_streams)} streams at {len(features)} features?\nEstimated time: {est_time_readable}",
+            "Start Automated Acquistion?",
+            wx.YES_NO | wx.ICON_QUESTION,
+        )
+
+        if dlg.ShowModal() == wx.ID_NO:
+            self._on_feature_acquisition_done(None)
+            return
 
         logging.debug(f"Acquiring at features: {features}")
 
@@ -352,7 +381,7 @@ class CryoAcquiController(object):
             features=features,
             stage=stage,
             focus=focus,
-            streams=self._acquiStreams.value,
+            streams=acq_streams,
             zparams=zparams,
             filename=filename,
             settings_obs=self._tab_data.main.settings_obs,
@@ -383,6 +412,14 @@ class CryoAcquiController(object):
             self._refresh_current_feature_data()
         except Exception as e:
             logging.warning(f"Error resetting acquisition GUI: {e}")
+
+    def _get_selected_features(self):
+        """Get the selected (checked) features from the checklist."""
+        features = [
+            self._tab_data.main.features.value[i]
+            for i in self._panel.acquire_features_chk_list.CheckedItems
+        ]
+        return features
 
     def _refresh_current_feature_data(self):
         # refresh the current feature to load stream data
@@ -556,12 +593,9 @@ class CryoAcquiController(object):
         # update the zlevels dictionary with the added/removed stream
         self._on_zstack()
 
-    @wxlimit_invocation(1)  # max 1/s
-    def _update_acquisition_time(self):
-        """
-        Updates the estimated time
-        required for acquisition
-        """
+
+    def _get_acq_time(self) -> float:
+        """Calculate the estimated acquisition time."""
         if not self._zStackActive.value:  # if no zstack
             acq_time = acqmng.estimateTime(self._acquiStreams.value)
 
@@ -569,9 +603,29 @@ class CryoAcquiController(object):
             acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
 
         acq_time = math.ceil(acq_time)
+        return acq_time
+
+    @wxlimit_invocation(1)  # max 1/s
+    def _update_acquisition_time(self):
+        """
+        Updates the estimated time
+        required for acquisition
+        """
+        acq_time = self._get_acq_time()
+
         # display the time on the GUI
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
+
+        # estimate the total time for acquiring at features
+        features = self._get_selected_features()
+        if not features:
+            self._panel.txt_acquire_features_est_time.SetLabel("No features selected.")
+            return
+
+        est_time = round(acq_time * len(features))
+        est_time_readable = units.readable_time(est_time, full=False)
+        self._panel.txt_acquire_features_est_time.SetLabel(f"Estimated time: {est_time_readable}")
 
     @call_in_wx_main
     def _on_stream_wavelength(self, _=None):
@@ -767,3 +821,54 @@ class CryoAcquiController(object):
             self._panel.btn_acquire_features.SetToolTip(DISABLED_TOOLTIP)
             self._panel.chk_use_autofocus_acquire_features.Disable()
             self._panel.chk_use_autofocus_acquire_features.SetToolTip(DISABLED_TOOLTIP)
+
+        self._update_features_checklist(features)
+        self._update_acquisition_time()
+
+    @call_in_wx_main
+    def _update_selected_feature(self, evt: wx.Event):
+        # get the index of selected item, and update the current feature
+        index = self._panel.acquire_features_chk_list.GetSelection()
+        f = self._tab_data.main.features.value[index]
+        self._tab_data.main.currentFeature.value = f
+
+    def _update_checked_features(self, evt: wx.Event):
+        """Prevent the user from checking a disabled feature."""
+        index = evt.GetInt()
+        disabled_features_indexes = [
+            i
+            for i, f in enumerate(self._tab_data.main.features.value)
+            if f.status.value == FEATURE_DEACTIVE
+        ]
+
+        # Prevent the change
+        if index in disabled_features_indexes:
+            self._panel.acquire_features_chk_list.Check(index, False)
+            f = self._tab_data.main.features.value[index]
+            disabled_txt = f"{f.name.value} is Discarded and cannot be acquired."
+            wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
+
+        # Update the acquisition time
+        self._update_acquisition_time()
+
+    def _update_feature_status(self, feature: CryoFeature):
+        self._update_features_checklist(self._tab_data.main.features.value)
+
+    @call_in_wx_main
+    def _update_features_checklist(self, features: List[CryoFeature]):
+        """
+        Sync the features with the checklistbox
+        """
+        # clear the list
+        self._panel.acquire_features_chk_list.Clear()
+
+        # add the features to the list, and check the enabled ones
+        for i, f in enumerate(features):
+            txt = f"{f.name.value} ({f.status.value})"
+            check = f.status.value != FEATURE_DEACTIVE # check only the active features
+
+            self._panel.acquire_features_chk_list.Append(txt)
+            self._panel.acquire_features_chk_list.Check(i, check)
+
+            # subscribe to the feature status, so we can update the list
+            f.status.subscribe(self._update_feature_status, init=False)

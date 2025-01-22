@@ -19,12 +19,14 @@ PARTICULAR  PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
-from odemis.model import CancellableFuture, logging
-import numpy
-from odemis.util import executeAsyncTask, img
 import threading
+import time
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
+
+import numpy
+
+from odemis.model import CancellableFuture, logging
+from odemis.util import executeAsyncTask, img
 
 
 def turnOnLight(bl, ccd):
@@ -80,6 +82,7 @@ def _doTurnOnLight(f, bl, ccd):
         # Turn the light on, full power!
         bl.power.value = bl.power.range[1]
         while True:
+            time.sleep(0.1)
             img2 = ccd.data.get()
             try:
                 new_img = img.Subtract(img2, img_light_off)

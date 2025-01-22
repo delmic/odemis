@@ -261,7 +261,6 @@ SPARC2_MODES = {
             'spec-focus-ext': ("sp-ccd",
                 {'chamber-light': {'power': 'off'},
                  # 'spec-selector' will depend on the affects
-                 # for the spec-ded aligner only z axis positions are stored, currently for one WL
                  'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # slit to the minimum, wavelength to the zeroth order
                  'spectrograph-dedicated': {'slit-in': 10e-6, 'wavelength': 0},
@@ -308,7 +307,13 @@ SPARC2_MODES = {
             'tunnel-lens-align': ("sp-ccd",
                 {'chamber-light': {'power': 'off'},
                  # 'spec-selector' will depend on the affects
-                 # for the spec-ded aligner only z axis positions are stored, currently for one WL
+                 # Note that the spec-ded aligner Z best pos depends on the wavelength being observed,
+                 # but for now, we rely on the user to adjust it. For now, the X & Y positions are
+                 # only manually moved.
+                 # Also, the spectral and temporal-spectrum mode are affected by this position, but
+                 # for now, they don't explicitly move this component, so the GUI alignment tab ensures
+                 # that it's already at the correct position at start-up, and there is no reason it
+                 # moves, unless the user adjusts the alignment.
                  'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # for the spectrograph dedicated slit fully open and filter always on pass-through
                  'spectrograph-dedicated': {'grating': 'mirror',

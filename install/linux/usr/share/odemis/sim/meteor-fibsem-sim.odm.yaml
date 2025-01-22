@@ -1,11 +1,11 @@
 # To start the xtadapter in autoscript simulator mode:
 # cd path/to/xtlib-adapter/xtadapter
-# python server_sim_autoscript.py sim
+# python server_autoscript.py sim
 # the server will be started, and listening on localhost:4242
 
 METEOR-FIBSEM-Sim: {
     class: Microscope,
-    role: meteor,
+    role: meteor
 }
 
 "FIBSEM": {
@@ -115,7 +115,6 @@ METEOR-FIBSEM-Sim: {
         POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-10.e-3, 20.e-3]}
     },
 }
-
 
 "Light Source": {
     class: omicronxx.HubxX,

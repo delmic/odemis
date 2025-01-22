@@ -28,12 +28,14 @@ from concurrent.futures import CancelledError, Future
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import msgpack # only used for debug information
+
 import msgpack_numpy
 import numpy
 import pkg_resources
 import Pyro5.api
 from Pyro5.errors import CommunicationError
 from scipy import ndimage
+
 from odemis import model, util
 from odemis.driver.xt_client import check_and_transfer_latest_package
 from odemis.model import (
@@ -215,6 +217,7 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.list_available_channels()
+
 
     def move_stage_absolute(self, position: Dict[str, float]) -> None:
         """ Move the stage the given position. This is blocking.
@@ -827,6 +830,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_detector_state(channel)
 
+
 #### IMAGING CONTROL
     def get_active_view(self) -> int:
         """Returns: the active view."""
@@ -1266,6 +1270,7 @@ class Scanner(model.Emitter):
                 if res != self.resolution.value:
                     self.resolution._value = res
                     self.resolution.notify(res)
+
                 self._updateResolution()
 
             voltage = self.parent.get_high_voltage(self.channel)
@@ -1280,6 +1285,7 @@ class Scanner(model.Emitter):
             if beam_current != self.probeCurrent.value:
                 self.probeCurrent._value = beam_current
                 self.probeCurrent.notify(beam_current)
+
             beam_shift = self.parent.get_beam_shift(self.channel)
             if beam_shift != self.shift.value:
                 self.shift._value = beam_shift
@@ -1549,6 +1555,7 @@ class Detector(model.Detector):
                     # non-blocking acquisition (disabled until hw testing)
                     # logging.debug("Starting one image acquisition")
 
+
                     # # start the acquisition
                     # self.start_acquisition()
                     # # stop the acquisition at the end of the frame
@@ -1781,6 +1788,7 @@ class Stage(model.Actuator):
         # such that all axes apart from z, have same values
         self._raw_offset = {"x": 0, "y": 0}
 
+
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
                                 **kwargs)
         # will take care of executing axis move asynchronously
@@ -1789,6 +1797,7 @@ class Stage(model.Actuator):
         self.position = model.VigilantAttribute({}, unit=stage_info["unit"],
                                                 readonly=True)
         self._get_coordinate_system_offset() # to get the offset values for raw coordinate system
+
         self._updatePosition()
 
         # Refresh regularly the position
@@ -1820,6 +1829,7 @@ class Stage(model.Actuator):
         logging.debug(f"The offset values in x and y are {self._raw_offset} when stage is in the raw coordinate "
                         f"system for raw stage coordinates: {pos}, linked stage coordinates: {pos_linked}")
         
+
     def _updatePosition(self):
         """
         update the position VA
@@ -1829,6 +1839,7 @@ class Stage(model.Actuator):
         # Apply the offset to the raw coordinates
         pos["x"] += self._raw_offset["x"]
         pos["y"] += self._raw_offset["y"]
+
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -1872,6 +1883,7 @@ class Stage(model.Actuator):
                         pos["x"] -= self._raw_offset["x"]
                     if "y" in pos.keys():
                         pos["y"] -= self._raw_offset["y"]
+
                     logging.debug("Moving to position {}".format(pos))
 
                 if "rx" in pos.keys():
