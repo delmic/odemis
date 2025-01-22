@@ -1,3 +1,4 @@
+# old mimas code
 """
 1.Check milling with one preset above the specified lamella
 2.Repeat the process to do milling below the lamella
@@ -18,16 +19,20 @@ import numpy
 import yaml
 
 from odemis import model
-from odemis.acq import move
 from odemis.acq.acqmng import acquire
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.feature import CryoFeature
-from odemis.acq.move import MILLING, MicroscopePostureManager
+from odemis.acq.feature import (
+    CryoFeature,
+)
+from odemis.acq.move import (
+    MILLING,
+    MicroscopePostureManager,
+)
 from odemis.acq.orsay_milling import mill_rectangle
 from odemis.acq.stitching._tiledacq import MOVE_SPEED_DEFAULT
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import find_fittest_converter
-from odemis.util import executeAsyncTask, dataio
+from odemis.util import dataio, executeAsyncTask
 
 ANCHOR_MAX_PIXELS = 512 ** 2  # max number of pixels for the anchor region
 
@@ -122,12 +127,10 @@ def load_config(yaml_filename):
 
     return millings
 
-
 # To handle the timeout error when the stage is not able to move to the desired position
 # It logs the message and raises the MoveError exception
 class MoveError(Exception):
     pass
-
 
 class MillingRectangleTask(object):
     """
@@ -242,7 +245,8 @@ class MillingRectangleTask(object):
         stage_time = 0
         for site in self.sites:
             stage_time += self.estimate_stage_movement_time(site, prev_stage_pos_ref)
-            prev_stage_pos_ref = site.pos.value
+            prev_pos = site.stage_position.value
+            prev_stage_pos_ref = (prev_pos["x"], prev_pos["y"], prev_pos["z"])
 
         return milling_time + stage_time
 
@@ -253,13 +257,15 @@ class MillingRectangleTask(object):
         :param stage_pos_ref: (tuple) reference position of the stage in m from where the stage moves.
         :return: (float) time to move the stage between two points in s.
         """
+        # TODO: refactor this func to use dict instead of tuple
         # current position from x,y,z of stage position and eliminating rx,ry,rz
         if stage_pos_ref is None:
-            stage_pos = self._stage.position.value
-            current_pos = [stage_pos[an] for an in ("x", "y", "z")]
+            stage_position = self._stage.position.value
+            current_pos = [stage_position[an] for an in ("x", "y", "z")]
         else:
             current_pos = stage_pos_ref
-        target_pos = site.pos.value  # list
+        tpos = site.stage_position.value
+        target_pos = (tpos["x"], tpos["y"], tpos["z"])
         diff = [abs(target - current) for target, current in zip(target_pos, current_pos)]
         stage_time = math.sqrt(sum(d ** 2 for d in diff)) / self._move_speed
 
@@ -286,9 +292,7 @@ class MillingRectangleTask(object):
         :param site: (CryoFeature) The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        target_pos = {"x": site.pos.value[0],
-                      "y": site.pos.value[1],
-                      "z": site.pos.value[2]}
+        target_pos = site.stage_position.value
         logging.debug("For feature %s moving the stage to %s m", site.name.value, target_pos)
         self._future.running_subf = self._stage.moveAbs(target_pos)
         stage_time = self.estimate_stage_movement_time(site)
@@ -479,7 +483,7 @@ class MillingRectangleTask(object):
                 with self._future._task_lock:
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
-                    logging.debug(f"Retracting the objective to set the imaging in FIB mode")
+                    logging.debug("Retracting the objective to set the imaging in FIB mode")
                     self._future.running_subf = posture_manager.cryoSwitchSamplePosition(MILLING)
 
                 self._future.running_subf.result()
