@@ -30,7 +30,7 @@ class MillingSettings2:
         self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(50e-06, 960e-06))
         self.mode = model.StringEnumerated(mode, choices=set(["Serial", "Parallel"]))
         self.channel = model.StringEnumerated(channel, choices=set(["ion"])) # TODO: add support for electron milling
-        self.align = model.BooleanVA(align) # align at the milling current 
+        self.align = model.BooleanVA(align) # align at the milling current
 
     def to_json(self) -> dict:
         return {"current": self.current.value,

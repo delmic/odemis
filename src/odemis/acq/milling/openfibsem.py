@@ -54,17 +54,17 @@ def create_openfibsem_microscope() -> OdemisMicroscope:
     config.system.stage.rotation_reference = math.degrees(rotation_reference)
     config.system.stage.rotation_180 = math.degrees(rotation_reference + math.pi)
     microscope = OdemisMicroscope(config.system)
-    
+
     return microscope
 
 def convert_pattern(p: MillingPatternParameters) -> BasePattern:
     """Convert from an odemis pattern to an openfibsem pattern"""
     if isinstance(p, RectanglePatternParameters):
         return _convert_rectangle_pattern(p)
-    
+
     if isinstance(p, TrenchPatternParameters):
         return _convert_trench_pattern(p)
-    
+
     if isinstance(p, MicroexpansionPatternParameters):
         return _convert_microexpansion_pattern(p)
 
@@ -163,7 +163,7 @@ class OpenFIBSEMMillingTaskManager:
         # create microscope connection
         self.microscope = create_openfibsem_microscope()
         self.microscope._last_imaging_settings.path = os.getcwd()   # TODO: resolve the path issue
-        
+
         # convert the tasks to milling stages
         self.tasks = tasks
         self.milling_stages = convert_milling_tasks_to_milling_stages(self.tasks)

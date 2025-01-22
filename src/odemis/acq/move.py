@@ -355,7 +355,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                                                                  pre_tilt=pre_tilt,
                                                                  column_tilt=math.radians(52))
             return {"rx": rx, "rz": md["rz"]}
-    
+
     def get_pre_tilt(self):
         stage_md = self.stage.getMetadata()
         return stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
@@ -471,12 +471,12 @@ class MeteorPostureManager(MicroscopePostureManager):
         ion_beam = model.getComponent(role='ion-beam')
         ion_beam_rotation = ion_beam.rotation.value
         if not numpy.isclose(sr, ion_beam_rotation, atol=ATOL_ROTATION_POS):
-            raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_beam_rotation}") 
+            raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_beam_rotation}")
 
         # rotation around x axis
         # FM TRANSFORM
-        tf = np.array([[1, 0, 0], 
-                    [0, np.cos(r), -np.sin(r)], 
+        tf = np.array([[1, 0, 0],
+                    [0, np.cos(r), -np.sin(r)],
                     [0, np.sin(r), np.cos(r)]])
         # SEM TRANSFORM
         tf_inv = np.linalg.inv(tf)
@@ -485,8 +485,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             sr = 0
 
         # apply scan rotation (rotation around z axis of sample-stage)
-        self._sr_matrix = np.array([[np.cos(sr), 0, 0], 
-                                [0, np.cos(sr), 0], 
+        self._sr_matrix = np.array([[np.cos(sr), 0, 0],
+                                [0, np.cos(sr), 0],
                                 [0, 0, 1]])
         self._sr_matrix_inv = np.linalg.inv(self._sr_matrix)
 
@@ -496,13 +496,13 @@ class MeteorPostureManager(MicroscopePostureManager):
         tf_sr = tf.dot(self._sr_matrix)
         tf_inv_sr = self._sr_matrix_inv.dot(tf_inv)
 
-        self._transforms2 = {FM_IMAGING: tf, 
-                             SEM_IMAGING: tf_inv_sr, 
-                             MILLING: tf_inv_sr, 
+        self._transforms2 = {FM_IMAGING: tf,
+                             SEM_IMAGING: tf_inv_sr,
+                             MILLING: tf_inv_sr,
                              UNKNOWN: tf_inv_sr}
-        self._inv_transforms2 = {FM_IMAGING: tf_inv, 
-                                 SEM_IMAGING: tf_sr, 
-                                 MILLING: tf_sr, 
+        self._inv_transforms2 = {FM_IMAGING: tf_inv,
+                                 SEM_IMAGING: tf_sr,
+                                 MILLING: tf_sr,
                                  UNKNOWN: tf_sr}
 
     def _convert_to_sample_stage_from_stage(self, pos_dep, absolute=True):
@@ -606,7 +606,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         return ppos
 
     def from_sample_stage_to_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
-        
+
         q = np.array([pos["x"], pos["y"], pos["z"]])
         # inverse transform
         # pinv = np.dot(q, sr_matrix_inv).dot(inv_transforms[SEM_IMAGING])
@@ -624,7 +624,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         return ppos
 
     def to_sample_stage_from_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Transform from the sample stage coordinate system to the 
+        """Transform from the sample stage coordinate system to the
         stage position coordinate system using 3D transform.
         """
 

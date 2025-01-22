@@ -123,7 +123,7 @@ class CryoChamberTab(Tab):
         main_frame.Bind(wx.EVT_MENU, self._import_features_from_autolamella, id=main_frame.menu_item_import_from_autolamella.GetId())
         if self._role == 'meteor':
             main_frame.menu_item_import_from_autolamella.Enable(True)
-        
+
         # enable import from 3dct for correlation
         main_frame.Bind(wx.EVT_MENU, self._import_features_from_3dct, id=main_frame.menu_item_import_from_3dct.GetId())
         if self._role == 'meteor':
@@ -203,7 +203,7 @@ class CryoChamberTab(Tab):
                                   FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                   MILLING: self.panel.btn_switch_milling,
                                   FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-                                  GRID_2: self.panel.btn_switch_grid2, 
+                                  GRID_2: self.panel.btn_switch_grid2,
                                   GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
 
@@ -539,14 +539,14 @@ class CryoChamberTab(Tab):
     def _import_features_from_3dct(self, _):
 
         # load 3dct position
-        path = SelectFileDialog(parent=self.panel, 
-                                message="Select 3DCT Position File to load", 
+        path = SelectFileDialog(parent=self.panel,
+                                message="Select 3DCT Position File to load",
                                 default_path=self.conf.pj_last_path)
-        
+
         if path is None: # Cancelled
             logging.warning("No 3DCT position file selected, exiting.")
             return
-        
+
         # load yaml file
         try:
             pt = parse_3dct_yaml_file(path)

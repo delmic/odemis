@@ -154,9 +154,9 @@ class CryoFeatureController(object):
             return
 
         # get the position at the posture
-        position = get_feature_position_at_posture(pm=self.pm, 
-                                                   feature=feature, 
-                                                   posture=posture, 
+        position = get_feature_position_at_posture(pm=self.pm,
+                                                   feature=feature,
+                                                   posture=posture,
                                                    recalculate=recalculate)
 
         logging.info(f"Moving to {POSITION_NAMES[posture]} position: {position}")
@@ -210,8 +210,8 @@ class CryoFeatureController(object):
         self._tab_data_model.main.currentFeature.value = None
         self._tab_data_model.main.currentFeature.value = feature
 
-    def save_milling_tasks(self, 
-                    milling_tasks: Dict[str, MillingTaskSettings], 
+    def save_milling_tasks(self,
+                    milling_tasks: Dict[str, MillingTaskSettings],
                     selected_milling_tasks: List[str]) -> None:
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature is None:

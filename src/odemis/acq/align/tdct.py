@@ -33,7 +33,6 @@ def convert_das_to_numpy_stack(das: List[model.DataArray]) -> numpy.ndarray:
     for da in das:
         if isinstance(da, model.DataArrayShadow):
             da = da.getData()
-        
         if da.ndim == 5: # model.DataArray is always 5D
             da = da[0, 0, :, :, :]
         arr.append(da)
@@ -63,19 +62,19 @@ def get_optimized_z_guass(das: List[model.DataArray], x: int, y: int, z: int, sh
         # getzGauss can fail, so we need to catch the exception
         zval, z, _ = multi_channel_get_z_guass(image=fm_image, x=x, y=y, show=show)
         logging.info(f"Using Z-Gauss optimisation: {z}, previous z: {prev_z}")
-        
+
     except RuntimeError as e:
         logging.warning(f"Error in z-gauss optimisation: {e}, using previous z: {prev_z}")
         z = prev_z
         x, y = prev_x, prev_y
-    
+
     return z
 
 
-def run_tdct_correlation(fib_coords: numpy.ndarray, 
-                           fm_coords: numpy.ndarray, 
-                           poi_coords: numpy.ndarray, 
-                           fib_image: model.DataArray, 
+def run_tdct_correlation(fib_coords: numpy.ndarray,
+                           fm_coords: numpy.ndarray,
+                           poi_coords: numpy.ndarray,
+                           fib_image: model.DataArray,
                            fm_image: model.DataArray,
                            path: str) -> Dict[str, Tuple[float, float]]:
     """Run 3DCT Multi-point correlation between FIB and FM images.
@@ -87,7 +86,7 @@ def run_tdct_correlation(fib_coords: numpy.ndarray,
     :param path: the path to save the results
     :return: the correlation results (including poi, transformations, and errors)
     """
-    
+
     # tmp: until we have a better solution for installation
     sys.path.append("/home/patrick/development/openfibsem/3DCT")
     sys.path.append("/home/patrick/development/openfibsem/3DCT/tdct")
@@ -129,7 +128,7 @@ def run_tdct_correlation(fib_coords: numpy.ndarray,
     return correlation_results
 
 def get_poi_coordinate(correlation_results: dict) -> Tuple[float, float]:
-    """Get the the point of interest coordinate from correlation data 
+    """Get the the point of interest coordinate from correlation data
     and convert from micrometers to meters in the microscope image coordinate system.
     :param correlation_results: the correlation results
     :return: the point of interest coordinate in meters
@@ -140,7 +139,7 @@ def get_poi_coordinate(correlation_results: dict) -> Tuple[float, float]:
     return poi_coord
 
 def parse_3dct_yaml_file(path: str) -> Tuple[float, float]:
-    """Parse the 3DCT yaml file and extract the point of interest (POI) 
+    """Parse the 3DCT yaml file and extract the point of interest (POI)
     in microscope image coordinates (um). Convert the coordinates to metres.
     Note: only the first POI is extracted.
     :param path: Path to the 3DCT yaml file."""

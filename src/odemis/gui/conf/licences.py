@@ -26,13 +26,13 @@ def get_license_enabled() -> bool:
         correlation_enabled = config["licence"].get("correlation", "True") == "True"
 
     logging.debug(f"odemis-advanced mode is {'enabled' if enabled else 'disabled'}")
-    return {"enabled": enabled, 
-            "fibsem": fibsem_enabled, 
-            "milling": milling_enabled, 
+    return {"enabled": enabled,
+            "fibsem": fibsem_enabled,
+            "milling": milling_enabled,
             "correlation": correlation_enabled}
 
 licences_enabled = get_license_enabled()
-ODEMIS_ADVANCED_FLAG = licences_enabled["enabled"] 
+ODEMIS_ADVANCED_FLAG = licences_enabled["enabled"]
 LICENCE_FIBSEM_ENABLED = licences_enabled["fibsem"]
 LICENCE_MILLING_ENABLED = licences_enabled["milling"]
 LICENCE_CORRELATION_ENABLED = licences_enabled["correlation"]

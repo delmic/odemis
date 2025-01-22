@@ -209,7 +209,7 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_change_file.Enable(not is_acquiring)
         self._panel.btn_acquire_overview.Enable(not is_acquiring)
         self._panel.streams_chk_list.Enable(not is_acquiring)
-        
+
         if self.acqui_mode is guimod.AcquiMode.FLM:
             self._panel.btn_acquire_features.Enable(not is_acquiring)
             self._panel.z_stack_chkbox.Enable(not is_acquiring)
@@ -232,7 +232,7 @@ class CryoAcquiController(object):
 
     def _get_acqui_streams(self, evt: wx.Event) -> List[stream.Stream]:
         """
-        Get the acquisition streams based on the acqui mode, 
+        Get the acquisition streams based on the acqui mode,
         button pressed, and the current view
         """
         acq_streams = self._acquiStreams.value
@@ -261,7 +261,7 @@ class CryoAcquiController(object):
         # until after the acquisition starts
         self._tab.streambar_controller.pauseStreams()
 
-        # get the streams to acquire (depending on mode, btn, ...)        
+        # get the streams to acquire (depending on mode, btn, ...)
         acq_streams = self._get_acqui_streams(evt)
 
         # acquire the data
@@ -480,9 +480,9 @@ class CryoAcquiController(object):
         :param filename: filename given by user
         """
         acq_map: Dict[str, str] = {
-            model.MD_AT_EM: "SEM", 
+            model.MD_AT_EM: "SEM",
             model.MD_AT_FIB: "FIB"
-        }    
+        }
         if self.acqui_mode is guimod.AcquiMode.FLM:
             filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
                                         filename=filename)
@@ -508,15 +508,15 @@ class CryoAcquiController(object):
 
             # export fib/sem data as separate images
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-                for d in data:                       
-                    filename = self._create_cryo_filename(base_filename, 
+                for d in data:
+                    filename = self._create_cryo_filename(base_filename,
                                                           d.metadata[model.MD_ACQ_TYPE])
                     exporter.export(filename, d, thumb_nail)
             else:
                 # export fm channels as single image
                 filename = self._create_cryo_filename(base_filename)
                 exporter.export(filename, data, thumb_nail)
-                logging.info(u"Acquisition saved as file '%s'.", filename)      
+                logging.info(u"Acquisition saved as file '%s'.", filename)
 
             # TODO: make saving fibsem data optional
             # TODO: investigate using Cntrl + S to save?
@@ -615,7 +615,7 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-            return 
+            return
 
         # estimate the total time for acquiring at features
         features = self._get_selected_features()

@@ -338,9 +338,9 @@ class MillingTaskController:
 
     @call_in_wx_main
     def draw_milling_tasks(self, pos: Optional[Tuple[float, float]] = None, convert_pos: bool = True):
-        """Redraw all milling tasks on the canvas. Clears the rectangles_overlay first, 
-        and then redraws all the patterns. If pos is given, the patterns are drawn at that position, 
-        otherwise they are drawn at the existing positions. 
+        """Redraw all milling tasks on the canvas. Clears the rectangles_overlay first,
+        and then redraws all the patterns. If pos is given, the patterns are drawn at that position,
+        otherwise they are drawn at the existing positions.
         :param pos: the position to draw the patterns at (Optional)
         :param convert_pos: whether to convert the position to the centre of the image coordinate (pattern coordinate system)
         """

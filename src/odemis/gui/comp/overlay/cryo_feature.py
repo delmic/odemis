@@ -219,13 +219,13 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         box = wx.MessageDialog(self.tab.main_frame,
                             message="Do you want to recalculate this feature position for all other postures?",
                             caption="Recalculate feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
-        
-        ans = box.ShowModal()  # Waits for the window to be closed       
+
+        ans = box.ShowModal()  # Waits for the window to be closed
         if ans == wx.ID_YES:
             for posture in self.pm.postures:
-                    get_feature_position_at_posture(pm=self.pm, 
-                                                    feature=self._selected_feature, 
-                                                    posture=posture, 
+                    get_feature_position_at_posture(pm=self.pm,
+                                                    feature=self._selected_feature,
+                                                    posture=posture,
                                                     recalculate=True)
 
     def _detect_point_inside_feature(self, v_pos):
