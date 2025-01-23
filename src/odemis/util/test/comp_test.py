@@ -139,7 +139,7 @@ class TestGenerateZlevels(unittest.TestCase):
         zStep = 10e-6
         actual = generate_zlevels(self.focus, zrange, zStep)
         expected = self.focus.position.value
-        self.assertAlmostEqual(expected["z"], actual)
+        self.assertAlmostEqual([expected["z"]], actual)
 
     def test_zrange_not_in_proper_order(self):
         self.focus.moveAbsSync({"z": 1300e-6})
