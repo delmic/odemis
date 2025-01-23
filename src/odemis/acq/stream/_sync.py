@@ -1086,7 +1086,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._sccd = s1
         self._ccd = s1._detector
         self._ccd_df = s1._dataflow
-        self._trigger = self._ccd.softwareTrigger
+        self._trigger = self._emitter.startScan  # to acquire a CCD image every time the SEM starts a new scan
         self._ccd_idx = len(self._streams) - 1  # optical detector is always last in streams
 
     def _supports_hw_sync(self):
@@ -1685,11 +1685,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # retrigger, or unsynchronise/resynchronise just before the end of
             # last scan).
 
-            # prepare detector
-            self._ccd_df.synchronizedOn(self._trigger)
-            # subscribe to last entry in _subscribers (optical detector)
-            self._ccd_df.subscribe(self._subscribers[self._ccd_idx])
-
             # Instead of subscribing/unsubscribing to the SEM for each pixel,
             # we've tried to keep subscribed, but request to be unsynchronised/
             # synchronised. However, synchronizing doesn't cancel the current
@@ -1730,6 +1725,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Scanning resolution is %s and scale %s",
                           self._emitter.resolution.value,
                           self._emitter.scale.value)
+
+            # Prepare CCD: acquire one frame every time the SEM starts scanning.
+            # The SEM may scan multiple times for each CCD frame.
+            self._ccd_df.synchronizedOn(self._trigger)
+            # Get the CCD ready to acquire
+            self._ccd_df.subscribe(self._subscribers[self._ccd_idx])
 
             last_ccd_update = 0
             start_t = time.time()
@@ -1933,27 +1934,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
             if self._acq_state == CANCELLED:
                 raise CancelledError()
 
-            # subscribe to _subscribers
+            # Start "all" the scanners (typically there is just one). The last one is the CCD, which
+            # is already subscribed, but waiting for the startScan event.
+            # As soon as the e-beam starts scanning (which can take a couple of ms), the
+            # startScan event is sent, which triggers the acquisition of one CCD frame.
             for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                 s._dataflow.subscribe(sub)
-            # TODO: in theory (aka in a perfect world), the ebeam would immediately
-            # be at the requested position after the subscription starts. However,
-            # that's not exactly the case due to:
-            # * physics limits the speed of voltage change in the ebeam column,
-            #   so it takes the "settle time" before the beam is at the right
-            #   place (in the order of 10 µs).
-            # * the (odemis) driver is asynchronous, and between the moment it
-            #   receives the request to start and the actual moment it asks the
-            #   hardware to change voltages, several ms might have passed.
-            # One thing that would help is to not park the e-beam between each
-            # spot. This way, the ebeam would reach the position much quicker,
-            # and if it's not yet at the right place, it's still not that far.
-            # In the meantime, waiting a tiny bit ensures the CCD receives the
-            # right data.
-            time.sleep(5e-3)  # give more chances spot has been already processed
-
-            # send event to detector to acquire one image
-            self._trigger.notify()
 
             # wait for detector to acquire image
             timedout = self._waitForImage(img_time)
@@ -2018,6 +2004,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 leech_nimg[li] -= 1
                 if leech_nimg[li] == 0:
                     try:
+                        # Temporarily switch the CCD to a different event trigger, so that it
+                        # doesn't get triggered while the leech is running (because it could use the
+                        # e-beam, which would send a startScan event)
+                        self._ccd_df.synchronizedOn(self._ccd.softwareTrigger)
+
                         nimg = l.next([d[-1] for d in self._acq_data])
                         logging.debug("Ran leech %s successfully. Will run next leech after %s acquisitions.", l, nimg)
                     except Exception:
@@ -2026,6 +2017,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     leech_nimg[li] = nimg
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
+
+                    # re-use the real trigger
+                    self._ccd_df.synchronizedOn(self._trigger)
 
             # Since we reached this point means everything went fine, so
             # no need to retry
@@ -2055,12 +2049,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
           CancelledError() if cancelled
           Exceptions if error
         """
-        # The idea of the acquiring with a scan stage:
+        # The main steps of an acquisition with a scan stage:
         #  (Note we expect the scan stage to be about at the center of its range)
         #  * Move the ebeam to 0, 0 (center), for the best image quality
-        #  * Start CCD acquisition with software synchronisation
+        #  * Start CCD acquisition with synchronisation on e-beam startScan
         #  * Move to next position with the stage and wait for it
-        #  * Start SED acquisition and trigger CCD
+        #  * Start SED acquisition -> startScan event triggers CCD
         #  * Wait for the CCD/SED data
         #  * Repeat until all the points have been scanned
         #  * Move back the stage to center in case of an 'independent' stage
@@ -2170,11 +2164,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
+                    # Start e-beam scan. As soon as it really starts, a startScan event is sent, which
+                    # triggers the CCD acquisition.
                     for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                         s._dataflow.subscribe(sub)
-
-                    time.sleep(5e-3)  # give more chances spot has been already processed
-                    self._trigger.notify()
 
                     # wait for detector to acquire image
                     timedout = self._waitForImage(px_time)
@@ -2261,6 +2254,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                 sstage.moveAbsSync(orig_spos)
                                 prev_spos.update(orig_spos)
                             try:
+                                # Temporarily switch the CCD to a different event trigger, so that it
+                                # doesn't get triggered while the leech is running (because it could use the
+                                # e-beam, which would send a startScan event)
+                                self._ccd_df.synchronizedOn(self._ccd.softwareTrigger)
+
                                 np = l.next([d[-1] for d in self._acq_data])
                             except Exception:
                                 logging.exception("Leech %s failed, will retry next pixel", l)
@@ -2268,6 +2266,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             leech_np[li] = np
                             if self._acq_state == CANCELLED:
                                 raise CancelledError()
+
+                            # re-use the real trigger
+                            self._ccd_df.synchronizedOn(self._trigger)
 
                     for i, das in enumerate(self._acq_data):
                         self._assembleLiveData(i, das[-1], px_idx, cor_pos, rep, 0)
