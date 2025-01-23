@@ -1232,6 +1232,8 @@ class SEMComedi(model.HwComponent):
                     stop_arg=nrscans)
         start = time.time()
 
+        self._scanner.startScan.notify()  # Special event that will only actually notify on the first call
+
         # run the commands
         self._reader.run()
         self._writer.run()
@@ -1336,6 +1338,7 @@ class SEMComedi(model.HwComponent):
             comedi.internal_trigger(self._device, self._ao_subdevice, self._ao_trig)
 
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
+        self._scanner.startScan.notify()  # Special event that will only actually notify on the first call
 
         self._reader.run()
         if nwscans != 1:
@@ -1649,6 +1652,8 @@ class SEMComedi(model.HwComponent):
                     self.set_to_resting_position()
                     # wait until something new comes in
                     self._check_cmd_q(block=True)
+
+                    self._scanner.startScan.clear()  # Get ready for the next scan
         except CancelledError:
             logging.info("Acquisition threading terminated on request")
         except Exception:
@@ -1660,6 +1665,7 @@ class SEMComedi(model.HwComponent):
             except comedi.ComediError:
                 # can happen if the driver already terminated
                 pass
+            self._scanner.startScan.clear()  # Get ready for the next scan
             logging.info("Acquisition thread closed")
             self._acquisition_thread = None
 
@@ -2515,6 +2521,23 @@ class FakeWriter(Accesser):
         self._must_stop.set()
 
 
+class EventOnce(model.Event):
+    """
+    Special Event class which passes the event only once to the listener, until it's reset.
+    """
+    def __init__(self):
+        super().__init__()
+        self._notified = False
+
+    def notify(self):
+        if not self._notified:
+            self._notified = True
+            super().notify()
+
+    def clear(self):
+        self._notified = False
+
+
 class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
@@ -2664,6 +2687,9 @@ class Scanner(model.Emitter):
         t.daemon = True
         t.start()
         self.indicate_scan_state(False)
+
+        # Event which is triggered at the beginning of the first frame of a scan
+        self.startScan = EventOnce()
 
         # In theory the maximum resolution depends on the X/Y ranges, the actual
         # ranges that can be used and the maxdata. It also depends on the noise
