@@ -528,7 +528,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         # rotation around x axis: fm = tf, sem = tf_inv
         tf, tf_inv = _get_transforms(r)
 
-        # TODO: enable scan rotation once complete        
+        # TODO: enable scan rotation once complete
         self._get_scan_rotation_matrix()
 
         logging.debug(f"tf_matrix: {tf}, sr_matrix: {self._sr_matrix}")
@@ -729,7 +729,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         Uses the inverse transformation
         :param pos: position in the sample-stage coordinates
         :return: position in the stage-bare coordinates"""
-        
+
         # inverse transform
         q = np.array([pos["x"], pos["y"], pos["z"]])
         posture = self.current_posture.value
@@ -755,7 +755,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         p = np.array([pos["x"], pos["y"], pos["z"]])
 
         # QUERY: for projecting other postures, should we use the current posture or the target posture?
-        # we should, but currently to_sample_stage... is only used to project features onto the screen, 
+        # we should, but currently to_sample_stage... is only used to project features onto the screen,
         # and they are displayed in the current posture, so it is fine to use the current posture
         posture = self.current_posture.value
         q = np.dot(p, self._transforms2[posture])
@@ -853,7 +853,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         # simple chain of milling->sem->fm
         sem_pos = self._transform_from_milling_to_sem(pos)
         return self._transformFromSEMToMeteor(sem_pos)
-    
+
     # TODO: add support for additional transforms:
     # SEM -> FIB
     # FIB -> SEM
@@ -1453,7 +1453,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :return: (dict str->float) the transformed position.
         """
         return NotImplemented
-    
+
     def _transform_from_fm_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area to the FIB imaging area.

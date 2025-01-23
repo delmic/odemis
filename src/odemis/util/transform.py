@@ -1306,8 +1306,8 @@ def _get_transforms(r: float) -> Tuple[numpy.ndarray, numpy.ndarray]:
     :return: the transformation matrices (forward and inverse).
     """
     tf = numpy.array(
-        [[1, 0, 0], 
-         [0, numpy.cos(r), -numpy.sin(r)], 
+        [[1, 0, 0],
+         [0, numpy.cos(r), -numpy.sin(r)],
          [0, numpy.sin(r), numpy.cos(r)]]
     )
     tf_inv = numpy.linalg.inv(tf)

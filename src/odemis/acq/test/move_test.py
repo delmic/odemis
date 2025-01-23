@@ -689,7 +689,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
     """
     MIC_CONFIG = METEOR_TFS3_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
-    
+
     @classmethod
     def setUpClass(cls):
         testing.start_backend(cls.MIC_CONFIG)
@@ -762,7 +762,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
         f.result()
 
         milling_pos_after_move = self.stage_bare.position.value
-        self.assertTrue(isNearPosition(milling_pos_after_move, milling_pos, 
+        self.assertTrue(isNearPosition(milling_pos_after_move, milling_pos,
                                        axes={"x", "y", "z", "rx", "rz"}))
 
         # fm
@@ -770,12 +770,12 @@ class TestMeteorTFS3Move(unittest.TestCase):
         f.result()
 
         fm_pos_after_move = self.stage_bare.position.value
-        self.assertTrue(isNearPosition(fm_pos_after_move, fm_pos, 
+        self.assertTrue(isNearPosition(fm_pos_after_move, fm_pos,
                                        axes={"x", "y", "z", "rx", "rz"}))
 
     def test_sample_stage_movement(self):
         """Test sample stage movements in different postures match the expected movements"""
-                    
+
         dx, dy = 50e-6, 50e-6
         self.pm.use_3d_transforms = True
         for posture in [FM_IMAGING, SEM_IMAGING]:
@@ -810,14 +810,14 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
             q = numpy.dot(tf, p)
             exp_sb_pos = {
-                "x": init_sb_pos["x"] + q[0], 
-                "y": init_sb_pos["y"] + q[1], 
+                "x": init_sb_pos["x"] + q[0],
+                "y": init_sb_pos["y"] + q[1],
                 "z": init_sb_pos["z"] + q[2],
                 "rx": init_sb_pos["rx"],
                 "rz": init_sb_pos["rz"]}
 
             # expected movement is projection of the movement along the x, y axes
-            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos, 
+            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
                                         axes={"x", "y", "z", "rx", "rz"}))
 
             # test absolute movement
@@ -828,7 +828,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
             abs_pos = init_ss_pos.copy()
             abs_pos["x"] += dx
             abs_pos["y"] += dy
-            
+
             f = self.stage.moveAbs(abs_pos)
             f.result()
             time.sleep(2)
@@ -836,9 +836,9 @@ class TestMeteorTFS3Move(unittest.TestCase):
             new_pos = self.stage.position.value
             new_sb_pos = self.stage_bare.position.value
 
-            self.assertTrue(isNearPosition(new_pos, abs_pos, 
+            self.assertTrue(isNearPosition(new_pos, abs_pos,
                                                   axes={"x", "y", "z", "rx", "rz"}))
-            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos, 
+            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
                                                   axes={"x", "y", "z", "rx", "rz"}))
 
         return
@@ -855,8 +855,8 @@ class TestMeteorTFS3Move(unittest.TestCase):
         tf, tf_inv = _get_transforms(r=math.radians(45))
         r = math.radians(45)
         tf2 = numpy.array(
-                [[1, 0, 0], 
-                [0, numpy.cos(r), -numpy.sin(r)], 
+                [[1, 0, 0],
+                [0, numpy.cos(r), -numpy.sin(r)],
                 [0, numpy.sin(r), numpy.cos(r)]])
         numpy.testing.assert_array_almost_equal(tf, tf2)
         numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf2))
