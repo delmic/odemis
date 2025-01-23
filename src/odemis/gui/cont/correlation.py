@@ -537,7 +537,7 @@ class GridColumns(Enum):
     Index = 4 # Column for "index"
 
 
-DEBUG = False
+DEBUG = True
 class CorrelationPointsController(object):
 
     def __init__(self, tab_data, panel, tab, viewports):
@@ -612,19 +612,19 @@ class CorrelationPointsController(object):
 
 
         # Set column 1 (Index) as an integer column
-        int_renderer = wx.grid.GridCellNumberRenderer()
-        int_attr = wx.grid.GridCellAttr()
-        int_attr.SetRenderer(int_renderer)
-        self.grid.SetColAttr(4, int_attr)
-
-        # Set columns 2, 3, and 4 (X, Y, Z Coordinates) as float columns with 2 decimal places
-        float_renderer = wx.grid.GridCellFloatRenderer(precision=3)
-        float_attr = wx.grid.GridCellAttr()
-        float_attr.SetRenderer(float_renderer)
-
-        self.grid.SetColAttr(1, float_attr)
-        self.grid.SetColAttr(2, float_attr)
-        self.grid.SetColAttr(3, float_attr)
+        # int_renderer = wx.grid.GridCellNumberEditor(min=1)
+        # int_attr = wx.grid.GridCellAttr()
+        # int_attr.SetEditor(int_renderer)
+        # self.grid.SetColAttr(4, int_attr)
+        #
+        # # Set columns 2, 3, and 4 (X, Y, Z Coordinates) as float columns with 2 decimal places
+        # float_renderer = wx.grid.GridCellFloatEditor(precision=3)
+        # float_attr = wx.grid.GridCellAttr()
+        # float_attr.SetEditor(float_renderer)
+        #
+        # self.grid.SetColAttr(1, float_attr)
+        # self.grid.SetColAttr(2, float_attr)
+        # self.grid.SetColAttr(3, float_attr)
         # Enable cell editing
         self.grid.EnableEditing(True)
 
@@ -703,7 +703,7 @@ class CorrelationPointsController(object):
                 self.correlation_target.fm_pois = fm_pois
 
 
-        self.correlation_target.reset_attributes()
+        # self.correlation_target.reset_attributes()
 
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
@@ -835,35 +835,6 @@ class CorrelationPointsController(object):
                     self._tab_data_model.main.selected_target_type.value = "RegionOfInterest"
                     self._tab_data_model.tool.value = TOOL_FIDUCIAL   # POI
                       # in tad data ? TODO
-            # Static Fluo Stream
-
-        ### CONTROLS ##############################
-        # SHIFT + LEFT CLICK -> MOVE_TO_POSITION
-        # LEFT, RIGHT -> TRANSLATION X
-        # UP, DOWN -> TRANSLATION Y
-        # SHIFT + LEFT, RIGHT -> ROTATION
-        # SHIFT + UP, DOWN -> SCALE
-        # ###########################################
-        # dx, dy, dr, dpx  = 0, 0, 0, 0
-        #
-        # # correlation control modifiers
-        # if shift_mod:
-        #     dr = math.radians(self._panel.dr_step_cntrl.GetValue())
-        #     dpx = self._panel.dpx_step_cntrl.GetValue() / 100
-        # else:
-        #     dx = dy = self._panel.dxy_step_cntrl.GetValue()
-        #
-        # logging.debug(f"key: {key}, shift: {shift_mod}")
-        # logging.debug(f"dx: {dx}, dy: {dy}, dr: {dr}, dpx: {dpx}")
-        #
-        # if key == wx.WXK_LEFT:
-        #     self._move_stream(-dx, 0, -dr, 0)
-        # elif key == wx.WXK_RIGHT:
-        #     self._move_stream(dx, 0, dr, 0)
-        # elif key == wx.WXK_UP:
-        #     self._move_stream(0, dy, 0, dpx)
-        # elif key == wx.WXK_DOWN:
-        #     self._move_stream(0, -dy, 0, -dpx)
 
     def on_load_points(self, event):
         """
@@ -936,6 +907,7 @@ class CorrelationPointsController(object):
         col = event.GetCol()
         new_value = event.GetString()
         col_name = self.grid.GetColLabelValue(col)
+        current_row_count = event.GetRow()
 
         # get the row label and select the current target based on the row label
         # todo should happen before the event is triggered
@@ -955,6 +927,10 @@ class CorrelationPointsController(object):
             try:
                 int(new_value)
                 self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
+                self._tab_data_model.main.currentTarget.value.name.value = self._tab_data_model.main.currentTarget.value.name.value[:-1] + str(new_value)
+                self.grid.SetCellValue(current_row_count, GridColumns.Type.value, self._tab_data_model.main.currentTarget.value.name.value)
+                # TODO update the canvas
+                # Todo KEEP 1 POI IN CRYO_FEATURE
             except ValueError:
                 wx.MessageBox("Index must be a int!", "Invalid Input", wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
@@ -1086,20 +1062,20 @@ class CorrelationPointsController(object):
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
             self.grid.AppendRows(1)
-            self.grid.SetRowLabelValue(current_row_count, target.name.value)
+            self.grid.SetRowLabelValue(current_row_count, target.name.value) #todo see the usage
             self.grid.SetCellValue(current_row_count, GridColumns.X.value, str(target.coordinates.value[0]))
             self.grid.SetCellValue(current_row_count, GridColumns.Y.value, str(target.coordinates.value[1]))
             self.grid.SetCellValue(current_row_count, GridColumns.Index.value, str(target.index.value))
 
             if target.type.value == "Fiducial":
                 if target.coordinates.value[2]:
-                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value, "FM")
+                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
                     self.grid.SetCellValue(current_row_count, GridColumns.Z.value, str(target.coordinates.value[2]))
                 else:
-                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value, "FIB")
+                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
                     self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
             elif target.type.value == "RegionOfInterest":
-                self.grid.SetCellValue(current_row_count, GridColumns.Type.value, "POI")
+                self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
         # self.grid.Layout()
         self._panel.Layout()
@@ -1176,13 +1152,13 @@ class CorrelationPointsController(object):
 
                 if target.type.value == "Fiducial":
                     if target.coordinates.value[2]:
-                        self.grid.SetCellValue(current_row_count, 0, "FM")
+                        self.grid.SetCellValue(current_row_count, 0, target.name.value)
                         self.grid.SetCellValue(current_row_count, 3, str(target.coordinates.value[2]))
                     else:
-                        self.grid.SetCellValue(current_row_count, 0, "FIB")
+                        self.grid.SetCellValue(current_row_count, 0, target.name.value)
                         self.grid.SetCellValue(current_row_count, 3, "")
                 elif target.type.value == "RegionOfInterest":
-                    self.grid.SetCellValue(current_row_count, 0, "POI")
+                    self.grid.SetCellValue(current_row_count, 0, target.name.value)
 
 
         # Ensure the rows are in order of the Index

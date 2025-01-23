@@ -487,7 +487,7 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.fn_count)
 
 
-DEBUG = False
+DEBUG = True
 class CryoCorrelationGUIData(CryoGUIData):
     """ Represent an interface used to correlate multiple streams together.
 
@@ -522,35 +522,39 @@ class CryoCorrelationGUIData(CryoGUIData):
         if self.focussedView.value.name.value == "FLM Overview":
             if type == "Fiducial":
                 t_name = make_unique_name("FM-1", existing_names)
+                # get the last digit of the t_name
+                # TODO limited to 9 fiducial pairs
+                index = int(t_name[-1])
                 # Parse through the existing names. find total elements with FM in the name
-                index = sum(1 for name in existing_names if "FM" in name)
+                # index = sum(1 for name in existing_names if "FM" in name)
                 # TOdo only static stream which is selected
-                for s in self.streams.value:
-                    if DEBUG and s:
-                        z = 10
-                        target = Target(x, y, z, name=t_name, type=type,
-                                        index=index + 1, fm_focus_position=fm_focus_position)
-                        break
-                    elif isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        target = Target(x, y, z, name=t_name, type=type,
-                                        index=index + 1, fm_focus_position=fm_focus_position)
-                        break
+
+                if DEBUG:
+                    z = 10
+                    target = Target(x, y, z, name=t_name, type=type,
+                                    index=index, fm_focus_position=fm_focus_position)
+
+                else:
+                    for s in self.streams.value:
+                        if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                            z = s.zIndex.value
+                            target = Target(x, y, z, name=t_name, type=type,
+                                            index=index, fm_focus_position=fm_focus_position)
+                            break
             elif type == "RegionOfInterest":
-                t_name = make_unique_name("POI-1", existing_names)
-                index = sum(1 for name in existing_names if "POI" in name)
-                # TOdo only static stream which is selected
-                for s in self.streams.value:
-                    if DEBUG and s:
-                        z = 10
-                        target = Target(x, y, z, name=t_name, type=type,
-                                        index=index + 1, fm_focus_position=fm_focus_position)
-                        break
-                    elif isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        target = Target(x, y, z, name=t_name, type=type,
-                                        index=index + 1, fm_focus_position=fm_focus_position)
-                        break
+                # TOdo only static stream which is selected, only add 1 poi
+                if DEBUG:
+                    z = 10
+                    target = Target(x, y, z, name="POI-1", type=type,
+                                    index=1, fm_focus_position=fm_focus_position)
+                else:
+                    for s in self.streams.value:
+
+                        if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                            z = s.zIndex.value
+                            target = Target(x, y, z, name="POI-1", type=type,
+                                            index=1, fm_focus_position=fm_focus_position)
+                            break
 
         elif self.focussedView.value.name.value == "SEM Overview":
             if type == "SurfaceFiducial":
@@ -560,15 +564,15 @@ class CryoCorrelationGUIData(CryoGUIData):
                 self.fib_surface_point.value = target
                 return target
             t_name = make_unique_name("FIB-1", existing_names)
-            index = sum(1 for name in existing_names if "FIB" in name)
+            index = int(t_name[-1])
             # self.main.fib_fiducial_index.value += 1
-            target = Target(x, y, z=0, name=t_name, type=type, index=index+1,
+            target = Target(x, y, z=0, name=t_name, type=type, index=index,
                             fm_focus_position=fm_focus_position)
 
         else:
             raise ValueError("Invalid selected view")
 
-        if self.focussedView.value.name.value == "FLM Overview" and z is None:
+        if self.focussedView.value.name.value == "FLM Overview" and z is None and not DEBUG:
             # TOOL NONE in the calling function
             logging.error("No z-index found in the given streams. Please select a stream with z-index.")
             return
