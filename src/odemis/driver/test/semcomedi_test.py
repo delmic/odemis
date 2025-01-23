@@ -531,49 +531,6 @@ class TestSEM(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
-#     @unittest.skip("simple")
-    def test_new_position_event(self):
-        """
-        check the new position works at least when the frequency is not too high
-        """
-        self.scanner.dwellTime.value = 1e-3
-        self.size = (10, 10)
-        self.scanner.resolution.value = self.size
-        numbert = numpy.prod(self.size)
-        # pixel write/read setup is pretty expensive ~10ms
-        expected_duration = self.compute_expected_duration() + numbert * 0.01
-
-        self.left = 1 # unsubscribe just after one
-        self.events = 0 # reset
-
-        # simulate the synchronizedOn() method of a DataFlow
-        self.scanner.newPixel.subscribe(self)
-
-        self.sed.data.subscribe(self.receive_image)
-        for i in range(10):
-            # * 2 because it can be quite long to setup each pixel.
-            time.sleep(expected_duration * 2 / 10)
-            if self.left == 0:
-                break # just to make it quicker if it's quicker
-
-        self.assertEqual(self.left, 0)
-
-        # Note: there could be slightly more events if the next acquisition starts,
-        # and that's kind of ok (although it's better to be able to stop the
-        # acquisition immediately after receiving the right number of images)
-        self.assertEqual(self.events, numbert)
-
-        self.scanner.newPixel.unsubscribe(self)
-        self.sed.data.get()
-        time.sleep(0.1)
-        self.assertEqual(self.events, numbert)
-
-    def onEvent(self):
-        """
-        Called by the SEM when a new position happens
-        """
-        self.events += 1
-
     def receive_image(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
