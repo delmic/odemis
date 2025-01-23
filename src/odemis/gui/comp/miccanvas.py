@@ -145,7 +145,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.dicho_overlay = None
         self.gadget_overlay = None
         self.cryofeature_overlay = None
-        self.cryotarget_overlay = None
+        self.cryotarget_fib_overlay = None
+        self.cryotarget_fm_overlay = None
 
         # play/pause icon
         self.play_overlay = PlayIconOverlay(self)
@@ -274,15 +275,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.cryofeature_overlay.active.value = True
 
         if guimodel.TOOL_FIDUCIAL in tools_possible:
-            # make two canvases, one for SEM and one for FM overview
-
-
-            # self.add_world_overlay(self.cryotarget_fm_overlay)
-            self.cryotarget_fib_overlay = CryoCorrelationFibPointsOverlay(self, tab_data)
             self.cryotarget_fm_overlay = CryoCorrelationFmPointsOverlay(self, tab_data)
-            self.add_world_overlay(self.cryotarget_fib_overlay)
-            # self.cryotarget_overlay.active.value = True
-            self.add_world_overlay(self.cryotarget_fm_overlay)
+            self.cryotarget_fib_overlay = CryoCorrelationFibPointsOverlay(self, tab_data)
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 

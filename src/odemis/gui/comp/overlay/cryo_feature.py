@@ -363,7 +363,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
 
     def _on_tool(self, selected_tool):
         """ Update the feature mode (show or edit) when the overlay is active and tools change"""
-        if self.active:
+        if self.active.value:
             if selected_tool == TOOL_FIDUCIAL:
                 if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
                     self._mode = MODE_EDIT_REFRACTIVE_INDEX
@@ -498,12 +498,30 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
 
 class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
+    def _detect_point_inside_target(self, v_pos):
+        """
+        Detect if a given point is over a target
+        :param v_pos: (int, int) Point in view coordinates
+        :return: (CryoFeature or None) Found target, None if not found
+        """
+
+        def in_radius(c_x, c_y, r, x, y):
+            return math.hypot(c_x - x, c_y - y) <= r
+
+        offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
+        for target in self.tab_data.main.targets.value:
+            if "FM" in target.name.value or "POI" in target.name.value:
+                coordinates = target.coordinates.value
+                fvsp = self.cnvs.phys_to_view(coordinates, offset)
+                if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
+                    return target
+
     def on_left_down(self, evt):
         """
         Handle mouse left click down: Create/Move feature if feature tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
             if self._mode == MODE_EDIT_FEATURES:
@@ -538,7 +556,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        if self.active:
+        if self.active.value:
             # evt.Skip()
             DragMixin._on_left_up(self, evt)
             self.clear_drag()
@@ -559,7 +577,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
@@ -582,7 +600,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     return
                 #     self.cnvs.reset_dynamic_cursor()
                 # self._hover_target = None
-            WorldOverlay.on_motion(self, evt)
+        WorldOverlay.on_motion(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
@@ -637,12 +655,27 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
 class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
-    # def __init__(self, cnvs, tab_data):
-    #     CryoCorrelationPointsOverlay.__init__(self, cnvs, tab_data)
+    def _detect_point_inside_target(self, v_pos):
+        """
+        Detect if a given point is over a target
+        :param v_pos: (int, int) Point in view coordinates
+        :return: (CryoFeature or None) Found target, None if not found
+        """
+
+        def in_radius(c_x, c_y, r, x, y):
+            return math.hypot(c_x - x, c_y - y) <= r
+
+        offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
+        for target in self.tab_data.main.targets.value:
+            if "FIB" in target.name.value:
+                coordinates = target.coordinates.value
+                fvsp = self.cnvs.phys_to_view(coordinates, offset)
+                if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
+                    return target
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
@@ -668,14 +701,14 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     return
                 #     self.cnvs.reset_dynamic_cursor()
                 # self._hover_target = None
-            WorldOverlay.on_motion(self, evt)
+        WorldOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
         """
         Handle mouse left click down: Create/Move feature if feature tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
@@ -719,7 +752,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        if self.active:
+        if self.active.value:
             # evt.Skip()
             DragMixin._on_left_up(self, evt)
             self.clear_drag()

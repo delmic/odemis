@@ -79,14 +79,12 @@ class CorrelationTab(Tab):
             (panel.btn_correlation_view_br,
                 (panel.vp_correlation_br, panel.lbl_correlation_view_br)),
         ])
-
-        panel.vp_correlation_tl.canvas.cryotarget_fm_overlay.active.value = True
-        panel.vp_correlation_tr.canvas.cryotarget_fib_overlay.active.value = True
-
-        panel.vp_correlation_tl.canvas.cryotarget_fib_overlay.active.value = False
-        panel.vp_correlation_tl.canvas.remove_world_overlay(panel.vp_correlation_tl.canvas.cryotarget_fib_overlay)
-        panel.vp_correlation_tr.canvas.cryotarget_fm_overlay.active.value = False
-        panel.vp_correlation_tr.canvas.remove_world_overlay(panel.vp_correlation_tr.canvas.cryotarget_fm_overlay)
+        self.panel.vp_correlation_tl.canvas.cryotarget_fm_overlay.active.value = True
+        self.panel.vp_correlation_tl.canvas.add_world_overlay(
+            self.panel.vp_correlation_tl.canvas.cryotarget_fm_overlay)
+        self.panel.vp_correlation_tr.canvas.cryotarget_fib_overlay.active.value = True
+        self.panel.vp_correlation_tr.canvas.add_world_overlay(
+            self.panel.vp_correlation_tr.canvas.cryotarget_fib_overlay)
 
 
 
