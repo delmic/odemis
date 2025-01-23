@@ -293,9 +293,6 @@ class SEMComedi(model.HwComponent):
             raise ValueError("SEMComedi device '%s' was not given a 'scanner' child" % device)
         self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
-        # for scanner.newPixel
-        self._new_position_thread = None
-        self._new_position_thread_pipe = [] # list to communicate with the current thread
 
         self._acquisition_thread = None
 
@@ -987,10 +984,7 @@ class SEMComedi(model.HwComponent):
         # We write at the given period, and read "osr" samples for each pixel
         nrchans = len(rchannels)
 
-        if dpr > 1 or (self._scanner.newPixel.hasListeners() and period >= 1e-3):
-            # if the newPixel event is used, prefer the per pixel write/read
-            # as it's much more precise (albeit a bit slower). It just needs to
-            # not be too costly (1 ms should be higher than the setup cost).
+        if dpr > 1:
             force_per_pixel = True
         else:
             force_per_pixel = False
@@ -1033,11 +1027,6 @@ class SEMComedi(model.HwComponent):
         Implementation of write_read_2d_data_raw by reading the input data n
           lines at a time.
         """
-        if self._scanner.newPixel.hasListeners() and margin > 0:
-            # we don't support margin detection on multiple lines for
-            # newPixel trigger.
-            maxlines = 1
-
         logging.debug(u"Reading %d lines at a time: %d samples/read every %g µs",
                       maxlines, maxlines * data.shape[1] * osr * len(rchannels),
                       period * 1e6)
@@ -1243,19 +1232,9 @@ class SEMComedi(model.HwComponent):
                     stop_arg=nrscans)
         start = time.time()
 
-        np_to_report = nwscans - settling_samples
-        shift_report = settling_samples
-        if settling_samples == 0:  # indicate a new ebeam position
-            self._scanner.newPixel.notify()
-            np_to_report -= 1
-            shift_report += 1
-
         # run the commands
         self._reader.run()
         self._writer.run()
-        self._start_new_position_notifier(np_to_report,
-                                          start + shift_report * period,
-                                          period)
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -1357,22 +1336,10 @@ class SEMComedi(model.HwComponent):
             comedi.internal_trigger(self._device, self._ao_subdevice, self._ao_trig)
 
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
-        start = time.time()
-
-        np_to_report = nwscans - settling_samples
-        shift_report = settling_samples
-        if settling_samples == 0:
-            # no margin => indicate a new ebeam position right now
-            self._scanner.newPixel.notify()
-            np_to_report -= 1
-            shift_report += 1
 
         self._reader.run()
         if nwscans != 1:
             self._writer.run()
-        self._start_new_position_notifier(np_to_report,
-                                          start + shift_report * period,
-                                          period)
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -1554,68 +1521,6 @@ class SEMComedi(model.HwComponent):
         logging.debug("Counter sync read after %g s", time.time() - start)
         return rbuf
 
-    def _start_new_position_notifier(self, n, start, period):
-        """
-        Notify the newPixel Event n times with the given period.
-        n (0 <= int): number of event notifications
-        start (float): time for the first event (should be in the future)
-        period (float): period between two events
-        Note: this is used to emulate an actual ebeam change of position when
-         the hardware is requested to move the ebeam at multiple positions in a
-         row. Do not expect a precision better than 10us.
-        Note 2: this method returns immediately (and the emulation is run in a
-         separate thread).
-        """
-        # no need if no one's listening
-        if not self._scanner.newPixel.hasListeners():
-            return
-
-        if n <= 0:
-            return
-
-        if period < 10e-6:
-            # don't even try: that's the time it'd take to have just one loop
-            # doing nothing
-            logging.error(u"Cannot generate newPixel events at such a "
-                          u"small period of %s µs", period * 1e6)
-            return
-
-        self._new_position_thread_pipe = []
-        self._new_position_thread = threading.Thread(
-                         target=self._notify_new_position,
-                         args=(n, start, period, self._new_position_thread_pipe),
-                         name="SEM new position notifier")
-
-        self._new_position_thread.start()
-
-    def _notify_new_position(self, n, start, period, pipe):
-        """
-        The thread content
-        """
-        trigger = 0
-        failures = 0
-        for i in range(n):
-            now = time.time()
-            trigger += period # accumulation error should be small
-            left = start - now + trigger
-            if left > 0:
-                if left > 10e-6: # TODO: if left < 1 ms => use usleep or nsleep
-                    time.sleep(left)
-            else:
-                failures += 1
-            if pipe: # put anything in the pipe and it will mean it has to stop
-                logging.debug("npnotifier received cancel message")
-                return
-            self._scanner.newPixel.notify()
-
-        if failures:
-            logging.warning(u"Failed to trigger newPixel in time %d times, "
-                            u"last trigger was %g µs late.", failures, -left * 1e6)
-
-    def _cancel_new_position_notifier(self):
-        logging.debug("cancelling npnotifier")
-        self._new_position_thread_pipe.append(True) # means it has to stop
-
     def start_acquire(self, detector):
         """
         Start acquiring images on the given detector (i.e., input channel).
@@ -1766,7 +1671,6 @@ class SEMComedi(model.HwComponent):
         # So it's protected with the init of read/write and set_to_resting_position
         with self._acquisition_init_lock:
             self._acquisition_must_stop.set()
-            self._cancel_new_position_notifier()
             # Cancelling parts which are not running is a no-op
             self._writer.cancel()
             self._reader.cancel()
@@ -2836,11 +2740,6 @@ class Scanner(model.Emitter):
         range_dwell = (min_dt, 1000) # s
         self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
-
-        # event to allow another component to synchronize on the beginning of
-        # a pixel position. Only sent during an actual pixel of a scan, not for
-        # the beam settling time or when put to rest.
-        self.newPixel = model.Event()
 
         self._prev_settings = [None, None, None, None] # resolution, scale, translation, margin
         self._scan_array = None # last scan array computed
