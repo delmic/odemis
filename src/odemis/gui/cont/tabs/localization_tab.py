@@ -192,7 +192,7 @@ class LocalizationTab(Tab):
         elif self.main_data.role == "meteor":
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
-            self._allowed_targets = [FM_IMAGING, SEM_IMAGING]
+            self._allowed_targets = [FM_IMAGING]
             self._stage = self.tab_data_model.main.stage_bare
         elif self.main_data.role == "mimas":
             # Only useful near the active positions: milling (FIB) or FLM

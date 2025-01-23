@@ -81,10 +81,38 @@ METEOR-FIBSEM-Sim: {
         # Mirroring values between SEM - METEOR
         POS_COR: [0.0253126, 0.0024916],
         CALIB: {"version": "tfs_2", 
-                "Sample pre-tilt":  0.6108652381980153},  # 35°
+                "Sample pre-tilt":  0.6108652381980153, # 35°
+                "SEM-Eucentric-Focus": 7.0e-3},  # aqulios=7.0e-3, hydra=4.0e-3
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
         FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session  
+    },
+}
+
+# LinkedYZ and Meteor Stage are deprecated but can be used to simulate the old behavior
+"Linked YZ": {
+    class: actuator.ConvertStage,
+    role: null,
+    dependencies: {
+        "under": "Stage"
+    },
+    init: {
+      axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+      rotation: 0.6108652381980153, # rad , 35°
+    },
+}
+
+"Meteor Stage": {
+    class: actuator.MultiplexActuator,
+    role: meteor-stage,
+    dependencies: { "x": "Stage", "y": "Linked YZ", "z": "Linked YZ", },
+    init: {
+        axes_map: { "x": "x", "y": "x", "z": "y",},
+    },
+    affects: ["Camera", "EBeam"],
+    metadata: {
+        # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
+        POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-10.e-3, 20.e-3]}
     },
 }
 
