@@ -48,6 +48,7 @@ from odemis.acq.feature import (
 )
 from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream
 from odemis.gui import conf
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
     OverviewStreamAcquiController,
@@ -66,25 +67,6 @@ from odemis.util.filename import create_filename, guess_pattern, update_counter
 ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
-
-# tmp flag for odemis advanced mode
-# TODO: remove and replace once the licenced version is released
-def get_license_enabled() -> bool:
-    """
-    Temporary function to get the license status.
-    Allows to enable/disable without changing the code.
-    """
-    enabled  = False
-    odemis_advanced_config = os.path.abspath(os.path.join(conf.file.CONF_PATH, "odemis_advanced.config"))
-    if os.path.exists(odemis_advanced_config):
-        config = configparser.ConfigParser(interpolation=None)
-        config.read(odemis_advanced_config)
-        enabled = config["licence"].get("enabled", "False") == "True"
-
-    logging.debug(f"odemis-advanced mode is {'enabled' if enabled else 'disabled'}")
-    return enabled
-
-ODEMIS_ADVANCED_FLAG = get_license_enabled()
 
 class CryoAcquiController(object):
     """
