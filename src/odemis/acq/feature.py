@@ -2,15 +2,12 @@ import copy
 import glob
 import json
 import logging
-import math
 import os
 import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
-from typing import Dict, List, Tuple
-
-import yaml
+from typing import Dict, List, Tuple, Optional
 
 from odemis import model
 from odemis.acq.acqmng import (
@@ -27,7 +24,6 @@ from odemis.acq.move import (
     FM_IMAGING,
     MILLING,
     POSITION_NAMES,
-    SEM_IMAGING,
     MicroscopePostureManager,
 )
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
@@ -48,15 +44,25 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
     "Discarded",
 )
 
-# TODO: drift correction area for each feature?
 MILLING_TASKS_PATH = os.path.join(os.path.dirname(milling_tasks_file), "milling_tasks.yaml")
+REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
+
+# NOTE: this refactor currently breaks TFS1 in the UI, because
+# there is no valid sample_stage_to_stage conversion, we need to decide
+# if we want to support this in the future or not.
+# It would require getting the linked yz stage from the backend and converting the positions the stage positions indirectly
+# The entire reason for doing the sample stage refactor was because we didnt want to do that in the first place,
+# so I think TFS1 should be deprecated, and migrate customers to TFS3
 
 class CryoFeature(object):
     """
     Model class for a cryo interesting feature
     """
-
-    def __init__(self, name, stage_position: dict, fm_focus_position: dict, streams=None, milling_tasks=None):
+    def __init__(self, name: str,
+                 stage_position: Dict[str, float],
+                 fm_focus_position: Dict[str, float],
+                 streams: Optional[List[Stream]] = None,
+                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None):
         """
         :param name: (string) the feature name
         :param stage_position: (dict) the stage position of the feature (stage-bare)
@@ -77,7 +83,7 @@ class CryoFeature(object):
         self.streams = streams if streams is not None else model.ListVA()
 
         # attributes for automated milling
-        self.path: str = None
+        self.path: str = None  # TODO:support path creation here, rather than on milling data save
         self.reference_image: model.DataArray = None
 
     def set_posture_position(self, posture: str, position: Dict[str, float]) -> None:
@@ -123,8 +129,8 @@ class CryoFeature(object):
         # assign the reference image
         self.reference_image = reference_image
 
-        # save the reference image to disk
-        filename = os.path.join(self.path, f"{self.name.value}-Reference-Alignment-FIB.ome.tiff") # TODO: check this for uniqueness? no, we want to overwrite
+        # save the reference image to disk (NOTE: we want to overwrite the existing file)
+        filename = os.path.join(self.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
         exporter = find_fittest_converter(filename)
         exporter.export(filename, reference_image)
 
@@ -200,7 +206,7 @@ class FeaturesDecoder(json.JSONDecoder):
 
             # load the reference image
             if feature.path:
-                filename = os.path.join(feature.path, f"{feature.name.value}-Reference-Alignment-FIB.ome.tiff")
+                filename = os.path.join(feature.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
                 if os.path.exists(filename):
                     feature.reference_image = open_acquisition(filename)[0]
                 else:
@@ -269,60 +275,6 @@ def load_project_data(path: str) -> dict:
 
     return {"overviews": overview_data, "features": features}
 
-def import_features_from_autolamella(path: str) -> List[CryoFeature]:
-    """Import feature positions from an autolamella experiment and convert them to odemis features.
-    :param path: path to the autolamella experiment directory
-    :return: list of CryoFeature
-    """
-
-    with open(os.path.join(path, "experiment.yaml"), "r") as f:
-        exp = yaml.load(f, Loader=yaml.FullLoader)
-
-    # get the relevant components
-    pm = MicroscopePostureManager(model.getMicroscope())
-
-    cryo_features = []
-    for lamella in exp["positions"]:  # get the position
-        pos = lamella["state"]["microscope_state"]["stage_position"]
-        name = pos["name"]
-
-        # remap r->rz, t->rx
-        pos["rx"] = pos.pop("t")
-        pos["rz"] = pos.pop("r")
-
-        # apply raw coordinate system offset (x, y only) # TODO: can't be used like this with sample-stage, need to fix
-        # if hasattr(pm.stage, "_raw_offset"):
-        # pos["x"] += pm.stage._raw_offset["x"]
-        # pos["y"] += pm.stage._raw_offset["y"]
-
-        posture = pm.getCurrentPostureLabel(pos=pos)
-        logging.info(
-            f"Feature: {name}, pos: {pos}, Posture: {POSITION_NAMES[posture]}"
-        )  # stage-bare
-
-        # NOTE: for now, we should check this is in SEM Imaging and skip if not for safety
-        if posture != SEM_IMAGING:
-            logging.warning(
-                f"Cryo feature {name} is not in SEM Imaging posture, skipping."
-            )
-            continue
-
-        # create feature
-        # TODO: we need to handle this better, the focus may be anywhere? maybe use the active position?
-        focus_pos = model.getComponent(role="focus").getMetadata()[model.MD_FAV_POS_ACTIVE]
-        cryo_feat = CryoFeature(
-            name=name,
-            stage_position=pos,
-            fm_focus_position=focus_pos,
-        )
-
-        cryo_feat.set_posture_position(SEM_IMAGING, pos)
-        cryo_feat.set_posture_position(FM_IMAGING, pm.to_posture(pos, FM_IMAGING))
-
-        cryo_features.append(cryo_feat)
-
-    return cryo_features
-
 def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
     """
     Add details of the given feature and the counter at the end of the given filename.
@@ -369,7 +321,7 @@ class CryoFeatureAcquisitionTask(object):
         self,
         future: futures.Future,
         features: List[CryoFeature],
-        stage: model.Actuator,
+        stage: model.Actuator, # stage-bare
         focus: model.Actuator,
         streams: List[Stream],
         filename: str,
