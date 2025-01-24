@@ -1,13 +1,37 @@
+import copy
 import logging
+import math
+import os
 
 import wx
-
-from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_DEACTIVE, save_features, FEATURE_POLISHED
-from odemis.acq.move import  FM_IMAGING, POSITION_NAMES
+from typing import Dict, List
+from odemis import model
+from odemis.acq.feature import (
+    FEATURE_ACTIVE,
+    FEATURE_DEACTIVE,
+    FEATURE_POLISHED,
+    FEATURE_READY_TO_MILL,
+    FEATURE_ROUGH_MILLED,
+    CryoFeature,
+    get_feature_position_at_posture,
+    save_features,
+)
+from odemis.acq.milling.tasks import MillingTaskSettings
+from odemis.acq.move import (
+    FM_IMAGING,
+    MILLING,
+    POSITION_NAMES,
+    SEM_IMAGING,
+    MeteorTFS2PostureManager,
+)
+from odemis.dataio.tiff import export
+from odemis.gui import model as guimod
+from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.model import TOOL_FEATURE
-from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.util.widgets import VigilantAttributeConnector
 
+SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING]
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -30,6 +54,8 @@ class CryoFeatureController(object):
         self._main_data_model = tab_data.main
         self._panel = panel
         self._tab = tab
+        self.pm: MeteorTFS2PostureManager = self._tab_data_model.main.posture_manager
+        self.acqui_mode = tab_data.acqui_mode
 
         # features va attributes (name, status..etc) connectors
         self._feature_name_va_connector = None
@@ -41,6 +67,7 @@ class CryoFeatureController(object):
 
         # values for feature status combobox
         self._panel.cmb_feature_status.Append(FEATURE_ACTIVE)
+        self._panel.cmb_feature_status.Append(FEATURE_READY_TO_MILL)
         self._panel.cmb_feature_status.Append(FEATURE_ROUGH_MILLED)
         self._panel.cmb_feature_status.Append(FEATURE_POLISHED)
         self._panel.cmb_feature_status.Append(FEATURE_DEACTIVE)
@@ -50,7 +77,16 @@ class CryoFeatureController(object):
         self._panel.btn_create_move_feature.Bind(wx.EVT_BUTTON, self._on_btn_create_move_feature)
         self._panel.btn_delete_feature.Bind(wx.EVT_BUTTON, self._on_btn_delete_feature)
         self._panel.btn_go_to_feature.Bind(wx.EVT_BUTTON, self._on_btn_go_to_feature)
-        self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
+
+        # specific controls for FM and FIBSEM modes
+        fm_mode = self.acqui_mode is guimod.AcquiMode.FLM
+        fibsem_mode = self.acqui_mode is guimod.AcquiMode.FIBSEM
+        if fm_mode:
+            self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
+        if fibsem_mode:
+            self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
+            self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
+            self.pm.current_posture.subscribe(self._on_posture_change)
 
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,
@@ -74,37 +110,121 @@ class CryoFeatureController(object):
 
     def _on_btn_use_current_z(self, _):
         # Use current focus to set currently selected feature
-        feature = self._tab_data_model.main.currentFeature.value
+        feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature:
-            pos = feature.pos.value
-            current_focus = self._main_data_model.focus.position.value['z']
-            feature.pos.value = (pos[0], pos[1], current_focus)
+            feature.fm_focus_position.value = self._main_data_model.focus.position.value
 
     def _on_btn_go_to_feature(self, _):
         """
         Move the stage and focus to the currently selected feature
         """
-        feature = self._tab_data_model.main.currentFeature.value
+        feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if not feature:
             return
-        pos = feature.pos.value
 
-        # get current position
-        pm = self._tab_data_model.main.posture_manager
-        current_label = pm.getCurrentPostureLabel()
-        logging.debug(f"Current posture: {POSITION_NAMES[current_label]}")
-
-        # TODO: @patrick remove this once SEM move is supported
-        if current_label != FM_IMAGING and self._main_data_model.microscope.role == "meteor":
-            logging.info(f"Currently under {POSITION_NAMES[current_label]}, "
-                         f"moving to feature position is not yet supported.")
+        current_posture = self.pm.getCurrentPostureLabel()
+        if self._main_data_model.microscope.role != "meteor":
+            role = self._main_data_model.microscope.role
+            logging.info(f"Currently under {POSITION_NAMES[current_posture]}, moving to feature position is not yet supported for {role}.")
             self._display_go_to_feature_warning()
             return
 
+        stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
+        fm_focus_position = feature.fm_focus_position.value
+
         # move to feature position
-        logging.info(f"Moving to position: {pos}")
-        self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
-        self._main_data_model.focus.moveAbs({'z': pos[2]})
+        logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {POSITION_NAMES[current_posture]}")
+        self.pm.stage.moveAbs(stage_position)
+
+        # if fm imaging, move focus too
+        if current_posture == FM_IMAGING:
+            self._main_data_model.focus.moveAbs(fm_focus_position)
+
+        return
+
+
+    def _move_to_posture(self, feature: CryoFeature, posture: int, recalculate: bool = False):
+        """
+        Move the stage to the current feature's position
+        """
+        # TODO: migrate _on_btn_go_to_feature to this function
+
+        if posture not in SUPPORTED_POSTURES:
+            logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
+            return
+
+        # get the position at the posture
+        position = get_feature_position_at_posture(pm=self.pm,
+                                                   feature=feature,
+                                                   posture=posture,
+                                                   recalculate=recalculate)
+
+        logging.info(f"Moving to {POSITION_NAMES[posture]} position: {position}")
+
+        # move the stage
+        f = self.pm.stage.moveAbs(position)
+        f.result()
+
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+
+    def save_milling_position(self, evt: wx.Event):
+        """
+        Save the milling tasks to the feature
+        """
+        feature: CryoFeature = self._tab_data_model.main.currentFeature.value
+        if feature is None:
+            logging.warning("No feature selected")
+            return
+
+        # TODO: validate everything here?
+        # TODO: move to feature?
+        # Validation:
+        # -> disable if not at feature
+        # -> disable if no milling tasks
+        # -> disable if no stream fib image
+        # -> disable if no selected tasks
+        # -> disable if invalid tasks
+
+        stream = self._tab.fib_stream # the fib stream
+
+        # acquire a new fib image for reference
+        from odemis.acq import acqmng
+        self._acq_future = acqmng.acquire(
+                [stream], self._tab_data_model.main.settings_obs)
+        self._acq_future.result()
+
+        if stream.raw is None:
+            logging.warning(f"No FIB image available to save for {feature.name.value}")
+            return
+
+        # save the milling data (tasks, reference image)
+        feature.save_milling_task_data(
+                                stage_position=self.pm.stage.position.value,
+                                # milling_tasks=milling_tasks,
+                                path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
+                                reference_image=stream.raw[0])
+
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+
+        # refresh current feature to update reference image and milling tasks
+        self._tab_data_model.main.currentFeature.value = None
+        self._tab_data_model.main.currentFeature.value = feature
+
+    def save_milling_tasks(self,
+                    milling_tasks: Dict[str, MillingTaskSettings],
+                    selected_milling_tasks: List[str]) -> None:
+        feature: CryoFeature = self._tab_data_model.main.currentFeature.value
+        if feature is None:
+            logging.warning("No feature selected")
+            return
+
+        # filter out the selected tasks
+        milling_tasks = {k: v for k, v in milling_tasks.items() if k in selected_milling_tasks}
+
+        feature.milling_tasks = copy.deepcopy(milling_tasks)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+
+    # TODO: pattern size not updating
 
     def _display_go_to_feature_warning(self) -> bool:
         box = wx.MessageDialog(self._tab.main_frame,
@@ -115,6 +235,12 @@ class CryoFeatureController(object):
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans == wx.ID_OK
 
+    def _on_posture_change(self, posture: int):
+        if posture not in SUPPORTED_POSTURES:
+            logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
+            return
+        self._enable_feature_ctrls(True)
+
     def _enable_feature_ctrls(self, enable: bool):
         """
         Enables/disables the feature controls
@@ -122,10 +248,18 @@ class CryoFeatureController(object):
         enable: If True, allow all the feature controls to be used.
         """
         self._panel.cmb_feature_status.Enable(enable)
-        self._panel.ctrl_feature_z.Enable(enable)
-        self._panel.btn_use_current_z.Enable(enable)
         self._panel.btn_go_to_feature.Enable(enable)
         self._panel.btn_delete_feature.Enable(enable)
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.ctrl_feature_z.Enable(enable)
+            self._panel.btn_use_current_z.Enable(enable)
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            current_posture = self.pm.getCurrentPostureLabel()
+            # TODO: check if current position is near the feature position, if not, disable and show warning to user
+            # TODO: acquire a new fib image for the reference, dont use the existing.
+            self._panel.btn_feature_save_position.Enable(enable and current_posture == MILLING)
+            if current_posture is not MILLING:
+                self._panel.btn_feature_save_position.SetToolTip("Move to the milling posture to save the position.")
 
     def _update_feature_cmb_list(self):
         """
@@ -212,15 +346,21 @@ class CryoFeatureController(object):
 
         # TODO: check, it seems that sometimes the EVT_TEXT_ENTER is first received
         # by the VAC, before the widget itself, which prevents getting the right value.
-        self._feature_z_va_connector = VigilantAttributeConnector(feature.pos,
-                                                                  self._panel.ctrl_feature_z,
-                                                                  events=wx.EVT_TEXT_ENTER,
-                                                                  ctrl_2_va=self._on_ctrl_feature_z_change,
-                                                                  va_2_ctrl=self._on_feature_pos)
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._feature_z_va_connector = VigilantAttributeConnector(feature.fm_focus_position,
+                                                                    self._panel.ctrl_feature_z,
+                                                                    events=wx.EVT_TEXT_ENTER,
+                                                                    ctrl_2_va=self._on_ctrl_feature_z_change,
+                                                                    va_2_ctrl=self._on_feature_focus_pos)
 
-    def _on_feature_pos(self, feature_pos):
-        # Set the feature Z ctrl with the 3rd (focus) element of the feature position
-        self._panel.ctrl_feature_z.SetValue(feature_pos[2])
+        # if FIBSEM mode, and milling tasks are available,, re-draw
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._tab.milling_task_controller.set_milling_tasks(feature.milling_tasks)
+            # self._panel.Layout()
+
+    def _on_feature_focus_pos(self, fm_focus_position: dict):
+        # Set the feature Z ctrl with the focus position
+        self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def _on_feature_name(self, _):
@@ -267,17 +407,12 @@ class CryoFeatureController(object):
 
     def _on_ctrl_feature_z_change(self):
         """
-        Get the current feature Z ctrl value to set feature Z position
-        :return: (tuple of 3 floats) the full position including the Z ctrl value
+        Get the current feature Z ctrl value to set feature focus position
+        :return: (dict) feature focus position
         """
         # HACK: sometimes the event is first received by this handler and later
         # by the UnitFloatCtrl. So the value is not yet computed => Force it, just in case.
         self._panel.ctrl_feature_z.on_text_enter(None)
         zpos = self._panel.ctrl_feature_z.GetValue()
 
-        feature = self._tab_data_model.main.currentFeature.value
-        if not feature:
-            logging.error("No feature connected, but Z position changed!")
-            return None, None, zpos
-        pos = feature.pos.value
-        return pos[0], pos[1], zpos
+        return {"z": zpos}
