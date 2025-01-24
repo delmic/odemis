@@ -253,8 +253,8 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
-    def add_new_feature(self, stage_position: Dict[str, float], 
-                        fm_focus_position: Dict[str, float] = None, 
+    def add_new_feature(self, stage_position: Dict[str, float],
+                        fm_focus_position: Dict[str, float] = None,
                         f_name: str = None) -> CryoFeature:
         """
         Create a new feature and add it to the features list
