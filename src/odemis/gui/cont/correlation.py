@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import copy
+import itertools
 import logging
 import math
 import threading
@@ -37,8 +38,7 @@ import wx
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
 
-from odemis.acq.feature import save_features
-from odemis.acq.target import Target
+from odemis.acq.feature import save_features, CorrelationTarget
 from odemis.gui.model import TOOL_FEATURE, TOOL_FIDUCIAL
 
 import odemis.acq.stream as acqstream
@@ -87,58 +87,6 @@ def convert_rgb_to_sem(rgb_stream: RGBStream) -> StaticSEMStream:
 
     return sem_stream
 
-class CorrelationMetadata:
-    """
-    Required image metadata for correlation calculation, alternatively use data directly.
-    """
-    def __init__(self, fib_image_shape: List[int], fib_pixel_size: List[float], fm_image_shape: List[int], fm_pixel_size: List[float]):
-        self.fib_image_shape = fib_image_shape
-        self.fib_pixel_size = fib_pixel_size
-        self.fm_image_shape = fm_image_shape
-        self.fm_pixel_size = fm_pixel_size
-
-# class CorrelationTargets:
-#     def __init__(self, targets: List[Target], projected_targets: List[Target], fib_surface_fiducial: Target,
-#                  fib_stream: StaticSEMStream, fm_streams: List[StaticFluoStream],
-#                  image_metadata: CorrelationMetadata,
-#                  correlation_result: float = None, refractive_index_correction: bool = True,
-#                  superz: StaticFluoStream = None):
-#         self.targets = targets
-#         self.projected_targets = projected_targets
-#         self.correlation_result = correlation_result
-#         self.fib_surface_fiducial = fib_surface_fiducial
-#         self.refractive_index_correction = refractive_index_correction
-#         # self.fm_roi = fm_roi
-#         # self.fm_fiducials = fm_fiducials
-#         # self.fib_fiducials = fib_fiducials
-#         # self.fib_roi = fib_roi
-#         self.fib_stream = fib_stream
-#         self.fm_streams = fm_streams
-#         self.superz = superz
-#         self.image_metadata = image_metadata
-
-class CorrelationTarget:
-    def __init__(self):
-        self.fm_pois : List[Target] = []
-        self.fm_fiducials : List[Target] = []
-        self.fib_fiducials : List[Target] = []
-        self.fib_surface_fiducial : Target = None
-
-        self.correlation_result: float = None
-        self.refractive_index_correction: bool = True
-        self.fib_projected_pois: List[Target] = []
-        self.fib_projected_fiducials: List[Target] = []
-
-        self.fib_stream :StaticSEMStream = None
-        self.fm_streams: List[StaticFluoStream] = []
-        self.superz: StaticFluoStream = None
-        self.image_metadata: CorrelationMetadata = None
-
-    def reset_attributes(self):
-        # rest of the attributes is set to none except the streams
-        self.correlation_result = None
-        self.fib_projected_pois = None
-        self.fib_projected_fiducials = None
 
 class CorrelationController(object):
 
@@ -537,7 +485,7 @@ class GridColumns(Enum):
     Index = 4 # Column for "index"
 
 
-DEBUG = True
+DEBUG = False
 class CorrelationPointsController(object):
 
     def __init__(self, tab_data, panel, tab, viewports):
@@ -643,6 +591,8 @@ class CorrelationPointsController(object):
         self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
         self.current_target_coordinate_subscription = False
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
+        self.initt = True
+        self._tab_data_model.main.currentFeature.subscribe(self.init_ct, init=True)
         self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface, init=True)
         # if self._tab_data_model.main.currentTarget:
         #     self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes, init=True)
@@ -669,6 +619,44 @@ class CorrelationPointsController(object):
     # make sure it is not initialized multiple times
     # add correlation target as an attribute in cryo feature, no need of VA
     # make an update function, which updates the specific parts of the class when changed
+
+    def init_ct(self, val):
+        if not DEBUG:
+            if not self._tab_data_model.main.currentFeature.value:
+                return False
+            elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
+                self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
+                self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
+            elif self.correlation_target is None:
+                correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
+                targets = []
+                projected_points = []
+                if correlation_target.fm_fiducials:
+                    targets.append(correlation_target.fm_fiducials)
+                if correlation_target.fm_pois:
+                    targets.append(correlation_target.fm_pois)
+                if correlation_target.fib_fiducials:
+                    targets.append(correlation_target.fib_fiducials)
+                if correlation_target.fib_projected_fiducials:
+                    projected_points.append(correlation_target.fib_projected_fiducials)
+                if correlation_target.fib_projected_pois:
+                    projected_points.append(correlation_target.fib_projected_pois)
+
+                # TOdo not used as output gets reset
+                # projected_points = list(
+                #     itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in projected_points))
+                # self._tab_data_model.projected_points = projected_points
+                # flatten the list of lists
+                targets = list(
+                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
+                self._tab_data_model.main.targets.value = targets
+                # for target in targets:
+                #     self._tab_data_model.main.currentTarget.value = target
+                    # self._on_target_changes(target)
+                    # self._tab_data_model.main.targets.value.append(target)
+                if correlation_target.fib_surface_fiducial:
+                    self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
+                self.correlation_target = correlation_target
 
     def update_feature_correlation_target(self, surface_fiducial = False):
 
@@ -704,17 +692,28 @@ class CorrelationPointsController(object):
 
 
         # self.correlation_target.reset_attributes()
-
+        # self._tab_data_model.main.currentFeature.value.correlation_targets[
+        #     self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
+        # self._tab_data_model.main.currentFeature.value.correlation_targets[
+        #     self._tab_data_model.main.currentFeature.value.status.value] = self.correlation_target
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
 
     def check_correlation_conditions(self):
+        # Todo conditions change when initializing the correlation target
+
+        # should npt be here, duplicate
         if not DEBUG:
             if not self._tab_data_model.main.currentFeature.value:
                 return False
             elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
                 self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
                 self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
+                # draw
+                # for vp in self._viewports:
+                #     # if vp.view.name.value == "SEM Overview":
+                #     vp.canvas.update_drawing()
+
 
 
         if self.correlation_target:
@@ -743,11 +742,11 @@ class CorrelationPointsController(object):
             # pass
             self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
             self._tab_data_model.tool.value = TOOL_FIDUCIAL   # TODO should not select this (confusing)
-            # self.update_feature_correlation_target(surface_fiducial=True)
+            self.update_feature_correlation_target(surface_fiducial=True)
 
-        # if self.check_correlation_conditions():
-        #     self.latest_change = True
-        #     self.queue_latest_change()
+        if self.check_correlation_conditions():
+            self.latest_change = True
+            self.queue_latest_change()
 
     def queue_latest_change(self):
         """
@@ -797,6 +796,8 @@ class CorrelationPointsController(object):
                 target_copy = copy.deepcopy(target)
                 target_copy.type.value = "ProjectedPoints"
                 self._tab_data_model.projected_points.append(target_copy)
+
+        self.correlation_target.fib_projected_fiducials =  self._tab_data_model.projected_points
 
         for vp in self._viewports:
             if vp.view.name.value == "SEM Overview":
@@ -929,8 +930,10 @@ class CorrelationPointsController(object):
                 self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
                 self._tab_data_model.main.currentTarget.value.name.value = self._tab_data_model.main.currentTarget.value.name.value[:-1] + str(new_value)
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, self._tab_data_model.main.currentTarget.value.name.value)
-                # TODO update the canvas
+                for vp in self._viewports:
+                    vp.canvas.update_drawing()
                 # Todo KEEP 1 POI IN CRYO_FEATURE
+                # \TODO pos load error
             except ValueError:
                 wx.MessageBox("Index must be a int!", "Invalid Input", wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
@@ -1036,7 +1039,7 @@ class CorrelationPointsController(object):
         #         break
         # if the value of the current target is changed, update the corresponing grid row
         # if new value add row in the grid otherwise update the row
-        target = self._tab_data_model.main.currentTarget.value
+        # target = self._tab_data_model.main.currentTarget.value
         existing_target =  False
         # existing_names = [t.name.value for t in self._tab_data_model.main.targets.value]
         # if existing_names and target.name.value in existing_names:
@@ -1057,7 +1060,13 @@ class CorrelationPointsController(object):
         #         existing_target = True
         #         # else if a new target is added which is not present in target list, add it in the grid
 
-        if target: # and not existing_target:
+        # if target: # and not existing_target:
+        # clear the grid and populate it with the new target list
+        self.grid.ClearGrid()
+        # delete the empty rows
+        if self.grid.GetNumberRows() > 1:
+            self.grid.DeleteRows(1, self.grid.GetNumberRows())
+        for target in targets:
 
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
@@ -1078,6 +1087,7 @@ class CorrelationPointsController(object):
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
         # self.grid.Layout()
+        self.reorder_table()
         self._panel.Layout()
 
 
