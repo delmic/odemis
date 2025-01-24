@@ -314,6 +314,12 @@ class Sparc2AlignTab(Tab):
                                         add_to_view=self.panel.vp_align_lens_ext.view)
                     self._ccd_spe_ext.stream_panel.flatten()
 
+                    # When going to tunnel-lens-align, the slit-in is automatically opened at the maximum.
+                    # Still, add a slit-in axis control to the stream panel, so that it's possible to go to
+                    # the minimum opening, in order to do a fine alignment in X.
+                    hw_conf = get_hw_config(spec, main_data.hw_settings_config)
+                    self._ccd_spe_ext.add_axis_entry("slit-in", spec, hw_conf.get("slit-in"))
+
                     # To activate the SEM spot when the external CCD plays
                     ccd_stream_ext.should_update.subscribe(self._on_ccd_stream_play)
 
