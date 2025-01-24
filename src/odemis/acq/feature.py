@@ -22,7 +22,9 @@ from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream
+from odemis.acq.target import Target
 from odemis.dataio import find_fittest_converter
+# from odemis.gui.cont.correlation import CorrelationTarget
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
@@ -38,12 +40,66 @@ FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
 )
 
 
+class CorrelationMetadata:
+    """
+    Required image metadata for correlation calculation, alternatively use data directly.
+    """
+    def __init__(self, fib_image_shape: List[int], fib_pixel_size: List[float], fm_image_shape: List[int], fm_pixel_size: List[float]):
+        self.fib_image_shape = fib_image_shape
+        self.fib_pixel_size = fib_pixel_size
+        self.fm_image_shape = fm_image_shape
+        self.fm_pixel_size = fm_pixel_size
+
+# class CorrelationTargets:
+#     def __init__(self, targets: List[Target], projected_targets: List[Target], fib_surface_fiducial: Target,
+#                  fib_stream: StaticSEMStream, fm_streams: List[StaticFluoStream],
+#                  image_metadata: CorrelationMetadata,
+#                  correlation_result: float = None, refractive_index_correction: bool = True,
+#                  superz: StaticFluoStream = None):
+#         self.targets = targets
+#         self.projected_targets = projected_targets
+#         self.correlation_result = correlation_result
+#         self.fib_surface_fiducial = fib_surface_fiducial
+#         self.refractive_index_correction = refractive_index_correction
+#         # self.fm_roi = fm_roi
+#         # self.fm_fiducials = fm_fiducials
+#         # self.fib_fiducials = fib_fiducials
+#         # self.fib_roi = fib_roi
+#         self.fib_stream = fib_stream
+#         self.fm_streams = fm_streams
+#         self.superz = superz
+#         self.image_metadata = image_metadata
+
+class CorrelationTarget:
+    def __init__(self):
+        self.fm_pois : List[Target] = []
+        self.fm_fiducials : List[Target] = []
+        self.fib_fiducials : List[Target] = []
+        self.fib_surface_fiducial : Target = None
+
+        self.correlation_result: float = None
+        self.refractive_index_correction: bool = True
+        self.fib_projected_pois: List[Target] = []
+        self.fib_projected_fiducials: List[Target] = []
+
+        self.fib_stream = None #:StaticSEMStream = None
+        self.fm_streams = None #: List[StaticFluoStream] = []
+        self.superz = None #: StaticFluoStream = None
+        self.image_metadata: CorrelationMetadata = None
+
+    def reset_attributes(self):
+        # rest of the attributes is set to none except the streams
+        self.correlation_result = None
+        self.fib_projected_pois = None
+        self.fib_projected_fiducials = None
+
+
 class CryoFeature(object):
     """
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, x, y, z, streams=None, correlation_targets=None):
         """
         :param name: (string) the feature name
         :param x: (float) the X axis of the feature position
@@ -61,7 +117,7 @@ class CryoFeature(object):
         self.streams = streams if streams is not None else model.ListVA()
         # TODO why VA, can it be no VA, maybe for saving
         # TODO add status ?
-        self.correlation_targets = {}
+        self.correlation_targets = correlation_targets
 
 
 def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
@@ -75,34 +131,35 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     for feature in features:
         # todo make a new function
         # TODO add stream names and other values
-        for key, ct_class in feature.correlation_targets.items():
-            correlation_targets[key] = {}
-            all_targets = []
-            correlation_targets[key]['coordinates'] = []
-            correlation_targets[key]['index'] = []
-            correlation_targets[key]['type'] = []
-            correlation_targets[key]['name'] = []
-            correlation_targets[key]['fm_focus_position'] = []
-            if ct_class.fm_fiducials:
-                all_targets.append(ct_class.fm_fiducials)
-            if ct_class.fm_pois:
-                all_targets.append(ct_class.fm_pois)
-            if ct_class.fib_fiducials:
-                all_targets.append(ct_class.fib_fiducials)
-            if ct_class.fib_projected_fiducials:
-                all_targets.append(ct_class.fib_projected_fiducials)
-            if ct_class.fib_projected_pois:
-                all_targets.append(ct_class.fib_projected_pois)
-            if ct_class.fib_surface_fiducial:
-                all_targets.append(ct_class.fib_surface_fiducial)
-            # serialize all_targets
-            all_targets = list(itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
-            for target in all_targets:
-                correlation_targets[key]['coordinates'].append(target.coordinates.value)
-                correlation_targets[key]['index'].append(target.index.value)
-                correlation_targets[key]['type'].append(target.type.value)
-                correlation_targets[key]['name'].append(target.name.value)
-                correlation_targets[key]['fm_focus_position'].append(target.fm_focus_position.value)
+        if feature.correlation_targets:
+            for key, ct_class in feature.correlation_targets.items():
+                correlation_targets[key] = {}
+                all_targets = []
+                correlation_targets[key]['coordinates'] = []
+                correlation_targets[key]['index'] = []
+                correlation_targets[key]['type'] = []
+                correlation_targets[key]['name'] = []
+                correlation_targets[key]['fm_focus_position'] = []
+                if ct_class.fm_fiducials:
+                    all_targets.append(ct_class.fm_fiducials)
+                if ct_class.fm_pois:
+                    all_targets.append(ct_class.fm_pois)
+                if ct_class.fib_fiducials:
+                    all_targets.append(ct_class.fib_fiducials)
+                if ct_class.fib_projected_fiducials:
+                    all_targets.append(ct_class.fib_projected_fiducials)
+                if ct_class.fib_projected_pois:
+                    all_targets.append(ct_class.fib_projected_pois)
+                if ct_class.fib_surface_fiducial:
+                    all_targets.append(ct_class.fib_surface_fiducial)
+                # flatten the list of lists
+                all_targets = list(itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
+                for target in all_targets:
+                    correlation_targets[key]['coordinates'].append(target.coordinates.value)
+                    correlation_targets[key]['index'].append(target.index.value)
+                    correlation_targets[key]['type'].append(target.type.value)
+                    correlation_targets[key]['name'].append(target.name.value)
+                    correlation_targets[key]['fm_focus_position'].append(target.fm_focus_position.value)
 
         feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
                         'status': feature.status.value, 'correlation_targets': correlation_targets}
@@ -121,15 +178,83 @@ class FeaturesDecoder(json.JSONDecoder):
         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
     def object_hook(self, obj):
+        if 'coordinates' in obj and not 'pos' in obj:
+            # correlation_targets = obj['correlation_targets']
+            # correlation_targets_rest = self.decode_correlation_targets(obj)
+            # obj["correlation_targets"] = correlation_targets_rest['Active']
+            return obj
+
+        if "Active" in obj:
+            return obj
+
         # Either the object is the feature list or the feature objects inside it
-        if 'name' in obj:
+        if 'name' in obj and 'pos' in obj:
             pos = obj['pos']
             feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
             feature.status.value = obj['status']
+
+            # Check if correlation_targets exist and decode them
+            if 'correlation_targets' in obj:
+                correlation_targets = self.decode_correlation_targets(obj['correlation_targets'])
+                feature.correlation_targets = correlation_targets
+
+
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
 
+    def decode_correlation_targets(self, correlation_targets_obj):
+        """
+        Decodes the correlation_targets dictionary into the appropriate CryoFeature data structure.
+        """
+        decoded_correlation_targets = {}
+        if not correlation_targets_obj:
+            return decoded_correlation_targets
+        # correlation_targets_obj = {"Active": correlation_targets_obj}
+        # Loop through each target type in correlation_targets_obj
+        for key, ct_obj in correlation_targets_obj.items():
+            # Initialize the CryoFeature correlation target class instance
+            correlation_target = CorrelationTarget()
+            # fm_fiducials = []
+            # fm_pois = []
+            # fib_fiducials = []
+            # fib_projected_fiducials = []
+            # fib_projected_pois = []
+            # fib_surface_fiducial = []
+
+
+            coordinates = ct_obj.get('coordinates', [])
+            indices = ct_obj.get('index', [])
+            types = ct_obj.get('type', [])
+            names = ct_obj.get('name', [])
+            fm_focus_positions = ct_obj.get('fm_focus_position', [])
+
+
+            for i in range(len(coordinates)):
+                target = Target(
+                    x =coordinates[i][0],
+                    y =coordinates[i][1],
+                    z =coordinates[i][2],
+                    index=indices[i],
+                    type=types[i],
+                    name=names[i],
+                    fm_focus_position=fm_focus_positions[i] )
+                if "FIB" in names[i] and types[i] == "Fiducial":
+                    correlation_target.fib_fiducials.append(target)
+                elif "FIB" in names[i] and types[i] == "ProjectedFiducial": #TODO  separate out and save projected points
+                    correlation_target.fib_projected_fiducials.append(target)
+                elif "FIB" in names[i] and types[i] == "ProjectedPOI":
+                    correlation_target.fib_projected_pois.append(target)
+                elif "FIB" in names[i] and types[i] == "SurfaceFiducial":
+                    correlation_target.fib_surface_fiducial = target
+                elif "FM" in names[i] and types[i] == "Fiducial":
+                    correlation_target.fm_fiducials.append(target)
+                elif "FM" in names[i] and types[i] == "POI":
+                    correlation_target.fm_pois.append(target)
+
+            decoded_correlation_targets[key] = correlation_target
+
+        return decoded_correlation_targets
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
