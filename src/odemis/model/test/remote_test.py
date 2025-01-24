@@ -1098,7 +1098,7 @@ class FakeDataFlow(model.DataFlow):
 
     # method for thread
     def generate(self):
-        while not self._stop.isSet():
+        while not self._stop.is_set():
             self.count += 1
             array = self._create_one(self.shape, self.bpp, self.count)
             if len(array):
