@@ -29,7 +29,7 @@ from typing import Dict, Tuple
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature
+from odemis.acq.feature import CryoFeature, get_feature_position_at_posture
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf

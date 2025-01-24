@@ -38,7 +38,7 @@ import odemis.gui
 import odemis.gui.cont.acquisition as acqcont
 from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 import odemis.gui.cont.views as viewcont
-from odemis.gui.cont import milling
+# from odemis.gui.cont import milling
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.acq.align import AutoFocus
