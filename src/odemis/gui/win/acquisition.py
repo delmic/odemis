@@ -27,7 +27,7 @@ import math
 import os.path
 from builtins import str
 from concurrent.futures._base import CancelledError
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import odemis.gui.model as guimodel
 import wx
@@ -1405,18 +1405,49 @@ def ShowChamberFileDialog(parent, projectname):
     fn = dialog.GetFilename()
     return os.path.join(path, fn)
 
-def LoadProjectFileDialog(parent, projectname):
+def LoadProjectFileDialog(
+    parent: wx.Frame,
+    projectname: str,
+    message: str = "Choose a project directory to load",
+) -> Optional[str]:
     """
-    parent (wxframe): parent window
-    projectname (string): project name to propose by default
-    return (string or none): the project directory name to load (or the none if the user cancelled)
+    :param parent (wx.Frame): parent window
+    :param projectname (string): project name to propose by default
+    :param message (string): message to display in the dialog
+    :return (string or none): the project directory name to load (or the none if the user cancelled)
     """
     # current project name
-    dialog = wx.DirDialog(parent,
-                           message="Choose a project directory to load",
-                           defaultPath=projectname,
-                           style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
-                           )
+    dialog = wx.DirDialog(
+        parent,
+        message=message,
+        defaultPath=projectname,
+        style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
+    )
+
+    # Show the dialog and check whether is was accepted or cancelled
+    if dialog.ShowModal() != wx.ID_OK:
+        return None
+
+    # project path have been selected...
+    return dialog.GetPath()
+
+def SelectFileDialog(
+    parent: wx.Frame,
+    message: str,
+    default_path: str,
+) -> Optional[str]:
+    """
+    :param parent (wx.Frame): parent window
+    :param message (string): message to display in the dialog
+    :param default_path (string): default path to open the dialog
+    :return (string or none): the selected file name (or the none if the user cancelled)
+    """
+    dialog = wx.FileDialog(
+        parent,
+        message=message,
+        defaultDir=default_path,
+        style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+    )
 
     # Show the dialog and check whether is was accepted or cancelled
     if dialog.ShowModal() != wx.ID_OK:
