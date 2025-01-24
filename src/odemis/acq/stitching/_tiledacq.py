@@ -43,8 +43,7 @@ from odemis.acq.stream import Stream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
 from odemis.model import DataArray
-from odemis.util import dataio as udataio, img, linalg
-from odemis.util import rect_intersect
+from odemis.util import dataio as udataio, img, linalg, rect_intersect
 from odemis.util.img import assembleZCube
 from odemis.util.linalg import generate_triangulation_points
 from odemis.util.raster import point_in_polygon
