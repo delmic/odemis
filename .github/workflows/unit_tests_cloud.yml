@@ -75,6 +75,12 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/util/test/fluo_test.py --verbose
 
+    - name: Run tests from odemis.util.focus
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/focus_test.py --verbose
+
     - name: Run tests from odemis.util.graph
       if: ${{ !cancelled() }}
       run: |
