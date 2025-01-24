@@ -22,20 +22,36 @@ import math
 import os
 import time
 import unittest
-from concurrent.futures._base import CancelledError, FINISHED
+from concurrent.futures._base import FINISHED, CancelledError
+from typing import List, Tuple
+from unittest import mock
 
 import numpy
+from shapely.affinity import rotate
+from shapely.geometry import Polygon
 
 import odemis
 from odemis import model
-from odemis.acq import stream, acqmng
+from odemis.acq import acqmng, stream
 from odemis.acq.acqmng import SettingsObserver
-from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
-    WEAVER_MEAN, acquireTiledArea, FocusingMethod
-from odemis.acq.stitching._tiledacq import (TiledAcquisitionTask, get_fov, get_zstack_levels, clip_tiling_bbox_to_range,
-                                            get_stream_based_bbox, get_tiled_bboxes, get_fov_based_bbox)
+from odemis.acq.stitching import (
+    REGISTER_IDENTITY,
+    WEAVER_COLLAGE_REVERSE,
+    WEAVER_MEAN,
+    FocusingMethod,
+    acquireTiledArea,
+)
+from odemis.acq.stitching._tiledacq import (
+    TiledAcquisitionTask,
+    clip_tiling_bbox_to_range,
+    get_fov,
+    get_fov_based_bbox,
+    get_stream_based_bbox,
+    get_tiled_bboxes,
+    get_zstack_levels,
+)
 from odemis.acq.stream import FluoStream
-from odemis.util import testing, img
+from odemis.util import img, testing
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -96,77 +112,54 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         # Smaller than FoV => 1x1
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, fov[0] / 2, fov[1] / 2),
+                                              (0, 0, fov[0] / 2, fov[1] / 2),
                                               overlap=0, future=model.InstantaneousFuture())
 
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (1, 1))
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 1)
 
         # Precisely 2x2 FoV, without overlap => 2x2 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, 2 * fov[0], 2 * fov[1]),
+                                              (0, 0, 2 * fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (2, 2))
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 4)
 
         # Precisely 1 x 2 FoV, without overlap => should give 1 x 2 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, fov[0], 2 * fov[1]),
+                                              (0, 0, fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (1, 2))
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 2)
 
         # Precisely 0.8 FoV, with overlap 0.2 => 1x1 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, 0.8 * fov[0], 0.8 * fov[1]),
+                                              (0, 0, 0.8 * fov[0], 0.8 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (1, 1))
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 1)
 
         # 2x3 FoV with overlap 0.2 => 3x4
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, 2 * fov[0], 3 * fov[1]),
+                                              (0, 0, 2 * fov[0], 3 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (3, 4))
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 12)
 
         # Precisely 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, 4 * 0.8 * fov[0], 7 * 0.8 * fov[1]),
+                                              (0, 0, 4 * 0.8 * fov[0], 7 * 0.8 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (4, 7))
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 28)
 
         # A tiny bit more 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
         eps = 1e-12
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=(0, 0, 4 * 0.8 * fov[0] + eps, 7 * 0.8 * fov[1] + eps),
+                                              (0, 0, 4 * 0.8 * fov[0] + eps, 7 * 0.8 * fov[1] + eps),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, starting_pos = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, (4, 7))
-
-    def test_generate_indices(self):
-        """
-        Test output of X, Y position indices scanning order
-        """
-        area = (-0.001, -0.001, 0.001, 0.001)
-        overlap = 0.2
-        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap, future=model.InstantaneousFuture())
-        gen = tiled_acq_task._generateScanningIndices((0, 0))
-        self.assertEqual(list(gen), [])
-
-        gen = tiled_acq_task._generateScanningIndices((1, 1))
-        res_gen = [(0, 0)]
-        self.assertEqual(list(gen), res_gen)
-
-        gen = tiled_acq_task._generateScanningIndices((2, 2))
-        res_gen = [(0, 0), (1, 0), (1, 1), (0, 1)]
-        self.assertEqual(list(gen), res_gen)
-
-        gen = list(tiled_acq_task._generateScanningIndices((2, 4)))
-        res_gen = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 2), (1, 2), (1, 3), (0, 3)]
-        self.assertEqual(list(gen), res_gen)
+        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
+        self.assertEqual(num_tiles, 28)
 
     def test_move_to_tiles(self):
         """
@@ -175,7 +168,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap, future=model.InstantaneousFuture())
+                                              area, overlap=overlap, future=model.InstantaneousFuture())
         fov = compute_camera_fov(self.ccd)
         exp_shift = fov[0] * (1 - overlap), fov[1] * (1 - overlap)
         # move to starting position (left, top)
@@ -209,7 +202,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap, future=model.InstantaneousFuture())
+                                              area, overlap=overlap, future=model.InstantaneousFuture())
         sem_fov = tiled_acq_task._getFov(self.sem_streams[0])
 
         exp_sem_fov = (self.ebeam.shape[0] * self.ebeam.pixelSize.value[0],
@@ -238,7 +231,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         # No focuser, to make it faster, and it doesn't affect the FoV
         fs = stream.FluoStream("fluo1", self.ccd, self.ccd.data, self.light, self.light_filter)
-        future = acquireTiledArea([fs], self.stage, area=area, overlap=overlap,
+        future = acquireTiledArea([fs], self.stage, area, overlap=overlap,
                                   registrar=REGISTER_IDENTITY, weaver=WEAVER_MEAN)
         data = future.result()
         self.assertIsInstance(data[0], model.DataArray)
@@ -275,7 +268,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(focus_value - (zsteps / 2 * 1e-6), focus_value + (zsteps / 2 * 1e-6), zsteps).tolist()
 
-        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
+        future = acquireTiledArea(self.fm_streams, self.stage, area, overlap=overlap,
                                   settings_obs=settings_obs, zlevels=zlevels,
                                   focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         data = future.result()
@@ -296,7 +289,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (0, 0, fm_fov[0] * 4, fm_fov[1] * 4)  # left, bottom, right, top
         overlap = 0.2
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
+        future = acquireTiledArea(self.fm_streams, self.stage, area, overlap=overlap,
                                   settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE,
                                   focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL)
         data = future.result()
@@ -308,7 +301,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # With sem stream
         area = (0, 0, 0.00001, 0.00001)
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        future = acquireTiledArea(self.sem_streams, self.stage, area=area, overlap=overlap)
+        future = acquireTiledArea(self.sem_streams, self.stage, area, overlap=overlap)
         data = future.result()
         self.assertTrue(future.done())
         self.assertEqual(len(data), 1)
@@ -332,7 +325,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         axis_range = self.focus.axes['z'].range
 
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap, future=model.InstantaneousFuture(),
+                                              area, overlap=overlap, future=model.InstantaneousFuture(),
                                               zlevels=zlevels, focus_points=focus_points,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         tiled_acq_task._refocus()
@@ -347,7 +340,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                                  area=area, overlap=overlap, future=model.InstantaneousFuture(),
+                                                  area, overlap=overlap, future=model.InstantaneousFuture(),
                                                   zlevels=zlevels, focus_points=focus_points,
                                                   focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL)
 
@@ -355,7 +348,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # no exception should be raised
         try:
             tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                                  area=area, overlap=overlap, future=model.InstantaneousFuture(),
+                                                  area, overlap=overlap, future=model.InstantaneousFuture(),
                                                   zlevels=zlevels, focus_points=focus_points,
                                                   focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         except Exception as e:
@@ -376,7 +369,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [0.0001989, 0.0001485, 4.766e-06]]
 
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap, future=model.InstantaneousFuture(),
+                                              area, overlap=overlap, future=model.InstantaneousFuture(),
                                               focus_points=focus_points)
         # Test a point that is on the plane
         x = 0
@@ -425,7 +418,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [0.0001989, 0.0001485, 4.766e-06]]
         # don't know if area and focus points are related
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                              area=area, overlap=overlap,
+                                              area, overlap=overlap,
                                               future=model.InstantaneousFuture(), focus_points=focus_points)
 
         # Test a point which is inside the triangulation area
@@ -456,7 +449,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 1.5)  # left, bottom, right, top
         overlap = 0.2
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
+        future = acquireTiledArea(self.fm_streams, self.stage, area, overlap=overlap,
                                   settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE,
                                   focusing_method=FocusingMethod.ALWAYS)
         data = future.result()
@@ -470,7 +463,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         sem_fov = compute_scanner_fov(self.ebeam)
         area = (0, 0, sem_fov[0] * 2, sem_fov[1] * 1.5)
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        future = acquireTiledArea(self.sem_streams, self.stage, area=area, overlap=overlap,
+        future = acquireTiledArea(self.sem_streams, self.stage, area, overlap=overlap,
                                   settings_obs=settings_obs, weaver=WEAVER_MEAN,
                                   focusing_method=FocusingMethod.ALWAYS)
         data = future.result()
@@ -530,7 +523,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         sem_fov = compute_scanner_fov(self.ebeam)
         area = (0, 0, sem_fov[0], sem_fov[1])
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        future = acquireTiledArea(self.sem_streams, self.stage, area=area,
+        future = acquireTiledArea(self.sem_streams, self.stage, area,
                                   overlap=overlap, registrar=REGISTER_IDENTITY, weaver=WEAVER_MEAN,
                                   focusing_method=FocusingMethod.NONE)
         data = future.result()
@@ -549,7 +542,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (0, 0, 0.00001, 0.00001)  # left, top, right, bottom
         overlap = 0.2
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
-        f = acquireTiledArea(self.sem_streams, self.stage, area=area, overlap=overlap)
+        f = acquireTiledArea(self.sem_streams, self.stage, area, overlap=overlap)
 
         f.add_update_callback(self.on_progress_update)
 
@@ -568,7 +561,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # Get area from stage metadata
         area = (-0.0001, -0.0001, 0.0001, 0.0001)
         overlap = 0.2
-        f = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap)
+        f = acquireTiledArea(self.fm_streams, self.stage, area, overlap=overlap)
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -803,6 +796,109 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         focuser.moveAbs({"z": frange[0]}).result() # move to the minimum position
         zlevels = get_zstack_levels(zsteps=10, zstep_size=2e-6, rel=False, focuser=focuser)
         self.assertAlmostEqual(zlevels[0], frange[0]) # minimum z level should be at minimum position
+
+
+class TiledAcquisitionTaskTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # Create a mock SEM stream
+        mock_stream = mock.Mock(spec=stream.SEMStream)
+        mock_stream.configure_mock(**{"guessFoV.return_value": (0.0021, 0.0018)})
+        # Set the focuser to None to avoid unnecessary dependencies
+        mock_stream.focuser = None
+        cls.streams = [mock_stream]
+
+    def create_rectangle(self, x_min: float, y_min: float, x_max: float, y_max: float, angle: float = 0) -> List[Tuple[float, float]]:
+        """
+        Helper to create a rotated rectangle from its bounding box coordinates.
+        :param x_min: Minimum x coordinate
+        :param y_min: Minimum y coordinate
+        :param x_max: Maximum x coordinate
+        :param y_max: Maximum y coordinate
+        :param angle: Rotation angle in degrees
+        """
+        rectangle = Polygon([(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)])
+        if angle != 0:
+            rectangle = rotate(rectangle, angle, origin='centroid', use_radians=False)
+        return list(rectangle.exterior.coords[:-1])  # Exclude exterior coords closing point which is the same as the first
+
+    def test_normalize_region_to_polygon(self):
+        # Region is a valid polygon
+        region = [(0.0, 0.0), (14.0e-3, 0.0), (14.0e-3, 13.0e-3), (0.0, 13.0e-3)]
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        # Exclude exterior coords closing point which is the same as the first
+        self.assertEqual(list(tiled_acq_task._polygon.exterior.coords[:-1]), region)
+
+        # Region is a bounding box
+        region = (0.0, 0.0, 14.0e-3, 13.0e-3)
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        # Exclude exterior coords closing point which is the same as the first
+        self.assertEqual(list(tiled_acq_task._polygon.exterior.coords[:-1]), [(0.0, 0.0), (14.0e-3, 0.0), (14.0e-3, 13.0e-3), (0.0, 13.0e-3)])
+
+        # Region is a rotated rectangle
+        rotated_rectangle = self.create_rectangle(0.0, 0.0, 14.0e-3, 13.0e-3, angle=45)
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=rotated_rectangle, overlap=0.1)
+        # Exclude exterior coords closing point which is the same as the first
+        self.assertEqual(list(tiled_acq_task._polygon.exterior.coords[:-1]), rotated_rectangle)
+
+        # Region is not a valid polygon or bounding box
+        region = [(0.1, 0.1), (0.1, 0.2), (0.2, 0.2), (0.2, 0.1, 0.1)]
+        with self.assertRaises(ValueError) as ctx:
+            tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        self.assertEqual("Region must either be a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points.", str(ctx.exception))
+
+    def test_get_number_of_tiles(self):
+        # Region is a bounding box
+        region = (0.0, 0.0, 14.0e-3, 13.0e-3)
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 56)
+
+        # Region is a bounding box with higher overlap
+        region = (0.0, 0.0, 14.0e-3, 13.0e-3)
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.5)
+        self.assertGreater(tiled_acq_task._number_of_tiles, 56)  # Should result in more tiles than the standard case
+
+        # Region is a rotated rectangle
+        rotated_rectangle = self.create_rectangle(0.0, 0.0, 14.0e-3, 13.0e-3, angle=45)
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=rotated_rectangle, overlap=0.01)
+        self.assertGreater(tiled_acq_task._number_of_tiles, 56)  # Should result in more tiles than the standard case
+
+        # Region is a very small bounding box (edge case)
+        region = (0.0, 0.0, 1e-6, 1e-6)
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.1)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 1)
+
+    def test_sort_tile_indices_zigzag(self):
+        # Define expected zigzag order
+        zigzag_tile_indices = [
+            (0, 0), (1, 0), (2, 0), (3, 0), (4, 0),
+            (4, 1), (3, 1), (2, 1), (1, 1), (0, 1),
+            (0, 2), (1, 2), (2, 2), (3, 2), (4, 2),
+        ]
+
+        # Generate mock tile indices
+        tile_indices = [(col, row) for row in range(3) for col in range(5)]
+
+        # Apply zigzag sorting
+        tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=(0, 0, 1, 1), overlap=0.1)
+        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag(tile_indices)
+        self.assertListEqual(sorted_indices, zigzag_tile_indices)
+
+        # Single row (edge case)
+        tile_indices = [(col, 0) for col in range(5)]
+        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag(tile_indices)
+        self.assertListEqual(sorted_indices, tile_indices)
+
+        # Single column (edge case)
+        tile_indices = [(0, row) for row in range(5)]
+        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag(tile_indices)
+        self.assertListEqual(sorted_indices, tile_indices)
+
+        # Empty tile indices
+        sorted_indices = tiled_acq_task._sort_tile_indices_zigzag([])
+        self.assertListEqual(sorted_indices, [])
+
 
 if __name__ == '__main__':
     unittest.main()
