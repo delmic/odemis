@@ -70,7 +70,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self._feature_icons = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/feature_active_unselected.png')),
             FEATURE_READY_TO_MILL: cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/feature_active_unselected.png')),
+            guiimg.getStream('/icon/feature_milled_unselected.png')),
             FEATURE_ROUGH_MILLED: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/feature_rough_unselected.png')),
             FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
@@ -80,7 +80,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self._feature_icons_selected = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/feature_active_selected.png')),
             FEATURE_READY_TO_MILL: cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/feature_active_selected.png')),
+            guiimg.getStream('/icon/feature_milled_selected.png')),
             FEATURE_ROUGH_MILLED: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/feature_rough_selected.png')),
             FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
