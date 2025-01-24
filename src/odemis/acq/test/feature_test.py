@@ -34,6 +34,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
     """
     Test the json encoder and decoder of the CryoFeature class
     """
+    path = ""
 
     def tearDown(self):
         if os.path.exists(self.path):
