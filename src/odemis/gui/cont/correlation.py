@@ -487,7 +487,10 @@ class GridColumns(Enum):
 
 DEBUG = False
 class CorrelationPointsController(object):
-
+    # TODO reset output
+    # save and show output
+    # POI > 1
+    # xyz changes
     def __init__(self, tab_data, panel, tab, viewports):
         """
         :param tab_data: (MicroscopyGUIData) the representation of the microscope GUI
@@ -546,9 +549,9 @@ class CorrelationPointsController(object):
         # Set column labels for correlation points
         # Set the data type and if the column can be edited
         self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
-        attr = wx.grid.GridCellAttr()
-        attr.SetReadOnly(True)
-        self.grid.SetColAttr(0, attr)
+        # attr = wx.grid.GridCellAttr()
+        # attr.SetReadOnly(True)
+        # self.grid.SetColAttr(0, attr)
         # self.grid.SetColLabelValue(1, "X")
         # self.grid.SetColLabelValue(2, "Y")
         # self.grid.SetColLabelValue(3, "Z")
@@ -934,11 +937,12 @@ class CorrelationPointsController(object):
                     vp.canvas.update_drawing()
                 # Todo KEEP 1 POI IN CRYO_FEATURE
                 # \TODO pos load error
+                # pencin in fib view
             except ValueError:
                 wx.MessageBox("Index must be a int!", "Invalid Input", wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
                 return
-        elif col_name in [GridColumns.X.name, GridColumns.Y.name, GridColumns.Z.name]:
+        elif col_name in [GridColumns.X.name, GridColumns.Y.name]: #, GridColumns.Z.name]:
             try:
                 p = float(new_value)
                 # if Z and FIB target, do not allow the change, before calling this function TODO
@@ -1015,7 +1019,7 @@ class CorrelationPointsController(object):
                 # self.grid.SelectRow(row)
                 self.grid.SetCellValue(row, GridColumns.X.value, str(target.coordinates.value[0]))
                 self.grid.SetCellValue(row, GridColumns.Y.value, str(target.coordinates.value[1]))
-                if target.coordinates.value[2]:
+                if "FIB" not in target.name.value:
                     self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
 
                 self.update_feature_correlation_target()
@@ -1075,16 +1079,14 @@ class CorrelationPointsController(object):
             self.grid.SetCellValue(current_row_count, GridColumns.X.value, str(target.coordinates.value[0]))
             self.grid.SetCellValue(current_row_count, GridColumns.Y.value, str(target.coordinates.value[1]))
             self.grid.SetCellValue(current_row_count, GridColumns.Index.value, str(target.index.value))
+            self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
-            if target.type.value == "Fiducial":
-                if target.coordinates.value[2]:
-                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
-                    self.grid.SetCellValue(current_row_count, GridColumns.Z.value, str(target.coordinates.value[2]))
-                else:
-                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
-                    self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
-            elif target.type.value == "RegionOfInterest":
-                self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
+
+            if "FIB" in target.name.value:
+                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
+            else:
+                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, str(target.coordinates.value[2]))
+
 
         # self.grid.Layout()
         self.reorder_table()
