@@ -34,8 +34,7 @@ import wx
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.align.tdct import parse_3dct_yaml_file
-from odemis.acq.feature import import_features_from_autolamella, load_project_data
+from odemis.acq.feature import load_project_data
 from odemis.acq.move import (
     ALIGNMENT,
     COATING,
@@ -118,16 +117,6 @@ class CryoChamberTab(Tab):
         self._is_initial_project_ready: bool = False
 
         self._move_cancelled = False
-
-        # enable autolamella import for meteor
-        main_frame.Bind(wx.EVT_MENU, self._import_features_from_autolamella, id=main_frame.menu_item_import_from_autolamella.GetId())
-        if self._role == 'meteor':
-            main_frame.menu_item_import_from_autolamella.Enable(True)
-
-        # enable import from 3dct for correlation
-        main_frame.Bind(wx.EVT_MENU, self._import_features_from_3dct, id=main_frame.menu_item_import_from_3dct.GetId())
-        if self._role == 'meteor':
-            main_frame.menu_item_import_from_3dct.Enable(True)
 
         self._current_posture = UNKNOWN  # position of the sample (regularly updated)
         self._target_posture = None  # when moving, move POSITION to be reached, otherwise None
@@ -518,46 +507,6 @@ class CryoChamberTab(Tab):
         wx.CallAfter(correlation_tab.correlation_controller._start_streams_subscriber)
 
         return True
-
-    def _import_features_from_autolamella(self, _):
-        """Import features from autolamella experiment."""
-
-        # select an autolamella directory to load
-        path = LoadProjectFileDialog(parent=self.panel,
-                                    projectname=self.conf.pj_last_path,
-                                    message="Select AutoLamella Project Directory to load")
-
-        if path is None: # Cancelled
-            return
-
-        # load features from autolamella experiment
-        cryo_features = import_features_from_autolamella(path)
-
-        # add the features to the current features list
-        logging.info(f"Imported {len(cryo_features)} features from autolamella experiment.")
-        self.tab_data_model.main.features.value.extend(cryo_features)
-
-    def _import_features_from_3dct(self, _):
-
-        # load 3dct position
-        path = SelectFileDialog(parent=self.panel,
-                                message="Select 3DCT Position File to load",
-                                default_path=self.conf.pj_last_path)
-
-        if path is None: # Cancelled
-            logging.warning("No 3DCT position file selected, exiting.")
-            return
-
-        # load yaml file
-        try:
-            pt = parse_3dct_yaml_file(path)
-        except Exception as e:
-            logging.error(f"Failed to load 3DCT position file: {e}")
-            return
-
-        # redraw milling position
-        fibsem_tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
-        fibsem_tab.milling_task_controller.draw_milling_tasks(pos=pt, convert_pos=False)
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):

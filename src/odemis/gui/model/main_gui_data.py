@@ -319,7 +319,6 @@ class MainGUIData(object):
                 if has_fibsem:
                     required_roles += ["e-beam", "se-detector", "ebeam-focus",
                                        "ion-beam", "se-detector-ion", "ion-focus"]
-                    required_roles.remove("stage")
             elif self.role == "mimas":
                 required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):

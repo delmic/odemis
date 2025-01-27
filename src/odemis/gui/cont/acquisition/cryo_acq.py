@@ -176,12 +176,6 @@ class CryoAcquiController(object):
 
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
-        self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
-        self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
-
-        # advanced features toggle
-        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
-        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
 
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
