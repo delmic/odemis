@@ -1,3 +1,17 @@
+odemis (3.6.2-1) focal; urgency=medium
+
+  * New version: 3.6.2
+  * Main bug fixes:
+    - Raise error message if Meteor focus position is outside the range
+    - Meteor fix invalid detector settings offset position in metadata
+    - SPARC newlines in AR csv export (Windows)
+    - cl_acquisition: e-beam scan settings could be sometimes incorrect
+    - driver zeiss: SetMagnification() should pass a float (not just int)
+    - Fix MeasureSpotsFocus() to work with all dtypes
+
+
+ -- Thera Pals <pals@delmic.com>  Mon, 27 Jan 2025 14:28:36 +0100
+
 odemis (3.6.1-1) focal; urgency=medium
 
   * New version 3.6.1
