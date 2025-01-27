@@ -31,6 +31,7 @@ import threading
 import time
 from concurrent.futures import Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List
 
@@ -45,6 +46,7 @@ from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_READY_TO_MILL,
     CryoFeature,
+    REFERENCE_IMAGE_FILENAME,
 )
 from odemis.acq.milling.tasks import MillingTaskManager, MillingTaskSettings
 from odemis.acq.move import (
@@ -57,6 +59,17 @@ from odemis.acq.stream import FIBStream, SEMStream
 from odemis.dataio import find_fittest_converter
 from odemis.util import executeAsyncTask
 from odemis.util.dataio import open_acquisition
+
+
+class MillingWorkflowTask(Enum):
+    RoughMilling = "Rough Milling"
+    Polishing = "Polishing"
+
+status_map: Dict[MillingWorkflowTask, str] = {
+    MillingWorkflowTask.RoughMilling: FEATURE_ROUGH_MILLED,
+    MillingWorkflowTask.Polishing: FEATURE_POLISHED,
+}
+
 # TODO: replace with run_milling_tasks_openfibsem
 def run_milling_tasks(tasks: List[MillingTaskSettings]) -> Future:
     """
@@ -79,17 +92,12 @@ def run_milling_tasks(tasks: List[MillingTaskSettings]) -> Future:
 
     return future
 
-class MillingWorkflowTask(Enum):
-    RoughMilling = "Rough Milling"
-    Polishing = "Polishing"
-
-status_map: Dict[MillingWorkflowTask, str] = {
-    MillingWorkflowTask.RoughMilling: FEATURE_ROUGH_MILLED,
-    MillingWorkflowTask.Polishing: FEATURE_POLISHED,
-}
-
 def get_associated_tasks(wt: MillingWorkflowTask,
                          milling_tasks: Dict[str, MillingTaskSettings]) -> List[MillingTaskSettings]:
+    """Get the milling tasks associated with the given workflow task.
+    :param wt: The workflow task to get associated tasks for.
+    :param milling_tasks: The dictionary of all milling tasks.
+    :return: List of associated tasks."""
     associated_tasks = []
     for task in milling_tasks.values():
 
@@ -104,7 +112,8 @@ def get_associated_tasks(wt: MillingWorkflowTask,
 
 class AutomatedMillingManager(object):
 
-    def __init__(self, future,
+    def __init__(self,
+                 future: Future,
                  features: List[CryoFeature],
                  stage: model.Actuator,
                  sem_stream: SEMStream,
@@ -119,7 +128,8 @@ class AutomatedMillingManager(object):
         self.features = features
         self.task_list = task_list
         self._exporter = find_fittest_converter("filename.ome.tiff")
-        self.posture_manager = MicroscopePostureManager(model.getMicroscope())
+        self.pm = MicroscopePostureManager(model.getMicroscope())
+        self._prefix: str = ""
 
         self._future = future
         if future is not None:
@@ -150,9 +160,10 @@ class AutomatedMillingManager(object):
             self.current_workflow = workflow_task.value
             logging.info(f"Starting {task_num}/{len(self.task_list)}: {self.current_workflow} for {len(self.features)} features...")
 
-            current_posture = self.posture_manager.getCurrentPostureLabel()
+            current_posture = self.pm.getCurrentPostureLabel()
             if current_posture not in [SEM_IMAGING, MILLING]:
-                raise ValueError(f"Current posture is {POSITION_NAMES[current_posture]}. Please switch to SEM_IMAGING or MILLING before starting automated milling.")
+                raise ValueError(f"Current posture is {POSITION_NAMES[current_posture]}. "
+                                 "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
 
             for feature in self.features:
 
@@ -163,6 +174,9 @@ class AutomatedMillingManager(object):
                 if feature.status.value == FEATURE_ACTIVE:
                     logging.info(f"Skipping {feature.name.value} as it is not ready for milling.")
                     continue
+
+                # prefix for images
+                self._prefix = f"{feature.name.value}-{self.current_workflow}"
 
                 self._future.msg = f"{feature.name.value}: Starting {self.current_workflow}"
                 self._future.current_feature = feature
@@ -237,11 +251,15 @@ class AutomatedMillingManager(object):
 
         # match image settings for alignment
         ref_image = feature.reference_image # load from directory?
-        filename = f"{feature.name.value}-Reference-Alignment-FIB.ome.tiff"
-        ref_image = open_acquisition(os.path.join(feature.path, filename))[0].getData()
+        if ref_image is None:
+            filename = f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}"
+            ref_image = open_acquisition(os.path.join(feature.path, filename))[0].getData()
+        if ref_image is None:
+            raise ValueError("Reference image not found.")
         pixel_size = ref_image.metadata[model.MD_PIXEL_SIZE]
         fov = pixel_size[0] * ref_image.shape[1]
         self.ion_beam.horizontalFoV.value = fov
+        self.ion_beam.resolution.value = ref_image.shape[::-1]
 
         # beam shift alignment
         self._future.running_subf = acquire([self.fib_stream])
@@ -252,9 +270,9 @@ class AutomatedMillingManager(object):
         # import random
         # x, y = random.randint(0, 100), random.randint(0, 100)
         # new_image = numpy.roll(new_image, [x, y], axis=[0, 1])
-        # print(f"Shifted image by {x}, {y} pixels")
+        # logging.debug(f"Shifted image by {x}, {y} pixels")
 
-        align_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Pre-Alignment-FIB.ome.tiff".replace(" ", "-")) # TODO: make unique?
+        align_filename = self.get_filename(feature, "Pre-Alignment-FIB")
         self._exporter.export(align_filename, new_image)
 
         align_reference_image(ref_image, new_image, scanner=self.ion_beam)
@@ -264,7 +282,7 @@ class AutomatedMillingManager(object):
         data, _ = self._future.running_subf.result()
         new_image = data[0]
 
-        align_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Post-Alignment-FIB.ome.tiff".replace(" ", "-")) # TODO: make unique?
+        align_filename = self.get_filename(feature, "Post-Alignment-FIB")
         self._exporter.export(align_filename, new_image)
 
     def _acquire_reference_images(self, feature: CryoFeature) -> None:
@@ -279,11 +297,19 @@ class AutomatedMillingManager(object):
         sem_image, fib_image = data
 
         # save images
-        sem_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Finished-SEM.ome.tiff".replace(" ", "-")) # TODO: make unique
-        fib_filename = os.path.join(feature.path, f"{feature.name.value}-{self.current_workflow}-Finished-FIB.ome.tiff".replace(" ", "-")) # TODO: make unique
+        sem_filename = self.get_filename(feature, "Finished-SEM")
+        fib_filename = self.get_filename(feature, "Finished-FIB")
         self._exporter.export(sem_filename, sem_image)
         self._exporter.export(fib_filename, fib_image)
 
+    def get_filename(self, feature: CryoFeature, basename: str) -> str:
+        """Get a unique filename for the given feature and basename.
+        :param feature: The feature to get the filename for.
+        :param basename: The basename of the filename.
+        :return: The full filename."""
+        ts = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        filename = f"{self._prefix}-{basename}-{ts}.ome.tiff".replace(" ", "-")
+        return os.path.join(os.path.join(feature.path, filename))
 
 def run_automated_milling(features: List[CryoFeature],
                           stage: model.Actuator,
@@ -312,7 +338,7 @@ def run_automated_milling(features: List[CryoFeature],
 
     # set the progress of the future
     total_duration = len(task_list) * len(features) * 30
-    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate
+    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate from openfibsem
 
     # assign the acquisition task to the future
     executeAsyncTask(future, amm.run)
