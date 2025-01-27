@@ -484,13 +484,11 @@ class GridColumns(Enum):
     Z = 3     # Column for "z"
     Index = 4 # Column for "index"
 
+GRID_PRECISION = 2
 
 DEBUG = False
 class CorrelationPointsController(object):
-    # TODO reset output
-    # save and show output
-    # POI > 1
-    # xyz changes
+
     def __init__(self, tab_data, panel, tab, viewports):
         """
         :param tab_data: (MicroscopyGUIData) the representation of the microscope GUI
@@ -507,7 +505,6 @@ class CorrelationPointsController(object):
 
         self._panel.fp_correlation_streams.Show(True)
 
-
         # Access the correlation points table (wxListCtrl)
         self.grid = panel.table_grid
 
@@ -520,10 +517,10 @@ class CorrelationPointsController(object):
 
         # Access the Refractive Index correction
         self.refractive_index_btn = panel.btn_refractive_index
-        # self.fib_surface_fiducial: Target = None
         self.refractive_index_btn.Bind(wx.EVT_BUTTON, self.on_refractive_index)
 
         self.delete_btn = panel.btn_delete_row
+        self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete_row)
 
         # Bind events for stream selector and Z-targeting
         # self.stream_selector.Bind(wx.EVT_COMBOBOX, self.on_stream_change)
@@ -534,33 +531,20 @@ class CorrelationPointsController(object):
         self.grid.Bind(wx.grid.EVT_GRID_CELL_CHANGING, self.on_cell_changing)
         self.grid.Bind(wx.grid.EVT_GRID_CELL_CHANGED, self.on_row_selected)
 
-        # Initialize the table for displaying points
-
-        # self.load_btn.Bind(wx.EVT_BUTTON, self.on_load_points)
-        self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete_row)
-
 
 
         self.grid.CreateGrid(0, 5)  # TODO make variables
-
         # Hide the default row labels (serial numbers)
         self.grid.SetRowLabelSize(0)
-
         # Set column labels for correlation points
         # Set the data type and if the column can be edited
         self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
         # attr = wx.grid.GridCellAttr()
         # attr.SetReadOnly(True)
-        # self.grid.SetColAttr(0, attr)
-        # self.grid.SetColLabelValue(1, "X")
-        # self.grid.SetColLabelValue(2, "Y")
-        # self.grid.SetColLabelValue(3, "Z")
-        # self.grid.SetColLabelValue(4, "index")
         self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
         self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
         self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name)
         self.grid.SetColLabelValue(GridColumns.Index.value, GridColumns.Index.name)
-
 
         # Set column 1 (Index) as an integer column
         # int_renderer = wx.grid.GridCellNumberEditor(min=1)
@@ -577,13 +561,12 @@ class CorrelationPointsController(object):
         # self.grid.SetColAttr(2, float_attr)
         # self.grid.SetColAttr(3, float_attr)
         # Enable cell editing
+        # Bind the key down event to handle Enter key suppression
+        self.grid.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
+
         self.grid.EnableEditing(True)
 
-        # Auto-size columns
-        # self.grid.AutoSizeColumns()
-
-        # self._populate_table()
-        # TODO make sure before initializing this class, feature ans feature status is fixed ? (Controller)
+        # TODO make sure before initializing this class, feature ana feature status is fixed ? (Controller)
         if DEBUG:
             self.correlation_target = CorrelationTarget()
         else:
@@ -594,11 +577,8 @@ class CorrelationPointsController(object):
         self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
         self.current_target_coordinate_subscription = False
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
-        self.initt = True
         self._tab_data_model.main.currentFeature.subscribe(self.init_ct, init=True)
         self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface, init=True)
-        # if self._tab_data_model.main.currentTarget:
-        #     self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes, init=True)
 
         panel.fp_correlation_panel.Show(True)
         # Show the main frame
@@ -613,21 +593,29 @@ class CorrelationPointsController(object):
         self.is_processing = False          # To track if the function is currently processing
         self.process_thread = None          # The thread handling the change
 
-    # @call_in_wx_main
-    # def _on_target_changes(self, targets: list) -> None:
-    #     pass
-    #     # self._populate_table()
 
     # initialize correlation target class in the current feature, once the minimum requirements
     # make sure it is not initialized multiple times
     # add correlation target as an attribute in cryo feature, no need of VA
     # make an update function, which updates the specific parts of the class when changed
+    def on_key_down(self, event):
+        """Handle key down events, especially to suppress Enter key default behavior."""
+        if event.GetKeyCode() == wx.WXK_RETURN:
+            # Commit the value in the currently edited cell
+            if self.grid.IsCellEditControlEnabled():
+                self.grid.DisableCellEditControl()
+                # Suppress the Enter key from moving to the next row
+            return
+        else:
+            # For other keys, allow the default behavior
+            event.Skip()
 
     def init_ct(self, val):
         if not DEBUG:
             if not self._tab_data_model.main.currentFeature.value:
                 return False
             elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
+                self._tab_data_model.main.currentFeature.value.correlation_targets = {}
                 self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
                 self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
             elif self.correlation_target is None:
@@ -653,10 +641,6 @@ class CorrelationPointsController(object):
                 targets = list(
                     itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
                 self._tab_data_model.main.targets.value = targets
-                # for target in targets:
-                #     self._tab_data_model.main.currentTarget.value = target
-                    # self._on_target_changes(target)
-                    # self._tab_data_model.main.targets.value.append(target)
                 if correlation_target.fib_surface_fiducial:
                     self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
                 self.correlation_target = correlation_target
@@ -717,8 +701,6 @@ class CorrelationPointsController(object):
                 #     # if vp.view.name.value == "SEM Overview":
                 #     vp.canvas.update_drawing()
 
-
-
         if self.correlation_target:
             if not DEBUG:
                 if len(self.correlation_target.fib_fiducials) >= 4 and len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) > 0 and self.correlation_target.fib_surface_fiducial:
@@ -732,9 +714,6 @@ class CorrelationPointsController(object):
                     return False
         else:
             return False
-
-
-
 
     def on_refractive_index(self, evt):
         # only one target that keeps on changing, at the end if do correlation possible,
@@ -840,17 +819,6 @@ class CorrelationPointsController(object):
                     self._tab_data_model.tool.value = TOOL_FIDUCIAL   # POI
                       # in tad data ? TODO
 
-    def on_load_points(self, event):
-        """
-        Add a new point (Index, X, Y, Z) to the grid.
-        """
-        new_point = ["6", "15.0", "25.1", "35.3"]  # Example new point, could be loaded from a file
-        new_row = self.grid.GetNumberRows()
-        self.grid.AppendRows(1)  # Add a new row
-
-        for col, value in enumerate(new_point):
-            self.grid.SetCellValue(new_row, col, value)
-
     def on_delete_row(self, event):
         """
         Delete the currently selected row.
@@ -858,16 +826,10 @@ class CorrelationPointsController(object):
         selected_rows = self.grid.GetSelectedRows()
         # row_evt = event.GetRow()
         if selected_rows:
-            # for col in range(self.grid.GetNumberCols()):
-            #     self.grid.SetCellBackgroundColour(selected_rows[0], col, wx.RED)
             for row in selected_rows:
                 self.grid.DeleteRows(pos=row, numRows=1, updateLabels=True)
 
-                # delete the from targets list by checking the row label which is same as the target name
                 for target in self._tab_data_model.main.targets.value:
-                    # if target.name.value == self.grid.GetRowLabelValue(row):
-                    #     self._tab_data_model.main.targets.value.remove(target)
-                    #     break
                     if target.name.value == self._tab_data_model.main.currentTarget.value.name.value:
                         self._tab_data_model.main.targets.value.remove(target)
                         self._tab_data_model.main.currentTarget.value = None
@@ -875,19 +837,8 @@ class CorrelationPointsController(object):
 
     def on_cell_selected(self, event):
         row = event.GetRow()
-        # col = event.GetCol()
-        # logging.debug(f"Cell selected at row {row}, column {col}")
-        # # Add your logic here for when a cell is selected
-        # event.Skip()
-        row_label = self.grid.GetRowLabelValue(event.GetRow())
-        # if row_label:
-        #     self._tab_data_model.main.currentTarget.value = [t for t in self._tab_data_model.main.targets.value
-        #                                                      if t.name.value == row_label][0]
-        # self._tab_data_model.main.currentTarget.value = [t for t in self._tab_data_model.main.targets.value
-        #                                                  if t.name.value == row_label][0]
         for target in self._tab_data_model.main.targets.value:
             if self.selected_target_in_grid(target, row):
-            # if target.name.value == self.grid.GetRowLabelValue(event.GetRow()):
                 self._tab_data_model.main.currentTarget.value = target
                 break
         # highlight the selected row
@@ -913,48 +864,78 @@ class CorrelationPointsController(object):
         col_name = self.grid.GetColLabelValue(col)
         current_row_count = event.GetRow()
 
-        # get the row label and select the current target based on the row label
-        # todo should happen before the event is triggered
-        # TODO index when changes cannot be more than the number of max indices in the list
-        # row_label = self.grid.GetRowLabelValue(event.GetRow())
-        # self._tab_data_model.main.currentTarget.value = [t for t in self._tab_data_model.main.targets.value
-        #                                                  if t.name.value == row_label][0]
-        #
-        # # highlight the selected row
-        # self.grid.SelectRow(event.GetRow())
-
         if col_name == GridColumns.Type.name:
             wx.MessageBox("Type cannot be changed", "Invalid Input", wx.OK | wx.ICON_ERROR)
             event.Veto()
             return
         elif col_name == GridColumns.Index.name:
             try:
-                int(new_value)
+                current_name = self._tab_data_model.main.currentTarget.value.name.value
+                current_index = self._tab_data_model.main.currentTarget.value.index.value
+                # index value for the target should be less than the maximum number of indices for that type
+                indices = []
+                target_swap = None
+                for target in self._tab_data_model.main.targets.value:
+                    if target.name.value[:-1] == current_name[:-1]:
+                        indices.append(target.index.value)
+                        if target.index.value == int(new_value):
+                            target_swap = target
+
+                index_max = max(indices)
+                assert 1 <= int(new_value) <= index_max
                 self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
-                self._tab_data_model.main.currentTarget.value.name.value = self._tab_data_model.main.currentTarget.value.name.value[:-1] + str(new_value)
+                self._tab_data_model.main.currentTarget.value.name.value = current_name[:-1] + str(new_value)
+                # todo grid set value shouldn't be used, use VA connector and disconnector
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, self._tab_data_model.main.currentTarget.value.name.value)
+
+                if target_swap:
+                    for row in range(self.grid.GetNumberRows()):
+                        if self.grid.GetCellValue(row, GridColumns.X.value) == f"{target_swap.coordinates.value[0]:.{GRID_PRECISION}f}":
+                            self._tab_data_model.main.targets.value.remove(target_swap)
+                            break
+                    target_swap.index.value = current_index
+                    target_swap.name.value = current_name[:-1] + str(target_swap.index.value)
+                    self._tab_data_model.main.targets.value.append(target_swap)
+                    self._tab_data_model.main.currentTarget.value = None
+
                 for vp in self._viewports:
                     vp.canvas.update_drawing()
-                # Todo KEEP 1 POI IN CRYO_FEATURE
-                # \TODO pos load error
-                # pencin in fib view
-            except ValueError:
-                wx.MessageBox("Index must be a int!", "Invalid Input", wx.OK | wx.ICON_ERROR)
+                # should happen before the event is triggered
+                # check difeerent feature different points
+                # save fib point
+                # fiducials icon change
+                # features still there when new project is used
+                # reset output
+                # load and save json in the same way
+                # pop up
+                # doc string
+                # todos
+                # enable z targetting
+                # change the keys
+                # new tool icon
+
+                # float, 2 values more
+                # none value not there
+                # pencil in fib
+                # keep more than one poi (big fov)
+                # enter issue resolved
+                # xyz change
+                # poi up
+                # index when changes cannot be more than the number of max indices in the list
+
+            except (ValueError, AssertionError):
+                wx.MessageBox(f"Index must be an int in the range (1, {index_max + 1})!", "Invalid Input", wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
                 return
-        elif col_name in [GridColumns.X.name, GridColumns.Y.name]: #, GridColumns.Z.name]:
+        elif col_name in [GridColumns.X.name, GridColumns.Y.name, GridColumns.Z.name]:
             try:
-                p = float(new_value)
-                # if Z and FIB target, do not allow the change, before calling this function TODO
                 if col_name == GridColumns.X.name:
-                    coord = self._tab_data_model.main.currentTarget.value.coordinates.value
-                    self._tab_data_model.main.currentTarget.value.coordinates.value = tuple((p, coord[1], coord[2]))
-                    # self._tab_data_model.main.currentTarget.value.coordinates.value[0] = float(new_value)
-                # elif col_name == "Y":
-                #     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = float(new_value)
-                # elif col_name == "Z" and ("FIB" not in self._tab_data_model.main.currentTarget.value.name.value):
-                #     # keep Z value empty for FIB targets as they don't have Z coordinates
-                #     self._tab_data_model.main.currentTarget.value.coordinates.value[2] = float(new_value)
+                    self._tab_data_model.main.currentTarget.value.coordinates.value[0] = float(new_value)
+                elif col_name == GridColumns.Y.name:
+                    self._tab_data_model.main.currentTarget.value.coordinates.value[1] = float(new_value)
+                elif col_name == GridColumns.Z.name and ("FIB" not in self._tab_data_model.main.currentTarget.value.name.value):
+                    # keep Z value empty for FIB targets as they don't have Z coordinates
+                    self._tab_data_model.main.currentTarget.value.coordinates.value[2] = float(new_value)
             except ValueError:
                 wx.MessageBox("X, Y, Z values must be a float!", "Invalid Input", wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
@@ -965,21 +946,16 @@ class CorrelationPointsController(object):
     def on_row_selected(self, event):
 
         col = event.GetCol()
-        # col_ind = self.grid.GetColIndex("Index")
-        # col_name = self.grid.GetColLabelValue(col)
-        # TODO
-        if col == 4:  # Index column was changed
+        col_name = self.grid.GetColLabelValue(col)
+
+        if col_name == GridColumns.Index.name:  # Index column was changed
             self.reorder_table()
 
     @call_in_wx_main
     def _on_current_target_changes(self, target):
         # according to target name, highlight the row
         for row in range(self.grid.GetNumberRows()):
-        # if target and target.name.value in [self.grid.GetRowLabelValue(row) for row in range(self.grid.GetNumberRows())]:
-        #     if target and self.grid.GetRowLabelValue(row) == target.name.value:
             if self.selected_target_in_grid(target, row):
-                # get the row index from row label which is target name
-                # row_index = self.grid.get_row_index(target.name.value)
                 self.grid.SelectRow(row)
                 self.reorder_table()
                 break
@@ -1005,20 +981,12 @@ class CorrelationPointsController(object):
     @call_in_wx_main
     def _on_current_coordinates_changes(self, coordinates):
         target = self._tab_data_model.main.currentTarget.value
-        existing_target =  False
         self.current_target_coordinate_subscription = False
-        # existing_names = [t.name.value for t in self._tab_data_model.main.targets.value]
-        # if existing_names and target.name.value in existing_names:
         for row in range(self.grid.GetNumberRows()):
             if self.selected_target_in_grid(target, row):
-        # if target and target.name.value in [self.grid.GetRowLabelValue(row) for row in range(self.grid.GetNumberRows())]:
-        #     if target and self.grid.GetRowLabelValue(row) == target.name.value:
 
-                # get the row index from row label which is target name
-                # row_index = self.grid.get_row_index(target.name.value)
-                # self.grid.SelectRow(row)
-                self.grid.SetCellValue(row, GridColumns.X.value, str(target.coordinates.value[0]))
-                self.grid.SetCellValue(row, GridColumns.Y.value, str(target.coordinates.value[1]))
+                self.grid.SetCellValue(row, GridColumns.X.value, f"{target.coordinates.value[0]:.{GRID_PRECISION}f}")
+                self.grid.SetCellValue(row, GridColumns.Y.value, f"{target.coordinates.value[1]:.{GRID_PRECISION}f}")
                 if "FIB" not in target.name.value:
                     self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
 
@@ -1028,7 +996,6 @@ class CorrelationPointsController(object):
                 self.latest_change = True
                 self.queue_latest_change()
 
-
     @call_in_wx_main
     def _on_target_changes(self, targets):
         """
@@ -1036,59 +1003,26 @@ class CorrelationPointsController(object):
         When FM is selected, the Z-targeting button is enabled.
         When FIB is selected, the Z-targeting button is disabled.
         """
-        # # select the grid row according the current target selection
-        # for row in range(self.grid.GetNumberRows()):
-        #     if self.grid.GetRowLabelValue(row) == target.name.value:
-        #         self.grid.SelectRow(row)
-        #         break
-        # if the value of the current target is changed, update the corresponing grid row
-        # if new value add row in the grid otherwise update the row
-        # target = self._tab_data_model.main.currentTarget.value
-        existing_target =  False
-        # existing_names = [t.name.value for t in self._tab_data_model.main.targets.value]
-        # if existing_names and target.name.value in existing_names:
-
-        # for row in range(self.grid.GetNumberRows()):
-        # # if target and target.name.value in [self.grid.GetRowLabelValue(row) for row in range(self.grid.GetNumberRows())]:
-        # # get selected row index and type
-        #     if self.selected_target_in_grid(target, row):
-        #     # if target and self.grid.GetRowLabelValue(row) == target.name.value:
-        #         # get the row index from row label which is target name
-        #         # row_index = self.grid.get_row_index(target.name.value)
-        #         self.grid.SelectRow(row)
-        #         self.grid.SetCellValue(row, GridColumns.X.value, str(target.coordinates.value[0]))
-        #         self.grid.SetCellValue(row, GridColumns.Y.value, str(target.coordinates.value[1]))
-        #         if target.coordinates.value[2]:
-        #             self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
-        #         # self.grid.SetCellValue(row, 4, str(target.index.value))
-        #         existing_target = True
-        #         # else if a new target is added which is not present in target list, add it in the grid
-
-        # if target: # and not existing_target:
-        # clear the grid and populate it with the new target list
+        # Clear the grid before populating it with new data
         self.grid.ClearGrid()
         # delete the empty rows
-        if self.grid.GetNumberRows() > 1:
-            self.grid.DeleteRows(1, self.grid.GetNumberRows())
+        if self.grid.GetNumberRows() > 0:
+            self.grid.DeleteRows(0, self.grid.GetNumberRows())
         for target in targets:
 
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
             self.grid.AppendRows(1)
-            self.grid.SetRowLabelValue(current_row_count, target.name.value) #todo see the usage
-            self.grid.SetCellValue(current_row_count, GridColumns.X.value, str(target.coordinates.value[0]))
-            self.grid.SetCellValue(current_row_count, GridColumns.Y.value, str(target.coordinates.value[1]))
+            self.grid.SetCellValue(current_row_count, GridColumns.X.value, f"{target.coordinates.value[0]:.{GRID_PRECISION}f}")
+            self.grid.SetCellValue(current_row_count, GridColumns.Y.value, f"{target.coordinates.value[1]:.{GRID_PRECISION}f}")
             self.grid.SetCellValue(current_row_count, GridColumns.Index.value, str(target.index.value))
             self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
-
             if "FIB" in target.name.value:
-                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
+                 self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
             else:
                 self.grid.SetCellValue(current_row_count, GridColumns.Z.value, str(target.coordinates.value[2]))
 
-
-        # self.grid.Layout()
         self.reorder_table()
         self._panel.Layout()
 
@@ -1127,81 +1061,14 @@ class CorrelationPointsController(object):
         """ Return the simulated Z-targeting value. Replace with real value. """
         return 42.0  # Example Z-value for demonstration
 
-    def _populate_table(self):
-        """
-        Populates the wxListCtrl with initial values (if any).
-        You can customize this method to load saved data or start with an empty table.
-        """
-
-
-
-        # from target list, add 0,1,2 to x y z
-        # the row label is the target.name with type being the target.type
-        # set the index from 1 and increment, separately for target.type in Fiducials and RegionOfInterests with Z none and RegionOfInterests with Z
-        # set the index from 1 and increment, separately for target.type in Fiducials and RegionOfInterests with Z none and RegionOfInterests with Z
-
-        for i, target in enumerate(self._tab_data_model.main.targets.value):
-            # row = self.grid.GetNumberRows()
-            # check if target name is already present in the grid row label
-            # if not append row
-            if target.name.value in [self.grid.GetRowLabelValue(row) for row in range(self.grid.GetNumberRows())]:
-                self.grid.SetCellValue(i, 1, str(target.coordinates.value[0]))
-                self.grid.SetCellValue(i, 2, str(target.coordinates.value[1]))
-                if target.coordinates.value[2]:
-                    self.grid.SetCellValue(i, 3, str(target.coordinates.value[2]))
-            else:
-                current_row_count = self.grid.GetNumberRows()
-                self.grid.AppendRows(1)
-                # get the len of the grid from the grid rows
-
-                # get the new row index of the grid newly appended
-
-
-                # self.grid.SetRowLabelValue(current_row_count, target.name.value)
-                self.grid.SetCellValue(current_row_count, 1, str(target.coordinates.value[0]))
-                self.grid.SetCellValue(current_row_count, 2, str(target.coordinates.value[1]))
-                self.grid.SetCellValue(current_row_count, 4, str(target.index.value))
-
-                if target.type.value == "Fiducial":
-                    if target.coordinates.value[2]:
-                        self.grid.SetCellValue(current_row_count, 0, target.name.value)
-                        self.grid.SetCellValue(current_row_count, 3, str(target.coordinates.value[2]))
-                    else:
-                        self.grid.SetCellValue(current_row_count, 0, target.name.value)
-                        self.grid.SetCellValue(current_row_count, 3, "")
-                elif target.type.value == "RegionOfInterest":
-                    self.grid.SetCellValue(current_row_count, 0, target.name.value)
-
-
-        # Ensure the rows are in order of the Index
-        # self.reorder_table()
-
-
-        # Ensure only one row can be selected at a time
-        # self.grid.SetSelectionMode(wx.grid.wxGridSelectRows)
-
-        # # Clear any existing rows
-        # self.table.DeleteAllItems()
-        #
-        # # Add initial dummy data (replace this with actual data if available)
-        # self.add_table_data(0, 10.0, 20.0, 30.0)
-        # self.add_table_data(1, 15.0, 25.0, None)
-
     def reorder_table(self):
         """
         Sorts the rows by 'Index' column. If an index exists, replace the row.
         """
-        # when index is changed, reorder the table, such that index is in increasing order, rows with same indices
-        # have poi (target type Region of Intered) , fm fiducial (tartget type fidcuial and FM in name) and then fib fiducial4
-        # get the rows from column label index and reorder
-        # get the rows from column label index and reorder
         rows = self.grid.GetNumberRows()
         if rows == 0:
             return
 
-        # Get the column index for the 'Index' column
-        col_ind = 4  #self.grid.GetColIndex("Index")
-        col_type = 0    #self.grid.GetColIndex("type")
         # Get the data from the grid
         data = []
         for row in range(self.grid.GetNumberRows()):
@@ -1209,37 +1076,9 @@ class CorrelationPointsController(object):
             data.append(row_data)
 
         # Sort the data by the Index first, and then by Type in case of a tie
-        # Index column: 1, Type column: 2
-        data.sort(key=lambda x: (x[col_ind], x[col_type]))
+        data.sort(key=lambda x: (x[GridColumns.Index.value], -ord(x[GridColumns.Type.value][0])))
 
         # Repopulate the grid with sorted data
         for row, row_data in enumerate(data):
             for col, value in enumerate(row_data):
                 self.grid.SetCellValue(row, col, str(value))
-
-    # TODO not used
-    # Todo add type in the list?
-    # def save_table_to_csv(self):
-    #     """
-    #     Save the data from both FIB and FM tables to a CSV file.
-    #     """
-    #     with open('correlation_points.csv', 'w', newline='') as csvfile:
-    #         writer = csv.writer(csvfile)
-    #         # Write the header
-    #         writer.writerow(["Index", "X", "Y", "Z"])
-    #
-    #         # Write FIB points
-    #         for row in range(self.table_fib.GetItemCount()):
-    #             index = self.table_fib.GetItemText(row, 0)
-    #             x = self.table_fib.GetItemText(row, 1)
-    #             y = self.table_fib.GetItemText(row, 2)
-    #             z = self.table_fib.GetItemText(row, 3)
-    #             writer.writerow([index, x, y, z])
-    #
-    #         # Write FM points
-    #         for row in range(self.table_fm.GetItemCount()):
-    #             index = self.table_fm.GetItemText(row, 0)
-    #             x = self.table_fm.GetItemText(row, 1)
-    #             y = self.table_fm.GetItemText(row, 2)
-    #             z = self.table_fm.GetItemText(row, 3)
-    #             writer.writerow([index, x, y, z])

@@ -29,10 +29,11 @@ class Target:
         self.coordinates = model.ListVA((x, y, z), unit="px")
         self.type = model.StringVA(type)
         self.name = model.StringVA(name)
-        self.index = model.IntContinuous(index, range=(1, 20))
+        # The index and target name are in sync.
+        # TODO to change increase the index limit. change the sync logic between index and name in tab_gui_data.py and correlation.py
+        self.index = model.IntContinuous(index, range=(1, 9))
         if size:
             self.size = model.FloatContinuous(size, range=(1, 20))# for super Z workflow
         else:
             self.size = None
         self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")
-

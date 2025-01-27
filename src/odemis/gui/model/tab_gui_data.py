@@ -488,6 +488,8 @@ class CryoLocalizationGUIData(CryoGUIData):
 
 
 DEBUG = True
+
+
 class CryoCorrelationGUIData(CryoGUIData):
     """ Represent an interface used to correlate multiple streams together.
 
@@ -512,11 +514,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
 
     def add_new_target(self, x, y, type, z=None, t_name=None):
-        #     if not t_name:
-        #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
-        #         t_name = make_unique_name("1", existing_names)
         z = None
-
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
         if self.focussedView.value.name.value == "FLM Overview":
@@ -525,8 +523,6 @@ class CryoCorrelationGUIData(CryoGUIData):
                 # get the last digit of the t_name
                 # TODO limited to 9 fiducial pairs
                 index = int(t_name[-1])
-                # Parse through the existing names. find total elements with FM in the name
-                # index = sum(1 for name in existing_names if "FM" in name)
                 # TOdo only static stream which is selected
 
                 if DEBUG:
@@ -542,23 +538,27 @@ class CryoCorrelationGUIData(CryoGUIData):
                                             index=index, fm_focus_position=fm_focus_position)
                             break
             elif type == "RegionOfInterest":
+                t_name = make_unique_name("POI-1", existing_names)
+                # get the last digit of the t_name
+                # TODO limited to 9 fiducial pairs
+                index = int(t_name[-1])
                 # TOdo only static stream which is selected, only add 1 poi
                 if DEBUG:
                     z = 10
-                    target = Target(x, y, z, name="POI-1", type=type,
-                                    index=1, fm_focus_position=fm_focus_position)
+                    target = Target(x, y, z, name=t_name, type=type,
+                                    index=index, fm_focus_position=fm_focus_position)
                 else:
                     for s in self.streams.value:
 
                         if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
                             z = s.zIndex.value
-                            target = Target(x, y, z, name="POI-1", type=type,
-                                            index=1, fm_focus_position=fm_focus_position)
+                            target = Target(x, y, z, name=t_name, type=type,
+                                            index=index, fm_focus_position=fm_focus_position)
                             break
 
         elif self.focussedView.value.name.value == "SEM Overview":
             if type == "SurfaceFiducial":
-            # self.main.fib_fiducial_index.value += 1
+                # self.main.fib_fiducial_index.value += 1
                 target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
                                 fm_focus_position=fm_focus_position)
                 self.fib_surface_point.value = target
@@ -601,6 +601,7 @@ class CryoCorrelationGUIData(CryoGUIData):
     #
     #     self.fib_surface_fiducial = target
     #     return target
+
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
