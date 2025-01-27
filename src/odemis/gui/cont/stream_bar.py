@@ -25,9 +25,9 @@ import functools
 import gc
 import logging
 import os
-from collections import OrderedDict
 import threading
 import time
+from collections import OrderedDict
 
 import wx
 
@@ -35,12 +35,13 @@ import odemis.acq.stream as acqstream
 import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
+from odemis.acq.stream import FastEMOverviewStream, StaticSEMStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
-from odemis.acq.stream import StaticStream, FastEMOverviewStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
+from odemis.util.dataio import data_to_static_streams
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -2178,6 +2179,101 @@ class CryoAcquiredStreamsController(CryoStreamsController):
             # (see CryoChamberTab._reset_project_data())
             for f in self._tab_data_model.main.features.value:
                 f.streams.value.clear()
+
+        # Clear the stream controller
+        self.stream_controllers = []
+
+        # Force a check of what can be garbage collected, as some of the streams
+        # could be quite big, that will help to reduce memory pressure.
+        gc.collect()
+
+
+class CryoFIBAcquiredStreamsController(CryoStreamsController):
+    """
+    StreamBarController to display the acquired reference image for automated milling workflow.
+    The only role of the controller is to display the streams in the 
+    acquired view when the feature is selected.
+    """
+
+    def __init__(self, tab_data, feature_view, *args, **kwargs):
+        """
+        feature_view (StreamView): the view to show the feature streams
+        """
+        super().__init__(tab_data, *args, **kwargs)
+        self._feature_view = feature_view
+
+        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+
+    def showFeatureStream(self, stream) -> StreamController:
+        """
+        Shows an Feature stream (in the Acquired view)
+        Must be run in the main GUI thread.
+        """
+        self._feature_view.addStream(stream)
+        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+                                   view=self._feature_view)
+        return sc
+
+    @call_in_wx_main
+    def _on_current_feature_changes(self, feature):
+        """
+        Handle switching the acquired streams appropriate to the current feature
+        :param feature: (CryoFeature or None) the newly selected current feature
+        """
+        self.clear_feature_streams()
+        # show the feature streams on the acquired view
+
+        acquired_streams = []
+        if feature:
+            if feature.reference_image is not None:
+                acquired_streams = data_to_static_streams([feature.reference_image])
+            for stream in acquired_streams:
+                self.showFeatureStream(stream)
+                self.stream = stream # should only ever be 1 stream
+        # refit the selected feature in the acquired view
+        self._view_controller.viewports[3].canvas.fit_view_to_content()
+
+    def clear_feature_streams(self):
+        """
+        Remove from display all feature streams (but leave the overview and live streams)
+        But DO NOT REMOVE the streams from the model
+        """
+        # Remove the panels, and indirectly it will clear the view
+        v = self._feature_view
+        for sc in self.stream_controllers.copy():
+            logging.warning(f"attempting to remove stream: {sc.stream}")
+            if not isinstance(sc.stream, StaticSEMStream):
+                logging.warning("Unexpected non static stream: %s", sc.stream)
+                continue
+
+            self._stream_bar.remove_stream_panel(sc.stream_panel)
+            if hasattr(v, "removeStream"):
+                v.removeStream(sc.stream)
+            if sc in self.stream_controllers:
+                self.stream_controllers.remove(sc)
+
+        self.stream = None
+        self._stream_bar.fit_streams()
+
+        # Force a check of what can be garbage collected, as some of the streams
+        # could be quite big, that will help to reduce memory pressure.
+        gc.collect()
+
+    def clear(self, clear_model=True):
+        """
+        Remove all the streams, from the GUI (view, stream panels) 
+        Must be called in the main GUI thread.
+        :param clear_model: unused, but required because of external api
+        """
+        # clear the graphical part
+        self._stream_bar.clear()
+
+        # Clean up the views
+        for stream in self._tab_data_model.streams.value:
+            if isinstance(stream, StaticStream):
+                for v in (self._feature_view, self._ov_view):
+                    if hasattr(v, "removeStream"):
+                        v.removeStream(stream)
 
         # Clear the stream controller
         self.stream_controllers = []
