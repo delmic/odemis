@@ -198,7 +198,7 @@ class CryoZLocalizationController(object):
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             raise ValueError("Select a feature first to specify the Z localization in X/Y")
-        pos = feature.pos.value[:2]
+        pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(feature.stage_position.value)
 
         # Disable the GUI and show the progress bar
         self._tab.streambar_controller.pauseStreams()
@@ -217,7 +217,7 @@ class CryoZLocalizationController(object):
         # The angles of stigmatorAngle should come from MD_CALIB, so it's relatively safe
         angle = self._tab_data.stigmatorAngle.value
 
-        self._acq_future = z_localization.measure_z(self._stigmator, angle, pos, s, logpath=fn)
+        self._acq_future = z_localization.measure_z(self._stigmator, angle, (pos["x"], pos["y"]), s, logpath=fn)
         self._panel.btn_z_localization.SetLabel("Cancel")
 
         self._acq_future_connector = ProgressiveFutureConnector(self._acq_future,
@@ -248,8 +248,7 @@ class CryoZLocalizationController(object):
 
             # Update the feature Z pos, and move there
             feature = self._tab_data.main.currentFeature.value
-            pos = feature.pos.value[:2]
-            feature.pos.value = pos + (zpos,)
+            feature.fm_focus_position.value = {"z": zpos}
             if warning:
                 # Update the Z pos, but do not move there.
                 logging.warning("Z pos shift detected of %s, but not going there as it had warning %s", zshift, warning)

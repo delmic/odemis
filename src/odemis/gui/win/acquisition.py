@@ -822,7 +822,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 "y": self.stage.axes["y"].range
             }
 
-            # tmp disable until consolidate to sem posture range
+            # TODO: not valid for sample-stage
             # stage_md = self.stage.getMetadata()
             # if imaging_range in stage_md:
                 # self._tiling_rng.update(stage_md[imaging_range])

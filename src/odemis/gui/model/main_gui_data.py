@@ -31,7 +31,7 @@ from odemis import model
 from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
-from odemis.acq.move import MicroscopePostureManager, MeteorTFS2PostureManager
+from odemis.acq.move import MicroscopePostureManager, MeteorTFS3PostureManager
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
@@ -314,7 +314,7 @@ class MainGUIData(object):
                 if self.role == "enzel":
                     required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
-                required_roles += ["light", "stage", "focus"]
+                required_roles += ["light", "stage", "focus", "stage-bare"]
                 # add additional roles when fibsem control enabled
                 if has_fibsem:
                     required_roles += ["e-beam", "se-detector", "ebeam-focus",
@@ -329,6 +329,13 @@ class MainGUIData(object):
                     required_roles += ["lens"]
             elif self.role == "mbsem":
                 required_roles += ["e-beam", "stage"]
+
+            # (special case): remove stage role for meteor tfs_3, as it's replaced with sample_stage
+            if self.role == "meteor":
+                stage_bare = model.getComponent(role="stage-bare")
+                md = stage_bare.getMetadata().get(model.MD_CALIB, {})
+                if md.get("version", "tfs_1") == "tfs_3":
+                    required_roles.remove("stage")
 
             for crole in required_roles:
                 attrname = self._ROLE_TO_ATTR[crole]
@@ -524,7 +531,8 @@ class CryoMainGUIData(MainGUIData):
 
         # Controls the stage movement based on the imaging mode
         self.posture_manager = MicroscopePostureManager(microscope)
-        if self.role == "meteor" and isinstance(self.posture_manager, MeteorTFS2PostureManager):
+
+        if isinstance(self.posture_manager, MeteorTFS3PostureManager):
             self.stage = self.posture_manager.sample_stage
 
         # stage.MD_SAMPLE_CENTERS contains the date in almost the right format, but the
