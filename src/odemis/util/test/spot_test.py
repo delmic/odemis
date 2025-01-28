@@ -339,6 +339,26 @@ class TestFindSpotPositions(unittest.TestCase):
         numpy.testing.assert_array_equal(sorted(indices), range(len(loc)))
         numpy.testing.assert_array_less(distances, 0.05)
 
+    def test_spots_close_to_edge(self):
+        """
+        `find_spot_positions` should find all spot positions in a generated
+        test image when the minimum distance between spots is larger than the
+        distance between the spots and the edge of the image.
+        """
+        # set a grid of 8 by 8 points to 1 at the top left of the image
+        image = numpy.zeros((256, 256))
+        image[4:100:12, 8:104:12] = 1
+        expected_ji = numpy.column_stack(numpy.where(image))
+
+        ji = spot.find_spot_positions(image, sigma=0.75, min_distance=12)
+
+        # Sort both arrays to ensure consistent ordering
+        expected_ji_sorted = expected_ji[numpy.lexsort((expected_ji[:, 1], expected_ji[:, 0]))]
+        ji_sorted = ji[numpy.lexsort((ji[:, 1], ji[:, 0]))]
+
+        # Check if the sorted arrays are equal
+        numpy.testing.assert_array_almost_equal(expected_ji_sorted, ji_sorted)
+
 
 if __name__ == "__main__":
     unittest.main()
