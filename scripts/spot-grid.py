@@ -20,6 +20,7 @@ import wx
 import wx.lib.wxcairo
 
 from odemis import dataio, model
+from odemis.acq.fastem import DEFAULT_PITCH
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.driver import ueye
 from odemis.gui.conf.file import AcquisitionConfig
@@ -35,7 +36,6 @@ MAX_WIDTH = 2000  # px
 PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
 DEFAULT_MAGNIFICATION = 40
 PIXEL_SIZE = PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION
-DEFAULT_PITCH = 3.2e-6
 # 0.75 is a safety factor to allow for some variation in spot positions
 MIN_DIST_SPOTS = int(0.75 * DEFAULT_PITCH / PIXEL_SIZE)
 
@@ -303,7 +303,7 @@ def main(args):
     parser.add_argument("--magnification", dest="magnification", type=float,
                         help="magnification (typically 40 or 50)")
     parser.add_argument("--pitch", dest="pitch", type=float, default=None,
-                        help="pitch in meters (typically 3.2e-6)")
+                        help=f"pitch in meters (defaults to  {DEFAULT_PITCH:0.1e})")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int, choices=[0, 1, 2],
                         default=0, help="set verbosity level (0-2, default = 0)")
     options = parser.parse_args(args[1:])
@@ -338,16 +338,15 @@ def main(args):
         logging.warning("No magnification specified, falling back to %s.", magnification)
     pixel_size = PIXEL_SIZE_SAMPLE_PLANE / magnification
 
-    if not options.pitch:
+    pitch = options.pitch
+    if not pitch:
         try:
             mppc = model.getComponent(role="mppc")
             mppc_md = mppc.getMetadata()
-            pitch = mppc_md.get(model.MD_CALIB, {}).get("pitch", 3.2e-6)
+            pitch = mppc_md.get(model.MD_CALIB, {}).get("pitch", DEFAULT_PITCH)
         except Exception as ex:
             logging.debug("Failed to read pitch from mppc, ex: %s", ex)
             pitch = DEFAULT_PITCH
-    else:
-        pitch = options.pitch
 
     # 0.75 is a safety factor to allow for some variation in spot positions
     min_dist_spots = int(0.75 * pitch / pixel_size)

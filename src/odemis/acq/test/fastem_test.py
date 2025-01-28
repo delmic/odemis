@@ -37,7 +37,7 @@ from odemis import model
 from odemis.acq import fastem, stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import SETTINGS_SELECTION
+from odemis.acq.fastem import DEFAULT_PITCH, SETTINGS_SELECTION
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.model.main_gui_data import FastEMMainGUIData
@@ -1295,8 +1295,9 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.mppc.frameDuration.value = 0.1
         cls.mppc.cellCompleteResolution.value = (900, 900)
         cls.mppc.shape = (8, 8)
-        cls.mppc.configure_mock(**{"getMetadata.return_value": {model.MD_CALIB: {"pitch": 3.2e-6},
-                                                                }})
+        cls.mppc.configure_mock(
+            **{"getMetadata.return_value": {model.MD_CALIB: {"pitch": DEFAULT_PITCH},}}
+        )
 
         cls.multibeam = Mock()
         cls.multibeam.configure_mock(**{"getMetadata.return_value": {model.MD_SCAN_OFFSET_CALIB: [0.01, 0.01],

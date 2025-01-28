@@ -53,6 +53,8 @@ from odemis.util.transform import SimilarityTransform, to_physical_space
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
+DEFAULT_PITCH = 3.2e-6  # distance between spots in m
+
 # TODO: Normally we do not use component names in code, only roles. Store in the roles in the SETTINGS_SELECTION,
 #  and at init lookup the role -> name conversion (using model.getComponent(role=role)).
 # Selection of components, VAs and values to save with the ROA acquisition, structured: {component: {VA: value}}
@@ -295,7 +297,7 @@ class AcquisitionTask(object):
         # Calculate the expected minimum distance between spots in the grid on the diagnostic camera
         detector_md = detector.getMetadata()
         ccd_md = ccd.getMetadata()
-        self._exp_pitch_m = detector_md.get(model.MD_CALIB, {}).get("pitch", 3.2e-6)  # m
+        self._exp_pitch_m = detector_md.get(model.MD_CALIB, {}).get("pitch", DEFAULT_PITCH)  # m
         lens_mag = ccd_md.get(model.MD_LENS_MAG)
         ccd_px_size = ccd_md.get(model.MD_SENSOR_PIXEL_SIZE)
         exp_pitch_px = self._exp_pitch_m * lens_mag / ccd_px_size[0]
