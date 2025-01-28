@@ -134,8 +134,8 @@ class TiledAcquisitionTask(object):
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
 
-        # Normalize the region input into a polygon
-        self._polygon = self._normalize_region_to_polygon(region)
+        # Convert the region input into a polygon
+        self._polygon = self._convert_region_to_polygon(region)
         xmin, ymin, xmax, ymax = self._polygon.bounds
         self._area_size = (xmax - xmin, ymax - ymin)
 
@@ -232,19 +232,19 @@ class TiledAcquisitionTask(object):
         self._weaver = weaver
         self._focus_plane = {}
 
-    def _normalize_region_to_polygon(
+    def _convert_region_to_polygon(
             self,
             region: Union[Tuple[float, float, float, float], List[Tuple[float, float]]]
         ) -> Polygon:
         """
-        Normalize the region input into a polygon.
+        Convert the region input into a polygon.
         :param region: Either a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points.
         :return: A polygon representing the region.
         :raise: ValueError if the region does not form a valid polygon.
         :raise: ValueError if the region is not a bounding box or a list of points.
         """
         if isinstance(region, tuple) and len(region) == 4:
-            # Normalize the bounding box
+            # Normalize the bounding box to ensure the order is correct
             xmin, ymin, xmax, ymax = util.normalize_rect(region)
             if region[0] != xmin or region[1] != ymin:
                 logging.warning("Acquisition area %s rearranged into %s", region, (xmin, ymin, xmax, ymax))
@@ -301,11 +301,9 @@ class TiledAcquisitionTask(object):
         if self._polygon is None:
             raise ValueError("Polygon shape is not defined.")
 
-        # Define grid cell size based on field of view (FoV) and overlap
-        reliable_fov = (
-            self._sfov[0] * (1 - self._overlap),  # Width of the tile
-            self._sfov[1] * (1 - self._overlap)   # Height of the tile
-        )
+        # The size of the smallest tile, non-including the overlap, which will be
+        # lost (and also indirectly represents the precision of the stage)
+        reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
 
         # Round up the number of tiles needed. With a twist: if we'd need less
         # than 1% of a tile extra, round down. This handles floating point
