@@ -32,7 +32,7 @@ from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.model import CALIBRATION_2, CALIBRATION_3
-from odemis.util.raster import get_possible_intersections
+from odemis.util.raster import get_polygon_grid_cells
 
 # The threshold is used to check if the ROA bounding box is larger in size
 ACQ_SIZE_THRESHOLD = 0.002  # 2 mm
@@ -192,11 +192,10 @@ class FastEMROA:
         rows = numpy.floor((ymax - points[:, 1]) / r_grid_width).astype(int)
         cols = numpy.floor((points[:, 0] - xmin) / c_grid_width).astype(int)
 
-        # Vectorized approach to calculate row and column pairs using np.roll
-        row_pairs = numpy.vstack((rows, numpy.roll(rows, -1))).T
-        col_pairs = numpy.vstack((cols, numpy.roll(cols, -1))).T
+        # Create array of (row, col) vertices
+        polygon_vertices = numpy.stack((rows, cols), axis=1)
 
-        intersected_fields = get_possible_intersections(row_pairs, col_pairs)
+        intersected_fields = get_polygon_grid_cells(polygon_vertices, include_neighbours=True)
 
         for row, col in intersected_fields:
             if 0 <= row < grid_height and 0 <= col < grid_width:
