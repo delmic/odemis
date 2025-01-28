@@ -154,6 +154,7 @@ jobs:
         python3 -m unittest src/odemis/acq/stitching/test/registrar_test.py --verbose
         python3 -m unittest src/odemis/acq/stitching/test/stitching_test.py --verbose
         python3 -m unittest src/odemis/acq/stitching/test/weaver_test.py --verbose
+        python3 -m unittest src.odemis.acq.stitching.test.tiledacq_test.TiledAcquisitionTaskTestCase --verbose
 
     - name: Run tests from odemis.acq.calibration
       if: ${{ !cancelled() }}
