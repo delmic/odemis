@@ -595,6 +595,8 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                         self._label.pos = (bpos[0]+10, bpos[1]+10)
                         self._label.draw(ctx)
                         # set_icon(self._feature_icons_selected[target.status.value])
+                    elif self.tab_data.main.currentTarget.value and (target.index.value == self.tab_data.main.currentTarget.value.index.value) and ("FIB" in self.tab_data.main.currentTarget.value.name.value):
+                        set_icon(self._feature_icons_selected["FiducialPair"])
                     else:
                         set_icon(self._feature_icons[target.type.value])
                         # set_icon(self._feature_icons[target.status.value])
@@ -772,6 +774,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                         self._label.pos = (bpos[0] + 10, bpos[1] + 10)
                         self._label.draw(ctx)
                         # set_icon(self._feature_icons_selected[target.status.value])
+                    elif self.tab_data.main.currentTarget.value and (target.index.value == self.tab_data.main.currentTarget.value.index.value) and ("FM" in self.tab_data.main.currentTarget.value.name.value):
+                        set_icon(self._feature_icons_selected["FiducialPair"])
                     else:
                         set_icon(self._feature_icons[target.type.value])
                         # set_icon(self._feature_icons[target.status.value])
