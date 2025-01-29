@@ -76,7 +76,7 @@ class Weaver(metaclass=ABCMeta):
         # how the user regularly sees the images.
         # However, when stitching SEM images, typically that is applied without changing the sample coordinates,
         # so usually the stitched image needs to take that rotation into account to be correct.
-        rotation = self.tiles[0].metadata.get(model.MD_ROTATION, 0) + self.tiles[0].metadata.get(model.MD_BEAM_SCAN_ROTATION, 0)
+        rotation = self.tiles[0].metadata.get(model.MD_ROTATION, 0) #+ self.tiles[0].metadata.get(model.MD_BEAM_SCAN_ROTATION, 0)
         center_of_rot = self.tiles[0].metadata[model.MD_POS]
 
         tiles = []

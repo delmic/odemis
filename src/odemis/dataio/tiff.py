@@ -718,6 +718,14 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
+        # scan rotation
+        try:
+            ext_set = md[model.MD_EXTRA_SETTINGS]
+            ebeam = ext_set.get("Electron-Beam", {}) # FIB/SEM should be same?
+            md[model.MD_BEAM_SCAN_ROTATION] = float(ebeam["rotation"][0])
+        except (KeyError, ValueError, TypeError):
+            pass
+
         pxe = ime.find("Pixels") # there must be only one per Image
 
         try:
