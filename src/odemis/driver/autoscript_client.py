@@ -33,6 +33,7 @@ import numpy
 import pkg_resources
 import Pyro5.api
 from Pyro5.errors import CommunicationError
+from scipy import ndimage
 
 from odemis import model, util
 from odemis.driver.xt_client import check_and_transfer_latest_package
@@ -1244,6 +1245,10 @@ class Scanner(model.Emitter):
                 if dwell_time != self.dwellTime.value:
                     self.dwellTime._value = dwell_time
                     self.dwellTime.notify(dwell_time)
+                res = self.parent.get_resolution(self.channel)
+                if res != self.resolution.value:
+                    self.resolution._value = res
+                    self.resolution.notify(res)
                 self._updateResolution()
 
             voltage = self.parent.get_high_voltage(self.channel)
@@ -1254,6 +1259,10 @@ class Scanner(model.Emitter):
             if voltage != self.accelVoltage.value:
                 self.accelVoltage._value = voltage
                 self.accelVoltage.notify(voltage)
+            beam_current = self.parent.get_beam_current(self.channel)
+            if beam_current != self.probeCurrent.value:
+                self.probeCurrent._value = beam_current
+                self.probeCurrent.notify(beam_current)
             beam_shift = self.parent.get_beam_shift(self.channel)
             if beam_shift != self.shift.value:
                 self.shift._value = beam_shift
@@ -1454,6 +1463,12 @@ class Detector(model.Detector):
         # this makes it pretty annoying to do anything on that side, and error prone.
         # disabling this until a better solution is found
 
+        # median filter applied to the image (required for cryo data)
+        self.median_filter = model.IntContinuous(
+            value=self.getMetadata().get(model.MD_MEDIAN_FILTER, 0),
+            range=(0, 9),
+        )
+
     def terminate(self) -> None:
         if self._generator:
             self.stop_generate()
@@ -1520,6 +1535,9 @@ class Detector(model.Detector):
                     # TODO: use the metadata from the image acquisition _md once it's available
                     image, _md = self.parent.acquire_image(self._scanner.channel)
 
+                    # median filter to remove noise (required for cryo data)
+                    if self.median_filter.value > 0:
+                        image = ndimage.median_filter(image, self.median_filter.value)
                     # non-blocking acquisition (disabled until hw testing)
                     # logging.debug("Starting one image acquisition")
                     # # start the acquisition
@@ -1748,6 +1766,12 @@ class Stage(model.Actuator):
             "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
         }
 
+        # When raw coordinate system is selected, in theory just z should change
+        # but in practice x and y change by a fixed offset. When raw coordinate system is used,
+        # offset correction is applied (in the later part of init)
+        # such that all axes apart from z, have same values
+        self._raw_offset = {"x": 0, "y": 0}
+
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
                                 **kwargs)
         # will take care of executing axis move asynchronously
@@ -1755,6 +1779,7 @@ class Stage(model.Actuator):
 
         self.position = model.VigilantAttribute({}, unit=stage_info["unit"],
                                                 readonly=True)
+        self._get_coordinate_system_offset() # to get the offset values for raw coordinate system
         self._updatePosition()
 
         # Refresh regularly the position
@@ -1770,12 +1795,31 @@ class Stage(model.Actuator):
             self._pos_poll.cancel()
             self._pos_poll = None
 
+    def _get_coordinate_system_offset(self):
+        """Calculate the offset values for raw coordinate system. The offset is the difference between the specimen (linked) and raw coordinate system."""
+        self.parent.set_default_stage_coordinate_system("SPECIMEN")
+        pos_linked = self._getPosition()
+        self.parent.set_default_stage_coordinate_system("RAW")
+        pos = self._getPosition()
+        for axis in self._raw_offset.keys():
+            self._raw_offset[axis] = pos_linked[axis] - pos[axis]
+        # the offset should only be in linear axes, it is not expected in rotational axes
+        if not all(pos[axis] == pos_linked[axis] for axis in ["rx", "rz"]):
+            logging.warning(
+                "Unexpected offset in rotational axes. There should be no difference between raw and linked coordinates for rotational axes. "
+                "Please check the stage configuration.")
+        logging.debug(f"The offset values in x and y are {self._raw_offset} when stage is in the raw coordinate "
+                        f"system for raw stage coordinates: {pos}, linked stage coordinates: {pos_linked}")
+
     def _updatePosition(self):
         """
         update the position VA
         """
         old_pos = self.position.value
         pos = self._getPosition()
+        # Apply the offset to the raw coordinates
+        pos["x"] += self._raw_offset["x"]
+        pos["y"] += self._raw_offset["y"]
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -1814,6 +1858,11 @@ class Stage(model.Actuator):
                 if rel:
                     logging.debug("Moving by shift {}".format(pos))
                 else:
+                    # apply the offset to the raw coordinates
+                    if "x" in pos.keys():
+                        pos["x"] -= self._raw_offset["x"]
+                    if "y" in pos.keys():
+                        pos["y"] -= self._raw_offset["y"]
                     logging.debug("Moving to position {}".format(pos))
 
                 if "rx" in pos.keys():
