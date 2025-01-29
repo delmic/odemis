@@ -39,7 +39,7 @@ import wx
 import wx.html
 
 from odemis.acq.feature import save_features, CorrelationTarget
-from odemis.gui.model import TOOL_FEATURE, TOOL_FIDUCIAL
+from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
@@ -1007,13 +1007,17 @@ class CorrelationPointsController(object):
             elif key == wx.WXK_DOWN:
                 if self._tab_data_model.focussedView.value.name.value == "FLM Overview":
                     self._tab_data_model.main.selected_target_type.value = "RegionOfInterest"
-                    self._tab_data_model.tool.value = TOOL_FIDUCIAL   # POI
+                    self._tab_data_model.tool.value = TOOL_REGION_OF_INTEREST   # POI
                       # in tad data ? TODO
 
     def on_delete_row(self, event):
         """
         Delete the currently selected row.
         """
+        if not self._tab_data_model.main.currentTarget.value:
+            self.grid.SelectRow(-1)
+            return
+
         selected_rows = self.grid.GetSelectedRows()
         # row_evt = event.GetRow()
         if selected_rows:
@@ -1024,6 +1028,8 @@ class CorrelationPointsController(object):
                     if target.name.value == self._tab_data_model.main.currentTarget.value.name.value:
                         self._tab_data_model.main.targets.value.remove(target)
                         self._tab_data_model.main.currentTarget.value = None
+                        # unselect grid row
+                        self.grid.SelectRow(-1)
                         break
         self.update_feature_correlation_target()
         if self.check_correlation_conditions():
