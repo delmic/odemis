@@ -27,14 +27,13 @@ of microscope images.
 
 """
 
-import configparser
 import logging
 import math
 import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
-from typing import List
+from typing import Dict, List, Optional
 
 import wx
 
@@ -43,11 +42,20 @@ from odemis.acq import acqmng, stream
 from odemis.acq.feature import (
     FEATURE_DEACTIVE,
     CryoFeature,
+    _create_fibsem_filename,
     acquire_at_features,
     add_feature_info_to_filename,
 )
-from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream
+from odemis.acq.stream import (
+    BrightfieldStream,
+    FIBStream,
+    FluoStream,
+    SEMStream,
+    StaticStream,
+    Stream,
+)
 from odemis.gui import conf
+from odemis.gui import model as guimod
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
@@ -76,8 +84,10 @@ class CryoAcquiController(object):
 
     def __init__(self, tab_data, panel, tab):
         self._panel = panel
-        self._tab_data = tab_data
+        self._tab_data: guimod.CryoGUIData = tab_data
         self._tab = tab
+
+        self.acqui_mode = self._tab_data.acqui_mode
 
         self.overview_acqui_controller = OverviewStreamAcquiController(
             self._tab_data, self._tab
@@ -89,7 +99,10 @@ class CryoAcquiController(object):
         # VA's
         self._filename = self._tab_data.filename
         self._acquiStreams = self._tab_data.acquisitionStreams
-        self._zStackActive = self._tab_data.zStackActive
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._zStackActive = self._tab_data.zStackActive
+        else:
+            self._zStackActive = model.BooleanVA(False)
 
         # Find the function pattern without detecting the count
         self._config.fn_ptn, _ = guess_pattern(self._filename.value, detect_count=False)
@@ -98,14 +111,14 @@ class CryoAcquiController(object):
         self._panel.gauge_cryosecom_acq.Hide()
         self._panel.txt_cryosecom_left_time.Hide()
         self._panel.txt_cryosecom_est_time.Show()
-        self._panel.txt_acquire_features_est_time.Show()
         self._panel.btn_cryosecom_acqui_cancel.Hide()
-        self._panel.Layout()
 
         # bind events (buttons, checking, ...) with callbacks
         # for "ACQUIRE" button
         self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
-        self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.txt_acquire_features_est_time.Show()
+            self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
         # for "change..." button
         self._panel.btn_cryosecom_change_file.Bind(
             wx.EVT_BUTTON, self._on_btn_change
@@ -116,44 +129,50 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
-        # for the z parameters widgets
-        self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
-        self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
-        self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
-        self._zlevels = {}  # type: dict[Stream, list[float]]
+        self._zlevels: Dict[Stream, List[float]] = {}
 
-        # callbacks of VA's
+        # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
-        self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
-        self._tab_data.zMin.subscribe(self._on_z_min, init=True)
-        self._tab_data.zMax.subscribe(self._on_z_max, init=True)
-        self._tab_data.zStep.subscribe(self._on_z_step, init=True)
         self._tab_data.streams.subscribe(self._on_streams_change, init=True)
         # TODO link .acquiStreams with a callback that is called
         # to check/uncheck items (?)
+        self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
+        self._tab_data.main.features.subscribe(self._on_features_change, init=True)
 
-        # VA's connector
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zStackActive,
-            value_ctrl=self._panel.z_stack_chkbox,
-            events=wx.EVT_CHECKBOX,
-        )
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zMin,
-            value_ctrl=self._panel.param_Zmin,
-            events=wx.EVT_COMMAND_ENTER,
-        )
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zMax,
-            value_ctrl=self._panel.param_Zmax,
-            events=wx.EVT_COMMAND_ENTER,
-        )
-        _ = VigilantAttributeConnector(
-            va=self._tab_data.zStep,
-            value_ctrl=self._panel.param_Zstep,
-            events=wx.EVT_COMMAND_ENTER,
-        )
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            # for the z parameters widgets
+            self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
+            self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
+            self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
+
+            # VA's
+            self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
+            self._tab_data.zMin.subscribe(self._on_z_min, init=True)
+            self._tab_data.zMax.subscribe(self._on_z_max, init=True)
+            self._tab_data.zStep.subscribe(self._on_z_step, init=True)
+
+            # VA's connector
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zStackActive,
+                value_ctrl=self._panel.z_stack_chkbox,
+                events=wx.EVT_CHECKBOX,
+            )
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zMin,
+                value_ctrl=self._panel.param_Zmin,
+                events=wx.EVT_COMMAND_ENTER,
+            )
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zMax,
+                value_ctrl=self._panel.param_Zmax,
+                events=wx.EVT_COMMAND_ENTER,
+            )
+            _ = VigilantAttributeConnector(
+                va=self._tab_data.zStep,
+                value_ctrl=self._panel.param_Zstep,
+                events=wx.EVT_COMMAND_ENTER,
+            )
 
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
@@ -161,9 +180,26 @@ class CryoAcquiController(object):
         self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
 
         # advanced features toggle
-        self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
-        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
-        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+        self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+        self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG and self.acqui_mode is guimod.AcquiMode.FLM)
+
+        # fibsem specific acquisition settings
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
+            self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
+            self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
+            self._panel.streams_chk_list.Hide()
+
+        # advanced features toggle
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
+            self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
+
+        # refresh the GUI
+        self._panel.Layout()
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -181,13 +217,18 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.Show(not is_acquiring)
         self._panel.btn_cryosecom_change_file.Enable(not is_acquiring)
         self._panel.btn_acquire_overview.Enable(not is_acquiring)
-        self._panel.btn_acquire_features.Enable(not is_acquiring)
-        self._panel.z_stack_chkbox.Enable(not is_acquiring)
         self._panel.streams_chk_list.Enable(not is_acquiring)
-        self._panel.chk_use_autofocus_acquire_features.Enable(not is_acquiring)
-        self._panel.param_Zmin.Enable(not is_acquiring and self._zStackActive.value)
-        self._panel.param_Zmax.Enable(not is_acquiring and self._zStackActive.value)
-        self._panel.param_Zstep.Enable(not is_acquiring and self._zStackActive.value)
+
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._panel.btn_acquire_features.Enable(not is_acquiring)
+            self._panel.z_stack_chkbox.Enable(not is_acquiring)
+            self._panel.chk_use_autofocus_acquire_features.Enable(not is_acquiring)
+            self._panel.param_Zmin.Enable(not is_acquiring and self._zStackActive.value)
+            self._panel.param_Zmax.Enable(not is_acquiring and self._zStackActive.value)
+            self._panel.param_Zstep.Enable(not is_acquiring and self._zStackActive.value)
+
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._panel.btn_acquire_all.Enable(not is_acquiring)
 
         # disable the streams settings while acquiring
         if is_acquiring:
@@ -198,7 +239,23 @@ class CryoAcquiController(object):
         # update the layout
         self._panel.Layout()
 
-    def _on_acquire(self, _):
+    def _get_acqui_streams(self, evt: wx.Event) -> List[stream.Stream]:
+        """
+        Get the acquisition streams based on the acqui mode,
+        button pressed, and the current view
+        """
+        acq_streams = self._acquiStreams.value
+        sender = evt.GetEventObject()
+        if (self.acqui_mode is guimod.AcquiMode.FIBSEM and
+                sender == self._panel.btn_cryosecom_acquire):
+            if self._tab_data.is_sem_active_view:
+                acq_streams = [s for s in acq_streams if isinstance(s, SEMStream)]
+            if self._tab_data.is_fib_active_view:
+                acq_streams = [s for s in acq_streams if isinstance(s, FIBStream)]
+        logging.debug(f"Acquisition streams: {acq_streams}")
+        return acq_streams
+
+    def _on_acquire(self, evt: wx.Event):
         """
         called when the button "acquire" is pressed
         """
@@ -213,15 +270,18 @@ class CryoAcquiController(object):
         # until after the acquisition starts
         self._tab.streambar_controller.pauseStreams()
 
+        # get the streams to acquire (depending on mode, btn, ...)
+        acq_streams = self._get_acqui_streams(evt)
+
         # acquire the data
         if self._zStackActive.value:
             self._on_zstack()  # update the zlevels with the current focus position
             self._acq_future = acqmng.acquireZStack(
-                self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
+                acq_streams, self._zlevels, self._tab_data.main.settings_obs)
 
         else:  # no zstack
             self._acq_future = acqmng.acquire(
-                self._acquiStreams.value, self._tab_data.main.settings_obs)
+                acq_streams, self._tab_data.main.settings_obs)
 
         logging.info("Acquisition started")
 
@@ -242,8 +302,9 @@ class CryoAcquiController(object):
         Called when the acquisition process is
         done, failed or canceled
         """
-        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        local_tab.tab_data_model.select_current_position_feature()
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._tab.tab_data_model.select_current_position_feature()
+
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
@@ -298,7 +359,7 @@ class CryoAcquiController(object):
                        "zstep": self._tab_data.zStep.value}
 
         filename = self._filename.value
-        stage = self._tab_data.main.stage
+        stage = self._tab_data.main.stage_bare
         focus = self._tab_data.main.focus
         acq_streams = self._acquiStreams.value
         features = self._get_selected_features()
@@ -373,6 +434,14 @@ class CryoAcquiController(object):
             self._tab_data.main.currentFeature.value = None
             self._tab_data.main.currentFeature.value = f
 
+    def _on_chkbox_save_acquisition(self, evt: wx.Event):
+
+        # toggle file controls when saving is enabled
+        enable = self._panel.chkbox_save_acquisition.IsChecked()
+        self._panel.lbl_filename.Enable(enable)
+        self._panel.txt_filename.Enable(enable)
+        self._panel.btn_cryosecom_change_file.Enable(enable)
+
     def _reset_acquisition_gui(self, text=None, state=None):
         """
         Resets some GUI widgets for the next acquisition
@@ -399,9 +468,9 @@ class CryoAcquiController(object):
         """
         Shows the acquired image on the view
         """
-        # get the localization tab
-        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        local_tab.display_acquired_data(data)
+        # Q: do we want FIBSEM images to show in the localization tab?
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._tab.display_acquired_data(data)
 
     @call_in_wx_main
     def _on_export_data_done(self, future):
@@ -413,19 +482,53 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
-    def _export_data(self, data, thumb_nail):
+
+    def _create_cryo_filename(self, filename: str, acq_type: Optional[str] = None) -> str:
+        """
+        Create a filename for cryo images depending on mode.
+        :param filename: filename given by user
+        """
+        acq_map: Dict[str, str] = {
+            model.MD_AT_EM: "SEM",
+            model.MD_AT_FIB: "FIB"
+        }
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
+                                        filename=filename)
+        else:
+            filename = _create_fibsem_filename(filename, acq_map[acq_type])
+
+        return filename
+
+    def _export_data(self, data: List[model.DataArray], thumb_nail):
         """
         Called to export the acquired data.
         data (DataArray): the returned data/images from the future
         thumb_nail (DataArray): the thumbnail of the views
         """
-        filename = self._filename.value
-        if data:
-            filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
-                                                 filename=filename)
+        auto_save: bool = True
+        if hasattr(self._panel, "chkbox_save_acquisition"):
+            auto_save = self._panel.chkbox_save_acquisition.IsChecked()
+
+        base_filename = self._filename.value
+        if data and auto_save:
+            # get the exporter
             exporter = dataio.get_converter(self._config.last_format)
-            exporter.export(filename, data, thumb_nail)
-            logging.info(u"Acquisition saved as file '%s'.", filename)
+
+            # export fib/sem data as separate images
+            if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+                for d in data:
+                    filename = self._create_cryo_filename(base_filename,
+                                                          d.metadata[model.MD_ACQ_TYPE])
+                    exporter.export(filename, d, thumb_nail)
+            else:
+                # export fm channels as single image
+                filename = self._create_cryo_filename(base_filename)
+                exporter.export(filename, data, thumb_nail)
+                logging.info(u"Acquisition saved as file '%s'.", filename)
+
+            # TODO: make saving fibsem data optional
+            # TODO: investigate using Cntrl + S to save?
             # update the filename
             self._filename.value = create_filename(
                 self._config.pj_last_path,
@@ -434,7 +537,7 @@ class CryoAcquiController(object):
                 self._config.fn_count,
             )
         else:
-            logging.debug("Not saving into file '%s' as there is no data", filename)
+            logging.debug("Not saving into file '%s' as there is no data", base_filename)
 
         return data
 
@@ -519,6 +622,9 @@ class CryoAcquiController(object):
         # display the time on the GUI
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
+
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            return
 
         # estimate the total time for acquiring at features
         features = self._get_selected_features()
@@ -714,6 +820,9 @@ class CryoAcquiController(object):
         ENABLED_AUTOFOCUS_TOOLTIP = "Automatically focus at each feature before acquiring."
         DISABLED_TOOLTIP = "Acquire features is disabled because no features are selected."
 
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            return
+
         if features:
             self._panel.btn_acquire_features.Enable()
             self._panel.btn_acquire_features.SetToolTip(ENABLED_TOOLTIP)
@@ -762,6 +871,11 @@ class CryoAcquiController(object):
         """
         Sync the features with the checklistbox
         """
+
+        # only available in the FLM mode
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            return
+
         # clear the list
         self._panel.acquire_features_chk_list.Clear()
 
