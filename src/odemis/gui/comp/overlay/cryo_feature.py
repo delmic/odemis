@@ -314,12 +314,16 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         "RegionOfInterest": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_unselected.png')),
         "ProjectedPoints": cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/projected_unselected.png')),
+            guiimg.getStream('/icon/projected_fiducial.png')),
+        "ProjectedPOI": cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/projected_poi.png')),
         "SurfaceFiducial": cairo.ImageSurface.create_from_png(
-            guiimg.getStream('/icon/projected_unselected.png'))}
+            guiimg.getStream('/icon/surface_fiducial.png'))}
 
         self._feature_icons_selected = {"Fiducial": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_selected.png')),
+        "FiducialPair": cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/highlighted_fiducial.png')),
         "RegionOfInterest": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_selected.png'))}
 
@@ -675,6 +679,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
+                    # TODO rename type
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value)
             elif self._mode == MODE_EDIT_FEATURES:
                 if target:

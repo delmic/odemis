@@ -153,7 +153,8 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
                 if ct_class.fib_surface_fiducial:
                     all_targets.append(ct_class.fib_surface_fiducial)
                 # flatten the list of lists
-                all_targets = list(itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
+                all_targets = list(
+                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
                 for target in all_targets:
                     correlation_targets[key]['coordinates'].append(target.coordinates.value)
                     correlation_targets[key]['index'].append(target.index.value)

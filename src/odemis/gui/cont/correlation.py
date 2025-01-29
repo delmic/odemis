@@ -47,6 +47,8 @@ from odemis import model
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.util import call_in_wx_main
+from odemis.model import ListVA
+
 
 # TODO: move to more approprate location
 def update_image_in_views(s: StaticStream, views: List[guimod.StreamView]) -> None:
@@ -592,7 +594,174 @@ class CorrelationPointsController(object):
         self.lock = threading.Lock()        # Lock to synchronize access to changes
         self.is_processing = False          # To track if the function is currently processing
         self.process_thread = None          # The thread handling the change
+        self.stream_groups = None
+        self.previous_group = None
 
+
+    @call_in_wx_main
+    def _on_fm_streams_change(self, stream_projections: ListVA) -> None:
+        if not self.stream_groups or len(stream_projections) <= 0:
+            return
+        # go for the latest stream projection
+        # get the stream name
+        # find the index in stream list and find the stream group
+        # update the visibility of the stream group
+        # Assuming stream_projections contains the updated streams
+        # for projection in stream_projections:
+        stream_obj = stream_projections[-1].stream # Get the stream name
+
+        # Find the index of the stream in the stream list
+        stream_index = next(
+            (i for i, stream in enumerate(self._tab_data_model.main.currentFeature.value.streams.value)
+             if stream == stream_obj), None)
+
+        # If the stream exists in the list
+        if stream_index is not None:
+            # Get the group this stream belongs to
+            group_key = next(
+                (key for key, indices in self.stream_groups.items() if stream_index in indices), None)
+
+            # Update visibility for the group
+            if self.previous_group == group_key:
+                return
+
+            self.previous_group = group_key
+            if group_key:
+                # should not add streams
+                # self._update_stream_group_visibility(group_key)
+                streams_list = self._tab_data_model.main.currentFeature.value.streams.value
+                for key, indices in self.stream_groups.items():
+                    for index in indices:
+                        stream = streams_list[index]
+                        # find stream controller for the stream
+                        ssc = next(
+                            (sc for sc in self._tab.streambar_controller.stream_controllers
+                             if sc.stream.name.value == stream.name.value), None)
+                        if isinstance(stream, StaticFluoStream) and not group_key:
+                            group_key = key
+
+                        if key == group_key:
+                            ssc.stream_panel.set_visible(True)
+                            ssc.stream_panel.collapse(False)
+                        elif isinstance(stream, StaticFluoStream):
+                            if hasattr(self._tab_data_model.views.value[0], "removeStream"):
+                                self._tab_data_model.views.value[0].removeStream(stream)
+                            ssc.stream_panel.set_visible(False)
+                            ssc.stream_panel.collapse(True)
+
+
+    def _update_stream_group_visibility(self, group_key: tuple) -> None:
+        streams_list = self._tab_data_model.main.currentFeature.value.streams.value
+        for key, indices in self.stream_groups.items():
+            for index in indices:
+                stream = streams_list[index]
+                ssc = self._tab.streambar_controller.addStream(stream,  play=False)
+                ssc.stream_panel.show_remove_btn(True)
+
+                if not  isinstance(stream, StaticFluoStream):
+                    ssc.stream_panel.set_visible(True)
+                    ssc.stream_panel.collapse(False)
+
+        self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_change, init=True)
+
+    def add_streams(self) -> None:
+        """add streams to the correlation tab
+        :param streams: (list[StaticStream]) the streams to add"""
+
+        # NOTE: we only add streams if they are not already in the correlation tab
+        # we will not remove streams from the correlation tab from outside it,
+        # as the user may still want to correlate them,
+        # even if they have been removed from another tab, e.g. 'localization'
+
+        # add streams to correlation tab
+        # logging.debug(f"Adding {len(streams)} streams to correlation tab {streams}")
+        # for s in streams:
+        #
+        #     # skip existing streams, live streams
+        #     if s in self._tab_data_model.streams.value or not isinstance(s, StaticStream):
+        #         continue
+        #
+        #     # if the user has loaded a rgb stream, assume it is meant to be a SEM stream
+        #     # (convert to 2D SEM stream, fix metadata, etc.)
+        #     if isinstance(s, RGBStream):
+        #         logging.debug(f"Converting RGB stream to SEM: {s.name.value}")
+        #         s = convert_rgb_to_sem(s)
+        #
+        #     # reset the stream correlation data, and add to correlation streams
+        #     self._reset_stream_correlation_data(s)
+        #     self._tab_data_model.streams.value.append(s)
+        #
+        #     # add stream to streambar
+        #     sc = self._tab.streambar_controller.addStream(s, add_to_view=True, play=False)
+        #     sc.stream_panel.show_remove_btn(True)
+
+        streams_list = self._tab_data_model.main.currentFeature.value.streams.value
+        stream_groups = {}
+
+        for stream_index, stream in enumerate(streams_list):
+
+            current_shape = stream.raw[0].shape
+            centre_pos = stream.raw[0].metadata[model.MD_POS]
+            if isinstance(stream, StaticFluoStream):
+                check_zindex = getattr(stream, "zIndex", None)  # Use getattr to handle if zIndex is not present
+                stream_name = stream.name.value
+
+                if check_zindex:
+                    # Create the key based on current shape, centre position, and zIndex
+                    key = (current_shape, centre_pos)
+
+                    # Check if a set for this key already exists
+                    if key not in stream_groups:
+                        # Create a new set if the combination of shape, centre position, and zIndex is different
+                        stream_groups[key] = set()
+
+                    # Check if there's already a stream with the same name in the set
+                    # If a stream with the same name exists, replace the previous index to keep the latest stream index
+                    indices_to_remove = set()
+                    for idx in stream_groups[key]:
+                        if streams_list[idx].name.value == stream_name:
+                            indices_to_remove.add(idx)
+
+                    # Remove old indices with the same name
+                    stream_groups[key] -= indices_to_remove
+
+                    # Add the new stream index to the set
+                    stream_groups[key].add(stream_index)
+
+            elif isinstance(stream, StaticSEMStream):
+                # TODO check fib stream index
+                key = (current_shape, centre_pos)
+                if key not in stream_groups:
+                    stream_groups[key] = set()
+                stream_groups[key].add(stream_index)
+
+
+
+        # add streams in stream controller
+        # TODO add FIB stream logic
+        first_valid_key = None
+        self.stream_groups = stream_groups
+        self._update_stream_group_visibility(first_valid_key)
+
+        # if stream_groups:
+        #     # Get the first key from the dictionary (unordered since dictionaries are unordered before Python 3.7)
+        #     first_key = next(iter(stream_groups))
+        #
+        #     # Get the set of indices associated with the first key
+        #     first_indices = stream_groups[first_key]
+        #
+        #     # "Activate" or process these indices (example: print them or do something with the streams)
+        #     for index in first_indices:
+        #         stream = streams_list[index]  # Access the stream using the index
+        #         ssc = self._tab.streambar_controller.addStream(stream, add_to_view=True, play=False)
+        #         ssc.stream_panel.set_visible(True)
+        #         ssc.stream_panel.collapse(False)
+        #         print(f"Processing stream at index {index}, stream name: {stream.name.value}")
+        # #         # Add your activation logic here (e.g., further processing, applying a function)
+        # else:
+        #     print("No stream groups available.")
+
+        # todo sem/fib STREAM?
 
     # initialize correlation target class in the current feature, once the minimum requirements
     # make sure it is not initialized multiple times
@@ -619,6 +788,8 @@ class CorrelationPointsController(object):
                 self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
                 self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
             elif self.correlation_target is None:
+                # to be outside correlation button maybe?
+                self.add_streams()
                 correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[self._tab_data_model.main.currentFeature.value.status.value]
                 targets = []
                 projected_points = []
@@ -913,6 +1084,7 @@ class CorrelationPointsController(object):
                 # enable z targetting
                 # change the keys
                 # new tool icon
+                # mto pixel proper
 
                 # float, 2 values more
                 # none value not there
