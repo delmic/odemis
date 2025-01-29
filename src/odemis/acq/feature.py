@@ -242,7 +242,7 @@ class FeaturesDecoder(json.JSONDecoder):
                     fm_focus_position=fm_focus_positions[i] )
                 if "FIB" in names[i] and types[i] == "Fiducial":
                     correlation_target.fib_fiducials.append(target)
-                elif "FIB" in names[i] and types[i] == "ProjectedFiducial": #TODO  separate out and save projected points
+                elif "FIB" in names[i] and types[i] == "ProjectedPoints": #TODO  separate out and save projected points
                     correlation_target.fib_projected_fiducials.append(target)
                 elif "FIB" in names[i] and types[i] == "ProjectedPOI":
                     correlation_target.fib_projected_pois.append(target)
@@ -250,7 +250,7 @@ class FeaturesDecoder(json.JSONDecoder):
                     correlation_target.fib_surface_fiducial = target
                 elif "FM" in names[i] and types[i] == "Fiducial":
                     correlation_target.fm_fiducials.append(target)
-                elif "FM" in names[i] and types[i] == "POI":
+                elif "POI" in names[i] and types[i] == "RegionOfInterest":
                     correlation_target.fm_pois.append(target)
 
             decoded_correlation_targets[key] = correlation_target
