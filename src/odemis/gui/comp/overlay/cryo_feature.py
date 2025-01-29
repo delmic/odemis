@@ -583,16 +583,16 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 # convert physical position to buffer 'world' coordinates
                 bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center, self.cnvs.scale,
                                                     offset=half_size_offset)
-
                 def set_icon(feature_icon):
                     ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
 
                 # Show proper feature icon based on selected target + status
                 try:
                     if target is self.tab_data.main.currentTarget.value:
+                        # Correct label positions such that label is outside the icon display
                         set_icon(self._feature_icons_selected[target.type.value])
                         self._label.text = target.name.value  # str(target.index.value)
-                        self._label.pos = (bpos[0], bpos[1])
+                        self._label.pos = (bpos[0]+10, bpos[1]+10)
                         self._label.draw(ctx)
                         # set_icon(self._feature_icons_selected[target.status.value])
                     else:
@@ -769,7 +769,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     if target is self.tab_data.main.currentTarget.value:
                         set_icon(self._feature_icons_selected[target.type.value])
                         self._label.text = target.name.value  # str(target.index.value)
-                        self._label.pos = (bpos[0], bpos[1])
+                        self._label.pos = (bpos[0] + 10, bpos[1] + 10)
                         self._label.draw(ctx)
                         # set_icon(self._feature_icons_selected[target.status.value])
                     else:

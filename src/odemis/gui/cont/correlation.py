@@ -874,14 +874,29 @@ class CorrelationPointsController(object):
 
         if self.correlation_target:
             if not DEBUG:
-                if len(self.correlation_target.fib_fiducials) >= 4 and len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) > 0 and self.correlation_target.fib_surface_fiducial:
+                if len(self.correlation_target.fib_fiducials) >= 4 and len(
+                        self.correlation_target.fm_fiducials) >= 4 and len(
+                        self.correlation_target.fm_pois) > 0 and self.correlation_target.fib_surface_fiducial and len(
+                        self._tab_data_model.views.value[0].stream_tree) > 0:
                     return True
                 else:
+                    self.correlation_target.reset_attributes()
+                    self._tab_data_model.projected_points = []
+                    self.correlation_txt.SetLabel("Correlation RMS Deviation :")
+                    for vp in self._viewports:
+                        if vp.view.name.value == "SEM Overview":
+                            vp.canvas.update_drawing()
                     return False
             else:
                 if len(self.correlation_target.fib_fiducials) >= 1 and len(self.correlation_target.fm_fiducials) >= 1 and self.correlation_target.fib_surface_fiducial:
                     return True
                 else:
+                    self.correlation_target.reset_attributes()
+                    self._tab_data_model.projected_points = []
+                    self.correlation_txt.SetLabel("Correlation RMS Deviation :")
+                    for vp in self._viewports:
+                        if vp.view.name.value == "SEM Overview":
+                            vp.canvas.update_drawing()
                     return False
         else:
             return False
@@ -950,7 +965,12 @@ class CorrelationPointsController(object):
                 target_copy.type.value = "ProjectedPoints"
                 self._tab_data_model.projected_points.append(target_copy)
 
-        self.correlation_target.fib_projected_fiducials =  self._tab_data_model.projected_points
+        if self._tab_data_model.projected_points:
+            self.correlation_target.fib_projected_fiducials =  self._tab_data_model.projected_points
+            target_copy = copy.deepcopy(target)
+            target_copy.type.value = "ProjectedPOI"
+            self._tab_data_model.projected_points.append(target_copy)
+            self.correlation_target.fib_projected_pois = [self._tab_data_model.projected_points[-1]]
 
         for vp in self._viewports:
             if vp.view.name.value == "SEM Overview":
@@ -1005,6 +1025,10 @@ class CorrelationPointsController(object):
                         self._tab_data_model.main.targets.value.remove(target)
                         self._tab_data_model.main.currentTarget.value = None
                         break
+        self.update_feature_correlation_target()
+        if self.check_correlation_conditions():
+            self.latest_change = True
+            self.queue_latest_change()
 
     def on_cell_selected(self, event):
         row = event.GetRow()
@@ -1197,6 +1221,10 @@ class CorrelationPointsController(object):
 
         self.reorder_table()
         self._panel.Layout()
+        self.update_feature_correlation_target()
+        if self.check_correlation_conditions():
+            self.latest_change = True
+            self.queue_latest_change()
 
 
         # if target:
