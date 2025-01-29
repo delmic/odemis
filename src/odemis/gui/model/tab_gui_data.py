@@ -41,6 +41,7 @@ from odemis.gui.model._constants import (
     STATE_ON,
     TOOL_DICHO,
     TOOL_FEATURE,
+    TOOL_REGION_OF_INTEREST,
     TOOL_FIDUCIAL,
     TOOL_LABEL,
     TOOL_LINE,
@@ -501,7 +502,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         super().__init__(main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
 

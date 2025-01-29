@@ -375,6 +375,9 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 else:
                     # TODO how to restrict the type as per the mode ?
                     self._mode = MODE_EDIT_FEATURES
+            elif selected_tool == TOOL_REGION_OF_INTEREST:
+                self.tab_data.main.selected_target_type.value = "RegionOfInterest"
+                self._mode = MODE_EDIT_FEATURES
             else:
                 self._mode = MODE_SHOW_FEATURES
 
@@ -595,7 +598,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                         self._label.pos = (bpos[0]+10, bpos[1]+10)
                         self._label.draw(ctx)
                         # set_icon(self._feature_icons_selected[target.status.value])
-                    elif self.tab_data.main.currentTarget.value and (target.index.value == self.tab_data.main.currentTarget.value.index.value) and ("FIB" in self.tab_data.main.currentTarget.value.name.value):
+                    elif self.tab_data.main.currentTarget.value and (target.index.value == self.tab_data.main.currentTarget.value.index.value) and ("FIB" in self.tab_data.main.currentTarget.value.name.value) and ("POI" not in target.name.value):
                         set_icon(self._feature_icons_selected["FiducialPair"])
                     else:
                         set_icon(self._feature_icons[target.type.value])

@@ -163,7 +163,6 @@ TOOLS = {
         ),
     model.TOOL_FEATURE:
         ModeTool(
-            # TODO: pick a new icon
             "btn_feature_toolbox_icon",
             model.TOOL_FEATURE,
             model.TOOL_NONE,
@@ -171,14 +170,14 @@ TOOLS = {
         ),
     model.TOOL_REGION_OF_INTEREST:
         ModeTool(
-            "btn_feature_toolbox_icon",
+            "btn_poi_icon",
             model.TOOL_REGION_OF_INTEREST,
             model.TOOL_NONE,
             "Create/Move region of interest"
         ),
     model.TOOL_FIDUCIAL:
         ModeTool(
-            "btn_feature_toolbox_icon",
+            "btn_fiducial_icon",
             model.TOOL_FIDUCIAL,
             model.TOOL_NONE,
             "Create/Move fiducial"
