@@ -636,7 +636,8 @@ class CorrelationPointsController(object):
                         # find stream controller for the stream
                         ssc = next(
                             (sc for sc in self._tab.streambar_controller.stream_controllers
-                             if sc.stream.name.value == stream.name.value), None)
+                             if sc.stream == stream), None)
+
                         if isinstance(stream, StaticFluoStream) and not group_key:
                             group_key = key
 
@@ -652,9 +653,10 @@ class CorrelationPointsController(object):
 
     def _update_stream_group_visibility(self, group_key: tuple) -> None:
         streams_list = self._tab_data_model.main.currentFeature.value.streams.value
-        for key, indices in self.stream_groups.items():
+        for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
             for index in indices:
                 stream = streams_list[index]
+                stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
                 ssc = self._tab.streambar_controller.addStream(stream,  play=False)
                 ssc.stream_panel.show_remove_btn(True)
 
@@ -667,33 +669,6 @@ class CorrelationPointsController(object):
     def add_streams(self) -> None:
         """add streams to the correlation tab
         :param streams: (list[StaticStream]) the streams to add"""
-
-        # NOTE: we only add streams if they are not already in the correlation tab
-        # we will not remove streams from the correlation tab from outside it,
-        # as the user may still want to correlate them,
-        # even if they have been removed from another tab, e.g. 'localization'
-
-        # add streams to correlation tab
-        # logging.debug(f"Adding {len(streams)} streams to correlation tab {streams}")
-        # for s in streams:
-        #
-        #     # skip existing streams, live streams
-        #     if s in self._tab_data_model.streams.value or not isinstance(s, StaticStream):
-        #         continue
-        #
-        #     # if the user has loaded a rgb stream, assume it is meant to be a SEM stream
-        #     # (convert to 2D SEM stream, fix metadata, etc.)
-        #     if isinstance(s, RGBStream):
-        #         logging.debug(f"Converting RGB stream to SEM: {s.name.value}")
-        #         s = convert_rgb_to_sem(s)
-        #
-        #     # reset the stream correlation data, and add to correlation streams
-        #     self._reset_stream_correlation_data(s)
-        #     self._tab_data_model.streams.value.append(s)
-        #
-        #     # add stream to streambar
-        #     sc = self._tab.streambar_controller.addStream(s, add_to_view=True, play=False)
-        #     sc.stream_panel.show_remove_btn(True)
 
         streams_list = self._tab_data_model.main.currentFeature.value.streams.value
         stream_groups = {}
