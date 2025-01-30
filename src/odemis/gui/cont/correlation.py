@@ -967,7 +967,7 @@ class CorrelationPointsController(object):
 
         if self._tab_data_model.projected_points:
             self.correlation_target.fib_projected_fiducials =  self._tab_data_model.projected_points
-            target_copy = copy.deepcopy(target)
+            target_copy = copy.deepcopy(target_copy)
             target_copy.type.value = "ProjectedPOI"
             self._tab_data_model.projected_points.append(target_copy)
             self.correlation_target.fib_projected_pois = [self._tab_data_model.projected_points[-1]]
@@ -1184,9 +1184,14 @@ class CorrelationPointsController(object):
     def _on_current_coordinates_changes(self, coordinates):
         target = self._tab_data_model.main.currentTarget.value
         self.current_target_coordinate_subscription = False
+        temp_check = False
         for row in range(self.grid.GetNumberRows()):
+            # TODO Check grid cells are changing
+            # TODO add changes due to Z
             if self.selected_target_in_grid(target, row):
-
+                # Get cell value
+                if self.grid.GetCellValue(row, GridColumns.X.value) != f"{target.coordinates.value[0]:.{GRID_PRECISION}f}" or self.grid.GetCellValue(row, GridColumns.Y.value) != f"{target.coordinates.value[1]:.{GRID_PRECISION}f}" or self.grid.GetCellValue(row, GridColumns.Z.value) != str(target.coordinates.value[2]):
+                    temp_check = True
                 self.grid.SetCellValue(row, GridColumns.X.value, f"{target.coordinates.value[0]:.{GRID_PRECISION}f}")
                 self.grid.SetCellValue(row, GridColumns.Y.value, f"{target.coordinates.value[1]:.{GRID_PRECISION}f}")
                 if "FIB" not in target.name.value:
@@ -1194,7 +1199,7 @@ class CorrelationPointsController(object):
 
                 self.update_feature_correlation_target()
 
-            if self.check_correlation_conditions():
+            if self.check_correlation_conditions and temp_check:
                 self.latest_change = True
                 self.queue_latest_change()
 
