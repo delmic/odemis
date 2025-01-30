@@ -124,7 +124,7 @@ class TestHH400Static(unittest.TestCase):
         self.assertRaises(Exception, picoquant.HH400, **wrong_config)
 
 
-class TestPicoBase(metaclass=ABCMeta):
+class PicoBaseTest(metaclass=ABCMeta):
     """
     Tests which can share a device initialization.
     To be inherited, for each type of device. The subclass should also inherit unittest.TestCase.
@@ -372,7 +372,7 @@ class TestPicoBase(metaclass=ABCMeta):
         self._lastdata = data
 
 
-class TestPH300(TestPicoBase, unittest.TestCase):
+class TestPH300(PicoBaseTest, unittest.TestCase):
     """
     Tests which can share one PH300 device
     """
@@ -387,7 +387,7 @@ class TestPH300(TestPicoBase, unittest.TestCase):
                 cls.det1 = child
 
 
-class TestPH330(TestPicoBase, unittest.TestCase):
+class TestPH330(PicoBaseTest, unittest.TestCase):
     """
     Tests which can share one PH330 device
     """
@@ -413,7 +413,7 @@ class TestPH330(TestPicoBase, unittest.TestCase):
         super().tearDownClass()
 
 
-class TestHH400(TestPicoBase, unittest.TestCase):
+class TestHH400(PicoBaseTest, unittest.TestCase):
     """
     Tests which can share one HH400 device
     """
@@ -458,7 +458,7 @@ class TestHH400(TestPicoBase, unittest.TestCase):
             self.assertEqual(self.dev.syncDiv.value, i)
 
 
-class TestPicoShuttersMixin(metaclass=ABCMeta):
+class PicoShuttersMixinTest(metaclass=ABCMeta):
     """
     Extra tests for devices with shutters.
     """
@@ -513,7 +513,7 @@ class TestPicoShuttersMixin(metaclass=ABCMeta):
         self.assertEqual(self.tc_act.position.value["shutter1"], 0)
 
 
-class TestPH300Shutters(TestPicoShuttersMixin, TestPH300):
+class TestPH300Shutters(PicoShuttersMixinTest, TestPH300):
     """
     Tests PH300 with shutters.
     """
@@ -535,7 +535,7 @@ class TestPH300Shutters(TestPicoShuttersMixin, TestPH300):
                 cls.det1 = child
 
 
-class TestPH330Shutters(TestPicoShuttersMixin, TestPH330):
+class TestPH330Shutters(PicoShuttersMixinTest, TestPH330):
     """
     Tests PH330 with shutters.
     """
@@ -556,7 +556,7 @@ class TestPH330Shutters(TestPicoShuttersMixin, TestPH330):
                 cls.det1 = child
 
 
-class TestHH400Shutters(TestPicoShuttersMixin, TestHH400):
+class TestHH400Shutters(PicoShuttersMixinTest, TestHH400):
     """
     Tests HH400 with shutters.
     """
