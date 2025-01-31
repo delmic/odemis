@@ -2155,8 +2155,8 @@ class AndorCam2(model.DigitalCamera):
             elif readout < (self._exposure_time / 100):
                 logging.info("Leaving shutter opened because readout is %g times "
                              "smaller than exposure", self._exposure_time / readout)
-            elif b[1] == im_res[1]:
-                logging.info("Leaving shutter opened because binning is full vertical")
+            elif b[1] == self._shape[1]:
+                logging.info("Leaving shutter opened because binning is full vertical (%s px)", b[1])
             else:
                 logging.info("Shutter activated")
                 shutter_active = True
