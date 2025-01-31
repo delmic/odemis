@@ -34,7 +34,7 @@ from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_DEACTIVE,
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
-from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST
+from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
 from odemis.gui.util.conversion import pixel_pos_to_canvas_pos, canvas_pos_to_pixel_pos
 
 MODE_EDIT_FEATURES = 1
@@ -42,7 +42,11 @@ MODE_SHOW_FEATURES = 2
 FEATURE_DIAMETER = 30  # pixels
 FEATURE_ICON_CENTER = 17  # pixels
 
+#TODO how the numbers are decided
+MODE_EDIT_FIDUCIALS = 5
+MODE_SHOW_FIDUCIALS = 6
 MODE_EDIT_REFRACTIVE_INDEX = 3
+MODE_EDIT_POI = 4
 
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
@@ -274,26 +278,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
 class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
     """ Overlay for showing the correlation points between two streams """
-    # _label.pos
-    # column
-    # reorder for new targets is not working
-    # swap indices in the table
-    # .layout for grid refresh
-    # delte should delete overlay
-    # adding new target
-    # fm targets should be in FM, same for FIB
-    # deleting target
-    # moving target
-    # z targeting
-    # grid operations
-    # correlation target structure there
-    #convert target attributes into a vas
-    # on double click -- the selected
 
-    #self.active
-    #status_change
-    # how to talk to the projected data (should be there in the grid but cannot be changed, except, fib marker)
-    # add correlation
     def __init__(self, cnvs, tab_data):
         """
         :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
@@ -302,7 +287,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         WorldOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
         self.tab_data = tab_data
-        self._mode = MODE_SHOW_FEATURES
+        self._mode = MODE_SHOW_FIDUCIALS
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         # self._selected_type = "Fiducial"
@@ -370,16 +355,17 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         """ Update the feature mode (show or edit) when the overlay is active and tools change"""
         if self.active.value:
             if selected_tool == TOOL_FIDUCIAL:
-                if self.tab_data.main.selected_target_type.value == "SurfaceFiducial":
-                    self._mode = MODE_EDIT_REFRACTIVE_INDEX
-                else:
-                    # TODO how to restrict the type as per the mode ?
-                    self._mode = MODE_EDIT_FEATURES
+                    #TODO rename features to targets
+                    # self.tab_data.main.selected_target_type.value = "Fiducial"
+                    self._mode = MODE_EDIT_FIDUCIALS
+            elif selected_tool == TOOL_SURFACE_FIDUCIAL:
+                # self.tab_data.main.selected_target_type.value = "SurfaceFiducial"
+                self._mode = MODE_EDIT_REFRACTIVE_INDEX
             elif selected_tool == TOOL_REGION_OF_INTEREST:
-                self.tab_data.main.selected_target_type.value = "RegionOfInterest"
-                self._mode = MODE_EDIT_FEATURES
+                # self.tab_data.main.selected_target_type.value = "RegionOfInterest"
+                self._mode = MODE_EDIT_POI
             else:
-                self._mode = MODE_SHOW_FEATURES
+                self._mode = MODE_SHOW_FIDUCIALS
 
     def _on_current_target_va(self, _):
         # Redraw when the current feature is changed, as it's displayed differently
@@ -482,7 +468,23 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
-            if self._mode == MODE_EDIT_FEATURES:
+            p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+            # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            if self._mode == MODE_EDIT_POI:
+                # Todo what does mode do
+                check_existing_poi = any("POI" in target.name.value for target in self.tab_data.main.targets.value)
+                if check_existing_poi:
+                    # add/modify fib_surface_fiducial
+                    # self.tab_data.fm_poi.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
+                    # self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                    self.tab_data.main.currentTarget.value = target
+                    self._selected_target = target
+                    DragMixin._on_left_down(self, evt)
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                else:
+                    # TODO rename type
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="RegionOfInterest")
+            elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
                     # move/drag the selected target
                     self.tab_data.main.currentTarget.value = target
@@ -491,15 +493,12 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # create new target based on the physical position then disable the target tool
-                    p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()),
-                                                    1e-07)
                     # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                     # if self.tab_data.main.selected_target_type is None:
                     #     self.tab_data.main.selected_target_type.value = "Fiducial"
                     self.tab_data.add_new_target(p_pos[0], p_pos[1],
-                                                 type=self.tab_data.main.selected_target_type.value)
+                                                 type="Fiducial")  # TODO
                     # self._selected_tool_va.value = TOOL_NONE
-
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
@@ -523,15 +522,21 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
             self.cnvs.update_drawing()
             self.cnvs.reset_dynamic_cursor()
             if self.left_dragging:
-
+                # TODO separate concerns if and else are not looking for same conditiond
+                # if self._mode == MODE_EDIT_POI:
+                #     p_pos = canvas_pos_to_pixel_pos(
+                #         self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size()),
+                #         1e-07)
+                #     # p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+                #     self.tab_data.fm_poi.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
+                #     self.cnvs.update_drawing()
+                # else:
                 if self._selected_target:
                     self._update_selected_target_position(evt.Position)
-
-                # evt.Skip()
             else:
                 WorldOverlay.on_left_up(self, evt)
             self._selected_tool_va.value = TOOL_NONE
-            self.tab_data.main.selected_target_type.value = "Fiducial"
+            # self.tab_data.main.selected_target_type.value = "Fiducial"
         else:
             WorldOverlay.on_left_up(self, evt)
 
@@ -545,7 +550,14 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
                 # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 # self._selected_target = self.tab_data.main.currentTarget.value
-                self._selected_target.coordinates.value = [p_pos[0], p_pos[1],  self._selected_target.coordinates.value[2]]
+                self._selected_target.coordinates.value = [p_pos[0], p_pos[1],
+                                                           self._selected_target.coordinates.value[2]]
+                # if self._mode == MODE_EDIT_POI:
+                #     self.tab_data.fm_poi.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
+                # # self._selected_target = self.tab_data.main.currentTarget.value
+                # else:
+                #     self._selected_target.coordinates.value = [p_pos[0], p_pos[1],
+                #                                                self._selected_target.coordinates.value[2]]
                 self.cnvs.update_drawing()
                 return
             target = self._detect_point_inside_target(v_pos)
@@ -554,7 +566,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
                 return
             else:
-                if self._mode == MODE_EDIT_FEATURES:
+                if self._mode == MODE_EDIT_FIDUCIALS or self._mode == MODE_EDIT_POI:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
                 else:
                     return
@@ -615,6 +627,24 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
                 ctx.paint()
 
+        # if self.tab_data.fm_poi.value:
+        #     coordinates = pixel_pos_to_canvas_pos(self.tab_data.fm_poi.value.coordinates.value, scale=1e-07)
+        #     # coordinates = self.tab_data.fib_surface_point.value.coordinates.value
+        #     half_size_offset = self.cnvs.get_half_buffer_size()
+        #     bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
+        #                                         self.cnvs.scale,
+        #                                         offset=half_size_offset)
+        #
+        #     def set_icon(feature_icon):
+        #         ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
+        #
+        #     if self.tab_data.main.currentTarget.value.type.value == "RegionOfInterest":
+        #         set_icon(self._feature_icons_selected[self.tab_data.fm_poi.value.type.value])
+        #     else:
+        #         set_icon(self._feature_icons[self.tab_data.fm_poi.value.type.value])
+
+            # ctx.paint()
+
 
 class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
@@ -659,7 +689,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
                 return
             else:
-                if self._mode == MODE_EDIT_FEATURES:
+                if self._mode == MODE_EDIT_FIDUCIALS or self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
                 else:
                     return
@@ -685,8 +715,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # TODO rename type
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value)
-            elif self._mode == MODE_EDIT_FEATURES:
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="SurfaceFiducial")
+            elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
                     # move/drag the selected target
                     self.tab_data.main.currentTarget.value = target
@@ -698,7 +728,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                     # if self.tab_data.main.selected_target_type is None:
                     #     self.tab_data.main.selected_target_type.value = "Fiducial"
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=self.tab_data.main.selected_target_type.value) #TODO
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="Fiducial") #TODO
                     # self._selected_tool_va.value = TOOL_NONE
 
             else:
@@ -737,7 +767,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             else:
                 WorldOverlay.on_left_up(self, evt)
             self._selected_tool_va.value = TOOL_NONE
-            self.tab_data.main.selected_target_type.value = "Fiducial"
+            # self.tab_data.main.selected_target_type.value = "Fiducial"
         else:
             WorldOverlay.on_left_up(self, evt)
 

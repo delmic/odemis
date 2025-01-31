@@ -62,6 +62,7 @@ TOOL_CURSOR = 17  # Equivalent to TOOL_NONE, if this tool is selected the tool V
 TOOL_EXPAND = 18  # Expand the view layout
 TOOL_FIDUCIAL = 19  # Create new fiducial or move selected one
 TOOL_REGION_OF_INTEREST = 20  # Select the region of interest or move selected one
+TOOL_SURFACE_FIDUCIAL = 21  # Create new surface fiducial or move selected one
 
 ALL_TOOL_MODES = {
     TOOL_NONE,
@@ -83,7 +84,8 @@ TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_POINT,
-              TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_FEATURE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST)
+              TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_FEATURE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST,
+              TOOL_SURFACE_FIDUCIAL)
 
 # Autofocus state
 TOOL_AUTO_FOCUS_ON = True

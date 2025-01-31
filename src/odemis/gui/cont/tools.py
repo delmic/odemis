@@ -182,6 +182,13 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move fiducial"
         ),
+    model.TOOL_SURFACE_FIDUCIAL:
+        ModeTool(
+            "btn_surface_fiducial_icon",
+            model.TOOL_SURFACE_FIDUCIAL,
+            model.TOOL_NONE,
+            "Create/Move surface fiducial"
+        ),
     model.TOOL_RECTANGLE:
         ModeTool(
             "btn_rectangle",
