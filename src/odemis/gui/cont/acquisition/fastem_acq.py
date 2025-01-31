@@ -54,7 +54,9 @@ from odemis.gui import (
     FG_COLOUR_EDIT,
     FG_COLOUR_ERROR,
     FG_COLOUR_WARNING,
+    img,
 )
+from odemis.gui.comp import buttons
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.fastem_user_settings_panel import (
     DWELL_TIME_ACQUISITION,
@@ -1186,7 +1188,8 @@ class FastEMCalibrationController:
         self.calibration_panel = SettingsPanel(
             self._tab_panel.pnl_calib, size=(400, 80)
         )
-        self._calib_1_lbl, self._calib_1 = self.calibration_panel.add_checkbox_control(
+
+        self._calib_1_lbl, self._calib_1_vis_btn, self._calib_1 = self.add_calibration_control(
             CALIBRATION_1, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_1_lbl.SetToolTip(
@@ -1198,7 +1201,8 @@ class FastEMCalibrationController:
         )
         self._calib_1.SetName(CALIBRATION_1)
         self._calib_1_lbl.SetForegroundColour(FG_COLOUR_BLIND_BLUE)
-        self._calib_2_lbl, self._calib_2 = self.calibration_panel.add_checkbox_control(
+
+        self._calib_2_lbl, self._calib_2_vis_btn, self._calib_2 = self.add_calibration_control(
             CALIBRATION_2, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_2_lbl.SetToolTip(
@@ -1210,7 +1214,8 @@ class FastEMCalibrationController:
         )
         self._calib_2.SetName(CALIBRATION_2)
         self._calib_2_lbl.SetForegroundColour(FG_COLOUR_BLIND_ORANGE)
-        self._calib_3_lbl, self._calib_3 = self.calibration_panel.add_checkbox_control(
+
+        self._calib_3_lbl, self._calib_3_vis_btn, self._calib_3 = self.add_calibration_control(
             CALIBRATION_3, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_3_lbl.SetToolTip(
@@ -1222,6 +1227,10 @@ class FastEMCalibrationController:
         )
         self._calib_3.SetName(CALIBRATION_3)
         self._calib_3_lbl.SetForegroundColour(FG_COLOUR_BLIND_PINK)
+
+        self._calib_1_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
+        self._calib_2_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
+        self._calib_3_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
 
         self.btn_calib = self._tab_panel.btn_calib
         self.btn_cancel_calib = self._tab_panel.btn_cancel_calib
@@ -1255,6 +1264,91 @@ class FastEMCalibrationController:
         self._main_data_model.is_acquiring.subscribe(self._on_is_acquiring)
         # enable/disable calibration buttons if calibrating
         self._tab_data_model.is_calibrating.subscribe(self._on_is_calibrating)
+
+    def _on_visibility_btn(self, evt):
+        """Toggle the visibility of the calibration region based on the button state."""
+        current_sample = self._main_data_model.current_sample.value
+        focussed_view = self._main_tab_data.focussedView.value
+        # if current_sample and focussed_view:
+        scintillator_num = int(focussed_view.name.value)
+
+        # Determine which calibration button was pressed
+        btn = evt.GetEventObject()
+        if btn == self._calib_1_vis_btn:
+            calibration_key = CALIBRATION_1
+        elif btn == self._calib_2_vis_btn:
+            calibration_key = CALIBRATION_2
+        elif btn == self._calib_3_vis_btn:
+            calibration_key = CALIBRATION_3
+
+        calibration = current_sample.scintillators[scintillator_num].calibrations[calibration_key]
+
+        # Toggle visibility based on button state
+        is_visible = btn.GetToggle()
+        calibration.shape.active.value = is_visible
+        if is_visible:
+            calibration.shape.cnvs.add_world_overlay(calibration.shape)
+        else:
+            calibration.shape.cnvs.remove_world_overlay(calibration.shape)
+
+        calibration.shape.cnvs.request_drawing_update()
+
+    def add_calibration_control(self, label_text, value=True, pos_col=1, span=wx.DefaultSpan):
+        """ Add a calibration control to the calibration settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (bool) Value to display (True == checked)
+        :param pos_col: (int) The column index in the grid layout where the checkbox will be placed.
+                        For example:
+                        - `pos_col=0` positions the checkbox in the first column.
+                        - `pos_col=1` positions it in the second column.
+        :param span: (tuple) the row and column spanning attributes of items in a GridBagSizer.
+        :returns: (wx.StaticText, ImageToggleButton, wx.CheckBox)
+            A tuple containing the label, visibility button and checkbox
+        """
+        self.calibration_panel.clear_default_message()
+        self.calibration_panel.Layout()
+        self.calibration_panel.num_rows += 1
+
+        lbl_ctrl, visibility_btn = self._add_side_label_with_toggle(label_text)
+        value_ctrl = wx.CheckBox(self.calibration_panel, wx.ID_ANY, style=wx.ALIGN_RIGHT | wx.NO_BORDER)
+        self.calibration_panel.gb_sizer.Add(value_ctrl, (self.calibration_panel.num_rows, pos_col), span=span,
+                                            flag=wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        value_ctrl.SetValue(value)
+
+        return lbl_ctrl, visibility_btn, value_ctrl
+
+    def _add_side_label_with_toggle(self, label_text):
+        """
+        Add a label with a toggle button to the calibration settings panel.
+        :param label_text: The text for the label.
+        :return: A tuple containing the label and the toggle button.
+        """
+
+        self.calibration_panel.clear_default_message()
+
+        # Create a horizontal sizer to hold the icon and text
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        visibility_btn = buttons.ImageToggleButton(self.calibration_panel,
+                                                   bitmap=img.getBitmap("icon/ico_eye_open.png"))
+        visibility_btn.bmpHover = img.getBitmap("icon/ico_eye_closed_h.png")
+        visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
+        visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
+        visibility_btn.SetToolTip("Toggle calibration region visibility")
+        visibility_btn.SetValue(True)  # by default show calibration regions
+        h_sizer.Add(visibility_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=3)
+
+        # Create label
+        lbl_ctrl = wx.StaticText(self.calibration_panel, -1, str(label_text))
+        h_sizer.Add(lbl_ctrl, flag=wx.ALIGN_CENTER_VERTICAL)
+
+        # Add combined sizer to grid sizer
+        self.calibration_panel.gb_sizer.Add(h_sizer,
+                                            (self.calibration_panel.num_rows, 0),
+                                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+
+        return lbl_ctrl, visibility_btn
 
     def _on_focussed_view(self, view):
         """
