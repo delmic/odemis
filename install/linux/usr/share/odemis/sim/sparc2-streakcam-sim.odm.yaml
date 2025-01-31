@@ -206,8 +206,9 @@
 #       device: 0,
         transp: [-1, 2], # if mirrored on X axis
     },
-#    dependencies: {spectrograph: "Spectrograph"},
-    # TODO does not work for now as modelgen says no component named spectrograph found
+    metadata: {
+        CALIB: {"intensity_limit": 50000},  # counts/s, high max to not trigger easily the safety check
+    },
 }
 
 "Streak Unit": {
