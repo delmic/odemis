@@ -39,7 +39,7 @@ import wx
 import wx.html
 
 from odemis.acq.feature import save_features, CorrelationTarget
-from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL
+from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL, TOOL_SURFACE_FIDUCIAL
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
@@ -518,8 +518,8 @@ class CorrelationPointsController(object):
         self.z_targeting_btn.Enable(False)  # Initially disable the Z-targeting button
 
         # Access the Refractive Index correction
-        self.refractive_index_btn = panel.btn_refractive_index
-        self.refractive_index_btn.Bind(wx.EVT_BUTTON, self.on_refractive_index)
+        # self.refractive_index_btn = panel.btn_refractive_index
+        # self.refractive_index_btn.Bind(wx.EVT_BUTTON, self.on_refractive_index)
 
         self.delete_btn = panel.btn_delete_row
         self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete_row)
@@ -581,6 +581,8 @@ class CorrelationPointsController(object):
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
         self._tab_data_model.main.currentFeature.subscribe(self.init_ct, init=True)
         self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface, init=True)
+        # self._tab_data_model.fm_poi.subscribe(self._on_current_fm_poi, init=True)
+
 
         panel.fp_correlation_panel.Show(True)
         # Show the main frame
@@ -789,9 +791,11 @@ class CorrelationPointsController(object):
                 self._tab_data_model.main.targets.value = targets
                 if correlation_target.fib_surface_fiducial:
                     self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
+                # if correlation_target.fm_pois:
+                #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
                 self.correlation_target = correlation_target
 
-    def update_feature_correlation_target(self, surface_fiducial = False):
+    def update_feature_correlation_target(self, surface_fiducial = False):#, fm_poi = False):
 
         if not self.correlation_target:
             return
@@ -800,11 +804,13 @@ class CorrelationPointsController(object):
             # todo check if it has a value
             fib_surface_fiducial = self._tab_data_model.fib_surface_point.value
             self.correlation_target.fib_surface_fiducial = fib_surface_fiducial
+        # elif fm_poi:
+        #     self.correlation_target.fm_pois = self._tab_data_model.fm_poi.value
         else:
         # if True:
             fib_fiducials = []
             fm_fiducials = []
-            fm_pois = []
+            # fm_pois = []
             # fib_surface_fiducial = None
             for target in self._tab_data_model.main.targets.value:
                 if "FIB" in target.name.value:
@@ -812,16 +818,16 @@ class CorrelationPointsController(object):
                 elif "FM" in target.name.value:
                     fm_fiducials.append(target)
                 elif "POI" in target.name.value:
-                    fm_pois.append(target)
+                    self.correlation_target.fm_pois = target
             if fib_fiducials:
                 fib_fiducials.sort(key=lambda x: x.index.value)
                 self.correlation_target.fib_fiducials = fib_fiducials
             if fm_fiducials:
                 fm_fiducials.sort(key=lambda x: x.index.value)
                 self.correlation_target.fm_fiducials = fm_fiducials
-            if fm_pois:
-                fm_pois.sort(key=lambda x: x.index.value)
-                self.correlation_target.fm_pois = fm_pois
+            # if fm_pois:
+            #     fm_pois.sort(key=lambda x: x.index.value)
+            #     self.correlation_target.fm_pois = fm_pois
 
 
         # self.correlation_target.reset_attributes()
@@ -849,10 +855,9 @@ class CorrelationPointsController(object):
 
         if self.correlation_target:
             if not DEBUG:
-                if len(self.correlation_target.fib_fiducials) >= 4 and len(
-                        self.correlation_target.fm_fiducials) >= 4 and len(
-                        self.correlation_target.fm_pois) > 0 and self.correlation_target.fib_surface_fiducial and len(
-                        self._tab_data_model.views.value[0].stream_tree) > 0:
+                if (len(self.correlation_target.fib_fiducials) >= 4 and len(
+                        self.correlation_target.fm_fiducials) >= 4 and self.correlation_target.fm_pois  and len(
+                        self._tab_data_model.views.value[0].stream_tree) > 0):
                     return True
                 else:
                     self.correlation_target.reset_attributes()
@@ -863,7 +868,7 @@ class CorrelationPointsController(object):
                             vp.canvas.update_drawing()
                     return False
             else:
-                if len(self.correlation_target.fib_fiducials) >= 1 and len(self.correlation_target.fm_fiducials) >= 1 and self.correlation_target.fib_surface_fiducial:
+                if len(self.correlation_target.fib_fiducials) >= 1 and self.correlation_target.fm_fiducials and self.correlation_target.fib_surface_fiducial:
                     return True
                 else:
                     self.correlation_target.reset_attributes()
@@ -876,20 +881,20 @@ class CorrelationPointsController(object):
         else:
             return False
 
-    def on_refractive_index(self, evt):
-        # only one target that keeps on changing, at the end if do correlation possible,
-        # rerun the correlation calculation (call decorator)
-        # how to do calculation if things rapidly change than the calculation speed
-
-        if self._tab_data_model.focussedView.value.name.value == "SEM Overview":
-            # pass
-            self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
-            self._tab_data_model.tool.value = TOOL_FIDUCIAL   # TODO should not select this (confusing)
-            self.update_feature_correlation_target(surface_fiducial=True)
-
-        if self.check_correlation_conditions():
-            self.latest_change = True
-            self.queue_latest_change()
+    # def on_refractive_index(self, evt):
+    #     # only one target that keeps on changing, at the end if do correlation possible,
+    #     # rerun the correlation calculation (call decorator)
+    #     # how to do calculation if things rapidly change than the calculation speed
+    #
+    #     if self._tab_data_model.focussedView.value.name.value == "SEM Overview":
+    #         # pass
+    #         self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
+    #         self._tab_data_model.tool.value = TOOL_SURFACE_FIDUCIAL
+    #         self.update_feature_correlation_target(surface_fiducial=True)
+    #
+    #     if self.check_correlation_conditions():
+    #         self.latest_change = True
+    #         self.queue_latest_change()
 
     def queue_latest_change(self):
         """
@@ -972,18 +977,12 @@ class CorrelationPointsController(object):
             return
 
         if ctrl_mode:
-            # add fiducials if up
-            # add pois if down (only for FLM)
             if key == wx.WXK_UP:
                 if self._tab_data_model.focussedView.value.name.value == "FLM Overview" or self._tab_data_model.focussedView.value.name.value == "SEM Overview":
-                    self._tab_data_model.main.selected_target_type.value = "Fiducial"
                     self._tab_data_model.tool.value = TOOL_FIDUCIAL
-                      # in tad data ? TODO
             elif key == wx.WXK_DOWN:
                 if self._tab_data_model.focussedView.value.name.value == "FLM Overview":
-                    self._tab_data_model.main.selected_target_type.value = "RegionOfInterest"
-                    self._tab_data_model.tool.value = TOOL_REGION_OF_INTEREST   # POI
-                      # in tad data ? TODO
+                    self._tab_data_model.tool.value = TOOL_REGION_OF_INTEREST
 
     def on_delete_row(self, event):
         """
@@ -1005,6 +1004,8 @@ class CorrelationPointsController(object):
                         self._tab_data_model.main.currentTarget.value = None
                         # unselect grid row
                         self.grid.SelectRow(-1)
+                        # if "POI" in target.name.value:
+                        #     self._tab_data_model.fm_poi = model.VigilantAttribute(None) # noone listening
                         break
         self.update_feature_correlation_target()
         if self.check_correlation_conditions():
@@ -1148,12 +1149,23 @@ class CorrelationPointsController(object):
         if self._tab_data_model.fib_surface_point.value:
             self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface, init=True)
 
+    # def _on_current_fm_poi(self, fm_poi):
+    #     if self._tab_data_model.fm_poi.value:
+    #         self._tab_data_model.fm_poi.value.coordinates.subscribe(self._on_current_coordinates_fm_poi, init=True)
+
     def _on_current_coordinates_fib_surface(self, coordinates):
         self.update_feature_correlation_target(surface_fiducial=True)
 
         if self.check_correlation_conditions():
             self.latest_change = True
             self.queue_latest_change()
+
+    # def _on_current_coordinates_fm_poi(self, coordinates):
+    #     self.update_feature_correlation_target(fm_poi=True)
+    #
+    #     if self.check_correlation_conditions():
+    #         self.latest_change = True
+    #         self.queue_latest_change()
 
     @call_in_wx_main
     def _on_current_coordinates_changes(self, coordinates):
@@ -1174,7 +1186,7 @@ class CorrelationPointsController(object):
 
                 self.update_feature_correlation_target()
 
-            if self.check_correlation_conditions and temp_check:
+            if self.check_correlation_conditions() and temp_check:
                 self.latest_change = True
                 self.queue_latest_change()
 

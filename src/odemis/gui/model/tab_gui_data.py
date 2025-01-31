@@ -43,6 +43,7 @@ from odemis.gui.model._constants import (
     TOOL_FEATURE,
     TOOL_REGION_OF_INTEREST,
     TOOL_FIDUCIAL,
+    TOOL_SURFACE_FIDUCIAL,
     TOOL_LABEL,
     TOOL_LINE,
     TOOL_NONE,
@@ -502,13 +503,14 @@ class CryoCorrelationGUIData(CryoGUIData):
         super().__init__(main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST}
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
 
         # the streams to correlate among all streams in .streams
         self.selected_stream = model.VigilantAttribute(None)
         self.fib_surface_point = model.VigilantAttribute(None)
+        # self.fm_poi = model.VigilantAttribute(None)
         self.projected_points: List[Target] = []
 
         # for export tool
@@ -539,23 +541,26 @@ class CryoCorrelationGUIData(CryoGUIData):
                                             index=index, fm_focus_position=fm_focus_position)
                             break
             elif type == "RegionOfInterest":
-                t_name = make_unique_name("POI-1", existing_names)
-                # get the last digit of the t_name
-                # TODO limited to 9 fiducial pairs
-                index = int(t_name[-1])
+                # t_name = make_unique_name("POI-1", existing_names)
+                # # get the last digit of the t_name
+                # # TODO limited to 9 fiducial pairs
+                # index = int(t_name[-1])
                 # TOdo only static stream which is selected, only add 1 poi
                 if DEBUG:
                     z = 10
-                    target = Target(x, y, z, name=t_name, type=type,
-                                    index=index, fm_focus_position=fm_focus_position)
+                    target = Target(x, y, z, name="POI-1", type=type,
+                                    index=1, fm_focus_position=fm_focus_position)
+                    # self.fm_poi.value = target
+                    # return target
                 else:
                     for s in self.streams.value:
-
                         if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
                             z = s.zIndex.value
-                            target = Target(x, y, z, name=t_name, type=type,
-                                            index=index, fm_focus_position=fm_focus_position)
-                            break
+                            target = Target(x, y, z, name="POI-1", type=type,
+                                            index=1, fm_focus_position=fm_focus_position)
+                            # self.fm_poi.value = target
+                            # TODO is it ok to retiren in for loop
+                            # return target
 
         elif self.focussedView.value.name.value == "SEM Overview":
             if type == "SurfaceFiducial":
