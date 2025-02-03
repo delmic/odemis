@@ -126,7 +126,7 @@ MD_AT_HISTORY = "History"
 MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
 MD_AT_EK = "AR Spectrum"
 MD_AT_TEMPORAL = "Temporal"
-MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
+MD_AT_ALIGN_OVERLAY = "Alignment overlay"  # E.g. view of the spectrograph slit for SPARCv2 alignment
 
 BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
 
