@@ -179,34 +179,55 @@ right-click and select *Git Bash here*. Then type::
 Creating the Odemis environment
 -------------------------------
 
-Install `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`_ and
-pick the right architecture for your computer (most likely 64-bit).
-Odemis is validated on Python 3.6, but Anaconda typically comes with a newer version of Python (eg, 3.9)
-The following instructions use the fact that Anaconda supports multiple versions of Python 
-simultaneously to install Python 3.6.
+Install `Miniconda <https://docs.anaconda.com/miniconda/install/#quick-command-line-install>`_ and
+pick the right architecture for your computer (most likely 64-bit). Take note of the installation path.
+Conda handles multiple versions of Python, so it is
+fine that Conda states Python 3.12 where Odemis requires 3.10. Make sure that `conda` is installed on the Path 
+(it should be an option during installation).
+
+Add Conda to path manually
+""""""""""""""""""""""""""
+
+Open "Edit the system environment variables" item (use search)
+
+#. Press "Environment Variables..." at the bottom
+#. Select the Path item from the top list, press "Edit..."
+#. Add a new entry using the "New" button
+#. <conda installation path>\\condabin
+#. Press the "OK" button two times
+#. Open a new PowerShell window to verify that the "conda" command is recognized
 
 Setup
 """""
-Open the *Anaconda prompt* and type::
+Open *PowerShell* and execute the following commands in succession::
 
-   cd Documents\odemis
-   conda create -y --name odemisdev python==3.6.13
-   conda activate odemisdev
-   conda config --append channels conda-forge
-   conda install --name odemisdev --file requirements-conda.txt
-   echo %cd%\src\ > %userprofile%\miniconda3\envs\odemisdev\lib\site-packages\odemis.pth
-   pip install https://github.com/delmic/Pyro4/archive/master.zip
+    cd "$HOME\Documents\odemis"
+
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+    conda init powershell
+
+    conda env create -f environment.yml
+
+    conda activate odemisdev
+
+    [System.Environment]::SetEnvironmentVariable(
+        "PYTHONPATH", 
+        "$($pwd)\src;" + 
+        "$([System.Environment]::GetEnvironmentVariable('PYTHONPATH', 'User'))", 
+        "User"
+    )
+
+    pip install https://github.com/delmic/Pyro4/archive/master.zip
 
 ..
-   Note: `conda develop src` is nicer than `echo ...`, but it needs conda-build to
+   Note: `conda develop src` is nicer than `[System.Environment]::SetEnvironmentVariable ...`, but it needs conda-build to
    be installed, which requires a lot more dependencies. On miniconda, it's not
    installed by default.
 
 Download, install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_,
 and pick the "Visual C++ build tools". Install also the pre-selected options.
 
-..
-   Note that previously, one had to install pylibtiff via pip: `pip install libtiff`
 
 Final steps
 """""""""""
@@ -244,11 +265,17 @@ Install `NSIS <https://nsis.sourceforge.io/Download>`_.
 Download the latest version of the `KillProc NSIS plugin <http://nsis.sourceforge.net/KillProc_plug-in>`_.
 Unzip it, and place the ``KillProc.dll`` in ``C:\\Program Files (x86)\\NSIS\\Plugins\\x86-unicode\``.
 
-Open the *Anaconda prompt* and make sure you are in the Odemis folder,
-with the *odemisdev* Python environment::
+(If not done at least once) Open *PowerShell* and execute the following commands in succession::
 
-   cd Documents\odemis
-   conda activate odemisdev
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+    conda init powershell
+
+Once initialized, open *PowerShell* and execute the following commands in succession::
+
+    cd "$HOME\Documents\odemis"
+
+    conda activate odemisdev
 
 To build just the viewer executable::
 
@@ -344,11 +371,6 @@ with the python version (3.6.13) on which Odemis has been well tested.
    prompt the following command:
    ``pip install https://github.com/delmic/Pyro4/archive/master.zip``.
 
-#. Download bitarray‑1.6.1‑cp36‑cp36m‑win_amd64.whl (or ‑win32.whl) from http://www.lfd.uci.edu/~gohlke/pythonlibs/#bitarray ,
-   and pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl (or -win32.whl) from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff.
-   and install them with a single command ``pip install bitarray‑1.6.1‑cp36‑cp36m‑win_amd64.whl pylibtiff‑0.4.2‑cp36‑cp36m‑win_amd64.whl``
-   (or ``pip install bitarray‑1.6.1‑cp36‑cp36m‑win32.whl pylibtiff‑0.4.2‑cp36‑cp36m‑win32.whl`` based on your system type).
-   
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
 Note that you may need to navigate to the Documents/Odemis/src folder to be able to import from odemis.
 
