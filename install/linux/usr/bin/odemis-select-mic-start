@@ -12,6 +12,7 @@ After selection of the microscope configuration the right (yaml) file will be us
 '
 # Default values for options
 select_version=false
+confirm_laser=false
 target_files=()
 
 # Function to display help information
@@ -21,8 +22,9 @@ display_help() {
     echo "Options:"
     echo "  --help                  Display this help message."
     echo "  --select-version        Show prompt for selection of Odemis version."
-    echo "  target_files            A selection of configuration files from a specific location."
-    echo "                         (e.g. /usr/share/odemis/sim/*meteor-main*.yaml)."
+    echo "  --confirm-laser         Show a confirmation dialog if the user selects a file ending with a wavelength (eg, 432nm)."
+    echo "  target_files            A series of configuration files from a specific location."
+    echo "                          (e.g. /usr/share/odemis/sim/*meteor-main*.yaml)."
     exit 0
 }
 
@@ -35,6 +37,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --select-version)
             select_version=true
+            ;;
+        --confirm-laser)
+            confirm_laser=true
             ;;
         --*)
             echo "Warning: Unkown option: $1, ignoring."
@@ -185,6 +190,10 @@ selection="$(zenity --list --title="Odemis configuration starter" \
     --width=300 --height=400 \
     --hide-column 1 --print-column=1 2>/dev/null)"
 
+if test "$selection" == ""; then
+    exit
+fi
+
 # if one of the microscope names is selected which also contains an error, show the log file and stop the script
 for efn in "${error_filenames[@]}"; do
     if test "$efn" == "$(basename ${selection})"; then
@@ -193,6 +202,17 @@ for efn in "${error_filenames[@]}"; do
     fi
 done
 
-if test "$selection" != ""; then
-    odemis-start "$selection"
+# If it is going to start a microscope file with a laser, ask the user to confirm
+if [ "$confirm_laser" = true ]; then
+    if [[ "$(basename ${selection})" =~ ([1-9][0-9][0-9]nm) ]]; then
+        laser="${BASH_REMATCH[1]}"
+        zenity --question \
+        --title="Odemis configuration starter" \
+        --text "Are you sure the filter cube is for the <b>$laser</b> laser?\n\nUsing the wrong filter cube may damage the detectors." \
+        --ok-label "Start" \
+        --cancel-label "Cancel" || exit
+    fi
 fi
+
+odemis-start "$selection"
+
