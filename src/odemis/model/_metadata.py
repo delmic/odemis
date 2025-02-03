@@ -88,7 +88,7 @@ MD_EBEAM_SPOT_DIAM = MD_BEAM_SPOT_DIAM
 # FIB-SEM metadata
 # position of the stage (in m or rad) for each axis in the chamber (raw hardware values)
 MD_STAGE_POSITION_RAW = "Stage position raw"  # dict of str -> float,
-MD_SAMPLE_PRE_TILT = "pre-tilt"  # (rad) pre-tilt of the sample stage / shuttle (tilt)
+MD_SAMPLE_PRE_TILT = "Sample pre-tilt"  # (rad) pre-tilt of the sample stage / shuttle (tilt)
 
 MD_STREAK_TIMERANGE = "Streak Time Range"  # (s) Time range for one streak/sweep
 MD_STREAK_MCPGAIN = "Streak MCP Gain"  # (int) Multiplying gain for microchannel plate
@@ -228,6 +228,10 @@ MD_SEM_IMAGING_RANGE = "SEM imaging range"  # dict str → [float, float] defini
 MD_FM_IMAGING_RANGE = "FM imaging range"  # dict str → [float, float] defining the volume of the FM imaging area, along x, y and z axes.
 MD_FAV_FM_POS_ACTIVE = "Favourite FM position active"  # dict str->float representing the position required for FM imaging
 MD_FAV_SEM_POS_ACTIVE = "Favourite SEM position active"  # dict -> float representing the position required for SEM imaging
+MD_FAV_FIB_POS_ACTIVE = "Favourite FIB position active"  # dict -> float representing the position required for FIB imaging
+MD_FAV_MILL_POS_ACTIVE = "Favourite Milling position active"  # dict -> float representing the position required for milling
+# NOTE: the MILL rx is defined as the angle between the FIB and the sample stage, not the stage tilt like the other metadata positions.
+# This rx is converted to the stage tilt when the user moves to the milling position.
 
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
