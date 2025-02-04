@@ -182,10 +182,12 @@ class MillingTaskManager:
             microscope.set_active_view(2)
             microscope.clear_patterns()
 
+            # we defer raising exceptions until we have restored the imaging state
+            # to avoid returning the microscope to user control at the milling current
             if e:
                 raise e
             if ce:
-                raise ce # future excepts error to be raised
+                raise ce # future expects error to be raised
         return
 
     def run(self):
@@ -195,13 +197,13 @@ class MillingTaskManager:
         self._future._task_state = RUNNING
 
         try:
-            for task in self.tasks:
+            for i, task in enumerate(self.tasks, 1):
 
                 with self._future._task_lock:
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
-                logging.info(f"Running milling task: {task.name}")
+                logging.info(f"Running milling task {i}/{len(self.tasks)}: {task.name}")
 
                 self.run_milling(task)
                 logging.debug("The milling completed")

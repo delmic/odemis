@@ -38,7 +38,7 @@ class MillingTaskTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
-    def test_milling_settings2(self):
+    def test_milling_settings(self):
 
         current = 100e-9
         voltage = 30e3

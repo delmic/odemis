@@ -41,7 +41,16 @@ COLOURS = [
     "red", "purple",
 ]
 
-def _draw_trench_pattern(image: model.DataArray, params: TrenchPatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
+def _draw_trench_pattern(image: model.DataArray, 
+                         params: TrenchPatternParameters, 
+                         colour: str = "yellow", 
+                         name: str = "Task") -> List[mpatches.Rectangle]:
+    """Draw a trench pattern on the given image using matplotlib.
+    :param image: the image to draw the pattern on
+    :param params: the trench pattern parameters
+    :param colour: the colour to draw the pattern in
+    :param name: the name of the task
+    :return: a list of matplotlib patches representing the trench pattern"""
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -68,7 +77,16 @@ def _draw_trench_pattern(image: model.DataArray, params: TrenchPatternParameters
     return [rect1, rect2]
 
 
-def _draw_rectangle_pattern(image: model.DataArray, params: RectanglePatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
+def _draw_rectangle_pattern(image: model.DataArray, 
+                            params: RectanglePatternParameters, 
+                            colour: str = "yellow", 
+                            name: str = "Task") -> List[mpatches.Rectangle]:
+    """Draw a rectangle pattern on the given image using matplotlib.
+    :param image: the image to draw the pattern on
+    :param params: the rectangle pattern parameters
+    :param colour: the colour to draw the pattern in
+    :param name: the name of the task
+    :return: a list of matplotlib patches representing the rectangle pattern"""
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -91,8 +109,16 @@ def _draw_rectangle_pattern(image: model.DataArray, params: RectanglePatternPara
 
     return [rect]
 
-def _draw_microexpansion_pattern(image: model.DataArray, params: MicroexpansionPatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
-
+def _draw_microexpansion_pattern(image: model.DataArray, 
+                                 params: MicroexpansionPatternParameters, 
+                                 colour: str = "yellow", 
+                                 name: str = "Task") -> List[mpatches.Rectangle]:
+    """Draw a microexpansion pattern on the given image using matplotlib.
+    :param image: the image to draw the pattern on
+    :param params: the microexpansion pattern parameters
+    :param colour: the colour to draw the pattern in
+    :param name: the name of the task
+    :return: a list of matplotlib patches representing the microexpansion pattern"""
     # get parameters
     width = params.width.value
     height = params.height.value
