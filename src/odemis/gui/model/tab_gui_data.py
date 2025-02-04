@@ -317,7 +317,7 @@ class CryoGUIData(MicroscopyGUIData):
         # No feature nearby => create a new one
         current_position = copy.deepcopy(self.main.stage_bare.position.value)
         self.add_new_feature(stage_position=current_position)
-        logging.debug(f"No feature found nearby. New feature created at {current_position}.")  
+        logging.debug(f"No feature found nearby. New feature created at {current_position}.")
 
 
 class CryoLocalizationGUIData(CryoGUIData):

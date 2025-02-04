@@ -144,9 +144,9 @@ class CryoFeature(object):
         logging.info(f"Stage position for milling: {self.get_posture_position(MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
-def get_feature_position_at_posture(pm: MicroscopePostureManager, 
-                                    feature: CryoFeature, 
-                                    posture: int, 
+def get_feature_position_at_posture(pm: MicroscopePostureManager,
+                                    feature: CryoFeature,
+                                    posture: int,
                                     recalculate: bool = False) -> Dict[str, float]:
     """Get the feature position at the given posture, if it doesn't exist, create it.
     :param pm: the posture manager
