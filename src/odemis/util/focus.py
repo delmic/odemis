@@ -70,6 +70,12 @@ def MeasureOpticalFocus(image):
         # TODO find faster/better solution
         image = _convertRBGToGrayscale(image)
 
+    # TODO: maybe switch to scipy.ndimage.laplace ?
+    # OpenCV only supports int of 8 & 16 bits and float32/64 images. So if we get anything else,
+    # we first convert to float64, to make sure it's compatible.
+    if image.dtype not in (numpy.int8, numpy.uint8, numpy.int16, numpy.uint16, numpy.float32, numpy.float64):
+         image = image.astype(numpy.float64)
+
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
@@ -120,6 +126,11 @@ def MeasureSpotsFocus(image):
     image (model.DataArray): Optical image
     returns (float): The focus level of the image (higher is better)
     """
+    # TODO: maybe switch to scipy.ndimage.sobel ?
+    # OpenCV only supports int of 8 & 16 bits and float32/64 images. So if we get anything else,
+    # we first convert to float64, to make sure it's compatible.
+    if image.dtype not in (numpy.int8, numpy.uint8, numpy.int16, numpy.uint16, numpy.float32, numpy.float64):
+         image = image.astype(numpy.float64)
     sobelx = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=5)
     sobely = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=5)
     sobel_image = sobelx ** 2 + sobely ** 2

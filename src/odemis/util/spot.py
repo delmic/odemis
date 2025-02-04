@@ -369,6 +369,7 @@ def find_spot_positions(
     threshold_abs: Optional[float] = None,
     threshold_rel: Optional[float] = None,
     num_spots: Optional[int] = None,
+    min_distance: Optional[int] = None,
 ) -> numpy.ndarray:
     """
     Find the center coordinates of spots with the highest intensity in an
@@ -390,6 +391,9 @@ def find_spot_positions(
     num_spots : int, optional
         Maximum number of spots. When the number of spots exceeds `num_spots`,
         return `num_spots` peaks based on highest spot intensity.
+    min_distance : int, optional
+        The minimal allowed distance in pixels separating peaks. To find the
+        maximum number of peaks, use `min_distance=1`.
 
     Returns
     -------
@@ -399,15 +403,18 @@ def find_spot_positions(
 
     """
     size = int(round(3 * sigma))
-    min_distance = 2 * size
-    filtered = bandpass_filter(image, sigma, min_distance)
+    len_object = 2 * size  # typical length of a spot
+    min_distance = len_object if not min_distance else min_distance  # distance between spots
+    filtered = bandpass_filter(image, sigma, len_object)
     coordinates = peak_local_max(
         filtered,
         min_distance=min_distance,
         threshold_abs=threshold_abs,
         threshold_rel=threshold_rel,
+        exclude_border=False,
         num_peaks=num_spots,
         p_norm=2,
+        len_object=len_object,
     )
 
     # Improve coordinate estimate using radial symmetry center.

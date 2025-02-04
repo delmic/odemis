@@ -50,7 +50,7 @@ class TestLogWindow(test.GuiTestCase):
 
         t = threading.Thread(target=log_msg)
         # Setting Daemon to True, will cause the thread to exit when the parent does
-        t.setDaemon(True)
+        t.daemon = True
         t.start()
 
         test.gui_loop()

@@ -364,6 +364,7 @@ def peak_local_max(
     num_peaks: Optional[int] = None,
     footprint: Optional[np.ndarray] = None,
     p_norm: float = np.inf,
+    len_object: Optional[int] = None,
 ) -> np.ndarray:
     """
     Find peaks in an image as coordinate list.
@@ -378,7 +379,7 @@ def peak_local_max(
     image : ndarray
         Input image.
     min_distance : int, optional
-        The minimal allowed distance separating peaks. To find the
+        The minimal allowed distance in pixels separating peaks. To find the
         maximum number of peaks, use `min_distance=1`.
     threshold_abs : float, optional
         Minimum intensity of peaks. By default, the absolute threshold is
@@ -406,6 +407,12 @@ def peak_local_max(
         A finite large p may cause a ValueError if overflow can occur.
         ``inf`` corresponds to the Chebyshev distance and 2 to the
         Euclidean distance.
+    len_object : int, optional
+        The length of the object in pixels. This parameter is used to determine
+        the border width for peak exclusion when `exclude_border` is True. If
+        not provided, `min_distance` is used as the length of the object. This
+        can be useful when the object size is known and different from
+        `min_distance`.
 
     Returns
     -------
@@ -460,7 +467,10 @@ def peak_local_max(
             stacklevel=2,
         )
 
-    border_width = _get_excluded_border_width(image, min_distance, exclude_border)
+    if not len_object:
+        len_object = min_distance
+
+    border_width = _get_excluded_border_width(image, len_object, exclude_border)
 
     threshold = _get_threshold(image, threshold_abs, threshold_rel)
 

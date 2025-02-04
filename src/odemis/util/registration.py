@@ -532,6 +532,7 @@ def estimate_grid_orientation_from_img(
     threshold_abs: Optional[float] = None,
     threshold_rel: Optional[float] = None,
     num_spots: Optional[int] = None,
+    min_distance: Optional[int] = None,
 ) -> Tuple[T, float]:
     """
     Image based estimation of the orientation of a square grid of points.
@@ -559,6 +560,9 @@ def estimate_grid_orientation_from_img(
         `num_spots = shape[0] * shape[1]` as default when set to `None`. Set
         `num_spots = 0` to not impose a maximum. Note that this behavior is
         different from odemis.util.spot.find_spot_position().
+    min_distance : int, optional
+        The minimal allowed distance in pixels separating peaks. To find the
+        maximum number of peaks, use `min_distance=1`.
 
     Returns
     -------
@@ -578,5 +582,5 @@ def estimate_grid_orientation_from_img(
         num_spots = shape[0] * shape[1]
     elif num_spots == 0:
         num_spots = None
-    ji = find_spot_positions(image, sigma, threshold_abs, threshold_rel, num_spots)
+    ji = find_spot_positions(image, sigma, threshold_abs, threshold_rel, num_spots, min_distance)
     return estimate_grid_orientation(ji, shape, transform_type)
