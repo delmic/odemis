@@ -414,7 +414,7 @@ class SEM(model.HwComponent):
         """
         mag (float): magnification in MAGNIFICATION_RANGE
         """
-        self._SendCmd(b'MAG %d' % mag)
+        self._SendCmd(b'MAG %G' % mag)
 
     def SetFocus(self, foc):
         """

@@ -127,7 +127,7 @@ class ViewportTestCase(test.GuiTestCase):
 
         t = threading.Thread(target=rotate, args=(ys, vwp))
         # Setting Daemon to True, will cause the thread to exit when the parent does
-        t.setDaemon(True)
+        t.daemon = True
         t.start()
 
         for i in range(10):  # Fail after 10s not yet finished

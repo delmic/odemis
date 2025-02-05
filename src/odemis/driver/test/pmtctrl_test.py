@@ -47,14 +47,23 @@ KWARGS_CTRL = KWARGS
 
 # Time-correlator Control (photon signal detector)
 class FakePH300(model.Component):
+    # For use by the RawDetector
+    trg_lvl_rng = (0, 100e-3)  # V
+    zc_lvl_rng = (0, 100e-3)  # V
+
     def __init__(self, name):
         self._shutters = {'shutter1': False}
         model.Component.__init__(self, name)
+
     def _toggle_shutters(self, shutters, open):
         for s in shutters:
             self._shutters[s] = open
+
     def GetCountRate(self, channel):
         return random.randint(0, 5000)
+
+    def SetInputCFD(self, channel, level, zero_cross):
+        pass
 
 
 CLASS_TR_CTRL = picoquant.RawDetector
@@ -358,7 +367,6 @@ class TestTCPMT(unittest.TestCase):
         # Protection should be reset after acquisition is done
         self.assertEqual(self.control.parent._shutters['shutter1'], False)
 
-
     def receive_image(self, dataflow, image):
         """
         callback for df
@@ -368,6 +376,7 @@ class TestTCPMT(unittest.TestCase):
 
         dataflow.unsubscribe(self.receive_image)
         self.is_received.set()
+
 
 class MatchLogHandler(BufferingHandler):
     def __init__(self, matcher):
@@ -395,6 +404,7 @@ class MatchLogHandler(BufferingHandler):
                 result = True
                 break
         return result
+
 
 class Matcher(object):
 
