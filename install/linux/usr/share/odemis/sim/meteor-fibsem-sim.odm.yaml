@@ -92,6 +92,7 @@ METEOR-FIBSEM-Sim: {
                 "SEM-Eucentric-Focus": 7.0e-3},  # aqulios=7.0e-3, hydra=4.0e-3
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
+        FAV_MILL_POS_ACTIVE: {"rx": 0.31, "rz": 0},
     },
 }
 
