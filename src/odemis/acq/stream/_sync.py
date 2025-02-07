@@ -1235,6 +1235,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # CCD to be sure it is not slowing thing down.
             self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
 
+        # Order matters (a bit). At least, on the Tescan, only the "external" waits extra time to ensure
+        # a stable e-beam condition, so it should be done last.
+        if model.hasVA(self._emitter, "blanker") and self._emitter.blanker.value is None:
+            # When the e-beam is set to automatic blanker mode, it would switch on/off for every
+            # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
+            # "blanker" off while the acquisition is running.
+            self._orig_hw_values[self._emitter.blanker] = self._emitter.blanker.value
+            self._emitter.blanker.value = False
+
         if model.hasVA(self._emitter, "external") and self._emitter.external.value is None:
             # When the e-beam is set to automatic external mode, it would switch on/off for every
             # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
@@ -2373,6 +2382,14 @@ class SEMMDStream(MultipleDetectorStream):
                                     det.name, dt, det.dwellTime.value)
 
         self._emitter.scale.value = cscale
+
+        # Order matters (a bit)
+        if model.hasVA(self._emitter, "blanker") and self._emitter.blanker.value is None:
+            # When the e-beam is set to automatic blanker mode, it would switch on/off for every
+            # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
+            # "blanker" off while the acquisition is running.
+            self._orig_hw_values[self._emitter.blanker] = self._emitter.blanker.value
+            self._emitter.blanker.value = False
 
         if model.hasVA(self._emitter, "external") and self._emitter.external.value is None:
             # When the e-beam is set to automatic external mode, it would switch on/off for every
