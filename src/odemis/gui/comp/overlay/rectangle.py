@@ -86,7 +86,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0), show_selection_points: bool = True):
         EditableShape.__init__(self, cnvs)
         RectangleEditingMixin.__init__(self, colour, center)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
@@ -150,6 +150,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             deg=None,
             background=None
         )
+
+        # draw selection points on shape
+        self._draw_selection_points = show_selection_points
 
     def to_dict(self) -> dict:
         """
@@ -478,7 +481,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
         ctx.set_dash([])
         ctx.set_line_width(1)
-        ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        if self._draw_selection_points:
+            ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        else:
+            ctx.set_source_rgba(*self.colour)  # face colour
         ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
         ctx.fill()
         ctx.arc(mid_point12.x, mid_point12.y, 4, 0, 2 * math.pi)
@@ -533,7 +539,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             ctx.stroke()
 
             self._calc_edges()
-            self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
+
+            if self._draw_selection_points:
+                self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Side labels
             if self.selected.value:
