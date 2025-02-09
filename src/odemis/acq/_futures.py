@@ -125,7 +125,7 @@ class SimpleStreamFuture(futures.Future):
                 l.next(self._stream.raw)
             l.complete(self._stream.raw)
 
-        return self._stream.raw # the acquisition data
+        return self._stream.raw, None # the acquisition data, and no (partial) error
 
     def _image_listener(self, image):
         """

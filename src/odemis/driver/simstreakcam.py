@@ -278,7 +278,13 @@ class ReadoutCamera(model.DigitalCamera):
             image[:] = 100  # Background level
             mx = 1000
         else:
-            mx = image.max()
+            mx = image.max() * 5
+
+        # Increase the image intensity based on the MCP gain.
+        # 0 -> x1
+        # 63 (max) -> x6.4
+        gain_factor = (self.parent._streakunit.MCPGain.value + 1) / 10
+        numpy.multiply(image, gain_factor, out=image, casting="unsafe")
 
         # Add some noise
         image += numpy.random.randint(0, 10, image.shape, dtype=image.dtype)

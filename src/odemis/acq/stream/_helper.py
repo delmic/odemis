@@ -26,7 +26,7 @@ import math
 import time
 
 import numbers
-from typing import Tuple, Any, Dict, Optional
+from typing import Tuple, Any, Dict, List, Optional, Callable
 
 import numpy
 
@@ -1727,7 +1727,7 @@ class OverlayStream(Stream):
         ovrl_future.result = self._result_wrapper(ovrl_future.result)
         return ovrl_future
 
-    def _result_wrapper(self, f):
+    def _result_wrapper(self, f) -> Callable:
         """
         Wraps the .result() return value of the Future provided
           by the FindOverlay function to make it return DataArrays, as a normal
@@ -1735,7 +1735,7 @@ class OverlayStream(Stream):
         """
 
         @wraps(f)
-        def result_as_da(timeout=None):
+        def result_as_da(timeout=None) -> Tuple[List[model.DataArray], Optional[Exception]]:
             trans_val, (opt_md, sem_md) = f(timeout)
             # In case the transformation values are extreme compared to the
             # calibration values just abort them
@@ -1787,7 +1787,7 @@ class OverlayStream(Stream):
             sem_md[model.MD_POS_COR] = (0, 0)
             opt_md[model.MD_SHEAR_COR] = 0
             # Create an empty DataArray with trans_md as the metadata
-            return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
+            return [model.DataArray([], opt_md), model.DataArray([], sem_md)], None
 
         return result_as_da
 
