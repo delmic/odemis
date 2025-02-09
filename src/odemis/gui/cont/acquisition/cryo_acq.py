@@ -82,15 +82,15 @@ class CryoAcquiController(object):
     microscope.
     """
 
-    def __init__(self, tab_data, panel, tab):
+    def __init__(self, tab_data, panel, tab, mode: guimod.AcquiMode):
         self._panel = panel
         self._tab_data: guimod.CryoGUIData = tab_data
         self._tab = tab
 
-        self.acqui_mode = self._tab_data.acqui_mode
+        self.acqui_mode = mode
 
         self.overview_acqui_controller = OverviewStreamAcquiController(
-            self._tab_data, self._tab
+            self._tab_data, self._tab, mode=self.acqui_mode
         )
         self._config = conf.get_acqui_conf()
         # contains the acquisition progressive future for the given streams

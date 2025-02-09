@@ -38,7 +38,7 @@ class CryoFeatureController(object):
     It requires features list VA & currentFeature VA on the tab data to function properly
     """
 
-    def __init__(self, tab_data, panel, tab):
+    def __init__(self, tab_data, panel, tab, mode: guimod.AcquiMode):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         panel (wx._windows.Panel): the panel containing the UI controls
@@ -55,7 +55,7 @@ class CryoFeatureController(object):
         self._panel = panel
         self._tab = tab
         self.pm: MeteorTFS2PostureManager = self._tab_data_model.main.posture_manager
-        self.acqui_mode = tab_data.acqui_mode
+        self.acqui_mode: guimod.AcquiMode = mode
 
         # features va attributes (name, status..etc) connectors
         self._feature_name_va_connector = None

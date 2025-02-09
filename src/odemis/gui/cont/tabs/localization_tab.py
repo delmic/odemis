@@ -123,7 +123,7 @@ class LocalizationTab(Tab):
         )
 
         self._acquisition_controller = acqcont.CryoAcquiController(
-            tab_data, panel, self)
+            tab_data, panel, self, mode=guimod.AcquiMode.FLM)
 
         self._acquired_stream_controller = CryoAcquiredStreamsController(
             tab_data,
@@ -134,7 +134,8 @@ class LocalizationTab(Tab):
             static=True,
         )
 
-        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self, 
+                                                               mode=guimod.AcquiMode.FLM)
         self._zloc_controller = CryoZLocalizationController(tab_data, panel, self)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
         self.conf = conf.get_acqui_conf()
