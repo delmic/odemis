@@ -86,7 +86,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0), show_selection_points: bool = True):
         EditableShape.__init__(self, cnvs)
         RectangleEditingMixin.__init__(self, colour, center)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
@@ -150,6 +150,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             deg=None,
             background=None
         )
+
+        # draw selection points on shape
+        self._draw_selection_points = show_selection_points
 
     def to_dict(self) -> dict:
         """
@@ -533,7 +536,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             ctx.stroke()
 
             self._calc_edges()
-            self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
+
+            if self._draw_selection_points:
+                self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Side labels
             if self.selected.value:
