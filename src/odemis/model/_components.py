@@ -607,7 +607,8 @@ class Detector(HwComponent, metaclass=ABCMeta):
     @roattribute
     def transpose(self):
         if self._transpose is None:
-            return tuple(range(len(self._shape) - 1))
+            # Should look like (1, 2, ...)
+            return tuple(range(1, len(self._shape)))
         else:
             return self._transpose
 
