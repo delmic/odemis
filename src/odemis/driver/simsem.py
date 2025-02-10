@@ -132,6 +132,9 @@ class Scanner(model.Emitter):
         self._aperture = aperture
         self._working_distance = wd
 
+        # Event which is triggered at the beginning of the first frame of a scan
+        self.startScan = model.Event()
+
         fake_img = self.parent.fake_img
         if parent._drift_period:
             # half the size, to keep some margin for the drift
@@ -530,6 +533,7 @@ class Detector(model.Detector):
         the Dataflow.
         """
         try:
+            first_frame = True
             while not self._acquisition_must_stop.is_set():
                 dwelltime = self.parent._scanner.dwellTime.value
                 resolution = self.parent._scanner.resolution.value
@@ -540,6 +544,9 @@ class Detector(model.Detector):
                 # as in Odemis the convention for SEM is that the ebeam waits
                 # for _all_ the detectors to be ready before scanning.
                 self.data._waitSync()
+                if first_frame:
+                    self.parent._scanner.startScan.notify()
+                    first_frame = False
                 callback(self._simulate_image())
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
