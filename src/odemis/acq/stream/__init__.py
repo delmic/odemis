@@ -58,7 +58,6 @@ EMStream.register(SEMStream)
 EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
 EMStream.register(EBICSettingsStream)
-EMStream.register(IndependentEBICStream)
 
 
 class CLStream(ABC):
