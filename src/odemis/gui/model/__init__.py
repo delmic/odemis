@@ -28,7 +28,7 @@ from .stream_view import (ContentView, FeatureOverviewView, FeatureView,
                           FixedOverviewView, MicroscopeView, StreamView, View)
 from .tab_gui_data import (AcquisitionWindowData, ActuatorGUIData,
                            AnalysisGUIData, ChamberGUIData, CryoChamberGUIData,
-                           CryoCorrelationGUIData, CryoGUIData,
+                           CryoCorrelationGUIData, CryoGUIData, CryoFIBSEMGUIData,
                            CryoLocalizationGUIData, EnzelAlignGUIData,
                            FastEMAcquisitionGUIData, FastEMMainTabGUIData,
                            FastEMSetupGUIData, LiveViewGUIData, MicroscopyGUIData,
