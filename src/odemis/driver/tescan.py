@@ -20,21 +20,25 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-import queue
 import gc
 import logging
 import math
+import queue
+import re
+import socket
+import threading
+import time
+import weakref
+from typing import Dict
+
 import numpy
+from tescan import sem, CancelledError
+
 from odemis import model, util
 from odemis.model import (HwError, isasync, CancellableThreadPoolExecutor,
                           roattribute, oneway)
 from odemis.util import TimeoutError
-import re
-import socket
-from tescan import sem, CancelledError
-import threading
-import time
-import weakref
+from odemis.util.driver import isNearPosition
 
 ACQ_CMD_UPD = 1
 ACQ_CMD_TERM = 2
@@ -1027,6 +1031,13 @@ class SEMDataFlow(model.DataFlow):
             self._evtq.get()
 
 
+STAGE_WAIT_DURATION = 20e-03  # s
+STAGE_WAIT_TIMEOUT = 5  # s
+STAGE_FRACTION_TOTAL_MOVE = 0.01  # tolerance of the requested stage movement
+STAGE_TOL_LINEAR = 1e-06  # in m, minimum tolerance
+STAGE_TOL_ROTATION = 0.00436  # in radians (0.25 degrees), minimum tolerance
+
+
 class Stage(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
@@ -1096,6 +1107,52 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure during XYZ polling")
 
+    def _checkPosition(self, orig_pos: Dict[str, float], target_pos: Dict[str, float], timeout: float = STAGE_WAIT_TIMEOUT):
+        """
+        Checks and waits for the current stage position to report the requested stage position given by pos.
+        :param orig_pos: original stage position before the stage movement in absolute coordinates
+        :param target_pos: requested stage position in absolute coordinates
+        :param timeout: maximum time in seconds to wait for the stage to report the requested position
+        :raises ValueError: if the stage position is not near the requested position after a timeout
+        """
+        # Drop axes from the original position, which are not important because they have not moved
+        orig_pos = {a: orig_pos[a] for a, nv in target_pos.items() if nv != orig_pos[a]}
+
+        # TODO: base the timeout on stage movement time estimation, needs to be checked on hardware
+        expected_end_time = time.time() + timeout  # s
+
+        # Update rotational and linear tolerances according to the magnitude of requested change
+        linear_axes_to_check = {"x", "y", "z"}.intersection(target_pos.keys())
+        rotational_axes_to_check = {"rx", "rz"}.intersection(target_pos.keys())
+        current_pos = self._position
+        movement_req = {ax: STAGE_FRACTION_TOTAL_MOVE * abs(target_pos[ax] - current_pos[ax]) for ax in
+                        target_pos.keys()}
+        tol_linear = STAGE_TOL_LINEAR
+        tol_rotation = STAGE_TOL_ROTATION
+        if linear_axes_to_check:
+            movement_req_linear = [movement_req[ax] for ax in linear_axes_to_check]
+            tol_linear = max(min(movement_req_linear), STAGE_TOL_LINEAR)  # m
+
+        if rotational_axes_to_check:
+            movement_req_rotational = [movement_req[ax] for ax in rotational_axes_to_check]
+            tol_rotation = max(min(movement_req_rotational), STAGE_TOL_ROTATION)  # radians
+
+        axes_to_check = linear_axes_to_check | rotational_axes_to_check
+
+        while not isNearPosition(current_pos=current_pos, target_position=target_pos,
+                                 axes=axes_to_check, rot_axes=rotational_axes_to_check,
+                                 atol_linear=tol_linear, atol_rotation=tol_rotation):
+            time.sleep(STAGE_WAIT_DURATION)
+            self._updatePosition()
+            current_pos = self._position
+            if time.time() > expected_end_time:
+                raise ValueError(
+                    f"Stage position after + {timeout} s is {current_pos} instead of requested position: "
+                    f"{target_pos}. Start position: {orig_pos}. Aborting move.")
+        else:
+            logging.debug("Position has updated fully: from %s -> %s", orig_pos,
+                          current_pos)
+
     def _updatePosition(self):
         """
         update the position VA
@@ -1140,6 +1197,8 @@ class Stage(model.Actuator):
 
             current_pos.update(req_pos)
 
+            orig_pos = self._position
+
             # always issue a move command containing values for all 5 axes so
             # there is no separate code needed for backward compatibility
             self.parent._device.StgMoveTo(current_pos["x"],
@@ -1156,8 +1215,14 @@ class Stage(model.Actuator):
             while self.parent._device.StgIsBusy():
                 time.sleep(0.1)
 
-            logging.debug("Stage move to %s completed", pos)
+            logging.debug("Stage move to %s reported as completed. Checking the new stage position...", pos)
             self._updatePosition()
+            # In some cases, the stage fails to move to the requested position but no error is raised by the
+            # Tescan API. This check will ensure that the stage has reached the requested position within a
+            # certain tolerance otherwise it will raise an error and stop the subsequent moves from being executed,
+            # for e.g. the other stage axes or the subsequent objective stage movement will halt if one of
+            # the stage axis failed to move or did not move correctly.
+            self._checkPosition(orig_pos, pos, timeout=STAGE_WAIT_TIMEOUT)
 
     def _doMoveRel(self, shift: dict):
         """
