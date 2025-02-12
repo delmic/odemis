@@ -28,6 +28,7 @@ import threading
 import numpy
 import cv2
 
+from odemis import model
 from odemis.acq.align.shift import MeasureShift
 
 MIN_RESOLUTION = (20, 20)  # sometimes 8x8 works, but it's not reliable enough
@@ -347,3 +348,31 @@ def GuessAnchorRegion(whole_img, sample_region):
                       (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
 
     return anchor_roi
+
+def align_reference_image(
+    ref_image: model.DataArray,
+    new_image: model.DataArray,
+    scanner: model.Emitter
+) -> None:
+    """Align the new image to the reference image using beam shift.
+    Only supports 2D images with the same resolution.
+    :param ref_image: The reference image to align with.
+    :param new_image: The new image to align to the reference.
+    :param scanner: The scanner to align with.
+    :return: None
+    """
+    if (ref_image.ndim != 2 or new_image.ndim != 2 or ref_image.shape != new_image.shape):
+        raise ValueError(f"Only equally sized 2D images are supported for alignment. {ref_image.shape}, {new_image.shape}")
+
+    if ref_image.metadata[model.MD_PIXEL_SIZE] != new_image.metadata[model.MD_PIXEL_SIZE]:
+        raise ValueError("The images must have the same pixel size.")
+
+    shift_px = MeasureShift(ref_image, new_image, 2)
+
+    pixelsize = ref_image.metadata[model.MD_PIXEL_SIZE]
+    shift_m = (shift_px[0] * pixelsize[0], shift_px[1] * pixelsize[1])
+
+    previous_shift = scanner.shift.value
+    shift = (shift_m[0] + previous_shift[0], shift_m[1] + previous_shift[1])  # m
+    scanner.shift.value = shift
+    logging.debug(f"reference image alignment: previous: {previous_shift}, calculated shift: {shift_m}, beam shift: {scanner.shift.value}")
