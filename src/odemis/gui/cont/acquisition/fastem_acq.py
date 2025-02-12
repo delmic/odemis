@@ -1209,7 +1209,9 @@ class FastEMCalibrationController:
         """Toggle the visibility of the calibration region based on the button state."""
         current_sample = self._main_data_model.current_sample.value
         focussed_view = self._main_tab_data.focussedView.value
-        # if current_sample and focussed_view:
+        if not (current_sample and focussed_view):
+            return
+
         scintillator_num = int(focussed_view.name.value)
 
         # Determine which calibration button was pressed
@@ -1271,7 +1273,7 @@ class FastEMCalibrationController:
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         visibility_btn = buttons.ImageToggleButton(self.calibration_panel,
-                                                   bitmap=img.getBitmap("icon/ico_eye_open.png"))
+                                                   bitmap=img.getBitmap("icon/ico_eye_closed.png"))
         visibility_btn.bmpHover = img.getBitmap("icon/ico_eye_closed_h.png")
         visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
         visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
@@ -1435,14 +1437,32 @@ class FastEMCalibrationController:
             calib_1_done, calib_2_done, _ = self.get_calibration_status(focussed_view)
             if self._calib_1.IsChecked():
                 calib_names.append(CALIBRATION_1)
+                if not self._calib_1_vis_btn.GetValue():
+                    # show the calibration region again when the user starts the calibration
+                    calibration = current_sample.scintillators[scintillator_num].calibrations[CALIBRATION_1]
+                    calibration.shape.active.value = True
+                    calibration.shape.cnvs.add_world_overlay(calibration.shape)
+                    self._calib_1_vis_btn.SetValue(True)
             if self._calib_2.IsChecked() and (
                 CALIBRATION_1 in calib_names or calib_1_done
             ):
                 calib_names.append(CALIBRATION_2)
+                if not self._calib_2_vis_btn.GetValue():
+                    # show the calibration region again when the user starts the calibration
+                    calibration = current_sample.scintillators[scintillator_num].calibrations[CALIBRATION_2]
+                    calibration.shape.active.value = True
+                    calibration.shape.cnvs.add_world_overlay(calibration.shape)
+                    self._calib_2_vis_btn.SetValue(True)
             if self._calib_3.IsChecked() and (
                 CALIBRATION_2 in calib_names or calib_2_done
             ):
                 calib_names.append(CALIBRATION_3)
+                if not self._calib_3_vis_btn.GetValue():
+                    # show the calibration region again when the user starts the calibration
+                    calibration = current_sample.scintillators[scintillator_num].calibrations[CALIBRATION_3]
+                    calibration.shape.active.value = True
+                    calibration.shape.cnvs.add_world_overlay(calibration.shape)
+                    self._calib_3_vis_btn.SetValue(True)
 
             for calib_name in calib_names:
                 calibration = current_sample.scintillators[
