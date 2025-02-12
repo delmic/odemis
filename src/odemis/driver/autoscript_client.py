@@ -1520,6 +1520,7 @@ class Detector(model.Detector):
                     md[model.MD_BEAM_FIELD_OF_VIEW] = self._scanner.horizontalFoV.value
                     md[model.MD_ACQ_TYPE] = self._scanner._acq_type
                     md[model.MD_ACQ_DATE] = time.time()
+                    md[model.MD_STAGE_POSITION_RAW] = self.parent._stage.position.value
                     md.update(self._metadata)
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.

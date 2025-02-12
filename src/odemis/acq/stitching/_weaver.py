@@ -170,6 +170,7 @@ class Weaver(metaclass=ABCMeta):
 
         md[model.MD_POS] = c_phy
         md[model.MD_DIMS] = "YX"
+        # TODO: update the correct STAgE_POSITION_RAW>..... its currently the top left corner
         return md
 
     def _adjust_brightness(self, tile, tiles):
