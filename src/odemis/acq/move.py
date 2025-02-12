@@ -1619,6 +1619,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
+        # NOTE: This should be a compucentric rotation. need to translate around rotation centre
         transformed_pos = pos.copy()
         fib_pos_active = self.get_posture_orientation(FIB_IMAGING)
 
@@ -1631,6 +1632,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
+        # NOTE: This should be a compucentric rotation. need to translate around rotation centre
         transformed_pos = pos.copy()
         fib_pos_active = self.get_posture_orientation(SEM_IMAGING)
 
