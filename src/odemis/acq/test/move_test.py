@@ -32,7 +32,7 @@ from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
                              LOADING, ALIGNMENT, COATING, MILLING, LOADING_PATH,
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
                              SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, ROT_DIST_SCALING_FACTOR,
-                             ATOL_LINEAR_TRANSFORM, ATOL_ROTATION_TRANSFORM,
+                             ATOL_LINEAR_TRANSFORM, ATOL_ROTATION_TRANSFORM, FIB_IMAGING, FM_FIB_VIEW,
                              MimasPostureManager, MeteorPostureManager, EnzelPostureManager, MeteorTFS3PostureManager)
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
@@ -722,11 +722,23 @@ class TestMeteorTFS3Move(unittest.TestCase):
         self.assertEqual(self.pm.current_posture.value, MILLING)
         self._test_3d_transformations()
 
+        f = self.pm.cryoSwitchSamplePosition(FM_FIB_VIEW)
+        f.result()
+        self.assertEqual(self.pm.current_posture.value, FM_FIB_VIEW)
+        self._test_3d_transformations()
+
+        f = self.pm.cryoSwitchSamplePosition(MILLING)
+        f.result()
+
+        f = self.pm.cryoSwitchSamplePosition(FIB_IMAGING)
+        f.result()
+        self.assertEqual(self.pm.current_posture.value, FIB_IMAGING)
+        self._test_3d_transformations()
+
         f = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
 
         self.assertEqual(self.pm.current_posture.value, FM_IMAGING)
-
         self._test_3d_transformations()
 
     def _test_3d_transformations(self):
@@ -751,10 +763,16 @@ class TestMeteorTFS3Move(unittest.TestCase):
         pos = self.stage_bare.position.value
         milling_pos = self.pm.to_posture(pos, MILLING)
         fm_pos = self.pm.to_posture(pos, FM_IMAGING)
+        fib_pos = self.pm.to_posture(pos, FIB_IMAGING)
+        sem_pos = self.pm.to_posture(fib_pos, SEM_IMAGING)
+        fm_fib_view = self.pm.to_posture(milling_pos, FM_FIB_VIEW)
 
         self.assertEqual(self.pm.getCurrentPostureLabel(pos), SEM_IMAGING)
         self.assertEqual(self.pm.getCurrentPostureLabel(milling_pos), MILLING)
         self.assertEqual(self.pm.getCurrentPostureLabel(fm_pos), FM_IMAGING)
+        self.assertEqual(self.pm.getCurrentPostureLabel(fib_pos), FIB_IMAGING)
+        self.assertEqual(self.pm.getCurrentPostureLabel(sem_pos), SEM_IMAGING)
+        self.assertEqual(self.pm.getCurrentPostureLabel(fm_fib_view), FM_FIB_VIEW)
 
         # move to positions and check that they are close to the expected positions
         # milling
@@ -772,6 +790,33 @@ class TestMeteorTFS3Move(unittest.TestCase):
         fm_pos_after_move = self.stage_bare.position.value
         self.assertTrue(isNearPosition(fm_pos_after_move, fm_pos,
                                        axes={"x", "y", "z", "rx", "rz"}))
+
+        # sem
+        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+
+        sem_pos_after_move = self.stage_bare.position.value
+        self.assertTrue(isNearPosition(sem_pos_after_move, sem_pos,
+                                        axes={"x", "y", "z", "rx", "rz"}))
+
+        # fib
+        f = self.pm.cryoSwitchSamplePosition(FIB_IMAGING)
+        f.result()
+
+        fib_pos_after_move = self.stage_bare.position.value
+        self.assertTrue(isNearPosition(fib_pos_after_move, fib_pos,
+                                        axes={"x", "y", "z", "rx", "rz"}))
+
+        # fm fib view
+        f = self.pm.stage.moveAbs(milling_pos)
+        f.result()
+
+        f = self.pm.cryoSwitchSamplePosition(FM_FIB_VIEW)
+        f.result()
+
+        fm_fib_view_after_move = self.stage_bare.position.value
+        self.assertTrue(isNearPosition(fm_fib_view_after_move, fm_fib_view,
+                                        axes={"x", "y", "z", "rx", "rz"}))
 
     def test_sample_stage_movement(self):
         """Test sample stage movements in different postures match the expected movements"""

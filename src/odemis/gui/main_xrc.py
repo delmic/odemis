@@ -428,6 +428,8 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.btn_switch_fm_imaging = xrc.XRCCTRL(self, "btn_switch_fm_imaging")
         self.btn_switch_milling = xrc.XRCCTRL(self, "btn_switch_milling")
         self.btn_switch_fib_imaging = xrc.XRCCTRL(self, "btn_switch_fib_imaging")
+        self.btn_switch_fm_fib_view = xrc.XRCCTRL(self, "btn_switch_fm_fib_view")
+        self.btn_switch_dummy = xrc.XRCCTRL(self, "btn_switch_dummy")
         self.btn_switch_grid1 = xrc.XRCCTRL(self, "btn_switch_grid1")
         self.btn_switch_grid2 = xrc.XRCCTRL(self, "btn_switch_grid2")
         self.btn_switch_loading = xrc.XRCCTRL(self, "btn_switch_loading")
@@ -4433,6 +4435,52 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												<cellpos>1,1</cellpos>
 											</object>
 											<object class="sizeritem">
+												<object class="ProgressRadioButton" name="btn_switch_fm_fib_view">
+													<icon>______img_icon_ico_milling_png</icon>
+													<icon_progress>______img_icon_ico_milling_orange_png</icon_progress>
+													<icon_on>______img_icon_ico_milling_green_png</icon_on>
+													<height>48</height>
+													<face_colour>def</face_colour>
+													<label>FM FIB VIEW</label>
+													<fg>#1A1A1A</fg>
+													<font>
+														<size>11</size>
+														<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+													</font>
+													<style>wxALIGN_CENTRE</style>
+													<hidden>1</hidden>
+													<XRCED>
+														<assign_var>1</assign_var>
+													</XRCED>
+												</object>
+												<flag>wxALL|wxEXPAND</flag>
+												<border>10</border>
+												<cellpos>2,0</cellpos>
+											</object>
+											<object class="sizeritem">
+												<object class="ProgressRadioButton" name="btn_switch_dummy">
+													<icon>______img_icon_ico_imaging_png</icon>
+													<icon_progress>______img_icon_ico_imaging_orange_png</icon_progress>
+													<icon_on>______img_icon_ico_imaging_green_png</icon_on>
+													<height>48</height>
+													<face_colour>def</face_colour>
+													<label>FIB IMAGING</label>
+													<fg>#1A1A1A</fg>
+													<font>
+														<size>11</size>
+														<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+													</font>
+													<style>wxALIGN_CENTRE</style>
+													<hidden>1</hidden>
+													<XRCED>
+														<assign_var>1</assign_var>
+													</XRCED>
+												</object>
+												<flag>wxALL|wxEXPAND</flag>
+												<border>10</border>
+												<cellpos>2,2</cellpos>
+											</object>
+											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_grid1">
 													<icon>______img_icon_ico_meteorgrid_png</icon>
 													<icon_progress>______img_icon_ico_meteorgrid_orange_png</icon_progress>
@@ -4453,7 +4501,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>2,0</cellpos>
+												<cellpos>3,0</cellpos>
 											</object>
 											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_grid2">
@@ -4476,7 +4524,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>2,1</cellpos>
+												<cellpos>3,1</cellpos>
 											</object>
 											<vgap>5</vgap>
 											<hgap>20</hgap>

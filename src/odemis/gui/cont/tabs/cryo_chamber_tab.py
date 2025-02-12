@@ -49,6 +49,7 @@ from odemis.acq.move import (
     SEM_IMAGING,
     THREE_BEAMS,
     UNKNOWN,
+    FM_FIB_VIEW,
 )
 from odemis.acq.stream import StaticStream
 from odemis.gui import conf
@@ -192,9 +193,12 @@ class CryoChamberTab(Tab):
                                   FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                   MILLING: self.panel.btn_switch_milling,
                                   FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                                  FM_FIB_VIEW: self.panel.btn_switch_fm_fib_view,
                                   GRID_2: self.panel.btn_switch_grid2,
                                   GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+
+            # TODO: correctly disable buttons when positions are not valid targets, e.g. FM_FIB_VIEW -> FIB_IMAGING
 
             # show load project button
             self.btn_load_project.Show()
@@ -220,7 +224,7 @@ class CryoChamberTab(Tab):
         # Event binding for position control
         for btn in self.position_btns.values():
             btn.Show()
-            if btn == self.panel.btn_switch_fib_imaging:
+            if btn == self.panel.btn_switch_dummy:
                 btn.Hide()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
