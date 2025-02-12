@@ -185,7 +185,7 @@ class FibsemTab(Tab):
         fib_stream_cont = self._streambar_controller.addStream(self.fib_stream, add_to_view=True)
         fib_stream_cont.stream_panel.show_remove_btn(False)
 
-        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self, 
+        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self,
                                                                mode=guimod.AcquiMode.FIBSEM)
 
         self._acquired_stream_controller = CryoFIBAcquiredStreamsController(
