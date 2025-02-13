@@ -131,21 +131,19 @@ class Weaver(metaclass=ABCMeta):
 
             tbbx_phy.append(bbx)
             
-            raw = t.metadata.get(model.MD_STAGE_POSITION_RAW, None)
-            if raw is None:
+            rc = t.metadata.get(model.MD_STAGE_POSITION_RAW, None)
+            if rc is None:
                 continue
-
-            rc = (raw["x"], raw["y"], raw["z"], raw["rz"], raw["rx"])
-            raw_coords.append(rc)
+            raw_coords.append(copy.deepcopy(rc))
 
         # get mean of raw coords for each axis
         mean_raw = {}
         if raw_coords:
-            mean_raw = {"x": numpy.mean([r[0] for r in raw_coords]),
-                        "y": numpy.mean([r[1] for r in raw_coords]),
-                        "z": numpy.mean([r[2] for r in raw_coords]),
-                        "rz": numpy.mean([r[3] for r in raw_coords]),
-                        "rx": numpy.mean([r[4] for r in raw_coords])}
+            mean_raw = {"x": numpy.mean([r["x"] for r in raw_coords]),
+                        "y": numpy.mean([r["y"] for r in raw_coords]),
+                        "z": numpy.mean([r["z"] for r in raw_coords]),
+                        "rz": numpy.mean([r["rz"] for r in raw_coords]),
+                        "rx": numpy.mean([r["rx"] for r in raw_coords])}
         
         gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
                     max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
