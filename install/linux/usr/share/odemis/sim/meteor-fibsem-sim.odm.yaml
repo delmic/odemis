@@ -38,8 +38,8 @@ METEOR-FIBSEM-Sim: {
 "Electron-Detector": {
     role: se-detector,
     init: {},
-    metadata: {
-        MEDIAN_FILTER: 3,
+    properties: {
+        medianFilter: 3,
     }
 
 }
@@ -60,8 +60,8 @@ METEOR-FIBSEM-Sim: {
 "Ion-Detector": {
     role: "se-detector-ion",
     init: {},
-    metadata: {
-        MEDIAN_FILTER: 3,
+    properties: {
+        medianFilter: 3,
     }
 }
 
