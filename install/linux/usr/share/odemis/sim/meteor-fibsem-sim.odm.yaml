@@ -37,7 +37,10 @@ METEOR-FIBSEM-Sim: {
 
 "Electron-Detector": {
     role: se-detector,
-    init: {}
+    init: {},
+    properties: {
+        medianFilter: 3,
+    }
 
 }
 
@@ -56,7 +59,10 @@ METEOR-FIBSEM-Sim: {
 
 "Ion-Detector": {
     role: "se-detector-ion",
-    init: {}
+    init: {},
+    properties: {
+        medianFilter: 3,
+    }
 }
 
 "Ion-Focus": {
@@ -84,7 +90,6 @@ METEOR-FIBSEM-Sim: {
                 "Sample pre-tilt":  0.6108652381980153},  # 35°
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
-        FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session  
     },
 }
 
