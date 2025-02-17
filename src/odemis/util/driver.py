@@ -374,6 +374,24 @@ def checkLightBand(band):
     # no error found
 
 
+class EventOnce(model.Event):
+    """
+    Special Event class which passes the event only once to the listener (using .notify()),
+    until it's reset (using .clear()).
+    """
+    def __init__(self):
+        super().__init__()
+        self._notified = False
+
+    def notify(self):
+        if not self._notified:
+            self._notified = True
+            super().notify()
+
+    def clear(self):
+        self._notified = False
+
+
 # Special trick functions for speeding up Pyro start-up
 def _speedUpPyroVAConnect(comp):
     """
