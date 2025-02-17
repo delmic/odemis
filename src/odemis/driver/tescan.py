@@ -755,12 +755,21 @@ class Scanner(model.Emitter):
         # magnetic gun is too slow. So it might be that 1 & 2 are inverted
         mode = 2 if blanked else 0
         with self.parent._acq_progress_lock:
+            logging.debug("Setting blanker to %d", mode)
             self.parent._device.ScSetBlanker(1, mode)
+        # The command is not blocking, but tests on a SEM showed it takes around 0.75s after unblanking
+        # for the e-beam to actually be ready. So explicitly wait to ensure that if a code acquires
+        # right after unblanking, the data will be correct. Use 1s to be really safe.
+        if not blanked:
+            time.sleep(1.0)  # s
         return blanked
 
     def _setExternal(self, external):
+        logging.debug("Setting external mode to %s", external)
         # 1 if external, 0 if not
         self.parent._device.ScSetExternal(int(external))
+        # Tests on a SEM showed that, contrarily to the blanker, external mode switch is very fast.
+        # So there is not need to wait explicitly after changing the value.
         return external
 
     def _onScale(self, s):
