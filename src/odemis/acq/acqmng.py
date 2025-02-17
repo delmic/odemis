@@ -268,7 +268,8 @@ def estimateZStackAcquisitionTime(streams, zlevels):
     acq_time = 0
     for s in streams:
         if s in zlevels.keys():
-            acq_time += s.estimateAcquisitionTime() * len(zlevels[s])
+            zs = zlevels.get(s, [0])
+            acq_time += s.estimateAcquisitionTime() * len(zs)
         else:
             acq_time += s.estimateAcquisitionTime()
     for s in streams:

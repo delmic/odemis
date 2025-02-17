@@ -399,7 +399,12 @@ class CryoFeatureAcquisitionTask(object):
 
         autofocus_time = 0
         if self.use_autofocus:
-            autofocus_time = estimateAutoFocusTime(self.streams[0].detector, None, steps=20)
+            rel_rng = SAFE_REL_RANGE_DEFAULT
+            focus_rng = (self.focus.position.value["z"] + rel_rng[0], self.focus.position.value["z"] + rel_rng[1])
+            autofocus_time = estimateAutoFocusTime(detector=self.streams[0].detector,
+                                                        emt=None,
+                                                        focus=self.focus,
+                                                        rng_focus=focus_rng)
 
         if self.zparams:
             zlevels = self._generate_zlevels(zmin=self.zparams["zmin"],
