@@ -13,7 +13,7 @@ Delmic’s mission is to empower companies and researchers by helping them achie
 
 Note: the viewer part is also tested to run on Windows (10+).
 
-For the complete list of dependencies, see the file `requirements.txt`.
+For the complete list of dependencies, see the file `environment.yml`.
 
 ## Installation
 See the `doc/INSTALL.txt` document for the complete installation procedure.

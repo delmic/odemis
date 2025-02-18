@@ -343,8 +343,8 @@ class SPARCTestCase(unittest.TestCase):
         data, exp = f.result()
         self.assertIsNone(exp)
 
-        spec1_data = data[0][1]
-        spec2_data = data[0][3]
+        spec1_data = data[1]
+        spec2_data = data[3]
         self.assertEqual(spec1_data.metadata[model.MD_EXTRA_SETTINGS]["Microscope"]['Model'],
                          ("sparc", None))
         self.assertEqual(spec1_data.metadata[model.MD_EXTRA_SETTINGS][self.spec.name]['binning'],

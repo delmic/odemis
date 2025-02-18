@@ -392,14 +392,18 @@ class GenericComponent(model.Actuator):
     def _doMoveAbs(self, pos):
         maxtime = 0
         for axis, new_pos in pos.items():
-            if isinstance(new_pos, float):
+            if hasattr(self.axes[axis], "choices"):
+                # It's not a linear axis => just make it last an arbitrary time, corresponding to moving by 1m.
+                # Default speed is 1 m/s, so 1s.
+                maxtime = max(maxtime, 1 / self.speed.value[axis])
+            else:  # linear axis
                 change = self._position[axis] - new_pos
                 maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-            else:  # for axes which are not of type float
-                maxtime = max(maxtime, 1 / self.speed.value[axis])
+
             self._position[axis] = new_pos
             logging.info("moving axis %s to %s", axis, self._position[axis])
 
+        logging.debug("Sleeping %g s", maxtime)
         time.sleep(maxtime)
         self._updatePosition()
 

@@ -74,8 +74,6 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
         fm_pos_grid1_p3 = fm_pos_grid1_p2.copy()
         fm_pos_grid1_p3["y"] += 25e-6
 
-        print(fm_pos_grid1_p2)
-        print(fm_pos_grid1_p3)
 
         # create some features
         focus_pos = cls.focus.position.value
@@ -189,6 +187,7 @@ class TestCryoFeaturePosturePositions(unittest.TestCase):
                                            feature.get_posture_position(posture),
                                            axes=self.all_axes))
             self.assertEqual(self.pm.getCurrentPostureLabel(ppos), posture)
+
 
 if __name__ == "__main__":
     unittest.main()

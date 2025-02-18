@@ -301,8 +301,7 @@ class SEM(model.HwComponent):
 
         # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
-        self.check_and_transfer_latest_package()
-        # check_and_transfer_latest_package(self) # TODO: migrate to this shared version
+        check_and_transfer_latest_package(self)
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated
@@ -361,66 +360,6 @@ class SEM(model.HwComponent):
             else:
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
-
-    def transfer_latest_package(self, data: bytes) -> None:
-        """
-        Transfer the latest xtadapter package.
-
-        Note:
-            Pyro has a 1 gigabyte message size limitation.
-            https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
-
-        :param data: The package's zip file data in bytes.
-
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.transfer_latest_package(data)
-
-    def check_and_transfer_latest_package(self) -> None:
-        """Check if a latest xtadapter package is available and then transfer it."""
-        try:
-            package = None
-            bitness = re.search(r"bitness:\s*([\da-z]+)", self._swVersion)
-            bitness = bitness.group(1) if bitness is not None else None
-            adapter = "xtadapter"
-            if "xttoolkit" in self._swVersion:
-                adapter = "fastem-xtadapter"
-            current_version = re.search(r"xtadapter:\s*([\d.]+)", self._swVersion)
-            current_version = current_version.group(1) if current_version is not None else None
-            if current_version is not None and bitness is not None:
-                package = check_latest_package(
-                    directory=XT_INSTALL_DIR,
-                    current_version=current_version,
-                    adapter=adapter,
-                    bitness=bitness,
-                    is_zip=True,
-                )
-            if package is not None:
-                # Check if it's a proper zip file
-                zip_file = zipfile.ZipFile(package.path)
-                ret = zip_file.testzip()
-                zip_file.close()
-                if ret is None:
-                    # Open the package's zip file as bytes and transfer them
-                    with open(package.path, mode="rb") as f:
-                        data = f.read()
-                    self.transfer_latest_package(data)
-                    # Notify the user that a newer xtadpater version is available
-                    notify2.init("Odemis")
-                    update = notify2.Notification(
-                        "Update Delmic XT Adapter",
-                        "Newer version {} is available on ThermoFisher Support PC.\n\n"
-                        "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n"
-                        "2. Restart the Delmic XT Adapter to install it.".format(package.version))
-                    update.set_urgency(notify2.URGENCY_NORMAL)
-                    update.set_timeout(10000)  # 10 seconds
-                    update.show()
-                else:
-                    logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
-
-        except Exception:
-            logging.warning("Failure during transfer latest xtadapter package (non critical)", exc_info=True)
 
     def move_stage(self, position: Dict[str, float], rel: bool = False) -> None:
         """

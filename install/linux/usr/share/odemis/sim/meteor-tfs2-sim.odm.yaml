@@ -67,8 +67,7 @@
         CALIB: {"dx": 0.0506252, "dy": 0.0049832, "version": "tfs_2", "Sample pre-tilt": 0.6108652381980153},
         # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
         # Note: these values are calibrated at installation time.
-        FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.14159265358979}, # 7° - 270°
-        # Typically rz = 110°, but we make it 0 so that at init it looks like in SEM position
+        FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.14159265358979}, # 7° - 180°
         FAV_SEM_POS_ACTIVE: {"rx": 0.314159, "rz": 0.0},    # Note that milling angle (rx) can be changed per session
     },
 }

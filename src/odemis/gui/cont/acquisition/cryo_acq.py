@@ -462,7 +462,6 @@ class CryoAcquiController(object):
         """
         Shows the acquired image on the view
         """
-        # Q: do we want FIBSEM images to show in the localization tab?
         if self.acqui_mode is guimod.AcquiMode.FLM:
             self._tab.display_acquired_data(data)
 
@@ -475,7 +474,6 @@ class CryoAcquiController(object):
         self._update_acquisition_time()
         data = future.result()
         self._display_acquired_data(data)
-
 
     def _create_cryo_filename(self, filename: str, acq_type: Optional[str] = None) -> str:
         """

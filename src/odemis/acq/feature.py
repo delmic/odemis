@@ -144,8 +144,16 @@ class CryoFeature(object):
         logging.info(f"Stage position for milling: {self.get_posture_position(MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
-def get_feature_position_at_posture(pm: MicroscopePostureManager, feature: CryoFeature, posture: int, recalculate: bool = False) -> Dict[str, float]:
-    """Get the feature position at the given posture, if it doesn't exist, create it."""
+def get_feature_position_at_posture(pm: MicroscopePostureManager,
+                                    feature: CryoFeature,
+                                    posture: int,
+                                    recalculate: bool = False) -> Dict[str, float]:
+    """Get the feature position at the given posture, if it doesn't exist, create it.
+    :param pm: the posture manager
+    :param feature: the feature to get the position for
+    :param posture: the posture to get the position for
+    :param recalculate: if True, force recalculate the position, otherwise use the existing one
+    :return: the position for the given posture"""
     position = feature.get_posture_position(posture)
 
     # if the position doesn't exist at that posture, create it
@@ -528,7 +536,12 @@ class CryoFeatureAcquisitionTask(object):
 
         autofocus_time = 0
         if self.use_autofocus:
-            autofocus_time = estimateAutoFocusTime(self.streams[0].detector, None, steps=20)
+            rel_rng = SAFE_REL_RANGE_DEFAULT
+            focus_rng = (self.focus.position.value["z"] + rel_rng[0], self.focus.position.value["z"] + rel_rng[1])
+            autofocus_time = estimateAutoFocusTime(detector=self.streams[0].detector,
+                                                        emt=None,
+                                                        focus=self.focus,
+                                                        rng_focus=focus_rng)
 
         if self.zparams:
             zlevels = self._generate_zlevels(zmin=self.zparams["zmin"],

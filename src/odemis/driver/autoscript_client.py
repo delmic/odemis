@@ -1464,10 +1464,7 @@ class Detector(model.Detector):
         # disabling this until a better solution is found
 
         # median filter applied to the image (required for cryo data)
-        self.median_filter = model.IntContinuous(
-            value=self.getMetadata().get(model.MD_MEDIAN_FILTER, 0),
-            range=(0, 9),
-        )
+        self.medianFilter = model.IntContinuous(0, range=(0, 9), setter=self._setMedianFilter)
 
     def terminate(self) -> None:
         if self._generator:
@@ -1536,8 +1533,8 @@ class Detector(model.Detector):
                     image, _md = self.parent.acquire_image(self._scanner.channel)
 
                     # median filter to remove noise (required for cryo data)
-                    if self.median_filter.value > 0:
-                        image = ndimage.median_filter(image, self.median_filter.value)
+                    if self.medianFilter.value > 0:
+                        image = ndimage.median_filter(image, self.medianFilter.value)
                     # non-blocking acquisition (disabled until hw testing)
                     # logging.debug("Starting one image acquisition")
                     # # start the acquisition
@@ -1705,6 +1702,17 @@ class Detector(model.Detector):
     def _setDetectorType(self, detector_type: str) -> str:
         self.parent.set_detector_type(detector_type, self._scanner.channel)
         return self.parent.get_detector_type(self._scanner.channel)
+
+    def _setMedianFilter(self, value: int) -> int:
+        """Set the median filter value and update the metadata."""
+
+        # if value is 0, remove the filter from the metadata
+        if value == 0:
+            self.updateMetadata({model.MD_DATA_FILTER: None})
+        else:
+            self.updateMetadata({model.MD_DATA_FILTER: f"median-filter:{value}"})
+        return value
+
     # TODO: add support for auto functions
 
 
@@ -1779,7 +1787,7 @@ class Stage(model.Actuator):
 
         self.position = model.VigilantAttribute({}, unit=stage_info["unit"],
                                                 readonly=True)
-        self._get_coordinate_system_offset() # to get the offset values for raw coordinate system
+        self._update_coordinate_system_offset() # to get the offset values for raw coordinate system
         self._updatePosition()
 
         # Refresh regularly the position
@@ -1795,7 +1803,7 @@ class Stage(model.Actuator):
             self._pos_poll.cancel()
             self._pos_poll = None
 
-    def _get_coordinate_system_offset(self):
+    def _update_coordinate_system_offset(self):
         """Calculate the offset values for raw coordinate system. The offset is the difference between the specimen (linked) and raw coordinate system."""
         self.parent.set_default_stage_coordinate_system("SPECIMEN")
         pos_linked = self._getPosition()
