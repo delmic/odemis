@@ -766,6 +766,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         for sc in self.streambar_controller.stream_controllers:
             self._orig_entries += get_local_settings_entries(sc)
 
+        # range for the autofocus (in m)
+        # default min/max range to 50 µm (half a grid square) to 1 mm (half a grid)
+        # this range should cover all cases for different magnifications (e.g. 20x, 50x, 100x)
+        self.focus_points_dist_ctrl.SetValueRange(50e-6, 1000e-6)
+        self.focus_points_dist = model.FloatContinuous(MAX_DISTANCE_FOCUS_POINTS, range=(50e-6, 1000e-6))
+        self.focus_points_dist_vac = VigilantAttributeConnector(
+            self.focus_points_dist, self.focus_points_dist_ctrl, events=wx.EVT_COMMAND_ENTER)
+
         self.start_listening_to_va()
 
         # make sure the view displays the same thing as the one we are
@@ -783,12 +791,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_close)
-
-        # range for the autofocus (in m)
-        # default min/max range to 50 µm (half a grid square) to 1 mm (half a grid)
-        # this range should cover all cases for different magnifications (e.g. 20x, 50x, 100x)
-        self.focus_points_dist_ctrl.SetValueRange(50e-6, 1000e-6)
-        self.focus_points_dist_ctrl.SetValue(MAX_DISTANCE_FOCUS_POINTS)
 
         # Set parameters for tiled acq
         # High overlap percentage is not required as the stitching is based only on stage position,
@@ -843,6 +845,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 entry.vigilattr.subscribe(self.on_setting_change)
 
         self.zsteps.subscribe(self.on_setting_change)
+        self.focus_points_dist.subscribe(self.on_setting_change)
         self.tiles_nx.subscribe(self.on_tiles_number)
         self.tiles_ny.subscribe(self.on_tiles_number)
         self.autofocus_roi_ckbox.subscribe(self.on_setting_change)
@@ -853,6 +856,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 entry.vigilattr.unsubscribe(self.on_setting_change)
 
         self.zsteps.unsubscribe(self.on_setting_change)
+        self.focus_points_dist.unsubscribe(self.on_setting_change)
         self.tiles_nx.unsubscribe(self.on_tiles_number)
         self.tiles_ny.unsubscribe(self.on_tiles_number)
         self.autofocus_roi_ckbox.unsubscribe(self.on_setting_change)
@@ -1068,6 +1072,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.lbl_acqestimate.SetLabel("Add a stream area to acquire.")
             return
 
+        focus_points_dist = self.focus_points_dist.value
         zlevels = self._get_zstack_levels()
         focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
@@ -1082,7 +1087,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                                     registrar=REGISTER_IDENTITY,
                                                     zlevels=zlevels,
                                                     focusing_method=focus_mtd,
-                                                    use_autofocus=self.autofocus_roi_ckbox.value)
+                                                    use_autofocus=self.autofocus_roi_ckbox.value,
+                                                    focus_points_dist=focus_points_dist,
+                                                  )
 
         txt = "The estimated acquisition time is {}."
         txt = txt.format(units.readable_time(math.ceil(acq_time)))

@@ -29,7 +29,7 @@ from concurrent.futures import CancelledError
 import logging
 import os
 import threading
-from typing import Set
+from typing import Set, Dict
 
 from odemis import model
 from odemis.acq import _futures
@@ -268,7 +268,8 @@ def estimateZStackAcquisitionTime(streams, zlevels):
     acq_time = 0
     for s in streams:
         if s in zlevels.keys():
-            acq_time += s.estimateAcquisitionTime() * len(zlevels[s])
+            zs = zlevels.get(s, [0])
+            acq_time += s.estimateAcquisitionTime() * len(zs)
         else:
             acq_time += s.estimateAcquisitionTime()
     for s in streams:
@@ -562,7 +563,7 @@ class AcquisitionTask(object):
 
                 # Wait for the acquisition to be finished.
                 # Will pass down exceptions, included in case it's cancelled
-                das = f.result()
+                das, acq_exp = f.result()
                 if not isinstance(das, Iterable):
                     logging.warning("Future of %s didn't return a list of DataArrays, but '%s'", s, das)
                     das = []
@@ -573,6 +574,10 @@ class AcquisitionTask(object):
                     for da in das:
                         da.metadata[model.MD_EXTRA_SETTINGS] = copy.deepcopy(settings)
                 raw_images[s] = das
+
+                # Now the data is stored, the exception handler will take care of the error
+                if acq_exp:
+                    raise acq_exp
 
                 # update the time left
                 expected_time -= self._streamTimes[s]
@@ -726,11 +731,31 @@ class SettingsObserver(object):
                     continue
                 # Store current value of VA (calling .value might take some time)
                 self._all_settings[comp.name][va_name] = [va.value, va.unit]
+
+                if va_name == "position" and hasattr(comp, "axes") and isinstance(comp.axes, dict):
+                    # For the .position, the axes definition may contain also the "user-friendly" name
+                    # of the axis, so we can add it to the metadata.
+                    def update_settings(value: Dict[str, float], comp_name=comp.name, va_name=va_name, comp=comp):
+                        try:
+                            axes_def: Dict[str, model.Axis] = comp.axes
+                            value = value.copy()
+                            for axis_name, p in value.items():
+                                if (axis_name in axes_def and hasattr(axes_def[axis_name], "choices")
+                                    and isinstance(axes_def[axis_name].choices, dict)
+                                    and p in axes_def[axis_name].choices
+                                   ):
+                                    value[axis_name] = f"{p} ({axes_def[axis_name].choices[p]})"
+                        except Exception:
+                            logging.exception("Failed to interpret user-friendly axis info for %s.position", comp_name)
+
+                        self._all_settings[comp_name][va_name][0] = value
+                else:  # Standard version: just store the VA value as-is
+                    def update_settings(value, comp_name=comp.name, va_name=va_name):
+                        self._all_settings[comp_name][va_name][0] = value
+
                 # Subscribe to VA, update dictionary on callback
-                def update_settings(value, comp_name=comp.name, va_name=va_name):
-                    self._all_settings[comp_name][va_name][0] = value
                 self._va_updaters.append(update_settings)
-                va.subscribe(update_settings)
+                va.subscribe(update_settings, init=True)
 
     def get_all_settings(self):
         return copy.deepcopy(self._all_settings)

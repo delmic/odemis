@@ -826,7 +826,25 @@ class TestMicroscope(unittest.TestCase):
 
 ### DETECTOR
     def test_detector_component(self):
-        pass
+        # set median filter value
+        median_filter = 3
+        self.detector.medianFilter.value = median_filter
+
+        # image acquisition
+        image = self.detector.data.get()
+        md = image.metadata
+        self.assertEqual(md[model.MD_DATA_FILTER], f"median-filter:{median_filter}")
+
+        req_keys = [model.MD_BEAM_DWELL_TIME, model.MD_BEAM_SCAN_ROTATION,
+                    model.MD_BEAM_VOLTAGE, model.MD_BEAM_CURRENT, model.MD_BEAM_SHIFT,
+                    model.MD_BEAM_FIELD_OF_VIEW, model.MD_ACQ_TYPE, model.MD_ACQ_DATE]
+        self.assertTrue(all(k in md for k in req_keys))
+
+        # no median filter
+        self.detector.medianFilter.value = 0
+        image = self.detector.data.get()
+        md = image.metadata
+        self.assertEqual(md[model.MD_DATA_FILTER], None)
 
 ### STAGE
     def test_stage_component(self):

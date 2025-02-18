@@ -1705,9 +1705,14 @@ class Detector(model.Detector):
 
     def _setMedianFilter(self, value: int) -> int:
         """Set the median filter value and update the metadata."""
-        self.updateMetadata({model.MD_DATA_FILTER:
-                             f"median-filter:{value}"})
+
+        # if value is 0, remove the filter from the metadata
+        if value == 0:
+            self.updateMetadata({model.MD_DATA_FILTER: None})
+        else:
+            self.updateMetadata({model.MD_DATA_FILTER: f"median-filter:{value}"})
         return value
+
     # TODO: add support for auto functions
 
 
