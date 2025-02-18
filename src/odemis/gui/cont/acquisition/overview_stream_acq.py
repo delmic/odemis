@@ -34,13 +34,13 @@ import wx
 from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.win.acquisition import OverviewAcquisitionDialog
-
+from odemis.gui import model as guimod
 
 class OverviewStreamAcquiController(object):
     """ controller to handle high-res image acquisition of the overview for the cryo-secom
     """
 
-    def __init__(self, tab_data, tab):
+    def __init__(self, tab_data, tab, mode: guimod.AcquiMode = guimod.AcquiMode.FLM):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         tab: (Tab): the tab which should show the data
@@ -48,6 +48,7 @@ class OverviewStreamAcquiController(object):
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._tab = tab
+        self.acqui_mode = mode
 
     def open_acquisition_dialog(self):
         """
@@ -76,7 +77,8 @@ class OverviewStreamAcquiController(object):
         # create the dialog
         try:
             acq_dialog = OverviewAcquisitionDialog(
-                self._tab.main_frame, self._tab_data_model)
+                self._tab.main_frame, self._tab_data_model, 
+                mode=self.acqui_mode)
             parent_size = [v * 0.77 for v in self._tab.main_frame.GetSize()]
 
             acq_dialog.SetSize(parent_size)

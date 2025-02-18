@@ -503,8 +503,8 @@ class OverlayTestCase(test.GuiTestCase):
         cryofeature_overlay.active.value = True
 
         # Add features to the tab's features list
-        tab_mod.add_new_feature(0, 0)
-        tab_mod.add_new_feature(0.001, 0.001)
+        tab_mod.add_new_feature(stage_position={"x": 0, "y": 0, "z": 0}, fm_focus_position={"z": 0})
+        tab_mod.add_new_feature(stage_position={"x":0.001, "y":0.001, "z":0.001}, fm_focus_position={"z": 0.001})
         # Execute the gui loop, so that the buffer contains the features
         test.gui_loop(0.1)
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer

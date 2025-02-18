@@ -38,7 +38,6 @@ import odemis.gui
 import odemis.gui.cont.acquisition as acqcont
 from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 import odemis.gui.cont.views as viewcont
-from odemis.gui.cont import milling
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.acq.align import AutoFocus
@@ -124,7 +123,7 @@ class LocalizationTab(Tab):
         )
 
         self._acquisition_controller = acqcont.CryoAcquiController(
-            tab_data, panel, self)
+            tab_data, panel, self, mode=guimod.AcquiMode.FLM)
 
         self._acquired_stream_controller = CryoAcquiredStreamsController(
             tab_data,
@@ -135,7 +134,8 @@ class LocalizationTab(Tab):
             static=True,
         )
 
-        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self, 
+                                                               mode=guimod.AcquiMode.FLM)
         self._zloc_controller = CryoZLocalizationController(tab_data, panel, self)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
         self.conf = conf.get_acqui_conf()
@@ -192,7 +192,7 @@ class LocalizationTab(Tab):
         elif self.main_data.role == "meteor":
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
-            self._allowed_targets = [FM_IMAGING, SEM_IMAGING]
+            self._allowed_targets = [FM_IMAGING]
             self._stage = self.tab_data_model.main.stage_bare
         elif self.main_data.role == "mimas":
             # Only useful near the active positions: milling (FIB) or FLM
@@ -202,15 +202,6 @@ class LocalizationTab(Tab):
         self._aligner = self.tab_data_model.main.aligner
 
         main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
-
-        # For now, only possible to mill on the MIMAS. Eventually, this could be
-        # dependent on the availability of the ion-beam component.
-        if self.main_data.role == "mimas":
-            self._serial_milling_controller = milling.MillingButtonController(
-                tab_data,
-                panel,
-                self
-            )
 
     def _on_overview_visible(self, val):
         """

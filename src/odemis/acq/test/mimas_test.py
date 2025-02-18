@@ -31,7 +31,7 @@ from odemis.acq import orsay_milling, stream
 from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_ROUGH_MILLED,
                                 CryoFeature)
-from odemis.acq.millmng import (MillingRectangleTask, MillingSettings,
+from odemis.acq.mimas import (MillingRectangleTask, MillingSettings,
                                 load_config, mill_features)
 from odemis.acq.move import LOADING, MicroscopePostureManager
 from odemis.acq.stream import UNDEFINED_ROI

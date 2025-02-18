@@ -85,7 +85,7 @@ FASTEM-sim: {
         axes: {
             'x': {
                 axis_number: 1,
-                speed: 0.001, # m/s
+                speed: 0.005, # m/s
                 closed_loop: True,
                 range: [-25.e-3, 25.e-3],  # m
                 motorstep_resolution: 4.5e-6,  # m / step
@@ -93,7 +93,7 @@ FASTEM-sim: {
                 },
             'y': {
                 axis_number: 2,
-                speed: 0.001, # m/s
+                speed: 0.005, # m/s
                 closed_loop: True,
                 range: [-25.e-3, 25.e-3],  # m
                 motorstep_resolution: 4.5e-6,  # m / step

@@ -87,7 +87,7 @@ class Weaver(metaclass=ABCMeta):
             # tiles.append(img.rotate_img_metadata(tile, -rotation, center_of_rot))
         # self.tiles = tiles
 
-        self.tbbx_px, self.gbbx_px, self.gbbx_phy = self.get_bounding_boxes(self.tiles)
+        self.tbbx_px, self.gbbx_px, self.gbbx_phy, self.mean_raw = self.get_bounding_boxes(self.tiles)
         im = self.weave_tiles()
         md = self.get_final_metadata(self.tiles[0].metadata.copy())
         # weaved_image = img.rotate_img_metadata(model.DataArray(im, md), rotation, center_of_rot)
@@ -122,6 +122,7 @@ class Weaver(metaclass=ABCMeta):
         pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
 
         tbbx_phy = []  # tuples of ltrb in physical coordinates
+        raw_coords = []  # 5-tuples of (x, y, z, r, x) for each tile
         for t in tiles:
             c = t.metadata[model.MD_POS]
             w = t.shape[-1], t.shape[-2]
@@ -132,7 +133,21 @@ class Weaver(metaclass=ABCMeta):
                    c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
 
             tbbx_phy.append(bbx)
+            
+            rc = t.metadata.get(model.MD_STAGE_POSITION_RAW, None)
+            if rc is None:
+                continue
+            raw_coords.append(copy.deepcopy(rc))
 
+        # get mean of raw coords for each axis
+        mean_raw = {}
+        if raw_coords:
+            mean_raw = {"x": numpy.mean([r["x"] for r in raw_coords]),
+                        "y": numpy.mean([r["y"] for r in raw_coords]),
+                        "z": numpy.mean([r["z"] for r in raw_coords]),
+                        "rz": numpy.mean([r["rz"] for r in raw_coords]),
+                        "rx": numpy.mean([r["rx"] for r in raw_coords])}
+        
         gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
                     max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
 
@@ -156,7 +171,7 @@ class Weaver(metaclass=ABCMeta):
         if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
             # Overlap > 50% or missing tiles
             logging.warning("Global area much bigger than sum of tile areas")
-        return tbbx_px, gbbx_px, gbbx_phy
+        return tbbx_px, gbbx_px, gbbx_phy, mean_raw
 
     def get_final_metadata(self, md: dict) -> dict:
         """
@@ -173,6 +188,10 @@ class Weaver(metaclass=ABCMeta):
 
         md[model.MD_POS] = c_phy
         md[model.MD_DIMS] = "YX"
+        # TODO: update the correct STAgE_POSITION_RAW>..... its currently the top left corner
+
+        md[model.MD_STAGE_POSITION_RAW] = self.mean_raw
+        md[model.MD_EXTRA_SETTINGS]["Stage"]["position"][0] = self.mean_raw
         return md
 
     def _adjust_brightness(self, tile, tiles):
