@@ -62,6 +62,7 @@ SELECTION_COLOUR_2ND = FG_COLOUR_2ND
 
 # Tint value for the Spectrograph line stream, to be used for adjusting the focus
 FOCUS_STREAM_COLOR = (0, 64, 255)  # colour it blue
+CL_STREAM_SNAPSHOT_COLOR = (255, 0, 0)  # colour it red
 
 # END Colour definitions
 
