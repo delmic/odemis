@@ -24,6 +24,7 @@ This document covers the main aspects of development with Odemis.
     dataio
     gui
     plugins
+    utils
     microscope
     documentation
 ..    testing

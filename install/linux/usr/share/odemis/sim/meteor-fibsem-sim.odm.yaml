@@ -37,7 +37,10 @@ METEOR-FIBSEM-Sim: {
 
 "Electron-Detector": {
     role: se-detector,
-    init: {}
+    init: {},
+    properties: {
+        medianFilter: 3,
+    }
 
 }
 
@@ -56,7 +59,10 @@ METEOR-FIBSEM-Sim: {
 
 "Ion-Detector": {
     role: "se-detector-ion",
-    init: {}
+    init: {},
+    properties: {
+        medianFilter: 3,
+    }
 }
 
 "Ion-Focus": {
@@ -78,15 +84,13 @@ METEOR-FIBSEM-Sim: {
         # Grid centers in SEM range
         # Adjusted so that at init (0,0,0), it's at the Grid 1.
         SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 5.0e-3, 'y': 0, 'z': 32.e-3}},
-        # Mirroring values between SEM - METEOR
-        POS_COR: [0.0253126, 0.0024916],
         CALIB: {"version": "tfs_3", 
                 "dx": 0.0506252, "dy": 0.0049832,
                 "Sample pre-tilt":  0.6108652381980153, # 35°
                 "SEM-Eucentric-Focus": 7.0e-3},  # aqulios=7.0e-3, hydra=4.0e-3
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
-        FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session  
+        FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session
     },
 }
 

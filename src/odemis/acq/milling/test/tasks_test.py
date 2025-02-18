@@ -20,7 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 from odemis.acq.milling.patterns import TrenchPatternParameters
-from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings2
+from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -38,14 +38,14 @@ class MillingTaskTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
-    def test_milling_settings2(self):
+    def test_milling_settings(self):
 
         current = 100e-9
         voltage = 30e3
         field_of_view = 400e-6
         mode = "Serial"
         channel = "ion"
-        milling_settings = MillingSettings2(current, voltage, field_of_view, mode, channel)
+        milling_settings = MillingSettings(current, voltage, field_of_view, mode, channel)
 
         self.assertEqual(milling_settings.current.value, current)
         self.assertEqual(milling_settings.voltage.value, voltage)
@@ -60,7 +60,7 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(json_data["mode"], mode)
         self.assertEqual(json_data["channel"], channel)
 
-        milling_settings_from_json = MillingSettings2.from_json(json_data)
+        milling_settings_from_json = MillingSettings.from_json(json_data)
         self.assertEqual(milling_settings_from_json.current.value, current)
         self.assertEqual(milling_settings_from_json.voltage.value, voltage)
         self.assertEqual(milling_settings_from_json.field_of_view.value, field_of_view)
@@ -69,7 +69,7 @@ class MillingTaskTestCase(unittest.TestCase):
 
     def test_milling_task_settings(self):
 
-        milling_settings = MillingSettings2(100e-9, 30e3, 400e-6, "Serial", "ion")
+        milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
         trench_pattern = TrenchPatternParameters(1e-6, 1e-6, 100e-9, 1e-6, (0, 0))
 
         milling_task_settings = MillingTaskSettings(milling_settings, [trench_pattern])
@@ -104,5 +104,3 @@ class MillingTaskTestCase(unittest.TestCase):
 
     def test_save_load_milling_tasks(self):
         pass
-
-        # TODO: millmng mill tasks

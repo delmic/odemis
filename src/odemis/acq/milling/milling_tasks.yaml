@@ -1,3 +1,8 @@
+# Contains the configuration for the milling tasks in the format:
+# 
+# task_name:
+#  milling: Milling parameters
+#  patterns: List of patterns (and parameters) to mill
 'Rough Milling 01':
   name: 'Rough Milling 01'
   milling:

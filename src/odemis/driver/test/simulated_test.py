@@ -202,6 +202,34 @@ class StageTest(unittest.TestCase, ActuatorTest):
     def tearDown(self):
         ActuatorTest.tearDown(self)
 
+    def test_moveAbs_0(self):
+        """
+        Move to 0 (int), which used to cause a bug in the speed computation, making the move very slow.
+        """
+        move = {}
+        # move to the centre
+        for axis in self.dev.axes:
+            rng = self.dev.axes[axis].range
+            move[axis] = (rng[0] + rng[1]) / 2
+        self.dev.moveAbsSync(move)
+
+        speed = {}
+        for axis in self.dev.axes:
+            rng = self.dev.axes[axis].range
+            move[axis] = rng[0]
+            print(rng)
+            speed[axis] = (rng[1] - rng[0]) / 1  # 1 s to go to whole range
+        self.dev.moveAbsSync(move)
+        logging.info("Updating speed to %s", speed)
+        self.dev.speed.value = speed
+
+        # Should take ~1s (used to take 5s)
+        move = {a: 0 for a in self.dev.axes}
+        t_start = time.time()
+        self.dev.moveAbsSync(move)
+        t_end = time.time()
+        self.assertLess(t_end - t_start, 2)
+
 
 class ChamberTest(unittest.TestCase):
     actuator_type = simulated.Chamber

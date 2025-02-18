@@ -316,8 +316,8 @@ class CryoGUIData(MicroscopyGUIData):
 
         # No feature nearby => create a new one
         current_position = copy.deepcopy(self.main.stage_bare.position.value)
-        feature = self.add_new_feature(stage_position=current_position)
-        logging.debug(f"New feature created at {current_position} because none are close by.")
+        self.add_new_feature(stage_position=current_position)
+        logging.debug(f"No feature found nearby. New feature created at {current_position}.")
 
 
 class CryoLocalizationGUIData(CryoGUIData):
@@ -365,7 +365,6 @@ class CryoLocalizationGUIData(CryoGUIData):
 
         self.view_posture = model.VigilantAttribute(FM_IMAGING)
         self.acqui_mode = AcquiMode.FLM
-
 
         if main.stigmator:
             # stigmator should have a "MD_CALIB" containing a dict[float, dict],
@@ -454,7 +453,6 @@ class CryoFIBSEMGUIData(CryoGUIData):
                     config.pj_last_path, config.fn_ptn,
                     config.last_extension,
                     config.fn_count)
-
 
 
 class CryoCorrelationGUIData(CryoGUIData):

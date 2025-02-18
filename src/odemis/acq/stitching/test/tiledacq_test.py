@@ -479,6 +479,38 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.focus.position.unsubscribe(self._position_listener)
         self.assertLess(len(self._focuser_pos), 2)
 
+    def test_estimate_time(self):
+        """Test the computation of tiled acquisition time according to the observed time in real-time acquisitions
+        observed in meteor/fm imaging."""
+        area = (-0.001, -0.001, 0.001, 0.001)
+        overlap = 0.2
+        # Test with more than one z level
+        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area=area, overlap=overlap,
+                                              focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
+                                              zlevels=[1, 2, 3])
+        tiled_acq_task._nx = 7
+        tiled_acq_task._ny = 7
+        # observed time duration during stage movement between tiles
+        min_stage_time = tiled_acq_task._nx * tiled_acq_task._ny * 0.3
+        # observed time duration during tile acquisition
+        min_ties_acq = tiled_acq_task._nx * tiled_acq_task._ny * len(tiled_acq_task._zlevels)
+        min_total_time = min_stage_time + min_ties_acq
+        # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
+        self.assertTrue(min_total_time <= tiled_acq_task.estimateTime() <= 1.30 * min_total_time)
+        # Test with one z level
+        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area=area, overlap=overlap,
+                                              focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
+                                              zlevels=[1])
+        tiled_acq_task._nx = 10
+        tiled_acq_task._ny = 10
+        # observed time duration during stage movement between tiles
+        min_stage_time = tiled_acq_task._nx * tiled_acq_task._ny * 0.3
+        # observed time duration during tile acquisition
+        min_ties_acq = tiled_acq_task._nx * tiled_acq_task._ny * len(tiled_acq_task._zlevels)
+        min_total_time = min_stage_time + min_ties_acq
+        # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
+        self.assertTrue(min_total_time <= tiled_acq_task.estimateTime() <= 1.30 * min_total_time)
+
     def _position_listener(self, pos):
         self._focuser_pos.append(pos)
 

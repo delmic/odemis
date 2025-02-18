@@ -155,7 +155,7 @@ def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: fl
                   min(max(focuser_rng[0], zrange_abs[1]), focuser_rng[1]))
 
     if zrange_abs[0] == zrange_abs[1]:
-        return focuser_pos + zrange[0]
+        return [focuser_pos + zrange[0]]
 
     # find number of zlevels
     n = (zrange_abs[1] - zrange_abs[0]) / abs(zstep) + 1

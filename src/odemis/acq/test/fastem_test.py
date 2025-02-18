@@ -37,7 +37,7 @@ from odemis import model
 from odemis.acq import fastem, stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import SETTINGS_SELECTION
+from odemis.acq.fastem import DEFAULT_PITCH, SETTINGS_SELECTION
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.model.main_gui_data import FastEMMainGUIData
@@ -757,10 +757,10 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
             roa = FastEMROA(shape=MockEditableShape(),
-                        main_data=self.main_data,
-                        overlap=0.0,
-                        name=roa_name,
-                        slice_index=0)
+                            main_data=self.main_data,
+                            overlap=0.0,
+                            name=roa_name,
+                            slice_index=0)
             roa.shape._points = points
             roa.shape.points.value = points
 
@@ -845,10 +845,10 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
             roa = FastEMROA(shape=MockEditableShape(),
-                        main_data=self.main_data,
-                        overlap=overlap,
-                        name=roa_name,
-                        slice_index=0)
+                            main_data=self.main_data,
+                            overlap=overlap,
+                            name=roa_name,
+                            slice_index=0)
             roa.shape._points = points
             roa.shape.points.value = points
 
@@ -1130,10 +1130,10 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
             roa = FastEMROA(shape=MockEditableShape(),
-                        main_data=self.main_data,
-                        overlap=0.0,
-                        name=roa_name,
-                        slice_index=0)
+                            main_data=self.main_data,
+                            overlap=0.0,
+                            name=roa_name,
+                            slice_index=0)
             roa.shape._points = points
             roa.shape.points.value = points
 
@@ -1295,6 +1295,9 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.mppc.frameDuration.value = 0.1
         cls.mppc.cellCompleteResolution.value = (900, 900)
         cls.mppc.shape = (8, 8)
+        cls.mppc.configure_mock(
+            **{"getMetadata.return_value": {model.MD_CALIB: {"pitch": DEFAULT_PITCH},}}
+        )
 
         cls.multibeam = Mock()
         cls.multibeam.configure_mock(**{"getMetadata.return_value": {model.MD_SCAN_OFFSET_CALIB: [0.01, 0.01],
@@ -1328,7 +1331,11 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         image[54:150:12, 54:150:12] = 1
         image = model.DataArray(input_array=image)
         cls.ccd.data.configure_mock(**{"get.return_value": image})
-        cls.ccd.configure_mock(**{"getMetadata.return_value": {model.MD_FAV_POS_ACTIVE: {"j": 100, "i": 100}}})
+        cls.ccd.configure_mock(**{"getMetadata.return_value": {
+            model.MD_FAV_POS_ACTIVE: {"j": 100, "i": 100},
+            model.MD_SENSOR_PIXEL_SIZE: (3.45e-6, 3.45e-6),
+            model.MD_LENS_MAG: 40,
+        }})
         cls.ccd.pointSpreadFunctionSize.value = 1
         cls.ccd.pixelSize.value = (1.0e-7, 1.0e-7)
 
