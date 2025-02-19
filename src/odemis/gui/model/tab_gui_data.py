@@ -503,6 +503,28 @@ class CryoCorrelationGUIData(CryoGUIData):
         super().__init__(main)
 
         # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+
+        # the streams to correlate among all streams in .streams
+        self.selected_stream = model.VigilantAttribute(None)
+
+        # for export tool
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+
+
+class CryoTdctCorrelationGUIData(CryoGUIData):
+    """ Represent an interface used to correlate using 3DCT.
+
+    Used for METEOR systems.
+
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
         tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
@@ -588,25 +610,6 @@ class CryoCorrelationGUIData(CryoGUIData):
         self.main.targets.value.append(target)
         self.main.currentTarget.value = target
         return target
-
-    # def add_new_target(self, x, y, type, z=None, t_name=None):
-    #     #     if not t_name:
-    #     #         existing_names = [str(f.index.value) for f in self.main.Targets.value]
-    #     #         t_name = make_unique_name("1", existing_names)
-    #     target = None
-    #     fm_focus_position = self.main.focus.position.value['z']
-    #     if self.focussedView.value.name.value == "SEM Overview" and type == "SurfaceFiducial":
-    #         # self.main.fib_fiducial_index.value += 1
-    #         target = Target(x, y, z=0, name=t_name, type=type, index=1,
-    #                         fm_focus_position=fm_focus_position)
-    #     else:
-    #         raise ValueError("Invalid selected view")
-    #
-    #     # same target structure for subscribing in overlay
-    #     # name to choose which grid, and good names to display on the streams and row name in grid target dictionary, identifier
-    #
-    #     self.fib_surface_fiducial = target
-    #     return target
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):

@@ -36,6 +36,7 @@ def get_resources():
 
 
 
+
 class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, *args):
@@ -77,6 +78,50 @@ class xrcfr_acq(wx.Dialog):
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
+
+
+
+
+class xrcfr_correlation(wx.Dialog):
+#!XRCED:begin-block:xrcfr_correlation.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcfr_correlation.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "fr_correlation")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "fr_correlation")
+
+        # Define variables for the controls, bind event handlers
+        self.correlation_toolbar = xrc.XRCCTRL(self, "correlation_toolbar")
+        self.pnl_correlation_grid = xrc.XRCCTRL(self, "pnl_correlation_grid")
+        self.vp_correlation_tl = xrc.XRCCTRL(self, "vp_correlation_tl")
+        self.vp_correlation_tr = xrc.XRCCTRL(self, "vp_correlation_tr")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
+        self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
+        self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
+        self.table_grid = xrc.XRCCTRL(self, "table_grid")
+        self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
+        self.btn_refractive_index = xrc.XRCCTRL(self, "btn_refractive_index")
+        self.txt_correlation_rms = xrc.XRCCTRL(self, "txt_correlation_rms")
+        self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
+        self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
 
 
 
@@ -374,13 +419,6 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
         self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
-        self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
-        self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
-        self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
-        self.table_grid = xrc.XRCCTRL(self, "table_grid")
-        self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
-        self.btn_refractive_index = xrc.XRCCTRL(self, "btn_refractive_index")
-        self.txt_correlation_rms = xrc.XRCCTRL(self, "txt_correlation_rms")
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
         self.lbl_instructions_correlation = xrc.XRCCTRL(self, "lbl_instructions_correlation")
@@ -811,6 +849,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.txt_cryosecom_left_time = xrc.XRCCTRL(self, "txt_cryosecom_left_time")
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
+        self.btn_tdct = xrc.XRCCTRL(self, "btn_tdct")
         self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
         self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
         self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
@@ -1680,6 +1719,227 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
     wx.MemoryFSHandler.AddFile('XRC/dialog_acq/dialog_acq_xrc', bytearray(dialog_acq_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/dialog_acq/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
     __res.Load('memory:XRC/dialog_acq/dialog_acq_xrc')
+
+    dialog_correlation_tdct_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxDialog" name="fr_correlation">
+    <object class="wxFlexGridSizer">
+      <cols>3</cols>
+      <rows>1</rows>
+      <growablecols>1</growablecols>
+      <growablerows>0</growablerows>
+<!--      <object class="sizeritem">-->
+<!--        <object class="LiveViewport" name="pnl_view_acq">-->
+<!--          <XRCED>-->
+<!--            <assign_var>1</assign_var>-->
+<!--          </XRCED>-->
+<!--        </object>-->
+<!--        <flag>wxEXPAND</flag>-->
+<!--      </object>-->
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="ToolBar" name="correlation_toolbar">
+                    <style>wxVERTICAL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+              </object>
+            </object>
+          </object>
+<!--          <size>-1,-1</size>-->
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_correlation_grid">
+          <object class="MicroscopeViewport" name="vp_correlation_tl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_tr">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_correlation_panel">
+                        <object class="wxPanel" name="pnl_correlation">
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxButton" name="btn_z_targeting">
+                                <label>Refine Z</label>
+                              </object>
+                            </object>
+                            <!-- Points Table (wxListCtrl) -->
+                            <object class="sizeritem">
+                              <object class="wxGrid" name="table_grid">
+                                <style>wxWANTS_CHARS</style>
+                              </object>
+                            </object>
+                            <!--                            <flag>wxALIGN_LEFT</flag>-->
+                            <!--                            <orient>wxVERTICAL</orient>-->
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <!-- Add Delete Button -->
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_row">
+                                    <icon>______img_icon_ico_trash_png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                </object>
+                                <!-- Z-targeting button -->
+                                <object class="sizeritem">
+                                  <object class="wxButton" name="btn_refractive_index">
+                                    <label>Refractive Index</label>
+                                    <enabled>1</enabled>  <!-- Initially disabled -->
+                                  </object>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="txt_correlation_rms">
+                                <label>Correlation RMS Deviation :</label>
+                                <fg>#E5E5E5</fg>
+                                <hidden>1</hidden>
+                              </object>
+                              <flag>wxLEFT</flag>
+                            </object>
+                          </object>
+                        </object>
+                      </object>
+
+
+                      <object class="FoldPanelItem" name="fp_correlation_streams">
+                        <object class="StreamBar" name="pnl_correlation_streams">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_cancel">
+                <height>48</height>
+                <face_colour>def</face_colour>
+                <label>Close</label>
+                <font>
+                  <size>14</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
+          <bg>#444444</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxVERTICAL</orient>
+    </object>
+    <size>400,-1</size>
+    <bg>#333333</bg>
+    <style>wxBORDER_NONE</style>
+  </object>
+  <flag>wxEXPAND</flag>
+</object>
+</object>
+    <title>Overview Acquisition</title>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+    </font>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_trash_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x04\x00\x00\x00\
+\xb5\xfa7\xea\x00\x00\x00>IDAT(\xcfc` \x01\xb41\xfcd\xf8\x0f\xc4-\xb8\x14\
+\xfcd\x10\x02\x92B\x0c?0\xa5\xfec\x85hJ\xf0\xf3\xc1\x02\xe8x\x18*\x80\x84\
+"\x0c`\x09\xcd\x16p<\xc0\xe0O\x86f\x06\xaa\x01\x00\x07s?\xea["x\xa5\x00\
+\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/dialog_correlation_tdct/dialog_correlation_tdct_xrc', bytearray(dialog_correlation_tdct_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/dialog_correlation_tdct/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
+    __res.Load('memory:XRC/dialog_correlation_tdct/dialog_correlation_tdct_xrc')
 
     dialog_overview_acq_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
@@ -3798,60 +4058,6 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem" name="fp_correlation_panel">
-                        <object class="wxPanel" name="pnl_correlation">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <object class="wxBoxSizer">
-                            <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
-                              <object class="wxButton" name="btn_z_targeting">
-                                <label>Refine Z</label>
-                              </object>
-                            </object>
-                            <!-- Points Table (wxListCtrl) -->
-                            <object class="sizeritem">
-                              <object class="wxGrid" name="table_grid">
-                                <style>wxWANTS_CHARS</style>
-                              </object>
-                            </object>
-<!--                            <flag>wxALIGN_LEFT</flag>-->
-<!--                            <orient>wxVERTICAL</orient>-->
-
-
-                    <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <!-- Add Delete Button -->
-                                <object class="sizeritem">
-                                  <object class="ImageButton" name="btn_delete_row">
-                                    <icon>______img_icon_ico_trash_png</icon>
-                                    <height>16</height>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                </object>
-                                <!-- Z-targeting button -->
-                                <object class="sizeritem">
-                                  <object class="wxButton" name="btn_refractive_index">
-                                    <label>Refractive Index</label>
-                                    <enabled>1</enabled>  <!-- Initially disabled -->
-                                  </object>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                            </object>
-                                                                <object class="sizeritem">
-                                      <object class="wxStaticText" name="txt_correlation_rms">
-                                        <label>Correlation RMS Deviation :  </label>
-                                        <fg>#E5E5E5</fg>
-                                        <hidden>1</hidden>
-                                      </object>
-                                      <flag>wxLEFT</flag>
-                                                                </object>
-
-                          </object>
-                        </object>
-                        </object>
                       <object class="FoldPanelItem" name="fp_meteor_correlation">
                         <object class="wxPanel" name="pnl_meteor_correlation">
                           <object class="wxBoxSizer">
@@ -4104,15 +4310,6 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 \x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_trash_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x04\x00\x00\x00\
-\xb5\xfa7\xea\x00\x00\x00>IDAT(\xcfc` \x01\xb41\xfcd\xf8\x0f\xc4-\xb8\x14\
-\xfcd\x10\x02\x92B\x0c?0\xa5\xfec\x85hJ\xf0\xf3\xc1\x02\xe8x\x18*\x80\x84\
-"\x0c`\x09\xcd\x16p<\xc0\xe0O\x86f\x06\xaa\x01\x00\x07s?\xea["x\xa5\x00\
-\x00\x00\x00IEND\xaeB`\x82'''
-
     ______img_icon_ico_export_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -4151,7 +4348,6 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/panel_tab_correlation_xrc', bytearray(panel_tab_correlation_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_export_png', bytearray(______img_icon_ico_export_png))
     __res.Load('memory:XRC/panel_tab_correlation/panel_tab_correlation_xrc')
 
@@ -9660,6 +9856,24 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                 <height>48</height>
                                 <face_colour>def</face_colour>
                                 <label>ACQUIRE OVERVIEW</label>
+                                <font>
+                                  <size>14</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_tdct">
+                                <height>48</height>
+                                <face_colour>def</face_colour>
+                                <label>3DCT</label>
                                 <font>
                                   <size>14</size>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>

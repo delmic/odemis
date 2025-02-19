@@ -253,60 +253,6 @@
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem" name="fp_correlation_panel">
-                        <object class="wxPanel" name="pnl_correlation">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <object class="wxBoxSizer">
-                            <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
-                              <object class="wxButton" name="btn_z_targeting">
-                                <label>Refine Z</label>
-                              </object>
-                            </object>
-                            <!-- Points Table (wxListCtrl) -->
-                            <object class="sizeritem">
-                              <object class="wxGrid" name="table_grid">
-                                <style>wxWANTS_CHARS</style>
-                              </object>
-                            </object>
-<!--                            <flag>wxALIGN_LEFT</flag>-->
-<!--                            <orient>wxVERTICAL</orient>-->
-
-
-                    <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <!-- Add Delete Button -->
-                                <object class="sizeritem">
-                                  <object class="ImageButton" name="btn_delete_row">
-                                    <icon>../../img/icon/ico_trash.png</icon>
-                                    <height>16</height>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                </object>
-                                <!-- Z-targeting button -->
-                                <object class="sizeritem">
-                                  <object class="wxButton" name="btn_refractive_index">
-                                    <label>Refractive Index</label>
-                                    <enabled>1</enabled>  <!-- Initially disabled -->
-                                  </object>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                            </object>
-                                                                <object class="sizeritem">
-                                      <object class="wxStaticText" name="txt_correlation_rms">
-                                        <label>Correlation RMS Deviation :  </label>
-                                        <fg>#E5E5E5</fg>
-                                        <hidden>1</hidden>
-                                      </object>
-                                      <flag>wxLEFT</flag>
-                                                                </object>
-
-                          </object>
-                        </object>
-                        </object>
                       <object class="FoldPanelItem" name="fp_meteor_correlation">
                         <object class="wxPanel" name="pnl_meteor_correlation">
                           <object class="wxBoxSizer">
