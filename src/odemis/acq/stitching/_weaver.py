@@ -79,19 +79,28 @@ class Weaver(metaclass=ABCMeta):
         rotation = self.tiles[0].metadata.get(model.MD_ROTATION, 0) #+ self.tiles[0].metadata.get(model.MD_BEAM_SCAN_ROTATION, 0)
         center_of_rot = self.tiles[0].metadata[model.MD_POS]
 
-        print(rotation, center_of_rot)
+        is_imported = False
+        if is_imported:
+            scan_rotation = self.tiles[0].metadata.get(model.MD_BEAM_SCAN_ROTATION, 0)
+            rotation += scan_rotation
+
+
+        # TODO: for imported images with scan rotation, we need to flag it as such
+        # and apply the rotation to the image, because the rotation is not also applied to
+        # the position.
+        # for images acquired with odemis, the rotation is already applied to the position. so no rotation needs to be applied
+        # QUERY: how to tell if the image was imported or acquired with odemis??
 
         tiles = []
         # Rotate all tiles by the inverse of the rotation, such that each tile is aligned with the horizontal axis.
-        # for tile in self.tiles:
-            # tiles.append(img.rotate_img_metadata(tile, -rotation, center_of_rot))
-        # self.tiles = tiles
+        for tile in self.tiles:
+            tiles.append(img.rotate_img_metadata(tile, -rotation, center_of_rot))
+        self.tiles = tiles
 
         self.tbbx_px, self.gbbx_px, self.gbbx_phy, self.mean_raw = self.get_bounding_boxes(self.tiles)
         im = self.weave_tiles()
         md = self.get_final_metadata(self.tiles[0].metadata.copy())
-        # weaved_image = img.rotate_img_metadata(model.DataArray(im, md), rotation, center_of_rot)
-        weaved_image = model.DataArray(im, md)
+        weaved_image = img.rotate_img_metadata(model.DataArray(im, md), rotation, center_of_rot)
 
         return weaved_image
 
@@ -188,8 +197,6 @@ class Weaver(metaclass=ABCMeta):
 
         md[model.MD_POS] = c_phy
         md[model.MD_DIMS] = "YX"
-        # TODO: update the correct STAgE_POSITION_RAW>..... its currently the top left corner
-
         md[model.MD_STAGE_POSITION_RAW] = self.mean_raw
         md[model.MD_EXTRA_SETTINGS]["Stage"]["position"][0] = self.mean_raw
         return md
