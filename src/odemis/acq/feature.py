@@ -85,6 +85,9 @@ class CorrelationTarget:
         self.fib_stream = None #:StaticSEMStream = None
         self.fm_streams = None #: List[StaticFluoStream] = []
         self.superz = None #: StaticFluoStream = None
+        # TODO may be redundant, could be removed as the 3DCT wrapper calculates the metadata
+        # Either that wrapper can be modified or this metadata can be removed
+        # Currently the below attribute is not used
         self.image_metadata: CorrelationMetadata = None
 
     def reset_attributes(self):
