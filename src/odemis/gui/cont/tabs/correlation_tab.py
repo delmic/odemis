@@ -40,8 +40,8 @@ from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
-from odemis.acq.stream import OpticalStream, EMStream, StaticStream, StaticSEMStream, StaticFluoStream
-from odemis.gui.cont.correlation import CorrelationController, CorrelationPointsController
+from odemis.acq.stream import OpticalStream, EMStream, StaticStream
+from odemis.gui.cont.correlation import CorrelationController
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.tabs.tab import Tab
@@ -79,13 +79,6 @@ class CorrelationTab(Tab):
             (panel.btn_correlation_view_br,
                 (panel.vp_correlation_br, panel.lbl_correlation_view_br)),
         ])
-        self.panel.vp_correlation_tl.canvas.cryotarget_fm_overlay.active.value = True
-        self.panel.vp_correlation_tl.canvas.add_world_overlay(
-            self.panel.vp_correlation_tl.canvas.cryotarget_fm_overlay)
-        self.panel.vp_correlation_tr.canvas.cryotarget_fib_overlay.active.value = True
-        self.panel.vp_correlation_tr.canvas.add_world_overlay(
-            self.panel.vp_correlation_tr.canvas.cryotarget_fib_overlay)
-
 
 
         # view selector
@@ -107,14 +100,6 @@ class CorrelationTab(Tab):
         self._streambar_controller.add_action("From tileset...", self._on_add_tileset)
 
 
-        # correlation points controller
-        self._correlation_points_controller = CorrelationPointsController(
-            tab_data,
-            panel,
-            self,
-            panel.pnl_correlaton_grid.viewports
-        )
-
         # correlation controller
         self._correlation_controller = CorrelationController(
             tab_data,
@@ -135,10 +120,6 @@ class CorrelationTab(Tab):
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
-
-    @property
-    def correlation_points_controller(self):
-        return self._correlation_points_controller
 
     @property
     def streambar_controller(self):

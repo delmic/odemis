@@ -312,12 +312,17 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         "RegionOfInterest": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_selected.png'))}
 
+        # Shifting the overlay from panel to a pop up dialog box has slightly changed the behavior of the overlay
+        # While adding fiducials in another view than the selected view, the fiducial are added in the selected view
+        # Either the fidcucials not be added to the selected view or the selected view should be changed
+        # to the view the fiducials are added
+        # TODO fix the behavior of the overlay
         if not hasattr(self.tab_data.main, "targets"):
             raise ValueError("CryoTargetsOverlay requires target VA.")
-        self.tab_data.main.targets.subscribe(self._on_target_changes, init=True)
+        self.tab_data.main.targets.subscribe(self._on_target_changes)
         if not hasattr(self.tab_data.main, "currentTarget"):
             raise ValueError("CryoFeatureOverlay requires currentTarget VA.")
-        self.tab_data.main.currentTarget.subscribe(self._on_current_target_va, init=True)
+        self.tab_data.main.currentTarget.subscribe(self._on_current_target_va)
 
         # self._selected_target = None
         self._hover_target = None
