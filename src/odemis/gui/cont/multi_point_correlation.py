@@ -143,8 +143,6 @@ class CorrelationPointsController(object):
         # else:
         self.correlation_target = None
 
-
-
         # self._tab_data_model.main.currentFeature.correlation_targets[self._tab_data_model.main.currentFeature.status.value] = CorrelationTarget()
         # self.correlation_target = self._tab_data_model.main.currentFeature.correlation_targets[self._tab_data_model.main.currentFeature.status.value]
         self.correlation_txt = panel.txt_correlation_rms
@@ -165,7 +163,7 @@ class CorrelationPointsController(object):
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
         self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface, init=True)
         # self._tab_data_model.main.currentFeature.subscribe(self.init_ct, init=True)
-        self.add_streams()
+        # self.add_streams()
         if self._tab_data_model.main.currentFeature.value.correlation_targets:
             # load the values
             # to be outside correlation button maybe?
@@ -196,6 +194,7 @@ class CorrelationPointsController(object):
                 self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
             # if correlation_target.fm_pois:
             #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
+            # load FM and FIB stream in the panel
             self.correlation_target = correlation_target
 
         else:
@@ -205,8 +204,11 @@ class CorrelationPointsController(object):
                 self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
             self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
                 self._tab_data_model.main.currentFeature.value.status.value]
+            self.add_streams()
 
-        # self._tab_data_model.fm_poi.subscribe(self._on_current_fm_poi, init=True)
+        # self.add_streams()
+        # TODO save the FM and FIB streams in the current feature
+
 
         panel.fp_correlation_panel.Show(True)
         # Show the main frame
@@ -284,6 +286,9 @@ class CorrelationPointsController(object):
     def add_streams(self, streams: list = None) -> None:
         """add streams to the tdct correlation dialog box
         :param streams: (list[StaticStream]) new streams to add"""
+        if not self.correlation_target:
+            return
+
         if streams:
             streams_list = streams
             # TODO remove special treatment for FIB, the FIB stream should be available in current feature streams
@@ -298,6 +303,14 @@ class CorrelationPointsController(object):
                     # self.stream_groups[key].add(stream_index)
                     ssc = self._tab.streambar_controller.addStream(stream, play=False, add_to_view=True)
                     ssc.stream_panel.show_remove_btn(True)
+                    if not self.correlation_target.fib_stream:
+                        self.correlation_target.fib_stream = stream
+                        # Get the data array
+
+                    else:
+                        self._tab.streambar_controller.removeStreamPanel(self.correlation_target.fib_stream)
+                        self.correlation_target.fib_stream = stream
+
             return
 
         else:
@@ -765,6 +778,24 @@ class CorrelationPointsController(object):
     @call_in_wx_main
     def _on_current_target_changes(self, target):
         # according to target name, highlight the row
+        # fix the fm groups and remove the extra ones, because the targets are dependent on the FM groups
+        if not self.correlation_target.fm_streams and self.previous_group:
+            streams_list = self._tab_data_model.main.currentFeature.value.streams.value
+            for key, indices in self.stream_groups.items():
+                if key == self.previous_group:
+                    for index in indices:
+                        stream = streams_list[index]
+                        self.correlation_target.fm_streams.append(stream)
+                        # find stream controller for the stream
+                        # ssc = next(
+                        #     (sc for sc in self._tab.streambar_controller.stream_controllers
+                        #      if sc.stream == stream), None)
+                else:
+                    for index in indices:
+                        stream = streams_list[index]
+                        self._tab.streambar_controller.removeStreamPanel(stream)
+
+
         for row in range(self.grid.GetNumberRows()):
             if self.selected_target_in_grid(target, row):
                 self.grid.SelectRow(row)
