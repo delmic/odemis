@@ -141,6 +141,7 @@ class CorrelationDialogController(object):
 
         # create the dialog
         try:
+            # TODO increase the size of the dialog for better views
             acq_dialog = CorrelationDialog(
                 self._tab.main_frame, self._tab_data_model)
             parent_size = [v * 0.77 for v in self._tab.main_frame.GetSize()]

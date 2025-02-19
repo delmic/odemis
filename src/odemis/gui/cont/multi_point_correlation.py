@@ -40,7 +40,7 @@ from odemis.gui import conf
 from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL, TOOL_SURFACE_FIDUCIAL
 
 from odemis import model
-from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticStream
+from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticStream, StaticFIBStream
 
 from odemis.gui.util import call_in_wx_main
 from odemis.model import ListVA
@@ -281,12 +281,28 @@ class CorrelationPointsController(object):
 
         self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_change, init=True)
 
-    def add_streams(self) -> None:
-        """add streams to the correlation tab
-        :param streams: (list[StaticStream]) the streams to add"""
+    def add_streams(self, streams: list = None) -> None:
+        """add streams to the tdct correlation dialog box
+        :param streams: (list[StaticStream]) new streams to add"""
+        if streams:
+            streams_list = streams
+            # TODO remove special treatment for FIB, the FIB stream should be available in current feature streams
+            for stream_index, stream in enumerate(streams_list):
+                # current_shape = stream.raw[0].shape
+                # centre_pos = stream.raw[0].metadata[model.MD_POS]
+                if isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
+                    # TODO check fib stream index
+                    # key = (current_shape, centre_pos)
+                    # if key not in self.stream_groups:
+                    #     self.stream_groups[key] = set()
+                    # self.stream_groups[key].add(stream_index)
+                    ssc = self._tab.streambar_controller.addStream(stream, play=False, add_to_view=True)
+                    ssc.stream_panel.show_remove_btn(True)
+            return
 
-        streams_list = self._tab_data_model.main.currentFeature.value.streams.value
-        stream_groups = {}
+        else:
+            streams_list = self._tab_data_model.main.currentFeature.value.streams.value
+            stream_groups = {}
 
         for stream_index, stream in enumerate(streams_list):
 
@@ -318,7 +334,7 @@ class CorrelationPointsController(object):
                     # Add the new stream index to the set
                     stream_groups[key].add(stream_index)
 
-            elif isinstance(stream, StaticSEMStream):
+            elif isinstance(stream, StaticFIBStream):
                 # TODO check fib stream index
                 key = (current_shape, centre_pos)
                 if key not in stream_groups:
@@ -367,47 +383,47 @@ class CorrelationPointsController(object):
             # For other keys, allow the default behavior
             event.Skip()
 
-    def init_ct(self, val):
-        if not DEBUG:
-            if not self._tab_data_model.main.currentFeature.value:
-                return False
-            elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
-                self._tab_data_model.main.currentFeature.value.correlation_targets = {}
-                self._tab_data_model.main.currentFeature.value.correlation_targets[
-                    self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
-                self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
-                    self._tab_data_model.main.currentFeature.value.status.value]
-            elif self.correlation_target is None:
-                # to be outside correlation button maybe?
-                self.add_streams()
-                correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
-                    self._tab_data_model.main.currentFeature.value.status.value]
-                targets = []
-                projected_points = []
-                if correlation_target.fm_fiducials:
-                    targets.append(correlation_target.fm_fiducials)
-                if correlation_target.fm_pois:
-                    targets.append(correlation_target.fm_pois)
-                if correlation_target.fib_fiducials:
-                    targets.append(correlation_target.fib_fiducials)
-                if correlation_target.fib_projected_fiducials:
-                    projected_points.append(correlation_target.fib_projected_fiducials)
-                if correlation_target.fib_projected_pois:
-                    projected_points.append(correlation_target.fib_projected_pois)
-
-                # TOdo not used as output gets reset
-                # projected_points = list(
-                #     itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in projected_points))
-                # self._tab_data_model.projected_points = projected_points
-                # flatten the list of lists
-                targets = list(
-                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
-                self._tab_data_model.main.targets.value = targets
-                if correlation_target.fib_surface_fiducial:
-                    self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
-                # if correlation_target.fm_pois:
-                #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
-                self.correlation_target = correlation_target
+    # def init_ct(self, val):
+    #     if not DEBUG:
+    #         if not self._tab_data_model.main.currentFeature.value:
+    #             return False
+    #         elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
+    #             self._tab_data_model.main.currentFeature.value.correlation_targets = {}
+    #             self._tab_data_model.main.currentFeature.value.correlation_targets[
+    #                 self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
+    #             self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
+    #                 self._tab_data_model.main.currentFeature.value.status.value]
+    #         elif self.correlation_target is None:
+    #             # to be outside correlation button maybe?
+    #             self.add_streams()
+    #             correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
+    #                 self._tab_data_model.main.currentFeature.value.status.value]
+    #             targets = []
+    #             projected_points = []
+    #             if correlation_target.fm_fiducials:
+    #                 targets.append(correlation_target.fm_fiducials)
+    #             if correlation_target.fm_pois:
+    #                 targets.append(correlation_target.fm_pois)
+    #             if correlation_target.fib_fiducials:
+    #                 targets.append(correlation_target.fib_fiducials)
+    #             if correlation_target.fib_projected_fiducials:
+    #                 projected_points.append(correlation_target.fib_projected_fiducials)
+    #             if correlation_target.fib_projected_pois:
+    #                 projected_points.append(correlation_target.fib_projected_pois)
+    #
+    #             # TOdo not used as output gets reset
+    #             # projected_points = list(
+    #             #     itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in projected_points))
+    #             # self._tab_data_model.projected_points = projected_points
+    #             # flatten the list of lists
+    #             targets = list(
+    #                 itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
+    #             self._tab_data_model.main.targets.value = targets
+    #             if correlation_target.fib_surface_fiducial:
+    #                 self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
+    #             # if correlation_target.fm_pois:
+    #             #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
+    #             self.correlation_target = correlation_target
 
     def update_feature_correlation_target(self, surface_fiducial=False):  # , fm_poi = False):
 

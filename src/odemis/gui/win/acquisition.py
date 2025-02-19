@@ -41,6 +41,7 @@ import odemis.acq.stream as acqstream
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
                                OpticalStream, ScannedFluoStream, SEMStream, FIBStream, StaticStream)
+from odemis.gui import conf
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
@@ -55,6 +56,7 @@ from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
 import odemis.gui.model as guimod
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, MicroscopyGUIData, TOOL_ACT_ZOOM_FIT
+import odemis.gui.util as guiutil
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
 from odemis.gui.util.conversion import sample_positions_to_layout
@@ -63,6 +65,7 @@ from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.model import ListVA
 from odemis.util import units
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 # Step value for z stack levels
@@ -1364,6 +1367,8 @@ class CorrelationDialog(xrcfr_correlation):
             static=True,
         )
 
+        self.streambar_controller.add_action("From file...", self._on_add_file)
+
         # correlation points controller
         # TODO remove two selfs?
         self._correlation_points_controller = CorrelationPointsController(
@@ -1394,6 +1399,77 @@ class CorrelationDialog(xrcfr_correlation):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
         # # self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_cancel)
+
+    def _on_add_file(self) -> None:
+        """
+        Called when the user requests to extend the current acquisition with
+        an extra file.
+        """
+        self.select_acq_file(True)
+
+    def select_acq_file(self, extend: bool = False, tileset: bool = False):
+        """ Open an image file using a file dialog box
+
+        extend (bool): if False, will ensure that the previous streams are closed.
+        If True, will add the new file to the current streams opened.
+        tileset (bool): if True, open files as tileset and stitch together
+        return (boolean): True if the user did pick a file, False if it was
+        cancelled.
+        """
+        # Find the available formats (and corresponding extensions)
+        formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
+        acq_conf = conf.get_acqui_conf()
+        path = acq_conf.last_path
+
+        wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
+        msg = "Choose a file to load" if not tileset else "Choose a tileset to load"
+        dialog = wx.FileDialog(self,
+                            message=msg,
+                            defaultDir=path,
+                            defaultFile="",
+                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE,
+                            wildcard=wildcards)
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return False
+
+        # Detect the format to use
+        fmt = formats[dialog.GetFilterIndex()]
+
+        if tileset:
+            filenames = dialog.GetPaths()
+            self.load_tileset(filenames, extend=extend)
+        else:
+            for filename in dialog.GetPaths():
+                if extend:
+                    logging.debug("Extending the streams with file %s", filename)
+                else:
+                    logging.debug("Current file set to %s", filename)
+
+                self.load_data(filename, fmt, extend=extend)
+                extend = True  # If multiple files loaded, the first one is considered main one
+
+    def load_data(self, filename: str, fmt: str = None, extend: bool = False) -> None:
+        data = open_acquisition(filename, fmt)
+        self.load_streams(data)
+
+    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
+        pass
+
+    @call_in_wx_main
+    def load_streams(self, data: List[model.DataArray]) -> None:
+        """ Load the data in the overview viewports
+        :param data: (list[model.DataArray]) list of data arrays to load as streams
+        """
+
+        # Create streams from data, add to correlation controller
+        streams = data_to_static_streams(data)
+        self.correlation_points_controller.add_streams(streams)
+
+        # fit to content
+        for vp in self.pnl_correlation_grid.viewports:
+            vp.canvas.fit_view_to_content()
 
     @property
     def correlation_points_controller(self):
