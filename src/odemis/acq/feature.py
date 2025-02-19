@@ -83,7 +83,7 @@ class CorrelationTarget:
         self.fib_projected_fiducials: List[Target] = []
 
         self.fib_stream = None #:StaticSEMStream = None
-        self.fm_streams = None #: List[StaticFluoStream] = []
+        self.fm_streams = [] #: List[StaticFluoStream] = []
         self.superz = None #: StaticFluoStream = None
         # TODO may be redundant, could be removed as the 3DCT wrapper calculates the metadata
         # Either that wrapper can be modified or this metadata can be removed
