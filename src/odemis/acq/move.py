@@ -39,11 +39,6 @@ from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
 from odemis.util.transform import RigidTransform, _get_transforms
 
-# feature flags
-USE_3D_TRANSFORMS = False
-USE_SCAN_ROTATION = False
-USE_LINKED_SEM_FOCUS_COMPENSATION = False
-
 MAX_SUBMOVE_DURATION = 90  # s
 
 UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, \
@@ -75,6 +70,8 @@ SAFETY_MARGIN_3DOF = 200e-6  # m
 ATOL_ROTATION_TRANSFORM = 0.04  # rad ~2.5 deg
 ATOL_LINEAR_TRANSFORM = 5e-6  # 5 um
 
+# roles that are affected by sample stage transformation
+COMPS_AFFECTED_ROLES = ["ccd", "e-beam", "ion-beam"]
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -314,9 +311,14 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # pre-tilt is required for milling posture, but not all systems have it
         stage_md = self.stage.getMetadata()
-        if model.MD_CALIB in stage_md:
-            if model.MD_SAMPLE_PRE_TILT in stage_md[model.MD_CALIB]:
-                self.pre_tilt = stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
+        md_calib = stage_md.get(model.MD_CALIB, {})
+        self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
+
+        # feature flags, for features still in testing
+        self.use_linked_sem_focus_compensation: bool = md_calib.get("use_linked_sem_focus_compensation", False)
+        self.use_3d_transforms: bool = md_calib.get("use_3d_transforms", False)
+        self.use_scan_rotation: bool = md_calib.get("use_scan_rotation", False)
+
         # current posture va
         self.current_posture = model.VigilantAttribute(UNKNOWN)
         self.stage.position.subscribe(self._update_posture, init=True)
@@ -353,7 +355,10 @@ class MeteorPostureManager(MicroscopePostureManager):
 
     def at_milling_posture(self, pos: Dict[str, float], stage_md: Dict[str, float]) -> bool:
         """Milling posture is not required for all meteor systems, so we need to
-        first check it's available"""
+        first check it's available
+        :param pos the stage position
+        :param stage_md the stage metadata
+        :param return True if the stage is at the milling posture, False if not (or not available)"""
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             stage_milling = self.get_posture_orientation(MILLING)
             if isNearPosition(pos,
@@ -364,7 +369,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         return False
 
     def get_posture_orientation(self, posture: int) -> Dict[str, float]:
-        """Get the orientation of the stage for the given posture"""
+        """Get the orientation of the stage for the given posture
+        :param posture: the posture to get the orientation for
+        :return: a dict with the orientation of the stage for the given posture"""
         stage_md = self.stage.getMetadata()
         if posture == SEM_IMAGING:
             return stage_md[model.MD_FAV_SEM_POS_ACTIVE]
@@ -1387,6 +1394,7 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
                 if future._task_state == CANCELLED:
                     raise CancelledError()
                 future._task_state = FINISHED
+
 
 class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
     def __init__(self, microscope):
@@ -2752,10 +2760,12 @@ class SampleStage(model.Actuator):
                                 axes=copy.deepcopy(self._stage_bare.axes), **kwargs)
 
         # update related MDs
-        affects = ["ccd", "e-beam", "ion-beam"] # roles
-        # TODO: filter so only updates availble components
-        comps = [c.role for c in model.getComponents()]
-        self.affects = [a for a in affects if a in comps]
+        self.affects = []
+        for role in COMPS_AFFECTED_ROLES:
+            try:
+                self.affects.append(model.getComponent(role=role))
+            except Exception:
+                pass
 
         # posture manager to convert the positions
         self.pm = posture_manager
@@ -2789,9 +2799,8 @@ class SampleStage(model.Actuator):
         self.position._set_value(pos, force_write=True)
 
         # update related mds
-        for a in self.affects:
+        for comp in self.affects:
             try:
-                comp = model.getComponent(role=a)
                 if comp:
                     md_pos = pos.get("x", 0), pos.get("y", 0)
                     comp.updateMetadata({
@@ -2849,22 +2858,27 @@ class SampleStage(model.Actuator):
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     @isasync
-    def move_vertical(self, pos: Dict[str, float]) -> Future:
+    def moveRelChamberReferential(self, shift: Dict[str, float]) -> Future:
         """Move the stage vertically in the chamber. This is non-blocking.
-        From OpenFIBSEM"""
+        From OpenFIBSEM
+        :param shift: The relative shift to be made
+        :return: A cancellable future
+        """
         # TODO: account for scan rotation
         theta = self._stage_bare.position.value["rx"] # tilt, in radians
-        dx = pos.get("x", 0)
-        pdy = pos.get("y", 0)
+        dx = shift.get("x", 0)
+        pdy = shift.get("y", 0)
 
+        # NOTE: this formula is for tfs only, for tescan z-axis is vertical
         dy = pdy * math.sin(theta)
         dz = pdy / math.cos(theta)
-        stage_position = {"x": dx, "y": dy, "z": dz}
-        logging.debug(f"Moving stage vertically by: {stage_position}, theta: {theta}, pos: {pos}")
-        return self._stage_bare.moveRel(stage_position)
+        vshift = {"x": dx, "y": dy, "z": dz}
+        logging.debug(f"Moving stage vertically by: {vshift}, theta: {theta}, initial shift: {shift}")
+        return self._stage_bare.moveRel(vshift)
 
     def stop(self, axes=None):
         self._stage_bare.stop()
+
 
 def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: int = math.radians(52)) -> float:
     """Calculate the stage tilt from the milling angle and the pre-tilt.

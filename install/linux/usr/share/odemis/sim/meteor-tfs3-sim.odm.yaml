@@ -67,7 +67,10 @@
         CALIB: {
             "version": "tfs_3", 
             "dx": 0.0506252, "dy": 0.0049832,
-            "Sample pre-tilt": 0.6108652381980153,
+            "pre-tilt": 0.6108652381980153,
+            "use_linked_sem_focus_compensation": false,
+            "use_3d_transforms": false,
+            "use_scan_rotation": false,
             },
         # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
         FAV_FM_POS_ACTIVE: {"rx": 0.29670597283903605  , "rz":  3.141592653589793}, # 17° - 180°
