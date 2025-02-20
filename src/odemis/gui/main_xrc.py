@@ -779,6 +779,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.btn_create_move_feature = xrc.XRCCTRL(self, "btn_create_move_feature")
         self.cmb_feature_status = xrc.XRCCTRL(self, "cmb_feature_status")
         self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
+        self.label_feature_z = xrc.XRCCTRL(self, "label_feature_z")
         self.ctrl_feature_z = xrc.XRCCTRL(self, "ctrl_feature_z")
         self.btn_use_current_z = xrc.XRCCTRL(self, "btn_use_current_z")
         self.menu_localization_streams = xrc.XRCCTRL(self, "menu_localization_streams")
@@ -9111,7 +9112,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxStaticText">
+                                  <object class="wxStaticText" name="label_feature_z">
                                     <label>Feature Z</label>
                                     <fg>#DDDDDD</fg>
                                   </object>
