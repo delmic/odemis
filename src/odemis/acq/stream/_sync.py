@@ -2417,25 +2417,12 @@ class SEMMDStream(MultipleDetectorStream):
         if cscale != scale:
             logging.warning("Emitter scale requested (%s) != accepted (%s)",
                             cscale, scale)
+        self._emitter.scale.value = cscale
 
         # TODO: check that no fuzzing is requested (as it's not supported and
         # not useful).
 
-        # If a detector is "independent", then connect its dwell time
-        # Note: resolution is updated later, just before the acquisition block
-        # TODO: should it be done automatically by the "SettingsStream" in .prepare() or .linkHwVA()?
         dt = self._dwellTime.value
-        for s in self._streams:
-            det = s._detector
-            if model.hasVA(det, "resolution"):
-                det.dwellTime.value = dt
-                # It's fine to a have dwell time slightly shorter (it will wait a tiny bit after acquiring
-                # each pixel), but not longer.
-                if det.dwellTime.value > dt:
-                    logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted",
-                                    det.name, dt, det.dwellTime.value)
-
-        self._emitter.scale.value = cscale
 
         # Order matters (a bit)
         if model.hasVA(self._emitter, "blanker") and self._emitter.blanker.value is None:
@@ -2554,9 +2541,11 @@ class SEMMDStream(MultipleDetectorStream):
                                      ((n_x, n_y), em_res))
 
                 # Update the resolution of the "independent" detectors
+                has_inde_detectors = False
                 for s in self._streams:
                     det = s._detector
                     if model.hasVA(det, "resolution"):
+                        has_inde_detectors = True
                         det.resolution.value = (n_x, n_y)
                         # It's unlikely but the detector could have specific constraints on the resolution
                         # and refuse the requested one => better fail early.
@@ -2564,7 +2553,8 @@ class SEMMDStream(MultipleDetectorStream):
                             raise ValueError(f"Failed to set the resolution of {det.name} to {n_x} x {n_y} px: "
                                              f"{det.resolution.value} px accepted")
                         else:
-                            logging.debug("Set resolution of independent detector %s to %s", det.name, (n_x, n_y))
+                            logging.debug("Set resolution of independent detector %s to %s",
+                                          det.name, (n_x, n_y))
 
                 # Move the beam to the center of the sub-frame
                 trans = tuple(pos_flat[spots_sum:(spots_sum + npixels2scan)].mean(axis=0))
@@ -2588,6 +2578,12 @@ class SEMMDStream(MultipleDetectorStream):
                 self._df0.synchronizedOn(self._trigger)
                 for s, sub in zip(self._streams, self._subscribers):
                     s._dataflow.subscribe(sub)
+
+                if has_inde_detectors:
+                    # The independent detectors might need a bit of time to be ready.
+                    # If not waiting, the first pixels might be missed.
+                    time.sleep(0.05)
+
                 start = time.time()
                 self._acq_min_date = start
                 self._trigger.notify()
@@ -2605,7 +2601,7 @@ class SEMMDStream(MultipleDetectorStream):
                 # receive the data (almost) at the same time.
                 max_end_t = start + frame_time * 10 + 5
                 for i, s in enumerate(self._streams):
-                    timeout = max(0.1, max_end_t - time.time())
+                    timeout = max(5.0, max_end_t - time.time())
                     if not self._acq_complete[i].wait(timeout):
                         raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
                                            % (self._emitter.translation.value, time.time() - max_end_t))
@@ -3387,8 +3383,8 @@ class ScannedFluoMDStream(MultipleDetectorStream):
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
-            logging.warning("Dropping data because it seems started %g s too early",
-                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            logging.warning("Dropping data (of stream %d) because it seems it started %g s too early",
+                            n, self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
             if n == 0:
                 # As the first detector is synchronised, we need to restart it
                 # TODO: probably not necessary, as the typical reason it arrived
