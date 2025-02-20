@@ -195,7 +195,19 @@ class CorrelationPointsController(object):
             # if correlation_target.fm_pois:
             #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
             # load FM and FIB stream in the panel
+            # TODO save the FM and FIB streams in the json file because fiducials are dependent on the dataarray
             self.correlation_target = correlation_target
+            if correlation_target.fm_streams:
+                # Will load the streams from the given streams
+                self.add_streams(correlation_target.fm_streams)
+            else:
+                # Will load the relevant streams from the current feature
+                # which one the fiducials should obey?
+                self.add_streams()
+
+            if correlation_target.fib_stream:
+                self.add_streams([correlation_target.fib_stream])
+
 
         else:
             # initialize the correlation target
@@ -207,7 +219,7 @@ class CorrelationPointsController(object):
             self.add_streams()
 
         # self.add_streams()
-        # TODO save the FM and FIB streams in the current feature
+
 
 
         panel.fp_correlation_panel.Show(True)
@@ -295,7 +307,7 @@ class CorrelationPointsController(object):
             for stream_index, stream in enumerate(streams_list):
                 # current_shape = stream.raw[0].shape
                 # centre_pos = stream.raw[0].metadata[model.MD_POS]
-                if isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
+                if isinstance(stream, StaticStream):
                     # TODO check fib stream index
                     # key = (current_shape, centre_pos)
                     # if key not in self.stream_groups:
@@ -303,13 +315,14 @@ class CorrelationPointsController(object):
                     # self.stream_groups[key].add(stream_index)
                     ssc = self._tab.streambar_controller.addStream(stream, play=False, add_to_view=True)
                     ssc.stream_panel.show_remove_btn(True)
-                    if not self.correlation_target.fib_stream:
-                        self.correlation_target.fib_stream = stream
-                        # Get the data array
+                    if isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
+                        if not self.correlation_target.fib_stream:
+                            self.correlation_target.fib_stream = stream
+                            # Get the data array
 
-                    else:
-                        self._tab.streambar_controller.removeStreamPanel(self.correlation_target.fib_stream)
-                        self.correlation_target.fib_stream = stream
+                        elif stream != self.correlation_target.fib_stream:
+                            self._tab.streambar_controller.removeStreamPanel(self.correlation_target.fib_stream)
+                            self.correlation_target.fib_stream = stream
 
             return
 
@@ -793,7 +806,9 @@ class CorrelationPointsController(object):
                 else:
                     for index in indices:
                         stream = streams_list[index]
-                        self._tab.streambar_controller.removeStreamPanel(stream)
+                        # FIB static stream should not be removed
+                        if isinstance(stream, StaticFluoStream):
+                            self._tab.streambar_controller.removeStreamPanel(stream)
 
 
         for row in range(self.grid.GetNumberRows()):
