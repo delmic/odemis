@@ -561,8 +561,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.pnl_projects_header = xrc.XRCCTRL(self, "pnl_projects_header")
         self.pnl_projects = xrc.XRCCTRL(self, "pnl_projects")
-        self.chk_ebeam_off = xrc.XRCCTRL(self, "chk_ebeam_off")
-        self.chk_beam_blank_off = xrc.XRCCTRL(self, "chk_beam_blank_off")
+        self.pnl_acq = xrc.XRCCTRL(self, "pnl_acq")
         self.txt_num_roas = xrc.XRCCTRL(self, "txt_num_roas")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
@@ -7319,18 +7318,13 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_ebeam_off">
-                            <label>Turn off e-beam after acquisition</label>
+                          <object class="wxPanel" name="pnl_acq">
+                            <bg>#333333</bg>
+                            <fg>#7F7F7F</fg>
+                            <size>400,140</size>
+                            <flag>wxTOP|wxEXPAND</flag>
+                            <option>1</option>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_beam_blank_off">
-                            <label>Do not blank beam in between fields</label>
-                          </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxFlexGridSizer">
