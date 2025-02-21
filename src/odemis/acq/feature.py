@@ -209,7 +209,7 @@ class FeaturesDecoder(json.JSONDecoder):
                                   )
             feature.status.value = obj['status']
             feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
-            feature.milling_tasks = {k: MillingTaskSettings.from_json(v) for k, v in milling_task_json.items()}
+            feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
             feature.path = obj.get('path', None)
 
             # load the reference image
