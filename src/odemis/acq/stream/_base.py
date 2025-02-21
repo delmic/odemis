@@ -1266,6 +1266,8 @@ class Stream(object):
             raise LookupError("Stream has no data")
         raw = self.raw[0]
         md = self._find_metadata(raw.metadata)
+        # Make sure that the the pixel size is the third dimension is ignored
+        # TODO run the unit tests
         pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
         rotation = md.get(model.MD_ROTATION, 0)
         shear = md.get(model.MD_SHEAR, 0)
@@ -1285,6 +1287,62 @@ class Stream(object):
             return pixel_pos
         else:
             return None
+        return pixel_pos
+
+    def getPixelCoordinates_alt(self, p_pos: Tuple[float, float]) -> Optional[Tuple[int, int]]:
+        """
+        Translate physical coordinates into data pixel coordinates even if the point is outside of the image.
+        :param p_pos: the position in physical coordinates (m)
+        :returns: the position in pixel coordinates or None if it's outside of the image
+        """
+        if not self.raw:
+            raise LookupError("Stream has no data")
+        raw = self.raw[0]
+        md = self._find_metadata(raw.metadata)
+        # Make sure that the the pixel size is the third dimension is ignored
+        # TODO run the unit tests
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[0:2]
+        rotation = md.get(model.MD_ROTATION, 0)
+        shear = md.get(model.MD_SHEAR, 0)
+        translation = md.get(model.MD_POS, (0, 0))[0:2]
+        size = raw.shape[-1], raw.shape[-2]
+        # The `pxs`, `rotation` and `shear` arguments are not directly passed
+        # in the `AffineTransform` because the formula of the `AffineTransform`
+        # uses a different definition of shear.
+        matrix = alt_transformation_matrix_from_implicit(pxs, rotation, -shear, "RSL")
+        tform = AffineTransform(matrix, translation)
+        pixel_pos_c = tform.inverse().apply(p_pos)
+        # MD_POS is the center of the image, so subtract half of the size to convert to pixel-coordinates
+        # A "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
+        pixel_pos = (int(math.floor(pixel_pos_c[0] + size[0] / 2)),
+                     int(math.floor(- (pixel_pos_c[1] - size[1] / 2))))
+
+        return pixel_pos
+
+    def getPhysicalCoordinates(self, pixel_pos: Tuple[int, int]) -> Optional[Tuple[float, float]]:
+        """
+        Translate pixel coordinates into physical coordinates in meters.
+        :param pixel_pos: the position in pixel coordinates (x, y)
+        :returns: the position in physical coordinates (x, y) in meters or None if it's outside of the image
+        """
+        if not self.raw:
+            raise LookupError("Stream has no data")
+        raw = self.raw[0]
+        md = self._find_metadata(raw.metadata)
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[0:2]
+        rotation = md.get(model.MD_ROTATION, 0)
+        shear = md.get(model.MD_SHEAR, 0)
+        translation = md.get(model.MD_POS, (0, 0))[0:2]
+        size = raw.shape[-1], raw.shape[-2]
+        # The `pxs`, `rotation` and `shear` arguments are not directly passed
+        # in the `AffineTransform` because the formula of the `AffineTransform`
+        # uses a different definition of shear.
+        matrix = alt_transformation_matrix_from_implicit(pxs, rotation, -shear, "RSL")
+        tform = AffineTransform(matrix, translation)
+        # Convert pixel coordinates to physical coordinates
+        pixel_pos_c = (pixel_pos[0] - size[0] / 2, -(pixel_pos[1] - size[1] / 2))
+        p_pos = tform.apply(pixel_pos_c)
+        return p_pos
 
     def getRawValue(self, pixel_pos):
         """

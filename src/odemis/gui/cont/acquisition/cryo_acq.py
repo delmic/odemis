@@ -51,7 +51,7 @@ from odemis.gui import conf
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
-    OverviewStreamAcquiController,
+    OverviewStreamAcquiController, CorrelationDialogController,
 )
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import (
@@ -82,6 +82,7 @@ class CryoAcquiController(object):
         self.overview_acqui_controller = OverviewStreamAcquiController(
             self._tab_data, self._tab
         )
+        self.correlation_dialog_controller = CorrelationDialogController(self._tab_data, self._tab)
         self._config = conf.get_acqui_conf()
         # contains the acquisition progressive future for the given streams
         self._acq_future = None
@@ -112,6 +113,10 @@ class CryoAcquiController(object):
         )
         # for "acquire overview" button
         self._panel.btn_acquire_overview.Bind(wx.EVT_BUTTON, self._on_acquire_overview)
+        # This a temporary button in the localisation tab. Once tested and FIBSEM tab is available,
+        # it will be moved to the FIBSEM tab.
+        # TODO move this button to the FIBSEM tab where the button will be enabled only if the requirements are met
+        self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
         # for "cancel" button
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
@@ -650,6 +655,12 @@ class CryoAcquiController(object):
         das = self.overview_acqui_controller.open_acquisition_dialog()
         if das:
             self._tab.load_overview_data(das)
+
+    def _on_tdct(self, _):
+        """
+        called when the button "TDCT" is pressed
+        """
+        self.correlation_dialog_controller.open_correlation_dialog()
 
     @call_in_wx_main
     def _on_filename(self, name):

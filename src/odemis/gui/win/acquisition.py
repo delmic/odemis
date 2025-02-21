@@ -19,7 +19,7 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+import collections
 import copy
 import gc
 import logging
@@ -37,9 +37,13 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview,
                                   get_tiled_bboxes, get_stream_based_bbox,
                                   get_zstack_levels)
+import odemis.acq.stream as acqstream
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
-                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
+                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream, StaticStream)
+from odemis.gui import conf
+from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
+
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
                                presets)
@@ -49,15 +53,23 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.settings import (LocalizationSettingsController,
                                       SecomSettingsController)
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
-from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView
+from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
+import odemis.gui.model as guimod
+from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, MicroscopyGUIData, TOOL_ACT_ZOOM_FIT
+import odemis.gui.util as guiutil
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
 from odemis.gui.util.conversion import sample_positions_to_layout
+import odemis.gui.cont.views as viewcont
 from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
+from odemis.model import ListVA
 from odemis.util import units
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_filename, guess_pattern, update_counter
+
+# Step value for z stack levels
+DEFAULT_FOV = (100e-6, 100e-6)  # m
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -619,10 +631,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Make sure the file is not overridden
         self.btn_secom_acquire.Enable()
-
-
-# Step value for z stack levels
-DEFAULT_FOV = (100e-6, 100e-6) # m
 
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
@@ -1309,6 +1317,225 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.terminate_listeners()
         self.EndModal(wx.ID_OPEN)
+
+
+class CorrelationDialog(xrcfr_correlation):
+    """
+    Class used to control the overview acquisition dialog
+    The data acquired is stored in a file, with predefined name, available on
+      .filename and it is opened (as pyramidal data) in .data .
+    """
+    def __init__(self,  parent, orig_tab_data):
+        xrcfr_correlation.__init__(self, parent)
+        main_data = orig_tab_data.main
+        tab_data = guimod.CryoTdctCorrelationGUIData(main_data)
+        self.tab_data = tab_data
+        # super().__init__(name, button, panel, main_frame, tab_data)
+
+        # self.main_data = main_data
+
+        # create the views, view_controller, and then add streams
+
+        vpv = self._create_views(self.pnl_correlation_grid.viewports)
+        # vpv = self._create_views(self.main_data, self.pnl_secom_grid.viewports)
+        self.view_controller = viewcont.ViewPortController(tab_data, None, vpv)
+
+        # Connect the view selection buttons
+        # buttons = collections.OrderedDict([
+        #     (panel.btn_correlation_view_all,
+        #      (None, panel.lbl_correlation_view_all)),
+        #     (panel.btn_correlation_view_tl,
+        #      (panel.vp_correlation_tl, panel.lbl_correlation_view_tl)),
+        #     (panel.btn_correlation_view_tr,
+        #      (panel.vp_correlation_tr, panel.lbl_correlation_view_tr)),
+        #     (panel.btn_correlation_view_bl,
+        #      (panel.vp_correlation_bl, panel.lbl_correlation_view_bl)),
+        #     (panel.btn_correlation_view_br,
+        #      (panel.vp_correlation_br, panel.lbl_correlation_view_br)),
+        # ])
+        self.vp_correlation_tl.canvas.cryotarget_fm_overlay.active.value = True
+        self.vp_correlation_tl.canvas.add_world_overlay(
+            self.vp_correlation_tl.canvas.cryotarget_fm_overlay)
+        self.vp_correlation_tr.canvas.cryotarget_fib_overlay.active.value = True
+        self.vp_correlation_tr.canvas.add_world_overlay(
+            self.vp_correlation_tr.canvas.cryotarget_fib_overlay)
+
+        # stream bar controller
+        self.streambar_controller = StreamBarController(
+            tab_data,
+            self.pnl_correlation_streams,
+            static=True,
+        )
+
+        self.streambar_controller.add_action("From file...", self._on_add_file)
+
+        # correlation points controller
+        # TODO remove two selfs?
+        self._correlation_points_controller = CorrelationPointsController(
+            tab_data,
+            self,
+            self,
+            self.pnl_correlation_grid.viewports
+        )
+
+        # Toolbar
+        self.tb = self.correlation_toolbar
+        for t in guimod.TOOL_ORDER:
+            if t in tab_data.tool.choices:
+                self.tb.add_tool(t, tab_data.tool)
+        # Add fit view to content to toolbar
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+
+        # # # make sure the view displays the same thing as the one we are
+        # # # duplicating
+        # # self._view.view_pos.value = orig_view.view_pos.value
+        # # self._view.mpp.value = orig_view.mpp.value
+        # # self._view.merge_ratio.value = orig_view.merge_ratio.value
+        # #
+        # # # attach the view to the viewport
+        # # self.pnl_view_acq.canvas.fit_view_to_next_image = False
+        # # self.pnl_view_acq.setView(self._view, self._tab_data_model)
+        # #
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+        # # self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
+        self.Bind(wx.EVT_CLOSE, self.on_cancel)
+
+    def _on_add_file(self) -> None:
+        """
+        Called when the user requests to extend the current acquisition with
+        an extra file.
+        """
+        self.select_acq_file(True)
+
+    def select_acq_file(self, extend: bool = False, tileset: bool = False):
+        """ Open an image file using a file dialog box
+
+        extend (bool): if False, will ensure that the previous streams are closed.
+        If True, will add the new file to the current streams opened.
+        tileset (bool): if True, open files as tileset and stitch together
+        return (boolean): True if the user did pick a file, False if it was
+        cancelled.
+        """
+        # Find the available formats (and corresponding extensions)
+        formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
+        acq_conf = conf.get_acqui_conf()
+        path = acq_conf.last_path
+
+        wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
+        msg = "Choose a file to load" if not tileset else "Choose a tileset to load"
+        dialog = wx.FileDialog(self,
+                            message=msg,
+                            defaultDir=path,
+                            defaultFile="",
+                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE,
+                            wildcard=wildcards)
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return False
+
+        # Detect the format to use
+        fmt = formats[dialog.GetFilterIndex()]
+
+        if tileset:
+            filenames = dialog.GetPaths()
+            self.load_tileset(filenames, extend=extend)
+        else:
+            for filename in dialog.GetPaths():
+                if extend:
+                    logging.debug("Extending the streams with file %s", filename)
+                else:
+                    logging.debug("Current file set to %s", filename)
+
+                self.load_data(filename, fmt, extend=extend)
+                extend = True  # If multiple files loaded, the first one is considered main one
+
+    def load_data(self, filename: str, fmt: str = None, extend: bool = False) -> None:
+        data = open_acquisition(filename, fmt)
+        self.load_streams(data)
+
+    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
+        pass
+
+    @call_in_wx_main
+    def load_streams(self, data: List[model.DataArray]) -> None:
+        """ Load the data in the overview viewports
+        :param data: (list[model.DataArray]) list of data arrays to load as streams
+        """
+
+        # Create streams from data, add to correlation controller
+        streams = data_to_static_streams(data)
+        self.correlation_points_controller.add_streams(streams)
+
+        # fit to content
+        for vp in self.pnl_correlation_grid.viewports:
+            vp.canvas.fit_view_to_content()
+
+    @property
+    def correlation_points_controller(self):
+        return self._correlation_points_controller
+
+    def _create_views(self, viewports):
+        """
+        Create views depending on the actual hardware present
+        return OrderedDict: as needed for the ViewPortController
+        """
+        # Acquired data at the top, live data at the bottom
+        # TODO change SEM Overview to FIB?
+        vpv = collections.OrderedDict([
+            (viewports[0], # focused view
+             {"name": "FLM Overview",
+              "stream_classes": OpticalStream,
+              }),
+            (viewports[1],
+             {"name": "SEM Overview",
+              "stream_classes": EMStream,
+              }),])
+        return vpv
+
+    def remove_all_streams(self):
+        """
+        Remove the streams we added to the view on creation
+        Must be called in the main GUI thread
+        """
+        # Ensure we don't update the view after the window is destroyed
+        self.streambar_controller.clear()
+
+        # TODO: need to have a .clear() on the settings_controller to clean up?
+        # self._settings_controller = None
+        # self._acq_streams = {}  # also empty the cache
+
+        gc.collect()  # To help reclaiming some memory
+
+    def terminate_listeners(self):
+        """
+        Disconnect all the connections to the streams.
+        Must be called in the main GUI thread.
+        """
+        # stop listening to events
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        # self.stop_listening_to_va()
+
+        self.remove_all_streams()
+        # Set the streambar controller to None so it wouldn't be a listener to stream.remove
+        self.streambar_controller = None
+
+    def on_close(self, evt):
+        """ Close event handler that executes various cleanup actions
+        """
+        assert self._correlation_points_controller.is_processing == False
+
+        self.EndModal(wx.ID_CANCEL)
+
+    def on_cancel(self, evt):
+        """ Handle acquisition cancel button click """
+        logging.info("Close button clicked, exiting 3DCT correlation")
+        while self._correlation_points_controller.is_processing:
+            continue
+
+        self.remove_all_streams()
+
+        self.on_close(evt)
 
 
 def ShowAcquisitionFileDialog(parent, filename):
