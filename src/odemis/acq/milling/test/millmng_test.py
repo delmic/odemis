@@ -16,7 +16,7 @@ from odemis.acq.feature import (
     FEATURE_DEACTIVE,
 )
 from odemis.acq.milling.tasks import load_milling_tasks
-from odemis.acq.millmng2 import MillingWorkflowTask, run_automated_milling, status_map
+from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling, status_map
 from odemis.acq.move import (
     FM_IMAGING,
     GRID_1,
