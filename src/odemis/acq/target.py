@@ -26,7 +26,7 @@ from odemis import model
 
 class Target:
     def __init__(self, x,y,z, name:str, type:str, index: int,  fm_focus_position: float, size: float = None ):
-        self.coordinates = model.ListVA((x, y, z), unit="px")
+        self.coordinates = model.ListVA((x, y, z), unit="m")
         self.type = model.StringVA(type)
         self.name = model.StringVA(name)
         # The index and target name are in sync.

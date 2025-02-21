@@ -77,7 +77,7 @@ class CorrelationTarget:
         self.fib_fiducials : List[Target] = []
         self.fib_surface_fiducial : Target = None
 
-        self.correlation_result: float = None
+        self.correlation_result = {}
         self.refractive_index_correction: bool = True
         self.fib_projected_pois: List[Target] = []
         self.fib_projected_fiducials: List[Target] = []
@@ -92,9 +92,9 @@ class CorrelationTarget:
 
     def reset_attributes(self):
         # rest of the attributes is set to none except the streams
-        self.correlation_result = None
-        self.fib_projected_pois = None
-        self.fib_projected_fiducials = None
+        self.correlation_result = {}
+        self.fib_projected_pois = []
+        self.fib_projected_fiducials = []
 
 
 class CryoFeature(object):
@@ -130,19 +130,20 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     :return: list of JSON serializable features
     """
     flist = []
-    correlation_targets = {}
     for feature in features:
         # todo make a new function
         # TODO add stream names and other values
+        correlation_targets = {}
         if feature.correlation_targets:
             for key, ct_class in feature.correlation_targets.items():
-                correlation_targets[key] = {}
                 all_targets = []
+                correlation_targets[key] = {}
                 correlation_targets[key]['coordinates'] = []
                 correlation_targets[key]['index'] = []
                 correlation_targets[key]['type'] = []
                 correlation_targets[key]['name'] = []
                 correlation_targets[key]['fm_focus_position'] = []
+                correlation_targets[key]['correlation_result'] = ct_class.correlation_result
                 if ct_class.fm_fiducials:
                     all_targets.append(ct_class.fm_fiducials)
                 if ct_class.fm_pois:
@@ -182,6 +183,8 @@ class FeaturesDecoder(json.JSONDecoder):
         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
     def object_hook(self, obj):
+        # if 'output' in obj:
+        #     return obj
         if 'coordinates' in obj and not 'pos' in obj:
             # correlation_targets = obj['correlation_targets']
             # correlation_targets_rest = self.decode_correlation_targets(obj)
@@ -232,6 +235,7 @@ class FeaturesDecoder(json.JSONDecoder):
             types = ct_obj.get('type', [])
             names = ct_obj.get('name', [])
             fm_focus_positions = ct_obj.get('fm_focus_position', [])
+            # correlation_result = ct_obj.get('correlation_result', [])
 
 
             for i in range(len(coordinates)):
@@ -255,6 +259,7 @@ class FeaturesDecoder(json.JSONDecoder):
                     correlation_target.fm_fiducials.append(target)
                 elif "POI" in names[i] and types[i] == "RegionOfInterest":
                     correlation_target.fm_pois.append(target)
+                # correlation_target.correlation_result = correlation_result
 
             decoded_correlation_targets[key] = correlation_target
 

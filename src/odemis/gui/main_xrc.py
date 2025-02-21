@@ -114,10 +114,9 @@ class xrcfr_correlation(wx.Dialog):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
         self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
+        self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
         self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
         self.table_grid = xrc.XRCCTRL(self, "table_grid")
-        self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
-        self.btn_refractive_index = xrc.XRCCTRL(self, "btn_refractive_index")
         self.txt_correlation_rms = xrc.XRCCTRL(self, "txt_correlation_rms")
         self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
         self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
@@ -1804,10 +1803,29 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="wxButton" name="btn_z_targeting">
-                                <label>Refine Z</label>
+                              <object class="wxBoxSizer">
+                                <!-- Add Delete Button -->
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_row">
+                                    <icon>______img_icon_ico_trash_png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxALL|wxEXPAND</flag>
+                                  <border>10</border>
+                                </object>
+                                <!-- Z-targeting button -->
+                                <object class="sizeritem">
+                                  <object class="wxButton" name="btn_z_targeting">
+                                    <label>Refine Z</label>
+                                  </object>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
                               </object>
                             </object>
+
                             <!-- Points Table (wxListCtrl) -->
                             <object class="sizeritem">
                               <object class="wxGrid" name="table_grid">
@@ -1817,32 +1835,13 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                             <!--                            <flag>wxALIGN_LEFT</flag>-->
                             <!--                            <orient>wxVERTICAL</orient>-->
                             <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <!-- Add Delete Button -->
-                                <object class="sizeritem">
-                                  <object class="ImageButton" name="btn_delete_row">
-                                    <icon>______img_icon_ico_trash_png</icon>
-                                    <height>16</height>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                </object>
-                                <!-- Z-targeting button -->
-                                <object class="sizeritem">
-                                  <object class="wxButton" name="btn_refractive_index">
-                                    <label>Refractive Index</label>
-                                    <enabled>1</enabled>  <!-- Initially disabled -->
-                                  </object>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
                               <object class="wxStaticText" name="txt_correlation_rms">
                                 <label>Correlation RMS Deviation :</label>
                                 <fg>#E5E5E5</fg>
                                 <hidden>1</hidden>
                               </object>
                               <flag>wxLEFT</flag>
+                              <border>10</border>
                             </object>
                           </object>
                         </object>

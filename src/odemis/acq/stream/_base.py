@@ -1319,7 +1319,7 @@ class Stream(object):
 
         return pixel_pos
 
-    def getPhysicalCoordinates(self, pixel_pos: Tuple[int, int]) -> Optional[Tuple[float, float]]:
+    def getPhysicalCoordinates(self, pixel_pos: Tuple[float, float]) -> Optional[Tuple[float, float]]:
         """
         Translate pixel coordinates into physical coordinates in meters.
         :param pixel_pos: the position in pixel coordinates (x, y)
