@@ -214,7 +214,7 @@ class FeaturesDecoder(json.JSONDecoder):
 
             # load the reference image
             if feature.path:
-                filename = os.path.join(feature.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
+                filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
                 if os.path.exists(filename):
                     feature.reference_image = open_acquisition(filename)[0]
                 else:
