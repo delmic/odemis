@@ -323,11 +323,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.current_posture = model.VigilantAttribute(UNKNOWN)
         self.stage.position.subscribe(self._update_posture, init=True)
 
-        # feature flags
-        self.use_3d_transforms: bool = USE_3D_TRANSFORMS
-        self.use_scan_rotation: bool = USE_SCAN_ROTATION
-        self.use_linked_sem_focus_compensation: bool = USE_LINKED_SEM_FOCUS_COMPENSATION
-
     def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
         """
         Detects the current stage position of meteor
