@@ -19,7 +19,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import unittest
-import json
 import numpy
 from odemis.acq.milling.patterns import RectanglePatternParameters, TrenchPatternParameters, MicroexpansionPatternParameters
 
@@ -48,7 +47,6 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
         )
 
     def test_assignment(self):
-
         # test assignment
         self.assertEqual(self.pattern.name.value, self.name)
         self.assertEqual(self.pattern.width.value, self.width)
@@ -58,28 +56,28 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.center.value, self.center)
         self.assertEqual(self.pattern.scan_direction.value, self.scan_direction)
 
-    def test_json(self):
-        # test to_json
-        rectangle_pattern_json = self.pattern.to_json()
-        self.assertEqual(rectangle_pattern_json["name"], self.name)
-        self.assertEqual(rectangle_pattern_json["width"], self.width)
-        self.assertEqual(rectangle_pattern_json["height"], self.height)
-        self.assertEqual(rectangle_pattern_json["depth"], self.depth)
-        self.assertEqual(rectangle_pattern_json["rotation"], self.rotation)
-        self.assertEqual(rectangle_pattern_json["center_x"], 0)
-        self.assertEqual(rectangle_pattern_json["center_y"], 0)
-        self.assertEqual(rectangle_pattern_json["scan_direction"], self.scan_direction)
-        self.assertEqual(rectangle_pattern_json["pattern"], "rectangle")
+    def test_dict(self):
+        # test to_dict
+        rectangle_pattern_dict = self.pattern.to_dict()
+        self.assertEqual(rectangle_pattern_dict["name"], self.name)
+        self.assertEqual(rectangle_pattern_dict["width"], self.width)
+        self.assertEqual(rectangle_pattern_dict["height"], self.height)
+        self.assertEqual(rectangle_pattern_dict["depth"], self.depth)
+        self.assertEqual(rectangle_pattern_dict["rotation"], self.rotation)
+        self.assertEqual(rectangle_pattern_dict["center_x"], 0)
+        self.assertEqual(rectangle_pattern_dict["center_y"], 0)
+        self.assertEqual(rectangle_pattern_dict["scan_direction"], self.scan_direction)
+        self.assertEqual(rectangle_pattern_dict["pattern"], "rectangle")
 
-        # test from_json
-        rectangle_pattern_from_json = RectanglePatternParameters.from_json(rectangle_pattern_json)
-        self.assertEqual(rectangle_pattern_from_json.name.value, self.name)
-        self.assertEqual(rectangle_pattern_from_json.width.value, self.width)
-        self.assertEqual(rectangle_pattern_from_json.height.value, self.height)
-        self.assertEqual(rectangle_pattern_from_json.depth.value, self.depth)
-        self.assertEqual(rectangle_pattern_from_json.rotation.value, self.rotation)
-        self.assertEqual(rectangle_pattern_from_json.center.value, self.center)
-        self.assertEqual(rectangle_pattern_from_json.scan_direction.value, self.scan_direction)
+        # test from_dict
+        rectangle_pattern_from_dict = RectanglePatternParameters.from_dict(rectangle_pattern_dict)
+        self.assertEqual(rectangle_pattern_from_dict.name.value, self.name)
+        self.assertEqual(rectangle_pattern_from_dict.width.value, self.width)
+        self.assertEqual(rectangle_pattern_from_dict.height.value, self.height)
+        self.assertEqual(rectangle_pattern_from_dict.depth.value, self.depth)
+        self.assertEqual(rectangle_pattern_from_dict.rotation.value, self.rotation)
+        self.assertEqual(rectangle_pattern_from_dict.center.value, self.center)
+        self.assertEqual(rectangle_pattern_from_dict.scan_direction.value, self.scan_direction)
 
     def test_generate(self):
         # test generate
@@ -107,7 +105,6 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         )
 
     def test_assignment(self):
-
         # test assignment
         self.assertEqual(self.pattern.name.value, self.name)
         self.assertEqual(self.pattern.width.value, self.width)
@@ -116,26 +113,26 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.spacing.value, self.spacing)
         self.assertEqual(self.pattern.center.value, self.center)
 
-    def test_json(self):
-        # test to_json
-        trench_pattern_json = self.pattern.to_json()
-        self.assertEqual(trench_pattern_json["name"], self.name)
-        self.assertEqual(trench_pattern_json["width"], self.width)
-        self.assertEqual(trench_pattern_json["height"], self.height)
-        self.assertEqual(trench_pattern_json["depth"], self.depth)
-        self.assertEqual(trench_pattern_json["spacing"], self.spacing)
-        self.assertEqual(trench_pattern_json["center_x"], 0)
-        self.assertEqual(trench_pattern_json["center_y"], 0)
-        self.assertEqual(trench_pattern_json["pattern"], "trench")
+    def test_dict(self):
+        # test to_dict
+        trench_pattern_dict = self.pattern.to_dict()
+        self.assertEqual(trench_pattern_dict["name"], self.name)
+        self.assertEqual(trench_pattern_dict["width"], self.width)
+        self.assertEqual(trench_pattern_dict["height"], self.height)
+        self.assertEqual(trench_pattern_dict["depth"], self.depth)
+        self.assertEqual(trench_pattern_dict["spacing"], self.spacing)
+        self.assertEqual(trench_pattern_dict["center_x"], 0)
+        self.assertEqual(trench_pattern_dict["center_y"], 0)
+        self.assertEqual(trench_pattern_dict["pattern"], "trench")
 
-        # test from_json
-        trench_pattern_from_json = TrenchPatternParameters.from_json(trench_pattern_json)
-        self.assertEqual(trench_pattern_from_json.name.value, self.name)
-        self.assertEqual(trench_pattern_from_json.width.value, self.width)
-        self.assertEqual(trench_pattern_from_json.height.value, self.height)
-        self.assertEqual(trench_pattern_from_json.depth.value, self.depth)
-        self.assertEqual(trench_pattern_from_json.spacing.value, self.spacing)
-        self.assertEqual(trench_pattern_from_json.center.value, self.center)
+        # test from_dict
+        trench_pattern_from_dict = TrenchPatternParameters.from_dict(trench_pattern_dict)
+        self.assertEqual(trench_pattern_from_dict.name.value, self.name)
+        self.assertEqual(trench_pattern_from_dict.width.value, self.width)
+        self.assertEqual(trench_pattern_from_dict.height.value, self.height)
+        self.assertEqual(trench_pattern_from_dict.depth.value, self.depth)
+        self.assertEqual(trench_pattern_from_dict.spacing.value, self.spacing)
+        self.assertEqual(trench_pattern_from_dict.center.value, self.center)
 
     def test_generate(self):
         # test generate
@@ -179,7 +176,6 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         )
 
     def test_assignment(self):
-
         # test assignment
         self.assertEqual(self.pattern.name.value, self.name)
         self.assertEqual(self.pattern.width.value, self.width)
@@ -188,26 +184,26 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.spacing.value, self.spacing)
         self.assertEqual(self.pattern.center.value, self.center)
 
-    def test_json(self):
-        # test to_json
-        microexpansion_pattern_json = self.pattern.to_json()
-        self.assertEqual(microexpansion_pattern_json["name"], self.name)
-        self.assertEqual(microexpansion_pattern_json["width"], self.width)
-        self.assertEqual(microexpansion_pattern_json["height"], self.height)
-        self.assertEqual(microexpansion_pattern_json["depth"], self.depth)
-        self.assertEqual(microexpansion_pattern_json["spacing"], self.spacing)
-        self.assertEqual(microexpansion_pattern_json["center_x"], 0)
-        self.assertEqual(microexpansion_pattern_json["center_y"], 0)
-        self.assertEqual(microexpansion_pattern_json["pattern"], "microexpansion")
+    def test_dict(self):
+        # test to_dict
+        microexpansion_pattern_dict = self.pattern.to_dict()
+        self.assertEqual(microexpansion_pattern_dict["name"], self.name)
+        self.assertEqual(microexpansion_pattern_dict["width"], self.width)
+        self.assertEqual(microexpansion_pattern_dict["height"], self.height)
+        self.assertEqual(microexpansion_pattern_dict["depth"], self.depth)
+        self.assertEqual(microexpansion_pattern_dict["spacing"], self.spacing)
+        self.assertEqual(microexpansion_pattern_dict["center_x"], 0)
+        self.assertEqual(microexpansion_pattern_dict["center_y"], 0)
+        self.assertEqual(microexpansion_pattern_dict["pattern"], "microexpansion")
 
-        # test from_json
-        microexpansion_pattern_from_json = MicroexpansionPatternParameters.from_json(microexpansion_pattern_json)
-        self.assertEqual(microexpansion_pattern_from_json.name.value, self.name)
-        self.assertEqual(microexpansion_pattern_from_json.width.value, self.width)
-        self.assertEqual(microexpansion_pattern_from_json.height.value, self.height)
-        self.assertEqual(microexpansion_pattern_from_json.depth.value, self.depth)
-        self.assertEqual(microexpansion_pattern_from_json.spacing.value, self.spacing)
-        self.assertEqual(microexpansion_pattern_from_json.center.value, self.center)
+        # test from_dict
+        microexpansion_pattern_from_dict = MicroexpansionPatternParameters.from_dict(microexpansion_pattern_dict)
+        self.assertEqual(microexpansion_pattern_from_dict.name.value, self.name)
+        self.assertEqual(microexpansion_pattern_from_dict.width.value, self.width)
+        self.assertEqual(microexpansion_pattern_from_dict.height.value, self.height)
+        self.assertEqual(microexpansion_pattern_from_dict.depth.value, self.depth)
+        self.assertEqual(microexpansion_pattern_from_dict.spacing.value, self.spacing)
+        self.assertEqual(microexpansion_pattern_from_dict.center.value, self.center)
 
     def test_generate(self):
         # test generate

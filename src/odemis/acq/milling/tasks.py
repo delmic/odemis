@@ -23,7 +23,6 @@ This module contains structures to define milling tasks and parameters.
 
 """
 
-import os
 from typing import Dict, List
 
 import yaml
@@ -45,7 +44,7 @@ class MillingSettings:
         self.channel = model.StringEnumerated(channel, choices=set(["ion"]))
         self.align = model.BooleanVA(align) # align at the milling current
 
-    def to_json(self) -> dict:
+    def to_dict(self) -> dict:
         return {"current": self.current.value,
                 "voltage": self.voltage.value,
                 "field_of_view": self.field_of_view.value,
@@ -54,7 +53,7 @@ class MillingSettings:
                 "align": self.align.value}
 
     @staticmethod
-    def from_json(data: dict) -> "MillingSettings":
+    def from_dict(data: dict) -> "MillingSettings":
         return MillingSettings(current=data["current"],
                                 voltage=data["voltage"],
                                 field_of_view=data["field_of_view"],
@@ -64,57 +63,70 @@ class MillingSettings:
                                 )
 
     def __repr__(self):
-        return f"{self.to_json()}"
+        return f"{self.to_dict()}"
 
 
 class MillingTaskSettings:
+    """Represents a milling tasks, which consists of a set of patterns and settings"""
     milling: MillingSettings
     patterns: List[MillingPatternParameters]
 
-    def __init__(self, milling: dict, patterns: List[MillingPatternParameters], name: str = "Milling Task"):
+    def __init__(self, milling: dict, patterns: List[MillingPatternParameters], name: str):
         self.name = name
         self.milling = milling
         self.patterns = patterns
 
-    def to_json(self) -> dict:
-        return {"name": self.name, "milling": self.milling.to_json(), "patterns": [pattern.to_json() for pattern in self.patterns]}
+    def to_dict(self) -> dict:
+        """Convert the parameters to a dictionary
+        :return: dictionary containing the milling task settings
+        """
+        return {"name": self.name,
+                "milling": self.milling.to_dict(),
+                "patterns": [pattern.to_dict() for pattern in self.patterns]}
 
     @staticmethod
-    def from_json(data: dict):
+    def from_dict(data: dict) -> "MillingTaskSettings":
+        """Create a MillingTaskSettings object from a dictionary
+        :param data: dictionary containing the milling task settings
+        :return: MillingTaskSettings"""
         return MillingTaskSettings(
             name=data.get("name", "Milling Task"),
-            milling=MillingSettings.from_json(data["milling"]),
-            patterns=[pattern_generator[p["pattern"]].from_json(p) for p in data["patterns"]])
+            milling=MillingSettings.from_dict(data["milling"]),
+            patterns=[pattern_generator[p["pattern"]].from_dict(p) for p in data["patterns"]])
 
     def __repr__(self):
-        return f"{self.to_json()}"
+        return f"{self.to_dict()}"
 
-    def generate(self):
-        """Generate a list of milling patterns for the microscope"""
+    def generate(self) -> List[MillingPatternParameters]:
+        """Generate the list of invidual shapes that can be drawn on the microscope from the high-level patterns.
+        :return: list of individual shapes to be drawn on the microscope
+        """
         patterns = []
         for pattern in self.patterns:
             patterns.extend(pattern.generate())
         return patterns
 
 
-def save_milling_tasks(path: str, milling_tasks: Dict[str, MillingTaskSettings]):
-    with open(os.path.join(path, "milling_tasks.yaml"), "w") as f:
-        yaml.dump(milling_tasks.to_json(), f)
+def save_milling_tasks(path: str, milling_tasks: Dict[str, MillingTaskSettings]) -> None:
+    """Save milling tasks to a yaml file.
+    :param path: path to the yaml file
+    :param milling_tasks: dictionary of milling tasks
+    :return: None
+    """
+    mdict = {k: v.to_dict() for k, v in milling_tasks.items()}
+    with open(path, "w") as f:
+        yaml.dump(mdict, f)
 
-def load_yaml(path: str):
+def load_milling_tasks(path: str) -> Dict[str, MillingTaskSettings]:
+    """Load milling tasks from a yaml file.
+    :param path: path to the yaml file
+    :return: dictionary of milling tasks
+    """
+    milling_tasks = {}
     with open(path, "r") as f:
         yaml_file = yaml.safe_load(f)
 
-    return yaml_file
+    # convert the dictionary to Dict[str, MillingTaskSettings]
+    milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in yaml_file.items()}
 
-def load_milling_tasks(path: str, task_list: List[str] = None) -> Dict[str, MillingTaskSettings]:
-    milling_tasks = {}
-    task_file = load_yaml(path)
-
-    if task_list is None:
-        task_list = task_file.keys()
-
-    for task_name in task_list:
-        task = MillingTaskSettings.from_json(task_file[task_name])
-        milling_tasks[task_name] = task
     return milling_tasks
