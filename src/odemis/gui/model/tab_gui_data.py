@@ -364,7 +364,6 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.streams.subscribe(self._on_stream_change, init=True)
 
         self.view_posture = model.VigilantAttribute(FM_IMAGING)
-        self.acqui_mode = AcquiMode.FLM
 
         if main.stigmator:
             # stigmator should have a "MD_CALIB" containing a dict[float, dict],
@@ -443,9 +442,6 @@ class CryoFIBSEMGUIData(CryoGUIData):
         self.patterns = model.ListVA()
 
         self.view_posture = model.VigilantAttribute(SEM_IMAGING)
-        self.acqui_mode = AcquiMode.FIBSEM
-        self.is_sem_active_view: bool = False
-        self.is_fib_active_view: bool = False
 
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()

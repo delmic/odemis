@@ -1667,7 +1667,7 @@ class SparcStreamsController(StreamBarController):
     def addEBIC(self, **kwargs):
         main_data = self._main_data_model
 
-        if model.hasVA(main_data.ebic, "resolution"):
+        if model.hasVA(main_data.ebic, "resolution") and model.hasVA(main_data.ebic, "dwellTime"):
             ebic_stream = acqstream.IndependentEBICStream(
                 "EBIC",
                 main_data.ebic,
@@ -2241,7 +2241,6 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         # Remove the panels, and indirectly it will clear the view
         v = self._feature_view
         for sc in self.stream_controllers.copy():
-            logging.warning(f"attempting to remove stream: {sc.stream}")
             if not isinstance(sc.stream, StaticSEMStream):
                 logging.warning("Unexpected non static stream: %s", sc.stream)
                 continue
@@ -2263,7 +2262,7 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         """
         Remove all the streams, from the GUI (view, stream panels)
         Must be called in the main GUI thread.
-        :param clear_model: unused, but required because of external api
+        :param clear_model: unused, but required because of StreamBarController api
         """
         # clear the graphical part
         self._stream_bar.clear()
