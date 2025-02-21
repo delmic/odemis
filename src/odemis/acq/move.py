@@ -2860,18 +2860,22 @@ class SampleStage(model.Actuator):
     @isasync
     def moveRelChamberReferential(self, shift: Dict[str, float]) -> Future:
         """Move the stage vertically in the chamber. This is non-blocking.
-        From OpenFIBSEM
-        :param shift: The relative shift to be made
+        From OpenFIBSEM.
+        The desired input shift (x, z) is transformed to x, y, z axis components such that the
+        the stage moves in the vertical direction in the chamber. For TFS, the z-axis is
+        attached to the tilt, so the tilt angle must be taken into account.
+        For Tescan systems, the z-axis is always vertical, so this function is not required.
+        :param shift: The relative shift to be made (x, z).
         :return: A cancellable future
         """
         # TODO: account for scan rotation
         theta = self._stage_bare.position.value["rx"] # tilt, in radians
         dx = shift.get("x", 0)
-        pdy = shift.get("y", 0)
+        pdz = shift.get("z", 0)
 
-        # NOTE: this formula is for tfs only, for tescan z-axis is vertical
-        dy = pdy * math.sin(theta)
-        dz = pdy / math.cos(theta)
+        # calculate axis components
+        dy = pdz * math.sin(theta)
+        dz = pdz / math.cos(theta)
         vshift = {"x": dx, "y": dy, "z": dz}
         logging.debug(f"Moving stage vertically by: {vshift}, theta: {theta}, initial shift: {shift}")
         return self._stage_bare.moveRel(vshift)
