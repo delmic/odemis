@@ -37,7 +37,7 @@ import wx
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq import millmng2 as millmng
+from odemis.acq.milling import millmng
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -46,7 +46,7 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
-from odemis.acq.millmng2 import MillingWorkflowTask, run_automated_milling
+from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay

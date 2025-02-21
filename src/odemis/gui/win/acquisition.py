@@ -1420,7 +1420,6 @@ def LoadProjectFileDialog(
     projectname: str,
     message: str = "Choose a project directory to load",
 ) -> Optional[str]:
-
     """
     :param parent (wx.Frame): parent window
     :param projectname (string): project name to propose by default
@@ -1434,11 +1433,30 @@ def LoadProjectFileDialog(
         defaultPath=projectname,
         style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
     )
-    dialog = wx.DirDialog(
+
+    # Show the dialog and check whether is was accepted or cancelled
+    if dialog.ShowModal() != wx.ID_OK:
+        return None
+
+    # project path that has been selected...
+    return dialog.GetPath()
+
+def SelectFileDialog(
+    parent: wx.Frame,
+    message: str,
+    default_path: str,
+) -> Optional[str]:
+    """
+    :param parent (wx.Frame): parent window
+    :param message (string): message to display in the dialog
+    :param default_path (string): default path to open the dialog
+    :return (string or None): the selected file name (or None if the user cancelled)
+    """
+    dialog = wx.FileDialog(
         parent,
         message=message,
-        defaultPath=projectname,
-        style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST,
+        defaultDir=default_path,
+        style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
     )
 
     # Show the dialog and check whether is was accepted or cancelled
