@@ -77,7 +77,7 @@ class OverviewStreamAcquiController(object):
         # create the dialog
         try:
             acq_dialog = OverviewAcquisitionDialog(
-                self._tab.main_frame, self._tab_data_model, 
+                self._tab.main_frame, self._tab_data_model,
                 mode=self.acqui_mode)
             parent_size = [v * 0.77 for v in self._tab.main_frame.GetSize()]
 

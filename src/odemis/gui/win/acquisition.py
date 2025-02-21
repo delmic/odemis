@@ -631,7 +631,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     The data acquired is stored in a file, with predefined name, available on
       .filename and it is opened (as pyramidal data) in .data .
     """
-    def __init__(self, parent, orig_tab_data, 
+    def __init__(self, parent, orig_tab_data,
                  mode: guimodel.AcquiMode = guimodel.AcquiMode.FLM):
         xrcfr_overview_acq.__init__(self, parent)
 
