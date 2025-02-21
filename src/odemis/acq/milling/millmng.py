@@ -140,7 +140,7 @@ class TFSMillingTaskManager:
                 self._future.running_subf = acquire([self.fib_stream])
                 data, _ = self._future.running_subf.result()
                 new_image = data[0]
-                align_reference_image(ref_image, new_image, self.ion_beam)
+                align_reference_image(ref_image, new_image, self.fib_stream.emitter)
 
             # draw milling patterns to microscope
             for pattern in settings.generate():
@@ -385,7 +385,8 @@ class AutomatedMillingManager(object):
         self._future.msg = f"{feature.name.value}: Milling: {self.current_workflow}"
         self._future.set_progress()
 
-        self._future.running_subf = run_milling_tasks(milling_tasks)
+        self._future.running_subf = run_milling_tasks(tasks=milling_tasks,
+                                                      fib_stream=self.fib_stream)
         self._future.running_subf.result()
 
     def _align_reference_image(self, feature: CryoFeature) -> None:

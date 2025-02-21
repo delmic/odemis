@@ -130,13 +130,16 @@ class TestAutomatedMillingManager(unittest.TestCase):
             files = glob.glob(os.path.join(feat.path, "*"))
             for f in files:
                 os.remove(f)
-            os.rmdir(feat.path)
+            if os.path.exists(feat.path):
+                os.rmdir(feat.path)
         # remove directory
-        os.rmdir(self.project_path)
+        if os.path.exists(self.project_path):
+            os.rmdir(self.project_path)
 
     def test_automated_milling(self):
         """Test automated milling workflow, and data changes."""
         # simulator starts at unknown, first move to grid1
+        features = self.features.copy()
         f = self.pm.stage.moveAbs(self.sem_grid1)
         f.result()
 
@@ -145,7 +148,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         f.result()
 
         f = run_automated_milling(
-            features=self.features,
+            features=features,
             stage=self.stage,
             sem_stream=self.sem_stream,
             fib_stream=self.fib_stream,
@@ -160,7 +163,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         f.result()
 
         f = run_automated_milling(
-            features=self.features,
+            features=features,
             stage=self.stage,
             sem_stream=self.sem_stream,
             fib_stream=self.fib_stream,
@@ -172,7 +175,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         # check for images
         image_filenames = ["Finished-SEM", "Finished-FIB",
                            "Pre-Alignment-FIB", "Post-Alignment-FIB"]
-        for feature in self.features:
+        for feature in features:
             for t in self.task_list:
                 ts = t.value.replace(" ", "-")
                 for fname in image_filenames:
