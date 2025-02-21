@@ -229,6 +229,11 @@ MD_SEM_IMAGING_RANGE = "SEM imaging range"  # dict str → [float, float] defini
 MD_FM_IMAGING_RANGE = "FM imaging range"  # dict str → [float, float] defining the volume of the FM imaging area, along x, y and z axes.
 MD_FAV_FM_POS_ACTIVE = "Favourite FM position active"  # dict str->float representing the position required for FM imaging
 MD_FAV_SEM_POS_ACTIVE = "Favourite SEM position active"  # dict -> float representing the position required for SEM imaging
+MD_FAV_FIB_POS_ACTIVE = "Favourite FIB position active"  # dict -> float representing the position required for FIB imaging
+MD_FAV_MILL_POS_ACTIVE = "Favourite Milling position active"  # dict -> float representing the position required for milling
+# NOTE: The milling angle is the angle measured in clockwise direction between the sample plane and FIB axes.
+# Assuming sample plane axis is positive from left to right and FIB imaging axis is positive from up to down.
+# This rx is converted to the stage tilt when the user moves to the milling position.
 
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
