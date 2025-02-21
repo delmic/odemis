@@ -907,6 +907,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if CAN_FOCUS in self.abilities and self.right_dragging:
             if evt.ShiftDown():
                 softener = 0.1  # softer
+            elif evt.ControlDown():
+                softener = 10   # faster
             else:
                 softener = 1
 

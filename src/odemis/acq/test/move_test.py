@@ -732,6 +732,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
     def _test_3d_transformations(self):
         """Test that the 3D transforms work the same as the 2D transforms for 0 scan rotation"""
         # 3d transforms should produce the same result as the 2d transforms
+        self.pm.use_3d_transforms = False # make sure we're using 2D transforms
         stage_pos = self.stage_bare.position.value
         ssp = self.pm.to_sample_stage_from_stage_position(stage_pos)    # new 2D method
         ssp2 = self.pm.to_sample_stage_from_stage_position2(stage_pos)  # new 3D method
@@ -776,6 +777,9 @@ class TestMeteorTFS3Move(unittest.TestCase):
     def test_sample_stage_movement(self):
         """Test sample stage movements in different postures match the expected movements"""
 
+        f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
+        f.result()
+
         dx, dy = 50e-6, 50e-6
         self.pm.use_3d_transforms = True
         for posture in [FM_IMAGING, SEM_IMAGING]:
@@ -806,7 +810,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
             # manually calculate the expected stage bare position
             p = [dx, dy, 0]
 
-            tf = self.pm._inv_transforms2[posture] # to-stage
+            tf = self.pm._inv_transforms2[posture] # to-stage bare
 
             q = numpy.dot(tf, p)
             exp_sb_pos = {

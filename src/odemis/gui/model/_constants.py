@@ -20,6 +20,9 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+
+from enum import Enum
+
 # The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
@@ -96,3 +99,7 @@ FLM_ALIGN = "FLM alignment"
 CALIBRATION_1 = "Calibration 1"
 CALIBRATION_2 = "Calibration 2"
 CALIBRATION_3 = "Calibration 3"
+
+class AcquisitionMode(Enum):
+    FLM = 1
+    FIBSEM = 2

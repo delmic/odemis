@@ -364,7 +364,10 @@ def align_reference_image(
     if (ref_image.ndim != 2 or new_image.ndim != 2 or ref_image.shape != new_image.shape):
         raise ValueError(f"Only equally sized 2D images are supported for alignment. {ref_image.shape}, {new_image.shape}")
 
-    shift_px = MeasureShift(ref_image, new_image, 10)
+    if ref_image.metadata[model.MD_PIXEL_SIZE] != new_image.metadata[model.MD_PIXEL_SIZE]:
+        raise ValueError("The images must have the same pixel size.")
+
+    shift_px = MeasureShift(ref_image, new_image, 2)
 
     pixelsize = ref_image.metadata[model.MD_PIXEL_SIZE]
     shift_m = (shift_px[0] * pixelsize[0], shift_px[1] * pixelsize[1])

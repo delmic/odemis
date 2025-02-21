@@ -442,8 +442,6 @@ class CryoFIBSEMGUIData(CryoGUIData):
         self.patterns = model.ListVA()
 
         self.view_posture = model.VigilantAttribute(SEM_IMAGING)
-        self.is_sem_active_view: bool = False
-        self.is_fib_active_view: bool = False
 
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()
