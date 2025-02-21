@@ -180,7 +180,7 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
                         'stage_position': feature.stage_position.value,
                         'fm_focus_position': feature.fm_focus_position.value,
                         'posture_positions': feature.posture_positions,
-                        "milling_tasks": {k: v.to_json() for k, v in feature.milling_tasks.items()},
+                        "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
                         }
         if feature.path:
             feature_item['path'] = feature.path
@@ -209,7 +209,7 @@ class FeaturesDecoder(json.JSONDecoder):
                                   )
             feature.status.value = obj['status']
             feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
-            feature.milling_tasks = {k: MillingTaskSettings.from_json(v) for k, v in milling_task_json.items()}
+            feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
             feature.path = obj.get('path', None)
 
             # load the reference image
