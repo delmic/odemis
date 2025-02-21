@@ -489,7 +489,7 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.fn_count)
 
 
-DEBUG = True
+DEBUG = False
 
 
 class CryoCorrelationGUIData(CryoGUIData):

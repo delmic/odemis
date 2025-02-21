@@ -35,6 +35,7 @@ import wx
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
 
+from odemis.acq.align.tdct import get_optimized_z_gauss
 from odemis.acq.feature import save_features, CorrelationTarget
 from odemis.gui import conf
 from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL, TOOL_SURFACE_FIDUCIAL
@@ -81,23 +82,13 @@ class CorrelationPointsController(object):
         # Access the correlation points table (wxListCtrl)
         self.grid = panel.table_grid
 
-        # Access the stream selector (for FIB/FM selection)
-        # self.stream_selector = panel.stream_selector
-
         # Access the Z-targeting button
         self.z_targeting_btn = panel.btn_z_targeting
-        self.z_targeting_btn.Enable(False)  # Initially disable the Z-targeting button
-
-        # Access the Refractive Index correction
-        # self.refractive_index_btn = panel.btn_refractive_index
-        # self.refractive_index_btn.Bind(wx.EVT_BUTTON, self.on_refractive_index)
+        self.z_targeting_btn.Bind(wx.EVT_BUTTON, self.on_z_targeting)
+        self.z_targeting_btn.Enable(False)
 
         self.delete_btn = panel.btn_delete_row
         self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete_row)
-
-        # Bind events for stream selector and Z-targeting
-        # self.stream_selector.Bind(wx.EVT_COMBOBOX, self.on_stream_change)
-        self.z_targeting_btn.Bind(wx.EVT_BUTTON, self.on_z_targeting)
 
         # Bind the event for cell selection
         self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self.on_cell_selected)
@@ -105,36 +96,15 @@ class CorrelationPointsController(object):
         self.grid.Bind(wx.grid.EVT_GRID_CELL_CHANGED, self.on_row_selected)
 
         self.grid.CreateGrid(0, 5)  # TODO make variables
-        # Hide the default row labels (serial numbers)
         self.grid.SetRowLabelSize(0)
         # Set column labels for correlation points
         # Set the data type and if the column can be edited
         self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
-        # attr = wx.grid.GridCellAttr()
-        # attr.SetReadOnly(True)
         self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
         self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
         self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name)
         self.grid.SetColLabelValue(GridColumns.Index.value, GridColumns.Index.name)
-
-        # Set column 1 (Index) as an integer column
-        # int_renderer = wx.grid.GridCellNumberEditor(min=1)
-        # int_attr = wx.grid.GridCellAttr()
-        # int_attr.SetEditor(int_renderer)
-        # self.grid.SetColAttr(4, int_attr)
-        #
-        # # Set columns 2, 3, and 4 (X, Y, Z Coordinates) as float columns with 2 decimal places
-        # float_renderer = wx.grid.GridCellFloatEditor(precision=3)
-        # float_attr = wx.grid.GridCellAttr()
-        # float_attr.SetEditor(float_renderer)
-        #
-        # self.grid.SetColAttr(1, float_attr)
-        # self.grid.SetColAttr(2, float_attr)
-        # self.grid.SetColAttr(3, float_attr)
-        # Enable cell editing
-        # Bind the key down event to handle Enter key suppression
         self.grid.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
-
         self.grid.EnableEditing(True)
 
         # TODO make sure before initializing this class, feature ana feature status is fixed ? (Controller)
@@ -161,26 +131,45 @@ class CorrelationPointsController(object):
         self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
         self.current_target_coordinate_subscription = False
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
+        # self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface,
+        #                                                                    init=True)
         self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface, init=True)
-        # self._tab_data_model.main.currentFeature.subscribe(self.init_ct, init=True)
         # self.add_streams()
         if self._tab_data_model.main.currentFeature.value.correlation_targets:
             # load the values
             # to be outside correlation button maybe?
-            correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
+            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
                 self._tab_data_model.main.currentFeature.value.status.value]
+            # load FM and FIB stream in the panel
+            # TODO save the FM and FIB streams in the json file because fiducials are dependent on the dataarray
+            # self.correlation_target = correlation_target
+            if self.correlation_target.fm_streams:
+                # Will load the streams from the given streams
+                self.add_streams(self.correlation_target.fm_streams)
+            else:
+                # TODO this should be removed, first streams then fiducials should be loaded
+                # Will load the relevant streams from the current feature
+                # which one the fiducials should obey?
+                self.add_streams()
+
+            if self.correlation_target.fib_stream:
+                self.add_streams([self.correlation_target.fib_stream])
+
             targets = []
             projected_points = []
-            if correlation_target.fm_fiducials:
-                targets.append(correlation_target.fm_fiducials)
-            if correlation_target.fm_pois:
-                targets.append(correlation_target.fm_pois)
-            if correlation_target.fib_fiducials:
-                targets.append(correlation_target.fib_fiducials)
-            if correlation_target.fib_projected_fiducials:
-                projected_points.append(correlation_target.fib_projected_fiducials)
-            if correlation_target.fib_projected_pois:
-                projected_points.append(correlation_target.fib_projected_pois)
+            # TODO Should the fiducials be converted in m , fm stream should be selected by then (do it at the end)
+            if self.correlation_target.fm_fiducials:
+                targets.append(self.correlation_target.fm_fiducials)
+            if self.correlation_target.fm_pois:
+                targets.append(self.correlation_target.fm_pois)
+            if self.correlation_target.fib_fiducials and self.correlation_target.fib_stream:
+                targets.append(self.correlation_target.fib_fiducials)
+            if self.correlation_target.fib_projected_fiducials:
+                projected_points.append(self.correlation_target.fib_projected_fiducials)
+            if self.correlation_target.fib_projected_pois:
+                projected_points.append(self.correlation_target.fib_projected_pois)
+
+
 
             # TOdo not used as output gets reset
             # projected_points = list(
@@ -189,25 +178,21 @@ class CorrelationPointsController(object):
             # flatten the list of lists
             targets = list(
                 itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
+
+            # check the update TODO
+            # TODO same stream (?) limit to 1, is there a stream
+            # for target in targets:
+            #     if "FIB" in target.name.value:
+            #         p_pos = self.correlation_target.fib_stream.getPhysicalCoordinates(
+            #         (target.coordinates.value[0], target.coordinates.value[1]))
+            #     else:
+            #         p_pos = self.correlation_target.fm_streams[0].getPhysicalCoordinates(
+            #             (target.coordinates.value[0], target.coordinates.value[1]))
+            #     target.coordinates.value[0:2] = p_pos
+
             self._tab_data_model.main.targets.value = targets
-            if correlation_target.fib_surface_fiducial:
-                self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
-            # if correlation_target.fm_pois:
-            #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
-            # load FM and FIB stream in the panel
-            # TODO save the FM and FIB streams in the json file because fiducials are dependent on the dataarray
-            self.correlation_target = correlation_target
-            if correlation_target.fm_streams:
-                # Will load the streams from the given streams
-                self.add_streams(correlation_target.fm_streams)
-            else:
-                # Will load the relevant streams from the current feature
-                # which one the fiducials should obey?
-                self.add_streams()
-
-            if correlation_target.fib_stream:
-                self.add_streams([correlation_target.fib_stream])
-
+            if self.correlation_target.fib_surface_fiducial:
+                self._tab_data_model.fib_surface_point.value = self.correlation_target.fib_surface_fiducial
 
         else:
             # initialize the correlation target
@@ -219,12 +204,7 @@ class CorrelationPointsController(object):
             self.add_streams()
 
         # self.add_streams()
-
-
-
         panel.fp_correlation_panel.Show(True)
-        # Show the main frame
-        # self.main_frame.Show()
         for vp in self._viewports:
             vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
@@ -261,6 +241,7 @@ class CorrelationPointsController(object):
                 # self._update_stream_group_visibility(group_key)
                 streams_list = self._tab_data_model.main.currentFeature.value.streams.value
                 for key, indices in self.stream_groups.items():
+                    # self.correlation_target.fm_streams = []
                     for index in indices:
                         stream = streams_list[index]
                         # find stream controller for the stream
@@ -272,6 +253,8 @@ class CorrelationPointsController(object):
                             group_key = key
 
                         if key == group_key:
+                            # # TODO it should not be here,
+                            # self.correlation_target.fm_streams.append(stream)
                             ssc.stream_panel.set_visible(True)
                             ssc.stream_panel.collapse(False)
                         elif isinstance(stream, StaticFluoStream):
@@ -283,11 +266,14 @@ class CorrelationPointsController(object):
     def _update_stream_group_visibility(self, group_key: tuple) -> None:
         streams_list = self._tab_data_model.main.currentFeature.value.streams.value
         for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
+            self.correlation_target.fm_streams = []
             for index in indices:
                 stream = streams_list[index]
                 stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
                 ssc = self._tab.streambar_controller.addStream(stream, play=False)
                 ssc.stream_panel.show_remove_btn(True)
+                # TODO it should not be here,
+                self.correlation_target.fm_streams.append(stream)
 
                 if not isinstance(stream, StaticFluoStream):
                     ssc.stream_panel.set_visible(True)
@@ -318,7 +304,17 @@ class CorrelationPointsController(object):
                     if isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
                         if not self.correlation_target.fib_stream:
                             self.correlation_target.fib_stream = stream
+                            if all("FIB" not in target.name.value for target in self._tab_data_model.main.targets.value):
+                                if self.correlation_target.fib_fiducials:
+                                # for target in targets:
+                                    # if "FIB" in target.name.value:
+                                    #     p_pos = self.correlation_target.fib_stream.getPhysicalCoordinates(
+                                    #         (target.coordinates.value[0], target.coordinates.value[1]))
+                                    #     target.coordinates.value[0:2] = p_pos
+
+                                    self._tab_data_model.main.targets.value.extend(self.correlation_target.fib_fiducials)
                             # Get the data array
+                            # stream.raw[0]
 
                         elif stream != self.correlation_target.fib_stream:
                             self._tab.streambar_controller.removeStreamPanel(self.correlation_target.fib_stream)
@@ -373,30 +369,6 @@ class CorrelationPointsController(object):
         self.stream_groups = stream_groups
         self._update_stream_group_visibility(first_valid_key)
 
-        # if stream_groups:
-        #     # Get the first key from the dictionary (unordered since dictionaries are unordered before Python 3.7)
-        #     first_key = next(iter(stream_groups))
-        #
-        #     # Get the set of indices associated with the first key
-        #     first_indices = stream_groups[first_key]
-        #
-        #     # "Activate" or process these indices (example: print them or do something with the streams)
-        #     for index in first_indices:
-        #         stream = streams_list[index]  # Access the stream using the index
-        #         ssc = self._tab.streambar_controller.addStream(stream, add_to_view=True, play=False)
-        #         ssc.stream_panel.set_visible(True)
-        #         ssc.stream_panel.collapse(False)
-        #         print(f"Processing stream at index {index}, stream name: {stream.name.value}")
-        # #         # Add your activation logic here (e.g., further processing, applying a function)
-        # else:
-        #     print("No stream groups available.")
-
-        # todo sem/fib STREAM?
-
-    # initialize correlation target class in the current feature, once the minimum requirements
-    # make sure it is not initialized multiple times
-    # add correlation target as an attribute in cryo feature, no need of VA
-    # make an update function, which updates the specific parts of the class when changed
     def on_key_down(self, event):
         """Handle key down events, especially to suppress Enter key default behavior."""
         if event.GetKeyCode() == wx.WXK_RETURN:
@@ -408,48 +380,6 @@ class CorrelationPointsController(object):
         else:
             # For other keys, allow the default behavior
             event.Skip()
-
-    # def init_ct(self, val):
-    #     if not DEBUG:
-    #         if not self._tab_data_model.main.currentFeature.value:
-    #             return False
-    #         elif not self._tab_data_model.main.currentFeature.value.correlation_targets:
-    #             self._tab_data_model.main.currentFeature.value.correlation_targets = {}
-    #             self._tab_data_model.main.currentFeature.value.correlation_targets[
-    #                 self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
-    #             self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
-    #                 self._tab_data_model.main.currentFeature.value.status.value]
-    #         elif self.correlation_target is None:
-    #             # to be outside correlation button maybe?
-    #             self.add_streams()
-    #             correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
-    #                 self._tab_data_model.main.currentFeature.value.status.value]
-    #             targets = []
-    #             projected_points = []
-    #             if correlation_target.fm_fiducials:
-    #                 targets.append(correlation_target.fm_fiducials)
-    #             if correlation_target.fm_pois:
-    #                 targets.append(correlation_target.fm_pois)
-    #             if correlation_target.fib_fiducials:
-    #                 targets.append(correlation_target.fib_fiducials)
-    #             if correlation_target.fib_projected_fiducials:
-    #                 projected_points.append(correlation_target.fib_projected_fiducials)
-    #             if correlation_target.fib_projected_pois:
-    #                 projected_points.append(correlation_target.fib_projected_pois)
-    #
-    #             # TOdo not used as output gets reset
-    #             # projected_points = list(
-    #             #     itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in projected_points))
-    #             # self._tab_data_model.projected_points = projected_points
-    #             # flatten the list of lists
-    #             targets = list(
-    #                 itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
-    #             self._tab_data_model.main.targets.value = targets
-    #             if correlation_target.fib_surface_fiducial:
-    #                 self._tab_data_model.fib_surface_point.value = correlation_target.fib_surface_fiducial
-    #             # if correlation_target.fm_pois:
-    #             #     self._tab_data_model.fm_poi.value = correlation_target.fm_pois
-    #             self.correlation_target = correlation_target
 
     def update_feature_correlation_target(self, surface_fiducial=False):  # , fm_poi = False):
 
@@ -466,6 +396,7 @@ class CorrelationPointsController(object):
             # if True:
             fib_fiducials = []
             fm_fiducials = []
+            self.correlation_target.fm_pois = []
             # fm_pois = []
             # fib_surface_fiducial = None
             for target in self._tab_data_model.main.targets.value:
@@ -481,22 +412,12 @@ class CorrelationPointsController(object):
             if fm_fiducials:
                 fm_fiducials.sort(key=lambda x: x.index.value)
                 self.correlation_target.fm_fiducials = fm_fiducials
-            # if fm_pois:
-            #     fm_pois.sort(key=lambda x: x.index.value)
-            #     self.correlation_target.fm_pois = fm_pois
 
-        # self.correlation_target.reset_attributes()
-        # self._tab_data_model.main.currentFeature.value.correlation_targets[
-        #     self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
-        # self._tab_data_model.main.currentFeature.value.correlation_targets[
-        #     self._tab_data_model.main.currentFeature.value.status.value] = self.correlation_target
-        # save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
         acq_conf = conf.get_acqui_conf()
         save_features(acq_conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def check_correlation_conditions(self):
         # Todo conditions change when initializing the correlation target
-
         # should npt be here, duplicate
         if not DEBUG:
             if not self._tab_data_model.main.currentFeature.value:
@@ -538,21 +459,6 @@ class CorrelationPointsController(object):
                     return False
         else:
             return False
-
-    # def on_refractive_index(self, evt):
-    #     # only one target that keeps on changing, at the end if do correlation possible,
-    #     # rerun the correlation calculation (call decorator)
-    #     # how to do calculation if things rapidly change than the calculation speed
-    #
-    #     if self._tab_data_model.focussedView.value.name.value == "SEM Overview":
-    #         # pass
-    #         self._tab_data_model.main.selected_target_type.value = "SurfaceFiducial"
-    #         self._tab_data_model.tool.value = TOOL_SURFACE_FIDUCIAL
-    #         self.update_feature_correlation_target(surface_fiducial=True)
-    #
-    #     if self.check_correlation_conditions():
-    #         self.latest_change = True
-    #         self.queue_latest_change()
 
     def queue_latest_change(self):
         """
@@ -657,6 +563,7 @@ class CorrelationPointsController(object):
                 for target in self._tab_data_model.main.targets.value:
                     if target.name.value == self._tab_data_model.main.currentTarget.value.name.value:
                         self._tab_data_model.main.targets.value.remove(target)
+                        self.z_targeting_btn.Enable(False)
                         self._tab_data_model.main.currentTarget.value = None
                         # unselect grid row
                         self.grid.SelectRow(-1)
@@ -734,29 +641,6 @@ class CorrelationPointsController(object):
 
                 for vp in self._viewports:
                     vp.canvas.update_drawing()
-                # should happen before the event is triggered
-                # check difeerent feature different points
-                # save fib point
-                # fiducials icon change
-                # features still there when new project is used
-                # reset output
-                # load and save json in the same way
-                # pop up
-                # doc string
-                # todos
-                # enable z targetting
-                # change the keys
-                # new tool icon
-                # mto pixel proper
-
-                # float, 2 values more
-                # none value not there
-                # pencil in fib
-                # keep more than one poi (big fov)
-                # enter issue resolved
-                # xyz change
-                # poi up
-                # index when changes cannot be more than the number of max indices in the list
 
             except (ValueError, AssertionError):
                 wx.MessageBox(f"Index must be an int in the range (1, {index_max + 1})!", "Invalid Input",
@@ -790,8 +674,72 @@ class CorrelationPointsController(object):
 
     @call_in_wx_main
     def _on_current_target_changes(self, target):
-        # according to target name, highlight the row
-        # fix the fm groups and remove the extra ones, because the targets are dependent on the FM groups
+        if target and "FIB" not in target.name.value:
+            self.z_targeting_btn.Enable(True)
+        else:
+            self.z_targeting_btn.Enable(False)
+
+        for row in range(self.grid.GetNumberRows()):
+            if self.selected_target_in_grid(target, row):
+                self.grid.SelectRow(row)
+                self.reorder_table()
+                break
+
+        if self._tab_data_model.main.currentTarget.value and not self.current_target_coordinate_subscription:
+            self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
+                                                                                init=True)
+            # subscribe only once
+            self.current_target_coordinate_subscription = True
+
+    def _on_current_fib_surface(self, fib_surface_fiducial):
+        # todo can be done in intialization
+        if self._tab_data_model.fib_surface_point.value:
+            self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface, init=True)
+
+    def _on_current_coordinates_fib_surface(self, coordinates):
+        self.update_feature_correlation_target(surface_fiducial=True)
+
+        if self.check_correlation_conditions():
+            self.latest_change = True
+            self.queue_latest_change()
+
+    @call_in_wx_main
+    def _on_current_coordinates_changes(self, coordinates):
+        target = self._tab_data_model.main.currentTarget.value
+        self.current_target_coordinate_subscription = False
+        temp_check = False
+        for row in range(self.grid.GetNumberRows()):
+            # TODO Check grid cells are changing
+            # TODO add changes due to Z
+            if self.selected_target_in_grid(target, row):
+                if "FM" or "POI" in target.name.value:
+                    pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(
+                        (target.coordinates.value[0], target.coordinates.value[1]))
+                    if int(self.grid.GetCellValue(row, GridColumns.Z.value)) != int(target.coordinates.value[2]):
+                        temp_check = True
+                    self.grid.SetCellValue(row, GridColumns.Z.value, f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
+                else:
+                    pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates_alt(
+                        (target.coordinates.value[0], target.coordinates.value[1]))
+                # Get cell value
+                if (self.grid.GetCellValue(row, GridColumns.X.value) != f"{pixel_coords[0]:.{GRID_PRECISION}f}" or
+                        self.grid.GetCellValue(row,GridColumns.Y.value) != f"{pixel_coords[1]:.{GRID_PRECISION}f}"):
+                    temp_check = True
+                self.grid.SetCellValue(row, GridColumns.X.value, f"{pixel_coords[0]:.{GRID_PRECISION}f}")
+                self.grid.SetCellValue(row, GridColumns.Y.value, f"{pixel_coords[1]:.{GRID_PRECISION}f}")
+                self.update_feature_correlation_target()
+
+            if self.check_correlation_conditions() and temp_check:
+                self.latest_change = True
+                self.queue_latest_change()
+
+    @call_in_wx_main
+    def _on_target_changes(self, targets):
+        """
+        Enable or disable buttons based on stream selection.
+        When FM is selected, the Z-targeting button is enabled.
+        When FIB is selected, the Z-targeting button is disabled.
+        """
         if not self.correlation_target.fm_streams and self.previous_group:
             streams_list = self._tab_data_model.main.currentFeature.value.streams.value
             for key, indices in self.stream_groups.items():
@@ -810,98 +758,30 @@ class CorrelationPointsController(object):
                         if isinstance(stream, StaticFluoStream):
                             self._tab.streambar_controller.removeStreamPanel(stream)
 
-
-        for row in range(self.grid.GetNumberRows()):
-            if self.selected_target_in_grid(target, row):
-                self.grid.SelectRow(row)
-                self.reorder_table()
-                break
-
-        if self._tab_data_model.main.currentTarget.value and not self.current_target_coordinate_subscription:
-            self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
-                                                                                init=True)
-            self.current_target_coordinate_subscription = True
-            # subscribe only once
-
-    def _on_current_fib_surface(self, fib_surface_fiducial):
-        # todo can be done in intialization
-        if self._tab_data_model.fib_surface_point.value:
-            self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface,
-                                                                               init=True)
-
-    # def _on_current_fm_poi(self, fm_poi):
-    #     if self._tab_data_model.fm_poi.value:
-    #         self._tab_data_model.fm_poi.value.coordinates.subscribe(self._on_current_coordinates_fm_poi, init=True)
-
-    def _on_current_coordinates_fib_surface(self, coordinates):
-        self.update_feature_correlation_target(surface_fiducial=True)
-
-        if self.check_correlation_conditions():
-            self.latest_change = True
-            self.queue_latest_change()
-
-    # def _on_current_coordinates_fm_poi(self, coordinates):
-    #     self.update_feature_correlation_target(fm_poi=True)
-    #
-    #     if self.check_correlation_conditions():
-    #         self.latest_change = True
-    #         self.queue_latest_change()
-
-    @call_in_wx_main
-    def _on_current_coordinates_changes(self, coordinates):
-        target = self._tab_data_model.main.currentTarget.value
-        self.current_target_coordinate_subscription = False
-        temp_check = False
-        for row in range(self.grid.GetNumberRows()):
-            # TODO Check grid cells are changing
-            # TODO add changes due to Z
-            if self.selected_target_in_grid(target, row):
-                # Get cell value
-                if self.grid.GetCellValue(row,
-                                          GridColumns.X.value) != f"{target.coordinates.value[0]:.{GRID_PRECISION}f}" or self.grid.GetCellValue(
-                    row,
-                    GridColumns.Y.value) != f"{target.coordinates.value[1]:.{GRID_PRECISION}f}" or self.grid.GetCellValue(
-                    row, GridColumns.Z.value) != str(target.coordinates.value[2]):
-                    temp_check = True
-                self.grid.SetCellValue(row, GridColumns.X.value, f"{target.coordinates.value[0]:.{GRID_PRECISION}f}")
-                self.grid.SetCellValue(row, GridColumns.Y.value, f"{target.coordinates.value[1]:.{GRID_PRECISION}f}")
-                if "FIB" not in target.name.value:
-                    self.grid.SetCellValue(row, GridColumns.Z.value, str(target.coordinates.value[2]))
-
-                self.update_feature_correlation_target()
-
-            if self.check_correlation_conditions() and temp_check:
-                self.latest_change = True
-                self.queue_latest_change()
-
-    @call_in_wx_main
-    def _on_target_changes(self, targets):
-        """
-        Enable or disable buttons based on stream selection.
-        When FM is selected, the Z-targeting button is enabled.
-        When FIB is selected, the Z-targeting button is disabled.
-        """
         # Clear the grid before populating it with new data
         self.grid.ClearGrid()
         # delete the empty rows
         if self.grid.GetNumberRows() > 0:
             self.grid.DeleteRows(0, self.grid.GetNumberRows())
         for target in targets:
-
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
             self.grid.AppendRows(1)
+            if "FM" or "POI" in target.name.value:
+                # TODO save the fm and fib stream metadata
+                pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt((target.coordinates.value[0],target.coordinates.value[1]))
+                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
+            else:
+                pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates_alt((target.coordinates.value[0],target.coordinates.value[1]))
+                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
+
+
             self.grid.SetCellValue(current_row_count, GridColumns.X.value,
-                                   f"{target.coordinates.value[0]:.{GRID_PRECISION}f}")
+                                   f"{pixel_coords[0]:.{GRID_PRECISION}f}")
             self.grid.SetCellValue(current_row_count, GridColumns.Y.value,
-                                   f"{target.coordinates.value[1]:.{GRID_PRECISION}f}")
+                                   f"{pixel_coords[1]:.{GRID_PRECISION}f}")
             self.grid.SetCellValue(current_row_count, GridColumns.Index.value, str(target.index.value))
             self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
-
-            if "FIB" in target.name.value:
-                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
-            else:
-                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, str(target.coordinates.value[2]))
 
         self.reorder_table()
         self._panel.Layout()
@@ -910,39 +790,16 @@ class CorrelationPointsController(object):
             self.latest_change = True
             self.queue_latest_change()
 
-        # if target:
-        #     if "FM" in target.name.value:
-        #         self.z_targeting_btn.Enable(True)
-        #     else:
-        #         self.z_targeting_btn.Enable(False)
-
     def on_z_targeting(self, event):
         """
         Handle Z-targeting when the Z-targeting button is clicked.
         This will update the Z value in the table and change the color based on success.
         """
-        selected_row = self.table.GetFirstSelected()
-        if selected_row == -1:
-            return  # No row selected
-
-        # Simulate Z-targeting (replace this with actual Z-targeting logic)
-        success = self.perform_z_targeting()
-
-        if success:
-            z_value = self.get_z_target_value()  # Get the Z-targeting result
-            self.table.SetItem(selected_row, 3, str(z_value))
-            self.table.SetItemTextColour(selected_row, wx.Colour(0, 255, 0))  # Green for success
-        else:
-            previous_z_value = self.table.GetItemText(selected_row, 3)
-            self.table.SetItemTextColour(selected_row, wx.Colour(255, 0, 0))  # Red for failure
-
-    def perform_z_targeting(self) -> bool:
-        """ Simulate a Z-targeting success/failure. Replace with actual Z-targeting logic. """
-        return True  # Simulating success for now
-
-    def get_z_target_value(self) -> float:
-        """ Return the simulated Z-targeting value. Replace with real value. """
-        return 42.0  # Example Z-value for demonstration
+        if self._tab_data_model.main.currentTarget.value:
+            das = [stream.raw[0] for stream in self.correlation_target.fm_streams]
+            coords = self._tab_data_model.main.currentTarget.value.coordinates.value
+            pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt((coords[0], coords[1]))
+            self._tab_data_model.main.currentTarget.value.coordinates.value[2] = get_optimized_z_gauss(das, float(pixel_coords[0]), float(pixel_coords[1]), coords[2])
 
     def reorder_table(self):
         """
