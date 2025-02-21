@@ -424,7 +424,8 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         Update the selected target with the newly moved position
         :param v_pos: (int, int) the coordinates in the view
         """
-        p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+        # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+        p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
         self._selected_feature.pos.value = [p_pos[0], p_pos[1], self._selected_feature.pos.value[2]]
         # Reset the selected tool to signal end of feature moving operation
         # self._selected_tool_va.value = TOOL_NONE
@@ -460,7 +461,8 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
         for target in self.tab_data.main.targets.value:
             if "FM" in target.name.value or "POI" in target.name.value:
-                coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale = 1e-07)
+                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale = 1e-07)
+                coordinates = target.coordinates.value
                 fvsp = self.cnvs.phys_to_view(coordinates, offset)
                 if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                     return target
@@ -473,8 +475,25 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
-            p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
-            # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+
+            correlation_target = self.tab_data.main.currentFeature.value.correlation_targets[
+                self.tab_data.main.currentFeature.value.status.value]
+            # if correlation_target.fm_streams:
+            #     stream = correlation_target.fm_streams[0]
+            #     half_size_offset = self.cnvs.get_half_buffer_size()
+            #     true_p = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            #     pixel_stream = stream.getPixelCoordinates(true_p)
+            #     physical_value = stream.getPhysicalCoordinates(pixel_stream)
+            #     # The physical coordinates from the cnvs.view_to_phys is not the same as getPhysicalCoordinates, there is a change in y which for
+            #     # one observational example led to a difference of 1 pixel change in y.
+            #     # it seems that buffer and stream pixel coordinates are calculated differently
+            #     bpos = self.cnvs.view_to_buffer_pos(v_pos, half_size_offset)#, offset=half_size_offset)
+            #     print(f"bla on left down {v_pos}")
+            #     print(f"bla on left down pixel coordinate {pixel_stream}")
+            #     print(f"bla on left down buffer coordinate {bpos}")
+            #     print(f"bla half size offset {half_size_offset}")
+            # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_POI:
                 # Todo what does mode do
                 check_existing_poi = any("POI" in target.name.value for target in self.tab_data.main.targets.value)
@@ -487,7 +506,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     DragMixin._on_left_down(self, evt)
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    # TODO rename type
+                    # TODO rename type to PointOfInterest
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type="RegionOfInterest")
             elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
@@ -552,8 +571,8 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 DragMixin._on_motion(self, evt)
-                p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
-                # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 # self._selected_target = self.tab_data.main.currentTarget.value
                 self._selected_target.coordinates.value = [p_pos[0], p_pos[1],
                                                            self._selected_target.coordinates.value[2]]
@@ -596,8 +615,8 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
             if "FM" in target.name.value or "POI" in target.name.value:
-                coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
-                # coordinates = target.coordinates.value
+                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
+                coordinates = target.coordinates.value
                 half_size_offset = self.cnvs.get_half_buffer_size()
 
                 # convert physical position to buffer 'world' coordinates
@@ -666,8 +685,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
         for target in self.tab_data.main.targets.value:
             if "FIB" in target.name.value:
-                coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
-                # coordinates = target.coordinates.value
+                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
+                coordinates = target.coordinates.value
                 fvsp = self.cnvs.phys_to_view(coordinates, offset)
                 if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                     return target
@@ -679,8 +698,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 DragMixin._on_motion(self, evt)
-                p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
-                # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+                # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
                 # self._selected_target = self.tab_data.main.currentTarget.value
@@ -710,8 +729,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
-            p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
-            # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+            # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                 # Todo what does mode do
                 if self.tab_data.fib_surface_point.value:
@@ -761,9 +780,9 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             if self.left_dragging:
                 #TODO separate concerns if and else are not looking for same conditiond
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                    p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size()),
-                                                    1e-07)
-                    # p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+                    # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size()),
+                    #                                 1e-07)
+                    p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1],  int(0)]
                     self.cnvs.update_drawing()
                 else:
@@ -792,8 +811,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
             if "FIB" in target.name.value:# or "Projected" in target.name.value:
-                coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
-                # coordinates = target.coordinates.value
+                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
+                coordinates = target.coordinates.value
                 half_size_offset = self.cnvs.get_half_buffer_size()
 
                 # convert physical position to buffer 'world' coordinates
@@ -830,8 +849,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 ctx.paint()
 
         if self.tab_data.fib_surface_point.value:
-            coordinates = pixel_pos_to_canvas_pos(self.tab_data.fib_surface_point.value.coordinates.value, scale=1e-07)
-            # coordinates = self.tab_data.fib_surface_point.value.coordinates.value
+            # coordinates = pixel_pos_to_canvas_pos(self.tab_data.fib_surface_point.value.coordinates.value, scale=1e-07)
+            coordinates = self.tab_data.fib_surface_point.value.coordinates.value
             half_size_offset = self.cnvs.get_half_buffer_size()
             bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
                                                 self.cnvs.scale,
@@ -844,8 +863,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             ctx.paint()
 
         for target in self.tab_data.projected_points:
-            coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
-            # coordinates = target.coordinates.value
+            # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
+            coordinates = target.coordinates.value
             half_size_offset = self.cnvs.get_half_buffer_size()
 
             # convert physical position to buffer 'world' coordinates

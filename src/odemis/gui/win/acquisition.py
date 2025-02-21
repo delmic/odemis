@@ -1529,7 +1529,7 @@ class CorrelationDialog(xrcfr_correlation):
 
     def on_cancel(self, evt):
         """ Handle acquisition cancel button click """
-        logging.info("Cancel button clicked, exiting 3DCT correlation")
+        logging.info("Close button clicked, exiting 3DCT correlation")
         while self._correlation_points_controller.is_processing:
             continue
 
