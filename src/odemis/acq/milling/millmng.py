@@ -46,30 +46,20 @@ from odemis.acq.stream import FIBStream
 from odemis.util import executeAsyncTask
 
 
-class MillingTaskManager:
+class TFSMillingTaskManager:
     """This class manages running milling tasks."""
 
-    def __init__(self, future: Future, tasks: List[MillingTaskSettings]):
+    def __init__(self, future: Future, tasks: List[MillingTaskSettings], fib_stream: FIBStream):
         """
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
         """
 
-        self.microscope = model.getComponent(role="fibsem")
+        self.fibsem = model.getComponent(role="fibsem")
         self.tasks = tasks
 
-        # for reference image alignment,
-        self.ion_beam = model.getComponent(role="ion-beam")
-        self.ion_det = model.getComponent(role="se-detector-ion")
-        self.ion_focus = model.getComponent(role="ion-focus")
-
-        self.fib_stream = FIBStream(
-            name="FIB",
-            detector=self.ion_det,
-            dataflow=self.ion_det.data,
-            emitter=self.ion_beam,
-            focuser=self.ion_focus,
-        )
+        # for reference image alignment
+        self.fib_stream = fib_stream
 
         self._future = future
         if future is not None:
@@ -89,7 +79,7 @@ class MillingTaskManager:
                 return False
             future._task_state = CANCELLED
             future.running_subf.cancel()
-            self.microscope.stop_milling()
+            self.fibsem.stop_milling()
             logging.debug("Milling procedure cancelled.")
         return True
 
@@ -98,11 +88,10 @@ class MillingTaskManager:
         Estimates the milling time for the given patterns.
         :return: (float > 0): the estimated time is in seconds
         """
-        return self.microscope.estimate_milling_time()
+        return self.fibsem.estimate_milling_time()
 
     def run_milling(self, settings: MillingTaskSettings):
         """Run the milling task with the given settings. ThermoFisher implementation"""
-        microscope = self.microscope
 
         # get the milling settings
         milling_current = settings.milling.current.value
@@ -113,12 +102,10 @@ class MillingTaskManager:
         align_at_milling_current = settings.milling.align.value
 
         # get initial imaging settings
-        imaging_current = microscope.get_beam_current(milling_channel)
-        imaging_voltage = microscope.get_high_voltage(milling_channel)
-        imaging_fov = microscope.get_field_of_view(milling_channel)
+        imaging_current = self.fibsem.get_beam_current(milling_channel)
+        imaging_voltage = self.fibsem.get_high_voltage(milling_channel)
+        imaging_fov = self.fibsem.get_field_of_view(milling_channel)
 
-        # error management
-        e, ce = False, False
         try:
 
             # acquire a reference image at the imaging settings
@@ -128,12 +115,12 @@ class MillingTaskManager:
                 ref_image = data[0]
 
             # set the milling state
-            microscope.clear_patterns()
-            microscope.set_default_patterning_beam_type(milling_channel)
-            microscope.set_high_voltage(milling_voltage, milling_channel)
-            microscope.set_beam_current(milling_current, milling_channel)
-            # microscope.set_field_of_view(milling_fov, milling_channel) # tmp: disable until matched in gui
-            microscope.set_patterning_mode(milling_mode)
+            self.fibsem.clear_patterns()
+            self.fibsem.set_default_patterning_beam_type(milling_channel)
+            self.fibsem.set_high_voltage(milling_voltage, milling_channel)
+            self.fibsem.set_beam_current(milling_current, milling_channel)
+            # self.fibsem.set_field_of_view(milling_fov, milling_channel) # tmp: disable until matched in gui
+            self.fibsem.set_patterning_mode(milling_mode)
 
             # acquire a new image at the milling settings and align
             if align_at_milling_current:
@@ -145,49 +132,42 @@ class MillingTaskManager:
             # draw milling patterns to microscope
             for pattern in settings.generate():
                 if isinstance(pattern, RectanglePatternParameters):
-                    microscope.create_rectangle(pattern.to_json())
+                    self.fibsem.create_rectangle(pattern.to_dict())
                 else:
                     raise NotImplementedError(f"Pattern {pattern} not supported") # TODO: support other patterns
 
             # estimate the milling time
-            estimated_time = microscope.estimate_milling_time()
+            estimated_time = self.fibsem.estimate_milling_time()
             self._future.set_end_time(time.time() + estimated_time)
 
             # start patterning (async)
-            microscope.start_milling()
+            self.fibsem.start_milling()
 
             # wait for milling to finish
             elapsed_time = 0
             wait_time = 5
-            while microscope.get_patterning_state() == "Running":
+            while self.fibsem.get_patterning_state() == "Running":
 
                 with self._future._task_lock:
                     if self._future.cancelled() == CANCELLED:
                         raise CancelledError()
 
-                logging.info(f"Milling in progress... {elapsed_time} / {estimated_time}")
+                logging.debug(f"Milling in progress... elapsed time: {elapsed_time} s, estimated time:  {estimated_time} s")
                 time.sleep(wait_time)
                 elapsed_time += wait_time
 
         except CancelledError as ce:
-            logging.info(f"Cancelled milling: {ce}")
+            logging.debug(f"Cancelled milling: {ce}")
+            raise
         except Exception as e:
-            logging.error(f"Error while milling: {e}")
+            logging.exception(f"Error while milling: {e}")
+            raise
         finally:
             # restore imaging state
-            microscope.set_beam_current(imaging_current, milling_channel)
-            microscope.set_high_voltage(imaging_voltage, milling_channel)
-            microscope.set_field_of_view(imaging_fov, milling_channel)
-            #microscope.set_channel(milling_channel) # TODO: expose on server
-            microscope.set_active_view(2)
-            microscope.clear_patterns()
-
-            # we defer raising exceptions until we have restored the imaging state
-            # to avoid returning the microscope to user control at the milling current
-            if e:
-                raise e
-            if ce:
-                raise ce # future expects error to be raised
+            self.fibsem.set_beam_current(imaging_current, milling_channel)
+            self.fibsem.set_high_voltage(imaging_voltage, milling_channel)
+            self.fibsem.set_field_of_view(imaging_fov, milling_channel)
+            self.fibsem.clear_patterns()
         return
 
     def run(self):
@@ -197,13 +177,13 @@ class MillingTaskManager:
         self._future._task_state = RUNNING
 
         try:
-            for i, task in enumerate(self.tasks, 1):
+            for task in self.tasks:
 
                 with self._future._task_lock:
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
-                logging.info(f"Running milling task {i}/{len(self.tasks)}: {task.name}")
+                logging.debug(f"Running milling task: {task.name}")
 
                 self.run_milling(task)
                 logging.debug("The milling completed")
@@ -212,14 +192,14 @@ class MillingTaskManager:
             logging.debug("Stopping because milling was cancelled")
             raise
         except Exception:
-            logging.exception("The milling failed")
+            logging.warning("The milling failed")
             raise
         finally:
             self._future._task_state = FINISHED
 
 
 # TODO: replace with run_milling_tasks_openfibsem
-def run_milling_tasks(tasks: List[MillingTaskSettings]) -> Future:
+def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream) -> Future:
     """
     Run multiple milling tasks in order.
     :param tasks: List of milling tasks to be executed in order.
@@ -228,7 +208,7 @@ def run_milling_tasks(tasks: List[MillingTaskSettings]) -> Future:
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
     # create acquisition task
-    milling_task_manager = MillingTaskManager(future, tasks)
+    milling_task_manager = TFSMillingTaskManager(future, tasks, fib_stream)
     # add the ability of cancelling the future during execution
     future.task_canceller = milling_task_manager.cancel
 
