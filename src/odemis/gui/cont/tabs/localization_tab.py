@@ -123,7 +123,7 @@ class LocalizationTab(Tab):
         )
 
         self._acquisition_controller = acqcont.CryoAcquiController(
-            tab_data, panel, self)
+            tab_data, panel, self, mode=guimod.AcquiMode.FLM)
 
         self._acquired_stream_controller = CryoAcquiredStreamsController(
             tab_data,
@@ -134,7 +134,8 @@ class LocalizationTab(Tab):
             static=True,
         )
 
-        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+        self._feature_panel_controller = CryoFeatureController(tab_data, panel, self,
+                                                               mode=guimod.AcquiMode.FLM)
         self._zloc_controller = CryoZLocalizationController(tab_data, panel, self)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
         self.conf = conf.get_acqui_conf()
@@ -191,7 +192,7 @@ class LocalizationTab(Tab):
         elif self.main_data.role == "meteor":
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
-            self._allowed_targets = [FM_IMAGING, SEM_IMAGING]
+            self._allowed_targets = [FM_IMAGING]
             self._stage = self.tab_data_model.main.stage_bare
         elif self.main_data.role == "mimas":
             # Only useful near the active positions: milling (FIB) or FLM
