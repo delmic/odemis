@@ -276,7 +276,8 @@ class CryoGUIData(MicroscopyGUIData):
                 md = self.main.focus.getMetadata()
                 fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
         feature = CryoFeature(f_name, stage_position, fm_focus_position)
-        get_feature_position_at_posture(pm, feature, posture)
+        for p in pm.postures: # calculate the position at all postures
+            get_feature_position_at_posture(pm, feature, p)
 
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature

@@ -89,8 +89,8 @@ METEOR-FIBSEM-Sim: {
                 "pre-tilt":  0.6108652381980153, # 35°
                 "SEM-Eucentric-Focus": 7.0e-3, # aqulios=7.0e-3, hydra=4.0e-3
                 "use_linked_sem_focus_compensation": false,
-                "use_3d_transforms": false,
-                "use_scan_rotation": false,},
+                "use_3d_transforms": true,
+                "use_scan_rotation": true,},
         FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
         FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session
