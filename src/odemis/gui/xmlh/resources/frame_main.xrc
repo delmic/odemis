@@ -184,15 +184,15 @@
             </XRCED>
           </object>
         </object>
-        <object class="wxMenuItem" name="menu_item_import_from_autolamella">
-          <label>Import Features from AutoLamella</label>
+        <object class="wxMenuItem" name="menu_item_import_from_3dct">
+          <label>Import Milling Position from 3DCT</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <object class="wxMenuItem" name="menu_item_import_from_3dct">
-          <label>Import Milling Position from 3DCT</label>
+        <object class="wxMenuItem" name="menu_item_import_from_autolamella">
+          <label>Import Features from AutoLamella</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
