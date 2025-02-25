@@ -2803,7 +2803,7 @@ class SampleStage(model.Actuator):
                         model.MD_STAGE_POSITION_RAW: pos_dep}
                         )
             except Exception as e:
-                logging.error("Failed to update %s with new position: %s", a, e)
+                logging.error("Failed to update %s with new position: %s", comp, e)
 
         # update the SEM focus position when the stage is moved to compensate for linked behavior
         # TODO: update the self.sem_eucentric_focus when the user manually focuses.
