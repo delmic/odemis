@@ -553,20 +553,26 @@ class MeteorPostureManager(MicroscopePostureManager):
         # NOTE: not implemented yet
 
         # need to check if e-beam and ion-beam are available
-        # ebeam = model.getComponent(role='e-beam')
-        # sr = ebeam.rotation.value
-        # ion_beam = model.getComponent(role='ion-beam')
-        # ion_sr = ion_beam.rotation.value
-        # if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
-        #     raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
+        comps = model.getComponents()
+        if not all(role in comps for role in ["e-beam", "ion-beam"]):
+            logging.warning("e-beam and/or ion-beam not available, scan rotation will be set to 0")
+            sr = 0
+        else:
+            # check if e-beam and ion-beam have the same rotation
+            ebeam = model.getComponent(role='e-beam')
+            ion_beam = model.getComponent(role='ion-beam')
+            sr = ebeam.rotation.value
+            ion_sr = ion_beam.rotation.value
+            if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
+                raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
 
         if not self.use_scan_rotation:
             sr = 0
 
         # apply scan rotation (rotation around z axis of sample-stage)
         self._sr_matrix = np.array([[np.cos(sr), 0, 0],
-                                [0, np.cos(sr), 0],
-                                [0, 0, 1]])
+                                    [0, np.cos(sr), 0],
+                                    [0, 0, 1]])
         self._sr_matrix_inv = np.linalg.inv(self._sr_matrix)
 
     def _get_stage_pos(self, sample_val: Dict[str, float], absolute: bool = True) -> Dict[str, float]:
@@ -885,6 +891,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         comp = model.getComponent(name="Linked YZ")
         self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+        self.postures = [SEM_IMAGING, FM_IMAGING, MILLING]
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
