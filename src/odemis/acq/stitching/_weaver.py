@@ -48,6 +48,7 @@ class Weaver(metaclass=ABCMeta):
         self.tbbx_px = None  # the bounding boxes of each tile in pixel coordinates
         self.gbbx_px = None  # the global bounding box of the weaved image in pixel coordinates
         self.gbbx_phy = None  # the global bounding box of the weaved image in physical coordinates
+        self.stage_bare_pos = None # the stage-bare position of the weaved image
 
     def addTile(self, tile):
         """
@@ -93,7 +94,7 @@ class Weaver(metaclass=ABCMeta):
             tiles.append(img.rotate_img_metadata(tile, -rotation, center_of_rot))
         self.tiles = tiles
 
-        self.tbbx_px, self.gbbx_px, self.gbbx_phy = self.get_bounding_boxes(self.tiles)
+        self.tbbx_px, self.gbbx_px, self.gbbx_phy, self.stage_bare_pos = self.get_bounding_boxes(self.tiles)
         im = self.weave_tiles()
         md = self.get_final_metadata(self.tiles[0].metadata.copy())
         weaved_image = img.rotate_img_metadata(model.DataArray(im, md), rotation, center_of_rot)
@@ -127,6 +128,7 @@ class Weaver(metaclass=ABCMeta):
         pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
 
         tbbx_phy = []  # tuples of ltrb in physical coordinates
+        stage_bare_coords = []  # dict of stage-bare coordinates
         for t in tiles:
             c = t.metadata[model.MD_POS]
             w = t.shape[-1], t.shape[-2]
@@ -137,6 +139,17 @@ class Weaver(metaclass=ABCMeta):
                    c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
 
             tbbx_phy.append(bbx)
+
+            # add the stage-bare position
+            sbc = t.metadata.get(model.MD_STAGE_POSITION_RAW, None)
+            if sbc is not None:
+                stage_bare_coords.append(copy.deepcopy(sbc))
+
+        # get the mean of stage-bare coords for each axis
+        mean_stage_bare_pos = None
+        if stage_bare_coords:
+            axes = stage_bare_coords[0].keys()
+            mean_stage_bare_pos = {k: numpy.mean([r[k] for r in stage_bare_coords]) for k in axes}
 
         gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
                     max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
@@ -161,7 +174,7 @@ class Weaver(metaclass=ABCMeta):
         if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
             # Overlap > 50% or missing tiles
             logging.warning("Global area much bigger than sum of tile areas")
-        return tbbx_px, gbbx_px, gbbx_phy
+        return tbbx_px, gbbx_px, gbbx_phy, mean_stage_bare_pos
 
     def get_final_metadata(self, md: dict) -> dict:
         """
@@ -178,6 +191,15 @@ class Weaver(metaclass=ABCMeta):
 
         md[model.MD_POS] = c_phy
         md[model.MD_DIMS] = "YX"
+
+        # add stage bare position to metadata if available
+        if self.stage_bare_pos is not None:
+            md[model.MD_STAGE_POSITION_RAW] = self.stage_bare_pos
+            try: # might not be present, but required for meteor
+                md[model.MD_EXTRA_SETTINGS]["Stage"]["position"][0] = self.stage_bare_pos
+            except KeyError:
+                pass
+
         return md
 
     def _adjust_brightness(self, tile, tiles):
