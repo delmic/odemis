@@ -25,26 +25,6 @@ import wx
 from odemis.util.conversion import (frgb_to_rgb, hex_to_frgb, hex_to_rgb,
                                     rgb_to_frgb)
 
-def canvas_pos_to_pixel_pos(canvas_pos, scale, offset=(0, 0)):
-    """ Convert canvas position to pixel position
-    :param canvas_pos: (float, float)
-    :param scale: float
-    :param offset: (float, float)
-    :return: (float, float)
-    """
-    return ((canvas_pos[0] - offset[0]) / scale,
-            (canvas_pos[1] - offset[1]) / scale)
-
-def pixel_pos_to_canvas_pos(pixel_pos, scale, offset = (0,0)):
-    """ Convert pixel position to canvas position
-    :param pixel_pos: (float, float)
-    :param scale: float
-    :param offset: (float, float)
-    :return: (float, float)
-    """
-    return (pixel_pos[0] * scale + offset[0],
-            pixel_pos[1] * scale + offset[1])
-
 
 def wxcol_to_rgb(wxcol):
     """ Convert a wx.Colour to an RGB int tuple

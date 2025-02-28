@@ -594,21 +594,15 @@ class CorrelationPointsController(object):
 
                 index_max = max(indices)
                 assert 1 <= int(new_value) <= index_max
-                self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
-                self._tab_data_model.main.currentTarget.value.name.value = current_name[:-1] + str(new_value)
-                # todo grid set value shouldn't be used, use VA connector and disconnector
-                self.grid.SetCellValue(current_row_count, GridColumns.Type.value,
-                                       self._tab_data_model.main.currentTarget.value.name.value)
-
                 if target_swap:
-                    for row in range(self.grid.GetNumberRows()):
-                        if self.grid.GetCellValue(row,
-                                                  GridColumns.X.value) == f"{target_swap.coordinates.value[0]:.{GRID_PRECISION}f}":
-                            self._tab_data_model.main.targets.value.remove(target_swap)
-                            break
                     target_swap.index.value = current_index
                     target_swap.name.value = current_name[:-1] + str(target_swap.index.value)
-                    self._tab_data_model.main.targets.value.append(target_swap)
+                    self._on_target_changes(self._tab_data_model.main.targets.value)
+                    self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
+                    self._tab_data_model.main.currentTarget.value.name.value = current_name[:-1] + str(new_value)
+                    # todo grid set value shouldn't be used, use VA connector and disconnector
+                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value,
+                                           self._tab_data_model.main.currentTarget.value.name.value)
                     self._tab_data_model.main.currentTarget.value = None
 
                 for vp in self._viewports:
@@ -670,7 +664,6 @@ class CorrelationPointsController(object):
         for row in range(self.grid.GetNumberRows()):
             if self.selected_target_in_grid(target, row):
                 self.grid.SelectRow(row)
-                self.reorder_table()
                 break
 
         if self._tab_data_model.main.currentTarget.value and not self.current_target_coordinate_subscription:
@@ -680,7 +673,6 @@ class CorrelationPointsController(object):
             self.current_target_coordinate_subscription = True
 
     def _on_current_fib_surface(self, fib_surface_fiducial):
-        # todo can be done in intialization
         if self._tab_data_model.fib_surface_point.value:
             self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface, init=True)
 

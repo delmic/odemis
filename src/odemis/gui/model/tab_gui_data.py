@@ -548,41 +548,19 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
                 # get the last digit of the t_name
                 # TODO limited to 9 fiducial pairs
                 index = int(t_name[-1])
-                # TOdo only static stream which is selected
-
-                if DEBUG:
-                    z = 10
-                    target = Target(x, y, z, name=t_name, type=type,
-                                    index=index, fm_focus_position=fm_focus_position)
-
-                else:
-                    for s in self.streams.value:
-                        if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                            z = s.zIndex.value
-                            target = Target(x, y, z, name=t_name, type=type,
-                                            index=index, fm_focus_position=fm_focus_position)
-                            break
+                for s in self.streams.value:
+                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        target = Target(x, y, z, name=t_name, type=type,
+                                        index=index, fm_focus_position=fm_focus_position)
+                        break
             elif type == "RegionOfInterest":
-                # t_name = make_unique_name("POI-1", existing_names)
-                # # get the last digit of the t_name
-                # # TODO limited to 9 fiducial pairs
-                # index = int(t_name[-1])
-                # TOdo only static stream which is selected, only add 1 poi
-                if DEBUG:
-                    z = 10
-                    target = Target(x, y, z, name="POI-1", type=type,
-                                    index=1, fm_focus_position=fm_focus_position)
-                    # self.fm_poi.value = target
-                    # return target
-                else:
-                    for s in self.streams.value:
-                        if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                            z = s.zIndex.value
-                            target = Target(x, y, z, name="POI-1", type=type,
-                                            index=1, fm_focus_position=fm_focus_position)
-                            # self.fm_poi.value = target
-                            # TODO is it ok to retiren in for loop
-                            # return target
+                # TODO limited to 9 fiducial pairs
+                for s in self.streams.value:
+                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
+                        z = s.zIndex.value
+                        target = Target(x, y, z, name="POI-1", type=type,
+                                        index=1, fm_focus_position=fm_focus_position)
 
         elif self.focussedView.value.name.value == "SEM Overview":
             if type == "SurfaceFiducial":

@@ -1330,29 +1330,10 @@ class CorrelationDialog(xrcfr_correlation):
         main_data = orig_tab_data.main
         tab_data = guimod.CryoTdctCorrelationGUIData(main_data)
         self.tab_data = tab_data
-        # super().__init__(name, button, panel, main_frame, tab_data)
-
-        # self.main_data = main_data
-
-        # create the views, view_controller, and then add streams
 
         vpv = self._create_views(self.pnl_correlation_grid.viewports)
-        # vpv = self._create_views(self.main_data, self.pnl_secom_grid.viewports)
         self.view_controller = viewcont.ViewPortController(tab_data, None, vpv)
 
-        # Connect the view selection buttons
-        # buttons = collections.OrderedDict([
-        #     (panel.btn_correlation_view_all,
-        #      (None, panel.lbl_correlation_view_all)),
-        #     (panel.btn_correlation_view_tl,
-        #      (panel.vp_correlation_tl, panel.lbl_correlation_view_tl)),
-        #     (panel.btn_correlation_view_tr,
-        #      (panel.vp_correlation_tr, panel.lbl_correlation_view_tr)),
-        #     (panel.btn_correlation_view_bl,
-        #      (panel.vp_correlation_bl, panel.lbl_correlation_view_bl)),
-        #     (panel.btn_correlation_view_br,
-        #      (panel.vp_correlation_br, panel.lbl_correlation_view_br)),
-        # ])
         self.vp_correlation_tl.canvas.cryotarget_fm_overlay.active.value = True
         self.vp_correlation_tl.canvas.add_world_overlay(
             self.vp_correlation_tl.canvas.cryotarget_fm_overlay)
@@ -1385,19 +1366,7 @@ class CorrelationDialog(xrcfr_correlation):
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
-
-        # # # make sure the view displays the same thing as the one we are
-        # # # duplicating
-        # # self._view.view_pos.value = orig_view.view_pos.value
-        # # self._view.mpp.value = orig_view.mpp.value
-        # # self._view.merge_ratio.value = orig_view.merge_ratio.value
-        # #
-        # # # attach the view to the viewport
-        # # self.pnl_view_acq.canvas.fit_view_to_next_image = False
-        # # self.pnl_view_acq.setView(self._view, self._tab_data_model)
-        # #
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
-        # # self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_cancel)
 
     def _on_add_file(self) -> None:
