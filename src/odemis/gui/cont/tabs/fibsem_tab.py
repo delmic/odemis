@@ -320,9 +320,9 @@ class FibsemTab(Tab):
             self.panel.vp_secom_bl.canvas.fit_to_bbox(bbox)
 
         # sync overview streams with correlation tab
-        # if len(streams) > 0 and self.main_data.role == "meteor":
-            # correlation_tab = self.main_data.getTabByName("meteor-correlation")
-            # correlation_tab.correlation_controller.add_streams(streams)
+        if len(streams) > 0 and self.main_data.role == "meteor":
+            correlation_tab = self.main_data.getTabByName("meteor-correlation")
+            correlation_tab.correlation_controller.add_streams(streams)
 
     def on_dbl_click(self, evt):
 

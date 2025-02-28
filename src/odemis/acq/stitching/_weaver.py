@@ -95,6 +95,7 @@ class Weaver(metaclass=ABCMeta):
         self.tiles = tiles
 
         self.tbbx_px, self.gbbx_px, self.gbbx_phy, self.stage_bare_pos = self.get_bounding_boxes(self.tiles)
+
         im = self.weave_tiles()
         md = self.get_final_metadata(self.tiles[0].metadata.copy())
         weaved_image = img.rotate_img_metadata(model.DataArray(im, md), rotation, center_of_rot)
@@ -129,6 +130,7 @@ class Weaver(metaclass=ABCMeta):
 
         tbbx_phy = []  # tuples of ltrb in physical coordinates
         stage_bare_coords = []  # dict of stage-bare coordinates
+
         for t in tiles:
             c = t.metadata[model.MD_POS]
             w = t.shape[-1], t.shape[-2]
