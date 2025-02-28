@@ -62,8 +62,6 @@ class GridColumns(Enum):
 
 GRID_PRECISION = 2
 
-DEBUG = False
-
 
 class CorrelationPointsController(object):
 
@@ -381,30 +379,18 @@ class CorrelationPointsController(object):
 
     def check_correlation_conditions(self):
         if self.correlation_target:
-            if not DEBUG:
-                if (len(self.correlation_target.fib_fiducials) >= 4 and len(
-                        self.correlation_target.fm_fiducials) >= 4 and self.correlation_target.fm_pois and len(
-                    self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream:
-                    return True
-                else:
-                    self.correlation_target.reset_attributes()
-                    self._tab_data_model.projected_points = []
-                    self.correlation_txt.SetLabel("Correlation RMS Deviation :")
-                    for vp in self._viewports:
-                        if vp.view.name.value == "SEM Overview":
-                            vp.canvas.update_drawing()
-                    return False
+            if (len(self.correlation_target.fib_fiducials) >= 4 and len(
+                    self.correlation_target.fm_fiducials) >= 4 and self.correlation_target.fm_pois and len(
+                self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream:
+                return True
             else:
-                if len(self.correlation_target.fib_fiducials) >= 1 and self.correlation_target.fm_fiducials and self.correlation_target.fib_surface_fiducial:
-                    return True
-                else:
-                    self.correlation_target.reset_attributes()
-                    self._tab_data_model.projected_points = []
-                    self.correlation_txt.SetLabel("Correlation RMS Deviation :")
-                    for vp in self._viewports:
-                        if vp.view.name.value == "SEM Overview":
-                            vp.canvas.update_drawing()
-                    return False
+                self.correlation_target.reset_attributes()
+                self._tab_data_model.projected_points = []
+                self.correlation_txt.SetLabel("Correlation RMS Deviation :")
+                for vp in self._viewports:
+                    if vp.view.name.value == "SEM Overview":
+                        vp.canvas.update_drawing()
+                return False
         else:
             return False
 
@@ -553,6 +539,10 @@ class CorrelationPointsController(object):
             if self.selected_target_in_grid(target, row):
                 self._tab_data_model.main.currentTarget.value = target
                 break
+
+        for vp in self._viewports:
+            vp.canvas.update_drawing()
+            
         # highlight the selected row
         self.grid.SelectRow(event.GetRow())
         event.Skip()
@@ -666,6 +656,9 @@ class CorrelationPointsController(object):
                 self.grid.SelectRow(row)
                 break
 
+        for vp in self._viewports:
+            vp.canvas.update_drawing()
+
         if self._tab_data_model.main.currentTarget.value and not self.current_target_coordinate_subscription:
             self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
                                                                                 init=True)
@@ -761,6 +754,10 @@ class CorrelationPointsController(object):
         self.reorder_table()
         self._panel.Layout()
         self.update_feature_correlation_target()
+
+        for vp in self._viewports:
+            vp.canvas.update_drawing()
+
         if self.check_correlation_conditions():
             self.latest_change = True
             self.queue_latest_change()

@@ -489,9 +489,6 @@ class CryoLocalizationGUIData(CryoGUIData):
             config.fn_count)
 
 
-DEBUG = False
-
-
 class CryoCorrelationGUIData(CryoGUIData):
     """ Represent an interface used to correlate multiple streams together.
 
@@ -539,7 +536,6 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
         self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
 
     def add_new_target(self, x, y, type, z=None, t_name=None):
-        z = None
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
         if self.focussedView.value.name.value == "FLM Overview":

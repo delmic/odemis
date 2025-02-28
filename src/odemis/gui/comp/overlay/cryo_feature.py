@@ -41,7 +41,6 @@ MODE_SHOW_FEATURES = 2
 FEATURE_DIAMETER = 30  # pixels
 FEATURE_ICON_CENTER = 17  # pixels
 
-#TODO how the numbers are decided
 MODE_EDIT_FIDUCIALS = 5
 MODE_SHOW_FIDUCIALS = 6
 MODE_EDIT_REFRACTIVE_INDEX = 3
@@ -310,19 +309,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         "RegionOfInterest": cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_selected.png'))}
 
-        # Shifting the overlay from panel to a pop up dialog box has slightly changed the behavior of the overlay
-        # While adding fiducials in another view than the selected view, the fiducial are added in the selected view
-        # Either the fidcucials not be added to the selected view or the selected view should be changed
-        # to the view the fiducials are added
-        # TODO fix the behavior of the overlay
-        if not hasattr(self.tab_data.main, "targets"):
-            raise ValueError("CryoTargetsOverlay requires target VA.")
-        self.tab_data.main.targets.subscribe(self._on_target_changes)
-        if not hasattr(self.tab_data.main, "currentTarget"):
-            raise ValueError("CryoFeatureOverlay requires currentTarget VA.")
-        self.tab_data.main.currentTarget.subscribe(self._on_current_target_va)
-
-        # self._selected_target = None
         self._hover_target = None
         self._label = self.add_label("")
         self.current_target_coordinate_subscription = False
@@ -338,25 +324,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 self._mode = MODE_EDIT_POI
             else:
                 self._mode = MODE_SHOW_FIDUCIALS
-
-    def _on_current_target_va(self, _):
-        # Redraw when the current feature is changed, as it's displayed differently
-        wx.CallAfter(self.cnvs.request_drawing_update)
-        if self.tab_data.main.currentTarget.value and not self.current_target_coordinate_subscription:
-            self.tab_data.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
-                                                                                init=True)
-            self.current_target_coordinate_subscription = True
-            # subscribe only once
-
-    # @call_in_wx_main
-    def _on_current_coordinates_changes(self, coordinates):
-        # Redraw when the current feature is changed, as it's displayed differently
-        self.current_target_coordinate_subscription = False
-        wx.CallAfter(self.cnvs.request_drawing_update)
-
-    def _on_target_changes(self, features):
-        # Redraw if a feature is added/removed
-        wx.CallAfter(self.cnvs.request_drawing_update)
 
     def on_left_down(self, evt):
         """
@@ -381,7 +348,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         Update the selected target with the newly moved position
         :param v_pos: (int, int) the coordinates in the view
         """
-        # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
         self._selected_feature.pos.value = [p_pos[0], p_pos[1], self._selected_feature.pos.value[2]]
         # Reset the selected tool to signal end of feature moving operation
@@ -418,7 +384,6 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
         for target in self.tab_data.main.targets.value:
             if "FM" in target.name.value or "POI" in target.name.value:
-                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale = 1e-07)
                 coordinates = target.coordinates.value
                 fvsp = self.cnvs.phys_to_view(coordinates, offset)
                 if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
@@ -432,17 +397,10 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
-
-            correlation_target = self.tab_data.main.currentFeature.value.correlation_targets[
-                self.tab_data.main.currentFeature.value.status.value]
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_POI:
-                # Todo what does mode do
                 check_existing_poi = any("POI" in target.name.value for target in self.tab_data.main.targets.value)
                 if check_existing_poi:
-                    # add/modify fib_surface_fiducial
-                    # self.tab_data.fm_poi.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
-                    # self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                     self.tab_data.main.currentTarget.value = target
                     self._selected_target = target
                     DragMixin._on_left_down(self, evt)
@@ -478,27 +436,16 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         otherwise let the canvas handle the event when the overlay is active.
         """
         if self.active.value:
-            # evt.Skip()
             DragMixin._on_left_up(self, evt)
             self.clear_drag()
             self.cnvs.update_drawing()
             self.cnvs.reset_dynamic_cursor()
             if self.left_dragging:
-                # TODO separate concerns if and else are not looking for same conditiond
-                # if self._mode == MODE_EDIT_POI:
-                #     p_pos = canvas_pos_to_pixel_pos(
-                #         self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size()),
-                #         1e-07)
-                #     # p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-                #     self.tab_data.fm_poi.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
-                #     self.cnvs.update_drawing()
-                # else:
                 if self._selected_target:
                     self._update_selected_target_position(evt.Position)
             else:
                 WorldOverlay.on_left_up(self, evt)
             self._selected_tool_va.value = TOOL_NONE
-            # self.tab_data.main.selected_target_type.value = "Fiducial"
         else:
             WorldOverlay.on_left_up(self, evt)
 
@@ -509,7 +456,6 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 DragMixin._on_motion(self, evt)
-                # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
                 p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 self._selected_target.coordinates.value = [p_pos[0], p_pos[1],
                                                            self._selected_target.coordinates.value[2]]
@@ -539,7 +485,6 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
             if "FM" in target.name.value or "POI" in target.name.value:
-                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
                 coordinates = target.coordinates.value
                 half_size_offset = self.cnvs.get_half_buffer_size()
 
@@ -591,7 +536,6 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
         for target in self.tab_data.main.targets.value:
             if "FIB" in target.name.value:
-                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
                 coordinates = target.coordinates.value
                 fvsp = self.cnvs.phys_to_view(coordinates, offset)
                 if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
@@ -604,11 +548,9 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 DragMixin._on_motion(self, evt)
-                # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
                 p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
-                # self._selected_target = self.tab_data.main.currentTarget.value
                 else:
                     self._selected_target.coordinates.value = [p_pos[0], p_pos[1],  self._selected_target.coordinates.value[2]]
                 self.cnvs.update_drawing()
@@ -635,16 +577,13 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         if self.active.value:
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
-            # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size()), 1e-07)
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                # Todo what does mode do
                 if self.tab_data.fib_surface_point.value:
                     # add/modify fib_surface_fiducial
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    # TODO rename type
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type="SurfaceFiducial")
             elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
@@ -654,11 +593,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     DragMixin._on_left_down(self, evt)
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    # create new target based on the physical position then disable the target tool
-                    # p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                    # if self.tab_data.main.selected_target_type is None:
-                    #     self.tab_data.main.selected_target_type.value = "Fiducial"
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="Fiducial") #TODO
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="Fiducial")
                     # self._selected_tool_va.value = TOOL_NONE
 
             else:
@@ -684,10 +619,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             self.cnvs.update_drawing()
             self.cnvs.reset_dynamic_cursor()
             if self.left_dragging:
-                #TODO separate concerns if and else are not looking for same conditiond
+                #TODO separate concerns if and else are not looking for same conditions
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                    # p_pos = canvas_pos_to_pixel_pos(self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size()),
-                    #                                 1e-07)
                     p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1],  int(0)]
                     self.cnvs.update_drawing()
@@ -707,17 +640,9 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         """
         if not self.show:
             return
-
-        # Check if the current view is "FLM Overview"
-        # if hasattr(self.tab_data, "focussedView"):
-        #     current_view = self.tab_data.focussedView.value.name.value
-        #     if current_view != "SEM Overview":
-        #         return
-
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
-            if "FIB" in target.name.value:# or "Projected" in target.name.value:
-                # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
+            if "FIB" in target.name.value:
                 coordinates = target.coordinates.value
                 half_size_offset = self.cnvs.get_half_buffer_size()
 
@@ -755,7 +680,6 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 ctx.paint()
 
         if self.tab_data.fib_surface_point.value:
-            # coordinates = pixel_pos_to_canvas_pos(self.tab_data.fib_surface_point.value.coordinates.value, scale=1e-07)
             coordinates = self.tab_data.fib_surface_point.value.coordinates.value
             half_size_offset = self.cnvs.get_half_buffer_size()
             bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
@@ -769,7 +693,6 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             ctx.paint()
 
         for target in self.tab_data.projected_points:
-            # coordinates = pixel_pos_to_canvas_pos(target.coordinates.value, scale=1e-07)
             coordinates = target.coordinates.value
             half_size_offset = self.cnvs.get_half_buffer_size()
 
