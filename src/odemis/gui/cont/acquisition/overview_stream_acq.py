@@ -104,7 +104,7 @@ class OverviewStreamAcquiController(object):
 
 
 class CorrelationDialogController(object):
-    """Controller to handle the multi point correlation initialization"""
+    """Controller to handle the multipoint correlation (3DCT) initialization"""
 
     def __init__(self, tab_data, tab):
         """
@@ -141,17 +141,16 @@ class CorrelationDialogController(object):
 
         # create the dialog
         try:
-            # TODO increase the size of the dialog for better views
             acq_dialog = CorrelationDialog(
                 self._tab.main_frame, self._tab_data_model)
-            parent_size = [v * 0.77 for v in self._tab.main_frame.GetSize()]
+            parent_size = [v * 0.9 for v in self._tab.main_frame.GetSize()]
 
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
-            action = acq_dialog.ShowModal()
+            acq_dialog.ShowModal()
 
         except Exception:
-            logging.exception("Failed to create acquisition dialog")
+            logging.exception("Failed to create 3DCT dialog")
             raise
         finally:
             apply_preset(orig_settings)
@@ -164,8 +163,3 @@ class CorrelationDialogController(object):
 
             self._main_data_model.is_acquiring.value = False
             acq_dialog.Destroy()
-
-        # if action == wx.ID_OPEN:
-        #     return acq_dialog.data
-        # else:
-        #     return None

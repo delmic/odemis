@@ -37,10 +37,9 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview,
                                   get_tiled_bboxes, get_stream_based_bbox,
                                   get_zstack_levels)
-import odemis.acq.stream as acqstream
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
-                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream, StaticStream)
+                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
 from odemis.gui import conf
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 
@@ -55,7 +54,7 @@ from odemis.gui.cont.settings import (LocalizationSettingsController,
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
 import odemis.gui.model as guimod
-from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, MicroscopyGUIData, TOOL_ACT_ZOOM_FIT
+from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 import odemis.gui.util as guiutil
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
@@ -63,7 +62,6 @@ from odemis.gui.util.conversion import sample_positions_to_layout
 import odemis.gui.cont.views as viewcont
 from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
-from odemis.model import ListVA
 from odemis.util import units
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_filename, guess_pattern, update_counter
@@ -1321,9 +1319,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
 class CorrelationDialog(xrcfr_correlation):
     """
-    Class used to control the overview acquisition dialog
-    The data acquired is stored in a file, with predefined name, available on
-      .filename and it is opened (as pyramidal data) in .data .
+    Initialize the controllers for CorrelationDialog box.
     """
     def __init__(self,  parent, orig_tab_data):
         xrcfr_correlation.__init__(self, parent)
@@ -1351,13 +1347,7 @@ class CorrelationDialog(xrcfr_correlation):
         self.streambar_controller.add_action("From file...", self._on_add_file)
 
         # correlation points controller
-        # TODO remove two selfs?
-        self._correlation_points_controller = CorrelationPointsController(
-            tab_data,
-            self,
-            self,
-            self.pnl_correlation_grid.viewports
-        )
+        self._correlation_points_controller = CorrelationPointsController(self)
 
         # Toolbar
         self.tb = self.correlation_toolbar
@@ -1376,14 +1366,10 @@ class CorrelationDialog(xrcfr_correlation):
         """
         self.select_acq_file(True)
 
-    def select_acq_file(self, extend: bool = False, tileset: bool = False):
-        """ Open an image file using a file dialog box
-
-        extend (bool): if False, will ensure that the previous streams are closed.
-        If True, will add the new file to the current streams opened.
-        tileset (bool): if True, open files as tileset and stitch together
-        return (boolean): True if the user did pick a file, False if it was
-        cancelled.
+    def select_acq_file(self, extend: bool = False):
+        """
+        Open an image file using a file dialog box
+        :return: True if the user did pick a file, False if it was cancelled.
         """
         # Find the available formats (and corresponding extensions)
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
@@ -1391,7 +1377,7 @@ class CorrelationDialog(xrcfr_correlation):
         path = acq_conf.last_path
 
         wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
-        msg = "Choose a file to load" if not tileset else "Choose a tileset to load"
+        msg = "Choose a file to load"
         dialog = wx.FileDialog(self,
                             message=msg,
                             defaultDir=path,
@@ -1406,35 +1392,28 @@ class CorrelationDialog(xrcfr_correlation):
         # Detect the format to use
         fmt = formats[dialog.GetFilterIndex()]
 
-        if tileset:
-            filenames = dialog.GetPaths()
-            self.load_tileset(filenames, extend=extend)
-        else:
-            for filename in dialog.GetPaths():
-                if extend:
-                    logging.debug("Extending the streams with file %s", filename)
-                else:
-                    logging.debug("Current file set to %s", filename)
+        for filename in dialog.GetPaths():
+            logging.debug("Current file set to %s", filename)
+            self.load_data(filename, fmt)
 
-                self.load_data(filename, fmt, extend=extend)
-                extend = True  # If multiple files loaded, the first one is considered main one
-
-    def load_data(self, filename: str, fmt: str = None, extend: bool = False) -> None:
+    def load_data(self, filename: str, fmt: str = None) -> None:
+        """
+        Load the data from the file and add it to the current streams
+        :param filename: name of the file to load
+        :param fmt: format of the file to load
+        """
         data = open_acquisition(filename, fmt)
         self.load_streams(data)
 
-    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
-        pass
-
     @call_in_wx_main
     def load_streams(self, data: List[model.DataArray]) -> None:
-        """ Load the data in the overview viewports
+        """
+        Load the data in the overview viewports
         :param data: (list[model.DataArray]) list of data arrays to load as streams
         """
-
         # Create streams from data, add to correlation controller
         streams = data_to_static_streams(data)
-        self.correlation_points_controller.add_streams(streams)
+        self.correlation_points_controller.group_add_streams(streams)
 
         # fit to content
         for vp in self.pnl_correlation_grid.viewports:
@@ -1449,7 +1428,6 @@ class CorrelationDialog(xrcfr_correlation):
         Create views depending on the actual hardware present
         return OrderedDict: as needed for the ViewPortController
         """
-        # Acquired data at the top, live data at the bottom
         # TODO change SEM Overview to FIB?
         vpv = collections.OrderedDict([
             (viewports[0], # focused view
@@ -1469,11 +1447,6 @@ class CorrelationDialog(xrcfr_correlation):
         """
         # Ensure we don't update the view after the window is destroyed
         self.streambar_controller.clear()
-
-        # TODO: need to have a .clear() on the settings_controller to clean up?
-        # self._settings_controller = None
-        # self._acq_streams = {}  # also empty the cache
-
         gc.collect()  # To help reclaiming some memory
 
     def terminate_listeners(self):
@@ -1483,27 +1456,22 @@ class CorrelationDialog(xrcfr_correlation):
         """
         # stop listening to events
         self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
-        # self.stop_listening_to_va()
-
         self.remove_all_streams()
         # Set the streambar controller to None so it wouldn't be a listener to stream.remove
         self.streambar_controller = None
 
     def on_close(self, evt):
-        """ Close event handler that executes various cleanup actions
-        """
+        """Close event handler that executes various cleanup actions"""
         assert self._correlation_points_controller.is_processing == False
 
         self.EndModal(wx.ID_CANCEL)
 
     def on_cancel(self, evt):
-        """ Handle acquisition cancel button click """
+        """Handle acquisition cancel button click"""
         logging.info("Close button clicked, exiting 3DCT correlation")
         while self._correlation_points_controller.is_processing:
             continue
-
         self.remove_all_streams()
-
         self.on_close(evt)
 
 

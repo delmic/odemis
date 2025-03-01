@@ -361,12 +361,9 @@ class MainGUIData(object):
                 self.features = model.ListVA()
                 # VA for the currently selected feature
                 self.currentFeature = model.VigilantAttribute(None)
+                # VAs for currently selected targets
                 self.targets = model.ListVA()
                 self.currentTarget = model.VigilantAttribute(None)
-                # self.selected_target_type = model.StringEnumerated("Fiducial", {"Fiducial", "RegionOfInterest", "ProjectedPoints","ProjectedPOI", "SurfaceFiducial"})
-                # self.fm_fiducial_index = model.IntVA(0)
-                # self.fib_fiducial_index = model.IntVA(0)
-                # self.fm_poi_index = model.IntVA(0)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
             self.settings_obs = acqmng.SettingsObserver(microscope, comps_with_role)

@@ -29,7 +29,6 @@ import os.path
 from typing import List, Optional
 import wx
 
-from odemis.acq.target import Target
 from odemis.gui import conf
 
 from odemis import dataio
@@ -46,7 +45,7 @@ from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
-import wx.grid
+
 
 class CorrelationTab(Tab):
 
@@ -80,7 +79,6 @@ class CorrelationTab(Tab):
                 (panel.vp_correlation_br, panel.lbl_correlation_view_br)),
         ])
 
-
         # view selector
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
@@ -98,7 +96,7 @@ class CorrelationTab(Tab):
 
         self._streambar_controller.add_action("From file...", self._on_add_file)
         self._streambar_controller.add_action("From tileset...", self._on_add_tileset)
-
+        self.panel.fp_correlation_streams.Show(True) # show stream bar panel always
 
         # correlation controller
         self._correlation_controller = CorrelationController(

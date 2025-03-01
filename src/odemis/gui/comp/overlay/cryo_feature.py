@@ -314,7 +314,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         self.current_target_coordinate_subscription = False
 
     def _on_tool(self, selected_tool):
-        """ Update the feature mode (show or edit) when the overlay is active and tools change"""
+        """ Update the relevant mode (show or edit) when the overlay is active and tools change"""
         if self.active.value:
             if selected_tool == TOOL_FIDUCIAL:
                     self._mode = MODE_EDIT_FIDUCIALS
@@ -327,7 +327,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
 
     def on_left_down(self, evt):
         """
-        Handle mouse left click down: Create/Move feature if feature tool is toggled,
+        Handle mouse left click down: Create/Move targets if the tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
         pass
@@ -349,7 +349,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         :param v_pos: (int, int) the coordinates in the view
         """
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-        self._selected_feature.pos.value = [p_pos[0], p_pos[1], self._selected_feature.pos.value[2]]
+        self._selected_target.pos.value = [p_pos[0], p_pos[1], self._selected_feature.pos.value[2]]
         # Reset the selected tool to signal end of feature moving operation
         # self._selected_tool_va.value = TOOL_NONE
         self.cnvs.update_drawing()
@@ -358,16 +358,17 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         """
         Detect if a given point is over a target
         :param v_pos: (int, int) Point in view coordinates
-        :return: (CryoFeature or None) Found target, None if not found
+        :return: (Target or None) Found target, None if not found
         """
 
         pass
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
-        Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
+        Draw all the targets, on their location, indicating their status.
         """
         pass
+
 
 class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
@@ -375,7 +376,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         """
         Detect if a given point is over a target
         :param v_pos: (int, int) Point in view coordinates
-        :return: (CryoFeature or None) Found target, None if not found
+        :return: (Target or None) Found target, None if not found
         """
 
         def in_radius(c_x, c_y, r, x, y):
@@ -417,16 +418,11 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1],
-                                                 type="Fiducial")  # TODO
-                    # self._selected_tool_va.value = TOOL_NONE
+                                                 type="Fiducial")
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
-                # self._selected_target = target
-                # self._selected_tool_va.value = TOOL_NONE
-                # STOP THE DRAGGING of the canvas
                 evt.Skip()
-                # WorldOverlay.on_left_down(self, evt)
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -463,21 +459,17 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 return
             target = self._detect_point_inside_target(v_pos)
             if target:
-                # self._hover_target = target
-                # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
                 return
             else:
                 if self._mode == MODE_EDIT_FIDUCIALS or self._mode == MODE_EDIT_POI:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
                 else:
                     return
-                #     self.cnvs.reset_dynamic_cursor()
-                # self._hover_target = None
         WorldOverlay.on_motion(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
-        Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
+        Draw all the targets, on their location, indicating their status.
         """
         if not self.show:
             return
@@ -499,24 +491,15 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     if target is self.tab_data.main.currentTarget.value:
                         # Correct label positions such that label is outside the icon display
                         set_icon(self._feature_icons_selected[target.type.value])
-                        self._label.text = target.name.value  # str(target.index.value)
+                        self._label.text = target.name.value
                         self._label.pos = (bpos[0]+10, bpos[1]+10)
                         self._label.draw(ctx)
-                        # set_icon(self._feature_icons_selected[target.status.value])
                     elif self.tab_data.main.currentTarget.value and (target.index.value == self.tab_data.main.currentTarget.value.index.value) and ("FIB" in self.tab_data.main.currentTarget.value.name.value) and ("POI" not in target.name.value):
                         set_icon(self._feature_icons_selected["FiducialPair"])
                     else:
                         set_icon(self._feature_icons[target.type.value])
-                        # set_icon(self._feature_icons[target.status.value])
                 except KeyError:
                     raise
-                    # logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
-
-                # if target is self._hover_target:
-                #     # show target name on hover
-                #     self._label.text = target.name.value #  str(target.index.value)
-                #     self._label.pos = (bpos[0], bpos[1])
-                #     self._label.draw(ctx)
 
                 ctx.paint()
 
@@ -527,7 +510,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         """
         Detect if a given point is over a target
         :param v_pos: (int, int) Point in view coordinates
-        :return: (CryoFeature or None) Found target, None if not found
+        :return: (Target or None) Found target, None if not found
         """
 
         def in_radius(c_x, c_y, r, x, y):
@@ -594,16 +577,11 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type="Fiducial")
-                    # self._selected_tool_va.value = TOOL_NONE
 
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
-                # self._selected_target = target
-                # self._selected_tool_va.value = TOOL_NONE
-                # STOP THE DRAGGING of the canvas
                 evt.Skip()
-                # WorldOverlay.on_left_down(self, evt)
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -630,13 +608,12 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             else:
                 WorldOverlay.on_left_up(self, evt)
             self._selected_tool_va.value = TOOL_NONE
-            # self.tab_data.main.selected_target_type.value = "Fiducial"
         else:
             WorldOverlay.on_left_up(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
-        Draw all the targets, on their location, indicating their status and whether it's selected or hovered on.
+        Draw all the targets, on their location, indicating their status.
         """
         if not self.show:
             return
@@ -658,25 +635,15 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 try:
                     if target is self.tab_data.main.currentTarget.value:
                         set_icon(self._feature_icons_selected[target.type.value])
-                        self._label.text = target.name.value  # str(target.index.value)
+                        self._label.text = target.name.value
                         self._label.pos = (bpos[0] + 10, bpos[1] + 10)
                         self._label.draw(ctx)
-                        # set_icon(self._feature_icons_selected[target.status.value])
                     elif self.tab_data.main.currentTarget.value and (target.index.value == self.tab_data.main.currentTarget.value.index.value) and ("FM" in self.tab_data.main.currentTarget.value.name.value):
                         set_icon(self._feature_icons_selected["FiducialPair"])
                     else:
                         set_icon(self._feature_icons[target.type.value])
-                        # set_icon(self._feature_icons[target.status.value])
                 except KeyError:
                     raise
-                    # logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
-
-                # if target is self._hover_target:
-                #     # show target name on hover
-                #     self._label.text = target.name.value  # str(target.index.value)
-                #     self._label.pos = (bpos[0], bpos[1])
-                #     self._label.draw(ctx)
-
                 ctx.paint()
 
         if self.tab_data.fib_surface_point.value:

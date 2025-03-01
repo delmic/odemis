@@ -52,7 +52,7 @@ from odemis.gui.comp.canvas import (
     BitmapCanvas,
 )
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
-from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, CryoCorrelationPointsOverlay, \
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, \
     CryoCorrelationFmPointsOverlay, CryoCorrelationFibPointsOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay

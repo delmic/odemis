@@ -1266,8 +1266,6 @@ class Stream(object):
             raise LookupError("Stream has no data")
         raw = self.raw[0]
         md = self._find_metadata(raw.metadata)
-        # Make sure that the the pixel size is the third dimension is ignored
-        # TODO run the unit tests
         pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
         rotation = md.get(model.MD_ROTATION, 0)
         shear = md.get(model.MD_SHEAR, 0)

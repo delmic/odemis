@@ -23,12 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import copy
-import itertools
 import logging
 import math
-import threading
-import time
-from enum import Enum
 from typing import List
 
 import wx
@@ -38,17 +34,12 @@ import wx
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
 
-from odemis.acq.feature import save_features, CorrelationTarget
-from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL, TOOL_SURFACE_FIDUCIAL
-
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.util import call_in_wx_main
-from odemis.model import ListVA
-
 
 # TODO: move to more approprate location
 def update_image_in_views(s: StaticStream, views: List[guimod.StreamView]) -> None:
@@ -88,7 +79,6 @@ def convert_rgb_to_sem(rgb_stream: RGBStream) -> StaticSEMStream:
     sem_stream.raw[0].metadata[model.MD_DIMS] = "YX"
 
     return sem_stream
-
 
 class CorrelationController(object):
 

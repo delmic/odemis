@@ -116,6 +116,8 @@ class CryoAcquiController(object):
         # This a temporary button in the localisation tab. Once tested and FIBSEM tab is available,
         # it will be moved to the FIBSEM tab.
         # TODO move this button to the FIBSEM tab where the button will be enabled only if the requirements are met
+        # To enable the feature and feature status, relevant fm and fib streams
+        # should be present. Rignt now, button is always enabled for the testing environment
         self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
         # for "cancel" button
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
