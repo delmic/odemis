@@ -170,6 +170,7 @@ class CorrelationPointsController(object):
                 self._tab_data_model.fib_surface_point.value = self.correlation_target.fib_surface_fiducial
         else:
             # initialize the correlation target
+            self._tab_data_model.main.currentFeature.value.correlation_targets = {}
             self._tab_data_model.main.currentFeature.value.correlation_targets[
                 self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
             self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[

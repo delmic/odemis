@@ -2,7 +2,6 @@ import glob
 import itertools
 import json
 import logging
-import math
 import os
 import threading
 import time
@@ -48,6 +47,7 @@ class CorrelationMetadata:
         self.fib_pixel_size = fib_pixel_size
         self.fm_image_shape = fm_image_shape
         self.fm_pixel_size = fm_pixel_size
+
 
 class CorrelationTarget:
     """
@@ -118,7 +118,8 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
         # TODO add stream names and other values
         correlation_targets = {}
         if feature.correlation_targets:
-            for key, ct_class in feature.correlation_targets.items():
+            items = feature.correlation_targets.items()
+            for key, ct_class in items:
                 all_targets = []
                 correlation_targets[key] = {}
                 correlation_targets[key]['coordinates'] = []
