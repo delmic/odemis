@@ -30,8 +30,13 @@ from odemis import model
 # install from: https://github.com/patrickcleeve2/3DCT/blob/refactor
 sys.path.append(f"{os.path.expanduser('~')}/development/3DCT")
 
-from tdct.correlation_v2 import run_correlation
-from tdct.util import multi_channel_get_z_guass
+TDCT_INSTALLED = False
+try:
+    from tdct.correlation_v2 import run_correlation
+    from tdct.util import multi_channel_get_z_guass
+    TDCT_INSTALLED = True
+except ImportError:
+    logging.warning("3DCT package is not installed, please install to enabled correlation.")
 
 def _convert_das_to_numpy_stack(das: List[model.DataArray]) -> numpy.ndarray:
     """Convert a list of DataArrays to a numpy stack.

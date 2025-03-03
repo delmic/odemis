@@ -23,10 +23,19 @@ import unittest
 import numpy
 from odemis import model
 from odemis.acq.align import tdct
-
 RESULTS_PATH = os.path.join(os.getcwd(), "correlation_data.yaml")
 
 class TestTDCT(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            if not tdct.TDCT_INSTALLED:
+                raise ImportError("3DCT package is not installed, please install to enabled correlation.")
+        except ImportError as err:
+            raise unittest.SkipTest(f"Skipping the tdct tests, correct libraries "
+                                    f"to perform the tests are not available.\n"
+                                    f"Got the error: {err}")
 
     def tearDown(self):
         if os.path.exists(RESULTS_PATH):
@@ -103,7 +112,7 @@ class TestTDCT(unittest.TestCase):
         self.assertTrue(RESULTS_PATH)
 
         # extract the poi coordinate from the correlation results
-        poi = tdct.get_poi_coordinate(ret)
+        poi = tdct.get_reprojected_poi_coordinate(ret)
 
         # check the poi coordinate match the expected value
         poi_um = ret["output"]["poi"][0]["px_um"]
@@ -111,3 +120,6 @@ class TestTDCT(unittest.TestCase):
         self.assertEqual(len(poi), 2)
         self.assertAlmostEqual(poi[0], poi_um[0] * 1e-6)
         self.assertAlmostEqual(poi[1], poi_um[1] * 1e-6)
+
+if __name__ == "__main__":
+    unittest.main()
