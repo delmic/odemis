@@ -554,7 +554,8 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # need to check if e-beam and ion-beam are available
         comps = model.getComponents()
-        if not all(role in comps for role in ["e-beam", "ion-beam"]):
+        roles = [comp.role for comp in comps]
+        if not ("e-beam" in roles and "ion-beam" in roles):
             logging.warning("e-beam and/or ion-beam not available, scan rotation will be set to 0")
             sr = 0
         else:
