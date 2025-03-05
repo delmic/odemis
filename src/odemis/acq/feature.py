@@ -1,7 +1,7 @@
 import glob
+import itertools
 import json
 import logging
-import math
 import os
 import threading
 import time
@@ -20,7 +20,8 @@ from odemis.acq.acqmng import (
 from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
-from odemis.acq.stream import Stream
+from odemis.acq.stream import Stream, StaticFluoStream
+from odemis.acq.target import Target
 from odemis.dataio import find_fittest_converter
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
@@ -37,18 +38,63 @@ FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
 )
 
 
+class CorrelationMetadata:
+    """
+    Required image metadata for 3DCT correlation calculation, alternatively use data directly.
+    """
+    def __init__(self, fib_image_shape: List[int], fib_pixel_size: List[float], fm_image_shape: List[int], fm_pixel_size: List[float]):
+        self.fib_image_shape = fib_image_shape
+        self.fib_pixel_size = fib_pixel_size
+        self.fm_image_shape = fm_image_shape
+        self.fm_pixel_size = fm_pixel_size
+
+
+class CorrelationTarget:
+    """
+    Model class consisting of parameters related to the 3DCT connected to a feature at a
+    defined status like Active, Rough Milling or Polished.
+    """
+
+    def __init__(self):
+        # Input parameters of 3DCT
+        self.fm_pois: List[Target] = []
+        self.fm_fiducials: List[Target] = []
+        self.fib_fiducials: List[Target] = []
+        self.fib_surface_fiducial : Target = None
+        self.fib_stream = None #:StaticSEMStream = None or StaticFIBStream = None
+        self.fm_streams: List[StaticFluoStream] = []
+        self.superz: StaticFluoStream = None
+        # TODO may be redundant, could be removed as the 3DCT wrapper calculates the metadata
+        # Either that wrapper can be modified or this metadata can be removed
+        # Currently the below attribute is not used
+        self.image_metadata: CorrelationMetadata = None
+
+        # Output parameters of 3DCT
+        self.correlation_result = {}
+        self.fib_projected_pois: List[Target] = []
+        self.fib_projected_fiducials: List[Target] = []
+
+    def reset_attributes(self):
+        """Reset output parameters when any input parameters are changed"""
+        self.correlation_result = {}
+        self.fib_projected_pois = []
+        self.fib_projected_fiducials = []
+
+
 class CryoFeature(object):
     """
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, x, y, z, streams=None, correlation_targets=None):
         """
         :param name: (string) the feature name
         :param x: (float) the X axis of the feature position
         :param y: (float) the Y axis of the feature position
         :param z: (float) the Z axis of the feature position
         :param streams: (List of StaticStream) list of acquired streams on this feature
+        :param correlation_targets: (Dict[str,CorrelationTarget]) Dictionary mapping the feature status to
+        CorrelationTarget, where feature status like Active, Rough Milled or polished is the key.
         """
         self.name = model.StringVA(name)
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
@@ -58,6 +104,7 @@ class CryoFeature(object):
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()
+        self.correlation_targets = correlation_targets
 
 
 def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
@@ -68,8 +115,43 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
     flist = []
     for feature in features:
+        # TODO add stream names and other values
+        correlation_targets = {}
+        if feature.correlation_targets:
+            items = feature.correlation_targets.items()
+            for key, ct_class in items:
+                all_targets = []
+                correlation_targets[key] = {}
+                correlation_targets[key]['coordinates'] = []
+                correlation_targets[key]['index'] = []
+                correlation_targets[key]['type'] = []
+                correlation_targets[key]['name'] = []
+                correlation_targets[key]['fm_focus_position'] = []
+                correlation_targets[key]['correlation_result'] = ct_class.correlation_result
+                if ct_class.fm_fiducials:
+                    all_targets.append(ct_class.fm_fiducials)
+                if ct_class.fm_pois:
+                    all_targets.append(ct_class.fm_pois)
+                if ct_class.fib_fiducials:
+                    all_targets.append(ct_class.fib_fiducials)
+                if ct_class.fib_projected_fiducials:
+                    all_targets.append(ct_class.fib_projected_fiducials)
+                if ct_class.fib_projected_pois:
+                    all_targets.append(ct_class.fib_projected_pois)
+                if ct_class.fib_surface_fiducial:
+                    all_targets.append(ct_class.fib_surface_fiducial)
+                # flatten the list of lists
+                all_targets = list(
+                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
+                for target in all_targets:
+                    correlation_targets[key]['coordinates'].append(target.coordinates.value)
+                    correlation_targets[key]['index'].append(target.index.value)
+                    correlation_targets[key]['type'].append(target.type.value)
+                    correlation_targets[key]['name'].append(target.name.value)
+                    correlation_targets[key]['fm_focus_position'].append(target.fm_focus_position.value)
+
         feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+                        'status': feature.status.value, 'correlation_targets': correlation_targets}
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -83,15 +165,69 @@ class FeaturesDecoder(json.JSONDecoder):
         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
     def object_hook(self, obj):
+        if 'coordinates' in obj and not 'pos' in obj:
+            return obj
+
+        if "Active" in obj:
+            return obj
+
         # Either the object is the feature list or the feature objects inside it
-        if 'name' in obj:
+        if 'name' in obj and 'pos' in obj:
             pos = obj['pos']
             feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
             feature.status.value = obj['status']
+            # Check if correlation_targets exist and decode them
+            if 'correlation_targets' in obj:
+                correlation_targets = self.decode_correlation_targets(obj['correlation_targets'])
+                feature.correlation_targets = correlation_targets
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
 
+    def decode_correlation_targets(self, correlation_targets_obj):
+        """
+        Decodes the correlation_targets dictionary into the appropriate CryoFeature data structure.
+        """
+        decoded_correlation_targets = {}
+        if not correlation_targets_obj:
+            return decoded_correlation_targets
+        # correlation_targets_obj = {"Active": correlation_targets_obj}
+        # Loop through each target type in correlation_targets_obj
+        for key, ct_obj in correlation_targets_obj.items():
+            # Initialize the CryoFeature correlation target class instance
+            correlation_target = CorrelationTarget()
+            coordinates = ct_obj.get('coordinates', [])
+            indices = ct_obj.get('index', [])
+            types = ct_obj.get('type', [])
+            names = ct_obj.get('name', [])
+            fm_focus_positions = ct_obj.get('fm_focus_position', [])
+            # correlation_result = ct_obj.get('correlation_result', [])
+            for i in range(len(coordinates)):
+                target = Target(
+                    x =coordinates[i][0],
+                    y =coordinates[i][1],
+                    z =coordinates[i][2],
+                    index=indices[i],
+                    type=types[i],
+                    name=names[i],
+                    fm_focus_position=fm_focus_positions[i] )
+                if "FIB" in names[i] and types[i] == "Fiducial":
+                    correlation_target.fib_fiducials.append(target)
+                elif "FIB" in names[i] and types[i] == "ProjectedPoints": #TODO  separate out and save projected points
+                    correlation_target.fib_projected_fiducials.append(target)
+                elif "FIB" in names[i] and types[i] == "ProjectedPOI":
+                    correlation_target.fib_projected_pois.append(target)
+                elif "FIB" in names[i] and types[i] == "SurfaceFiducial":
+                    correlation_target.fib_surface_fiducial = target
+                elif "FM" in names[i] and types[i] == "Fiducial":
+                    correlation_target.fm_fiducials.append(target)
+                elif "POI" in names[i] and types[i] == "RegionOfInterest":
+                    correlation_target.fm_pois.append(target)
+                # correlation_target.correlation_result = correlation_result
+
+            decoded_correlation_targets[key] = correlation_target
+
+        return decoded_correlation_targets
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
