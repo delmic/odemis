@@ -1,99 +1,81 @@
-# To start the xtadapter in autoscript simulator mode:
-# cd path/to/xtlib-adapter/xtadapter
-# python server_autoscript.py sim
-# the server will be started, and listening on localhost:4242
+# For now, this is esssentially just a FM microscope, as the FIB part is handled
+# separately by the SEM
 
-METEOR-FIBSEM-Sim: {
+"METEOR TFSv3": {
     class: Microscope,
-    role: meteor
+    role: meteor,
 }
 
-"FIBSEM": {
-  class: autoscript_client.SEM,
-  role: fibsem,
-  init: {
-    # address: "192.168.6.5",  # real
-    address: "localhost",    # simulator
-    port: "4242"
-  },
-  children: {
-    stage: "Stage",
-    sem-scanner: "Electron-Beam",
-    sem-detector: "Electron-Detector",
-    sem-focus: "Electron-Focus",
-    fib-scanner: "Ion-Beam",
-    fib-detector: "Ion-Detector",
-    fib-focus: "Ion-Focus",
-  }
-}
-
-
-"Electron-Beam": {
-    role: e-beam,
+"SEM": {
+    class: simsem.SimSEM,
+    role: null,
     init: {
-        hfw_nomag: 0.25, # hfw when mag == 100x
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+    },
+    children: {
+        scanner: "EBeam",
+        detector0: "SE Detector",
+        focus: "EBeam Focus",
     }
 }
 
-"Electron-Detector": {
-    role: se-detector,
+"EBeam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,  # Not required for the meteor
     init: {},
-    properties: {
-        medianFilter: 3,
-    }
-
+    affects: ["SE Detector"],
 }
 
-"Electron-Focus": {
-    role: ebeam-focus,
+"EBeam Focus": {
+    # role: ebeam-focus,
+    role: null,
     init: {},
-    affects: ["Electron-Beam"]
+    affects: ["EBeam"]
 }
 
-"Ion-Beam": {
-    role: "ion-beam",
-    init: {
-        hfw_nomag: 0.25, # hfw when mag == 100x
-    }
-}
-
-"Ion-Detector": {
-    role: "se-detector-ion",
+"SE Detector": {
+    # Internal child of SimSEM, so no class
+    # role: se-detector,
+    role: null,
     init: {},
-    properties: {
-        medianFilter: 3,
-    }
 }
 
-"Ion-Focus": {
-    role: ion-focus,
-    init: {},
-    affects: ["Ion-Beam"]
-}
+
 # Normally provided by the SEM
 "Stage": {
+    class: tmcm.TMCLController,
     role: stage-bare,
     init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["x", "y", "z", "rx", "rz"],
+        ustepsize: [1.e-6, 1.e-6, 1.e-6, 1.2e-5, 1.2e-5], # unit/step
+        rng: [[-0.1, 0.1], [-0.05, 0.05], [-0.05, 0.1], [-2, 2], [0, 6.28]],
+        unit: ["m", "m", "m", "rad", "rad"],
+        refproc: "Standard",
     },
     metadata: {
         # Loading position:
         FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 29.e-3 },
         # XYZ ranges for SEM & METEOR
         SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 37.e-3]},
-        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 34.e-3]},
+        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 37.e-3]},
         # Grid centers in SEM range
         # Adjusted so that at init (0,0,0), it's at the Grid 1.
-        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 5.0e-3, 'y': 0, 'z': 32.e-3}},
-        # Mirroring values between SEM - METEOR
-        POS_COR: [0.0253126, 0.0024916],
-        CALIB: {"version": "tfs_3", 
-                "pre-tilt":  0.6108652381980153, # 35°
-                "SEM-Eucentric-Focus": 7.0e-3, # aquilos=7.0e-3, hydra=4.0e-3
-                "use_linked_sem_focus_compensation": false,
-                "use_3d_transforms": false,
-                "use_scan_rotation": false,},
-        FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  3.141592653589793}, # 7° - 270°
-        FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
+        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 32.e-3}},
+        # dx and dy are mirroring values between SEM - METEOR, pre-tilt is 35°
+        CALIB: {
+            "version": "tfs_3", 
+            "dx": 0.0506252, "dy": 0.0049832,
+            "pre-tilt": 0.6108652381980153,
+            "use_linked_sem_focus_compensation": false,
+            "use_3d_transforms": false,
+            "use_scan_rotation": false,
+            },
+        # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
+        FAV_FM_POS_ACTIVE: {"rx": 0.29670597283903605  , "rz":  3.141592653589793}, # 17° - 180°
+        FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°, 0° rotation
+        FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session  
     },
 }
 
@@ -146,7 +128,7 @@ METEOR-FIBSEM-Sim: {
         port: "/dev/fake6", # Simulator
         address: null, # Simulator
         axes: ["fw"],
-        ustepsize: [1.227184e-6], # [rad/µstep]
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
         refproc: "Standard",
@@ -164,7 +146,7 @@ METEOR-FIBSEM-Sim: {
             "fw": 50.e-3,  # rad
         },
     },
-    children: {"slave": "Optical Actuators"},
+    dependencies: {"slave": "Optical Actuators"},
 }
 
 "Filter Wheel": {
@@ -189,7 +171,6 @@ METEOR-FIBSEM-Sim: {
     # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
     affects: ["Camera"],
 }
-
 
 # CLS3252dsc-1
 "Optical Focus": {
