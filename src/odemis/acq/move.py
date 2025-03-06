@@ -535,8 +535,9 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         logging.debug(f"tf_matrix: {tf}, sr_matrix: {self._sr_matrix}")
 
-        tf_sr = tf.dot(self._sr_matrix)
-        tf_inv_sr = self._sr_matrix_inv.dot(tf_inv)
+        tf_sr = numpy.dot(self._sr_matrix, tf)
+        # tf_inv_sr = self._sr_matrix_inv.dot(tf_inv)
+        tf_inv_sr = numpy.linalg.inv(tf_sr)
 
         self._transforms2 = {FM_IMAGING: tf,
                              SEM_IMAGING: tf_inv_sr,
