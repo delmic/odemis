@@ -25,6 +25,8 @@ import math
 import queue
 import threading
 import time
+from concurrent.futures import Future
+from typing import Dict, Optional, Tuple
 
 from odemis import model
 from odemis.acq.stream import DataProjection, RGBSpatialProjection, Stream, StreamTree
@@ -431,7 +433,7 @@ class StreamView(View):
         shift = (view_pos[0] - prev_pos["x"], view_pos[1] - prev_pos["y"])
         return self.moveStageBy(shift)
 
-    def moveStageTo(self, pos):
+    def moveStageTo(self, pos: Tuple[float, float]) -> Optional[Future]:
         """
         Request an absolute move of the stage to a given position
 
@@ -450,7 +452,7 @@ class StreamView(View):
         f.add_done_callback(self._on_stage_move_done)
         return f
 
-    def clipToStageLimits(self, pos):
+    def clipToStageLimits(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Clip current position in x/y direction to the maximum allowed stage limits.
 
