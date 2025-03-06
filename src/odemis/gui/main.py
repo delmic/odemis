@@ -202,6 +202,12 @@ class OdemisGUIApp(wx.App):
                     "panel": main_xrc.xrcpnl_tab_correlation
                 },
                 {
+                    "name": "meteor-fibsem",
+                    "controller": tabs.FibsemTab,
+                    "button": self.main_frame.btn_tab_fibsem,
+                    "panel": main_xrc.xrcpnl_tab_fibsem
+                },
+                {
                     "name": "secom_align",
                     "controller": tabs.SecomAlignTab,
                     "button": self.main_frame.btn_tab_align,

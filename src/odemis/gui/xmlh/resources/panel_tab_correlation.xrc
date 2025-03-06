@@ -461,6 +461,22 @@
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                    <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_correlate">
+                      <size>382,-1</size>
+                      <icon>../../img/icon/feature_active_selected.png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>CORRELATE IMAGES</label>
+                      <fg>#FFFFFF</fg>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
                   <object class="sizeritem">
                     <object class="ImageTextButton" name="btn_export">
                       <size>382,-1</size>

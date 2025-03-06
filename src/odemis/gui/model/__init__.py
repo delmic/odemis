@@ -33,4 +33,4 @@ from .tab_gui_data import (AcquisitionWindowData, ActuatorGUIData,
                            FastEMAcquisitionGUIData, FastEMMainTabGUIData,
                            FastEMSetupGUIData, LiveViewGUIData, MicroscopyGUIData,
                            SecomAlignGUIData, Sparc2AlignGUIData,
-                           SparcAcquisitionGUIData, SparcAlignGUIData)
+                           SparcAcquisitionGUIData, SparcAlignGUIData, AcquiMode)

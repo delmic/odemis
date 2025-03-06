@@ -40,6 +40,7 @@ from odemis import model
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.util import call_in_wx_main
+from odemis.acq.move import POSITION_NAMES, SEM_IMAGING, FM_IMAGING
 
 # TODO: move to more approprate location
 def update_image_in_views(s: StaticStream, views: List[guimod.StreamView]) -> None:
@@ -134,6 +135,10 @@ class CorrelationController(object):
 
         # localization tab
         self.localization_tab: LocalizationTab = None
+
+        # guided correlation
+        self.pm = self._main_data_model.posture_manager
+        self._panel.btn_correlate.Bind(wx.EVT_BUTTON, self.on_auto_correlate)
 
     @call_in_wx_main
     def _update_correlation_cmb(self, streams: list) -> None:
@@ -467,3 +472,44 @@ class CorrelationController(object):
 
         # move the stream using the correlation position offset
         self._move_stream(dx=dx, dy=dy, dr=0, dpx=0)
+
+    def on_auto_correlate(self, evt: wx.Event) -> None:
+        logging.warning(f"ON AUTO CORRELATE")
+        
+        for s in self._tab_data_model.streams.value:
+
+            logging.warning(f"STREAM: {s.name.value}")
+            # CHECK IF SEM STREAM
+            # GET METADATA
+
+            md = s.raw[0].metadata
+            emd = md[model.MD_EXTRA_SETTINGS]
+            stage_md = emd["Stage"]
+            pos = stage_md["position"][0]
+            logging.warning(f"POSITION: {pos}")
+
+            posture = self.pm.getCurrentPostureLabel(pos)
+            logging.warning(f"POSTURE: {POSITION_NAMES[posture]}")
+
+            if isinstance(s, StaticSEMStream):
+                logging.warning(f"SEM STREAM: {s.name.value}")
+
+                fm_pos = self.pm.to_posture(pos, FM_IMAGING)
+                fm_posture = self.pm.getCurrentPostureLabel(fm_pos)
+                logging.warning(f"FM POSITION: {fm_pos}, posture: {POSITION_NAMES[fm_posture]}")
+
+                # TODO: move the image to that position (sample-stage coordinates?)
+
+                ssp = self.pm.to_sample_stage_from_stage_position(fm_pos)
+                md_pos = (ssp["x"], ssp["y"])
+                logging.warning(f"SAMPLE STAGE POSITION: {md_pos}")
+
+                self._tab_data_model.selected_stream.value = s
+                self._move_stream_to_pos(md_pos)
+            
+            if isinstance(s, StaticFluoStream):
+                logging.warning(f"FLUO STREAM: {s.name.value}")
+
+                logging.warning(f"POSITION: {md[model.MD_POS]}")
+                
+            # BUG: the position of the SEM overview is based on the first tile, not the centre, so that is where the projection goes. 
