@@ -26,7 +26,7 @@ def fix_static_text_clipping(panel):
     # the StaticText's not shown at init to be initialized with a size as if
     # the font was standard size. So if the font is big, the text is cropped.
     # See: https://github.com/wxWidgets/Phoenix/issues/1452
-    # https://trac.wxwidgets.org/ticket/16088
+    # https://github.com/wxWidgets/wxWidgets/issues/16088 (fixed in v3.1.6+).
     # This following forces resizing of all static text found on the panel and its children
     _force_resize_static_text(panel)
     # Eventually, update the size of the parent, based on everything inside it
