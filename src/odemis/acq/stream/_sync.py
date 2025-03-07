@@ -2579,14 +2579,15 @@ class SEMMDStream(MultipleDetectorStream):
                 for s, sub in zip(self._streams, self._subscribers):
                     s._dataflow.subscribe(sub)
 
+                start = time.time()
+                self._acq_min_date = start
+
                 if has_inde_detectors:
                     # The independent detectors might need a bit of time to be ready.
                     # If not waiting, the first pixels might be missed.
                     time.sleep(0.05)
 
-                start = time.time()
-                self._acq_min_date = start
-                self._trigger.notify()
+                self._trigger.notify()  # starts the e-beam scan
                 # Time to scan a frame
                 frame_time = px_time * npixels2scan
 
