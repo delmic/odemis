@@ -772,6 +772,7 @@ class Acquirer:
         try:
             self._scanner.active_ttl_mng.indicate_state(True)
             self._scanner.active_ttl_mng.wait_active()  # Blocks until the scan state is set
+            self._scanner.startScan.clear()  # Indicate the next notification should be sent (first frame)
 
             while True:
                 # Any more messages to process? Some could have arrived in the meantime
@@ -1405,6 +1406,7 @@ class Acquirer:
 
         # Now start!
         ai_task.start()
+        self._scanner.startScan.notify()  # Special event that will only actually notify on the first frame
         logging.debug("AI task started (with AO + DO too)")
 
         n_analog_det = len(acq_settings.analog_detectors)
@@ -2371,6 +2373,9 @@ class Scanner(model.Emitter):
         # Manage the "slow" TTL signals
         self.active_ttl_mng = ActiveTTLManager(parent, self, scanning_ttl or {}, scan_active_delay,
                                                self._on_active_state_change)
+
+        # Event which is triggered at the beginning of the first frame of a scan
+        self.startScan = driver.EventOnce()
 
         # Validate fast TTLs
         fast_do_channels = set()  # set of ints, to check all channels are unique
