@@ -22,8 +22,11 @@ If not, see http://www.gnu.org/licenses/.
 # The MightyEBIC scan controller will acquire a signal synchronized on the pixel signal
 # from the e-beam scanner. Eventually, the complete signal of the frame is sent digitally to
 # Odemis.
+# Note: requires the asyncua library, from https://github.com/FreeOpcUa/opcua-asyncio .
+# It can be installed with "sudo pip3 install asyncua".
 
 import asyncio
+import datetime
 import logging
 import math
 import re
@@ -32,16 +35,20 @@ import time
 import queue
 from asyncio import AbstractEventLoop
 from functools import wraps
-from typing import Optional, Tuple, Dict, Any, List, Coroutine
+from typing import Optional, Tuple, Dict, Any, List
 
 from odemis import model
 from odemis.model import Detector, oneway, MD_ACQ_DATE, HwError
 
 import numpy
-from asyncua import Client, Server, Node, ua
-from asyncua.common.methods import uamethod
-from asyncua.common.statemachine import State, StateMachine
-from asyncua.ua import NodeId, ObjectIds, LocalizedText, Argument
+try:
+    from asyncua import Client, Server, Node, ua
+    from asyncua.common.methods import uamethod
+    from asyncua.common.statemachine import State, StateMachine, Transition
+    from asyncua.ua import NodeId, ObjectIds, LocalizedText, Argument
+except ImportError:
+    logging.error("The Python asyncua library is required for the ephemeron driver. Install with: sudo pip3 install asyncua")
+    raise
 
 # Don't use too verbose logging for asyncua, otherwise it's really an explosion
 logging.getLogger("asyncua").setLevel(logging.WARNING)
@@ -911,6 +918,66 @@ STATE_ARGS = [
 ]
 
 
+class StateMachineNodeFixed(StateMachine):
+    """
+    Overrides the standard asyncua StateMachine to fix the issue when setting the state to a Node.
+    Provided by Ephemeron. See https://github.com/FreeOpcUa/opcua-asyncio/pull/1663 .
+    Only used by the MightyEBICSimulator.
+    It's not clear whether that's the right way to fix the issue, but that's how Ephemeron does it,
+    and the goal of the simulator is to simulate what they do. So this is good for that.
+    """
+    async def _write_state(self, state: State):
+        if not isinstance(state, State):
+            raise ValueError(
+                f"Statemachine: {self._name} -> state: {state} is not a instance of StateMachine.State class"
+            )
+        await self._current_state_node.write_value(
+            ua.LocalizedText(state.name, self.locale), ua.VariantType.LocalizedText
+        )
+        if state.node:
+            if self._current_state_id_node:
+                # CHANGED:
+                #await self._current_state_id_node.write_value(state.node.nodeid, varianttype=ua.VariantType.NodeId)
+                await self._current_state_id_node.write_value(state.name, ua.VariantType.String)
+            if self._current_state_name_node and state.name:
+                await self._current_state_name_node.write_value(state.name, ua.VariantType.QualifiedName)
+            if self._current_state_number_node and state.number:
+                await self._current_state_number_node.write_value(state.number, ua.VariantType.UInt32)
+            if self._current_state_effective_display_name_node and state.effectivedisplayname:
+                await self._current_state_effective_display_name_node.write_value(
+                    state.effectivedisplayname, ua.VariantType.LocalizedText
+                )
+
+    async def _write_transition(self, transition: Transition):
+        if not isinstance(transition, Transition):
+            raise ValueError(
+                f"Statemachine: {self._name} -> state: {transition} is not a instance of StateMachine.Transition class"
+            )
+        transition._transitiontime = datetime.datetime.now(datetime.timezone.utc)
+        await self._last_transition_node.write_value(
+            ua.LocalizedText(transition.name, self.locale), ua.VariantType.LocalizedText
+        )
+        if self._optionals:
+            if self._last_transition_id_node:
+                # CHANGED:
+                # await self._last_transition_id_node.write_value(
+                #     transition.node.nodeid, varianttype=ua.VariantType.NodeId
+                # )
+                await self._last_transition_id_node.write_value(
+                    transition.name, ua.VariantType.String
+                )
+            if self._last_transition_name_node and transition.name:
+                await self._last_transition_name_node.write_value(
+                    ua.QualifiedName(transition.name, self._idx), ua.VariantType.QualifiedName
+                )
+            if self._last_transition_number_node and transition.number:
+                await self._last_transition_number_node.write_value(transition.number, ua.VariantType.UInt32)
+            if self._last_transition_transitiontime_node and transition._transitiontime:
+                await self._last_transition_transitiontime_node.write_value(
+                    transition._transitiontime, ua.VariantType.DateTime
+                )
+
+
 class MightyEBICSimulator(Server):
     """ OPC Server class: This class is required for setting up a simulated server and the state machine. """
     def __init__(self, url: str, parent_det: MightyEBIC):
@@ -1010,7 +1077,7 @@ class MightyEBICSimulator(Server):
 
     async def setup_state_machine(self) -> None:
         """ Set up the state machine for the server. """
-        self.state_machine = StateMachine(
+        self.state_machine = StateMachineNodeFixed(
             self,
             self.nodes.objects,
             NAMESPACE_INDEX,
