@@ -411,8 +411,32 @@ class FibsemTab(Tab):
 
         self._on_stage_pos(self.pm.stage.position.value)
 
+        # if the tab isn't shown, we don't want to ask the user
+        if evt is None: # if the event is None, it means this is the initial update, dont ask the user
+            return
+        
+        # changing milling angle, causes previously defined features at milling angle to be "seen" as SEM_IMAGING
+        # QUERY: should we update the features to the new milling angle?
+        box = wx.MessageDialog(self.main_frame,
+                            message=f"Do you want to update existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)?",
+                            caption="Update existing feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+        ans = box.ShowModal()  # Waits for the window to be closed
+        if ans == wx.ID_YES:
+            logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
+            # NOTE: use stage_tilt, not milling_angle
+            for feature in self.main_data.features.value:
+                milling_position = feature.get_posture_position(MILLING)
+                if milling_position is not None:
+                    milling_position["rx"] = stage_tilt
+                    feature.set_posture_position(MILLING, milling_position)
+
     def _move_to_milling_position(self, evt: wx.Event):
         logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
+
+        if self.pm.current_posture.value != SEM_IMAGING:
+            wx.MessageBox("Switch to SEM position first", "Error", wx.OK | wx.ICON_ERROR)
+            return
 
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
@@ -420,6 +444,10 @@ class FibsemTab(Tab):
         self._on_stage_pos(self.pm.stage.position.value)
 
     def _move_to_sem(self, evt: wx.Event):
+
+        if self.pm.current_posture.value != MILLING:
+            wx.MessageBox("Switch to milling position first", "Error", wx.OK | wx.ICON_ERROR)
+            return
 
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()

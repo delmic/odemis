@@ -62,10 +62,12 @@ from odemis.util.dataio import open_acquisition
 class TFSMillingTaskManager:
     """This class manages running milling tasks."""
 
-    def __init__(self, future: Future, tasks: List[MillingTaskSettings], fib_stream: FIBStream):
+    def __init__(self, future: Future, tasks: List[MillingTaskSettings], fib_stream: FIBStream, filename: str = None):
         """
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
+        :param fib_stream: The FIB stream to use for milling
+        :param filename: The filename to use for saving images
         """
 
         self.fibsem = model.getComponent(role="fibsem")
@@ -73,6 +75,9 @@ class TFSMillingTaskManager:
 
         # for reference image alignment
         self.fib_stream = fib_stream
+        self.filename = filename
+        if filename is not None:
+            self._exporter = find_fittest_converter(filename=filename)
 
         self._future = future
         if future is not None:
@@ -141,6 +146,20 @@ class TFSMillingTaskManager:
                 data, _ = self._future.running_subf.result()
                 new_image = data[0]
                 align_reference_image(ref_image, new_image, self.fib_stream.emitter)
+                
+                # save the alignment images
+                if self.filename is not None:
+                    base_filename = self.filename
+                    pre_filename = base_filename.replace(".ome.tiff", "-At-Imaging-Current-FIB.ome.tiff")
+                    post_filename = base_filename.replace(".ome.tiff", "-At-Milling-Current-Pre-Alignment-FIB.ome.tiff")
+                    self._exporter.export(pre_filename, ref_image)
+                    self._exporter.export(post_filename, new_image)
+                    
+                    self._future.running_subf = acquire([self.fib_stream])
+                    data, _ = self._future.running_subf.result()
+                    post_image = data[0]
+                    post_filename = base_filename.replace(".ome.tiff", "-At-Milling-Current-Post-Alignment-FIB.ome.tiff")
+                    self._exporter.export(post_filename, post_image)
 
             # draw milling patterns to microscope
             for pattern in settings.generate():
@@ -212,7 +231,7 @@ class TFSMillingTaskManager:
 
 
 # TODO: replace with run_milling_tasks_openfibsem
-def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream) -> Future:
+def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream, filename: str = None) -> Future:
     """
     Run multiple milling tasks in order.
     :param tasks: List of milling tasks to be executed in order.
@@ -221,7 +240,7 @@ def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream) -
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
     # create acquisition task
-    milling_task_manager = TFSMillingTaskManager(future, tasks, fib_stream)
+    milling_task_manager = TFSMillingTaskManager(future, tasks, fib_stream, filename)
     # add the ability of cancelling the future during execution
     future.task_canceller = milling_task_manager.cancel
 
@@ -385,8 +404,10 @@ class AutomatedMillingManager(object):
         self._future.msg = f"{feature.name.value}: Milling: {self.current_workflow}"
         self._future.set_progress()
 
+        filename = self.get_filename(feature, "Milling-Tasks")
         self._future.running_subf = run_milling_tasks(tasks=milling_tasks,
-                                                      fib_stream=self.fib_stream)
+                                                      fib_stream=self.fib_stream,
+                                                      filename=filename)
         self._future.running_subf.result()
 
     def _align_reference_image(self, feature: CryoFeature) -> None:

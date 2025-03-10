@@ -132,7 +132,7 @@ class EditMeteorCalibrationDialog(wx.Dialog):
         # add a label below the controls
         txt = f"Editing the calibration is currently restricted to +/- {rng*1e6}um. \nPlease edit the configuration file directly for larger changes."
         lbl_ctrl = wx.StaticText(self._panel, -1, txt)
-        lbl_ctrl.Wrap(350)  # Wrap to 350 pixels
+        lbl_ctrl.Wrap(375)  # Wrap to 350 pixels
         
         lbl_ctrl.SetFont(wx.Font(8, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
         self.gb_sizer.Add(

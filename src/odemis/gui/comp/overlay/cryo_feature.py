@@ -202,9 +202,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         :param v_pos: (int, int) the coordinates in the view
         """
         # re-calculate the position for all postures
-        self._selected_feature.stage_position.value = self._view_to_stage_pos(v_pos)
         # use current_posture instead of view_posture to support milling posture
-        self._selected_feature.posture_positions[self.pm.current_posture.value] = self._selected_feature.stage_position.value
+        stage_position = self._view_to_stage_pos(v_pos)
+        self._selected_feature.stage_position.value = stage_position
+        self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
 
         # try:
         #     feature = self._selected_feature
@@ -229,6 +230,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self.cnvs.update_drawing()
 
     def _update_other_postures(self):
+        """Ask the user to recalculate the feature position for all other postures"""
         self.tab = self.tab_data.main.getTabByName(self.tab_name)
         box = wx.MessageDialog(self.tab.main_frame,
                             message="Do you want to recalculate this feature position for all other postures?",
@@ -237,6 +239,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         ans = box.ShowModal()  # Waits for the window to be closed
         if ans == wx.ID_YES:
             for posture in self.pm.postures:
+                if posture != self.pm.current_posture.value:
+                    logging.info(f"updating {posture} for {self._selected_feature.name.value}")
                     get_feature_position_at_posture(pm=self.pm,
                                                     feature=self._selected_feature,
                                                     posture=posture,
@@ -266,7 +270,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             if self.dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                self._selected_feature.set_posture_position(self.view_posture, self._view_to_stage_pos(v_pos))
+                self._selected_feature.set_posture_position(self.pm.current_posture.value, self._view_to_stage_pos(v_pos))
                 self.cnvs.update_drawing()
                 return
             feature = self._detect_point_inside_feature(v_pos)
@@ -332,14 +336,13 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         pos = self.pm.from_sample_stage_to_stage_position(new_pos)
         return pos
 
-
     def _get_feature_position_at_view_posture(self, feature: CryoFeature) -> Dict[str, float]:
         """Get the feature position at the view posture, create it if it doesn't exist"""
 
         return get_feature_position_at_posture(
             pm=self.pm,
             feature=feature,
-            posture=self.view_posture,
+            posture=self.pm.current_posture.value, #self.view_posture,
         )
 
     def _on_view_posture_change(self, posture):
