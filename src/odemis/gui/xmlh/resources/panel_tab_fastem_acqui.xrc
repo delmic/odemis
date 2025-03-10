@@ -68,18 +68,13 @@
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_ebeam_off">
-                            <label>Turn off e-beam after acquisition</label>
+                          <object class="wxPanel" name="pnl_acq">
+                            <bg>#333333</bg>
+                            <fg>#7F7F7F</fg>
+                            <size>400,140</size>
+                            <flag>wxTOP|wxEXPAND</flag>
+                            <option>1</option>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_beam_blank_off">
-                            <label>Do not blank beam in between fields</label>
-                          </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxFlexGridSizer">
