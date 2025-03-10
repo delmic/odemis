@@ -36,7 +36,7 @@ from odemis import model, util
 from odemis.model import isasync
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
-from odemis.util.transform import RigidTransform, _get_transforms
+from odemis.util.transform import RigidTransform, get_rotation_transforms
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -317,6 +317,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         stage_md = self.stage.getMetadata()
         md_calib = stage_md.get(model.MD_CALIB, {})
         self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
+        self.fib_column_tilt = TFS_FIB_COLUMN_TILT
 
         # feature flags, for features still in testing
         # NOTE: use_linked_sem_focus_compensation:
@@ -341,7 +342,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.current_posture = model.VigilantAttribute(UNKNOWN)
         self.stage.position.subscribe(self._update_posture, init=True)
 
-        self.fib_column_tilt = TFS_FIB_COLUMN_TILT
 
         # set the transforms between different postures
         self._posture_transforms = {
@@ -570,19 +570,23 @@ class MeteorPostureManager(MicroscopePostureManager):
         # the inverse transformation is used for sample stage -> stage
 
         # pre-tilt is rotation around the stage-bare x axis
-        r = self.pre_tilt
+        rx = self.pre_tilt
+
         # note: this is currently for tfs, which does not have scale, shear or translation
-
         # rotation around x axis: fm = tf, sem = tf_inv
-        tf, tf_inv = _get_transforms(r)
+        tf, tf_inv = get_rotation_transforms(rx=rx)
 
-        # TODO: enable scan rotation once complete
-        sr_matrix, sr_matrix_inv = self._get_scan_rotation_matrix()
+        # NOTE: not yet implemented, see meteor-1100-fibsem-tab 
+        sr = 0
+        if not self.use_scan_rotation:
+            sr = 0
 
-        logging.debug(f"tf_matrix: {tf}, sr_matrix: {sr_matrix}")
+        # get scan rotation matrix (rz -> rx)
+        tf_sr, tf_inv_sr = get_rotation_transforms(rx=rx, rz=sr)
+        logging.debug(f"tf_matrix: {tf}, tf_sr: {tf_sr}")
 
-        tf_sr = tf.dot(sr_matrix)
-        tf_inv_sr = sr_matrix_inv.dot(tf_inv)
+        # tmp: assert that scan rotation matrix has no impact on standard tf
+        numpy.testing.assert_array_equal(tf, tf_sr)
 
         self._transforms2 = {FM_IMAGING: tf,
                              SEM_IMAGING: tf_inv_sr,
@@ -592,30 +596,6 @@ class MeteorPostureManager(MicroscopePostureManager):
                                  SEM_IMAGING: tf_sr,
                                  MILLING: tf_sr,
                                  UNKNOWN: tf_sr}
-
-    def _get_scan_rotation_matrix(self) -> Tuple[numpy.ndarray, numpy.ndarray]:
-        """Calculate the scan rotation trasnformation matrix for the sample-stage"""
-        sr = 0
-        # NOTE: not implemented yet
-
-        # need to check if e-beam and ion-beam are available
-        # ebeam = model.getComponent(role='e-beam')
-        # sr = ebeam.rotation.value
-        # ion_beam = model.getComponent(role='ion-beam')
-        # ion_sr = ion_beam.rotation.value
-        # if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
-        #     raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
-
-        if not self.use_scan_rotation:
-            sr = 0
-
-        # apply scan rotation (rotation around z axis of sample-stage)
-        sr_matrix = numpy.array([[numpy.cos(sr), 0, 0],
-                                    [0, numpy.cos(sr), 0],
-                                    [0, 0, 1]])
-        sr_matrix_inv = numpy.linalg.inv(sr_matrix)
-
-        return sr_matrix, sr_matrix_inv
 
     def _get_stage_pos(self, sample_val: Dict[str, float], absolute: bool = True) -> Dict[str, float]:
         """
@@ -1498,6 +1478,23 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         """
         return NotImplemented
 
+    def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
+        """Transform the shift from chamber to stage bare coordinates.
+        Used for moving the stage vertically in the chamber.
+        :param shift: The shift to be transformed
+        :return: The transformed shift
+        """
+        # get the shift values
+        dx = shift.get("x", 0)
+        pdz = shift.get("z", 0)
+
+        # calculate axis components
+        theta = self.stage.position.value["rx"] # tilt, in radians
+        dy = pdz * math.sin(theta)
+        dz = pdz / math.cos(theta)
+        vshift = {"x": dx, "y": dy, "z": dz}
+        logging.debug(f"transforming from chamber to stage-bare, vshift: {vshift}, theta: {theta}, initial shift: {shift}")
+        return vshift
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
@@ -2140,6 +2137,17 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     raise CancelledError()
                 future._task_state = FINISHED
 
+    def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
+        """Transform the shift from stage bare to chamber coordinates.
+        Used for moving the stage vertically in the chamber.
+        For tescan, the z-axis is already aligned with the chamber axis,
+        so this function returns the input.
+        :param shift: The shift to be transformed
+        :return: The transformed shift
+        """
+        vshift = {"x": shift.get("x", 0), "z": shift.get("z", 0)}
+        return vshift
+
 
 class MimasPostureManager(MicroscopePostureManager):
     def __init__(self, microscope):
@@ -2778,15 +2786,22 @@ class SampleStage(model.Actuator):
                                 axes=copy.deepcopy(self._stage_bare.axes), **kwargs)
 
         # update related MDs
-        self.affects = []
+        self._affected_components = []
         for role in COMPS_AFFECTED_ROLES:
             try:
-                self.affects.append(model.getComponent(role=role))
+                self._affected_components.append(model.getComponent(role=role))
             except Exception:
                 pass
 
+        # get the ebeam focus component, for the SEM focus compensation (not always available)
+        self.ebeam_focus = None
+        try:
+            self.ebeam_focus = model.getComponent(role="ebeam-focus")
+        except Exception:
+            pass
+
         # posture manager to convert the positions
-        self.pm = posture_manager
+        self._pm = posture_manager
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({"x": 0, "y": 0, "z": 0, "rx": 0, "rz": 0},
@@ -2808,16 +2823,16 @@ class SampleStage(model.Actuator):
         update the position VA when the dep's position is updated
         """
         # TODO: this should be posture converted to SEM posture
-        # pos_sem = self.pm.to_posture(pos_dep, SEM_IMAGING)
-        # pos = self.pm.to_sample_stage_from_stage_position(pos_sem)
+        # pos_sem = self._pm.to_posture(pos_dep, SEM_IMAGING)
+        # pos = self._pm.to_sample_stage_from_stage_position(pos_sem)
         # logging.warning(f"Converted position from {pos_dep} to {pos_sem}, Updating SampleStage position to {pos}")
 
-        pos = self.pm.to_sample_stage_from_stage_position(pos_dep)
+        pos = self._pm.to_sample_stage_from_stage_position(pos_dep)
         # it's read-only, so we change it via _value
         self.position._set_value(pos, force_write=True)
 
         # update related mds
-        for comp in self.affects:
+        for comp in self._affected_components:
             try:
                 if comp:
                     md_pos = pos.get("x", 0), pos.get("y", 0)
@@ -2830,12 +2845,11 @@ class SampleStage(model.Actuator):
 
         # update the SEM focus position when the stage is moved to compensate for linked behavior
         # TODO: update the self.sem_eucentric_focus when the user manually focuses.
-        if self.pm.use_linked_sem_focus_compensation:
+        if self._pm.use_linked_sem_focus_compensation:
             try:
-                ebeam_focus = model.getComponent(role="ebeam-focus")
                 # get the eucentric focus position from the metadata
                 self.sem_eucentric_focus = self._stage_bare.getMetadata()[model.MD_CALIB].get("SEM-Eucentric-Focus", 7.0e-3)
-                f = ebeam_focus.moveAbs({"z": self.sem_eucentric_focus})
+                f = self.ebeam_focus.moveAbs({"z": self.sem_eucentric_focus})
                 f.result()
             except Exception as e:
                 logging.error(f"Failed to update ebeam-focus with new position: 'z': {self.sem_eucentric_focus}, {e}")
@@ -2844,7 +2858,7 @@ class SampleStage(model.Actuator):
         """
         update the speed VA based on the dependency's speed
         """
-        # stage_speed = self.pm.to_sample_stage_from_stage_movement(dep_speed)
+        # stage_speed = self._pm.to_sample_stage_from_stage_movement(dep_speed)
         self.speed._set_value(dep_speed, force_write=True)
 
     @isasync
@@ -2854,7 +2868,7 @@ class SampleStage(model.Actuator):
         :param **kwargs: Mostly there to support "update" argument
         """
         # missing values are assumed to be zero
-        shift_stage = self.pm.from_sample_stage_to_stage_movement(shift)
+        shift_stage = self._pm.from_sample_stage_to_stage_movement(shift)
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
@@ -2871,7 +2885,7 @@ class SampleStage(model.Actuator):
                 pos[key] = self.position.value[key]
 
         # pos is a position, so absolute conversion
-        pos_stage = self.pm.from_sample_stage_to_stage_position(pos)
+        pos_stage = self._pm.from_sample_stage_to_stage_position(pos)
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
@@ -2887,15 +2901,8 @@ class SampleStage(model.Actuator):
         :return: A cancellable future
         """
         # TODO: account for scan rotation
-        theta = self._stage_bare.position.value["rx"] # tilt, in radians
-        dx = shift.get("x", 0)
-        pdz = shift.get("z", 0)
-
-        # calculate axis components
-        dy = pdz * math.sin(theta)
-        dz = pdz / math.cos(theta)
-        vshift = {"x": dx, "y": dy, "z": dz}
-        logging.debug(f"Moving stage vertically by: {vshift}, theta: {theta}, initial shift: {shift}")
+        # transform the shift from stage bare to chamber coordinates
+        vshift = self._pm._transformFromChamberToStage(shift)
         return self._stage_bare.moveRel(vshift)
 
     def stop(self, axes=None):
