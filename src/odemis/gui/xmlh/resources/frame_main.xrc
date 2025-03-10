@@ -183,6 +183,13 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="wxMenuItem" name="menu_item_edit_meteor_calibration">
+            <label>Edit METEOR Calibration</label>
+            <enabled>0</enabled>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
         </object>
         <object class="wxMenuItem" name="menu_item_import_from_3dct">
           <label>Import Milling Position from 3DCT</label>

@@ -231,6 +231,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.menu_item_edit_meteor_calibration = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_edit_meteor_calibration"))
         self.menu_item_import_from_3dct = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_import_from_3dct"))
         self.menu_item_import_from_autolamella = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_import_from_autolamella"))
         self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
@@ -2713,6 +2714,13 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <label>Show log panel</label>
             <accel>Ctrl+D</accel>
             <checkable>1</checkable>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="wxMenuItem" name="menu_item_edit_meteor_calibration">
+            <label>Edit METEOR Calibration</label>
+            <enabled>0</enabled>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

@@ -57,6 +57,7 @@ from odemis.gui.comp.buttons import (
     BTN_TOGGLE_OFF,
     BTN_TOGGLE_PROGRESS,
 )
+from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -123,6 +124,11 @@ class CryoChamberTab(Tab):
         main_frame.Bind(wx.EVT_MENU, self._import_features_from_3dct, id=main_frame.menu_item_import_from_3dct.GetId())
         if self._role == 'meteor':
             main_frame.menu_item_import_from_3dct.Enable(True)
+
+        # enable meteor calibration
+        main_frame.Bind(wx.EVT_MENU, self._edit_meteor_calibration, id=main_frame.menu_item_edit_meteor_calibration.GetId())
+        if self._role == 'meteor':
+            main_frame.menu_item_edit_meteor_calibration.Enable(True)
 
         self._current_posture = UNKNOWN  # position of the sample (regularly updated)
         self._target_posture = None  # when moving, move POSITION to be reached, otherwise None
@@ -535,6 +541,20 @@ class CryoChamberTab(Tab):
         # redraw milling position
         fibsem_tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
         fibsem_tab.milling_task_controller.draw_milling_tasks(pos=pt, convert_pos=False)
+
+    def _edit_meteor_calibration(self, evt):
+        """Open a dialog for editing meteor stage calibration metadata"""
+
+        md_calib = self._stage.getMetadata()[model.MD_CALIB]
+        dialog = EditMeteorCalibrationDialog(self.main_frame, md_calib)
+        dialog.Center()
+
+        ret = dialog.ShowModal()
+        if ret == wx.ID_OK:
+            self._stage.updateMetadata({model.MD_CALIB: dialog.md_calib})
+            logging.info(f"Updated calibration stage metadata: {self._stage.getMetadata()[model.MD_CALIB]}")
+
+        dialog.Destroy()
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):
