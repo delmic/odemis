@@ -142,6 +142,8 @@ class TFSMillingTaskManager:
 
             # acquire a new image at the milling settings and align
             if align_at_milling_current:
+                # reset beam shift?
+                self.fib_stream.emitter.shift.value = (0, 0)
                 self._future.running_subf = acquire([self.fib_stream])
                 data, _ = self._future.running_subf.result()
                 new_image = data[0]
