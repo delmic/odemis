@@ -41,7 +41,7 @@ from odemis.util.driver import (
     getSerialDriver,
     guessActuatorMoveDuration,
     readMemoryUsage,
-    speedUpPyroConnect,
+    speedUpPyroConnect, EventOnce,
 )
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -94,6 +94,31 @@ class TestDriver(unittest.TestCase):
         else:
             with self.assertRaises(LookupError):
                 v = get_linux_version()
+
+    def onEvent(self):
+        """
+        callback for the Event
+        """
+        self._event_notifications += 1
+
+    def test_event_once(self):
+        self._event_notifications = 0
+
+        event = EventOnce()
+        event.subscribe(self)
+
+        # Should send the first notification
+        event.notify()
+        self.assertEqual(self._event_notifications, 1)
+        # and all further notifications should be ignored
+        event.notify()
+        event.notify()
+        self.assertEqual(self._event_notifications, 1)
+
+        # ... until we reset the event
+        event.clear()
+        event.notify()
+        self.assertEqual(self._event_notifications, 2)
 
     def test_estimateMoveDuration(self):
         """Test estimateMoveDuration takes the correct input and returns a correct estimation."""
