@@ -167,6 +167,13 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/acq/test/feature_test.py --verbose
 
+    - name: Run tests from odemis.acq.milling
+      if: ${{ !cancelled() }}
+      run: |
+          export PYTHONPATH="$PWD/src:$PYTHONPATH"
+          python3 -m unittest src/odemis/acq/milling/test/patterns_test.py --verbose
+          python3 -m unittest src/odemis/acq/milling/test/tasks_test.py --verbose
+
     - name: Run tests from odemis.acq.leech
       if: ${{ !cancelled() }}
       run: |
