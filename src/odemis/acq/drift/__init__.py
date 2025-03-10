@@ -367,6 +367,12 @@ def align_reference_image(
     if ref_image.metadata[model.MD_PIXEL_SIZE] != new_image.metadata[model.MD_PIXEL_SIZE]:
         raise ValueError("The images must have the same pixel size.")
 
+    # get the real data, if the image is a shadow (e.g. when loaded from disk)
+    if isinstance(ref_image, model.DataArrayShadow):
+        ref_image = ref_image.getData()
+    if isinstance(new_image, model.DataArrayShadow):
+        new_image = new_image.getData()
+
     shift_px = MeasureShift(ref_image, new_image, 2)
 
     pixelsize = ref_image.metadata[model.MD_PIXEL_SIZE]

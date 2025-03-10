@@ -216,7 +216,7 @@ class FeaturesDecoder(json.JSONDecoder):
             if feature.path:
                 filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
                 if os.path.exists(filename):
-                    feature.reference_image = open_acquisition(filename)[0]
+                    feature.reference_image = open_acquisition(filename)[0].getData()
                 else:
                     logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
             return feature
