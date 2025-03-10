@@ -148,7 +148,7 @@ class TFSMillingTaskManager:
                 data, _ = self._future.running_subf.result()
                 new_image = data[0]
                 align_reference_image(ref_image, new_image, self.fib_stream.emitter)
-                
+
                 # save the alignment images
                 if self.filename is not None:
                     base_filename = self.filename
@@ -156,7 +156,7 @@ class TFSMillingTaskManager:
                     post_filename = base_filename.replace(".ome.tiff", "-At-Milling-Current-Pre-Alignment-FIB.ome.tiff")
                     self._exporter.export(pre_filename, ref_image)
                     self._exporter.export(post_filename, new_image)
-                    
+
                     self._future.running_subf = acquire([self.fib_stream])
                     data, _ = self._future.running_subf.result()
                     post_image = data[0]

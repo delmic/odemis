@@ -414,7 +414,7 @@ class FibsemTab(Tab):
         # if the tab isn't shown, we don't want to ask the user
         if evt is None: # if the event is None, it means this is the initial update, dont ask the user
             return
-        
+
         # changing milling angle, causes previously defined features at milling angle to be "seen" as SEM_IMAGING
         # QUERY: should we update the features to the new milling angle?
         box = wx.MessageDialog(self.main_frame,
