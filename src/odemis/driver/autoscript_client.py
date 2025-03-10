@@ -1032,9 +1032,10 @@ class SEM(model.HwComponent):
             self.server.set_patterning_mode(mode)
 
     def clear_patterns(self) -> None:
-        """Clear all patterns."""
+        """Clear all patterns in fib. NOTE: active_view 2 is the fib view"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
+            self.server.set_active_view(2) # channel = ion
             self.server.clear_patterns()
 
     def set_default_application_file(self, application_file: str = "Si") -> None:
@@ -1517,6 +1518,7 @@ class Detector(model.Detector):
                     md[model.MD_BEAM_FIELD_OF_VIEW] = self._scanner.horizontalFoV.value
                     md[model.MD_ACQ_TYPE] = self._scanner._acq_type
                     md[model.MD_ACQ_DATE] = time.time()
+                    md[model.MD_STAGE_POSITION_RAW] = self.parent._stage.position.value
                     md.update(self._metadata)
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
