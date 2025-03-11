@@ -77,7 +77,9 @@ class TestOverlayStream(unittest.TestCase):
         ovrl.repetition.value = (4, 4)
 
         f = ovrl.acquire()
-        das = f.result()
+        das, ex = f.result()
+        self.assertIsNone(ex)
+
         cor_md = das[0].metadata
         for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
             self.assertIn(k, cor_md)

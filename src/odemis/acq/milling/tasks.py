@@ -29,7 +29,7 @@ import yaml
 from odemis import model
 from odemis.acq.milling.patterns import (
     MillingPatternParameters,
-    pattern_generator,
+    PATTERN_NAME_TO_CLASS,
 )
 
 
@@ -40,8 +40,8 @@ class MillingSettings:
         self.current = model.FloatContinuous(current, unit="A", range=(20e-12, 120e-9))
         self.voltage = model.FloatContinuous(voltage, unit="V", range=(0, 30e3))
         self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(50e-06, 960e-06))
-        self.mode = model.StringEnumerated(mode, choices=set(["Serial", "Parallel"]))
-        self.channel = model.StringEnumerated(channel, choices=set(["ion"]))
+        self.mode = model.StringEnumerated(mode, choices={"Serial", "Parallel"})
+        self.channel = model.StringEnumerated(channel, choices={"ion"})
         self.align = model.BooleanVA(align) # align at the milling current
 
     def to_dict(self) -> dict:
@@ -68,13 +68,13 @@ class MillingSettings:
 
 class MillingTaskSettings:
     """Represents a milling tasks, which consists of a set of patterns and settings"""
-    milling: MillingSettings
-    patterns: List[MillingPatternParameters]
 
-    def __init__(self, milling: dict, patterns: List[MillingPatternParameters], name: str):
-        self.name = name
-        self.milling = milling
-        self.patterns = patterns
+    def __init__(self, milling: MillingSettings,
+                 patterns: List[MillingPatternParameters],
+                 name: str):
+        self.name: str = name
+        self.milling: MillingSettings = milling
+        self.patterns: List[MillingPatternParameters] = patterns
 
     def to_dict(self) -> dict:
         """Convert the parameters to a dictionary
@@ -92,7 +92,7 @@ class MillingTaskSettings:
         return MillingTaskSettings(
             name=data.get("name", "Milling Task"),
             milling=MillingSettings.from_dict(data["milling"]),
-            patterns=[pattern_generator[p["pattern"]].from_dict(p) for p in data["patterns"]])
+            patterns=[PATTERN_NAME_TO_CLASS[p["pattern"]].from_dict(p) for p in data["patterns"]])
 
     def __repr__(self):
         return f"{self.to_dict()}"

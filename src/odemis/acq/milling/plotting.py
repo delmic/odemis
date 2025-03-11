@@ -19,7 +19,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 ### Purpose ###
 
-This module contains plotting utils related to milling tasks.
+This module contains plotting utils related to milling tasks, and is primarily
+for debugging and visualisation purposes.
+
+To use:
+
+import matplotlib.pyplot as plt
+from odemis.acq.milling.plotting import draw_milling_tasks
+
+# image is a DataArray, e.g. stream.raw[0]
+image = fib_stream.raw[0]
+
+# milling_tasks is a dict of milling tasks, e.g. feature.milling_tasks
+milling_tasks = feature.milling.tasks
+
+# create a figure, and draw the milling tasks on it
+fig = draw_milling_tasks(image, milling_tasks)
+# display the figure
+plt.show()
 
 """
 from typing import Dict, List
@@ -41,16 +58,7 @@ COLOURS = [
     "red", "purple",
 ]
 
-def _draw_trench_pattern(image: model.DataArray,
-                         params: TrenchPatternParameters,
-                         colour: str = "yellow",
-                         name: str = "Task") -> List[mpatches.Rectangle]:
-    """Draw a trench pattern on the given image using matplotlib.
-    :param image: the image to draw the pattern on
-    :param params: the trench pattern parameters
-    :param colour: the colour to draw the pattern in
-    :param name: the name of the task
-    :return: a list of matplotlib patches representing the trench pattern"""
+def _draw_trench_pattern(image: model.DataArray, params: TrenchPatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -62,7 +70,7 @@ def _draw_trench_pattern(image: model.DataArray,
     pmx, pmy = mx / pixel_size, my / pixel_size
 
     # convert to image coordinates
-    cy, cx = image.shape[0] // 2, image.shape[1] // 2
+    cy, cx = image.shape[0] / 2, image.shape[1] / 2
     px = cx + pmx
     py = cy - pmy
 
@@ -71,21 +79,30 @@ def _draw_trench_pattern(image: model.DataArray,
     height = height / pixel_size
     spacing = spacing / pixel_size
 
-    rect1 = mpatches.Rectangle((px-width/2, py+spacing/2), width=width, height=height, linewidth=1, edgecolor=colour, facecolor=colour, alpha=0.3, label=f"{name}")
-    rect2 = mpatches.Rectangle((px-width/2, py-spacing/2-height), width=width, height=height, linewidth=1, edgecolor=colour, facecolor=colour, alpha=0.3)
+    rect1 = mpatches.Rectangle(
+        xy=(px - width / 2, py + spacing / 2),
+        width=width,
+        height=height,
+        linewidth=1,
+        edgecolor=colour,
+        facecolor=colour,
+        alpha=0.3,
+        label=f"{name}",
+    )
+    rect2 = mpatches.Rectangle(
+        xy=(px - width / 2, py - spacing / 2 - height),
+        width=width,
+        height=height,
+        linewidth=1,
+        edgecolor=colour,
+        facecolor=colour,
+        alpha=0.3,
+    )
 
     return [rect1, rect2]
 
-def _draw_rectangle_pattern(image: model.DataArray,
-                            params: RectanglePatternParameters,
-                            colour: str = "yellow",
-                            name: str = "Task") -> List[mpatches.Rectangle]:
-    """Draw a rectangle pattern on the given image using matplotlib.
-    :param image: the image to draw the pattern on
-    :param params: the rectangle pattern parameters
-    :param colour: the colour to draw the pattern in
-    :param name: the name of the task
-    :return: a list of matplotlib patches representing the rectangle pattern"""
+
+def _draw_rectangle_pattern(image: model.DataArray, params: RectanglePatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -96,7 +113,7 @@ def _draw_rectangle_pattern(image: model.DataArray,
     pmx, pmy = mx / pixel_size, my / pixel_size
 
     # convert to image coordinates
-    cy, cx = image.shape[0] // 2, image.shape[1] // 2
+    cy, cx = image.shape[0] / 2, image.shape[1] / 2
     px = cx + pmx
     py = cy - pmy
 
@@ -104,20 +121,21 @@ def _draw_rectangle_pattern(image: model.DataArray,
     width = width / pixel_size
     height = height / pixel_size
 
-    rect = mpatches.Rectangle((px-width/2, py+height/2), width=width, height=height, linewidth=1, edgecolor=colour, facecolor=colour, alpha=0.3, label=f"{name}")
+    rect = mpatches.Rectangle(
+        xy=(px - width / 2, py + height / 2),
+        width=width,
+        height=height,
+        linewidth=1,
+        edgecolor=colour,
+        facecolor=colour,
+        alpha=0.3,
+        label=f"{name}",
+    )
 
     return [rect]
 
-def _draw_microexpansion_pattern(image: model.DataArray,
-                                 params: MicroexpansionPatternParameters,
-                                 colour: str = "yellow",
-                                 name: str = "Task") -> List[mpatches.Rectangle]:
-    """Draw a microexpansion pattern on the given image using matplotlib.
-    :param image: the image to draw the pattern on
-    :param params: the microexpansion pattern parameters
-    :param colour: the colour to draw the pattern in
-    :param name: the name of the task
-    :return: a list of matplotlib patches representing the microexpansion pattern"""
+def _draw_microexpansion_pattern(image: model.DataArray, params: MicroexpansionPatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
+
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -129,7 +147,7 @@ def _draw_microexpansion_pattern(image: model.DataArray,
     pmx, pmy = mx / pixel_size, my / pixel_size
 
     # convert to image coordinates
-    cy, cx = image.shape[0] // 2, image.shape[1] // 2
+    cy, cx = image.shape[0] / 2, image.shape[1] / 2
     px = cx + pmx
     py = cy - pmy
 
@@ -138,8 +156,25 @@ def _draw_microexpansion_pattern(image: model.DataArray,
     height = height / pixel_size
     spacing = spacing / pixel_size
 
-    rect1 = mpatches.Rectangle((px-spacing, py-height/2), width=width, height=height, linewidth=1, edgecolor=colour, facecolor=colour, alpha=0.3, label=f"{name}")
-    rect2 = mpatches.Rectangle((px+spacing-width/2, py-height/2), width=width, height=height, linewidth=1, edgecolor=colour, facecolor=colour, alpha=0.3)
+    rect1 = mpatches.Rectangle(
+        xy=(px - spacing, py - height / 2),
+        width=width,
+        height=height,
+        linewidth=1,
+        edgecolor=colour,
+        facecolor=colour,
+        alpha=0.3,
+        label=f"{name}",
+    )
+    rect2 = mpatches.Rectangle(
+        xy=(px + spacing - width / 2, py - height / 2),
+        width=width,
+        height=height,
+        linewidth=1,
+        edgecolor=colour,
+        facecolor=colour,
+        alpha=0.3,
+    )
 
     return [rect1, rect2]
 

@@ -167,14 +167,11 @@ HW_SETTINGS_CONFIG = {
                 "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("probeCurrent", {
-                "label": "Beam Current",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "type": "float",
-                "scale": "linear",
-                "event": wx.EVT_SCROLL_CHANGED
+                "label": "Beam current",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("spotSize", {
-                "tooltip": "Electron-beam Spot size",
+                "tooltip": "Electron-beam spot size",
             }),
             ("horizontalFoV", {
                 "label": "HFW",
@@ -242,16 +239,13 @@ HW_SETTINGS_CONFIG = {
         "ion-beam":
         OrderedDict((
             ("accelVoltage", {
-                "label": "Accel. Voltage",
+                "label": "Accel. voltage",
                 "tooltip": "Accelerating voltage",
                 "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("probeCurrent", {
-                "label": "Beam Current",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "type": "float",
-                "scale": "linear",
-                "event": wx.EVT_SCROLL_CHANGED
+                "label": "Beam current",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("resolution", {
                 "label": "Resolution",

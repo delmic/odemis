@@ -26,7 +26,7 @@ from odemis.acq.milling.tasks import MillingTaskSettings, MillingSettings, load_
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-TASKS_PATH = os.path.join(os.getcwd(), "milling_tasks.yaml")
+TASKS_PATH = os.path.join(os.path.dirname(__file__), "milling_tasks.yaml")
 
 class MillingTaskTestCase(unittest.TestCase):
 

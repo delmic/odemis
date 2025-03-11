@@ -1,3 +1,6 @@
+# This file defines the default milling tasks used in the application.
+# Other configurations can be created by the user, but this file
+# provides a starting point.
 # Contains the configuration for the milling tasks in the format:
 # 
 # task_name:

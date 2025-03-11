@@ -53,6 +53,7 @@ class TFSMillingTaskManager:
         """
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
+        :param fib_stream: The FIB stream to use for reference image acquisition
         """
 
         self.fibsem = model.getComponent(role="fibsem")
@@ -62,9 +63,8 @@ class TFSMillingTaskManager:
         self.fib_stream = fib_stream
 
         self._future = future
-        if future is not None:
-            self._future.running_subf = model.InstantaneousFuture()
-            self._future._task_lock = threading.Lock()
+        self._future.running_subf = model.InstantaneousFuture()
+        self._future._task_lock = threading.Lock()
 
     def cancel(self, future: Future) -> bool:
         """
@@ -127,7 +127,7 @@ class TFSMillingTaskManager:
                 self._future.running_subf = acquire([self.fib_stream])
                 data, _ = self._future.running_subf.result()
                 new_image = data[0]
-                align_reference_image(ref_image, new_image, self.ion_beam)
+                align_reference_image(ref_image, new_image, self.fib_stream.emitter)
 
             # draw milling patterns to microscope
             for pattern in settings.generate():

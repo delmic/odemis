@@ -241,7 +241,7 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
         return patterns
 
 # dictionary to map pattern names to pattern classes
-pattern_generator = {
+PATTERN_NAME_TO_CLASS = {
     "rectangle": RectanglePatternParameters,
     "trench": TrenchPatternParameters,
     "microexpansion": MicroexpansionPatternParameters,
