@@ -534,7 +534,8 @@ class MicroscopeViewport(ViewPort):
             # Note: in practice, there is no AR spatial stream, so it's
             # never mixed with any other stream.
             def get_stream_prio(s):
-                if isinstance(s, (FluoStream, StaticFluoStream, CLStream)):
+                if (isinstance(s, (FluoStream, StaticFluoStream, CLStream))
+                    or s.acquisitionType.value in {model.MD_AT_ALIGN_OVERLAY}):
                     return 0
                 elif isinstance(s, SpectrumStream):
                     return 2
