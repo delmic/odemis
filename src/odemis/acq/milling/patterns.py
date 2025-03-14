@@ -97,7 +97,6 @@ class RectanglePatternParameters(MillingPatternParameters):
         Note: the rectangle is a pattern that is always generated as a single shape"""
         return [self]
 
-
 class TrenchPatternParameters(MillingPatternParameters):
     """Represents trench pattern parameters"""
 

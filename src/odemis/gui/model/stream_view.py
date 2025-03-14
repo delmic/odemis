@@ -443,7 +443,8 @@ class StreamView(View):
         if not self._stage:
             return None
 
-        move = self.clipToStageLimits({"x": pos[0], "y": pos[1]})
+        if isinstance(pos, tuple):
+            move = self.clipToStageLimits({"x": pos[0], "y": pos[1]})
 
         logging.debug("Requesting stage to move to %s mm in x direction and %s mm in y direction",
                       move["x"] * 1e3, move["y"] * 1e3)

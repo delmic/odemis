@@ -31,6 +31,7 @@ from typing import Dict, Union, List, Iterable, Tuple
 
 import numpy
 import scipy
+import numpy as np
 
 from odemis import model, util
 from odemis.model import isasync
@@ -879,6 +880,18 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.check_stage_metadata(required_keys=self.required_keys)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
+
+        # # NOTE: @patrick
+        # we also need to check if they are using raw coordinates,
+        # because this will invert the z-direction???? how?
+        # No, because if they are using raw coordinates,
+        # the z-axis is inverted in the stage metadata, and the pretilt is too,
+        # so it's handled there
+
+        # forced conversion to sample-stage
+        comp = model.getComponent(name="Linked YZ")
+        self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
+        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
