@@ -597,7 +597,7 @@ class Detector(HwComponent, metaclass=ABCMeta):
 
         # Maximum value of each dimension of the detector (including the
         # intensity). A CCD camera 2560x1920 with 12 bits intensity has a 3D
-        # shape (2560, 1920, 2048).
+        # shape (2560, 1920, 4096).
         self._shape = (0,)
 
         # Data-flow coming from this detector.
