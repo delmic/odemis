@@ -37,7 +37,7 @@ from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.driver import ATOL_LINEAR_POS, isNearPosition
-from odemis.util.transform import _get_transforms
+from odemis.util.transform import get_rotation_transforms
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -739,13 +739,17 @@ class TestMeteorTFS3Move(unittest.TestCase):
         ssp3 = self.pm._get_sample_pos(stage_pos)                       # old 2D method
 
         # assert near Position
-        self.assertTrue(isNearPosition(ssp, ssp2, axes={"x", "y", "z", "rx", "rz"}))
-        self.assertTrue(isNearPosition(ssp, ssp3, axes={"x", "y", "z", "rx", "rz"}))
+        self.assertTrue(isNearPosition(ssp, ssp2, axes={"x", "y", "z"}))
+        self.assertTrue(isNearPosition(ssp, ssp3, axes={"x", "y", "z"}))
 
     def test_to_posture(self):
         """Test that posture projection is the same as moving to the posture"""
+
+        # first move back to grid-1 to make sure we are in a known position
         f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
         f.result()
+
+        # move to SEM imaging posture
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
 
@@ -841,7 +845,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
             new_sb_pos = self.stage_bare.position.value
 
             self.assertTrue(isNearPosition(new_pos, abs_pos,
-                                                  axes={"x", "y", "z", "rx", "rz"}))
+                                                  axes={"x", "y", "z"}))
             self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
                                                   axes={"x", "y", "z", "rx", "rz"}))
 
@@ -850,27 +854,63 @@ class TestMeteorTFS3Move(unittest.TestCase):
     def test_transformation_calculation(self):
         """Simple tests for 3D transform calculations"""
 
-        tf, tf_inv = _get_transforms(0)
+        tf, tf_inv = get_rotation_transforms(rx=0)
         self.assertEqual(tf.shape, (3, 3))
         self.assertEqual(tf_inv.shape, (3, 3))
         numpy.testing.assert_array_almost_equal(tf, numpy.eye(3))
         numpy.testing.assert_array_almost_equal(tf_inv, numpy.eye(3))
 
-        tf, tf_inv = _get_transforms(r=math.radians(45))
-        r = math.radians(45)
-        tf2 = numpy.array(
+        # rotation around x-axis
+        rx = math.radians(45)
+        tf, tf_inv = get_rotation_transforms(rx=rx)
+        tf_rx = numpy.array(
                 [[1, 0, 0],
-                [0, numpy.cos(r), -numpy.sin(r)],
-                [0, numpy.sin(r), numpy.cos(r)]])
-        numpy.testing.assert_array_almost_equal(tf, tf2)
-        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf2))
+                [0, numpy.cos(rx), -numpy.sin(rx)],
+                [0, numpy.sin(rx), numpy.cos(rx)]])
+        numpy.testing.assert_array_almost_equal(tf, tf_rx)
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_rx))
+
+        # rotation around z-axis
+        rz = math.radians(180)
+        tf, tf_inv = get_rotation_transforms(rz=rz)
+        tf_rz = numpy.array([
+            [numpy.cos(rz), -numpy.sin(rz), 0],
+            [numpy.sin(rz), numpy.cos(rz), 0],
+            [0, 0, 1]])
+        numpy.testing.assert_array_almost_equal(tf, tf_rz)
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_rz))
+
+        # multiply two rotations (rz, rx)
+        tf, tf_inv = get_rotation_transforms(rx=rx, rz=rz)
+        tf_2 = numpy.dot(tf_rz, tf_rx)
+        numpy.testing.assert_array_almost_equal(tf, tf_2)
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_2))
 
     def test_scan_rotation(self):
         # TODO: implement once completed
         pass
 
-    def test_component_metadata_update(self):
-        pass # TODO:
+    def test_stage_to_chamber(self):
+        """Test the sample-stage to chamber transformation used for vertical movements."""
+
+        # go to sem imaging
+        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        time.sleep(2)
+
+        # calculate the vertical shift in chamber coordinates
+        shift = {"x": 100e-6, "z": 50e-6}
+        zshift = self.pm._transformFromChamberToStage(shift)
+
+        # calculate axis components
+        theta = self.stage_bare.position.value["rx"] # tilt, in radians (stage-bare)
+        dy = shift["z"] * math.sin(theta)
+        dz = shift["z"] / math.cos(theta)
+        expected_vshift = {"x": shift["x"], "y": dy, "z": dz}
+
+        # check that the transformation is correct
+        for axis in expected_vshift.keys():
+            self.assertAlmostEqual(zshift[axis], expected_vshift[axis], places=5)
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
     """
@@ -955,6 +995,11 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(current_grid, None)
 
+    def test_stage_to_chamber(self):
+        shift = {"x": 100e-6, "z": 50e-6}
+        zshift = self.posture_manager._transformFromChamberToStage(shift)
+        self.assertAlmostEqual(zshift["x"], shift["x"], places=5)
+        self.assertAlmostEqual(zshift["z"], shift["z"], places=5)
 
 class TestMimasMove(unittest.TestCase):
     """

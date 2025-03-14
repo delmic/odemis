@@ -49,7 +49,7 @@
         port: "/dev/fake6",
         address: null,
         axes: ["x", "y", "z", "rx", "rz"],
-        ustepsize: [1.e-6, 1.e-6, 1.e-6, 1.2e-5, 1.2e-5], # unit/µstep
+        ustepsize: [1.e-6, 1.e-6, 1.e-6, 1.2e-5, 1.2e-5], # unit/step
         rng: [[-0.1, 0.1], [-0.05, 0.05], [-0.05, 0.1], [-2, 2], [0, 6.28]],
         unit: ["m", "m", "m", "rad", "rad"],
         refproc: "Standard",
