@@ -66,7 +66,7 @@ from odemis.util import img, linalg, rect_intersect
 from odemis.util.focus import MeasureOpticalFocus
 from odemis.util.img import assembleZCube
 from odemis.util.linalg import generate_triangulation_points
-from odemis.util.raster import point_in_polygon
+from odemis.util.raster import point_in_polygon, get_possible_intersections
 
 # TODO: Find a value that works fine with common cases
 # Ratio of the allowed difference of tile focus from good focus
@@ -339,34 +339,6 @@ class TiledAcquisitionTask(object):
         # Create an empty grid for storing intersected tiles
         tile_grid = numpy.zeros((ny, nx), dtype=bool)
 
-        def get_possible_intersected_tiles(row_pairs, col_pairs):
-            """Bresenham's line algorithm to determine the possible intersected tiles."""
-            tiles = set()
-            for (row1, row2), (col1, col2) in zip(row_pairs, col_pairs):
-                dx = abs(row2 - row1)
-                dy = abs(col2 - col1)
-                sx = 1 if row1 < row2 else -1
-                sy = 1 if col1 < col2 else -1
-                err = dx - dy
-
-                while True:
-                    tiles.add((row1, col1))
-                    # Add adjacent neighbors to ensure complete coverage
-                    tiles.add((row1 + sx, col1))
-                    tiles.add((row1 - sx, col1))
-                    tiles.add((row1, col1 + sy))
-                    tiles.add((row1, col1 - sy))
-                    if row1 == row2 and col1 == col2:
-                        break
-                    e2 = err * 2
-                    if e2 > -dy:
-                        err -= dy
-                        row1 += sx
-                    if e2 < dx:
-                        err += dx
-                        col1 += sy
-            return tiles
-
         # Vectorized conversion of polygon points to grid coordinates
         points = numpy.array(self._polygon.exterior.coords)
         rows = numpy.floor((ymax - points[:, 1]) / reliable_fov[1]).astype(int)
@@ -376,7 +348,7 @@ class TiledAcquisitionTask(object):
         row_pairs = numpy.vstack((rows, numpy.roll(rows, -1))).T
         col_pairs = numpy.vstack((cols, numpy.roll(cols, -1))).T
 
-        intersected_tiles = get_possible_intersected_tiles(row_pairs, col_pairs)
+        intersected_tiles = get_possible_intersections(row_pairs, col_pairs)
 
         for row, col in intersected_tiles:
             if 0 <= row < ny and 0 <= col < nx:
