@@ -115,51 +115,54 @@ class CRYOSECOMTestCase(unittest.TestCase):
                                               (0, 0, fov[0] / 2, fov[1] / 2),
                                               overlap=0, future=model.InstantaneousFuture())
 
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 1)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 1)
+        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0)])
 
         # Precisely 2x2 FoV, without overlap => 2x2 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               (0, 0, 2 * fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 4)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 4)
+        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0), (1, 0), (0, 1), (1, 1)])
 
         # Precisely 1 x 2 FoV, without overlap => should give 1 x 2 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               (0, 0, fov[0], 2 * fov[1]),
                                               overlap=0, future=model.InstantaneousFuture())
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 2)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 2)
+        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0), (0, 1)])
 
         # Precisely 0.8 FoV, with overlap 0.2 => 1x1 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               (0, 0, 0.8 * fov[0], 0.8 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 1)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 1)
+        self.assertEqual(tiled_acq_task._tile_indices, [(0, 0)])
 
         # 2x3 FoV with overlap 0.2 => 3x4
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               (0, 0, 2 * fov[0], 3 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 12)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 12)
+        self.assertEqual(
+            tiled_acq_task._tile_indices,
+            [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2), (0, 3), (1, 3), (2, 3)]
+        )
 
         # Precisely 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               (0, 0, 4 * 0.8 * fov[0], 7 * 0.8 * fov[1]),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 28)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 28)
+        self.assertEqual(tiled_acq_task._tile_indices, [(col, row) for row in range(7) for col in range(4)])
 
         # A tiny bit more 4*0.8x7*0.8 FoV, with overlap 0.2 => 4x7 tiles
         eps = 1e-12
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               (0, 0, 4 * 0.8 * fov[0] + eps, 7 * 0.8 * fov[1] + eps),
                                               overlap=0.2, future=model.InstantaneousFuture())
-        num_tiles, _, _ = tiled_acq_task._getNumberOfTiles()
-        self.assertEqual(num_tiles, 28)
+        self.assertEqual(tiled_acq_task._number_of_tiles, 28)
+        self.assertEqual(tiled_acq_task._tile_indices, [(col, row) for row in range(7) for col in range(4)])
 
     def test_move_to_tiles(self):
         """
@@ -823,7 +826,7 @@ class TiledAcquisitionTaskTestCase(unittest.TestCase):
             rectangle = rotate(rectangle, angle, origin='centroid', use_radians=False)
         return list(rectangle.exterior.coords[:-1])  # Exclude exterior coords closing point which is the same as the first
 
-    def test_normalize_region_to_polygon(self):
+    def test_convert_region_to_polygon(self):
         # Region is a valid polygon
         region = [(0.0, 0.0), (14.0e-3, 0.0), (14.0e-3, 13.0e-3), (0.0, 13.0e-3)]
         tiled_acq_task = TiledAcquisitionTask(streams=self.streams, stage=mock.Mock(spec=model.Actuator), region=region, overlap=0.0145)

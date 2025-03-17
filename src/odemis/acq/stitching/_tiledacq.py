@@ -66,7 +66,7 @@ from odemis.util import img, linalg, rect_intersect
 from odemis.util.focus import MeasureOpticalFocus
 from odemis.util.img import assembleZCube
 from odemis.util.linalg import generate_triangulation_points
-from odemis.util.raster import point_in_polygon
+from odemis.util.raster import get_polygon_grid_cells, point_in_polygon
 
 # TODO: Find a value that works fine with common cases
 # Ratio of the allowed difference of tile focus from good focus
@@ -138,8 +138,8 @@ class TiledAcquisitionTask(object):
             self._future.running_subf: future.Future = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
 
-        # Normalize the region input into a polygon
-        self._polygon = self._normalize_region_to_polygon(region)
+        # Convert the region input into a polygon
+        self._polygon = self._convert_region_to_polygon(region)
         xmin, ymin, xmax, ymax = self._polygon.bounds
         self._area_size = (xmax - xmin, ymax - ymin)
 
@@ -156,7 +156,8 @@ class TiledAcquisitionTask(object):
         self._sfov = self._guessSmallestFov(streams)
         logging.debug("Smallest FoV: %s", self._sfov)
 
-        self._number_of_tiles, self._starting_pos, self._tile_indices = self._getNumberOfTiles()
+        self._starting_pos, self._tile_indices = self._get_tile_coverage()
+        self._number_of_tiles = len(self._tile_indices)
         logging.debug("Calculated number of tiles %s", self._number_of_tiles)
 
         # save actual time take for tile acquisition, stage movement from one tile to another
@@ -241,19 +242,19 @@ class TiledAcquisitionTask(object):
         self._weaver = weaver
         self._focus_plane = {}
 
-    def _normalize_region_to_polygon(
+    def _convert_region_to_polygon(
             self,
             region: Union[Tuple[float, float, float, float], List[Tuple[float, float]]]
         ) -> Polygon:
         """
-        Normalize the region input into a polygon.
+        Convert the region input into a polygon.
         :param region: Either a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points.
         :return: A polygon representing the region.
         :raise: ValueError if the region does not form a valid polygon.
         :raise: ValueError if the region is not a bounding box or a list of points.
         """
         if isinstance(region, tuple) and len(region) == 4:
-            # Normalize the bounding box
+            # Normalize the bounding box to ensure the order is correct
             xmin, ymin, xmax, ymax = util.normalize_rect(region)
             if region[0] != xmin or region[1] != ymin:
                 logging.warning("Acquisition area %s rearranged into %s", region, (xmin, ymin, xmax, ymax))
@@ -299,22 +300,19 @@ class TiledAcquisitionTask(object):
         return (min(f[0] for f in fovs),
                 min(f[1] for f in fovs))
 
-    def _getNumberOfTiles(self):
+    def _get_tile_coverage(self) -> Tuple[Dict[str, float], List[Tuple[int, int]]]:
         """
         Calculate the exact tiles required to cover the region.
         return:
-            nb (int): total number of tiles to cover the region
-            starting_position (float, float): center of the first tile (at the top-left)
-            tile_indices (List[Tuple[int, int]]: List of (col, row) indices for the tiles
+            starting_position: center of the first tile (at the top-left)
+            tile_indices: List of (col, row) indices for the tiles
         """
         if self._polygon is None:
             raise ValueError("Polygon shape is not defined.")
 
-        # Define grid cell size based on field of view (FoV) and overlap
-        reliable_fov = (
-            self._sfov[0] * (1 - self._overlap),  # Width of the tile
-            self._sfov[1] * (1 - self._overlap)   # Height of the tile
-        )
+        # The size of the smallest tile, non-including the overlap, which will be
+        # lost (and also indirectly represents the precision of the stage)
+        reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
 
         # Round up the number of tiles needed. With a twist: if we'd need less
         # than 1% of a tile extra, round down. This handles floating point
@@ -332,64 +330,43 @@ class TiledAcquisitionTask(object):
         # We pick alternative 1 (no real reason)
         xmin, ymin, xmax, ymax = self._polygon.bounds
         center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
-        total_size = nx * reliable_fov[0], ny * reliable_fov[1]
+        total_size = (
+            nx * reliable_fov[0] + self._sfov[0] * self._overlap,
+            ny * reliable_fov[1] + self._sfov[1] * self._overlap,
+        )
         xmin = center[0] - total_size[0] / 2
         ymax = center[1] + total_size[1] / 2
 
         # Create an empty grid for storing intersected tiles
+        # An intersected tile is any tile in the grid that intersects with (or falls within) the given polygon
         tile_grid = numpy.zeros((ny, nx), dtype=bool)
-
-        def get_possible_intersected_tiles(row_pairs, col_pairs):
-            """Bresenham's line algorithm to determine the possible intersected tiles."""
-            tiles = set()
-            for (row1, row2), (col1, col2) in zip(row_pairs, col_pairs):
-                dx = abs(row2 - row1)
-                dy = abs(col2 - col1)
-                sx = 1 if row1 < row2 else -1
-                sy = 1 if col1 < col2 else -1
-                err = dx - dy
-
-                while True:
-                    tiles.add((row1, col1))
-                    # Add adjacent neighbors to ensure complete coverage
-                    tiles.add((row1 + sx, col1))
-                    tiles.add((row1 - sx, col1))
-                    tiles.add((row1, col1 + sy))
-                    tiles.add((row1, col1 - sy))
-                    if row1 == row2 and col1 == col2:
-                        break
-                    e2 = err * 2
-                    if e2 > -dy:
-                        err -= dy
-                        row1 += sx
-                    if e2 < dx:
-                        err += dx
-                        col1 += sy
-            return tiles
 
         # Vectorized conversion of polygon points to grid coordinates
         points = numpy.array(self._polygon.exterior.coords)
         rows = numpy.floor((ymax - points[:, 1]) / reliable_fov[1]).astype(int)
         cols = numpy.floor((points[:, 0] - xmin) / reliable_fov[0]).astype(int)
 
-        # Vectorized calculation of intersected grid cells
-        row_pairs = numpy.vstack((rows, numpy.roll(rows, -1))).T
-        col_pairs = numpy.vstack((cols, numpy.roll(cols, -1))).T
+        # Create array of (row, col) vertices
+        polygon_vertices = numpy.stack((rows, cols), axis=1)
 
-        intersected_tiles = get_possible_intersected_tiles(row_pairs, col_pairs)
+        intersected_tiles = get_polygon_grid_cells(polygon_vertices, include_neighbours=True)
 
+        # The intersected tiles contains tiles which can be inside the polygon, outside the polygon and tiles which
+        # actually intersect with the polygon. We only need the tiles which actually intersect the polygon, to binary
+        # fill the holes and get the tile indices.
         for row, col in intersected_tiles:
-            if 0 <= row < ny and 0 <= col < nx:
-                # Define the bounds of the current tile
-                tile_bounds = box(
-                    xmin + col * reliable_fov[0],
-                    ymax - (row + 1) * reliable_fov[1],
-                    xmin + (col + 1) * reliable_fov[0],
-                    ymax - row * reliable_fov[1]
-                )
-                # Check if the tile intersects with the polygon shape
-                if self._polygon.intersects(tile_bounds):
-                    tile_grid[row, col] = True
+            if not (0 <= row < ny and 0 <= col < nx):  # Certainly out of the polygon => not worthy to acquire
+                continue
+            # Define the bounds of the current tile
+            tile_bounds = box(
+                xmin + col * reliable_fov[0],
+                ymax - (row + 1) * reliable_fov[1],
+                xmin + (col + 1) * reliable_fov[0],
+                ymax - row * reliable_fov[1]
+            )
+            # Check if the tile intersects with the polygon shape
+            if self._polygon.intersects(tile_bounds):
+                tile_grid[row, col] = True
 
         # Fill any holes in the grid to get contiguous tiles
         filled_grid = binary_fill_holes(tile_grid)
@@ -402,7 +379,7 @@ class TiledAcquisitionTask(object):
             "y": ymax - reliable_fov[1] / 2
         }
 
-        return len(tile_indices), starting_position, tile_indices
+        return starting_position, tile_indices
 
     def _cancelAcquisition(self, future):
         """
@@ -421,6 +398,12 @@ class TiledAcquisitionTask(object):
     def _sort_tile_indices_zigzag(self, tile_indices: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         """
         Sort the given tile indices in a zigzag scanning order.
+        # Below is an example for a 5x3 tile grid:
+        # A-->-->-->--v
+        #             |
+        # v--<--<--<---
+        # |
+        # --->-->-->--Z
         :param tile_indices: List of (int, int) tuples representing the tile indices
         :return: List of (int, int) tuples sorted in a zigzag scanning order
         """
@@ -633,7 +616,7 @@ class TiledAcquisitionTask(object):
                 if pxs > max_pxs:
                     max_pxs = pxs
 
-        stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / STITCH_SPEED
+        stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
         try:
             # move_speed is a default speed but not an actual stage speed due to which
             # extra time is added based on observed time taken to move stage from one tile position to another
