@@ -881,8 +881,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
         # NOTE:
-        # we don't need to check if they are using raw coordinates, 
-        # because the z-axis and pre-tilt angle are inverted in each case, 
+        # we don't need to check if they are using raw coordinates,
+        # because the z-axis and pre-tilt angle are inverted in each case,
         # which accounts for the inversion between raw/specimen
 
         # forced conversion to sample-stage, to enable the conversion between sample and stage positions
