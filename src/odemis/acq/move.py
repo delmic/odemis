@@ -880,6 +880,16 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
+        # NOTE:
+        # we don't need to check if they are using raw coordinates, 
+        # because the z-axis and pre-tilt angle are inverted in each case, 
+        # which accounts for the inversion between raw/specimen
+
+        # forced conversion to sample-stage, to enable the conversion between sample and stage positions
+        comp = model.getComponent(name="Linked YZ")
+        self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
+        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
@@ -2912,7 +2922,6 @@ class SampleStage(model.Actuator):
 
     def stop(self, axes=None):
         self._stage_bare.stop()
-
 
 def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: int = math.radians(52)) -> float:
     """Calculate the stage tilt from the milling angle and the pre-tilt.
