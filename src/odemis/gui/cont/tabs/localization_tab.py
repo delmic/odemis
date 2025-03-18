@@ -77,6 +77,17 @@ class LocalizationTab(Tab):
         # Order matters!
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
+        # If the camera native resolution is larger than the viewport (> 1.9x), the image displayed
+        # on the screen might have aliasing artifacts. (Eg, Andor Sona, with the METEOR v2).
+        # To avoid this, we interpolate the content. The only drawback of interpolation is that it
+        # lowers the frame rate, which can be annoying when manually focusing, so we don't activate
+        # it by default.
+        if main_data.ccd.resolution.range[1][0] > wx.DisplaySize()[1] * 0.95:  # px
+            logging.debug("Activating interpolation in localization tab, as camera has resolution %s",
+                          main_data.ccd.resolution.range[1][0])
+            for v in tab_data.views.value:
+                v.interpolate_content.value = True
+
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
             (panel.btn_secom_view_all,
