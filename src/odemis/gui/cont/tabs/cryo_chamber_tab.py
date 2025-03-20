@@ -73,8 +73,10 @@ from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
-# from odemis.acq.align.tdct import parse_3dct_yaml_file
-
+try:
+    from odemis.acq.align.tdct import parse_3dct_yaml_file
+except ImportError as e:
+    logging.warning(f"Unable to import 3DCT module: {e}")
 
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):

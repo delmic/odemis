@@ -28,7 +28,7 @@ import yaml
 from odemis import model
 
 # install from: https://github.com/patrickcleeve2/3DCT/blob/refactor
-sys.path.append(f"{os.path.expanduser('~')}/development/3DCT")
+sys.path.append(f"{os.path.expanduser('~')}/development/openfibsem/3DCT")
 
 from tdct.correlation_v2 import run_correlation
 from tdct.util import multi_channel_get_z_guass

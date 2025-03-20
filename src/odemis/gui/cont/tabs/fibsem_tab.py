@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import math
+import numpy
 
 import wx
 
@@ -339,8 +340,12 @@ class FibsemTab(Tab):
             dx = p_pos[0] - init_pos[0]
             dy = p_pos[1] - init_pos[1]
 
-            # TODO: invert dy if scan rotated.
-
+            # invert dy if scan rotated.
+            if numpy.isclose(self.main_data.ion_beam.rotation.value, 
+                                math.radians(180), 
+                                atol=1e-2):
+                dy *= -1
+                logging.debug("Scan rotation detected, inverting dy")            
             logging.info(f"Moving stage vertically by: {dx}, {dy}")
             f = self.pm.sample_stage.moveRelChamberReferential({"x": dx, "z": dy})
             f.result()

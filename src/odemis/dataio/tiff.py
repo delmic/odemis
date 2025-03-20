@@ -1590,9 +1590,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
                 if isinstance(owl, str):
-                    filter = ET.SubElement(chan, "Filter", attrib={
-                                    "ID": "Filter:%d:%d" % (idnum, subid)})
-                    filter.attrib["Type"] = owl
+                    pass # No-emission -> passthrough
+                    # filter = ET.SubElement(chan, "Filter", attrib={
+                                    # "ID": "Filter:%d:%d" % (idnum, subid)})
+                    # filter.attrib["Type"] = owl
                 elif model.MD_IN_WL in da.metadata:
                     # Use excitation wavelength in case of multiple bands
                     iwl = da.metadata[model.MD_IN_WL]

@@ -439,7 +439,8 @@ class MillingTaskController:
 
         # run the milling tasks
         tasks = [task for task_name, task in self.milling_tasks.items() if task_name in self.selected_tasks.value]
-        self._mill_future = millmng.run_milling_tasks(tasks=tasks)
+        self._mill_future = millmng.run_milling_tasks(tasks=tasks,
+                                                      fib_stream=self._tab.fib_stream)
 
         # link the milling gauge to the milling future
         self._gauge_future_conn = ProgressiveFutureConnector(
