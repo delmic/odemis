@@ -3,17 +3,17 @@ How to install Odemis
 
 = Installing the dependencies =
 
-You need Ubuntu 16.04 (x86 - 32/64 bits).
+You need Ubuntu 22.04 (x86 - 64 bits).
 The dependencies can be found in the file debian/control. Basically, they can be
 installed with:
 sudo apt-get install python3-pil python3-yaml python3-serial python3-zmq \
-python3-concurrent.futures python3-scipy python3-decorator cgroup-bin \
-python3-libtiff python3-comedilib python3-h5py libtiff5-dev python3-future \
+python3-scipy python3-decorator python3-shapely python3-setuptools \
+python3-libtiff python3-comedilib python3-h5py libtiff5-dev cython3 \
 python3-pkg-resources python3-netifaces python3-cairo python3-numpy python3-scipy \
 python3-decorator python3-xdg python3-suds python3-matplotlib python3-opencv \
 python3-wxgtk4.0 python3-serial python3-evdev python3-notify2 python3-psutil \
-graphicsmagick cgroup-bin python3-pyro4 authbind python3-setuptools cython3 \
-python3-shapely
+graphicsmagick cgroup-tools authbind
+
 
 Some of these packages need newer version than what is available in the default
 Ubuntu repository. They can be found on Delmic's PPA, or it's possible to
