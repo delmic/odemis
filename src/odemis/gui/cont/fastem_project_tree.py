@@ -443,7 +443,7 @@ class NodeWindow(wx.Window):
         self.right_sizer.Add(self.gauge, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
         self.right_sizer.Add(self.status_text, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
 
-        self.main_sizer.Add(self.right_sizer, 0, wx.ALIGN_RIGHT)
+        self.main_sizer.Add(self.right_sizer, 0)
         self.SetSizer(self.main_sizer)
         self.Layout()
 

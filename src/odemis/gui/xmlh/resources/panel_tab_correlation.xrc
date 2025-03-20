@@ -265,7 +265,6 @@
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
                               <flag>wxEXPAND</flag>
                             </object>
@@ -274,7 +273,7 @@
                               <object class="wxFlexGridSizer">
                                 <object class="sizeritem">
                                 <object class="wxCheckBox" name="ctrl_enable_correlation">
-                                  <label>Correlaton Enabled</label>
+                                  <label>Correlation Enabled</label>
                                   <fg>#E5E5E5</fg>
                                   <XRCED>
                                     <assign_var>1</assign_var>

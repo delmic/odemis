@@ -418,8 +418,8 @@ class SettingsPanel(wx.Panel):
         button_sizer.Add(delete_button_ctrl, 0, wx.ALL)
 
         control_sizer = wx.BoxSizer(wx.VERTICAL)
-        control_sizer.Add(value_ctrl, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
-        control_sizer.Add(button_sizer, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
+        control_sizer.Add(value_ctrl, 0, wx.ALL | wx.EXPAND, 5)
+        control_sizer.Add(button_sizer, 0, wx.ALL | wx.EXPAND, 5)
 
         self.gb_sizer.Add(control_sizer, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND)
