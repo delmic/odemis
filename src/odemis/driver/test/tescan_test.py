@@ -365,10 +365,9 @@ class BaseSEMTest(object):
         ebeam = self.scanner
 
         orig_probe_current = ebeam.probeCurrent.value
-        pc_choices = sorted(ebeam.probeCurrent.choices)
-        ebeam.probeCurrent.value = pc_choices[0]
+        ebeam.probeCurrent.value = 1e-9
         time.sleep(6)  # Wait for value refresh
-        self.assertAlmostEqual(pc_choices[0], ebeam.probeCurrent.value)
+        self.assertAlmostEqual(1e-9, ebeam.probeCurrent.value)
 
         # Reset
         ebeam.probeCurrent.value = orig_probe_current
