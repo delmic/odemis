@@ -2332,8 +2332,6 @@ class Stage(model.Actuator):
                     target_pos = {ax: val + orig_pos[ax] for ax, val in pos.items()}
                 else:
                     target_pos = pos
-                # Drop axes from the original position, which are not important because they have not moved
-                orig_pos = {a: orig_pos[a] for a, nv in target_pos.items() if nv != orig_pos[a]}
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2380,10 +2378,8 @@ class Stage(model.Actuator):
                 # The stage is not moving anymore, however in some rare cases, the server still reports the old
                 # position for a short while (typically < 1s). This can cause all sorts of confusion in the calling
                 # code, as it would seem that the move didn't have any effect, and later on, after the position
-                # is eventually updated that the stage has moved unexpectedly. So, wait until the reported position is
-                # (1) not identical to the starting position and (2) not too far from the target position.
+                # is eventually updated that the stage has moved unexpectedly. So, wait until close to the target position.
 
-                # The stage is not moving anymore, but we still want to wait until the position has been updated
                 # TODO: base the timeout on stage movement time estimation, needs to be checked on hardware
                 wait_stage_move = 10  # s
                 expected_end_time = time.time() + wait_stage_move  # s
@@ -2405,42 +2401,29 @@ class Stage(model.Actuator):
                     tol_rotation = max(min(movement_req_rotational), STAGE_TOL_ROTATION)  # radians
 
                 axes_to_check = linear_axes_to_check | rotational_axes_to_check
-
-                while True:
-                    current_pos = self.parent.get_stage_position()
-                    # Every axis requested to move should have moved (compared to the position before starting)
-                    # if there is some change w.r.t starting position, proceed to check the target position
-                    # Note that we don't use almost_equal() on the floats, because all we care about is whether
-                    # the position has changed. Even a very tiny change is a sign we've received a position update.
-                    if all(current_pos[a] != op for a, op in orig_pos.items()):
-
-                        if axes_to_check:
-                            axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
-                                                          axes=axes_to_check, rot_axes=rotational_axes_to_check,
-                                                          atol_linear=tol_linear, atol_rotation=tol_rotation)
-                        else:
-                            axes_updated = True  # No axis to check => move is done
-
-                        if axes_updated:
-                            logging.debug("Position has updated fully: from %s -> %s", orig_pos,
-                                          current_pos)
-                            break
-                        else:
-                            logging.debug("Waiting a little longer as position has not updated fully: %s != %s",
-                                          current_pos, target_pos)
-                    else:
-                        logging.debug("Waiting for position to update: %s == %s (for some axes)",
-                                      orig_pos, current_pos)
+                while axes_to_check:
+                    if isNearPosition(current_pos=current_pos, target_position=target_pos,
+                                      axes=axes_to_check, rot_axes=rotational_axes_to_check,
+                                      atol_linear=tol_linear, atol_rotation=tol_rotation):
+                        # Drop axes from the original position, which are not important because they have not moved
+                        orig_pos = {a: orig_pos[a] for a, nv in target_pos.items()
+                                    if nv != orig_pos[a]}
+                        logging.debug("Position has updated fully: from %s -> %s", orig_pos,
+                                      current_pos)
+                        break
 
                     if time.time() > expected_end_time:
-                        logging.warning("Stage position after move + %s s is %s instead of target pos: %s. "
+                        logging.warning("Stage position after %s s is %s instead of target pos: %s. "
                                         "Giving up waiting.", wait_stage_move, current_pos, target_pos)
                         break
 
                     if future._must_stop.is_set():
                         raise CancelledError()
 
+                    logging.debug("Waiting a little longer as position has not updated fully: %s != %s",
+                                  current_pos, target_pos)
                     time.sleep(STAGE_WAIT_DURATION)
+                    current_pos = self.parent.get_stage_position()
 
             except Exception:
                 if future._must_stop.is_set():
