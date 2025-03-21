@@ -131,6 +131,18 @@ CONFIG_SEM = {
 }
 
 
+class EventReceiver:
+    """
+    Helper class to receive model.Events
+    """
+    def __init__(self):
+        self.count = 0
+
+    def onEvent(self):
+        logging.debug("Received an event")
+        self.count += 1
+
+
 class TestAnalogSEM(unittest.TestCase):
 
     @classmethod
@@ -735,11 +747,16 @@ class TestAnalogSEM(unittest.TestCase):
         # Default dwell time is the shortest dwell time => that's what we want
         self.scanner.scale.value = 64, 64
         self.scanner.resolution.value = 10, 8
+
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         exp_shape, exp_pxs, _ = self.compute_expected_metadata()
         da = self.sed.data.get()
         self.assertEqual(da.shape, exp_shape)
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(evt_counter.count, 1)
 
         # Very tiny (single sample)
         self.scanner.scale.value = 64, 64
@@ -750,6 +767,8 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(da.shape, exp_shape)
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(evt_counter.count, 2)
+        self.scanner.startScan.unsubscribe(evt_counter)
 
     def test_acquisition_big_res(self):
         """
@@ -800,6 +819,9 @@ class TestAnalogSEM(unittest.TestCase):
         self.scanner.translation.value = (0, 0)
         exp_shape, exp_pxs, exp_duration = self.compute_expected_metadata()
 
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         spots_dates = []
         for i in range(50):
             # On the SPARC, the dwell time doesn't actually change for every spot, but let's make it
@@ -819,7 +841,9 @@ class TestAnalogSEM(unittest.TestCase):
             spots_dates.append(self.acq_dates[-1])
             time.sleep(5e-3)  # simulate data processing
 
+        self.scanner.startScan.unsubscribe(evt_counter)
         self.assertEqual(len(spots_dates), 50)
+        self.assertEqual(evt_counter.count, 50)
 
     def test_acquisition_long_dt(self):
         """
@@ -845,6 +869,10 @@ class TestAnalogSEM(unittest.TestCase):
         self.scanner.dwellTime.value = 1e-6  # s
         exp_shape, exp_pxs, exp_duration = self.compute_expected_metadata()
 
+        # Also check that the startScan event is properly sent just once after the first acquisition
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         # Acquire several points/frame in a row, to make sure it can continuously acquire
         number = 7
         self.expected_shape = exp_shape
@@ -859,6 +887,9 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertTrue(done, f"Acquisition not completed within time. Still running after {exp_tot_dur} * 1.3")
         duration = stop_t - start_t
         self.assertGreaterEqual(duration, exp_tot_dur, f"Acquisition ended too early: {duration}s")
+
+        self.assertEqual(evt_counter.count, 1)
+        self.scanner.startScan.unsubscribe(evt_counter)
 
     def test_flow_change_settings(self):
         """

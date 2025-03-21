@@ -95,6 +95,19 @@ class TestSEMStatic(unittest.TestCase):
         sem.terminate()
         daemon.shutdown()
 
+
+class EventReceiver:
+    """
+    Helper class to receive model.Events
+    """
+    def __init__(self):
+        self.count = 0
+
+    def onEvent(self):
+        logging.debug("Received an event")
+        self.count += 1
+
+
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device
@@ -364,6 +377,10 @@ class TestSEM(unittest.TestCase):
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
 
+        # Also check that the startScan event is properly sent just once after the first acquisition
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         number = 5
         self.left = number
         self.sed.data.subscribe(self.receive_image)
@@ -371,6 +388,9 @@ class TestSEM(unittest.TestCase):
         self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
 
         self.assertEqual(self.left, 0)
+
+        self.assertEqual(evt_counter.count, 1)
+        self.scanner.startScan.unsubscribe(evt_counter)
 
     def test_acquire_with_va(self):
         """
@@ -429,6 +449,10 @@ class TestSEM(unittest.TestCase):
         number = 5
         expected_duration = self.compute_expected_duration()
 
+        # Also check that the startScan event is properly sent just once after the first acquisition
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         self.left = 10000 + number # don't unsubscribe automatically
 
         for i in range(number):
@@ -438,6 +462,9 @@ class TestSEM(unittest.TestCase):
 
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
+
+        self.assertEqual(evt_counter.count, number)
+        self.scanner.startScan.unsubscribe(evt_counter)
 
     def receive_image(self, dataflow, image):
         """
