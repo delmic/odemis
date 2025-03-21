@@ -38,7 +38,7 @@ from functools import wraps
 from typing import Optional, Tuple, Dict, Any, List
 
 from odemis import model
-from odemis.model import Detector, oneway, MD_ACQ_DATE, HwError
+from odemis.model import Detector, oneway, MD_ACQ_DATE, HwError, FloatContinuous
 
 import numpy
 try:
@@ -77,6 +77,7 @@ EBIC_INFO_NODE = "MightyEBICInfo"
 # the time between the device is ready and the e-beam scanner starts (typically a few seconds).
 # Also accounts for the time it takes to report the scan is complete (should take less than a few seconds).
 SCAN_EXTRA_TIMEOUT = 60  # s
+
 
 
 class MightyEBIC(Detector):
@@ -133,8 +134,7 @@ class MightyEBIC(Detector):
                                                        channels=self._channel + 1,
                                                        spp=MAX_SAMPLES_PER_PIXEL,
                                                        delay=0)
-        self.dwellTime = model.FloatContinuous(dt_min, (dt_min, dt_max), unit="s",
-                                               setter=self.on_dwell_time_change)
+        self.dwellTime = DwellTimeVA(dt_min, (dt_min, dt_max), detector=self)
 
         self.data = EBICDataFlow(self)
         self._acquisition_thread: Optional[threading.Thread] = None
@@ -194,7 +194,7 @@ class MightyEBIC(Detector):
             delay = 0
             md = self.getMetadata()
 
-            act_dt, spp, os = self._opc_client.guess_samples_per_pixel_and_oversampling(self.dwellTime.value, self._channel + 1, 0)
+            act_dt, spp, os = self.find_dwell_time_settings(self.dwellTime.value)
             md[model.MD_DWELL_TIME] = act_dt
             md[model.MD_INTEGRATION_COUNT] = os * spp
             scan_time = self._opc_client.calculate_scan_time(act_dt, res[0], res[1])
@@ -308,12 +308,12 @@ class MightyEBIC(Detector):
         das = [model.DataArray(channel_data, md) for channel_data in raw_arr]
         return das
 
-    def on_dwell_time_change(self, value: float) -> float:
+    def find_dwell_time_settings(self, value: float) -> Tuple[float, int, int]:
         """
         Called when the dwell time is changed, the value is checked and a value compatible with the
         hardware and *smaller* or equal to the requested value is returned.
         :param value: request dwell time (s)
-        :return: accepted dwell time (s)
+        :return: accepted dwell time (s), samples per pixel, oversampling
         """
         # Find the closest SPP & oversampling that matches the requested dwell time. It always returns a smaller or equal value,
         # unless a value smaller than the minimum is requested (in which case it returns the minimum)
@@ -321,6 +321,39 @@ class MightyEBIC(Detector):
         if not value * 0.9 <= dt <= value: # 10% tolerance as a rule-of-thumb (it does happen sometimes)
             logging.warning(f"Requested dwell time {value} differs from calculated dwell time {dt}, "
                             f"with {self._channel + 1} channels, using SPP {spp} and oversampling {os}.")
+        return dt, spp, os
+
+
+class DwellTimeVA(FloatContinuous):
+    """
+    Dedicated VA for setting (and clipping) the dwell time
+    """
+    def __init__(self, value: float, rng: Tuple[float, float], detector: MightyEBIC):
+        super().__init__(value, rng, unit="s", setter=self._set_dwell_time)
+        self._detector = detector
+
+    def clip(self, value: float) -> float:
+        """
+        Return the dwell time accepted by the MightyEBIC that is closest to the requested value, and within the allowed range.
+        :param value: requested dwell time
+        :return: acceptable dwell time
+        """
+        if value <= self._range[0]:
+            return self._range[0]
+        if value >= self._range[1]:
+            return self._range[1]
+
+        dt, spp, os = self._detector.find_dwell_time_settings(value)
+        return dt
+
+    def _set_dwell_time(self, value: float) -> float:
+        """
+        Called when the dwell time is changed, the value is checked and a value compatible with the
+        hardware and *smaller* or equal to the requested value is returned.
+        :param value: request dwell time (s)
+        :return: accepted dwell time (s)
+        """
+        dt, spp, os = self._detector.find_dwell_time_settings(value)
         return dt
 
 

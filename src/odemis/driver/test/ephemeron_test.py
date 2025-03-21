@@ -181,7 +181,10 @@ class TestMightyEBICDetector(unittest.TestCase):
         is always less or equal to the requested value.
         """
         for dt in self.dwell_time_values:
+            exp_dt = self.ebic_det.dwellTime.clip(dt)
             self.ebic_det.dwellTime.value = dt
+            # Clip should return the accepted value (without actually setting it)
+            self.assertEqual(self.ebic_det.dwellTime.value, exp_dt)
             self.assertLessEqual(self.ebic_det.dwellTime.value, dt)
 
     def test_acquisition(self):
