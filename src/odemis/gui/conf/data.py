@@ -600,6 +600,7 @@ HW_SETTINGS_CONFIG = {
             ("dwellTime", {
                 "tooltip": "Time spent by the e-beam on each pixel",
                 "scale": "log",
+                "range": (1e-6, 1000.0),  # Make sure to not provide too long dwell times
             }),
             ("pixelDuration", {
                 "label": "Time resolution",
