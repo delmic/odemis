@@ -596,8 +596,8 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
-            logging.warning("Dropping data because it started %g s too early",
-                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            logging.warning("Dropping data (of stream %d) because it started %g s too early",
+                            n, self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
             # TODO: As the detector is synchronised, we need to restart it.
             # Or maybe not, as the typical reason it arrived early is that the
             # detector was already running, in which case they haven't
