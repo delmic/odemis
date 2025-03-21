@@ -30,7 +30,8 @@ import logging
 
 import wx
 import wx.adv
-import wx.xrc as xrc
+from decorator import decorator
+from wx import xrc
 
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.foldpanelbar as fpb
@@ -45,6 +46,25 @@ from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.stream_panel import StreamPanel
 
 HANDLER_CLASS_LIST = []
+
+# Since wxPython v4.1+, which uses wxWidgets 3.1+, the handling of the "hidden" tag has changed.
+# Previously, this was handled by the default .SetupWindow() method.
+# Now, every handler has to explicitly handle it, in DoCreateResource().
+# The standard wxWidget code does it via a macro XRC_MAKE_INSTANCE, but we cannot use a C macro.
+# => Do something similar with a decorator.
+@decorator
+def apply_hidden(f, self):
+    """
+    Decorator for DoCreateResource(), to hide the widget, if the "hidden" tag is True.
+    :param f: function to decorate
+    :param self: XmlResourceHandler
+    :return: the create widget (same as DoCreateResource())
+    """
+    widget = f(self)
+    if self.GetBool("hidden", False):
+        widget.Hide()
+
+    return widget
 
 
 ##################################
@@ -65,6 +85,7 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "StreamPanel")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -104,6 +125,7 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'FoldPanelBar')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         w = fpb.FoldPanelBar(
             self.GetParentAsWindow(),
@@ -134,6 +156,7 @@ class CaptionBarXmlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'CaptionBar')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         parent = self.GetParentAsWindow()
         w = fpb.CaptionBar(
@@ -155,6 +178,7 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'FoldPanelItem')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         parent = self.GetParentAsWindow()
         w = fpb.FoldPanelItem(parent,
@@ -184,6 +208,7 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'StreamBar')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         parent = self.GetParentAsWindow()
         w = StreamBar(parent,
@@ -210,6 +235,7 @@ class FastEMProjectListXmlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'FastEMProjectList')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         parent = self.GetParentAsWindow()
         w = FastEMProjectList(parent,
@@ -239,6 +265,7 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, self.klass.__name__)
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -333,6 +360,7 @@ class SuggestTextCtrlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'SuggestTextCtrl')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -358,6 +386,7 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'UnitIntegerCtrl')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -387,6 +416,7 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
         return self.IsOfClass(node, 'UnitFloatCtrl')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -537,6 +567,7 @@ class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "UnitIntegerSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -573,6 +604,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "UnitFloatSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -618,6 +650,7 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "VisualRangeSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
         # Now create the object
@@ -642,6 +675,7 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "BandwidthSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
         # Now create the object
@@ -682,6 +716,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "OwnerDrawnComboBox")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -718,6 +753,7 @@ class ToolBarHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, 'ToolBar')
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -755,6 +791,7 @@ class ViewportGridHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, 'ViewportGrid')
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
