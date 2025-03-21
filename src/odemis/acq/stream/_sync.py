@@ -338,7 +338,18 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
 
         # Order matters: if same local VAs for emitter (e-beam). The ones from
         # the last stream are used.
+        inde_detectors = []  # typically, 0 or 1 stream
         for s in self._streams:
+            # Do the independent detectors last, so that they control the exact scanner dwell time
+            det = s._detector
+            if model.hasVA(det, "dwellTime"):
+                inde_detectors.append(s)
+                continue
+            s._linkHwVAs()
+            s._linkHwAxes()
+
+        for s in inde_detectors:
+            logging.debug("Configuring stream %s settings as master", s)
             s._linkHwVAs()
             s._linkHwAxes()
 
@@ -2423,7 +2434,7 @@ class SEMMDStream(MultipleDetectorStream):
         # TODO: check that no fuzzing is requested (as it's not supported and
         # not useful).
 
-        dt = self._dwellTime.value
+        dt = self._emitter.dwellTime.value
 
         # Order matters (a bit)
         if model.hasVA(self._emitter, "blanker") and self._emitter.blanker.value is None:
@@ -2492,8 +2503,6 @@ class SEMMDStream(MultipleDetectorStream):
             # only be known once we start acquiring. One way would be to set a synchronization, and
             # then subscribe all the detectors, and finally check the dwell time.
             px_time = self._adjustHardwareSettings()
-            if not almost_equal(self._emitter.dwellTime.value, px_time):
-                raise IOError("Expected hw dt = %f but got %f" % (px_time, self._emitter.dwellTime.value))
             spot_pos = self._getSpotPositions()
             pos_flat = spot_pos.reshape((-1, 2))  # X/Y together (X iterates first)
             rep = self.repetition.value
@@ -2502,8 +2511,8 @@ class SEMMDStream(MultipleDetectorStream):
             self._current_scan_area = (0, 0, 0, 0)
             self._raw = []
             self._anchor_raw = []
-            logging.debug("Starting e-beam sync acquisition with components %s",
-                          ", ".join(s._detector.name for s in self._streams))
+            logging.debug("Starting e-beam sync acquisition @ %s s with components %s",
+                          px_time, ", ".join(s._detector.name for s in self._streams))
 
             tot_num = numpy.prod(rep)
 
