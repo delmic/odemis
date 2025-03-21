@@ -20,14 +20,16 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import copy
 import logging
 import math
 from abc import ABCMeta
-from typing import Tuple
+from enum import Enum
+from typing import Dict, Tuple
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature
+from odemis.acq.feature import CryoFeature, get_feature_position_at_posture
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
@@ -247,16 +249,31 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
-    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None):
+    def add_new_feature(self, stage_position: Dict[str, float],
+                        fm_focus_position: Dict[str, float] = None,
+                        f_name: str = None) -> CryoFeature:
         """
         Create a new feature and add it to the features list
         """
+        # set the posture position
+        pm = self.main.posture_manager
+        posture = pm.getCurrentPostureLabel(stage_position)
+
         if not f_name:
             existing_names = [f.name.value for f in self.main.features.value]
             f_name = make_unique_name("Feature-1", existing_names)
-        if pos_z is None:
-            pos_z = self.main.focus.position.value['z']
-        feature = CryoFeature(f_name, pos_x, pos_y, pos_z)
+        if fm_focus_position is None:
+            # if the focus position is not provided:
+            # at FM posture: use the current focus position
+            # otherwise: use the active focus position
+            if posture == FM_IMAGING:
+                fm_focus_position = self.main.focus.position.value
+            else:
+                md = self.main.focus.getMetadata()
+                fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
+        feature = CryoFeature(f_name, stage_position, fm_focus_position)
+        get_feature_position_at_posture(pm, feature, posture)
+
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
         return feature
@@ -269,13 +286,17 @@ class CryoGUIData(MicroscopyGUIData):
         Given current stage position, either select one of the features closest to
           the position or create a new one with the position.
         """
-        current_position = self.main.stage.position.value
+        current_position = self.main.stage_bare.position.value
         current_feature = self.main.currentFeature.value
 
         def dist_to_pos(feature):
-            return math.hypot(feature.pos.value[0] - current_position["x"],
-                              feature.pos.value[1] - current_position["y"])
-
+            pm = self.main.posture_manager
+            position = get_feature_position_at_posture(pm, feature, pm.current_posture.value)
+            pos = pm.to_sample_stage_from_stage_position(position)
+            sample_stages_pos = pm.to_sample_stage_from_stage_position(current_position)
+            # Note: we can get the sample stage position direction from: self.stage.position.value
+            return math.hypot(pos["x"] - sample_stages_pos["x"],
+                              pos["y"] - sample_stages_pos["y"])
 
         if current_feature and dist_to_pos(current_feature) <= self.ATOL_FEATURE_POS:
             return  # We are already good, nothing else to do
@@ -290,11 +311,9 @@ class CryoGUIData(MicroscopyGUIData):
             pass
 
         # No feature nearby => create a new one
-        feature = self.add_new_feature(current_position["x"], current_position["y"],
-                                       self.main.focus.position.value["z"])
-        logging.debug("New feature created at %s because none are close by.",
-                      (current_position["x"], current_position["y"]))
-        self.main.currentFeature.value = feature
+        current_position = copy.deepcopy(self.main.stage_bare.position.value)
+        self.add_new_feature(stage_position=current_position)
+        logging.debug(f"No feature found nearby. New feature created at {current_position}.")
 
 
 class CryoLocalizationGUIData(CryoGUIData):
