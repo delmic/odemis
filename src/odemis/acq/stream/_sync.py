@@ -279,11 +279,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
             shape = (len(pol_pos), rep[1], rep[0])
             # estimate acq time for leeches is based on two fastest axis
             if self._integrationTime:
-                # get the exposure time directly from the hardware (e.g. hardware rounds value) to calc counts
-                integration_count = int(math.ceil(self._integrationTime.value / self._ccd.exposureTime.value))
-                if integration_count != self._integrationCounts.value:
-                    logging.debug("Integration count of %d, does not match integration count of %d as expected",
-                                  integration_count, self._integrationCounts.value)
+                integration_count = self._integrationCounts.value
                 if integration_count > 1:
                     shape = (len(pol_pos), rep[1], rep[0], integration_count)  # overwrite shape
 
