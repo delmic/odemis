@@ -439,6 +439,17 @@
                               <flag>wxLEFT|wxBOTTOM</flag>
                               <border>10</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_apply_current_z_to_all_features">
+                                <height>24</height>
+                                <bg>#000000</bg>
+                                <label>Apply Current Z to All Features</label>
+                                <tooltip>Save the current position of the focus as the feature focus position for all features.</tooltip>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxLEFT</flag>
+                              <border>65</border>
+                            </object>
                             <flag>wxALIGN_RIGHT</flag>
                             <orient>wxVERTICAL</orient>
                           </object>

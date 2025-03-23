@@ -230,6 +230,7 @@ class LocalizationTab(Tab):
         self.panel.fp_secom_streams.Show(live)
         self.panel.fp_acquisitions.Show(live)
         self.panel.btn_use_current_z.Enable(live)
+        self.panel.btn_apply_current_z_to_all_features.Enable(live)
 
     @property
     def settingsbar_controller(self):

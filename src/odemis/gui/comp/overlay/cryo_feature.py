@@ -57,7 +57,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self._mode = MODE_SHOW_FEATURES
         self.tab_data = tab_data
         self.pm: MeteorTFS2PostureManager = self.tab_data.main.posture_manager
-        self.view_posture = self.tab_data.view_posture.value
+        self.view_posture = self.tab_data.view_posture.value # QUERY: for FIBSEM Tab this should be the current posture..., not just SEM?
         self.tab_data.view_posture.subscribe(self._on_view_posture_change, init=True)
 
         # get the tab based on the view posture
@@ -207,20 +207,6 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self._selected_feature.stage_position.value = stage_position
         self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
 
-        # try:
-        #     feature = self._selected_feature
-        #     sem_pos = feature.get_posture_position(SEM_IMAGING)
-        #     fm_pos = feature.get_posture_position(FM_IMAGING)
-        #     TRANS_COR = {"dx":  fm_pos["x"] - sem_pos["x"], "dy": fm_pos["y"] - sem_pos["y"]}
-        #     logging.warning(f"TRANSFORM: {TRANS_COR['dx']*1e3}, {TRANS_COR['dy']*1e3}")
-        #     from odemis import model
-        #     md_calib = self.pm.stage.getMetadata()[model.MD_CALIB]
-        #     md_calib["dx"] = TRANS_COR["dx"]
-        #     md_calib["dy"] = TRANS_COR["dy"]
-        #     self.pm.stage.updateMetadata({model.MD_CALIB: md_calib})
-        #     # update stage metadata MD_CALIB, dx, dy
-        # except Exception as e:
-        #     logging.error(e)
         # ask user to recalculate the feature position for all other postures
         self._update_other_postures()
 

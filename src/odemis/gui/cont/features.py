@@ -22,7 +22,8 @@ from odemis.acq.move import (
     MILLING,
     POSITION_NAMES,
     SEM_IMAGING,
-    MeteorTFS2PostureManager,
+    FIB_IMAGING,
+    MeteorTFS3PostureManager,
 )
 from odemis.dataio.tiff import export
 from odemis.gui import model as guimod
@@ -31,7 +32,7 @@ from odemis.gui.model import TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
-SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING]
+SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -54,7 +55,7 @@ class CryoFeatureController(object):
         self._main_data_model = tab_data.main
         self._panel = panel
         self._tab = tab
-        self.pm: MeteorTFS2PostureManager = self._tab_data_model.main.posture_manager
+        self.pm: MeteorTFS3PostureManager = self._tab_data_model.main.posture_manager
         self.acqui_mode: guimod.AcquiMode = mode
 
         # features va attributes (name, status..etc) connectors
@@ -83,6 +84,7 @@ class CryoFeatureController(object):
         fibsem_mode = self.acqui_mode is guimod.AcquiMode.FIBSEM
         if fm_mode:
             self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
+            self._panel.btn_apply_current_z_to_all_features.Bind(wx.EVT_BUTTON, self._on_btn_apply_current_z_to_all_features)
         if fibsem_mode:
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
@@ -113,6 +115,20 @@ class CryoFeatureController(object):
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature:
             feature.fm_focus_position.value = self._main_data_model.focus.position.value
+
+    def _on_btn_apply_current_z_to_all_features(self, _):
+        # Use current focus to all features
+
+        focus_value = self._main_data_model.focus.position.value
+
+        box = wx.MessageDialog(self._panel,
+                               f"Apply current focus position ({focus_value['z']*1e3:.2f}mm) to all features?",
+                               caption="Feature Focus Update",
+                               style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        ans = box.ShowModal()
+        if ans == wx.ID_YES:
+            for feature in self._tab_data_model.main.features.value:
+                feature.fm_focus_position.value = focus_value
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -253,6 +269,7 @@ class CryoFeatureController(object):
         if self.acqui_mode is guimod.AcquiMode.FLM:
             self._panel.ctrl_feature_z.Enable(enable)
             self._panel.btn_use_current_z.Enable(enable)
+            self._panel.btn_apply_current_z_to_all_features.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             current_posture = self.pm.getCurrentPostureLabel()
             # TODO: check if current position is near the feature position, if not, disable and show warning to user

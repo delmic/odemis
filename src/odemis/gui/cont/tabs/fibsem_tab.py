@@ -216,6 +216,7 @@ class FibsemTab(Tab):
         self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
         self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
+        self.panel.btn_switch_fib_imaging.Bind(wx.EVT_BUTTON, self._move_to_fib)
 
     def _on_view(self, view):
         """Hide/Disable milling controls when fib view is not selected"""
@@ -394,10 +395,13 @@ class FibsemTab(Tab):
         # update the stage position buttons
         self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
         self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+        self.panel.btn_switch_fib_imaging.SetValue(BTN_TOGGLE_OFF)
         if posture == SEM_IMAGING:
             self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
         if posture == MILLING:
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+        if posture == FIB_IMAGING:
+            self.panel.btn_switch_fib_imaging.SetValue(BTN_TOGGLE_COMPLETE)
 
         self.panel.Layout()
 
@@ -439,7 +443,7 @@ class FibsemTab(Tab):
     def _move_to_milling_position(self, evt: wx.Event):
         logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
 
-        if self.pm.current_posture.value != SEM_IMAGING:
+        if self.pm.current_posture.value not in [SEM_IMAGING, FIB_IMAGING]:
             wx.MessageBox("Switch to SEM position first", "Error", wx.OK | wx.ICON_ERROR)
             return
 
@@ -450,11 +454,22 @@ class FibsemTab(Tab):
 
     def _move_to_sem(self, evt: wx.Event):
 
-        if self.pm.current_posture.value != MILLING:
+        if self.pm.current_posture.value not in [MILLING, FIB_IMAGING]:
             wx.MessageBox("Switch to milling position first", "Error", wx.OK | wx.ICON_ERROR)
             return
 
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+
+        self._on_stage_pos(self.pm.stage.position.value)
+
+    def _move_to_fib(self, evt: wx.Event):
+
+        if self.pm.current_posture.value not in [SEM_IMAGING, MILLING]:
+            wx.MessageBox("Switch to SEM/MILLING position first", "Error", wx.OK | wx.ICON_ERROR)
+            return
+
+        f = self.pm.cryoSwitchSamplePosition(FIB_IMAGING)
         f.result()
 
         self._on_stage_pos(self.pm.stage.position.value)

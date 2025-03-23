@@ -234,8 +234,6 @@ class CryoChamberTab(Tab):
         # Event binding for position control
         for btn in self.position_btns.values():
             btn.Show()
-            if btn == self.panel.btn_switch_fib_imaging:
-                btn.Hide()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
@@ -889,8 +887,8 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING]
+                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING, FIB_IMAGING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
