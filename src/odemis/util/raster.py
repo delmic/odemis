@@ -21,9 +21,9 @@ This file is part of Odemis.
 
 """
 
-from builtins import range  # For Python 2 & 3
-
 import math
+from builtins import range  # For Python 2 & 3
+from typing import List, Set, Tuple
 
 
 def rasterize_line(p0, p1, width=1):
@@ -142,3 +142,45 @@ def point_in_polygon(p, polygon):
         p1x, p1y = p2x, p2y
 
     return inside
+
+
+def get_possible_intersections(row_pairs: List[Tuple], col_pairs: List[Tuple], include_neighbors: bool = True) -> Set[Tuple]:
+    """
+    Uses Bresenham's line algorithm to determine the possible intersected fields/tiles.
+
+    :param row_pairs: (list of tuple) A list of (start_row, end_row) pairs defining line segments.
+    :param col_pairs: (list of tuple) A list of (start_col, end_col) pairs defining line segments.
+    :param include_neighbors: (bool) If True, includes adjacent neighbors to ensure complete coverage. Defaults to True.
+
+    :return: A set of (row, col) tuples representing the intersected fields/tiles.
+    """
+    intersections = set()
+    for (row1, row2), (col1, col2) in zip(row_pairs, col_pairs):
+        dx = abs(row2 - row1)
+        dy = abs(col2 - col1)
+        sx = 1 if row1 < row2 else -1
+        sy = 1 if col1 < col2 else -1
+        err = dx - dy
+
+        while True:
+            intersections.add((row1, col1))
+
+            if include_neighbors:
+                # Add adjacent neighbors to ensure complete coverage
+                intersections.add((row1 + sx, col1))
+                intersections.add((row1 - sx, col1))
+                intersections.add((row1, col1 + sy))
+                intersections.add((row1, col1 - sy))
+
+            if row1 == row2 and col1 == col2:
+                break
+
+            e2 = err * 2
+            if e2 > -dy:
+                err -= dy
+                row1 += sx
+            if e2 < dx:
+                err += dx
+                col1 += sy
+
+    return intersections
