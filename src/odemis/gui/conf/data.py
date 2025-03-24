@@ -168,7 +168,10 @@ HW_SETTINGS_CONFIG = {
             }),
             ("probeCurrent", {
                 "label": "Beam current",
-                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+                # The following only affects when it's a slider
+                "event": wx.EVT_SCROLL_CHANGED,
+                "scale": "log",
+                "accuracy": 3,
             }),
             ("spotSize", {
                 "tooltip": "Electron-beam spot size",
