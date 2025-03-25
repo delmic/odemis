@@ -43,6 +43,7 @@ from odemis.gui import conf
 from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
 from odemis.model import ListVA
+from odemis.util.interpolation import interpolate_z_stack
 
 
 # create an enum with column labels and position
@@ -111,7 +112,6 @@ class CorrelationPointsController(object):
         self.stream_groups = None
         self.previous_group = None
 
-        # TODO unsubscription when exiting the dialog box. Not sure if it is necessary
         # Reset targets and current target and populate it based on the current feature
         self.correlation_target = None
         self._tab_data_model.main.targets = model.ListVA()
@@ -122,6 +122,17 @@ class CorrelationPointsController(object):
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes)
         self._tab_data_model.fib_surface_point.subscribe(self._on_current_fib_surface)
 
+        # Interpolate the fm streams such that the pixel size in z is the same as in x and y
+        streams_list = []
+        for stream in self._tab_data_model.main.currentFeature.value.streams.value:
+            if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
+                stream_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
+                streams_list.append(StaticFluoStream(stream.name.value, stream_interpolated))
+            else:
+                streams_list.append(stream)
+
+        self.streams_list = streams_list
+
         if self._tab_data_model.main.currentFeature.value.correlation_targets:
             # Similar logic can be used while enabling the 3DCT button i.e. during the check of relevant conditions.
             self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
@@ -129,7 +140,6 @@ class CorrelationPointsController(object):
             # Maintain the order of loading. First check the streams and then load the targets. If no streams are
             # present or the saved streams are not available, load all the relevant streams, and reset the fib and fm
             # targets accordingly.
-            # TODO save the FM and FIB streams in the json file
 
             # Load the streams
             if self.correlation_target.fm_stream_key or self.correlation_target.fib_stream_key:
@@ -195,10 +205,9 @@ class CorrelationPointsController(object):
 
             self.previous_group = group_key
             if group_key:
-                streams_list = self._tab_data_model.main.currentFeature.value.streams.value
                 for key, indices in self.stream_groups.items():
                     for index in indices:
-                        stream = streams_list[index]
+                        stream = self.streams_list[index]
                         # find stream controller for the stream
                         ssc = next(
                             (sc for sc in  self._panel.streambar_controller.stream_controllers
@@ -221,7 +230,6 @@ class CorrelationPointsController(object):
         Based on the stream groups, add the streams to the stream bar such that the stream panels of one
         group are visible and open together while the other groups are set to invisible and collapsed.
         """
-        streams_list = self._tab_data_model.main.currentFeature.value.streams.value
         if self.correlation_target.fm_stream_key:
         # Load the FM streams
             if self.correlation_target.fm_stream_key:
@@ -231,7 +239,7 @@ class CorrelationPointsController(object):
                     self.correlation_target.fm_streams = []
                     indices = self.stream_groups[fm_stream_key_tuple]
                     for index in indices:
-                        stream = streams_list[index]
+                        stream = self.streams_list[index]
                         ssc = self._panel.streambar_controller.addStream(stream, play=False)
                         ssc.stream_panel.show_remove_btn(True)
                         self.correlation_target.fm_streams.append(stream)
@@ -241,7 +249,7 @@ class CorrelationPointsController(object):
                 self.correlation_target.fm_streams = []
 
                 for index in indices:
-                    stream = streams_list[index]
+                    stream = self.streams_list[index]
                     # TODO check for group in the stream name in the final version
                     stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
                     ssc =  self._panel.streambar_controller.addStream(stream, play=False)
@@ -289,12 +297,11 @@ class CorrelationPointsController(object):
                             self.correlation_target.fib_stream = stream
             return
         else:
-            streams_list = self._tab_data_model.main.currentFeature.value.streams.value
             stream_groups = {}
 
         # Group the FM streams related to the current feature based on the shape and current position. THe FM streams
         # which have z stack are considered for grouping, the other FM streams without z stack are ignored.
-        for stream_index, stream in enumerate(streams_list):
+        for stream_index, stream in enumerate(self.streams_list):
             current_shape = stream.raw[0].shape
             centre_pos = stream.raw[0].metadata[model.MD_POS]
             if isinstance(stream, StaticFluoStream):
@@ -311,7 +318,7 @@ class CorrelationPointsController(object):
                     # If a stream with the same name exists, replace the previous index to keep the latest stream index
                     indices_to_remove = set()
                     for idx in stream_groups[key]:
-                        if streams_list[idx].name.value == stream_name:
+                        if self.streams_list[idx].name.value == stream_name:
                             indices_to_remove.add(idx)
                     # Remove old indices with the same name
                     stream_groups[key] -= indices_to_remove
@@ -715,15 +722,14 @@ class CorrelationPointsController(object):
     def _on_target_changes(self, targets) -> None:
         # TODO remove the below block in the final version, not even useful for the testing
         if not self.correlation_target.fm_streams and self.previous_group:
-            streams_list = self._tab_data_model.main.currentFeature.value.streams.value
             for key, indices in self.stream_groups.items():
                 if key == self.previous_group:
                     for index in indices:
-                        stream = streams_list[index]
+                        stream = self.streams_list[index]
                         self.correlation_target.fm_streams.append(stream)
                 else:
                     for index in indices:
-                        stream = streams_list[index]
+                        stream = self.streams_list[index]
                         # FIB static stream should not be removed
                         if isinstance(stream, StaticFluoStream):
                              self._panel.streambar_controller.removeStreamPanel(stream)
