@@ -811,7 +811,7 @@
                                   <object class="ImageTextButton" name="btn_tdct">
                                     <height>48</height>
                                     <face_colour>def</face_colour>
-                                    <label>3DCT</label>
+                                    <label>Correlate FIB/FM</label>
                                     <font>
                                       <size>14</size>
                                       <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>

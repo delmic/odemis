@@ -9875,7 +9875,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                   <object class="ImageTextButton" name="btn_tdct">
                                     <height>48</height>
                                     <face_colour>def</face_colour>
-                                    <label>3DCT</label>
+                                    <label>Correlate FIB/FM</label>
                                     <font>
                                       <size>14</size>
                                       <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
