@@ -350,8 +350,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         """
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
         self._selected_target.pos.value = [p_pos[0], p_pos[1], self._selected_feature.pos.value[2]]
-        # Reset the selected tool to signal end of feature moving operation
-        # self._selected_tool_va.value = TOOL_NONE
         self.cnvs.update_drawing()
 
     def _detect_point_inside_target(self, v_pos):
@@ -395,7 +393,11 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse left click down: Create/Move feature if feature tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        if self.active.value:
+        # Capture key presses and ignore the event
+        ctrl_mode = evt.ControlDown()
+        shift_mode = evt.ShiftDown()
+        if self.active.value and not ctrl_mode and not shift_mode:
+            self.tab_data.focussedView.value = self.cnvs.view
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
@@ -423,6 +425,10 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 if target:
                     self.tab_data.main.currentTarget.value = target
                 evt.Skip()
+        elif self.active.value and ctrl_mode:
+            self._selected_tool_va.value = TOOL_FIDUCIAL
+        elif self.active.value and shift_mode:
+            self._selected_tool_va.value = TOOL_REGION_OF_INTEREST
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -431,7 +437,10 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        if self.active.value:
+        # Capture key presses and ignore the event
+        ctrl_mode = evt.ControlDown()
+        shift_mode = evt.ShiftDown()
+        if self.active.value and not ctrl_mode and not shift_mode:
             DragMixin._on_left_up(self, evt)
             self.clear_drag()
             self.cnvs.update_drawing()
@@ -540,16 +549,12 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 return
             target = self._detect_point_inside_target(v_pos)
             if target or self.tab_data.fib_surface_point.value :
-                # self._hover_target = target
-                # self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
                 return
             else:
                 if self._mode == MODE_EDIT_FIDUCIALS or self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
                 else:
                     return
-                #     self.cnvs.reset_dynamic_cursor()
-                # self._hover_target = None
         WorldOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
@@ -557,7 +562,11 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse left click down: Create/Move feature if feature tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        if self.active.value:
+        # Capture key presses and ignore the event
+        ctrl_mode = evt.ControlDown()
+        shift_mode = evt.ShiftDown()
+        if self.active.value and not ctrl_mode and not shift_mode:
+            self.tab_data.focussedView.value = self.cnvs.view
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
@@ -582,6 +591,8 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 if target:
                     self.tab_data.main.currentTarget.value = target
                 evt.Skip()
+        elif self.active.value and ctrl_mode:
+            self._on_tool(TOOL_FIDUCIAL)
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -590,14 +601,15 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        if self.active.value:
-            # evt.Skip()
+        # Capture key presses and ignore the event
+        ctrl_mode = evt.ControlDown()
+        shift_mode = evt.ShiftDown()
+        if self.active.value and not ctrl_mode and not shift_mode:
             DragMixin._on_left_up(self, evt)
             self.clear_drag()
             self.cnvs.update_drawing()
             self.cnvs.reset_dynamic_cursor()
             if self.left_dragging:
-                #TODO separate concerns if and else are not looking for same conditions
                 if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
                     p_pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1],  int(0)]

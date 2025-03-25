@@ -132,36 +132,22 @@ class CorrelationPointsController(object):
             # TODO save the FM and FIB streams in the json file
 
             # Load the streams
-            if self.correlation_target.fm_streams:
+            if self.correlation_target.fm_stream_key or self.correlation_target.fib_stream_key:
                 # Will load the streams from the given streams
-                self.group_add_streams(self.correlation_target.fm_streams)
-            else:
-                # Right now, the FM and FIB streams are not saved in the json file. So, we need to load the streams
-                # It loads the relevant streams from the current feature
-                # The targets will be converted to pixels based on the latest loaded FM groups
-                # TODO remove this special treatment in the final version
-                self.group_add_streams()
-            if self.correlation_target.fib_stream:
-                self.group_add_streams([self.correlation_target.fib_stream])
+                self.group_streams()
+                self._add_stream_group()
+            # TODO uncomment in the final version
+            # if self.correlation_target.fib_stream:
+            #     self.group_streams([self.correlation_target.fib_stream])
 
             # Load the targets
             targets = []
-            projected_points = []
             if self.correlation_target.fm_fiducials:
                 targets.append(self.correlation_target.fm_fiducials)
             if self.correlation_target.fm_pois:
                 targets.append(self.correlation_target.fm_pois)
             if self.correlation_target.fib_fiducials and self.correlation_target.fib_stream:
                 targets.append(self.correlation_target.fib_fiducials)
-            #  As rhe correlation result is calculated quickly (no need to load it)
-            # if self.correlation_target.fib_projected_fiducials:
-            #     projected_points.append(self.correlation_target.fib_projected_fiducials)
-            # if self.correlation_target.fib_projected_pois:
-            #     projected_points.append(self.correlation_target.fib_projected_pois)
-            # projected_points = list(
-            #     itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in projected_points))
-            # self._tab_data_model.projected_points = projected_points
-            # TODO remove the commented block if the projected points loading is not required
             # flatten the list of lists
             targets = list(
                 itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
@@ -175,11 +161,10 @@ class CorrelationPointsController(object):
                 self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
             self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
                 self._tab_data_model.main.currentFeature.value.status.value]
-            self.group_add_streams()
+            self.group_streams()
+            self._add_stream_group()
 
         self._panel.fp_correlation_panel.Show(True)
-        for vp in self._viewports:
-            vp.canvas.Bind(wx.EVT_CHAR, self._on_char)
 
     @call_in_wx_main
     def _on_fm_streams_change(self, stream_projections: ListVA) -> None:
@@ -237,33 +222,48 @@ class CorrelationPointsController(object):
         group are visible and open together while the other groups are set to invisible and collapsed.
         """
         streams_list = self._tab_data_model.main.currentFeature.value.streams.value
-        for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
-            self.correlation_target.fm_streams = []
-            for index in indices:
-                stream = streams_list[index]
-                # TODO check for group in the stream name in the final version
-                stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
-                ssc =  self._panel.streambar_controller.addStream(stream, play=False)
-                ssc.stream_panel.show_remove_btn(True)
-                # When the FM streams are saved, it will be loaded in the init
-                # TODO below line should not be here in the final version
-                self.correlation_target.fm_streams.append(stream)
-                if not isinstance(stream, StaticFluoStream):
-                    ssc.stream_panel.set_visible(True)
-                    ssc.stream_panel.collapse(False)
+        if self.correlation_target.fm_stream_key:
+        # Load the FM streams
+            if self.correlation_target.fm_stream_key:
+                # Convert the list of lists to a tuple of tuples
+                fm_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fm_stream_key)
+                if fm_stream_key_tuple in self.stream_groups:
+                    self.correlation_target.fm_streams = []
+                    indices = self.stream_groups[fm_stream_key_tuple]
+                    for index in indices:
+                        stream = streams_list[index]
+                        ssc = self._panel.streambar_controller.addStream(stream, play=False)
+                        ssc.stream_panel.show_remove_btn(True)
+                        self.correlation_target.fm_streams.append(stream)
+        else:
 
-        # Update the group visibility based on the latest changes
-        self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_change, init=True)
+            for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
+                self.correlation_target.fm_streams = []
 
-    def group_add_streams(self, streams: list = None) -> None:
+                for index in indices:
+                    stream = streams_list[index]
+                    # TODO check for group in the stream name in the final version
+                    stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
+                    ssc =  self._panel.streambar_controller.addStream(stream, play=False)
+                    ssc.stream_panel.show_remove_btn(True)
+                    self.correlation_target.fm_stream_key = key
+                    # When the FM streams are saved, it will be loaded in the init
+                    # TODO below line should not be here in the final version
+                    self.correlation_target.fm_streams.append(stream)
+                    if not isinstance(stream, StaticFluoStream):
+                        self.correlation_target.fib_stream_key = key
+                        ssc.stream_panel.set_visible(True)
+                        ssc.stream_panel.collapse(False)
+
+            # Update the group visibility based on the latest changes
+            self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_change, init=True)
+
+    def group_streams(self, streams: list = None) -> None:
         """
         Add the FIB and FM streams to the stream bar. The FM streams first need to be grouped based on the shape and
         position. The FIB streams are added directly.
         :param streams: (list[StaticStream]) new streams to add
         """
-        if not self.correlation_target:
-            return
-
         if streams:
             # Load the FIB streams through the add streams button. In the final version, the FIB stream will be
             # loaded automatically and add streams button will be removed.
@@ -317,18 +317,20 @@ class CorrelationPointsController(object):
                     stream_groups[key] -= indices_to_remove
                     # Add the new stream index to the set
                     stream_groups[key].add(stream_index)
-            elif isinstance(stream, StaticFIBStream):
-                # TODO check fib stream index
+            elif isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
                 key = (current_shape, centre_pos)
                 if key not in stream_groups:
                     stream_groups[key] = set()
                 stream_groups[key].add(stream_index)
+                # TODO check fib stream index
+                self.correlation_target.fib_stream = stream
+                self.correlation_target.fib_stream_key = key
+                # Add FIB stream
+                ssc = self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
+                ssc.stream_panel.show_remove_btn(True)
 
-        # Add the FM streams according the groups
-        # TODO take care of adding FIB streams logic in the final version
         self.stream_groups = stream_groups
-        logging.debug(f"Stream groups for FM stream in 3DCT: {stream_groups}")
-        self._add_stream_group()
+
 
     def _on_key_down_grid(self, event) -> None:
         """Handle key down events on the grid, especially to suppress Enter key default behavior."""
@@ -342,7 +344,7 @@ class CorrelationPointsController(object):
             # For other keys, allow the default behavior
             event.Skip()
 
-    def _update_feature_correlation_target(self, surface_fiducial=False):  # , fm_poi = False):
+    def _update_feature_correlation_target(self, surface_fiducial=False):
         """Populate the correlation target based on the latest changes to save it."""
         if not self.correlation_target:
             return
@@ -479,29 +481,6 @@ class CorrelationPointsController(object):
             if vp.view.name.value == "SEM Overview":
                 vp.canvas.update_drawing()
 
-    def _on_char(self, evt: wx.Event) -> None:
-        """
-        Handle key presses on the views
-        :param evt: (wx.Event) the event
-        """
-        # TODO change the keys to Ctrl + Left Click and Alt + Left Click
-        key = evt.GetKeyCode()
-        ctrl_mode = evt.ControlDown()
-
-        # pass through event, if not a valid correlation key or enabled
-        valid_keys = [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN]
-        if key not in valid_keys:
-            evt.Skip()
-            return
-
-        if ctrl_mode:
-            if key == wx.WXK_UP:
-                if self._tab_data_model.focussedView.value.name.value == "FLM Overview" or self._tab_data_model.focussedView.value.name.value == "SEM Overview":
-                    self._tab_data_model.tool.value = TOOL_FIDUCIAL
-            elif key == wx.WXK_DOWN:
-                if self._tab_data_model.focussedView.value.name.value == "FLM Overview":
-                    self._tab_data_model.tool.value = TOOL_REGION_OF_INTEREST
-
     def _on_delete_row(self, event) -> None:
         """
         Deletes the currently selected row and clear the current target VA. Updates the correlation target based on the
@@ -599,9 +578,6 @@ class CorrelationPointsController(object):
                                            self._tab_data_model.main.currentTarget.value.name.value)
                     self._tab_data_model.main.currentTarget.value = None
 
-                for vp in self._viewports:
-                    vp.canvas.update_drawing()
-
             except (ValueError, AssertionError):
                 wx.MessageBox(f"Index must be an int in the range (1, {index_max + 1})!", "Invalid Input",
                               wx.OK | wx.ICON_ERROR)
@@ -641,6 +617,10 @@ class CorrelationPointsController(object):
 
     def _on_cell_changed(self, event) -> None:
         """Get the cell column of the modified cell and reorder the grid/table based on the index column."""
+        # Refresh the canvas to update the target overlays in the viewports
+        for vp in self._viewports:
+            vp.canvas.update_drawing()
+        # If the index column is modified, reorder the grid based on the index column
         col = event.GetCol()
         col_name = self.grid.GetColLabelValue(col)
         if col_name == GridColumns.Index.name:
@@ -656,8 +636,13 @@ class CorrelationPointsController(object):
         # Enable or disable buttons based on stream selection.
         # When FM is selected, the Z-targeting button is enabled.
         # When FIB is selected, the Z-targeting button is disabled.
+        # For new targets, automatically perform Z targeting if MIP is checked for atleast one FM stream
+        mip_enabled = any([stream.max_projection for stream in self.correlation_target.fm_streams])
+
         if target and "FIB" not in target.name.value:
             self.z_targeting_btn.Enable(True)
+            if mip_enabled:
+                self._on_z_targeting(None)
         else:
             self.z_targeting_btn.Enable(False)
 
@@ -728,6 +713,7 @@ class CorrelationPointsController(object):
 
     @call_in_wx_main
     def _on_target_changes(self, targets) -> None:
+        # TODO remove the below block in the final version, not even useful for the testing
         if not self.correlation_target.fm_streams and self.previous_group:
             streams_list = self._tab_data_model.main.currentFeature.value.streams.value
             for key, indices in self.stream_groups.items():

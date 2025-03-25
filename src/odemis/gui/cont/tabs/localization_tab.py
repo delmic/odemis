@@ -311,7 +311,7 @@ class LocalizationTab(Tab):
         # sync overview streams with correlation tab
         if len(streams) > 0 and self.main_data.role == "meteor":
             correlation_tab = self.main_data.getTabByName("meteor-correlation")
-            correlation_tab.correlation_controller.group_add_streams(streams)
+            correlation_tab.correlation_controller.add_streams(streams)
 
     def reset_live_streams(self):
         """

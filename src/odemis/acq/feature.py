@@ -38,17 +38,6 @@ FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
 )
 
 
-class CorrelationMetadata:
-    """
-    Required image metadata for 3DCT correlation calculation, alternatively use data directly.
-    """
-    def __init__(self, fib_image_shape: List[int], fib_pixel_size: List[float], fm_image_shape: List[int], fm_pixel_size: List[float]):
-        self.fib_image_shape = fib_image_shape
-        self.fib_pixel_size = fib_pixel_size
-        self.fm_image_shape = fm_image_shape
-        self.fm_pixel_size = fm_pixel_size
-
-
 class CorrelationTarget:
     """
     Model class consisting of parameters related to the 3DCT connected to a feature at a
@@ -63,13 +52,11 @@ class CorrelationTarget:
         self.fib_surface_fiducial : Target = None
         self.fib_stream = None #:StaticSEMStream = None or StaticFIBStream = None
         self.fm_streams: List[StaticFluoStream] = []
+        self.fib_stream_key = None
+        self.fm_stream_key = None
         self.superz: StaticFluoStream = None
-        # TODO may be redundant, could be removed as the 3DCT wrapper calculates the metadata
-        # Either that wrapper can be modified or this metadata can be removed
-        # Currently the below attribute is not used
-        self.image_metadata: CorrelationMetadata = None
 
-        # Output parameters of 3DCT
+        # Output parameters of multipoint correlation. The output is calculated from run_correlation function
         self.correlation_result = {}
         self.fib_projected_pois: List[Target] = []
         self.fib_projected_fiducials: List[Target] = []
@@ -128,6 +115,10 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
                 correlation_targets[key]['name'] = []
                 correlation_targets[key]['fm_focus_position'] = []
                 correlation_targets[key]['correlation_result'] = ct_class.correlation_result
+                if ct_class.fm_stream_key:
+                    correlation_targets[key]['fm_stream_key'] = ct_class.fm_stream_key
+                if ct_class.fib_stream_key:
+                    correlation_targets[key]['fib_stream_key'] = ct_class.fib_stream_key
                 if ct_class.fm_fiducials:
                     all_targets.append(ct_class.fm_fiducials)
                 if ct_class.fm_pois:
@@ -191,8 +182,6 @@ class FeaturesDecoder(json.JSONDecoder):
         decoded_correlation_targets = {}
         if not correlation_targets_obj:
             return decoded_correlation_targets
-        # correlation_targets_obj = {"Active": correlation_targets_obj}
-        # Loop through each target type in correlation_targets_obj
         for key, ct_obj in correlation_targets_obj.items():
             # Initialize the CryoFeature correlation target class instance
             correlation_target = CorrelationTarget()
@@ -201,7 +190,12 @@ class FeaturesDecoder(json.JSONDecoder):
             types = ct_obj.get('type', [])
             names = ct_obj.get('name', [])
             fm_focus_positions = ct_obj.get('fm_focus_position', [])
-            # correlation_result = ct_obj.get('correlation_result', [])
+
+            if ct_obj.get('fm_stream_key', None):
+                correlation_target.fm_stream_key = ct_obj.get('fm_stream_key', None)
+            if ct_obj.get('fib_stream_key', None):
+                correlation_target.fib_stream_key = ct_obj.get('fib_stream_key', None)
+
             for i in range(len(coordinates)):
                 target = Target(
                     x =coordinates[i][0],
@@ -223,7 +217,6 @@ class FeaturesDecoder(json.JSONDecoder):
                     correlation_target.fm_fiducials.append(target)
                 elif "POI" in names[i] and types[i] == "RegionOfInterest":
                     correlation_target.fm_pois.append(target)
-                # correlation_target.correlation_result = correlation_result
 
             decoded_correlation_targets[key] = correlation_target
 

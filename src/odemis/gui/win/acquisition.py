@@ -1413,7 +1413,7 @@ class CorrelationDialog(xrcfr_correlation):
         """
         # Create streams from data, add to correlation controller
         streams = data_to_static_streams(data)
-        self.correlation_points_controller.group_add_streams(streams)
+        self.correlation_points_controller.group_streams(streams)
 
         # fit to content
         for vp in self.pnl_correlation_grid.viewports:
