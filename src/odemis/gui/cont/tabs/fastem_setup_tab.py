@@ -120,12 +120,12 @@ class FastEMSetupTab(Tab):
         self.btn_optical_autofocus = self.sem_stream_cont.btn_optical_autofocus
         self.btn_sem_autofocus = self.sem_stream_cont.btn_sem_autofocus
         self.btn_autobc = self.sem_stream_cont.btn_auto_brightness_contrast
+        self.btn_autostigmation = self.sem_stream_cont.btn_autostigmation
 
         self.btn_optical_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_optical_autofocus)
         self.btn_sem_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_sem_autofocus)
         self.btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
-        # TODO The below line should be uncommented once autostigmation is working
-        # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
+        self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 
         # At the start of an autofunction, the stream updates are paused.
         # Use the `stream_should_update` flag to store the current value of `semStream.should_update` VA
@@ -212,6 +212,7 @@ class FastEMSetupTab(Tab):
         # Disable other calibration buttons
         self.btn_sem_autofocus.Enable(False)
         self.btn_autobc.Enable(False)
+        self.btn_autostigmation.Enable(False)
         self.calibration_controller.calibration_panel.Enable(False)
         self.sem_stream_cont.enable(False)
         self.sem_stream_cont.stream_panel.enable(False)
@@ -250,6 +251,10 @@ class FastEMSetupTab(Tab):
         :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
         self.tab_data.is_calibrating.value = False
+        self.btn_optical_autofocus.Enable(True)
+        self.btn_sem_autofocus.Enable(True)
+        self.btn_autobc.Enable(True)
+        self.btn_autostigmation.Enable(True)
         self.calibration_controller.calibration_panel.Enable(True)
         self.sem_stream_cont.enable(True)
         self.sem_stream_cont.stream_panel.enable(True)
@@ -283,9 +288,9 @@ class FastEMSetupTab(Tab):
             return
 
         # Disable other calibration buttons
-        # TODO also disable btn_autostigmation once autostigmation is working
         self.btn_optical_autofocus.Enable(False)
         self.btn_autobc.Enable(False)
+        self.btn_autostigmation.Enable(False)
         self.calibration_controller.calibration_panel.Enable(False)
         self.sem_stream_cont.enable(False)
         self.sem_stream_cont.stream_panel.enable(False)
@@ -323,6 +328,7 @@ class FastEMSetupTab(Tab):
         self.btn_optical_autofocus.Enable(True)
         self.btn_sem_autofocus.Enable(True)
         self.btn_autobc.Enable(True)
+        self.btn_autostigmation.Enable(True)
         self.calibration_controller.calibration_panel.Enable(True)
         self.sem_stream_cont.enable(True)
         self.sem_stream_cont.stream_panel.enable(True)
@@ -345,9 +351,9 @@ class FastEMSetupTab(Tab):
             return
 
         # Disable other calibration buttons
-        # TODO also disable btn_autostigmation once autostigmation is working
         self.btn_optical_autofocus.Enable(False)
         self.btn_sem_autofocus.Enable(False)
+        self.btn_autostigmation.Enable(False)
         self.calibration_controller.calibration_panel.Enable(False)
         self.sem_stream_cont.enable(False)
         self.sem_stream_cont.stream_panel.enable(False)
@@ -374,6 +380,7 @@ class FastEMSetupTab(Tab):
         self.btn_optical_autofocus.Enable(True)
         self.btn_sem_autofocus.Enable(True)
         self.btn_autobc.Enable(True)
+        self.btn_autostigmation.Enable(True)
         self.calibration_controller.calibration_panel.Enable(True)
         self.sem_stream_cont.enable(True)
         self.sem_stream_cont.stream_panel.enable(True)
@@ -391,6 +398,11 @@ class FastEMSetupTab(Tab):
                 self.tab_data.semStream.should_update.value = True
 
     def _on_btn_autostigmation(self, _):
+        # check if cancelled
+        if self.tab_data.is_calibrating.value:
+            fastem._executor.cancel()
+            return
+
         # Disable other calibration buttons
         self.btn_optical_autofocus.Enable(False)
         self.btn_sem_autofocus.Enable(False)
@@ -409,10 +421,21 @@ class FastEMSetupTab(Tab):
         # make sure the acquire/tab buttons are disabled
         self.tab_data.is_calibrating.value = True
         self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
-        f = self.sem_stream_cont.stream.emitter.applyAutoStigmator(
-            self.sem_stream_cont.stream.detector
+        f = fastem.align(
+            self.tab_data.main.ebeam,
+            self.tab_data.main.multibeam,
+            self.tab_data.main.descanner,
+            self.tab_data.main.mppc,
+            self.tab_data.main.stage,
+            self.tab_data.main.ccd,
+            self.tab_data.main.beamshift,
+            self.tab_data.main.det_rotator,
+            self.tab_data.main.sed,
+            self.tab_data.main.ebeam_focus,
+            calibrations=[Calibrations.AUTOSTIGMATION],
         )
         f.add_done_callback(self._on_autostigmation_done)
+        self._update_button_controls(self.btn_autostigmation)
 
     @call_in_wx_main
     def _on_autostigmation_done(self, f):
@@ -464,7 +487,6 @@ class FastEMSetupTab(Tab):
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
-        # TODO also include btn_autostigmation once autostigmation is working
         enable = not mode
         self.active_scintillator_ctrl.Enable(enable)
         self.sem_stream_cont.enable(enable)
@@ -473,6 +495,7 @@ class FastEMSetupTab(Tab):
         self.btn_optical_autofocus.Enable(enable)
         self.btn_sem_autofocus.Enable(enable)
         self.btn_autobc.Enable(enable)
+        self.btn_autostigmation.Enable(enable)
         if mode:
             self.sem_stream_cont.pauseStream()
             self.sem_stream_cont.pause()
