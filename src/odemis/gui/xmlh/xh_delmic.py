@@ -3,7 +3,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Delmic
+Copyright © 2012-2025 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -30,7 +30,8 @@ import logging
 
 import wx
 import wx.adv
-import wx.xrc as xrc
+from decorator import decorator
+from wx import xrc
 
 import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.foldpanelbar as fpb
@@ -46,10 +47,29 @@ from odemis.gui.comp.stream_panel import StreamPanel
 
 HANDLER_CLASS_LIST = []
 
+# Since wxPython v4.1+, which uses wxWidgets 3.1+, the handling of the "hidden" tag has changed.
+# Previously, this was handled by the default .SetupWindow() method.
+# Now, every handler has to explicitly handle it, in DoCreateResource().
+# The standard wxWidget code does it via a macro XRC_MAKE_INSTANCE, but we cannot use a C macro.
+# => Do something similar with a decorator.
+@decorator
+def apply_hidden(f, self):
+    """
+    Decorator for DoCreateResource(), to hide the widget, if the "hidden" tag is True.
+    :param f: function to decorate
+    :param self: XmlResourceHandler
+    :return: the create widget (same as DoCreateResource())
+    """
+    widget = f(self)
+    if self.GetBool("hidden", False):
+        widget.Hide()
+
+    return widget
+
+
 ##################################
 # Fold Panel Bar related Handlers
 ##################################
-
 
 class StreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -63,10 +83,9 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "StreamPanel")
+        return self.IsOfClass(node, "StreamPanel")
 
-        return capable
-
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -100,153 +119,132 @@ HANDLER_CLASS_LIST.append(StreamPanelXmlHandler)
 class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        #self._isInside = False
 
     def CanHandle(self, node):
-        # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
-        #        self._isInside and self.IsOfClass(node, 'foldpanel')
         return self.IsOfClass(node, 'FoldPanelBar')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
+        w = fpb.FoldPanelBar(
+            self.GetParentAsWindow(),
+            self.GetID(),
+            self.GetPosition(),
+            self.GetSize(),
+            self.GetStyle()
+        )
+        self.SetupWindow(w)
 
-        if self.GetClass() == 'FoldPanelBar':
-            #print "Creating FoldpanelBar"
-            w = fpb.FoldPanelBar(
-                self.GetParentAsWindow(),
-                self.GetID(),
-                self.GetPosition(),
-                self.GetSize(),
-                self.GetStyle()
-            )
-            self.SetupWindow(w)
+        parent = w.GetParent()
+        if parent.__class__ == wx.ScrolledWindow:
+            parent.EnableScrolling(False, True)
+            parent.SetScrollbars(-1, 10, 1, 1)
 
-            parent = w.GetParent()
-            if parent.__class__ == wx.ScrolledWindow:
-                parent.EnableScrolling(False, True)
-                parent.SetScrollbars(-1, 10, 1, 1)
+        self.CreateChildren(w, False)
 
-            self.CreateChildren(w, False)
-
-            return w
+        return w
 HANDLER_CLASS_LIST.append(FoldPanelBarXmlHandler)
 
 
 class CaptionBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'CaptionBar')
 
-
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
-
-        if self.GetClass() == 'CaptionBar':
-            #print "Creating CaptionBar"
-            parent = self.GetParentAsWindow()
-            w = fpb.CaptionBar(
-                            parent,
-                            self.GetText('label'),
-                            self.GetBool('collapsed')
-            )
-            self.SetupWindow(w)
-            return w
+        parent = self.GetParentAsWindow()
+        w = fpb.CaptionBar(
+                        parent,
+                        self.GetText('label'),
+                        self.GetBool('collapsed')
+        )
+        self.SetupWindow(w)
+        return w
 HANDLER_CLASS_LIST.append(CaptionBarXmlHandler)
 
 
 class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'FoldPanelItem')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
+        parent = self.GetParentAsWindow()
+        w = fpb.FoldPanelItem(parent,
+                              self.GetID(),
+                              self.GetPosition(),
+                              self.GetSize(),
+                              self.GetStyle(),
+                              self.GetText('label'),
+                              self.GetBool('collapsed'),
+                              nocaption=self.GetBool('nocaption'))
+        self.SetupWindow(w)
+        self.CreateChildren(w, False)
 
-        if self.GetClass() == 'FoldPanelItem':
-            parent = self.GetParentAsWindow()
-            w = fpb.FoldPanelItem(parent,
-                                  self.GetID(),
-                                  self.GetPosition(),
-                                  self.GetSize(),
-                                  self.GetStyle(),
-                                  self.GetText('label'),
-                                  self.GetBool('collapsed'),
-                                  nocaption=self.GetBool('nocaption'))
-            self.SetupWindow(w)
-            self.CreateChildren(w, False)
-
-            # Move all the FoldPanelItem children to the main sizer
-            w.children_to_sizer()
-            parent.add_item(w)
-            return w
+        # Move all the FoldPanelItem children to the main sizer
+        w.children_to_sizer()
+        parent.add_item(w)
+        return w
 HANDLER_CLASS_LIST.append(FoldPanelItemXmlHandler)
 
 
 class StreamBarXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'StreamBar')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
-
-        if self.GetClass() == 'StreamBar':
-            parent = self.GetParentAsWindow()
-            w = StreamBar(parent,
-                                 self.GetID(),
-                                 self.GetPosition(),
-                                 self.GetSize(),
-                                 self.GetStyle(),
-                                 add_button=self.GetBool('add_button'))
-            self.SetupWindow(w)
-            # 'Dirty' fix for the hard coded 'add stream' child button
-            if self.GetBool('add_button'):
-                w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
-            parent.add_item(w)
-            return w
+        parent = self.GetParentAsWindow()
+        w = StreamBar(parent,
+                             self.GetID(),
+                             self.GetPosition(),
+                             self.GetSize(),
+                             self.GetStyle(),
+                             add_button=self.GetBool('add_button'))
+        self.SetupWindow(w)
+        # 'Dirty' fix for the hard coded 'add stream' child button
+        if self.GetBool('add_button'):
+            w.btn_add_stream.SetBackgroundColour(w.GetBackgroundColour())
+        parent.add_item(w)
+        return w
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
 class FastEMProjectListXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'FastEMProjectList')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
-
-        if self.GetClass() == 'FastEMProjectList':
-            parent = self.GetParentAsWindow()
-            w = FastEMProjectList(parent,
-                                  self.GetID(),
-                                  self.GetPosition(),
-                                  self.GetSize(),
-                                  self.GetStyle())
-            self.SetupWindow(w)
-            #parent.add_item(w)
-            return w
+        parent = self.GetParentAsWindow()
+        w = FastEMProjectList(parent,
+                              self.GetID(),
+                              self.GetPosition(),
+                              self.GetSize(),
+                              self.GetStyle())
+        self.SetupWindow(w)
+        return w
 HANDLER_CLASS_LIST.append(FastEMProjectListXmlHandler)
 
 
@@ -256,17 +254,18 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
-        self.AddWindowStyles()
         # Custom styles
         self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
         self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
         self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+        # Standard styles
+        self.AddWindowStyles()
 
     def CanHandle(self, node):
         return self.IsOfClass(node, self.klass.__name__)
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -304,7 +303,7 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
                 **kwargs)
 
         except ValueError:
-            print("Failed to create ImageButton %s" % (self.GetName(),))
+            logging.error("Failed to create ImageButton %s" % (self.GetName(),))
             raise
 
         self.SetupWindow(w)
@@ -355,14 +354,13 @@ class SuggestTextCtrlHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'SuggestTextCtrl')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -382,14 +380,13 @@ class UnitIntegerCtrlHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'UnitIntegerCtrl')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -413,14 +410,13 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
         self.AddWindowStyles()
-        # Custom styles
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'UnitFloatCtrl')
 
     # Process XML parameters and create the object
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -447,64 +443,7 @@ HANDLER_CLASS_LIST.append(UnitFloatCtrlHandler)
 # Canvas Handlers
 ##################################
 
-class CameraViewportXmlHandler(xrc.XmlResourceHandler):
-
-    klass = vport.CameraViewport
-
-    def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Specify the styles recognized by objects of this type
-        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
-        self.AddWindowStyles()
-
-    # This method and the next one are required for XmlResourceHandlers
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "CameraViewport")
-
-    def DoCreateResource(self):
-        assert self.GetInstance() is None
-
-        # Now create the object
-        panel = self.klass(self.GetParentAsWindow(),
-                           id=self.GetID(),
-                           pos=self.GetPosition(),
-                           size=self.GetSize(),
-                           style=self.GetStyle())
-        self.SetupWindow(panel)
-        return panel
-HANDLER_CLASS_LIST.append(CameraViewportXmlHandler)
-
-
-class FixedOverviewViewportXmlHandler(xrc.XmlResourceHandler):
-
-    klass = vport.FixedOverviewViewport
-
-    def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Specify the styles recognized by objects of this type
-        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
-        self.AddWindowStyles()
-
-    # This method and the next one are required for XmlResourceHandlers
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "FixedOverviewViewport")
-
-    def DoCreateResource(self):
-        assert self.GetInstance() is None
-
-        # Now create the object
-        panel = self.klass(self.GetParentAsWindow(),
-                           id=self.GetID(),
-                           pos=self.GetPosition(),
-                           size=self.GetSize(),
-                           style=self.GetStyle())
-        self.SetupWindow(panel)
-        return panel
-HANDLER_CLASS_LIST.append(FixedOverviewViewportXmlHandler)
-
-
 class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
-
     klass = vport.MicroscopeViewport
 
     def __init__(self):
@@ -515,7 +454,7 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        return self.IsOfClass(node, "MicroscopeViewport")
+        return self.IsOfClass(node, self.klass.__name__)
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -535,132 +474,85 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(MicroscopeViewportXmlHandler)
 
 
+class CameraViewportXmlHandler(MicroscopeViewportXmlHandler):
+    klass = vport.CameraViewport
+HANDLER_CLASS_LIST.append(CameraViewportXmlHandler)
+
+
+class FixedOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
+    klass = vport.FixedOverviewViewport
+HANDLER_CLASS_LIST.append(FixedOverviewViewportXmlHandler)
+
+
 class LiveViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.LiveViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "LiveViewport")
 HANDLER_CLASS_LIST.append(LiveViewportXmlHandler)
 
 
 class RawLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.RawLiveViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "RawLiveViewport")
 HANDLER_CLASS_LIST.append(RawLiveViewportXmlHandler)
 
 
 class FeatureOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.FeatureOverviewViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "FeatureOverviewViewport")
 HANDLER_CLASS_LIST.append(FeatureOverviewViewportXmlHandler)
 
 
 class ARAcquiViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.ARAcquiViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "ARAcquiViewport")
 HANDLER_CLASS_LIST.append(ARAcquiViewportXmlHandler)
 
 
 class PointSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.PointSpectrumViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "PointSpectrumViewport")
 HANDLER_CLASS_LIST.append(PointSpectrumViewportXmlHandler)
 
 
 class ChronographViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.ChronographViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "ChronographViewport")
 HANDLER_CLASS_LIST.append(ChronographViewportXmlHandler)
 
 
 class ThetaViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.ThetaViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "ThetaViewport")
 HANDLER_CLASS_LIST.append(ThetaViewportXmlHandler)
 
 
 class ARLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.ARLiveViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "ARLiveViewport")
 HANDLER_CLASS_LIST.append(ARLiveViewportXmlHandler)
 
 
 class EKLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.EKLiveViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "EKLiveViewport")
 HANDLER_CLASS_LIST.append(EKLiveViewportXmlHandler)
 
 
 class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.AngularResolvedViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "AngularResolvedViewport")
 HANDLER_CLASS_LIST.append(AngularResolvedViewportXmlHandler)
 
 
 class LineSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.LineSpectrumViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "LineSpectrumViewport")
 HANDLER_CLASS_LIST.append(LineSpectrumViewportXmlHandler)
 
 
 class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.TemporalSpectrumViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "TemporalSpectrumViewport")
-
-
 HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
 
+
 class FastEMMainViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.FastEMMainViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "FastEMMainViewport")
 HANDLER_CLASS_LIST.append(FastEMMainViewportXmlHandler)
 
+
 class AngularSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
-
     klass = vport.AngularSpectrumViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "AngularSpectrumViewport")
-
-
 HANDLER_CLASS_LIST.append(AngularSpectrumViewportXmlHandler)
+
 
 ##################################
 # Sliders
@@ -669,14 +561,13 @@ HANDLER_CLASS_LIST.append(AngularSpectrumViewportXmlHandler)
 class UnitIntegerSliderHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Specify the styles recognized by objects of this type
         self.AddWindowStyles()
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "UnitIntegerSlider")
-        return capable
+        return self.IsOfClass(node, "UnitIntegerSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -707,13 +598,13 @@ HANDLER_CLASS_LIST.append(UnitIntegerSliderHandler)
 class UnitFloatSliderHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Specify the styles recognized by objects of this type
         self.AddWindowStyles()
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "UnitFloatSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -753,14 +644,13 @@ HANDLER_CLASS_LIST.append(UnitFloatSliderHandler)
 class VisualRangeSliderHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-        # Specify the styles recognized by objects of this type
         self.AddWindowStyles()
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "VisualRangeSlider")
-        return capable
+        return self.IsOfClass(node, "VisualRangeSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
         # Now create the object
@@ -785,6 +675,7 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "BandwidthSlider")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
         # Now create the object
@@ -825,6 +716,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "OwnerDrawnComboBox")
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -836,6 +728,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
                                             style=self.GetStyle())
         new_ctrl.SetButtonBitmaps(img.getBitmap("button/btn_down.png"), pushButtonBg=False)
         self.SetupWindow(new_ctrl)
+
         return new_ctrl
 HANDLER_CLASS_LIST.append(OwnerDrawnComboBoxHandler)
 
@@ -856,13 +749,11 @@ class ToolBarHandler(xrc.XmlResourceHandler):
 
         # Standard styles
         self.AddWindowStyles()
-        #self._isInside = False
 
     def CanHandle(self, node):
-        # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
-        #        self._isInside and self.IsOfClass(node, 'foldpanel')
         return self.IsOfClass(node, 'ToolBar')
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
@@ -894,13 +785,13 @@ class ViewportGridHandler(xrc.XmlResourceHandler):
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
-
         # Standard styles
         self.AddWindowStyles()
 
     def CanHandle(self, node):
         return self.IsOfClass(node, 'ViewportGrid')
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
