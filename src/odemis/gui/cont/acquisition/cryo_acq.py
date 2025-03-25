@@ -46,7 +46,7 @@ from odemis.acq.feature import (
     acquire_at_features,
     add_feature_info_to_filename,
 )
-from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream
+from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream, StaticFluoStream
 from odemis.gui import conf
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
@@ -118,6 +118,8 @@ class CryoAcquiController(object):
         # TODO move this button to the FIBSEM tab where the button will be enabled only if the requirements are met
         # To enable the feature and feature status, relevant fm and fib streams
         # should be present. Rignt now, button is always enabled for the testing environment
+        self.txt_tdct = self._panel.txt_tdct
+        self.txt_tdct.Show(True)
         self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
         # for "cancel" button
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
@@ -662,7 +664,20 @@ class CryoAcquiController(object):
         """
         called when the button "TDCT" is pressed
         """
-        self.correlation_dialog_controller.open_correlation_dialog()
+        for stream in self._tab_data.main.currentFeature.value.streams.value:
+            if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
+                z_stack = True
+                self.txt_tdct.SetLabel("Interpolation of Z stacks .... \nMay take a while")
+                wx.CallAfter(self._open_dialog_if_needed, z_stack)
+                return  # Prevent continuing execution here
+
+        wx.MessageBox("The selected feature does not contain a Z-stack stream.\n"
+                      "Please acquire a Z-stack to proceed.", "Info", wx.OK | wx.ICON_INFORMATION)
+
+    def _open_dialog_if_needed(self, z_stack):
+        if z_stack:
+            self.correlation_dialog_controller.open_correlation_dialog()
+            self.txt_tdct.SetLabel("")
 
     @call_in_wx_main
     def _on_filename(self, name):

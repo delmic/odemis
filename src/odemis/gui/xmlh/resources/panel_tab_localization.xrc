@@ -806,18 +806,33 @@
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_tdct">
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>3DCT</label>
-                                <font>
-                                  <size>14</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_tdct">
+                                    <height>48</height>
+                                    <face_colour>def</face_colour>
+                                    <label>3DCT</label>
+                                    <font>
+                                      <size>14</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="txt_tdct">
+                                    <fg>#E5E5E5</fg>
+                                    <hidden>1</hidden>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                                <flag>wxTOP</flag>
+                                <border>17</border>
                               </object>
                               <option>0</option>
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>

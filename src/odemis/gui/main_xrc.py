@@ -849,6 +849,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
         self.btn_tdct = xrc.XRCCTRL(self, "btn_tdct")
+        self.txt_tdct = xrc.XRCCTRL(self, "txt_tdct")
         self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
         self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
         self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
@@ -9869,18 +9870,33 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_tdct">
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>3DCT</label>
-                                <font>
-                                  <size>14</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_tdct">
+                                    <height>48</height>
+                                    <face_colour>def</face_colour>
+                                    <label>3DCT</label>
+                                    <font>
+                                      <size>14</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="txt_tdct">
+                                    <fg>#E5E5E5</fg>
+                                    <hidden>1</hidden>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                                <flag>wxTOP</flag>
+                                <border>17</border>
                               </object>
                               <option>0</option>
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
