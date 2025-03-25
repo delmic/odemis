@@ -453,6 +453,10 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         # difference compared to the focus levels measured so far.
         step = 8 * dof
         lower_bound, upper_bound = rng
+        # Ensure we take at least 10 steps
+        if (upper_bound - lower_bound) < 10 * step:
+            logging.debug("Focus range < 10 steps, adjusting step size to %g m", (upper_bound - lower_bound) / 10)
+            step = (upper_bound - lower_bound) / 10
         # start moving upwards until we reach the upper bound or we find some
         # significant deviation in focus level
         # The number of steps is the distance to the upper bound divided by the step size.
