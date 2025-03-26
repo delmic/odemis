@@ -1249,10 +1249,13 @@ class MPPC(model.Detector):
         z_position = md.get(model.MD_SLICE_IDX, 0)  # if slice number is not provided use 0.
         eff_field_size = md.get(model.MD_FIELD_SIZE, self._scanner.resolution.value)
 
+        offload_disable = True if ".calibrations" in self.filename.value else False
+
         megafield_metadata = MegaFieldMetaData(
             stack_id=os.path.basename(self.filename.value),
             info=info,
             storage_directory=os.path.dirname(self.filename.value),
+            offload_disable=offload_disable,
             custom_data=custom_data,
             stage_position_x=float(stage_position[0]),
             stage_position_y=float(stage_position[1]),
