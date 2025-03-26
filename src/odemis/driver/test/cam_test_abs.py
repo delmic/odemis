@@ -581,6 +581,7 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
     def setUp(self):
         self._data = queue.Queue()
         self.got_image = threading.Event()
+        self.sem_data_received = threading.Event()
         self.end_time = 0
         self.sem_size = (10, 10)
         self.ccd_size = self.ccd.resolution.value
@@ -619,12 +620,14 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
     def test_basic(self):
         """
         check the synchronization of the SEM with the CCD:
-        The SEM scans a region and for each point, the CCD acquires one image.
+        The SEM scans each point of a region separately. For each point the "startScan" event is sent,
+        which triggers a CCD image acquisition.
         """
         start = time.time()
         exp = 50e-3  # s
         # in practice, it takes up to 500ms to take an image of 50 ms exposure
-        numbert = numpy.prod(self.sem_size)
+        sem_completed_shape = (10, 6)  # X, Y
+        numbert = numpy.prod(sem_completed_shape)
 
         # use large binning, to reduce the resolution
         if model.hasVA(self.ccd, "binning") and not self.ccd.binning.readonly:
@@ -635,35 +638,36 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
         # magical formula to get a long enough dwell time.
         # works with PVCam and Andorcam, but is probably different with other drivers :-(
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
+
+        self.sem_size = (1, 1)  # one pixel at a time
         # it seems with the iVac, 20ms is enough to account for the overhead and extra image acquisition
         self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.2
         self.scanner.resolution.value = self.sem_size
-        # pixel write/read setup is pretty expensive ~10ms
-        expected_duration = numbert * (self.scanner.dwellTime.value + 0.01)
 
-        self.sem_left = 1 # unsubscribe just after one
         self.ccd_left = numbert # unsubscribe after receiving
 
         try:
-            self.ccd.data.synchronizedOn(self.scanner.newPixel)
+            self.ccd.data.synchronizedOn(self.scanner.startScan)
         except IOError:
             self.skipTest("Camera doesn't support synchronisation")
         self.ccd.data.subscribe(self.receive_ccd_image)
 
-        self.sed.data.subscribe(self.receive_sem_data)
-        for i in range(10):
-            # * 3 because it can be quite long to setup each pixel.
-            time.sleep(expected_duration * 2 / 10)
-            if self.sem_left == 0:
-                break # just to make it quicker if it's quicker
+        # Acquire every pixel. In reality, for every pixel the scanner.translation would be set to
+        # a different value. But here we don't care about the actual data, just CCD synchronization.
+        for idx in numpy.ndindex(sem_completed_shape):
+            self.sem_left = 10  # large enough to never reach
+            self.sem_data_received.clear()
+            self.sed.data.subscribe(self.receive_sem_data)
+            if not self.sem_data_received.wait(self.scanner.dwellTime.value * 2 + 0.1):
+                raise self.fail(f"Sem didn't send data for point {idx}")
+            self.sed.data.unsubscribe(self.receive_sem_data)
+            time.sleep(0.05)  # Take a bit of time before starting the next pixel
 
         self.ccd.data.unsubscribe(self.receive_ccd_image)
-        self.sed.data.unsubscribe(self.receive_sem_data)
         self.ccd.data.synchronizedOn(None)
 
         logging.info("Took %g s", self.end_time - start)
         time.sleep(exp + readout)
-        self.assertEqual(self.sem_left, 0)
         self.assertEqual(self.ccd_left, 0)
 
         # check we can still get data normally
@@ -845,6 +849,7 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
         self.assertEqual(image.shape, self.sem_size[::-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.sem_left -= 1
+        self.sem_data_received.set()
         if self.sem_left <= 0:
             dataflow.unsubscribe(self.receive_sem_data)
 
