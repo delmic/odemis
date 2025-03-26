@@ -46,6 +46,7 @@ ACQ_CMD_TERM = 2
 # a spot with less than 100 integrations it gets an enormous delay to receive
 # new data from the server.
 TESCAN_PXL_LIMIT = 100
+PROBE_CURRENT_RANGE = (10e-12, 100e-9)
 
 
 class SEM(model.HwComponent):
@@ -539,7 +540,7 @@ class Scanner(model.Emitter):
     etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
     """
-    def __init__(self, name, role, parent, fov_range, **kwargs):
+    def __init__(self, name, role, parent, fov_range, current_range=PROBE_CURRENT_RANGE, **kwargs):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
@@ -613,13 +614,10 @@ class Scanner(model.Emitter):
                                                   setter=self._setVoltage)
         self.accelVoltage.subscribe(self._onVoltage)
 
-        # Enumerated float with respect to the PC indexes of Tescan API
-        self._list_currents = self.GetProbeCurrents()
-        pc_choices = set(self._list_currents)
-        # We use the current PC
-        pc = self._list_currents[self.parent._device.GetPCIndex() - 1]
-        self.probeCurrent = model.FloatEnumerated(pc, pc_choices, unit="A",
-                                                  setter=self._setPC)
+        pc = self.parent._device.GetBeamCurrent() * 1e-12  # Convert from pA to A
+        # For limits of current, values from the Tescan UI are used, since the API did not specify any.
+        self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
+                                                    setter=self._setPC)
         self.probeCurrent.subscribe(self._onPC)
 
         # TODO: Use BooleanVA instead
@@ -708,13 +706,8 @@ class Scanner(model.Emitter):
         return power
 
     def _setPC(self, value):
-        # Set the corresponding current index to Tescan SEM
-        ipc = util.index_closest(value, self._list_currents)
-        self.parent._device.SetPCIndex(ipc + 1)
-
-        pc = self._list_currents[ipc]
-
-        return pc
+        self.parent._device.SetBeamCurrent(value * 1e12)  # Convert from A to pA
+        return value
 
     def _onPC(self, current):
         self.parent._metadata[model.MD_EBEAM_CURRENT] = current
@@ -730,18 +723,6 @@ class Scanner(model.Emitter):
             voltages.append(float(i[1]))
         volt_range = (voltages[0], voltages[-2])
         return volt_range
-
-    def GetProbeCurrents(self):
-        """
-        return (list of float): probe current values ordered by index
-        """
-        currents = []
-        pcs = self.parent._device.EnumPCIndexes()
-        cur = re.findall(r'\=(.*?)\n', pcs)
-        for i in enumerate(cur):
-            # picoamps to amps
-            currents.append(float(i[1]) * 1e-12)
-        return currents
 
     def _setBlanker(self, blanked):
         # Index:
@@ -878,7 +859,7 @@ class Scanner(model.Emitter):
                         self.accelVoltage.notify(new_volt)
 
                     prev_pc = self.probeCurrent._value
-                    new_pc = self._list_currents[self.parent._device.GetPCIndex() - 1]
+                    new_pc = self.parent._device.GetBeamCurrent() * 1e-12  # Convert from pA to A
                     if prev_pc != new_pc:
                         self.probeCurrent._value = new_pc
                         self.probeCurrent.notify(new_pc)
@@ -1534,6 +1515,8 @@ class ChamberDataFlow(model.DataFlow):
 PRESSURE_VENTED = 1e05  # Pa
 PRESSURE_PUMPED = 1e-02  # Pa
 VACUUM_TIMEOUT = 5 * 60  # seconds
+
+
 class ChamberPressure(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
