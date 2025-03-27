@@ -396,7 +396,9 @@ class CorrelationPointsController(object):
             else:
                 self.correlation_target.reset_attributes()
                 self._tab_data_model.projected_points = []
-                self.correlation_txt.SetLabel("Correlation RMS Deviation :")
+                self.correlation_txt.SetLabel("To run correlation, please add \n"
+                                              "minimum 4 FIB-FM fiducial pairs, 1 POI in FM.")
+                self._panel.Layout()
                 for vp in self._viewports:
                     if vp.view.name.value == "SEM Overview":
                         vp.canvas.update_drawing()
@@ -644,7 +646,7 @@ class CorrelationPointsController(object):
         # When FM is selected, the Z-targeting button is enabled.
         # When FIB is selected, the Z-targeting button is disabled.
         # For new targets, automatically perform Z targeting if MIP is checked for atleast one FM stream
-        mip_enabled = any([stream.max_projection for stream in self.correlation_target.fm_streams])
+        mip_enabled = any([stream.max_projection.value for stream in self.correlation_target.fm_streams])
 
         if target and "FIB" not in target.name.value:
             self.z_targeting_btn.Enable(True)
