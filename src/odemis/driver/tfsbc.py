@@ -23,7 +23,11 @@ import logging
 
 import numpy
 import serial.tools.list_ports
-from pymodbus.client.sync import ModbusSerialClient
+try:
+    from pymodbus.client import ModbusSerialClient  # version 3.6
+except ImportError:
+    from pymodbus.client.sync import ModbusSerialClient  # version 2.1
+
 
 from odemis import model
 from odemis.model import HwError
