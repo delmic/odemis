@@ -279,11 +279,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
             shape = (len(pol_pos), rep[1], rep[0])
             # estimate acq time for leeches is based on two fastest axis
             if self._integrationTime:
-                # get the exposure time directly from the hardware (e.g. hardware rounds value) to calc counts
-                integration_count = int(math.ceil(self._integrationTime.value / self._ccd.exposureTime.value))
-                if integration_count != self._integrationCounts.value:
-                    logging.debug("Integration count of %d, does not match integration count of %d as expected",
-                                  integration_count, self._integrationCounts.value)
+                integration_count = self._integrationCounts.value
                 if integration_count > 1:
                     shape = (len(pol_pos), rep[1], rep[0], integration_count)  # overwrite shape
 
@@ -600,8 +596,8 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
-            logging.warning("Dropping data because it started %g s too early",
-                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            logging.warning("Dropping data (of stream %d) because it started %g s too early",
+                            n, self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
             # TODO: As the detector is synchronised, we need to restart it.
             # Or maybe not, as the typical reason it arrived early is that the
             # detector was already running, in which case they haven't

@@ -2434,6 +2434,12 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
         cls.filter = model.getComponent(role="filter")
 
+    def setUp(self):
+        # Wait a bit for the simulator to be "ready" again (as it's not a very good simulator)
+        # Otherwise, if immediately stopping & starting, the simulator may generate an old image,
+        # very early.
+        time.sleep(2)
+
     def _roiToPhys(self, repst):
         """
         Compute the (expected) physical position of a stream ROI
@@ -3128,6 +3134,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # check the dtype is correct
         self.assertEqual(ts_da.dtype, numpy.uint32)
 
+        time.sleep(2)
         # do a second acquisition with longer exp time and check values are bigger due to integration
         streaks.integrationTime.value = 2.5  # s
 
@@ -3183,10 +3190,11 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
         # set stream VAs
         streaks.integrationTime.value = 2  # s
-        # TODO use fixed repetition value -> set ROI?
-        streaks.repetition.value = (3, 5)  # results in (1, 2)
+        # The maximum exposure time of the streak-ccd is 1s => 2 images are integrated
+        assert streaks.integrationCounts.value == 2
+        streaks.roi.value = (0, 0.2, 0.4, 0.8)
+        streaks.repetition.value = (3, 5)  # results in (2, 4)
 
-        streaks.roi.value = (0, 0.2, 0.3, 0.6)
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1  # s  so should run leech for sub acquisitions (between integrating 2 images)
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)

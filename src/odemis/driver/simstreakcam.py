@@ -123,6 +123,7 @@ class ReadoutCamera(model.DigitalCamera):
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
         self.data = SimpleStreakCameraDataFlow(self._start, self._stop, self._sync)
+        self._evtq = queue.Queue()  # queue for synchronization
         self._generator = None
 
         self._img_counter = 0  # initialize the image counter
@@ -199,15 +200,12 @@ class ReadoutCamera(model.DigitalCamera):
 
         if self._sync_event:  # if new event = None, unsubscribe previous event (which was softwareTrigger)
             self._sync_event.unsubscribe(self)
-            if not event:
-                self._evtq.put(None)  # in case it was waiting for this event
 
         self._sync_event = event
 
         if self._sync_event:
             # softwareTrigger subscribes to onEvent method: if softwareTrigger.notify() called, onEvent method called
             self._sync_event.subscribe(self)  # must have onEvent method
-            self._evtq = queue.Queue()  # to be sure it's empty
 
     @oneway
     def onEvent(self):
@@ -347,8 +345,13 @@ class ReadoutCamera(model.DigitalCamera):
           received. If the DataFlow is not synchronised on any event, this
           method immediately returns
         """
-        if self._sync_event:
-            self._evtq.get()
+        while self._sync_event:
+            try:
+                # Don't wait forever, because maybe while we are waiting the DataFlow got unsynchronized
+                self._evtq.get(timeout=0.1)
+                return  # Event received
+            except queue.Empty:
+                pass
 
 
 class StreakUnit(model.HwComponent):
