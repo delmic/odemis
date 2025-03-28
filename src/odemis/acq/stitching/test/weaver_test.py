@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+import copy
 import logging
 import math
 import os
@@ -30,11 +31,16 @@ import unittest
 import warnings
 
 import numpy
-
 import odemis
 from odemis import model
-from odemis.acq.stitching import CollageWeaver, MeanWeaver, CollageWeaverReverse, WEAVER_MEAN, WEAVER_COLLAGE_REVERSE, \
-    WEAVER_COLLAGE
+from odemis.acq.stitching import (
+    WEAVER_COLLAGE,
+    WEAVER_COLLAGE_REVERSE,
+    WEAVER_MEAN,
+    CollageWeaver,
+    CollageWeaverReverse,
+    MeanWeaver,
+)
 from odemis.acq.stitching.test.stitching_test import decompose_image
 from odemis.dataio import find_fittest_converter
 from odemis.util.img import ensure2DImage
@@ -223,6 +229,87 @@ class WeaverBaseTest:
                 weaved_img = weaver.getFullImage()
                 self.assertEqual(weaved_img.metadata[model.MD_ROTATION], rotation)
 
+    def test_stage_bare_pos(self):
+        """Test the calculation of the mean stage-bare position for the weaved image."""
+        # create four tiles with different stage positions
+        img = numpy.zeros((100, 100))
+
+        px = 1e-6
+        md1 = {
+            model.MD_POS: (-50e-6, -50e-6),
+            model.MD_STAGE_POSITION_RAW: {
+                "x": -50e-6,
+                "y": -50e-6,
+                "z": 10e-6,
+                "rx": 0.61,
+                "rz": 0,
+            },
+            model.MD_PIXEL_SIZE: (px, px),
+        }
+        in1 = model.DataArray(img, md1)
+        md2 = {
+            model.MD_POS: (50e-6, -50e-6),
+            model.MD_STAGE_POSITION_RAW: {
+                "x": 50e-6,
+                "y": -50e-6,
+                "z": 10e-6,
+                "rx": 0.61,
+                "rz": 0,
+            },
+            model.MD_PIXEL_SIZE: (px, px),
+        }
+        in2 = model.DataArray(img, md2)
+        md3 = {
+            model.MD_POS: (-50e-6, 50e-6),
+            model.MD_STAGE_POSITION_RAW: {
+                "x": -50e-6,
+                "y": 50e-6,
+                "z": 5e-6,
+                "rx": 0.61,
+                "rz": 0,
+            },
+            model.MD_PIXEL_SIZE: (px, px),
+        }
+        in3 = model.DataArray(img, md3)
+        md4 = {
+            model.MD_POS: (50e-6, 50e-6),
+            model.MD_STAGE_POSITION_RAW: {
+                "x": 50e-6,
+                "y": 50e-6,
+                "z": 5e-6,
+                "rx": 0.61,
+                "rz": 0,
+            },
+            model.MD_PIXEL_SIZE: (px, px),
+        }
+        in4 = model.DataArray(img, md4)
+
+        # calculate mean stage-bare for each axes
+        stage_bares = []
+        for md in [md1, md2, md3, md4]:
+            stage_bares.append(copy.deepcopy(md[model.MD_STAGE_POSITION_RAW]))
+        mean_stage_bare = {}
+        for key in stage_bares[0].keys():
+            mean_stage_bare[key] = numpy.mean([md[key] for md in stage_bares])
+
+        if self.weaver_type == WEAVER_COLLAGE:
+            weaver_class = CollageWeaver
+        elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+            weaver_class = CollageWeaverReverse
+        elif self.weaver_type == WEAVER_MEAN:
+            weaver_class = MeanWeaver
+        weaver = weaver_class()
+        weaver.addTile(in1)
+        weaver.addTile(in2)
+        weaver.addTile(in3)
+        weaver.addTile(in4)
+        outd = weaver.getFullImage()
+
+        # check that the mean stage-bare position is correct
+        for axes in mean_stage_bare.keys():
+            self.assertAlmostEqual(outd.metadata[model.MD_STAGE_POSITION_RAW][axes],
+                                   mean_stage_bare[axes],
+                                   places=3)
 
 class TestCollageWeaver(WeaverBaseTest, unittest.TestCase):
 
