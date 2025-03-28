@@ -1245,15 +1245,17 @@ class MPPC(model.Detector):
 
         md = self.getMetadata()
         custom_data = md.get(model.MD_EXTRA_SETTINGS, "")  # if no custom metadata, pass an empty string
-        # TODO support USER_NOTE in GUI
         info = md.get(model.MD_USER_NOTE, None)  # if no user note pass None, so it is not added to the metadata.yaml
-        z_position = md.get(model.MD_SLICE_IDX, 0)  # if slice number is not provided use 0. TODO support in GUI
+        z_position = md.get(model.MD_SLICE_IDX, 0)  # if slice number is not provided use 0.
         eff_field_size = md.get(model.MD_FIELD_SIZE, self._scanner.resolution.value)
+
+        offload_disable = True if ".calibrations" in self.filename.value else False
 
         megafield_metadata = MegaFieldMetaData(
             stack_id=os.path.basename(self.filename.value),
             info=info,
             storage_directory=os.path.dirname(self.filename.value),
+            offload_disable=offload_disable,
             custom_data=custom_data,
             stage_position_x=float(stage_position[0]),
             stage_position_y=float(stage_position[1]),
