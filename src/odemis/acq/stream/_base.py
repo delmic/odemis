@@ -1321,7 +1321,7 @@ class Stream(object):
         """
         Translate pixel coordinates into physical coordinates in meters.
         :param pixel_pos: the position in pixel coordinates (x, y)
-        :returns: the position in physical coordinates (x, y) in meters or None if it's outside of the image
+        :returns: the position in physical coordinates (x, y) in meters
         """
         if not self.raw:
             raise LookupError("Stream has no data")

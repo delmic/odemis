@@ -449,7 +449,7 @@ class CorrelationPointsController(object):
         poi_coords = []
         path = os.getcwd()
         for fib_coord in self.correlation_target.fib_fiducials:
-            fib_coord = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(fib_coord.coordinates.value[0:2])
+            fib_coord = self.correlation_target.fib_stream.getPixelCoordinates_alt(fib_coord.coordinates.value[0:2])
             fib_coords.append(fib_coord)
         fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
         for fm_coord in self.correlation_target.fm_fiducials:
@@ -479,7 +479,9 @@ class CorrelationPointsController(object):
             self._tab_data_model.projected_points.append(target)
             self.correlation_target.fib_projected_fiducials.append(target)
 
-        projected_poi = get_reprojected_poi_coordinate(self.correlation_target.correlation_result)
+        # Convert from pixel to physical coordinates
+        projected_poi = (self.correlation_target.fib_stream.getPhysicalCoordinates
+                         (self.correlation_target.correlation_result["output"]["poi"][0]["image_px"]))
         projected_poi_target = Target(x=projected_poi[0], y=projected_poi[1], z=0, name="PPOI", type="ProjectedPOI",
                                       index=1,
                                       fm_focus_position=0)
@@ -580,15 +582,15 @@ class CorrelationPointsController(object):
                     target_swap.index.value = current_index
                     target_swap.name.value = current_name[:-1] + str(target_swap.index.value)
                     self._on_target_changes(self._tab_data_model.main.targets.value)
-                    self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
-                    self._tab_data_model.main.currentTarget.value.name.value = current_name[:-1] + str(new_value)
-                    # TODO grid set value shouldn't be used, use VA connector and disconnector ?
-                    self.grid.SetCellValue(current_row_count, GridColumns.Type.value,
-                                           self._tab_data_model.main.currentTarget.value.name.value)
-                    self._tab_data_model.main.currentTarget.value = None
+                self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
+                self._tab_data_model.main.currentTarget.value.name.value = current_name[:-1] + str(new_value)
+                # TODO grid set value shouldn't be used, use VA connector and disconnector ?
+                self.grid.SetCellValue(current_row_count, GridColumns.Type.value,
+                                       self._tab_data_model.main.currentTarget.value.name.value)
+                self._tab_data_model.main.currentTarget.value = None
 
             except (ValueError, AssertionError):
-                wx.MessageBox(f"Index must be an int in the range (1, {index_max + 1})!", "Invalid Input",
+                wx.MessageBox(f"Index must be an int in the range (1, {index_max})!", "Invalid Input",
                               wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
                 return
@@ -694,11 +696,8 @@ class CorrelationPointsController(object):
         self.current_target_coordinate_subscription = False
         temp_check = False
         for row in range(self.grid.GetNumberRows()):
-            # TODO Connect the z with MIP and Z targetting.
-            # Such that if MIP is selected, Z targetting is enabled by default at the time of adding the fm targets.
-            # MIP should be selected altleast by one FM stream.
             if self._selected_target_in_grid(target, row):
-                if "FM" or "POI" in target.name.value:
+                if "FIB" != target.name.value[:3]:
                     pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(
                         (target.coordinates.value[0], target.coordinates.value[1]))
                     if float(self.grid.GetCellValue(row, GridColumns.Z.value)) != float(target.coordinates.value[2]):
@@ -745,7 +744,7 @@ class CorrelationPointsController(object):
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
             self.grid.AppendRows(1)
-            if "FM" or "POI" in target.name.value:
+            if "FIB" != target.name.value[:3]:
                 # TODO save the fm and fib stream metadata
                 pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(
                     (target.coordinates.value[0], target.coordinates.value[1]))
