@@ -2583,7 +2583,8 @@ class SEMMDStream(MultipleDetectorStream):
                 if has_inde_detectors:
                     # The independent detectors might need a bit of time to be ready.
                     # If not waiting, the first pixels might be missed.
-                    time.sleep(0.05)
+                    # Note: ephemeron EBIC hardware needs at least 0.1s
+                    time.sleep(0.1)
 
                 start = time.time()
                 self._acq_min_date = start
