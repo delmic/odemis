@@ -21,7 +21,7 @@ from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream, StaticFluoStream
-from odemis.acq.target import Target
+from odemis.acq.target import Target, FIDUCIAL, PROJECTED_FIDUCIAL, PROJECTED_POI, SURFACE_FIDUCIAL, POI
 from odemis.dataio import find_fittest_converter
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
@@ -45,24 +45,30 @@ class CorrelationTarget:
     """
 
     def __init__(self):
-        # Input parameters of 3DCT
+        # Input parameters of multipoint correlation. The input is provided by the user in the GUI
+        # The fm_pois are the points of interest in the FM image for which the poi in FIB is calculated using
+        # correlation. The fm_fiducials and fib fiducials are pairs of distinct fiducials in FM and FIB images
+        # respectively which are used to calculate the transformation matrix between the two images.
         self.fm_pois: List[Target] = []
         self.fm_fiducials: List[Target] = []
         self.fib_fiducials: List[Target] = []
+        # The fib surface fiducial is the target information provided by the user indicating the top surface of lamella
+        # in FIB image. This is used to correct the projected fiducials/poi in the FIB image based on the thickness of
+        # the lamella.
         self.fib_surface_fiducial : Target = None
         self.fib_stream = None #:StaticSEMStream = None or StaticFIBStream = None
         self.fm_streams: List[StaticFluoStream] = []
         self.fib_stream_key = None
         self.fm_stream_key = None
-        self.superz: StaticFluoStream = None
+        self.superz_stream: StaticFluoStream = None
 
         # Output parameters of multipoint correlation. The output is calculated from run_correlation function
         self.correlation_result = {}
         self.fib_projected_pois: List[Target] = []
         self.fib_projected_fiducials: List[Target] = []
 
-    def reset_attributes(self):
-        """Reset output parameters when any input parameters are changed"""
+    def clear(self):
+        """Clear output parameters when any input parameters are changed"""
         self.correlation_result = {}
         self.fib_projected_pois = []
         self.fib_projected_fiducials = []
@@ -205,17 +211,17 @@ class FeaturesDecoder(json.JSONDecoder):
                     type=types[i],
                     name=names[i],
                     fm_focus_position=fm_focus_positions[i] )
-                if "FIB" in names[i] and types[i] == "Fiducial":
+                if "FIB" in names[i] and types[i] == FIDUCIAL:
                     correlation_target.fib_fiducials.append(target)
-                elif "FIB" in names[i] and types[i] == "ProjectedPoints": #TODO  separate out and save projected points
+                elif "FIB" in names[i] and types[i] == PROJECTED_FIDUCIAL:
                     correlation_target.fib_projected_fiducials.append(target)
-                elif "FIB" in names[i] and types[i] == "ProjectedPOI":
+                elif "FIB" in names[i] and types[i] == PROJECTED_POI:
                     correlation_target.fib_projected_pois.append(target)
-                elif "FIB" in names[i] and types[i] == "SurfaceFiducial":
+                elif "FIB" in names[i] and types[i] == SURFACE_FIDUCIAL:
                     correlation_target.fib_surface_fiducial = target
-                elif "FM" in names[i] and types[i] == "Fiducial":
+                elif "FM" in names[i] and types[i] == FIDUCIAL:
                     correlation_target.fm_fiducials.append(target)
-                elif "POI" in names[i] and types[i] == "RegionOfInterest":
+                elif "POI" in names[i] and types[i] == POI:
                     correlation_target.fm_pois.append(target)
 
             decoded_correlation_targets[key] = correlation_target

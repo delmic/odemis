@@ -34,13 +34,11 @@ import wx
 import wx.html
 
 from odemis import model
-from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_stack, run_tdct_correlation, \
-    get_reprojected_poi_coordinate
+from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_stack, run_tdct_correlation
 from odemis.acq.feature import save_features, CorrelationTarget
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticStream, StaticFIBStream
 from odemis.acq.target import Target
 from odemis.gui import conf
-from odemis.gui.model import TOOL_REGION_OF_INTEREST, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
 from odemis.model import ListVA
 from odemis.util.interpolation import interpolate_z_stack
@@ -212,6 +210,10 @@ class CorrelationPointsController(object):
                         ssc = next(
                             (sc for sc in  self._panel.streambar_controller.stream_controllers
                              if sc.stream == stream), None)
+
+                        if not ssc:
+                            logging.error(f"Stream controller not found for stream {stream.name.value}")
+                            return
 
                         if isinstance(stream, StaticFluoStream) and not group_key:
                             group_key = key
@@ -389,19 +391,20 @@ class CorrelationPointsController(object):
         :return: (bool) True if the conditions are met, False otherwise
         """
         if self.correlation_target:
-            if (len(self.correlation_target.fib_fiducials) >= 4 and len(
+            if ((len(self.correlation_target.fib_fiducials) >= 4 and len(
                     self.correlation_target.fm_fiducials) >= 4 and self.correlation_target.fm_pois and len(
-                self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream:
+                self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
+                    (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
                 return True
             else:
-                self.correlation_target.reset_attributes()
+                self.correlation_target.clear()
                 self._tab_data_model.projected_points = []
                 self.correlation_txt.SetLabel("To run correlation, please add \n"
                                               "minimum 4 FIB-FM fiducial pairs, 1 POI in FM.")
                 self._panel.Layout()
-                for vp in self._viewports:
-                    if vp.view.name.value == "SEM Overview":
-                        vp.canvas.update_drawing()
+                # Update the FIB viewport because it shows the output overlays
+                # It is the second viewport out of total two viewports
+                self._viewports[1].canvas.update_drawing()
                 return False
         else:
             return False
@@ -447,7 +450,7 @@ class CorrelationPointsController(object):
         fib_coords = []
         fm_coords = []
         poi_coords = []
-        path = os.getcwd()
+        path = self._tab_data_model.main.project_path.value
         for fib_coord in self.correlation_target.fib_fiducials:
             fib_coord = self.correlation_target.fib_stream.getPixelCoordinates_alt(fib_coord.coordinates.value[0:2])
             fib_coords.append(fib_coord)
@@ -456,9 +459,6 @@ class CorrelationPointsController(object):
             fm_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(fm_coord.coordinates.value[0:2])
             fm_coords.append([fm_coord_2d[0], fm_coord_2d[1], fm_coord.coordinates.value[2]])
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
-        min_n = min(len(fib_coords), len(fm_coords)) # make fm coords and fib coords the same length
-        fib_coords = fib_coords[:min_n]
-        fm_coords = fm_coords[:min_n]
         poi_coord = self.correlation_target.fm_pois
         poi_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(poi_coord.coordinates.value[0:2])
         poi_coords.append([poi_coord_2d[0], poi_coord_2d[1], poi_coord.coordinates.value[2]])
@@ -488,9 +488,7 @@ class CorrelationPointsController(object):
         self._tab_data_model.projected_points.append(projected_poi_target)
         self.correlation_target.fib_projected_pois = [projected_poi_target]
         # Display the output in the relevant views
-        for vp in self._viewports:
-            if vp.view.name.value == "SEM Overview":
-                vp.canvas.update_drawing()
+        self._viewports[1].canvas.update_drawing()
 
     def _on_delete_row(self, event) -> None:
         """

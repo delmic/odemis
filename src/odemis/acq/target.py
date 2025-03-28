@@ -23,17 +23,62 @@ from typing import List
 
 from odemis import model
 
+FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL, PROJECTED_POI = (
+    "Fiducial",
+    "PointOfInterest",
+    "SurfaceFiducial",
+    "ProjectedPoints",
+    "ProjectedPOI",
+)
+
 
 class Target:
-    def __init__(self, x,y,z, name:str, type:str, index: int,  fm_focus_position: float, size: float = None ):
+    def __init__(self, x:float, y:float, z:float, name:str, type:str, index: int,  fm_focus_position: float, size: float = None ):
+        """
+        Target class to store the target information for multipoint correlation.
+        :param x: physical position in x in meters
+        :param y: physical position in y in meters
+        :param z: physical position in z in meters
+        :param name: name of the target saved as <type>-<index>. For example, "FM-1", "POI-2", "FIB-3", "PP", "PPOI"
+        :param type: type of the given target like Fiducial, PointOfInterest, ProjectedPoints, ProjectedPOI or SurfaceFiducial
+        :param index: index of the target in the given type. For example, "FM-1", "FM-2", "FM-3"...
+        :param fm_focus_position: position of the focus (objective in cased of Meteor) in meters
+        :param size: size of the area of interest in meters. Only used for super Z workflow
+        """
         self.coordinates = model.ListVA((x, y, z), unit="m")
-        self.type = model.StringVA(type)
+        self.type = model.StringEnumerated(type, choices={FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL,
+                                                          PROJECTED_POI})
         self.name = model.StringVA(name)
-        # The index and target name are in sync.
-        # TODO to change increase the index limit. change the sync logic between index and name in tab_gui_data.py and correlation.py
+        # Warning: The index and target name are in sync. To increase the index limit more than 9, please first change the logic of finding indices from the
+        # target name in add_new_target() in tab_gui_data.py and
+        # _on_current_coordinates_changes(), _on_cell_changing in  multi_point_correlation.py
         self.index = model.IntContinuous(index, range=(1, 9))
         if size:
-            self.size = model.FloatContinuous(size, range=(1, 20))# for super Z workflow
+            self.size = model.FloatContinuous(size, range=(1, 20)) # for super Z workflow
         else:
             self.size = None
         self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")
+
+        def to_dict(self) -> dict:
+            return {
+                "coordinates": self.coordinates.value,
+                "type": self.type.value,
+                "name": self.name.value,
+                "index": self.index.value,
+                "fm_focus_position": self.fm_focus_position.value,
+                "size": self.size.value if self.size else None,
+            }
+
+        @staticmethod
+        def from_dict(d: dict) -> "Target":
+            x, y, z = d["coordinates"]
+            return Target(
+                x=x,
+                y=y,
+                z=z,
+                name=d["name"],
+                type=d["type"],
+                index=d["index"],
+                fm_focus_position=d["fm_focus_position"],
+                size=d.get("size", None),
+            )

@@ -117,13 +117,8 @@ class CorrelationDialogController(object):
 
     def open_correlation_dialog(self):
         """
-        return None or a list of DataArrays: the acquired images. None if it was
-          cancelled.
+        Opens the multipoint correlation dialog
         """
-        # Indicate we are acquiring, especially important for the SEM which
-        # need to get the external signal to not scan (cf MicroscopeController)
-        self._main_data_model.is_acquiring.value = True
-
         # save the original settings
         settingsbar_controller = self._tab.settingsbar_controller
         orig_entries = get_global_settings_entries(settingsbar_controller)
@@ -161,5 +156,4 @@ class CorrelationDialogController(object):
             streambar_controller.enable(True)
             streambar_controller.resume()
 
-            self._main_data_model.is_acquiring.value = False
             acq_dialog.Destroy()

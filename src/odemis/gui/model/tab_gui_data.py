@@ -29,7 +29,7 @@ import odemis.acq.stream as acqstream
 from odemis import model
 from odemis.acq.feature import CryoFeature
 from odemis.acq.stream import StaticFluoStream
-from odemis.acq.target import Target
+from odemis.acq.target import Target, FIDUCIAL, POI, SURFACE_FIDUCIAL
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -442,7 +442,7 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
         """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
         :param x: (float) x position of the target
         :param y: (float) y position of the target
-        :param type: (str) type of the given targrt like Fiducial, RegionOfInterest or SurfaceFiducial
+        :param type: (str) type of the given targrt like Fiducial, PointOfInterest or SurfaceFiducial
         :param z: (float) optional z position for the given target. For target in FM, z is compulsory and for the target
          in FIB, z is None.
         :return: (Target or error) Target if parameters are valid otherwise logs error.
@@ -452,7 +452,7 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
         existing_names = [str(f.name.value) for f in self.main.targets.value]
 
         if self.focussedView.value.name.value == "FLM Overview":
-            if type == "Fiducial":
+            if type == FIDUCIAL:
                 t_name = make_unique_name("FM-1", existing_names)
                 # get the last digit of the t_name
                 # TODO limited to 9 fiducial pairs
@@ -463,7 +463,7 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
                         target = Target(x, y, z, name=t_name, type=type,
                                         index=index, fm_focus_position=fm_focus_position)
                         break
-            elif type == "RegionOfInterest":
+            elif type == POI:
                 # TODO limited to 9 fiducial pairs
                 for s in self.streams.value:
                     if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
@@ -472,7 +472,7 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
                                         index=1, fm_focus_position=fm_focus_position)
 
         elif self.focussedView.value.name.value == "SEM Overview":
-            if type == "SurfaceFiducial":
+            if type == SURFACE_FIDUCIAL:
                 target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
                                 fm_focus_position=fm_focus_position)
                 self.fib_surface_point.value = target

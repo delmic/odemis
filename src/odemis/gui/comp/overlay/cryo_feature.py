@@ -31,6 +31,7 @@ import odemis.gui.img as guiimg
 import wx
 from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_DEACTIVE,
                                 FEATURE_POLISHED, FEATURE_ROUGH_MILLED)
+from odemis.acq.target import FIDUCIAL, PROJECTED_POI, PROJECTED_FIDUCIAL, POI, SURFACE_FIDUCIAL
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
@@ -291,22 +292,22 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         if self._selected_tool_va:
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
-        self._feature_icons = {"Fiducial": cairo.ImageSurface.create_from_png(
+        self._feature_icons = {FIDUCIAL: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_unselected.png')),
-        "RegionOfInterest": cairo.ImageSurface.create_from_png(
+        POI: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_unselected.png')),
-        "ProjectedPoints": cairo.ImageSurface.create_from_png(
+        PROJECTED_FIDUCIAL: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/projected_fiducial.png')),
-        "ProjectedPOI": cairo.ImageSurface.create_from_png(
+        PROJECTED_POI: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/projected_poi.png')),
-        "SurfaceFiducial": cairo.ImageSurface.create_from_png(
+        SURFACE_FIDUCIAL: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/surface_fiducial.png'))}
 
-        self._feature_icons_selected = {"Fiducial": cairo.ImageSurface.create_from_png(
+        self._feature_icons_selected = {FIDUCIAL: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_selected.png')),
         "FiducialPair": cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/highlighted_fiducial.png')),
-        "RegionOfInterest": cairo.ImageSurface.create_from_png(
+        POI: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_selected.png'))}
 
         self._hover_target = None
@@ -410,7 +411,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # TODO rename type to PointOfInterest
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="RegionOfInterest")
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=POI)
             elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
                     # move/drag the selected target
@@ -420,7 +421,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1],
-                                                 type="Fiducial")
+                                                 type=FIDUCIAL)
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
@@ -576,7 +577,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="SurfaceFiducial")
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=SURFACE_FIDUCIAL)
             elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
                     # move/drag the selected target
@@ -585,7 +586,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     DragMixin._on_left_down(self, evt)
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type="Fiducial")
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=FIDUCIAL)
 
             else:
                 if target:
