@@ -6,6 +6,7 @@
 			<object class="sizeritem">
 				<object class="wxPanel">
 					<object class="wxBoxSizer">
+						<orient>wxVERTICAL</orient>
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_project">
 								<object class="wxGridBagSizer">
@@ -93,10 +94,9 @@
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxALL|wxALIGN_CENTRE|wxEXPAND</flag>
+							<flag>wxALL|wxEXPAND</flag>
 							<border>5</border>
 						</object>
-						<orient>wxVERTICAL</orient>
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_switch_buttons">
 								<object class="wxBoxSizer">

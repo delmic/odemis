@@ -3803,7 +3803,6 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
                               <flag>wxEXPAND</flag>
                             </object>
@@ -3812,7 +3811,7 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                               <object class="wxFlexGridSizer">
                                 <object class="sizeritem">
                                 <object class="wxCheckBox" name="ctrl_enable_correlation">
-                                  <label>Correlaton Enabled</label>
+                                  <label>Correlation Enabled</label>
                                   <fg>#E5E5E5</fg>
                                   <XRCED>
                                     <assign_var>1</assign_var>
@@ -4091,6 +4090,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 			<object class="sizeritem">
 				<object class="wxPanel">
 					<object class="wxBoxSizer">
+						<orient>wxVERTICAL</orient>
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_project">
 								<object class="wxGridBagSizer">
@@ -4178,10 +4178,9 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxALL|wxALIGN_CENTRE|wxEXPAND</flag>
+							<flag>wxALL|wxEXPAND</flag>
 							<border>5</border>
 						</object>
-						<orient>wxVERTICAL</orient>
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_switch_buttons">
 								<object class="wxBoxSizer">
@@ -10792,7 +10791,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                 </XRCED>
               </object>
               <option>1</option>
-              <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+              <flag>wxTOP|wxEXPAND</flag>
               <border>5</border>
             </object>
             <object class="sizeritem">
