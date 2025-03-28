@@ -36,7 +36,7 @@ from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream, \
     OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream, \
     ScannedRemoteTCStream, ScannedTCSettingsStream
-from odemis.util import img, fluo, executeAsyncTask
+from odemis.util import img, fluo, executeAsyncTask, almost_equal
 import time
 import copy
 from odemis.model import prepare_to_listen_to_more_vas
@@ -311,7 +311,6 @@ def foldStreams(streams, reuse=None):
     return (set of Streams): The set of streams, with the ones that can be
       folded replaced by an MD streams, the other streams are pass as-is.
     """
-    # TODO: support SPARC streams
     if reuse is None:
         reuse = []
 
@@ -347,7 +346,7 @@ def foldStreams(streams, reuse=None):
             for smds in scan_semmds:
                 compatible = True
                 for smd in smds:
-                    if not (smd._dwellTime.value == s._dwellTime.value and
+                    if not (almost_equal(smd._dwellTime.value, s._dwellTime.value, rtol=0.01) and  # 1% tolerance
                             smd.repetition.value == s.repetition.value and
                             smd.roi.value == s.roi.value and
                             # as of now, each MDStream has only 2 streams, and the first one is always the SEM stream.

@@ -1698,11 +1698,13 @@ class IndependentEBICStream(EBICSettingsStream):
             logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted vs %s s by emitter",
                             self._detector.name, min_emt_dt, det_dt, emt_dt)
 
-        # We report the emitter dwell time, which is the actual exposure of the pixels
-        return emt_dt
+        # We report the detector dwell time, which is what will influence the data (and also what the
+        # user requested, so that's most intuitive)
+        return det_dt
 
     def _linkHwVAs(self):
         super()._linkHwVAs()
+        # Configure both detector and emitter dwell times, and update the dwell time VA with the accepted value
         emt_dt = self._set_hw_dwell_time(self.emtDwellTime.value)
         self.emtDwellTime.value = emt_dt
 
