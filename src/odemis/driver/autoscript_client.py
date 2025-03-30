@@ -1124,7 +1124,7 @@ class Scanner(model.Emitter):
         beam_current_info = self.parent.beam_current_info(self.channel)
         self.probeCurrent = model.FloatContinuous(
             value=self.parent.get_beam_current(self.channel),
-            range=beam_current_info["range"],
+            range=(beam_current_info["range"][0], beam_current_info["range"][-1]),
             unit=beam_current_info["unit"],
             setter=self._setCurrent
         )
