@@ -32,6 +32,8 @@ import numpy
 from math import pi
 from time import sleep
 
+import odemis.acq.feature
+
 try:
     # We don't directly need ConsoleClient, but we need to know if it's available
     import ConsoleClient
@@ -207,12 +209,12 @@ class TestOrsay(unittest.TestCase):
         test_value = 27
         self.gis_res.targetTemperature.value = test_value
         sleep(60)
-        self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
+        self.assertEqual(int(odemis.acq.feature.Target), test_value)
         self.assertEqual(int(self.gis_res.temperature.value), 27)
 
         self.gis_res.targetTemperature.value = 0
         sleep(3)
-        self.assertEqual(int(self.gis_res._temperaturePar.Target), 0)
+        self.assertEqual(int(odemis.acq.feature.Target), 0)
         self.assertEqual(int(self.gis_res.temperature.value), 0)
 
         self.gis_res.targetTemperature.value = init_state  # return to value from before test
@@ -239,12 +241,12 @@ class TestOrsay(unittest.TestCase):
 
         # Both the target and actual values should match the preset value
         self.assertAlmostEqual(condenser_voltage,
-                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target))
+                               float(odemis.acq.feature.Target))
         self.assertAlmostEqual(condenser_voltage,
                                float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Actual))
         if TEST_NOHW is False:  # This only works on the real hardware
             self.assertEqual(aperture_number,
-                             int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target))
+                             int(odemis.acq.feature.Target))
             self.assertEqual(aperture_number,
                              int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Actual))
 
@@ -294,25 +296,25 @@ class TestPneumaticSuspension(unittest.TestCase):
         """
         Test for controlling the power valve
         """
-        init_state = self.psus._valve.Target
+        init_state = odemis.acq.feature.Target
 
-        self.psus._valve.Target = orsay.VALVE_OPEN
+        odemis.acq.feature.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertTrue(self.psus.power.value)
 
-        self.psus._valve.Target = orsay.VALVE_CLOSED
+        odemis.acq.feature.Target = orsay.VALVE_CLOSED
         sleep(5)
         self.assertFalse(self.psus.power.value)
 
         self.psus.power.value = True
         sleep(5)
-        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_OPEN)
+        self.assertEqual(int(odemis.acq.feature.Target), orsay.VALVE_OPEN)
 
         self.psus.power.value = False
         sleep(5)
-        self.assertEqual(int(self.psus._valve.Target), orsay.VALVE_CLOSED)
+        self.assertEqual(int(odemis.acq.feature.Target), orsay.VALVE_CLOSED)
 
-        self.psus._valve.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     def test_errorstate(self):
         """
@@ -339,35 +341,35 @@ class TestPneumaticSuspension(unittest.TestCase):
         # return to value from before test
         self.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState.Actual = init_state
 
-        init_state = self.psus._valve.Target
-        self.psus._valve.Target = 3
+        init_state = odemis.acq.feature.Target
+        odemis.acq.feature.Target = 3
         sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension is in error", str(self.psus.state.value))
-        self.psus._valve.Target = -1
+        odemis.acq.feature.Target = -1
         sleep(1)
         self.assertIsInstance(self.psus.state.value, HwError)
         self.assertIn("ValvePneumaticSuspension could not be contacted", str(self.psus.state.value))
-        self.psus._valve.Target = orsay.VALVE_OPEN
+        odemis.acq.feature.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertEqual(self.psus.state.value, model.ST_RUNNING)
-        self.psus._valve.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     def test_updatePower(self):
         """
         Check that the power VA is updated correctly
         """
-        init_state = self.psus._valve.Target
+        init_state = odemis.acq.feature.Target
 
-        self.psus._valve.Target = orsay.VALVE_OPEN
+        odemis.acq.feature.Target = orsay.VALVE_OPEN
         sleep(5)
         self.assertTrue(self.psus.power.value)
 
-        self.psus._valve.Target = orsay.VALVE_CLOSED
+        odemis.acq.feature.Target = orsay.VALVE_CLOSED
         sleep(5)
         self.assertFalse(self.psus.power.value)
 
-        self.psus._valve.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     def test_updatePressure(self):
         """
@@ -429,7 +431,7 @@ class TestVacuumChamber(unittest.TestCase):
         for vac_status, vac_pos in enumerate(sorted(vac_choices, reverse=True)):
             self.pressure.moveAbs({"vacuum": vac_pos})
             sleep(1)
-            self.assertEqual(int(self.pressure._chamber.VacuumStatus.Target), vac_status)
+            self.assertEqual(int(odemis.acq.feature.Target), vac_status)
             self.pressure.stop()
 
     def test_updatePressure(self):
@@ -723,21 +725,21 @@ class TestGIS(unittest.TestCase):
         if TEST_NOHW == True:
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
-        init_pos = self.gis._positionPar.Target
+        init_pos = odemis.acq.feature.Target
 
-        self.gis._positionPar.Target = orsay.STR_WORK
+        odemis.acq.feature.Target = orsay.STR_WORK
         sleep(1)
         self.assertTrue(self.gis.position.value["arm"])
 
-        self.gis._positionPar.Target = "MOVING"
+        odemis.acq.feature.Target = "MOVING"
         sleep(1)
         self.assertFalse(self.gis.position.value["arm"])
 
-        self.gis._positionPar.Target = orsay.STR_PARK
+        odemis.acq.feature.Target = orsay.STR_PARK
         sleep(1)
         self.assertFalse(self.gis.position.value["arm"])
 
-        self.gis._positionPar.Target = init_pos  # return to value from before test
+        odemis.acq.feature.Target = init_pos  # return to value from before test
 
     def test_updatePositionReservoir(self):
         """
@@ -747,21 +749,21 @@ class TestGIS(unittest.TestCase):
         if TEST_NOHW != "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
-        init_flow = self.gis._reservoirPar.Target
+        init_flow = odemis.acq.feature.Target
 
-        self.gis._reservoirPar.Target = orsay.STR_OPEN
+        odemis.acq.feature.Target = orsay.STR_OPEN
         sleep(1)
         self.assertTrue(self.gis.position.value["reservoir"])
 
-        self.gis._reservoirPar.Target = "MOVING"
+        odemis.acq.feature.Target = "MOVING"
         sleep(1)
         self.assertFalse(self.gis.position.value["reservoir"])
 
-        self.gis._reservoirPar.Target = orsay.STR_CLOSED
+        odemis.acq.feature.Target = orsay.STR_CLOSED
         sleep(1)
         self.assertFalse(self.gis.position.value["reservoir"])
 
-        self.gis._reservoirPar.Target = init_flow  # return to value from before test
+        odemis.acq.feature.Target = init_flow  # return to value from before test
 
     # TODO Currently not tested on the real hardware because for now it seems to be unsafe to move the GIS
     def test_moveAbs(self):
@@ -950,18 +952,18 @@ class TestGISReservoir(unittest.TestCase):
         """
         Check that the targetTemperature VA is updated correctly
         """
-        init_state = self.gis_res._temperaturePar.Target
+        init_state = odemis.acq.feature.Target
 
         test_value = 27
-        self.gis_res._temperaturePar.Target = test_value
+        odemis.acq.feature.Target = test_value
         sleep(1)
         self.assertEqual(self.gis_res.targetTemperature.value, test_value)
 
-        self.gis_res._temperaturePar.Target = 0
+        odemis.acq.feature.Target = 0
         sleep(1)
         self.assertEqual(self.gis_res.targetTemperature.value, 0)
 
-        self.gis_res._temperaturePar.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     # TODO test again, GIS Reservoir could not be used during Hw testing
     def test_updateTemperature(self):
@@ -971,35 +973,35 @@ class TestGISReservoir(unittest.TestCase):
         if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
-        init_state = self.gis_res._temperaturePar.Target
+        init_state = odemis.acq.feature.Target
 
         test_value = 20
-        self.gis_res._temperaturePar.Target = test_value
+        odemis.acq.feature.Target = test_value
         sleep(1)
         self.assertEqual(self.gis_res.temperature.value, test_value)
 
-        self.gis_res._temperaturePar.Target = 0
+        odemis.acq.feature.Target = 0
         sleep(1)
         self.assertEqual(self.gis_res.temperature.value, 0)
 
-        self.gis_res._temperaturePar.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     # TODO test again, GIS Reservoir could not be used during Hw testing
     def test_updateTemperatureRegulation(self):
         """
         Check that the temperatureRegulation VA is updated correctly
         """
-        init_state = self.gis_res._gis.RegulationOn.Target
+        init_state = odemis.acq.feature.Target
 
-        self.gis_res._gis.RegulationOn.Target = True
+        odemis.acq.feature.Target = True
         sleep(1)
         self.assertTrue(self.gis_res.temperatureRegulation.value)
 
-        self.gis_res._gis.RegulationOn.Target = False
+        odemis.acq.feature.Target = False
         sleep(1)
         self.assertFalse(self.gis_res.temperatureRegulation.value)
 
-        self.gis_res._gis.RegulationOn.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     def test_updateAge(self):
         """
@@ -1050,11 +1052,11 @@ class TestGISReservoir(unittest.TestCase):
         test_value = 27
         self.gis_res.targetTemperature.value = test_value
         sleep(1)
-        self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
+        self.assertEqual(int(odemis.acq.feature.Target), test_value)
 
         self.gis_res.targetTemperature.value = 0
         sleep(1)
-        self.assertEqual(int(self.gis_res._temperaturePar.Target), 0)
+        self.assertEqual(int(odemis.acq.feature.Target), 0)
 
         self.gis_res.targetTemperature.value = init_state  # return to value from before test
 
@@ -1068,12 +1070,12 @@ class TestGISReservoir(unittest.TestCase):
         self.gis_res.temperatureRegulation.value = False
         sleep(1)
         self.assertFalse(self.gis_res.temperatureRegulation.value)
-        self.assertFalse(self.gis_res._gis.RegulationOn.Target.lower() == "true")
+        self.assertFalse(odemis.acq.feature.Target.lower() == "true")
 
         self.gis_res.temperatureRegulation.value = True
         sleep(1)
         self.assertTrue(self.gis_res.temperatureRegulation.value)
-        self.assertTrue(self.gis_res._gis.RegulationOn.Target.lower() == "true")
+        self.assertTrue(odemis.acq.feature.Target.lower() == "true")
 
         self.gis_res.temperatureRegulation.value = init_state  # return to value from before test
 
@@ -1119,24 +1121,24 @@ class TestOrsayParameterConnector(unittest.TestCase):
     def test_parameter_update(self):
         test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
         test_value = 0.1
-        init_state = test_parameter.Target
+        init_state = odemis.acq.feature.Target
         va = model.FloatVA(0.0)
         orsay.OrsayParameterConnector(va, test_parameter)
         va.value = test_value
         sleep(0.5)
         self.assertEqual(test_value, float(test_parameter.Actual))
-        test_parameter.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     def test_va_update(self):
         test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
         test_value = 0.1
-        init_state = test_parameter.Target
+        init_state = odemis.acq.feature.Target
         va = model.FloatVA(0.0)
         orsay.OrsayParameterConnector(va, test_parameter)
-        test_parameter.Target = test_value
+        odemis.acq.feature.Target = test_value
         sleep(0.5)
         self.assertEqual(test_value, va.value)
-        test_parameter.Target = init_state  # return to value from before test
+        odemis.acq.feature.Target = init_state  # return to value from before test
 
     def test_range(self):
         test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
@@ -1163,8 +1165,8 @@ class TestOrsayParameterConnector(unittest.TestCase):
         maxpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Maxvalue
         orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent, minpar=minpar, maxpar=maxpar)
         sleep(0.5)
-        self.assertEqual(va.range[0], float(minpar.Target))
-        self.assertEqual(va.range[1], float(maxpar.Target))
+        self.assertEqual(va.range[0], float(odemis.acq.feature.Target))
+        self.assertEqual(va.range[1], float(odemis.acq.feature.Target))
 
     def test_conversion_functions_error(self):
         # Check that the conversion functions can only be used with two callables.
@@ -1437,8 +1439,8 @@ class TestFIBSource(unittest.TestCase):
             self.skipTest("Regulation mode is not implemented on the simulator")
 
         hvps = self.datamodel.HVPSFloatingIon
-        init_state = hvps.BeamCurrent_Enabled.Target  # Actual isn't used on this one
-        hvps.BeamCurrent_Enabled.Target = False  # Set to voltage mode
+        init_state = odemis.acq.feature.Target  # Actual isn't used on this one
+        odemis.acq.feature.Target = False  # Set to voltage mode
         connector_test(self, self.fib_source.suppressorVoltage, self.fib_source._hvps.Suppressor,
                        [(1000, 1000), (900, 900)], hw_safe=True, settletime=10)
 
@@ -1750,27 +1752,27 @@ class TestFIBBeam(unittest.TestCase):
 
         self.fibbeam.imageFormat.value = (1024, 1024)
 
-        self.fibbeam._ionColumn.ImageArea.Target = "0 0 1024 1024"
+        odemis.acq.feature.Target = "0 0 1024 1024"
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (0, 0))
         self.assertEqual(self.fibbeam.resolution.value, (1024, 1024))
 
-        self.fibbeam._ionColumn.ImageArea.Target = "0 0 1 1"
+        odemis.acq.feature.Target = "0 0 1 1"
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-511.5, -511.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
 
-        self.fibbeam._ionColumn.ImageArea.Target = "0 0 3 3"
+        odemis.acq.feature.Target = "0 0 3 3"
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-510.5, -510.5))
         self.assertEqual(self.fibbeam.resolution.value, (3, 3))
 
-        self.fibbeam._ionColumn.ImageArea.Target = "20 50 80 70"
+        odemis.acq.feature.Target = "20 50 80 70"
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-452, -427))
         self.assertEqual(self.fibbeam.resolution.value, (80, 70))
 
-        self.fibbeam._ionColumn.ImageArea.Target = "1023 1023 1 1"
+        odemis.acq.feature.Target = "1023 1023 1 1"
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (511.5, 511.5))
         self.assertEqual(self.fibbeam.resolution.value, (1, 1))
@@ -1778,27 +1780,27 @@ class TestFIBBeam(unittest.TestCase):
         self.fibbeam.translation.value = (0.0, 0.0)
         self.fibbeam.resolution.value = (1024, 1024)
         sleep(1)
-        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 1024 1024")
+        self.assertEqual(odemis.acq.feature.Target, "0 0 1024 1024")
 
         self.fibbeam.resolution.value = (1, 1)
         self.fibbeam.translation.value = (-511.5, -511.5)
         sleep(1)
-        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 1 1")
+        self.assertEqual(odemis.acq.feature.Target, "0 0 1 1")
 
         self.fibbeam.resolution.value = (3, 3)
         sleep(1)
         self.assertEqual(self.fibbeam.translation.value, (-510.5, -510.5))
-        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "0 0 3 3")
+        self.assertEqual(odemis.acq.feature.Target, "0 0 3 3")
 
         self.fibbeam.resolution.value = (80, 70)
         self.fibbeam.translation.value = (-452.0, -427.0)
         sleep(1)
-        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "20 50 80 70")
+        self.assertEqual(odemis.acq.feature.Target, "20 50 80 70")
 
         self.fibbeam.resolution.value = (1, 1)
         self.fibbeam.translation.value = (511.5, 511.5)
         sleep(1)
-        self.assertEqual(self.fibbeam._ionColumn.ImageArea.Target, "1023 1023 1 1")
+        self.assertEqual(odemis.acq.feature.Target, "1023 1023 1 1")
 
         self.fibbeam.translation.value = (0.0, 0.0)
         self.fibbeam.resolution.value = (1024, 1024)
@@ -2204,9 +2206,9 @@ class TestScanner(unittest.TestCase):
                 preset_name = self.scanner._probe_current_presets[new_current]
                 preset_content = self.oserver.preset_manager.GetPreset(preset_name)
                 exp = self.oserver._get_preset_setting(preset_content, "HybridAperture", "XPosition")
-                self.assertEqual(datamodel.HybridAperture.XPosition.Target, exp)
+                self.assertEqual(odemis.acq.feature.Target, exp)
                 exp = self.oserver._get_preset_setting(preset_content, "Sed", "PMT")
-                self.assertEqual(datamodel.Sed.PMT.Target, exp)
+                self.assertEqual(odemis.acq.feature.Target, exp)
 
             # Test that setting None is allowed... and does nothing
             current = self.scanner.probeCurrent.value
@@ -2603,7 +2605,7 @@ class TestFocus(unittest.TestCase):
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
                 cls.focus.updateMetadata({model.MD_CALIB: 0.18e6})  # Volt per meter
-        cls.init_lens_voltage = cls.ov.Target
+        cls.init_lens_voltage = odemis.acq.feature.Target
         cls.focus.baseLensVoltage = 10000
         cls.fibbeam.objectiveVoltage.value = 14000
         if TEST_NOHW == "sim":  # Actual stays 0 in simulation, so set it directly
@@ -2616,7 +2618,7 @@ class TestFocus(unittest.TestCase):
         """
         Terminate the Orsay client
         """
-        cls.ov.Target = cls.init_lens_voltage  # return to initial value
+        odemis.acq.feature.Target = cls.init_lens_voltage  # return to initial value
         cls.oserver.terminate()
 
     def test_position_update(self):
@@ -2759,7 +2761,7 @@ class TestFIBAperture(unittest.TestCase):
                                    hw_safe=True, readonly=True, settletime=settletime)
                     break  # Finish iteration of the test
 
-        self._hybridAperture.SelectedDiaph.Target = init_aperture  # Reset the initial aperture
+        odemis.acq.feature.Target = init_aperture  # Reset the initial aperture
 
     def testMoveAbs(self):
         init_x_pos = float(self._hybridAperture.XPosition.Actual)
@@ -2944,7 +2946,7 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
 
     init_values = []
     for p in parameters:
-        init_values.append(p.Target)  # get the initial values of the parameters
+        init_values.append(odemis.acq.feature.Target)  # get the initial values of the parameters
 
     # write to the Parameter, check that the VA follows
     # Do this such that all possible transitions of one value to another are tested at least once
@@ -2980,7 +2982,7 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             va.value = va_value1
             sleep(settletime)
             for i in range(len(parameters)):
-                target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
+                target = type(par_value1[i])(odemis.acq.feature.Target)  # needed since many parameter values are strings
                 test_case.assertAlmostEqual(target, par_value1[i],
                                       places=10,
                                             msg="The assertEqual between target and par_value1 isn't correct.")
@@ -2989,7 +2991,7 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             va.value = va_value2
             sleep(settletime)
             for i in range(len(parameters)):
-                target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
+                target = type(par_value1[i])(odemis.acq.feature.Target)  # needed since many parameter values are strings
                 test_case.assertAlmostEqual(target, par_value2[i],
                                       places=10,
                                             msg="The assertEqual between target and par_value2 isn't correct.")
@@ -2998,13 +3000,13 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             va.value = va_value1
             sleep(settletime)
             for i in range(len(parameters)):
-                target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
+                target = type(par_value1[i])(odemis.acq.feature.Target)  # needed since many parameter values are strings
                 test_case.assertAlmostEqual(target, par_value1[i],
                                       places=10,
                                             msg="The second assertEqual between target and par_value1 isn't correct.")
 
     for i in range(len(parameters)):
-        parameters[i].Target = init_values[i]  # return to the values form before test
+        odemis.acq.feature.Target = init_values[i]  # return to the values form before test
 
 
 if __name__ == '__main__':

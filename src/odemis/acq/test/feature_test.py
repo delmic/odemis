@@ -20,8 +20,8 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
     """
     Test the json encoder and decoder of the CryoFeature class
     """
-    test_str = ('{"feature_list": [{"name": "Feature-1", "pos": [0, 0, 0], "status": "Active", "correlation_targets": {}}'
-                ', {"name": "Feature-2", "pos": [0.001, 0.001, 0.002], "status": "Active", "correlation_targets": {}}]}')
+    test_str = ('{"feature_list": [{"name": "Feature-1", "pos": [0, 0, 0], "status": "Active", "correlation_data": {}}'
+                ', {"name": "Feature-2", "pos": [0.001, 0.001, 0.002], "status": "Active", "correlation_data": {}}]}')
 
     def test_feature_encoder(self):
         feature1 = CryoFeature("Feature-1", 0, 0, 0)

@@ -35,9 +35,8 @@ import wx.html
 
 from odemis import model
 from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_stack, run_tdct_correlation
-from odemis.acq.feature import save_features, CorrelationTarget
+from odemis.acq.feature import save_features, FIBFMCorrelationData, Target
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticStream, StaticFIBStream
-from odemis.acq.target import Target
 from odemis.gui import conf
 from odemis.gui.util import call_in_wx_main
 from odemis.model import ListVA
@@ -131,9 +130,9 @@ class CorrelationPointsController(object):
 
         self.streams_list = streams_list
 
-        if self._tab_data_model.main.currentFeature.value.correlation_targets:
+        if self._tab_data_model.main.currentFeature.value.correlation_data:
             # Similar logic can be used while enabling the 3DCT button i.e. during the check of relevant conditions.
-            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
+            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data[
                 self._tab_data_model.main.currentFeature.value.status.value]
             # Maintain the order of loading. First check the streams and then load the targets. If no streams are
             # present or the saved streams are not available, load all the relevant streams, and reset the fib and fm
@@ -164,10 +163,10 @@ class CorrelationPointsController(object):
                 self._tab_data_model.fib_surface_point.value = self.correlation_target.fib_surface_fiducial
         else:
             # initialize the correlation target
-            self._tab_data_model.main.currentFeature.value.correlation_targets = {}
-            self._tab_data_model.main.currentFeature.value.correlation_targets[
-                self._tab_data_model.main.currentFeature.value.status.value] = CorrelationTarget()
-            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_targets[
+            self._tab_data_model.main.currentFeature.value.correlation_data = {}
+            self._tab_data_model.main.currentFeature.value.correlation_data[
+                self._tab_data_model.main.currentFeature.value.status.value] = FIBFMCorrelationData()
+            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data[
                 self._tab_data_model.main.currentFeature.value.status.value]
             self.group_streams()
             self._add_stream_group()
@@ -306,6 +305,7 @@ class CorrelationPointsController(object):
         for stream_index, stream in enumerate(self.streams_list):
             current_shape = stream.raw[0].shape
             centre_pos = stream.raw[0].metadata[model.MD_POS]
+            centre_pos = tuple([round(pos,6) for pos in centre_pos])  # to handle floating point precision
             if isinstance(stream, StaticFluoStream):
                 check_zindex = getattr(stream, "zIndex", None)
                 stream_name = stream.name.value
@@ -452,15 +452,15 @@ class CorrelationPointsController(object):
         poi_coords = []
         path = self._tab_data_model.main.project_path.value
         for fib_coord in self.correlation_target.fib_fiducials:
-            fib_coord = self.correlation_target.fib_stream.getPixelCoordinates_alt(fib_coord.coordinates.value[0:2])
+            fib_coord = self.correlation_target.fib_stream.getPixelCoordinates(fib_coord.coordinates.value[0:2], check_bbox=False)
             fib_coords.append(fib_coord)
         fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
         for fm_coord in self.correlation_target.fm_fiducials:
-            fm_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(fm_coord.coordinates.value[0:2])
+            fm_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(fm_coord.coordinates.value[0:2], check_bbox=False)
             fm_coords.append([fm_coord_2d[0], fm_coord_2d[1], fm_coord.coordinates.value[2]])
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
         poi_coord = self.correlation_target.fm_pois
-        poi_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(poi_coord.coordinates.value[0:2])
+        poi_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(poi_coord.coordinates.value[0:2], check_bbox=False)
         poi_coords.append([poi_coord_2d[0], poi_coord_2d[1], poi_coord.coordinates.value[2]])
         poi_coords = numpy.array(poi_coords, dtype=numpy.float32)
         # Run the correlation
@@ -696,15 +696,15 @@ class CorrelationPointsController(object):
         for row in range(self.grid.GetNumberRows()):
             if self._selected_target_in_grid(target, row):
                 if "FIB" != target.name.value[:3]:
-                    pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(
-                        (target.coordinates.value[0], target.coordinates.value[1]))
+                    pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates(
+                        (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                     if float(self.grid.GetCellValue(row, GridColumns.Z.value)) != float(target.coordinates.value[2]):
                         temp_check = True
                     self.grid.SetCellValue(row, GridColumns.Z.value,
                                            f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
                 else:
-                    pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates_alt(
-                        (target.coordinates.value[0], target.coordinates.value[1]))
+                    pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
+                        (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                 # Get cell value
                 if (self.grid.GetCellValue(row, GridColumns.X.value) != f"{pixel_coords[0]:.{GRID_PRECISION}f}" or
                         self.grid.GetCellValue(row, GridColumns.Y.value) != f"{pixel_coords[1]:.{GRID_PRECISION}f}"):
@@ -744,13 +744,13 @@ class CorrelationPointsController(object):
             self.grid.AppendRows(1)
             if "FIB" != target.name.value[:3]:
                 # TODO save the fm and fib stream metadata
-                pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt(
-                    (target.coordinates.value[0], target.coordinates.value[1]))
+                pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates(
+                    (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                 self.grid.SetCellValue(current_row_count, GridColumns.Z.value,
                                        f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
             else:
-                pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates_alt(
-                    (target.coordinates.value[0], target.coordinates.value[1]))
+                pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
+                    (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                 self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
 
             self.grid.SetCellValue(current_row_count, GridColumns.X.value,
@@ -779,7 +779,7 @@ class CorrelationPointsController(object):
         if self._tab_data_model.main.currentTarget.value:
             das = [stream.raw[0] for stream in self.correlation_target.fm_streams]
             coords = self._tab_data_model.main.currentTarget.value.coordinates.value
-            pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates_alt((coords[0], coords[1]))
+            pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates((coords[0], coords[1]), check_bbox=False)
             self._tab_data_model.main.currentTarget.value.coordinates.value[2] = float(get_optimized_z_gauss(das, int(
                 pixel_coords[0]), int(pixel_coords[1]), coords[2]))
 

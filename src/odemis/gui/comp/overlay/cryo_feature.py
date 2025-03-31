@@ -30,8 +30,8 @@ import odemis.gui as gui
 import odemis.gui.img as guiimg
 import wx
 from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_DEACTIVE,
-                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED)
-from odemis.acq.target import FIDUCIAL, PROJECTED_POI, PROJECTED_FIDUCIAL, POI, SURFACE_FIDUCIAL
+                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, POI, FIDUCIAL, SURFACE_FIDUCIAL, PROJECTED_POI,
+                                PROJECTED_FIDUCIAL)
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
@@ -331,18 +331,18 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         Handle mouse left click down: Create/Move targets if the tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        pass
+        evt.Skip()
 
     def on_left_up(self, evt):
         """
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        pass
+        evt.Skip()
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        pass
+        evt.Skip()
 
     def _update_selected_target_position(self, v_pos):
         """
@@ -359,7 +359,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         :param v_pos: (int, int) Point in view coordinates
         :return: (Target or None) Found target, None if not found
         """
-
         pass
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
@@ -593,7 +592,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.tab_data.main.currentTarget.value = target
                 evt.Skip()
         elif self.active.value and ctrl_mode:
-            self._on_tool(TOOL_FIDUCIAL)
+            self._selected_tool_va.value = TOOL_FIDUCIAL
         else:
             WorldOverlay.on_left_down(self, evt)
 
