@@ -152,6 +152,7 @@ class MainGUIData(object):
         "descanner": "descanner",
         "mppc": "mppc",
         "ion-beam": "ion_beam",
+        "ion-focus": "ion_focus",
         "ebeam-shift": "beamshift",
         "diagnostic-ccd": "ccd",
         "det-rotator": "det_rotator",
@@ -236,6 +237,7 @@ class MainGUIData(object):
         self.descanner = None  # descan mirrors of the fastem microscope
         self.mppc = None  # detector of the fastem microscope
         self.ion_beam = None
+        self.ion_focus = None
         self.beamshift = None  # beam shift deflection controller
         self.det_rotator = None  # detector rotator of the fastem microscope
         self.ion_sed = None  # detector for the ions of a composited detector component
@@ -301,6 +303,7 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
+            has_fibsem = any([c.role == "fibsem" for c in components])
             if self.role in ("secom", "delphi", "enzel"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role in ("secom", "enzel"):
@@ -309,6 +312,10 @@ class MainGUIData(object):
                     required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus", "stage-bare"]
+                # add additional roles when fibsem control enabled
+                if has_fibsem:
+                    required_roles += ["e-beam", "se-detector", "ebeam-focus",
+                                       "ion-beam", "se-detector-ion", "ion-focus"]
             elif self.role == "mimas":
                 required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):
@@ -520,14 +527,13 @@ class CryoMainGUIData(MainGUIData):
 
         # Controls the stage movement based on the imaging mode
         self.posture_manager = MicroscopePostureManager(microscope)
-
-        if isinstance(self.posture_manager, MeteorTFS3PostureManager):
+        if self.role == "meteor" and isinstance(self.posture_manager, MeteorTFS3PostureManager):
             self.stage = self.posture_manager.sample_stage
 
         # stage.MD_SAMPLE_CENTERS contains the date in almost the right format, but the
         # position is a dict instead of a tuple. => Convert it, while checking the data.
         # Ex: {"grid 1": {"x": 0.1, "y": -0.2}} -> {"grid 1": (0.1, -0.2)}
-        sample_centers_raw = self.stage.getMetadata().get(model.MD_SAMPLE_CENTERS)
+        sample_centers_raw = None #self.stage_bare.getMetadata().get(model.MD_SAMPLE_CENTERS)
 
         # TODO: on the METEOR, the MD_SAMPLE_CENTERS is on the stage-bare, in
         # the stage-bare coordinates (SEM). To display them, we'd need to
