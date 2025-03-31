@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import itertools
 import logging
 import os
+import queue
 import threading
 from enum import Enum
 
@@ -102,10 +103,10 @@ class CorrelationPointsController(object):
         # Parameters to keep track of the latest changes and process the correlation result with the latest change
         self.correlation_txt = self._panel.txt_correlation_rms
         self.correlation_txt.Show(True)
-        self.latest_change = None  # Holds the latest change
-        self.lock = threading.Lock()  # Lock to synchronize access to changes
+        self.change_queue = queue.Queue()  # Holds the latest change
+        self.worker_thread = threading.Thread(target=self._process_queue, daemon=True)
+        self.worker_thread.start()
         self.is_processing = False  # To track if the function is currently processing
-        self.process_thread = None  # The thread handling the change
         self.stream_groups = None
         self.previous_group = None
 
@@ -410,36 +411,36 @@ class CorrelationPointsController(object):
             return False
 
     def _queue_latest_change(self):
-        """
-        This method is called when there's an input change.
-        If there's a change already being processed, it will override it and process the latest change.
-        """
-        with self.lock:  # Ensure thread-safe access to latest_change
-            self.latest_change = True  # Overwrite with the latest change
-            if self.is_processing:  # If a process is running, it will handle the latest change.
-                logging.warning("Multipoint Correlation is running. It will handle the latest change.")
-                self.correlation_txt.SetLabel("Correlation RMS Deviation :  Calculating...")
-                return
-            # Start processing the latest change in a separate thread
-            self.process_thread = threading.Thread(target=self._process_latest_change)
-            self.process_thread.start()
+        """Queue the latest change to process the correlation result."""
+        while not self.change_queue.empty():
+            try:
+                self.change_queue.get_nowait()  # Remove older, outdated requests
+            except queue.Empty:
+                break
+        logging.warning("Multipoint Correlation is running. It will handle the latest change.")
+        self.correlation_txt.SetLabel("Correlation RMS Deviation :  Calculating...")
+        self.change_queue.put(True)  # Only enqueue the latest change request
+
+    def _process_queue(self):
+        """Worker thread that continuously processes requests from the queue."""
+        while True:
+            task = self.change_queue.get()
+            if task is None:  # Special exit signal
+                break
+            self._process_latest_change()
 
     def _process_latest_change(self):
-        """
-        Processes only the latest change in targets.
-        """
-        while True:
-            with self.lock:
-                if not self.latest_change:
-                    break  # No more changes to process
-                self.latest_change = False  # Clear the latest change to indicate it's being processed
-                self.is_processing = True
-            # Process the change (simulate long processing)
-            self._do_correlation()
-            with self.lock:
-                rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
-                self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {rms}")
-                self.is_processing = False  # Mark that processing is complete
+        """Process the latest change in the queue."""
+        self.is_processing = True
+        self._do_correlation()
+        rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
+        self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {rms}")
+        self.is_processing = False  # Mark that processing is complete
+
+    def stop(self):
+        """Gracefully stop the worker thread."""
+        self.change_queue.put(None)
+        self.worker_thread.join()
 
     def _do_correlation(self):
         """Run the correlation between the FIB and FM images."""
@@ -515,7 +516,6 @@ class CorrelationPointsController(object):
                         break
         self._update_feature_correlation_target()
         if self.check_correlation_conditions():
-            self.latest_change = True
             self._queue_latest_change()
 
     def _on_cell_selected(self, event) -> None:
@@ -714,7 +714,6 @@ class CorrelationPointsController(object):
                 self._update_feature_correlation_target()
 
             if self.check_correlation_conditions() and temp_check:
-                self.latest_change = True
                 self._queue_latest_change()
 
     @call_in_wx_main
@@ -768,7 +767,6 @@ class CorrelationPointsController(object):
             vp.canvas.update_drawing()
 
         if self.check_correlation_conditions():
-            self.latest_change = True
             self._queue_latest_change()
 
     def _on_z_targeting(self, event) -> None:

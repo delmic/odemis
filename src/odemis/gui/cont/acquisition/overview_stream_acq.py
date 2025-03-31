@@ -136,16 +136,16 @@ class CorrelationDialogController(object):
 
         # create the dialog
         try:
-            acq_dialog = CorrelationDialog(
+            cor_dialog = CorrelationDialog(
                 self._tab.main_frame, self._tab_data_model)
             parent_size = [v * 0.9 for v in self._tab.main_frame.GetSize()]
 
-            acq_dialog.SetSize(parent_size)
-            acq_dialog.Center()
-            acq_dialog.ShowModal()
+            cor_dialog.SetSize(parent_size)
+            cor_dialog.Center()
+            cor_dialog.ShowModal()
 
         except Exception:
-            logging.exception("Failed to create 3DCT dialog")
+            logging.exception("Failed to create correlation dialog")
             raise
         finally:
             apply_preset(orig_settings)
@@ -156,4 +156,5 @@ class CorrelationDialogController(object):
             streambar_controller.enable(True)
             streambar_controller.resume()
 
-            acq_dialog.Destroy()
+            cor_dialog.correlation_points_controller.stop()
+            cor_dialog.Destroy()
