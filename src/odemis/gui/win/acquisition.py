@@ -631,7 +631,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     The data acquired is stored in a file, with predefined name, available on
       .filename and it is opened (as pyramidal data) in .data .
     """
-    def __init__(self, parent, orig_tab_data):
+    def __init__(self, parent, orig_tab_data,
+                 mode: guimodel.AcquiMode = guimodel.AcquiMode.FLM):
         xrcfr_overview_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
@@ -658,10 +659,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             save_dir = self.conf.pj_last_path
 
         # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
-        self.fibsem_mode = False # isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
+        self.acqui_mode = mode
 
         # hide optical settings when in fibsem mode
-        self.fp_settings_secom_optical.Show(not self.fibsem_mode)
+        self.fp_settings_secom_optical.Show(self.acqui_mode is guimodel.AcquiMode.FLM)
 
         self.filename = create_filename(save_dir, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
@@ -796,24 +797,23 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # High overlap percentage is not required as the stitching is based only on stage position,
         # independent of the image content. It just needs to be big enough to make sure that even with some stage
         # imprecision, all the tiles will overlap or at worse be next to each other (i.e. , no space between tiles)
-        self.overlap = 0.10
+        self.overlap = 0.1
+        self.stage = self._main_data_model.stage
+        self.settings_obs = self._main_data_model.settings_obs
         try:
-            if self.fibsem_mode:
-                self.stage = self._main_data_model.stage_bare
+            if self.acqui_mode is guimodel.AcquiMode.FIBSEM:
                 self.focuser = self._main_data_model.ebeam_focus
                 self.detector = self._main_data_model.sed
-                self.settings_obs = self._main_data_model.settings_obs
                 imaging_range = model.MD_SEM_IMAGING_RANGE
 
                 # In FIBSEM mode, we don't have autofocus because of how the overview code currently works
                 self.autofocus_chkbox.Hide()
                 self.autofocus_roi_ckbox.value = False
-
+                self.focus_points_dist_ctrl.Hide()
+                self.focus_points_dist_lbl.Hide()
             else:
-                self.stage = self._main_data_model.stage
                 self.focuser = self._main_data_model.focus
                 self.detector = self._main_data_model.ccd
-                self.settings_obs = self._main_data_model.settings_obs
                 imaging_range = model.MD_POS_ACTIVE_RANGE
 
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
@@ -823,9 +823,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 "y": self.stage.axes["y"].range
             }
 
-            stage_md = self.stage.getMetadata()
-            if imaging_range in stage_md:
-                self._tiling_rng.update(stage_md[imaging_range])
+            # tmp disable until consolidate to sem posture range
+            # stage_md = self.stage.getMetadata()
+            # if imaging_range in stage_md:
+                # self._tiling_rng.update(stage_md[imaging_range])
         except (KeyError, IndexError):
             raise ValueError(f"Failed to find stage {imaging_range} with x and y range")
 
@@ -885,6 +886,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
             if not isinstance(s, LiveStream):
                 continue
+            if self.acqui_mode is guimodel.AcquiMode.FIBSEM and not isinstance(s, SEMStream):
+                continue # only support sem streams atm (TODO: add once fib posture is supported)
 
             sc = self.streambar_controller.addStream(s, add_to_view=self._view)
             sc.stream_panel.show_remove_btn(True)
