@@ -47,12 +47,6 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
 MILLING_TASKS_PATH = os.path.join(os.path.dirname(milling_tasks_file), "milling_tasks.yaml")
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 
-# NOTE: this refactor currently breaks TFS1 in the UI, because
-# there is no valid sample_stage_to_stage conversion, we need to decide
-# if we want to support this in the future or not.
-# It would require getting the linked yz stage from the backend and converting the positions the stage positions indirectly
-# The entire reason for doing the sample stage refactor was because we didnt want to do that in the first place,
-# so I think TFS1 should be deprecated, and migrate customers to TFS3
 
 class CryoFeature(object):
     """
@@ -92,6 +86,8 @@ class CryoFeature(object):
         :param posture: the posture to set the position for
         :param position: the position to set
         """
+        # TODO: once the stage has access to it, it should check that the position is within the
+        # allowed range for the given posture (see SEM_IMAGING_RANGE, FM_IMAGING_RANGE)
         self.posture_positions[posture] = position
 
     def get_posture_position(self, posture: str) -> Dict[str, float]:
