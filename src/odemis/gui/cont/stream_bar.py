@@ -28,6 +28,7 @@ import os
 import threading
 import time
 from collections import OrderedDict
+from typing import Optional
 
 import wx
 
@@ -2201,6 +2202,7 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         """
         super().__init__(tab_data, *args, **kwargs)
         self._feature_view = feature_view
+        self.stream: Optional[StaticStream] = None  # The stream currently displayed, related the selected Feature
 
         tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
 
@@ -2230,6 +2232,8 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
             for stream in acquired_streams:
                 self.showFeatureStream(stream)
                 self.stream = stream # should only ever be 1 stream
+        else:
+            self.stream = None
         # refit the selected feature in the acquired view
         self._view_controller.viewports[3].canvas.fit_view_to_content()
 

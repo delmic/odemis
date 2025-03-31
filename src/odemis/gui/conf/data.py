@@ -851,7 +851,14 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "tooltip": "Number of pixels in the image",
                 "choices": None,
                 "accuracy": None,  # never simplify the numbers
-            }
+            },
+            "probeCurrent": {
+                "label": "Beam Current",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "type": "float",
+                "scale": "linear",
+                "event": wx.EVT_SCROLL_CHANGED
+            },
         },
     }
 }
