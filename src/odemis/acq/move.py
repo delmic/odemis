@@ -27,7 +27,7 @@ import threading
 from abc import abstractmethod
 from concurrent.futures import CancelledError, Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-from typing import Dict, Union, List, Iterable, Tuple
+from typing import Dict, Union, Iterable
 
 import numpy
 import scipy
@@ -36,7 +36,7 @@ from odemis import model, util
 from odemis.model import isasync
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isInRange, isNearPosition
-from odemis.util.transform import RigidTransform, get_rotation_transforms
+from odemis.util.transform import get_rotation_transforms
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -92,8 +92,6 @@ class MicroscopePostureManager:
                 return super().__new__(MeteorZeiss1PostureManager)
             elif stage_version == "tfs_1":
                 return super().__new__(MeteorTFS1PostureManager)
-            elif stage_version == "tfs_2":
-                return super().__new__(MeteorTFS2PostureManager)
             elif stage_version == "tfs_3":
                 return super().__new__(MeteorTFS3PostureManager)
             elif stage_version == "tescan_1":
@@ -323,20 +321,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         # NOTE: use_linked_sem_focus_compensation:
         # when true, the SEM focus is restored to the eucentric focus when moving the stage
         # this is done on TFS systems to compensate for the SEM focus changing when the stage is moved (due to stage linking)
-        # NOTE: use_3d_transforms:
-        # when true, a 3D transformation matrix is used to convert between sample and stage positions.
-        # previously, only a 2D matrix was used, as the only transforms was around the x-axis (pre-tilt compensation). The x-axis coordinate
-        # was grafted onto the output of the 2D transform which only applied to the y/z axes. This is now done in a single matrix.
-        # NOTE: use_scan_rotation:
-        # when true, an additional rotation matrix is applied to the sample-stage transforms (rotation around z-axes of sample-stage),
-        # to account for scan rotation. The code checks that the scan rotation is the same for both the SEM/FIB before applying the transform.
-        # this requires the use_3d_transforms to be enabled. It is only expected to work for either 0 or 180 degree scan rotation, which in practice
-        # are the only values used.
-        # NOTE: use_3d_transforms and use_scan_rotation are still in testing, so are not enabled by default.
         # NOTE: these flags will be removed, along with 2D transforms, once 3D transforms and scan rotation are fully tested.
         self.use_linked_sem_focus_compensation: bool = md_calib.get("use_linked_sem_focus_compensation", False)
-        self.use_3d_transforms: bool = md_calib.get("use_3d_transforms", False)
-        self.use_scan_rotation: bool = md_calib.get("use_scan_rotation", False)
 
         # current posture va
         self.current_posture = model.VigilantAttribute(UNKNOWN)
@@ -348,16 +334,24 @@ class MeteorPostureManager(MicroscopePostureManager):
             FM_IMAGING: {
                 SEM_IMAGING: self._transformFromMeteorToSEM,
                 MILLING: self._transformFromMeteorToMilling,
+                FIB_IMAGING: self._transformFromMeteorToFIB,
             },
             SEM_IMAGING: {
                 FM_IMAGING: self._transformFromSEMToMeteor,
                 MILLING: self._transformFromSEMToMilling,
+                FIB_IMAGING: self._transformFromSEMToFIB,
             },
             MILLING: {
                 SEM_IMAGING: self._transformFromMillingToSEM,
                 FM_IMAGING: self._transformFromMillingToFM,
                 # milling position can be dynamically updated, so we need to support this recalculation
                 MILLING: self._transformFromSEMToMilling,
+                FIB_IMAGING: self._transformFromMillingToFIB,
+            },
+            FIB_IMAGING: {
+                SEM_IMAGING: self._transformFromFIBToSEM,
+                FM_IMAGING: self._transformFromFIBToMeteor,
+                MILLING: self._transformFromFIBToMilling,
             },
             UNKNOWN: {
                 UNKNOWN: lambda x: x
@@ -383,6 +377,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         if isInRange(pos, stage_fm_imaging_rng, self.linear_axes):
             return FM_IMAGING
         if isInRange(pos, stage_sem_imaging_rng, self.linear_axes):
+            if self.at_fib_posture(pos, stage_md):
+                return FIB_IMAGING
             if self.at_milling_posture(pos, stage_md):
                 return MILLING
             return SEM_IMAGING
@@ -399,6 +395,21 @@ class MeteorPostureManager(MicroscopePostureManager):
             stage_milling = self.get_posture_orientation(MILLING)
             if isNearPosition(pos,
                             stage_milling,
+                            self.rotational_axes,
+                            atol_rotation=math.radians(3)):
+                return True
+        return False
+
+    def at_fib_posture(self, pos: Dict[str, float], stage_md: Dict[str, float]) -> bool:
+        """FIB posture is not required for all meteor systems, so we need to
+        first check it's available
+        :param pos the stage position
+        :param stage_md the stage metadata
+        :param return True if the stage is at the fib posture, False if not (or not available)"""
+        if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
+            stage_fib = self.get_posture_orientation(FIB_IMAGING)
+            if isNearPosition(pos,
+                            stage_fib,
                             self.rotational_axes,
                             atol_rotation=math.radians(3)):
                 return True
@@ -484,90 +495,16 @@ class MeteorPostureManager(MicroscopePostureManager):
         self._metadata[model.MD_SHEAR_COR] = shear
         self._update_conversion()
 
-    def _get_rot_matrix(self, invert: bool = False) -> RigidTransform:
-        """
-        Get 2x2 rigid transformation matrix for the given rotation.
-        :param invert: inverse the sign of rotation, if True.
-        :return: rigid transformation matrix.
-        """
-        rotation = self._metadata[model.MD_ROTATION_COR]
-        if invert:
-            rotation *= -1
-        return RigidTransform(rotation=rotation).matrix
-
-    def _convert_sample_from_stage(self, val: List[float], absolute=True) -> List[float]:
-        """
-        Convert values from stage to sample axes in the current posture.
-        :param val: values of stage axes.
-        :param absolute: if True, use absolute values otherwise relative.
-        :return: values of the updated sample axes.
-        """
-        # stage-bare position
-        Q = numpy.array(val, dtype=float)
-        # Transform to coordinates in the reference frame of the sample plane
-        posture = self.current_posture.value
-        p = self._inv_transforms[posture].dot(Q)
-        if absolute:
-            p -= self._O
-        return p.tolist()
-
-    def _convert_sample_to_stage(self, val: List[float], absolute=True) -> List[float]:
-        """
-        Convert values from sample axes in current posture to stage axes.
-        :param val: values of sample axes.
-        :param absolute: if True, use absolute values otherwise relative.
-        :return: values of updated stage axes.
-        """
-        # Sample plane position
-        P = numpy.array(val, dtype=float)
-        if absolute:
-            P += self._O
-        # Transform to coordinates in the reference frame of the stage-bare
-        posture = self.current_posture.value
-        q = self._transforms[posture].dot(P)
-        return q.tolist()
-
     def _update_conversion(self):
         """
         Computes transformation parameters based on the given metadata to allow conversion
         stage-bare and sample plane.
         """
+        # NOTE: transformations are defined as sample stage -> stage bare
+        # the inverse transformation is used for stage bare -> sample stage
         translation = self._metadata[model.MD_POS_COR]
         scale = self._metadata[model.MD_PIXEL_SIZE_COR]
         shear = self._metadata[model.MD_SHEAR_COR]
-
-        shear_matrix = numpy.array([[1, shear[0]], [shear[1], 1]])
-
-        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
-        scale_matrix = numpy.identity(len(scale)) * scale
-
-        # fm imaging
-        self._transforms[FM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix()
-        self._inv_transforms[FM_IMAGING] = numpy.linalg.inv(self._transforms[FM_IMAGING])
-
-        # sem imaging
-        self._transforms[SEM_IMAGING] = scale_matrix @ shear_matrix @ self._get_rot_matrix(invert=True)
-        self._inv_transforms[SEM_IMAGING] = numpy.linalg.inv(self._transforms[SEM_IMAGING])
-
-        # milling angle
-        self._transforms[MILLING] = self._transforms[SEM_IMAGING]
-        self._inv_transforms[MILLING] = self._inv_transforms[SEM_IMAGING]
-
-        # add unknown as same as SEM IMAGING
-        # NOTE: UKNOWN posture is not currently used for movement, but represents when the stage is
-        # not at one of the known postures. The transform is set to the same as SEM IMAGING, as that's the
-        # most common posture for the stage to be in when unknown. The transform is required to prevent the GUI
-        # from erroring when the stage is in an unknown posture when trying to display a position.
-        self._transforms[UNKNOWN] = self._transforms[SEM_IMAGING]
-        self._inv_transforms[UNKNOWN] = self._inv_transforms[SEM_IMAGING]
-
-        # Offset between origins of the coordinate systems
-        self._O = numpy.array(translation, dtype=float)
-
-        ###### 3D TRANSFORMS ######
-
-        # NOTE: transformations are defined as sample stage -> stage bare
-        # the inverse transformation is used for stage bare -> sample stage
 
         # The shear & scale parameters are for the 2nd and 3rd axes (y and z) in FM imaging
         shear_matrix_3d = numpy.array([
@@ -591,182 +528,58 @@ class MeteorPostureManager(MicroscopePostureManager):
         tf = scale_matrix_3d @ shear_matrix_3d @ rot_matrix_3d
         tf_inv = numpy.linalg.inv(tf)
 
-        # NOTE: not yet implemented, see meteor-1100-fibsem-tab
-        sr = 0
-        if not self.use_scan_rotation:
-            sr = 0
+        # get the scan rotation value
+        sr = self._get_scan_rotation()
 
         # TODO: also need shear and scale for SEM_IMAGING and MILLING postures, each different.
         # get scan rotation matrix (rz -> rx)
         tf_sr, tf_inv_sr = get_rotation_transforms(rx=rx, rz=sr)
         logging.debug(f"tf_matrix: {tf}, tf_sr: {tf_sr}")
 
-        self._transforms2 = {FM_IMAGING: tf,
+        self._transforms = {FM_IMAGING: tf,
+                            FIB_IMAGING: tf_sr,
                              SEM_IMAGING: tf_inv_sr,
                              MILLING: tf_inv_sr,
                              UNKNOWN: tf_inv_sr}
-        self._inv_transforms2 = {FM_IMAGING: tf_inv,
+        self._inv_transforms = {FM_IMAGING: tf_inv,
+                                 FIB_IMAGING: tf_inv_sr,
                                  SEM_IMAGING: tf_sr,
                                  MILLING: tf_sr,
                                  UNKNOWN: tf_sr}
 
-    def _get_stage_pos(self, sample_val: Dict[str, float], absolute: bool = True) -> Dict[str, float]:
+    def _get_scan_rotation(self) -> float:
         """
-        Get stage coordinates from sample plane coordinates in current posture.
-        :param sample_val: sample plane coordinates.
-        :param absolute: if True, use absolute values otherwise relative.
-        :return: stage coordinates.
+        Get the scan rotation value for SEM/FIB, and ensure they match.
+        :return: the scan rotation value in radians
         """
-        vpos = self._convert_sample_to_stage([sample_val[self._axes_dep["x"]], sample_val[self._axes_dep["y"]]],
-                                                 absolute=absolute)
-        vpos_dict = {self._axes_dep["x"]: vpos[0], self._axes_dep["y"]: vpos[1]}
-        stage_pos = sample_val.copy()
-        stage_pos.update(vpos_dict)
-        return stage_pos
 
-    def _get_sample_pos(self, stage_val: Dict[str, float], absolute: bool = True) -> Dict[str, float]:
-        """
-        Get sample plane coordinates from stage coordinates.
-        :param stage_val: stage coordinates.
-        :param absolute: if True, use absolute values otherwise relative.
-        :return: sample plane coordinates.
-        """
-        # Convert position dict from dependant axes to original axes
-        vpos = self._convert_sample_from_stage([stage_val[self._axes_dep["x"]], stage_val[self._axes_dep["y"]]],
-                                               absolute=absolute)
-        # remap vpos x, y -> sample plane y, z
-        vpos_dict = {self._axes_dep["x"]: vpos[0], self._axes_dep["y"]: vpos[1]}
-        sample_pos = stage_val.copy()
-        sample_pos.update(vpos_dict)
-        return sample_pos
+        # need to check if e-beam and ion-beam are available
+        comps = model.getComponents()
+        roles = [comp.role for comp in comps]
+        if not ("e-beam" in roles and "ion-beam" in roles):
+            logging.warning("e-beam and/or ion-beam not available, scan rotation will be set to 0")
+            return 0
 
-    def constrain_stage_pos_axes(self, stage_val: Dict[str, float], fixed_sample_axes: Dict[str, float],
-                                 posture: int=FM_IMAGING) -> Dict[str, float]:
-        """
-        Get the stage (bare) coordinates by constraining the sample plane to a defined plane given by fixed_sample_pos.
-        :param stage_val: stage (bare) coordinates for a position in FM imaging
-        :param fixed_sample_axes: (should only have z) sample plane coordinates in FM imaging, which has a good Z value
-        :param posture: Posture in which the stage (bare) coordinates are constrained,currently set to FM imaging
-        :return: resultant stage (bare) coordinates for FM imaging, with the sample Z based on fixed_sample_pos.
-        """
-        if posture == FM_IMAGING:
-            assert fixed_sample_axes.keys() == {"z"}
-            sample_pos = self._get_sample_pos(stage_val, absolute=True)
-            sample_pos["z"] = fixed_sample_axes["z"]
-            new_stage_pos = self._get_stage_pos(sample_pos, absolute=True)
-            return new_stage_pos
-        else:
-            raise NotImplementedError(f"Posture {posture} not supported")
+        # check if e-beam and ion-beam have the same rotation
+        ebeam = model.getComponent(role='e-beam')
+        ion_beam = model.getComponent(role='ion-beam')
+        sr = ebeam.rotation.value
+        ion_sr = ion_beam.rotation.value
+        if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
+            raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
 
-    ###### DEPRECATE START #######
-    # These functions can be removed once 3D transforms are fully implemented
-    def _convert_to_sample_stage_from_stage(self, pos_dep, absolute=True):
-        # Object lens position vector
-        Q = numpy.array(pos_dep, dtype=float)
-        # Transform to coordinates in the reference frame of the sample stage
-        posture = self.current_posture.value
-        p = self._inv_transforms[posture].dot(Q)
-        if absolute:
-            p -= self._O
-        return p.tolist()
-
-    def _convert_from_sample_stage_to_stage(self, pos, absolute=True):
-        # Sample stage position vector
-        P = numpy.array(pos, dtype=float)
-        if absolute:
-            P += self._O
-        # Transform to coordinates in the reference frame of the objective stage
-        posture = self.current_posture.value
-        q = self._transforms[posture].dot(P)
-        return q.tolist()
-
-    def _get_pos_vector(self, pos_val, absolute=True):
-        """ Convert position dict into dependant axes position dict"""
-        if absolute:
-            vpos = pos_val["x"], pos_val["y"]
-        else:
-            vpos = pos_val.get("x", 0), pos_val.get("y", 0)
-        # vpos_dep = self._convert_from_sample_stage_to_stage(vpos, absolute=absolute)
-        vpos_dep = self._convert_sample_to_stage(vpos, absolute=absolute)
-        return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1]}
-
-    ###### DEPRECATE END #######
+        return sr
 
     def from_sample_stage_to_stage_movement(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Get the stage movement coordinates from the sample stage movement coordinates.
+        """
+        Get the stage movement coordinates from the sample stage movement coordinates.
         (sample-stage -> stage-bare, for relative movements)
         :param pos: move in sample-stage coordinates (not all axes are required)
-        :return: move in the stage-bare coordinates"""
-        if self.use_3d_transforms:
-            return self.from_sample_stage_to_stage_movement2(pos)
-        # Convert position dict from original axes to dependant axes
-        vpos = self._get_pos_vector({"x": pos.get("y", 0), "y": pos.get("z", 0)}, absolute=False)
-
-        # return the new position
-        new_pos = {}
-        new_pos["x"] = pos["x"]
-        new_pos.update(vpos)
-
-        return new_pos
-
-    def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Get stage position coordinates from sample stage coordinates (sample-stage -> stage-bare).
-        :param pos: position in the sample-stage coordinates
-        :return: position in the stage-bare coordinates
+        :return: move in the stage-bare coordinates
         """
-        if self.use_3d_transforms:
-            return self.from_sample_stage_to_stage_position2(pos)
-        # Convert position dict from original axes to dependant axes
-        vpos = self._get_pos_vector({"x": pos["y"], "y": pos["z"]}, absolute=True)
-
-        # add rx, rz (orientation)
-        posture = self.getCurrentPostureLabel()
-        orientation = self.get_posture_orientation(posture)
-
-        # return the new position
-        new_pos = {}
-        new_pos["x"] = pos["x"]
-        new_pos.update(orientation)
-        new_pos.update(vpos)
-
-        logging.debug("For posture %s, pos %s -> pos bare %s", posture, pos, new_pos)
-        detected_posture = self.getCurrentPostureLabel(new_pos)
-        if detected_posture != posture:
-            logging.warning("Posture detected %s does not match expected posture %s", detected_posture, posture)
-
-        return new_pos
-
-    def to_sample_stage_from_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Get sample stage coordinates from stage coordinates. (stage-bare -> sample stage)
-        :param pos: position in the stage-bare coordinates
-        :return: position in the sample-stage coordinatess
-        """
-        if self.use_3d_transforms:
-            return self.to_sample_stage_from_stage_position2(pos)
-
-        # Convert position dict from dependant axes to original axes
-        vpos = self._convert_sample_from_stage([pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
-        # remap vpos x, y -> stage y, z
-        vpos = {self._axes_dep["x"]: vpos[0], self._axes_dep["y"]: vpos[1]}
-
-        new_pos = {}
-        new_pos["x"] = pos["x"]
-        new_pos.update(vpos)
-
-        return new_pos
-
-    ######### 3D TRANSFORMS #########
-
-    def from_sample_stage_to_stage_movement2(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Get the stage movement coordinates from the sample stage movement coordinates.
-        (sample-stage -> stage-bare, for relative movements)
-        Uses the inverse transformation
-        :param pos: move in sample-stage coordinates (not all axes are required)
-        :return: move in the stage-bare coordinates"""
         q = numpy.array([pos.get("x", 0), pos.get("y", 0), pos.get("z", 0)])
-        # inverse transform
         posture = self.current_posture.value
-        pinv = self._transforms2[posture] @ q
+        pinv = self._transforms[posture] @ q
 
         ppos = {}
         ppos["x"] = pinv[0]
@@ -774,16 +587,15 @@ class MeteorPostureManager(MicroscopePostureManager):
         ppos[self._axes_dep["y"]] = pinv[2]
         return ppos
 
-    def from_sample_stage_to_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Get stage position coordinates from sample stage coordinates (sample-stage -> stage-bare).
-        Uses the inverse transformation
+    def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Get stage position coordinates from sample stage coordinates (sample-stage -> stage-bare).
         :param pos: position in the sample-stage coordinates
-        :return: position in the stage-bare coordinates"""
-
-        # inverse transform
+        :return: position in the stage-bare coordinates
+        """
         q = numpy.array([pos["x"], pos["y"], pos["z"]])
         posture = self.current_posture.value
-        pinv = self._transforms2[posture] @ q
+        pinv = self._transforms[posture] @ q
 
         # add orientation (rx, rz)
         orientation = self.get_posture_orientation(posture)
@@ -795,20 +607,15 @@ class MeteorPostureManager(MicroscopePostureManager):
         ppos.update(orientation)
         return ppos
 
-    def to_sample_stage_from_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """Get sample stage coordinates from stage coordinates. (stage-bare -> sample stage)
-        Uses the forward tranfsormation
+    def to_sample_stage_from_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Get sample stage coordinates from stage coordinates. (stage-bare -> sample stage)
         :param pos: position in the stage-bare coordinates
         :return: position in the sample-stage coordinates
         """
-
         p = numpy.array([pos["x"], pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
-
-        # QUERY: for projecting other postures, should we use the current posture or the target posture?
-        # we should, but currently to_sample_stage... is only used to project features onto the screen,
-        # and they are displayed in the current posture, so it is fine to use the current posture
         posture = self.current_posture.value
-        q = self._inv_transforms2[posture] @ p
+        q = self._inv_transforms[posture] @ p
 
         qpos = {}
         qpos["x"] = q[0]
@@ -855,7 +662,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
     def _transformFromMillingToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
-        Transforms the stage position from milling to sem imaging position"
+        Transforms the stage position from milling to sem imaging position
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
@@ -867,7 +674,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
     def _transformFromMeteorToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
-        Transforms the stage position from fm imaging to milling position"
+        Transforms the stage position from fm imaging to milling position
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
@@ -877,7 +684,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
     def _transformFromMillingToFM(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
-        Transforms the stage position from milling to fm imaging position"
+        Transforms the stage position from milling to fm imaging position
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
@@ -885,14 +692,58 @@ class MeteorPostureManager(MicroscopePostureManager):
         sem_pos = self._transformFromMillingToSEM(pos)
         return self._transformFromSEMToMeteor(sem_pos)
 
-    # TODO: add support for additional transforms:
-    # SEM -> FIB
-    # FIB -> SEM
-    # FIB -> MILLING
-    # MILLING -> FIB
-    # FIB -> FM
-    # FM -> FIB
-    # TODO: add FM-MILL-VIEW posture
+    def _transformFromSEMToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from SEM imaging to FIB imaging position
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        raise NotImplementedError()
+
+    def _transformFromFIBToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from FIB imaging to SEM imaging position
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        raise NotImplementedError()
+
+    def _transformFromMeteorToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from meteor to FIB imaging position
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        raise NotImplementedError()
+
+    def _transformFromFIBToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from FIB imaging to meteor position
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        raise NotImplementedError()
+
+    def _transformFromMillingToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from milling to fib imaging position"
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        # simple chain of milling->sem->fib
+        sem_pos = self._transformFromMillingToSEM(pos)
+        return self._transformFromSEMToFIB(sem_pos)
+
+    def _transformFromFIBToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from fib imaging to milling position"
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        # simple chain of fib->sem->milling
+        sem_pos = self._transformFromFIBToSEM(pos)
+        return self._transformFromSEMToMilling(sem_pos)
+
 
 class MeteorTFS1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
@@ -946,6 +797,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 end_pos = fm_target_pos
             elif target_pos_lbl == MILLING:
                 end_pos = self._transformFromSEMToMilling(stage_position)
+            elif target_pos_lbl == FIB_IMAGING:
+                end_pos = self._transformFromSEMToFIB(stage_position)
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
                 end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
@@ -955,15 +808,14 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 end_pos = self._transformFromMeteorToSEM(stage_position)
             elif target_pos_lbl == MILLING:
                 end_pos = self._transformFromMeteorToMilling(stage_position)
+            elif target_pos_lbl == FIB_IMAGING:
+                end_pos = self._transformFromMeteorToFIB(stage_position)
         elif current_position == MILLING:
+            if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]:
+                end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
+        elif current_position == FIB_IMAGING:
             if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING]:
                 end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
-            # NOTE:grid positions are not supported in milling atm
-
-            # TODO: @patrick
-            # separate the grid positions from the postures
-            # add support for FIB_IMAGING
-
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
@@ -1194,231 +1046,6 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 future._task_state = FINISHED
 
 
-class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
-    def __init__(self, microscope):
-        MeteorPostureManager.__init__(self, microscope)
-        # Check required metadata used during switching
-        self.check_stage_metadata(required_keys={model.MD_CALIB})
-        required_keys_tfs2 = {model.MD_SAMPLE_PRE_TILT, "dx", "dy"}
-        self.check_calib_data(required_keys=required_keys_tfs2)
-        if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
-            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
-        # Get the stage pre-tilt from the stage metadata
-        stage_md = self.stage.getMetadata()
-        self.pre_tilt = stage_md[model.MD_CALIB][model.MD_SAMPLE_PRE_TILT]
-        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
-        # Helpful parameters to work with fixed imaging plane in FM
-        self.fm_sample_z_from_sem: Dict[str, float] = {}  # previous stage position in SEM before switching to FM
-        self.fm_sample_fixed_axes: Dict[str, float] = {}  # fixed sample plane axes used for FM imaging
-        # In FM imaging, get the sample plane axes such that FM features are always observed at fixed imaging plane
-        # defined by the Z axis of the sample plane. Default value is computed by GRID 1 centre of stage (bare) in FM
-        # imaging (any grid centre can be used).
-        sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-        sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-        fm_grid1_stage_pos = self._transformFromSEMToMeteor(sem_grid1_pos, fix_fm_plane=False)
-        self.fm_sample_fixed_axes = self._get_fm_sample_z(fm_grid1_stage_pos)
-
-    def _get_fm_sample_z(self, stage_pos: Dict[str, float]) -> Dict[str, float]:
-        """
-        Get z of sample plane in FM imaging
-        :param stage_pos: stage (bare) coordinates
-        :return z position in the sample plane coordinates
-        """
-        fm_sample_z = {"z": self._get_sample_pos(stage_pos, absolute=True)["z"]}
-        return fm_sample_z
-
-    # Note: this transformation consists of translation of along x and y
-    # axes, and typically for 7 degrees rotation around rx, and 180 degrees rotation around rz.
-    # The rotation angles are constant existing in "FM_POS_ACTIVE" metadata,
-    # but the translation values are calculated based on the current position and some
-    # correction/shifting parameters existing in metadata "FM_POS_ACTIVE".
-    # This correction parameters can change every session. They are calibrated
-    # at the beginning of each run.
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
-        """
-        Transforms the current stage position from the SEM imaging area to the
-        meteor/FM imaging area.
-        :param pos: the initial stage position.
-        :param fix_fm_plane: if True, calculate the transformed position at a constant FM imaging plane
-        :return: the transformed position.
-        """
-
-        stage_md = self.stage.getMetadata()
-        transformed_pos = pos.copy()
-        calibrated_values = stage_md[model.MD_CALIB]
-        fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]  # updates rx & rz
-
-        # check if the stage positions have rz axes
-        if not ("rz" in pos and "rz" in fm_pos_active):
-            raise ValueError(f"The stage position does not have rz axis pos={pos}, fm_pos_active={fm_pos_active}")
-
-        # whether we need to rotate around the z axis (180deg)
-        has_rz = not isNearPosition(pos, fm_pos_active, {"rz"},
-                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
-
-        # NOTE:
-        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
-        # if we are not rotating around the z axis, we we only need to translate the x and y axes
-        if has_rz:
-            transformed_pos["x"] = calibrated_values["dx"] - pos["x"]
-            transformed_pos["y"] = calibrated_values["dy"] - pos["y"]
-        else:
-            transformed_pos["x"] = pos["x"] + calibrated_values["dx"]
-            transformed_pos["y"] = pos["y"] + calibrated_values["dy"]
-
-        transformed_pos.update(fm_pos_active)  # updates rx & rz
-
-        if fix_fm_plane:
-            # In FM mode, observe the features on sample on a fixed imaging plane
-            transformed_pos_fav = self.constrain_stage_pos_axes(transformed_pos, self.fm_sample_fixed_axes)
-            transformed_pos = transformed_pos_fav
-            # check if the transformed position is within the FM imaging range
-            if not isInRange(transformed_pos, stage_md[model.MD_FM_IMAGING_RANGE], {'x', 'y'}):
-                # only log warning, because transforms are used to get current position too
-                logging.warning(f"Transformed position {transformed_pos} is outside FM imaging range")
-
-        return transformed_pos
-
-    # Note: this transformation also consists of translation and rotation.
-    # The translation is along x and y axes. They are calculated based on
-    # the current position and correction parameters which are calibrated every session.
-    # The typical rotation angles are 180 degree around rz axis, and a rotation angle
-    # around rx axis which should also be calibrated at the beginning of the run.
-    # The rx angle is actually the same as the milling angle.
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """
-        Transforms the current stage position from the meteor/FM imaging area
-        to the SEM imaging area.
-        :param pos: (dict str->float) the initial stage position.
-        :return: (dict str->float) the transformed stage position.
-        """
-        stage_md = self.stage.getMetadata()
-        transformed_pos = pos.copy()
-        calibrated_values = stage_md[model.MD_CALIB]
-        sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-
-        # check if the stage positions have rz axes
-        if not ("rz" in pos and "rz" in sem_pos_active):
-            raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
-
-        # whether we need to rotate around the z axis (180deg)
-        has_rz = not isNearPosition(pos, sem_pos_active, {"rz"},
-                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
-
-        if self.fm_sample_z_from_sem:
-        # Get the stage (bare) coordinates in FM imaging by restoring the sample plane height to a previous position
-        # before fixing the FM imaging plane.
-            transformed_pos = self.constrain_stage_pos_axes(pos, self.fm_sample_z_from_sem)
-
-        # NOTE:
-        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
-        # if we are not rotating around the z axis, we we only need to translate the x and y axes
-        if has_rz:
-            transformed_pos["x"] = calibrated_values["dx"] - transformed_pos["x"]
-            transformed_pos["y"] = calibrated_values["dy"] - transformed_pos["y"]
-        else:
-            transformed_pos["x"] = transformed_pos["x"] - calibrated_values["dx"]
-            transformed_pos["y"] = transformed_pos["y"] - calibrated_values["dy"]
-
-        transformed_pos.update(sem_pos_active)
-
-        # check if the transformed position is within the SEM imaging range
-        if not isInRange(transformed_pos, stage_md[model.MD_SEM_IMAGING_RANGE], {'x', 'y'}):
-            # only log warning, because transforms are used to get current position too
-            logging.warning(f"Transformed position {transformed_pos} is outside SEM imaging range")
-
-        return transformed_pos
-
-    def _doCryoSwitchSamplePosition(self, future, target):
-        """
-        Do the actual switching procedure for cryoSwitchSamplePosition
-        :param future: cancellable future of the move
-        :param target: (int) target position either one of the constants: LOADING, SEM_IMAGING, FM_IMAGING.
-        """
-        try:
-            try:
-                target_name = POSITION_NAMES[target]
-            except KeyError:
-                raise ValueError(f"Unknown target '{target}'")
-
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
-
-            # get the meta data
-            focus_md = self.focus.getMetadata()
-            focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
-            focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
-            # To hold the ordered sub moves list
-            sub_moves = []  # list of tuples (component, position)
-
-            # get the current label
-            current_label = self.getCurrentPostureLabel()
-            current_name = POSITION_NAMES[current_label]
-
-            if current_label == target:
-                logging.warning(f"Requested move to the same position as current: {target_name}")
-
-            # get the set point position
-            target_pos = self.getTargetPosition(target)
-
-            # If at some "weird" position, it's quite unsafe. We consider the targets
-            # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
-            # by SEM_IMAGING and then go to the actual requested position.
-            if current_label == UNKNOWN:
-                logging.warning("Moving stage while current position is unknown.")
-                if target not in (LOADING, SEM_IMAGING):
-                    logging.debug("Moving first to SEM_IMAGING position")
-                    target_pos_sem = self.getTargetPosition(SEM_IMAGING)
-                    if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
-                        sub_moves.append((self.focus, focus_deactive))
-                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
-                    sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos_sem)))
-
-            if target in (GRID_1, GRID_2):
-                # The current mode doesn't change. Only X/Y/Z should move (typically
-                # only X/Y). In the same mode, GRID 1/2, the rx/rz values should not change
-                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
-                # save rotation, tilt and z in SEM before switching to FM imaging
-                # to restore rotation and tilt while switching back from FM -> SEM
-                if current_label == SEM_IMAGING and target == FM_IMAGING:
-                    current_value = self.stage.position.value
-                    fm_stage_z_from_sem = self._transformFromSEMToMeteor(current_value, fix_fm_plane=False)
-                    self.fm_sample_z_from_sem = self._get_fm_sample_z(fm_stage_z_from_sem)
-                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
-                                                                             'rz': current_value['rz']}})
-                # Park the focuser for safety
-                if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
-                    sub_moves.append((self.focus, focus_deactive))
-
-                # Move translation axes, then rotational ones
-                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-
-                if target == FM_IMAGING:
-                    # Engage the focuser
-                    sub_moves.append((self.focus, focus_active))
-            else:
-                raise ValueError(f"Unsupported move to target {target_name}")
-
-            # run the moves
-            logging.info("Moving from position {} to position {}.".format(current_name, target_name))
-            for component, sub_move in sub_moves:
-                self._run_sub_move(future, component, sub_move)
-
-        except CancelledError:
-            logging.info("CryoSwitchSamplePosition cancelled.")
-        except Exception:
-            logging.exception("Failure to move to {} position.".format(target_name))
-            raise
-        finally:
-            with future._task_lock:
-                if future._task_state == CANCELLED:
-                    raise CancelledError()
-                future._task_state = FINISHED
-
-
 class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
     def __init__(self, microscope):
         MeteorPostureManager.__init__(self, microscope)
@@ -1427,12 +1054,12 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(required_keys=self.required_keys)
         self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT, "dx", "dy"}) # TODO: add "SEM-Eucentric-Focus"
-        if not {"x", "y", "z", "rz", "rx"}.issubset(self.stage.axes):
-            raise KeyError("The stage misses 'x', 'y', 'z', 'rx' or 'rz' axes")
+        if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
+            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
-        self.postures = [SEM_IMAGING, FM_IMAGING, MILLING]
+        self.postures = [SEM_IMAGING, FM_IMAGING, MILLING]  # TODO: also support FIB_IMAGING
 
     def create_sample_stage(self):
         self.sample_stage = SampleStage(name="Sample Stage",
@@ -1480,7 +1107,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         # check if the stage positions have rz axes
         if not ("rz" in pos and "rz" in sem_pos_active):
-            raise ValueError(f"The stage position does not have rz axis. {pos=:}, {sem_pos_active=:}")
+            raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
 
         transformed_pos["x"] = md_calib["dx"] - pos["x"]
         transformed_pos["y"] = md_calib["dy"] - pos["y"]
@@ -1495,7 +1122,20 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed position.
         """
-        raise NotImplementedError()
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        md_calib = stage_md[model.MD_CALIB]
+        fm_pos_active = self.get_posture_orientation(FM_IMAGING)
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and "rz" in fm_pos_active):
+            raise ValueError(f"The stage position does not have rz axis. pos={pos}, fm_pos_active={fm_pos_active}")
+
+        transformed_pos["x"] = pos["x"] + md_calib["trans-dx"]
+        transformed_pos["y"] = pos["y"] + md_calib["trans-dy"]
+        transformed_pos.update(fm_pos_active)
+
+        return transformed_pos
 
     def _transformFromMeteorToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1503,7 +1143,53 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
-        raise NotImplementedError()
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        md_calib = stage_md[model.MD_CALIB]
+        fib_pos_active = self.get_posture_orientation(FIB_IMAGING)
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and "rz" in fib_pos_active):
+            raise ValueError(f"The stage position does not have rz axis. pos={pos}, fib_pos_active={fib_pos_active}")
+
+        transformed_pos["x"] = pos["x"] - md_calib["trans-dx"]
+        transformed_pos["y"] = pos["y"] - md_calib["trans-dy"]
+        transformed_pos.update(fib_pos_active)
+
+        return transformed_pos
+
+    def _transformFromSEMToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from SEM imaging to the FIB imaging area.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed stage position.
+        """
+        # NOTE: This should be a compucentric rotation. need to translate around rotation centre
+        transformed_pos = pos.copy()
+        fib_pos_active = self.get_posture_orientation(FIB_IMAGING)
+        transformed_pos.update(fib_pos_active)
+
+        # invert x,y for compucentric rotation (rotation centered at 0,0)
+        transformed_pos["x"] = -transformed_pos["x"]
+        transformed_pos["y"] = -transformed_pos["y"]
+        return transformed_pos
+
+    def _transformFromFIBToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from FIB imaging to the SEM imaging area.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed stage position.
+        """
+        # NOTE: This should be a compucentric rotation. need to translate around rotation centre
+        transformed_pos = pos.copy()
+        fib_pos_active = self.get_posture_orientation(SEM_IMAGING)
+        transformed_pos.update(fib_pos_active)
+
+        # invert x,y for compucentric rotation (rotation centered at 0,0)
+        transformed_pos["x"] = -transformed_pos["x"]
+        transformed_pos["y"] = -transformed_pos["y"]
+
+        return transformed_pos
 
     def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from chamber to stage bare coordinates.
@@ -1544,7 +1230,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "m"], rotation=self.pre_tilt)
         self.postures = [SEM_IMAGING, FM_IMAGING]
-        self.use_3d_transforms = True
 
     def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
         new_pos = super().from_sample_stage_to_stage_position(pos)
@@ -1888,7 +1573,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt, shear=shear, scale=scale)
         self.postures = [SEM_IMAGING, FM_IMAGING]
-        self.use_3d_transforms = True
 
     def check_calib_data(self, required_keys: set):
         """
@@ -2974,7 +2658,6 @@ class SampleStage(model.Actuator):
 
     def stop(self, axes=None):
         self._stage_bare.stop()
-
 
 def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: int = math.radians(52)) -> float:
     """Calculate the stage tilt from the milling angle and the pre-tilt.
