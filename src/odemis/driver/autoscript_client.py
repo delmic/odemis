@@ -841,7 +841,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_channel(channel)
 
-    def acquire_image(self, channel: str) -> Tuple[numpy.ndarray, Dict[str, Any]]:
+    def acquire_image(self, channel: str, frame_settings: Optional[Dict] = None) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
         Acquire an image from the detector (blocking).
         :param channel: Name of one of the channels.
@@ -849,7 +849,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.acquire_image(channel)
+            return self.server.acquire_image(channel, frame_settings)
 
     def get_last_image(self, channel: str, wait_for_frame: bool = True) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
