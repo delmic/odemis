@@ -341,11 +341,11 @@ class FibsemTab(Tab):
             dy = p_pos[1] - init_pos[1]
 
             # invert dy if scan rotated.
-            if numpy.isclose(self.main_data.ion_beam.rotation.value, 
-                                math.radians(180), 
+            if numpy.isclose(self.main_data.ion_beam.rotation.value,
+                                math.radians(180),
                                 atol=1e-2):
                 dy *= -1
-                logging.debug("Scan rotation detected, inverting dy")            
+                logging.debug("Scan rotation detected, inverting dy")
             logging.info(f"Moving stage vertically by: {dx}, {dy}")
             f = self.pm.sample_stage.moveRelChamberReferential({"x": dx, "z": dy})
             f.result()

@@ -475,9 +475,9 @@ class CorrelationController(object):
 
     def on_auto_correlate(self, evt: wx.Event) -> None:
         """"Automatically correlate the SEM/FM overviews based on the SEM stage position"""
-        
+
         for s in self._tab_data_model.streams.value:
-            
+
             # get the metadata from the stream (SEM only)
             md = s.raw[0].metadata
             emd = md[model.MD_EXTRA_SETTINGS]
@@ -485,7 +485,7 @@ class CorrelationController(object):
             pos = stage_md["position"][0]
 
             if isinstance(s, StaticSEMStream):
-                
+
                 # convert sem stage-bare position to fm sample-stage position
                 fm_pos = self.pm.to_posture(pos, FM_IMAGING)
                 ssp = self.pm.to_sample_stage_from_stage_position(fm_pos)
@@ -493,5 +493,3 @@ class CorrelationController(object):
                 # update metadata
                 self._tab_data_model.selected_stream.value = s
                 self._move_stream_to_pos(md_pos)
-
-                

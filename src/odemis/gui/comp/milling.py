@@ -174,4 +174,3 @@ class MillingTaskPanel(wx.Panel):
     def on_visibility_btn(self, evt):
         # generate EVT_STREAM_VISIBLE
         return
-

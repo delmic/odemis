@@ -99,11 +99,11 @@ class EditMeteorCalibrationDialog(wx.Dialog):
             ymax = y_val + rng
 
             x_value_ctrl = UnitFloatCtrl(
-                self._panel, value=x_val, style=wx.NO_BORDER, 
+                self._panel, value=x_val, style=wx.NO_BORDER,
                 min_val=xmin, max_val=xmax, **conf
             )
             y_value_ctrl = UnitFloatCtrl(
-                self._panel, value=y_val, style=wx.NO_BORDER, 
+                self._panel, value=y_val, style=wx.NO_BORDER,
                 min_val=ymin, max_val=ymax, **conf
             )
             self.gb_sizer.Add(
@@ -131,7 +131,7 @@ class EditMeteorCalibrationDialog(wx.Dialog):
         txt = f"Editing the calibration is currently restricted to +/- {rng*1e6}um. \nPlease edit the configuration file directly for larger changes."
         lbl_ctrl = wx.StaticText(self._panel, -1, txt)
         lbl_ctrl.Wrap(375)  # Wrap to 350 pixels
-        
+
         lbl_ctrl.SetFont(wx.Font(8, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
         self.gb_sizer.Add(
             lbl_ctrl,
@@ -164,7 +164,7 @@ class EditMeteorCalibrationDialog(wx.Dialog):
         update_bg_color = wx.Colour(0, 100, 200)  # Blue color
         self.update_button.SetBackgroundColour(update_bg_color)
         self.update_button.SetForegroundColour(wx.WHITE)
-    
+
         cancel_bg_color = wx.Colour(200, 0, 0)  # Red color
         self.cancel_button.SetBackgroundColour(cancel_bg_color)
         self.cancel_button.SetForegroundColour(wx.WHITE)
@@ -188,7 +188,7 @@ class EditMeteorCalibrationDialog(wx.Dialog):
                 x_val = ctrl["x"].GetValue()
                 y_val = ctrl["y"].GetValue()
                 self.md_calib.update({"dx": x_val, "dy": y_val})
-    
+
             elif name == "FIB-View":
                 x_val = ctrl["x"].GetValue()
                 y_val = ctrl["y"].GetValue()
@@ -197,4 +197,3 @@ class EditMeteorCalibrationDialog(wx.Dialog):
         logging.debug(f"Updated calibration stage metadata: {self.md_calib}")
 
         self.EndModal(wx.ID_OK)
-        

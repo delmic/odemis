@@ -532,7 +532,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                                  SEM_IMAGING: tf_sr,
                                  MILLING: tf_sr,
                                  UNKNOWN: tf_sr}
-    
+
     def _get_scan_rotation(self) -> float:
         """Get the scan rotation value for SEM/FIB, and ensure they match.
         :return: the scan rotation value in radians"""

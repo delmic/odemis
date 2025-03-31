@@ -710,7 +710,7 @@ def _updateMDFromOME(root, das):
             try:
                 md[model.MD_STAGE_POSITION_RAW] = md[model.MD_EXTRA_SETTINGS]["Stage"]["position"][0]
             except Exception:
-                pass 
+                pass
             rotation = mapa.find(".//M[@K='Rotation']")
             if rotation is not None:
                 md[model.MD_ROTATION] = float(rotation.text)
