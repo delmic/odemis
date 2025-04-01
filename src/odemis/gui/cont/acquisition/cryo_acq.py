@@ -242,10 +242,8 @@ class CryoAcquiController(object):
         sender = evt.GetEventObject()
         if (self.acqui_mode is guimod.AcquiMode.FIBSEM and
                 sender == self._panel.btn_cryosecom_acquire):
-            if self._tab_data.is_sem_active_view:
-                acq_streams = [s for s in acq_streams if isinstance(s, SEMStream)]
-            if self._tab_data.is_fib_active_view:
-                acq_streams = [s for s in acq_streams if isinstance(s, FIBStream)]
+            view = self._tab_data.focussedView.value  
+            acq_streams = [s for s in acq_streams if view.is_compatible(s.__class__)] 
         logging.debug(f"Acquisition streams: {acq_streams}")
         return acq_streams
 
