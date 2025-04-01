@@ -1428,14 +1428,13 @@ class CorrelationDialog(xrcfr_correlation):
         Create views depending on the actual hardware present
         return OrderedDict: as needed for the ViewPortController
         """
-        # TODO change SEM Overview to FIB?
         vpv = collections.OrderedDict([
             (viewports[0], # focused view
-             {"name": "FLM Overview",
+             {"name": "FLM view",
               "stream_classes": OpticalStream,
               }),
             (viewports[1],
-             {"name": "SEM Overview",
+             {"name": "FIB view",
               "stream_classes": EMStream,
               }),])
         return vpv

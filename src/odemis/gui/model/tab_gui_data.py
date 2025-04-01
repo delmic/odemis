@@ -450,27 +450,20 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
 
-        if self.focussedView.value.name.value == "FLM Overview":
+        if self.views.value[0] == self.focussedView.value: # FM view
             if type == FIDUCIAL:
                 t_name = make_unique_name("FM-1", existing_names)
                 # get the last digit of the t_name
                 # TODO limited to 9 fiducial pairs
                 index = int(t_name[-1])
-                for s in self.streams.value:
-                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        target = Target(x, y, z, name=t_name, type=type,
+                target = Target(x, y, z=0, name=t_name, type=type,
                                         index=index, fm_focus_position=fm_focus_position)
-                        break
+
             elif type == POI:
-                # TODO limited to 9 fiducial pairs
-                for s in self.streams.value:
-                    if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex"):
-                        z = s.zIndex.value
-                        target = Target(x, y, z, name="POI-1", type=type,
+                target = Target(x, y, z=0, name="POI-1", type=type,
                                         index=1, fm_focus_position=fm_focus_position)
 
-        elif self.focussedView.value.name.value == "SEM Overview":
+        elif self.views.value[1] == self.focussedView.value: # FIB view
             if type == SURFACE_FIDUCIAL:
                 target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
                                 fm_focus_position=fm_focus_position)
