@@ -38,7 +38,7 @@ from odemis.util import testing
 
 
 logging.getLogger().setLevel(logging.DEBUG)
-logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s", force=True)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
@@ -603,6 +603,22 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_cancel_acquisition(self):
+        self.scanner.dwellTime.value = 100e-6  # a little bit more than 10s per frame
+        self.left = 1
+        logging.info("Starting initial (long) acquisition")
+        self.sed.data.subscribe(self.receive_image)
+        time.sleep(1)
+        logging.info("Stopping initial (long) acquisition")
+        self.sed.data.unsubscribe(self.receive_image)
+        start = time.time()
+        self.scanner.dwellTime.value = 1e-6  # shorter dwell time
+        logging.info("Starting short acquisition")
+        self.sed.data.get()
+        logging.info("Finished short acquisition")
+        duration = time.time() - start
+        self.assertLess(duration, 3)
 
     def test_roi(self):
         """
