@@ -1122,12 +1122,20 @@ class Scanner(model.Emitter):
         # beam current
         # NOTE: VA is named probeCurrent to match existing API
         beam_current_info = self.parent.beam_current_info(self.channel)
-        self.probeCurrent = model.FloatContinuous(
-            value=self.parent.get_beam_current(self.channel),
-            range=(beam_current_info["range"][0], beam_current_info["range"][-1]),
-            unit=beam_current_info["unit"],
-            setter=self._setCurrent
-        )
+        if "choices" in beam_current_info:
+            self.probeCurrent = model.VAEnumerated(
+                value=self.parent.get_beam_current(self.channel),
+                choices=set(beam_current_info["choices"]),
+                unit=beam_current_info["unit"],
+                setter=self._setCurrent
+            )
+        else:
+            self.probeCurrent = model.FloatContinuous(
+                value=self.parent.get_beam_current(self.channel),
+                range=beam_current_info["range"],
+                unit=beam_current_info["unit"],
+                setter=self._setCurrent
+            )
 
         # beamshift
         beam_shift_info = self.parent.beam_shift_info(self.channel)

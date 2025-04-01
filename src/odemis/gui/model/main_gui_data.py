@@ -257,6 +257,9 @@ class MainGUIData(object):
         # Indicates whether a stream is in preparation (i.e., a prepare() future is active)
         self.is_preparing = model.BooleanVA(False)
 
+        # Indicates whether the microscope is milling
+        self.is_milling = model.BooleanVA(False)
+
         # The microscope object will be probed for common detectors, actuators, emitters etc.
         if microscope:
             self.role = microscope.role

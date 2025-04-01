@@ -23,7 +23,6 @@ from odemis.acq.move import (
     POSITION_NAMES,
     SEM_IMAGING,
     FIB_IMAGING,
-    MeteorTFS2PostureManager,
 )
 from odemis.dataio.tiff import export
 from odemis.gui import model as guimod
