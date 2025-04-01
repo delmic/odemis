@@ -879,6 +879,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.check_stage_metadata(required_keys=self.required_keys)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
+        
+        # forced conversion to sample-stage axes
+        comp = model.getComponent(name="Linked YZ")
+        self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
+        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+        self.postures = [SEM_IMAGING, FM_IMAGING, MILLING]
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
