@@ -1918,7 +1918,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
   <flag>wxEXPAND</flag>
 </object>
 </object>
-    <title>Overview Acquisition</title>
+    <title>Multipoint Correlation</title>
     <bg>#000000</bg>
     <font>
       <size>9</size>
