@@ -1032,9 +1032,10 @@ class SEM(model.HwComponent):
             self.server.set_patterning_mode(mode)
 
     def clear_patterns(self) -> None:
-        """Clear all patterns."""
+        """Clear all patterns in fib. NOTE: active_view 2 is the fib view"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
+            self.server.set_active_view(2) # channel = ion
             self.server.clear_patterns()
 
     def set_default_application_file(self, application_file: str = "Si") -> None:
@@ -1121,12 +1122,19 @@ class Scanner(model.Emitter):
         # beam current
         # NOTE: VA is named probeCurrent to match existing API
         beam_current_info = self.parent.beam_current_info(self.channel)
-        self.probeCurrent = model.FloatContinuous(
-            value=self.parent.get_beam_current(self.channel),
-            range=beam_current_info["range"],
-            unit=beam_current_info["unit"],
-            setter=self._setCurrent
-        )
+        if "choices" in beam_current_info:
+            self.probeCurrent = model.FloatEnumerated(
+                value=self.parent.get_beam_current(self.channel),
+                choices=beam_current_info["choices"],
+                unit=beam_current_info["unit"],
+                setter=self._setCurrent)
+        else:
+            self.probeCurrent = model.FloatContinuous(
+                value=self.parent.get_beam_current(self.channel),
+                range=beam_current_info["range"],
+                unit=beam_current_info["unit"],
+                setter=self._setCurrent
+            )
 
         # beamshift
         beam_shift_info = self.parent.beam_shift_info(self.channel)

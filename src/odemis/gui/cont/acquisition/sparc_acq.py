@@ -68,10 +68,24 @@ class SparcAcquiController(object):
         self._tab_panel = tab_panel
         self._streambar_controller = streambar_controller
         self._interlockTriggered = False  # local/private bool to track interlock status
+        self._ebeam_blanker = None
 
         if model.hasVA(self._main_data_model.light, "interlockTriggered"):
             # subscribe to the VA and initialize the warning status
-            self._main_data_model.light.interlockTriggered.subscribe(self.on_interlock_change)
+            self._main_data_model.light.interlockTriggered.subscribe(self.on_interlock_change, init=True)
+
+        # Trick: _ebeam_blanker is set *after* on_interlock_change() is called at init.
+        # This way, at init, even if the interlock is already triggered, the blanker is untouched. Only the
+        # warning message is shown. This is to avoid the blanker to change the SEM state at init, as
+        # anyway the user might have been using the system as-is for a while, and it's confusing that
+        # suddenly the e-beam is blanked when the Odemis GUI starts. Especially, this helps the safety
+        # only if the interlock is triggered due to the SPARC cover being open... but they are many
+        # other reasons for the interlock to be triggered.
+
+        if self._main_data_model.ebeam and model.hasVA(self._main_data_model.ebeam, "blanker"):
+            # blanker state before interlock (to restore it when interlock is reset)
+            self._ebeam_blanker = self._main_data_model.ebeam.blanker
+            self._pre_interlock_blanker = self._ebeam_blanker.value
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -218,33 +232,45 @@ class SparcAcquiController(object):
             self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
             logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
 
-    def on_interlock_change(self, value):
+    def on_interlock_change(self, value: bool) -> None:
         """
         If the connected interlock status changes, the label on the acquisition panel has to
         be updated. Either the status is not triggered and the notification label will not be
         visible or the status is triggered and the user is notified through the label.
         Update the label status through calling update_acquisition_time() without any arguments.
-        :param value (BooleanVA): current interlockTriggered VA value
+        :param value: current interlockTriggered VA value
         """
         if value == self._interlockTriggered:
             # if the value did not change in respect to the previous value
             return
 
-        logging.warning(f"Interlock status changed from {not value} -> "
-                        f"{value}")
+        logging.warning(f"Interlock status changed from {not value} -> {value}")
 
         if value:
-            popup.show_message(wx.GetApp().main_frame,
-                               title="Laser safety",
-                               message=f"Laser was suspended automatically due to interlock trigger.",
-                               timeout=10.0,
-                               level=logging.WARNING)
+            # The laser is connected electronically to the interlock, so nothing to do in software.
+            # For the e-beam (to protect the user from X-rays), we force the blanker on.
+            if self._ebeam_blanker:
+                self._pre_interlock_blanker = self._ebeam_blanker.value
+                self._ebeam_blanker.value = True
+                message = "Laser and e-beam were suspended automatically due to interlock trigger."
+            else:
+                message = "Laser was suspended automatically due to interlock trigger."
         else:
-            popup.show_message(wx.GetApp().main_frame,
-                               title="Laser safety",
-                               message=f"Laser interlock trigger is reset to normal.",
-                               timeout=10.0,
-                               level=logging.WARNING)
+            message = "Laser interlock trigger is reset to normal."
+            # Put back the e-beam blanker to its original state, but only if it is (still) forced
+            # on (otherwise, it's a sign that the user is manually handling it).
+            if self._ebeam_blanker and self._ebeam_blanker.value is True:
+                self._ebeam_blanker.value = self._pre_interlock_blanker
+                if self._pre_interlock_blanker is False:
+                    message += " E-beam blanker disabled."
+                elif self._pre_interlock_blanker is None:  # Automatic mode (= blanker active when not acquiring)
+                    message += " E-beam blanker set back to automatic mode."
+
+        popup.show_message(wx.GetApp().main_frame,
+                           title="Laser safety",
+                           message=message,
+                           timeout=10.0,
+                           level=logging.WARNING)
 
         self._interlockTriggered = value
         self.update_acquisition_time()

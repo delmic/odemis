@@ -605,8 +605,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.pnl_projects_header = xrc.XRCCTRL(self, "pnl_projects_header")
         self.pnl_projects = xrc.XRCCTRL(self, "pnl_projects")
-        self.chk_ebeam_off = xrc.XRCCTRL(self, "chk_ebeam_off")
-        self.chk_beam_blank_off = xrc.XRCCTRL(self, "chk_beam_blank_off")
+        self.pnl_acq = xrc.XRCCTRL(self, "pnl_acq")
         self.txt_num_roas = xrc.XRCCTRL(self, "txt_num_roas")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
@@ -823,6 +822,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.btn_create_move_feature = xrc.XRCCTRL(self, "btn_create_move_feature")
         self.cmb_feature_status = xrc.XRCCTRL(self, "cmb_feature_status")
         self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
+        self.label_feature_z = xrc.XRCCTRL(self, "label_feature_z")
         self.ctrl_feature_z = xrc.XRCCTRL(self, "ctrl_feature_z")
         self.btn_use_current_z = xrc.XRCCTRL(self, "btn_use_current_z")
         self.menu_localization_streams = xrc.XRCCTRL(self, "menu_localization_streams")
@@ -4070,7 +4070,6 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
                               <flag>wxEXPAND</flag>
                             </object>
@@ -4079,7 +4078,7 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                               <object class="wxFlexGridSizer">
                                 <object class="sizeritem">
                                 <object class="wxCheckBox" name="ctrl_enable_correlation">
-                                  <label>Correlaton Enabled</label>
+                                  <label>Correlation Enabled</label>
                                   <fg>#E5E5E5</fg>
                                   <XRCED>
                                     <assign_var>1</assign_var>
@@ -4358,6 +4357,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 			<object class="sizeritem">
 				<object class="wxPanel">
 					<object class="wxBoxSizer">
+						<orient>wxVERTICAL</orient>
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_project">
 								<object class="wxGridBagSizer">
@@ -4445,10 +4445,9 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxALL|wxALIGN_CENTRE|wxEXPAND</flag>
+							<flag>wxALL|wxEXPAND</flag>
 							<border>5</border>
 						</object>
-						<orient>wxVERTICAL</orient>
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_switch_buttons">
 								<object class="wxBoxSizer">
@@ -7586,18 +7585,13 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_ebeam_off">
-                            <label>Turn off e-beam after acquisition</label>
+                          <object class="wxPanel" name="pnl_acq">
+                            <bg>#333333</bg>
+                            <fg>#7F7F7F</fg>
+                            <size>400,140</size>
+                            <flag>wxTOP|wxEXPAND</flag>
+                            <option>1</option>
                           </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxCheckBox" name="chk_beam_blank_off">
-                            <label>Do not blank beam in between fields</label>
-                          </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxFlexGridSizer">
@@ -9378,7 +9372,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxStaticText">
+                                  <object class="wxStaticText" name="label_feature_z">
                                     <label>Feature Z</label>
                                     <fg>#DDDDDD</fg>
                                   </object>
@@ -11097,7 +11091,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                 </XRCED>
               </object>
               <option>1</option>
-              <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+              <flag>wxTOP|wxEXPAND</flag>
               <border>5</border>
             </object>
             <object class="sizeritem">

@@ -1426,10 +1426,9 @@ class FastEMStreamController(StreamController):
         _, self.btn_sem_autofocus = self.stream_panel.add_run_btn(
             label_text="SEM autofocus", button_label="Run"
         )
-        # TODO uncomment when Autostigmation is working
-        # _, self.btn_autostigmation = self.stream_panel.add_run_btn(
-        #     label_text="Autostigmation", button_label="Run"
-        # )
+        _, self.btn_autostigmation = self.stream_panel.add_run_btn(
+            label_text="Autostigmation", button_label="Run"
+        )
 
         # Store a setting entry for the immersion mode button
         se = SettingEntry(name="immersion_mode", va=self.stream.emitter.immersion,

@@ -2434,6 +2434,12 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
         cls.filter = model.getComponent(role="filter")
 
+    def setUp(self):
+        # Wait a bit for the simulator to be "ready" again (as it's not a very good simulator)
+        # Otherwise, if immediately stopping & starting, the simulator may generate an old image,
+        # very early.
+        time.sleep(2)
+
     def _roiToPhys(self, repst):
         """
         Compute the (expected) physical position of a stream ROI
@@ -3128,6 +3134,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # check the dtype is correct
         self.assertEqual(ts_da.dtype, numpy.uint32)
 
+        time.sleep(2)
         # do a second acquisition with longer exp time and check values are bigger due to integration
         streaks.integrationTime.value = 2.5  # s
 
@@ -3183,10 +3190,11 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
         # set stream VAs
         streaks.integrationTime.value = 2  # s
-        # TODO use fixed repetition value -> set ROI?
-        streaks.repetition.value = (3, 5)  # results in (1, 2)
+        # The maximum exposure time of the streak-ccd is 1s => 2 images are integrated
+        assert streaks.integrationCounts.value == 2
+        streaks.roi.value = (0, 0.2, 0.4, 0.8)
+        streaks.repetition.value = (3, 5)  # results in (2, 4)
 
-        streaks.roi.value = (0, 0.2, 0.3, 0.6)
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1  # s  so should run leech for sub acquisitions (between integrating 2 images)
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
@@ -4317,19 +4325,10 @@ class TimeCorrelatorTestCase(unittest.TestCase):
     """
     Tests the SEMTemporalMDStream.
     """
-    backend_was_running = False
 
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(TIME_CORRELATOR_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(TIME_CORRELATOR_CONFIG)
 
         # Find CCD & SEM components
         cls.time_correlator = model.getComponent(role="time-correlator")
@@ -4343,16 +4342,6 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         # (during referencing the shutters are force closed, so the acquisition
         # goes faster because the shutters can't open anyway, which is not realistic)
         time.sleep(10)
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_acquisition(self):
         """
@@ -4420,9 +4409,6 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         self.assertIn(self.ebeam.dwellTime.value, (1, 1e-6))
         data, exp = f.result()
         self.assertIsNone(exp)
-        # Dwell time on detector and emitter should be back to normal
-        self.assertEqual(self.time_correlator.dwellTime.value, 2)
-        self.assertEqual(self.ebeam.dwellTime.value, 0.042)
 
         self.assertEqual(len(data), 3)  # additional anchor region data array
         self.assertEqual(data[0].shape[-1], 1)
@@ -4440,7 +4426,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
             self.time_correlator,
             self.time_correlator.data,
             self.ebeam,
-            # No local VA, to check it also works the "old" way
+            detvas={"dwellTime"},
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
@@ -4448,7 +4434,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
 
         sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
         tc_stream.repetition.value = (5, 3)
-        self.time_correlator.dwellTime.value = 5e-3
+        self.time_correlator.dwellTime.value = 1  # s
         f = sem_tc_stream.acquire()
 
         # Check if there is a live update in the setting stream.

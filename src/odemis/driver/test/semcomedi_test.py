@@ -162,6 +162,19 @@ class TestSEMStatic(unittest.TestCase):
             comp = diffx >= 0 # must be decreasing
         self.assertTrue(comp.all())
 
+
+class EventReceiver:
+    """
+    Helper class to receive model.Events
+    """
+    def __init__(self):
+        self.count = 0
+
+    def onEvent(self):
+        logging.debug("Received an event")
+        self.count += 1
+
+
 #@unittest.skip("simple")
 class TestSEM(unittest.TestCase):
     """
@@ -425,6 +438,10 @@ class TestSEM(unittest.TestCase):
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
 
+        # Also check that the startScan event is properly sent just once after the first acquisition
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         number = 5
         self.left = number
         self.sed.data.subscribe(self.receive_image)
@@ -432,6 +449,9 @@ class TestSEM(unittest.TestCase):
         self.acq_done.wait(number * (2 + expected_duration * 1.1)) # 2s per image should be more than enough in any case
 
         self.assertEqual(self.left, 0)
+
+        self.assertEqual(evt_counter.count, 1)
+        self.scanner.startScan.unsubscribe(evt_counter)
 
 #     @unittest.skip("simple")
     def test_acquire_with_va(self):
@@ -493,15 +513,23 @@ class TestSEM(unittest.TestCase):
         number = 5
         expected_duration = self.compute_expected_duration()
 
+        # Also check that the startScan event is properly sent just once after the first acquisition
+        evt_counter = EventReceiver()
+        self.scanner.startScan.subscribe(evt_counter)
+
         self.left = 10000 + number # don't unsubscribe automatically
 
         for i in range(number):
             self.sed.data.subscribe(self.receive_image)
             time.sleep(expected_duration * 1.2) # make sure we received at least one image
             self.sed.data.unsubscribe(self.receive_image)
+            time.sleep(0.01)
 
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
+
+        self.assertEqual(evt_counter.count, number)
+        self.scanner.startScan.unsubscribe(evt_counter)
 
     def test_sync_flow(self):
         """
@@ -530,49 +558,6 @@ class TestSEM(unittest.TestCase):
         self.acq_done.wait(2 + expected_duration * 1.1)
 
         self.assertEqual(self.left, 0)
-
-#     @unittest.skip("simple")
-    def test_new_position_event(self):
-        """
-        check the new position works at least when the frequency is not too high
-        """
-        self.scanner.dwellTime.value = 1e-3
-        self.size = (10, 10)
-        self.scanner.resolution.value = self.size
-        numbert = numpy.prod(self.size)
-        # pixel write/read setup is pretty expensive ~10ms
-        expected_duration = self.compute_expected_duration() + numbert * 0.01
-
-        self.left = 1 # unsubscribe just after one
-        self.events = 0 # reset
-
-        # simulate the synchronizedOn() method of a DataFlow
-        self.scanner.newPixel.subscribe(self)
-
-        self.sed.data.subscribe(self.receive_image)
-        for i in range(10):
-            # * 2 because it can be quite long to setup each pixel.
-            time.sleep(expected_duration * 2 / 10)
-            if self.left == 0:
-                break # just to make it quicker if it's quicker
-
-        self.assertEqual(self.left, 0)
-
-        # Note: there could be slightly more events if the next acquisition starts,
-        # and that's kind of ok (although it's better to be able to stop the
-        # acquisition immediately after receiving the right number of images)
-        self.assertEqual(self.events, numbert)
-
-        self.scanner.newPixel.unsubscribe(self)
-        self.sed.data.get()
-        time.sleep(0.1)
-        self.assertEqual(self.events, numbert)
-
-    def onEvent(self):
-        """
-        Called by the SEM when a new position happens
-        """
-        self.events += 1
 
     def receive_image(self, dataflow, image):
         """

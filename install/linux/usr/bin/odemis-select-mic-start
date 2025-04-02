@@ -111,7 +111,9 @@ if [ $status == 0 ] || [ $status == 3 ] ; then
         sudo odemis-stop
     elif [ "$reply" == "GUI only" ]; then
         echo "Trying to start the GUI"
-        odemis-gui
+        # Read the LOGLEVEL from the configuration file
+        . /etc/odemis.conf
+        odemis-gui --log-level ${LOGLEVEL:-1}
         exit
     else
         exit

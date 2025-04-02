@@ -419,15 +419,15 @@ class NodeWindow(wx.Window):
         self.checkbox = wx.CheckBox(self, label="")
         self.item_label = wx.StaticText(self, label=node.name)
         self.gauge = wx.Gauge(self, range=100, size=(100, 16))
-        self.open_text = wx.StaticText(self, label="Open")
-        self.open_text.SetForegroundColour(FG_COLOUR_DIS)
+        self.status_text = wx.StaticText(self, label="Open")
+        self.status_text.SetForegroundColour(FG_COLOUR_DIS)
 
         # Bind the checkbox event
         self.checkbox.Bind(wx.EVT_CHECKBOX, self.on_checkbox)
 
         if node.type in [NodeType.ALL_PROJECTS, NodeType.PROJECT, NodeType.RIBBON]:
             self.gauge.Hide()
-            self.open_text.Hide()
+            self.status_text.Hide()
         # Layout widgets
         self._layout_widgets()
 
@@ -441,9 +441,9 @@ class NodeWindow(wx.Window):
         self.main_sizer.Add(self.left_sizer, 0, wx.ALIGN_LEFT)
         self.main_sizer.AddStretchSpacer(1)
         self.right_sizer.Add(self.gauge, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
-        self.right_sizer.Add(self.open_text, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
+        self.right_sizer.Add(self.status_text, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
 
-        self.main_sizer.Add(self.right_sizer, 0, wx.ALIGN_RIGHT)
+        self.main_sizer.Add(self.right_sizer, 0)
         self.SetSizer(self.main_sizer)
         self.Layout()
 

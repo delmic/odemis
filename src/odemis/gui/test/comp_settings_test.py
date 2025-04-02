@@ -114,7 +114,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         }
 
         self.settings_panel.clear_all()
-        _, ctrl = self.settings_panel.add_int_field("Integer", 33, conf)
+        _, ctrl = self.settings_panel.add_int_field("Integer", 33, conf=conf)
         self.assertEqual(33, ctrl.GetValue())
 
         self.assertEqual(len(self.settings_panel.GetChildren()), 2)
@@ -130,7 +130,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         }
 
         self.settings_panel.clear_all()
-        _, ctrl = self.settings_panel.add_float_field("Float", 0.33, conf)
+        _, ctrl = self.settings_panel.add_float_field("Float", 0.33, conf=conf)
         self.assertEqual(0.33, ctrl.GetValue())
 
         self.assertEqual(len(self.settings_panel.GetChildren()), 2)

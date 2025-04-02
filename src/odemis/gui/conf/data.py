@@ -167,10 +167,14 @@ HW_SETTINGS_CONFIG = {
                 "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("probeCurrent", {
-                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+                "label": "Beam current",
+                # The following only affects when it's a slider
+                "event": wx.EVT_SCROLL_CHANGED,
+                "scale": "log",
+                "accuracy": 3,
             }),
             ("spotSize", {
-                "tooltip": "Electron-beam Spot size",
+                "tooltip": "Electron-beam spot size",
             }),
             ("horizontalFoV", {
                 "label": "HFW",
@@ -234,6 +238,43 @@ HW_SETTINGS_CONFIG = {
             ("scanner", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+        )),
+        "ion-beam":
+        OrderedDict((
+            ("accelVoltage", {
+                "label": "Accel. voltage",
+                "tooltip": "Accelerating voltage",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+            }),
+            ("probeCurrent", {
+                "label": "Beam current",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+            }),
+            ("resolution", {
+                "label": "Resolution",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": None,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Pixel integration time",
+                "type": "float",
+                "accuracy": 3,
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("horizontalFoV", {
+                "label": "HFW",
+                "tooltip": "Horizontal Field Width",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.hfw_choices,
+            }),
+            ("scale", {
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+
         )),
     "ebeam-blanker":
         OrderedDict((
@@ -562,6 +603,7 @@ HW_SETTINGS_CONFIG = {
             ("dwellTime", {
                 "tooltip": "Time spent by the e-beam on each pixel",
                 "scale": "log",
+                "range": (1e-6, 1000.0),  # Make sure to not provide too long dwell times
             }),
             ("pixelDuration", {
                 "label": "Time resolution",
@@ -579,10 +621,47 @@ HW_SETTINGS_CONFIG = {
         # Keep the same `contrast` and `brigtness` slider order as in the TFS UI
         OrderedDict((
             ("contrast", {
+                "label": "Contrast",
                 "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Contrast of the electron detector",
             }),
             ("brightness", {
+                "label": "Brightness",
                 "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Brightness of the electron detector",
+            }),
+            ("mode", {
+                "label": "Detector Mode",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Mode of the electron detector",
+            }),
+            ("type", {
+                "label": "Detector Type",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Type of the electron detector",
+            }),
+        )),
+    "se-detector-ion":
+        OrderedDict((
+            ("brightness", {
+                "label": "Brightness",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Brightness of the ion detector",
+            }),
+            ("contrast", {
+                "label": "Contrast",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Contrast of the ion detector",
+            }),
+            ("mode", {
+                "label": "Detector Mode",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Mode of the ion detector",
+            }),
+            ("type", {
+                "label": "Detector Type",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Type of the ion detector",
             }),
         )),
 }
@@ -761,6 +840,20 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
         },
     },
+    "meteor" : {
+        "e-beam": {
+            "scale": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "resolution": {
+                "label": "Resolution",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": None,
+                "accuracy": None,  # never simplify the numbers
+            }
+        },
+    }
 }
 
 # The sparc-simplex is identical to the sparc

@@ -28,6 +28,7 @@ import time
 import unittest
 from concurrent.futures import CancelledError
 
+import numpy
 import Pyro4
 
 from odemis import model
@@ -54,8 +55,10 @@ CONFIG_CM = {"name": "camera", "role": "chamber-ccd"}
 CONFIG_FOCUS = {"name": "focus", "role": "focus", "axes": ["z"]}
 CONFIG_PRESSURE = {"name": "pressure", "role": "pressure"}
 CONFIG_LIGHT = {"name": "light", "role": "chamber-light"}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam",
-                  "fov_range": [196.e-9, 25586.e-6]}
+CONFIG_SCANNER = {"name": "scanner",
+                  "role": "ebeam",
+                  "fov_range": [196.e-9, 25586.e-6],
+                  "current_range": [5.e-12, 200.e-9]}
 CONFIG_SEM = {"name": "sem", "role": "sem",
               "children": {"detector0": CONFIG_SED,
                            "scanner": CONFIG_SCANNER,
@@ -361,14 +364,17 @@ class BaseSEMTest(object):
 #        gc.collect()
         pass
 
+    def test_probe_current_range(self):
+        ebeam = self.scanner
+        numpy.testing.assert_array_equal(ebeam.probeCurrent.range, CONFIG_SCANNER["current_range"])
+
     def test_probe_current(self):
         ebeam = self.scanner
 
         orig_probe_current = ebeam.probeCurrent.value
-        pc_choices = sorted(ebeam.probeCurrent.choices)
-        ebeam.probeCurrent.value = pc_choices[0]
+        ebeam.probeCurrent.value = 1e-9
         time.sleep(6)  # Wait for value refresh
-        self.assertAlmostEqual(pc_choices[0], ebeam.probeCurrent.value)
+        self.assertAlmostEqual(1e-9, ebeam.probeCurrent.value)
 
         # Reset
         ebeam.probeCurrent.value = orig_probe_current

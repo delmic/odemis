@@ -28,12 +28,13 @@ import numpy
 
 import odemis
 from odemis import model
-from odemis.acq import stream
+from odemis.acq import stream, acqmng
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
     WEAVER_MEAN, acquireTiledArea, FocusingMethod
 from odemis.acq.stitching._tiledacq import (TiledAcquisitionTask, get_fov, get_zstack_levels, clip_tiling_bbox_to_range,
                                             get_stream_based_bbox, get_tiled_bboxes, get_fov_based_bbox)
+from odemis.acq.stream import FluoStream
 from odemis.util import testing, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
@@ -490,26 +491,36 @@ class CRYOSECOMTestCase(unittest.TestCase):
                                               zlevels=[1, 2, 3])
         tiled_acq_task._nx = 7
         tiled_acq_task._ny = 7
-        # observed time duration during stage movement between tiles
-        min_stage_time = tiled_acq_task._nx * tiled_acq_task._ny * 0.3
-        # observed time duration during tile acquisition
-        min_ties_acq = tiled_acq_task._nx * tiled_acq_task._ny * len(tiled_acq_task._zlevels)
-        min_total_time = min_stage_time + min_ties_acq
+        total_tiles = tiled_acq_task._nx * tiled_acq_task._ny
+        # Observed time duration during stage movement between tiles
+        min_stage_time = total_tiles * 0.3
+        # Calculated time duration during tile acquisition
+        zlevels_dict = {s: tiled_acq_task._zlevels for s in tiled_acq_task._streams
+                        if isinstance(s, (FluoStream))}
+        acq_time = acqmng.estimateZStackAcquisitionTime(tiled_acq_task._streams, zlevels_dict) * total_tiles
+        min_total_time = min_stage_time + acq_time
         # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
-        self.assertTrue(min_total_time <= tiled_acq_task.estimateTime() <= 1.30 * min_total_time)
+        estimated_time = tiled_acq_task.estimateTime()
+        self.assertLessEqual(min_total_time, estimated_time)
+        self.assertLessEqual(estimated_time, 1.30 * min_total_time)
         # Test with one z level
         tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area=area, overlap=overlap,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
                                               zlevels=[1])
         tiled_acq_task._nx = 10
         tiled_acq_task._ny = 10
-        # observed time duration during stage movement between tiles
-        min_stage_time = tiled_acq_task._nx * tiled_acq_task._ny * 0.3
-        # observed time duration during tile acquisition
-        min_ties_acq = tiled_acq_task._nx * tiled_acq_task._ny * len(tiled_acq_task._zlevels)
-        min_total_time = min_stage_time + min_ties_acq
+        total_tiles = tiled_acq_task._nx * tiled_acq_task._ny
+        # Observed time duration during stage movement between tiles
+        min_stage_time = total_tiles * 0.3
+        # Calculated time duration during tile acquisition
+        zlevels_dict = {s: tiled_acq_task._zlevels for s in tiled_acq_task._streams
+                        if isinstance(s, (FluoStream))}
+        acq_time = acqmng.estimateZStackAcquisitionTime(tiled_acq_task._streams, zlevels_dict) * total_tiles
+        min_total_time = min_stage_time + acq_time
         # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
-        self.assertTrue(min_total_time <= tiled_acq_task.estimateTime() <= 1.30 * min_total_time)
+        estimated_time = tiled_acq_task.estimateTime()
+        self.assertLessEqual(min_total_time, estimated_time)
+        self.assertLessEqual(estimated_time, 1.30 * min_total_time)
 
     def _position_listener(self, pos):
         self._focuser_pos.append(pos)

@@ -36,7 +36,7 @@ import time
 from builtins import str
 from concurrent.futures._base import CancelledError
 from functools import partial
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import wx
 
@@ -44,7 +44,7 @@ from odemis import dataio, model
 from odemis.acq import align, fastem, stream
 from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import FastEMCalibration, estimate_acquisition_time
+from odemis.acq.fastem import FastEMCalibration, ROASkipped, estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
@@ -52,7 +52,11 @@ from odemis.gui import (
     FG_COLOUR_BLIND_PINK,
     FG_COLOUR_DIS,
     FG_COLOUR_EDIT,
+    FG_COLOUR_ERROR,
+    FG_COLOUR_WARNING,
+    img,
 )
+from odemis.gui.comp import buttons
 from odemis.gui.comp.fastem_roa import FastEMROA
 from odemis.gui.comp.fastem_user_settings_panel import (
     DWELL_TIME_ACQUISITION,
@@ -539,6 +543,47 @@ class FastEMAcquiController(object):
             EVT_TREE_NODE_CHANGE, self._on_project_tree_node_change
         )
 
+        # Setup the controls
+        self.acq_panel = SettingsPanel(
+            self._tab_panel.pnl_acq, size=(400, 140)
+        )
+        autostig_lbl, self.autostig_period = self.acq_panel.add_int_field(
+            "Autostigmation period", value=0,
+            pos_col=2, span=(1, 1), conf={"min_val": 0, "max_val": 1000}
+        )
+        autostig_lbl.SetToolTip(
+            "Period for which to run autostigmation, if the value is 5 it should run for "
+            "ROAs with index 0, 5, 10, etc."
+        )
+        autofocus_lbl, self.autofocus_period = self.acq_panel.add_int_field(
+            "Autofocus period", value=0,
+            pos_col=2, span=(1, 1), conf={"min_val": 0, "max_val": 1000}
+        )
+        autofocus_lbl.SetToolTip(
+            "Period for which to run autofocus, if the value is 5 it should run for "
+            "ROAs with index 0, 5, 10, etc."
+        )
+        chk_beam_blank_off_lbl, self.chk_beam_blank_off = self.acq_panel.add_checkbox_control(
+            "Do not blank beam in between fields", value=False, pos_col=2, span=(1, 1)
+        )
+        chk_beam_blank_off_lbl.SetToolTip(
+            "Reduces the acquisition time by keeping the e-beam active between fields instead "
+            "of blanking it."
+        )
+        chk_stop_acq_on_failure_lbl, self.chk_stop_acq_on_failure = self.acq_panel.add_checkbox_control(
+            "Stop acquisition on failure", value=True, pos_col=2, span=(1, 1)
+        )
+        chk_stop_acq_on_failure_lbl.SetToolTip(
+            "Stop the entire acquisition if a ROA acquisition fails. If unselected, skip the failed ROA "
+            "and continue the acquisition for subsequent ROAs."
+        )
+        chk_ebeam_off_lbl, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
+            "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
+        )
+        chk_ebeam_off_lbl.SetToolTip(
+            "Automatically turned off the e-beam after acquisition is complete."
+        )
+
         # ROA count
         self.roa_count = 0
         self._tab_panel.txt_num_roas.SetValue("0")
@@ -555,8 +600,6 @@ class FastEMAcquiController(object):
         self.txt_num_roas = self._tab_panel.txt_num_roas
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
-        self.chk_ebeam_off = self._tab_panel.chk_ebeam_off
-        self.chk_beam_blank_off = self._tab_panel.chk_beam_blank_off
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
         self.save_full_cells = model.BooleanVA(
@@ -576,7 +619,7 @@ class FastEMAcquiController(object):
         self._roa_future_connector = []
         self._on_roa_acquisition_done_sub_callback = {}
         self._set_next_project_dwell_time_sub_callback = {}
-        self._open_folder_sub_callback = {}
+        self._status_text_callback = {}
 
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
@@ -802,7 +845,7 @@ class FastEMAcquiController(object):
         self._roa_future_connector.clear()
         self._set_next_project_dwell_time_sub_callback.clear()
         self._on_roa_acquisition_done_sub_callback.clear()
-        self._open_folder_sub_callback.clear()
+        self._status_text_callback.clear()
         self._main_data_model.is_acquiring.value = False
 
         if text is not None:
@@ -849,20 +892,19 @@ class FastEMAcquiController(object):
         # Read the period with which to run autostigmation and autofocus, if the value is 5 it should run for
         # ROAs with index 0, 5, 10, etc., if the value is 0 it should never run autostigmation
         acqui_conf = AcquisitionConfig()
-        autostig_period = (
-            math.inf if acqui_conf.autostig_period == 0 else acqui_conf.autostig_period
-        )
-        autofocus_period = (
-            math.inf
-            if acqui_conf.autofocus_period == 0
-            else acqui_conf.autofocus_period
-        )
+        autostig_period = self.autostig_period.GetValue()
+        if autostig_period == 0:
+            autostig_period = math.inf
+        autofocus_period = self.autofocus_period.GetValue()
+        if autofocus_period == 0:
+            autofocus_period = math.inf
         logging.debug(
             f"Will run autostigmation every {autostig_period} sections "
             f"and autofocus every {autofocus_period} sections."
         )
         username = self._main_data_model.current_user.value
         blank_beam = not self.chk_beam_blank_off.IsChecked()
+        stop_acq_on_failure = self.chk_stop_acq_on_failure.IsChecked()
 
         total_t = 0
         project_names = list(self.project_roas.keys())
@@ -879,6 +921,9 @@ class FastEMAcquiController(object):
             for idx, roa_window in enumerate(roas):
                 roa = roa_window[0]
                 window = roa_window[1]
+                window.status_text.SetForegroundColour(FG_COLOUR_DIS)
+                window.status_text.SetLabelText("Open")
+                window.Layout()
                 pre_calib = pre_calibrations.copy()
                 if idx == 0:
                     pass
@@ -907,6 +952,7 @@ class FastEMAcquiController(object):
                     settings_obs=self._main_data_model.settings_obs,
                     spot_grid_thresh=acqui_conf.spot_grid_threshold,
                     blank_beam=blank_beam,
+                    stop_acq_on_failure=stop_acq_on_failure,
                     acq_dwell_time=self.main_tab_data.project_settings_data.value[
                         project_name
                     ][DWELL_TIME_ACQUISITION],
@@ -1041,23 +1087,38 @@ class FastEMAcquiController(object):
                 self.asm_service_path,
             )
 
+    @call_in_wx_main
     def on_roa_acquisition_done(self, future, path, window):
         """
-        Callback called when a ROA acquisition is finished (either successfully or
-        failed)
+        Callback called when a ROA acquisition is finished (either successfully,
+        cancelled or failed)
         """
+        def update_status(text: str, color: str, bind_callback: Optional[Callable] = None):
+            window.status_text.SetForegroundColour(color)
+            window.status_text.SetLabelText(text)
+            if window in self._status_text_callback:
+                old_callback = self._status_text_callback.pop(window)
+                window.status_text.Unbind(wx.EVT_LEFT_UP, old_callback)
+            if bind_callback:
+                self._status_text_callback[window] = bind_callback
+                window.status_text.Bind(wx.EVT_LEFT_UP, bind_callback)
+
         try:
-            future.result()
-            window.open_text.SetForegroundColour(FG_COLOUR_EDIT)
-            open_folder_sub_callback = partial(self._open_folder, path=path)
-            self._open_folder_sub_callback[window] = open_folder_sub_callback
-            window.open_text.Bind(wx.EVT_LEFT_UP, open_folder_sub_callback)
+            _, ex = future.result()
+            if isinstance(ex, ROASkipped):
+                update_status("Skipped", FG_COLOUR_ERROR)
+            elif ex is None:
+                update_status("Open", FG_COLOUR_EDIT, partial(self._open_folder, path=path))
+            # If any other exception is returned and not raised it is still considered as a failure
+            else:
+                update_status("Failed", FG_COLOUR_ERROR)
+        except CancelledError:
+            update_status("Cancelled", FG_COLOUR_WARNING)
         except Exception:
-            window.open_text.SetForegroundColour(FG_COLOUR_DIS)
-            if window in self._open_folder_sub_callback:
-                open_folder_sub_callback = self._open_folder_sub_callback[window]
-                window.open_text.Unbind(wx.EVT_LEFT_UP, open_folder_sub_callback)
-                del self._open_folder_sub_callback[window]
+            update_status("Failed", FG_COLOUR_ERROR)
+        finally:
+            window.Layout()
+            window.Refresh()
 
     def on_cancel(self, evt):
         """
@@ -1127,7 +1188,8 @@ class FastEMCalibrationController:
         self.calibration_panel = SettingsPanel(
             self._tab_panel.pnl_calib, size=(400, 80)
         )
-        self._calib_1_lbl, self._calib_1 = self.calibration_panel.add_checkbox_control(
+
+        self._calib_1_lbl, self._calib_1_vis_btn, self._calib_1 = self.add_calibration_control(
             CALIBRATION_1, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_1_lbl.SetToolTip(
@@ -1139,7 +1201,8 @@ class FastEMCalibrationController:
         )
         self._calib_1.SetName(CALIBRATION_1)
         self._calib_1_lbl.SetForegroundColour(FG_COLOUR_BLIND_BLUE)
-        self._calib_2_lbl, self._calib_2 = self.calibration_panel.add_checkbox_control(
+
+        self._calib_2_lbl, self._calib_2_vis_btn, self._calib_2 = self.add_calibration_control(
             CALIBRATION_2, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_2_lbl.SetToolTip(
@@ -1151,7 +1214,8 @@ class FastEMCalibrationController:
         )
         self._calib_2.SetName(CALIBRATION_2)
         self._calib_2_lbl.SetForegroundColour(FG_COLOUR_BLIND_ORANGE)
-        self._calib_3_lbl, self._calib_3 = self.calibration_panel.add_checkbox_control(
+
+        self._calib_3_lbl, self._calib_3_vis_btn, self._calib_3 = self.add_calibration_control(
             CALIBRATION_3, value=False, pos_col=2, span=(1, 1)
         )
         self._calib_3_lbl.SetToolTip(
@@ -1163,6 +1227,10 @@ class FastEMCalibrationController:
         )
         self._calib_3.SetName(CALIBRATION_3)
         self._calib_3_lbl.SetForegroundColour(FG_COLOUR_BLIND_PINK)
+
+        self._calib_1_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
+        self._calib_2_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
+        self._calib_3_vis_btn.Bind(wx.EVT_BUTTON, self._on_visibility_btn)
 
         self.btn_calib = self._tab_panel.btn_calib
         self.btn_cancel_calib = self._tab_panel.btn_cancel_calib
@@ -1196,6 +1264,105 @@ class FastEMCalibrationController:
         self._main_data_model.is_acquiring.subscribe(self._on_is_acquiring)
         # enable/disable calibration buttons if calibrating
         self._tab_data_model.is_calibrating.subscribe(self._on_is_calibrating)
+
+    def _on_visibility_btn(self, evt):
+        """Toggle the visibility of the calibration region based on the button state."""
+        current_sample = self._main_data_model.current_sample.value
+        focussed_view = self._main_tab_data.focussedView.value
+        if not (current_sample and focussed_view):
+            return
+
+        scintillator_num = int(focussed_view.name.value)
+
+        # Determine which calibration button was pressed
+        btn = evt.GetEventObject()
+        if btn == self._calib_1_vis_btn:
+            calibration_key = CALIBRATION_1
+        elif btn == self._calib_2_vis_btn:
+            calibration_key = CALIBRATION_2
+        elif btn == self._calib_3_vis_btn:
+            calibration_key = CALIBRATION_3
+
+        # Toggle visibility based on button state
+        is_visible = btn.GetToggle()
+        self._show_calibration_region(is_visible, scintillator_num, calibration_key)
+
+    def add_calibration_control(self, label_text, value=True, pos_col=1, span=wx.DefaultSpan):
+        """ Add a calibration control to the calibration settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (bool) Value to display (True == checked)
+        :param pos_col: (int) The column index in the grid layout where the checkbox will be placed.
+                        For example:
+                        - `pos_col=0` positions the checkbox in the first column.
+                        - `pos_col=1` positions it in the second column.
+        :param span: (tuple) the row and column spanning attributes of items in a GridBagSizer.
+        :returns: (wx.StaticText, ImageToggleButton, wx.CheckBox)
+            A tuple containing the label, visibility button and checkbox
+        """
+        self.calibration_panel.clear_default_message()
+        self.calibration_panel.Layout()
+        self.calibration_panel.num_rows += 1
+
+        lbl_ctrl, visibility_btn = self._add_calibration_label_with_toggle(label_text)
+        value_ctrl = wx.CheckBox(self.calibration_panel, wx.ID_ANY, style=wx.ALIGN_RIGHT | wx.NO_BORDER)
+        self.calibration_panel.gb_sizer.Add(value_ctrl, (self.calibration_panel.num_rows, pos_col), span=span,
+                                            flag=wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        value_ctrl.SetValue(value)
+
+        return lbl_ctrl, visibility_btn, value_ctrl
+
+    def _add_calibration_label_with_toggle(self, label_text):
+        """
+        Add a label with a toggle button to the calibration settings panel.
+        :param label_text: The text for the label.
+        :return: A tuple containing the label and the toggle button.
+        """
+
+        self.calibration_panel.clear_default_message()
+
+        # Create a horizontal sizer to hold the icon and text
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        visibility_btn = buttons.ImageToggleButton(self.calibration_panel,
+                                                   bitmap=img.getBitmap("icon/ico_eye_closed.png"))
+        visibility_btn.bmpHover = img.getBitmap("icon/ico_eye_closed_h.png")
+        visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
+        visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
+        visibility_btn.SetToolTip("Toggle calibration region visibility")
+        visibility_btn.SetValue(True)  # by default show calibration regions
+        h_sizer.Add(visibility_btn, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=3)
+
+        # Create label
+        lbl_ctrl = wx.StaticText(self.calibration_panel, -1, str(label_text))
+        h_sizer.Add(lbl_ctrl, flag=wx.ALIGN_CENTER_VERTICAL)
+
+        # Add combined sizer to grid sizer
+        self.calibration_panel.gb_sizer.Add(h_sizer,
+                                            (self.calibration_panel.num_rows, 0),
+                                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+
+        return lbl_ctrl, visibility_btn
+
+    def _show_calibration_region(self, is_visible, scint_num, calibration_key):
+        """
+        Show the calibration region for a given scintillator and calibration key.
+        :param is_visible: (bool) Show or hide the calibration region.
+        :param scint_num: (int) The scintillator number.
+        :param calibration_key: (str) The calibration key.
+        """
+        current_sample = self._main_data_model.current_sample.value
+        if not current_sample:
+            return
+
+        calibration = current_sample.scintillators[scint_num].calibrations[calibration_key]
+        calibration.shape.active.value = is_visible
+        if is_visible:
+            calibration.shape.cnvs.add_world_overlay(calibration.shape)
+        else:
+            calibration.shape.cnvs.remove_world_overlay(calibration.shape)
+
+        calibration.shape.cnvs.request_drawing_update()
 
     def _on_focussed_view(self, view):
         """
@@ -1342,14 +1509,26 @@ class FastEMCalibrationController:
             calib_1_done, calib_2_done, _ = self.get_calibration_status(focussed_view)
             if self._calib_1.IsChecked():
                 calib_names.append(CALIBRATION_1)
+                if not self._calib_1_vis_btn.GetValue():
+                    # show the calibration region again when the user starts the calibration
+                    self._show_calibration_region(True, scintillator_num, CALIBRATION_1)
+                    self._calib_1_vis_btn.SetValue(True)
             if self._calib_2.IsChecked() and (
                 CALIBRATION_1 in calib_names or calib_1_done
             ):
                 calib_names.append(CALIBRATION_2)
+                if not self._calib_2_vis_btn.GetValue():
+                    # show the calibration region again when the user starts the calibration
+                    self._show_calibration_region(True, scintillator_num, CALIBRATION_2)
+                    self._calib_2_vis_btn.SetValue(True)
             if self._calib_3.IsChecked() and (
                 CALIBRATION_2 in calib_names or calib_2_done
             ):
                 calib_names.append(CALIBRATION_3)
+                if not self._calib_3_vis_btn.GetValue():
+                    # show the calibration region again when the user starts the calibration
+                    self._show_calibration_region(True, scintillator_num, CALIBRATION_3)
+                    self._calib_3_vis_btn.SetValue(True)
 
             for calib_name in calib_names:
                 calibration = current_sample.scintillators[

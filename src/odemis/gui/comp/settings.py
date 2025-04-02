@@ -264,34 +264,44 @@ class SettingsPanel(wx.Panel):
         return self._add_slider(UnitFloatSlider, label_text, value, conf)
 
     @control_bookkeeper
-    def add_int_field(self, label_text, value=None, conf=None):
+    def add_int_field(self, label_text, value=None, pos_col=1, span=wx.DefaultSpan, conf=None):
         """ Add an integer value field to the settings panel
 
         :param label_text: (str) Label text to display
         :param value: (None or int) Value to display
         :param conf: (None or dict) Dictionary containing parameters for the control
+        :param pos_col: (int) The column index in the grid layout where the int field will be placed.
+                        For example:
+                        - `pos_col=0` positions the int field in the first column.
+                        - `pos_col=1` positions it in the second column.
+        :param span: (tuple) the row and column spanning attributes of items in a GridBagSizer.
 
         """
 
-        return self._add_num_field(UnitIntegerCtrl, label_text, value, conf)
+        return self._add_num_field(UnitIntegerCtrl, label_text, value, pos_col, span, conf)
 
     @control_bookkeeper
-    def add_float_field(self, label_text, value=None, conf=None):
+    def add_float_field(self, label_text, value=None, pos_col=1, span=wx.DefaultSpan, conf=None):
         """ Add a float value field to the settings panel
 
         :param label_text: (str) Label text to display
         :param value: (None or float) Value to display
         :param conf: (None or dict) Dictionary containing parameters for the control
+        :param pos_col: (int) The column index in the grid layout where the float field will be placed.
+                        For example:
+                        - `pos_col=0` positions the float field in the first column.
+                        - `pos_col=1` positions it in the second column.
+        :param span: (tuple) the row and column spanning attributes of items in a GridBagSizer.
 
         """
 
-        return self._add_num_field(UnitFloatCtrl, label_text, value, conf)
+        return self._add_num_field(UnitFloatCtrl, label_text, value, pos_col, span, conf)
 
-    def _add_num_field(self, klass, label_text, value, conf):
+    def _add_num_field(self, klass, label_text, value, pos_col, span, conf):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self, value=value, style=wx.NO_BORDER, **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, pos_col), span=span,
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
@@ -408,8 +418,8 @@ class SettingsPanel(wx.Panel):
         button_sizer.Add(delete_button_ctrl, 0, wx.ALL)
 
         control_sizer = wx.BoxSizer(wx.VERTICAL)
-        control_sizer.Add(value_ctrl, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
-        control_sizer.Add(button_sizer, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
+        control_sizer.Add(value_ctrl, 0, wx.ALL | wx.EXPAND, 5)
+        control_sizer.Add(button_sizer, 0, wx.ALL | wx.EXPAND, 5)
 
         self.gb_sizer.Add(control_sizer, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND)

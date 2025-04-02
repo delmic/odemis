@@ -175,7 +175,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         self._current_scan_area = None  # l,t,r,b (int)
 
         # Start threading event for live update overlay
-        self._live_update_period = 2
+        self._live_update_period = 2  # s
         self._im_needs_recompute = threading.Event()
         self._init_thread(self._live_update_period)
 
@@ -279,11 +279,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
             shape = (len(pol_pos), rep[1], rep[0])
             # estimate acq time for leeches is based on two fastest axis
             if self._integrationTime:
-                # get the exposure time directly from the hardware (e.g. hardware rounds value) to calc counts
-                integration_count = int(math.ceil(self._integrationTime.value / self._ccd.exposureTime.value))
-                if integration_count != self._integrationCounts.value:
-                    logging.debug("Integration count of %d, does not match integration count of %d as expected",
-                                  integration_count, self._integrationCounts.value)
+                integration_count = self._integrationCounts.value
                 if integration_count > 1:
                     shape = (len(pol_pos), rep[1], rep[0], integration_count)  # overwrite shape
 
@@ -600,8 +596,8 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
-            logging.warning("Dropping data because it started %g s too early",
-                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            logging.warning("Dropping data (of stream %d) because it started %g s too early",
+                            n, self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
             # TODO: As the detector is synchronised, we need to restart it.
             # Or maybe not, as the typical reason it arrived early is that the
             # detector was already running, in which case they haven't
@@ -1086,7 +1082,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._sccd = s1
         self._ccd = s1._detector
         self._ccd_df = s1._dataflow
-        self._trigger = self._ccd.softwareTrigger
+        self._trigger = self._emitter.startScan  # to acquire a CCD image every time the SEM starts a new scan
         self._ccd_idx = len(self._streams) - 1  # optical detector is always last in streams
 
     def _supports_hw_sync(self):
@@ -1685,11 +1681,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # retrigger, or unsynchronise/resynchronise just before the end of
             # last scan).
 
-            # prepare detector
-            self._ccd_df.synchronizedOn(self._trigger)
-            # subscribe to last entry in _subscribers (optical detector)
-            self._ccd_df.subscribe(self._subscribers[self._ccd_idx])
-
             # Instead of subscribing/unsubscribing to the SEM for each pixel,
             # we've tried to keep subscribed, but request to be unsynchronised/
             # synchronised. However, synchronizing doesn't cancel the current
@@ -1730,6 +1721,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Scanning resolution is %s and scale %s",
                           self._emitter.resolution.value,
                           self._emitter.scale.value)
+
+            # Prepare CCD: acquire one frame every time the SEM starts scanning.
+            # The SEM may scan multiple times for each CCD frame.
+            self._ccd_df.synchronizedOn(self._trigger)
+            # Get the CCD ready to acquire
+            self._ccd_df.subscribe(self._subscribers[self._ccd_idx])
 
             last_ccd_update = 0
             start_t = time.time()
@@ -1933,27 +1930,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
             if self._acq_state == CANCELLED:
                 raise CancelledError()
 
-            # subscribe to _subscribers
+            # Start "all" the scanners (typically there is just one). The last one is the CCD, which
+            # is already subscribed, but waiting for the startScan event.
+            # As soon as the e-beam starts scanning (which can take a couple of ms), the
+            # startScan event is sent, which triggers the acquisition of one CCD frame.
             for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                 s._dataflow.subscribe(sub)
-            # TODO: in theory (aka in a perfect world), the ebeam would immediately
-            # be at the requested position after the subscription starts. However,
-            # that's not exactly the case due to:
-            # * physics limits the speed of voltage change in the ebeam column,
-            #   so it takes the "settle time" before the beam is at the right
-            #   place (in the order of 10 µs).
-            # * the (odemis) driver is asynchronous, and between the moment it
-            #   receives the request to start and the actual moment it asks the
-            #   hardware to change voltages, several ms might have passed.
-            # One thing that would help is to not park the e-beam between each
-            # spot. This way, the ebeam would reach the position much quicker,
-            # and if it's not yet at the right place, it's still not that far.
-            # In the meantime, waiting a tiny bit ensures the CCD receives the
-            # right data.
-            time.sleep(5e-3)  # give more chances spot has been already processed
-
-            # send event to detector to acquire one image
-            self._trigger.notify()
 
             # wait for detector to acquire image
             timedout = self._waitForImage(img_time)
@@ -2018,6 +2000,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 leech_nimg[li] -= 1
                 if leech_nimg[li] == 0:
                     try:
+                        # Temporarily switch the CCD to a different event trigger, so that it
+                        # doesn't get triggered while the leech is running (because it could use the
+                        # e-beam, which would send a startScan event)
+                        self._ccd_df.synchronizedOn(self._ccd.softwareTrigger)
+
                         nimg = l.next([d[-1] for d in self._acq_data])
                         logging.debug("Ran leech %s successfully. Will run next leech after %s acquisitions.", l, nimg)
                     except Exception:
@@ -2026,6 +2013,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     leech_nimg[li] = nimg
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
+
+                    # re-use the real trigger
+                    self._ccd_df.synchronizedOn(self._trigger)
 
             # Since we reached this point means everything went fine, so
             # no need to retry
@@ -2055,12 +2045,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
           CancelledError() if cancelled
           Exceptions if error
         """
-        # The idea of the acquiring with a scan stage:
+        # The main steps of an acquisition with a scan stage:
         #  (Note we expect the scan stage to be about at the center of its range)
         #  * Move the ebeam to 0, 0 (center), for the best image quality
-        #  * Start CCD acquisition with software synchronisation
+        #  * Start CCD acquisition with synchronisation on e-beam startScan
         #  * Move to next position with the stage and wait for it
-        #  * Start SED acquisition and trigger CCD
+        #  * Start SED acquisition -> startScan event triggers CCD
         #  * Wait for the CCD/SED data
         #  * Repeat until all the points have been scanned
         #  * Move back the stage to center in case of an 'independent' stage
@@ -2170,11 +2160,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
+                    # Start e-beam scan. As soon as it really starts, a startScan event is sent, which
+                    # triggers the CCD acquisition.
                     for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                         s._dataflow.subscribe(sub)
-
-                    time.sleep(5e-3)  # give more chances spot has been already processed
-                    self._trigger.notify()
 
                     # wait for detector to acquire image
                     timedout = self._waitForImage(px_time)
@@ -2261,6 +2250,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                 sstage.moveAbsSync(orig_spos)
                                 prev_spos.update(orig_spos)
                             try:
+                                # Temporarily switch the CCD to a different event trigger, so that it
+                                # doesn't get triggered while the leech is running (because it could use the
+                                # e-beam, which would send a startScan event)
+                                self._ccd_df.synchronizedOn(self._ccd.softwareTrigger)
+
                                 np = l.next([d[-1] for d in self._acq_data])
                             except Exception:
                                 logging.exception("Leech %s failed, will retry next pixel", l)
@@ -2268,6 +2262,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             leech_np[li] = np
                             if self._acq_state == CANCELLED:
                                 raise CancelledError()
+
+                            # re-use the real trigger
+                            self._ccd_df.synchronizedOn(self._trigger)
 
                     for i, das in enumerate(self._acq_data):
                         self._assembleLiveData(i, das[-1], px_idx, cor_pos, rep, 0)
@@ -2603,8 +2600,8 @@ class SEMMDStream(MultipleDetectorStream):
                 for i, s in enumerate(self._streams):
                     timeout = max(5.0, max_end_t - time.time())
                     if not self._acq_complete[i].wait(timeout):
-                        raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
-                                           % (self._emitter.translation.value, time.time() - max_end_t))
+                        raise TimeoutError("Acquisition of repetition stream at pos %s timed out after %g s"
+                                           % (self._emitter.translation.value, time.time() - start))
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
                     s._dataflow.unsubscribe(self._subscribers[i])
@@ -2829,10 +2826,11 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             raise ValueError("Second stream detector needs to have 'time-correlator' " +
                              "as its role, not %s." % streams[1]._detector.role)
 
-        super(SEMTemporalMDStream, self).__init__(name, streams)
+        super().__init__(name, streams)
 
         self._se_stream = streams[0]
         self._tc_stream = streams[1]
+        self._trigger = self._emitter.startScan  # to acquire a CCD image every time the SEM starts a new scan
 
     def _estimateRawAcquisitionTime(self):
         res = numpy.prod(self._tc_stream.repetition.value)
@@ -2866,6 +2864,22 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         self._tc_stream._detector.dwellTime.value = dwell_time
         self._emitter.dwellTime.value = dwell_time
 
+        # Order matters (a bit). At least, on the Tescan, only the "external" waits extra time to ensure
+        # a stable e-beam condition, so it should be done last.
+        if model.hasVA(self._emitter, "blanker") and self._emitter.blanker.value is None:
+            # When the e-beam is set to automatic blanker mode, it would switch on/off for every
+            # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
+            # "blanker" off while the acquisition is running.
+            self._orig_hw_values[self._emitter.blanker] = self._emitter.blanker.value
+            self._emitter.blanker.value = False
+
+        if model.hasVA(self._emitter, "external") and self._emitter.external.value is None:
+            # When the e-beam is set to automatic external mode, it would switch on/off for every
+            # block of acquisition. This is not efficient, and can disrupt the e-beam. So we force
+            # "external" while the acquisition is running.
+            self._orig_hw_values[self._emitter.external] = self._emitter.external.value
+            self._emitter.external.value = True
+
         return px_time, ninteg
 
     def _runAcquisition(self, future) -> Tuple[List[model.DataArray], Optional[Exception]]:
@@ -2887,13 +2901,18 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         se_data = []
         tc_data = []
         spot_pos = self._getSpotPositions()
+        tcdf = self._tc_stream._dataflow
 
-        # Dwell times can be modified to account for drift correction, save original values to
-        # restore at the end of the acquisition
-        emitter_dt = self._emitter.dwellTime.value
-        tc_dt = self._tc_stream._detector.dwellTime.value
         try:
             img_time, ninteg = self._adjustHardwareSettings()
+
+            # Prepare the time-correlator: acquire one frame every time the SEM starts scanning.
+            # The SEM may scan multiple times for each CCD frame.
+            tcdf.synchronizedOn(self._trigger)
+            # Get the time-correlator ready to acquire
+            tcdf.subscribe(self._subscribers[-1])
+
+            start_t = time.time()
 
             for px_idx in numpy.ndindex(*self.repetition.value[::-1]):
                 x, y = tuple(spot_pos[px_idx])
@@ -2918,15 +2937,23 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                     logging.debug("Memory used = %d bytes", udriver.readMemoryUsage())
                     # Perform drift correction
                     if self._dc_estimator:
-                        drift_est.acquire()
-                        dc_vect = drift_est.estimate()
-                        tot_dc_vect[0] += dc_vect[0]
-                        tot_dc_vect[1] += dc_vect[1]
+                        try:
+                            # Temporarily switch the detector to a different event trigger, so that it
+                            # doesn't get triggered while the drift estimator is running (because it uses the
+                            # e-beam, which sends a startScan event)
+                            tcdf.synchronizedOn(self._tc_stream._detector.softwareTrigger)
+                            drift_est.acquire()
+                            dc_vect = drift_est.estimate()
+                            tot_dc_vect[0] += dc_vect[0]
+                            tot_dc_vect[1] += dc_vect[1]
+                        except Exception:
+                            logging.exception("Drift correction failed, will retry next pixel")
+                        tcdf.synchronizedOn(self._trigger)
+
                 n += 1
                 logging.info("Acquired %d out of %d pixels", n, numpy.prod(self.repetition.value))
 
-                # TODO: use _integrateImages(), once the function is per image
-
+                # TODO: use ImageIntegrator for the image integration
                 # Sum up the partial data to get the full output for the pixel
                 dtype = tc_px_data[0].dtype
                 idt = numpy.iinfo(dtype)
@@ -2940,6 +2967,8 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 pxsum = model.DataArray(pxsum.astype(dtype), tc_md)
                 tc_data.append(pxsum)
 
+                # TODO: this is actually not really correct as the SEM data is "normalized", so the
+                # final data should be divided by ninteg. This is done correctly in ImageIntegrator.
                 pxsum = numpy.sum(se_px_data, 0)
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
                 se_md = se_px_data[0].metadata.copy()
@@ -2952,6 +2981,11 @@ class SEMTemporalMDStream(MultipleDetectorStream):
 
                 # Live update the setting stream with the new data
                 self._tc_stream._onNewData(self._tc_stream._dataflow, tc_data[-1])
+
+            dur = time.time() - start_t
+            logging.info("Acquisition completed in %g s -> %g s/frame", dur, dur / n)
+            tcdf.unsubscribe(self._subscribers[-1])
+            tcdf.synchronizedOn(None)
 
             self._onCompletedData(0, se_data)
             self._onCompletedData(1, tc_data)
@@ -2970,16 +3004,20 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             # TODO: once live data is supported, return the partial data
             raise
         finally:
+            for s, sub in zip(self._streams, self._subscribers):
+                s._dataflow.unsubscribe(sub)
+            tcdf.synchronizedOn(None)  # In case of exception
+
+            for s in self._streams:
+                s._unlinkHwVAs()
+            self._restoreHardwareSettings()
+
             logging.debug("TC acquisition finished")
             self._acq_done.set()
-            # Reset hardware settings (dwell times might have been reduced due
-            # to subpixel drift correction)
-            self._tc_stream._detector.dwellTime.value = tc_dt
-            self._emitter.dwellTime.value = emitter_dt
 
         return self.raw, None
 
-    def _acquireImage(self, x, y, img_time):
+    def _acquireImage(self, x: float, y: float, img_time: float) -> Tuple[model.DataArray, model.DataArray]:
         try:
             for ce in self._acq_complete:
                 ce.clear()
@@ -2992,21 +3030,21 @@ class SEMTemporalMDStream(MultipleDetectorStream):
 
             self._acq_min_date = time.time()
 
-            # Get data
-            for s, sub in zip(self._streams, self._subscribers):
+            # Start "all" the detectors but the time-correlator => start the e-beam
+            for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                 s._dataflow.subscribe(sub)
 
             # Wait for detector to acquire image
             for i, s in enumerate(self._streams):
                 timeout = 2.5 * img_time + 3
                 if not self._acq_complete[i].wait(timeout):
-                    raise TimeoutError()
+                    raise TimeoutError(f"Timeout waiting for stream {i}")
             if self._acq_state == CANCELLED:
                 raise CancelledError()
             tc_data, se_data = self._acq_data[-1][-1], self._acq_data[0][-1]
             return tc_data, se_data
         finally:
-            for s, sub in zip(self._streams, self._subscribers):
+            for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                 s._dataflow.unsubscribe(sub)
 
     def _onCompletedData(self, n, raw_das):
