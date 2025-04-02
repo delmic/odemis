@@ -89,6 +89,43 @@ class FIBFMCorrelationData:
         self.fib_projected_pois = []
         self.fib_projected_fiducials = []
 
+    def to_dict(self) -> Dict[str, List[Dict[str, List]]]:
+        """
+        Convert the FIBFMCorrelationData to a dictionary.
+        :return: The dictionary representation of the FIBFMCorrelationData.
+        """
+        data = {
+            "fm_fiducials": [fid.to_dict() for fid in self.fm_fiducials],
+            "fm_pois": [poi.to_dict() for poi in self.fm_pois],
+            "fib_fiducials": [fid.to_dict() for fid in self.fib_fiducials],
+            "fib_projected_pois": [poi.to_dict() for poi in self.fib_projected_pois],
+            "fib_projected_fiducials": [fid.to_dict() for fid in self.fib_projected_fiducials],
+            "fib_surface_fiducial": self.fib_surface_fiducial.to_dict() if self.fib_surface_fiducial else None,
+            "correlation_result": self.correlation_result,
+            "fm_stream_key": self.fm_stream_key,
+            "fib_stream_key": self.fib_stream_key,
+        }
+        return data
+
+    @staticmethod
+    def from_dict(data: Dict[str, List[Dict[str, List]]]) -> "FIBFMCorrelationData":
+        """
+        Convert the dictionary to FIBFMCorrelationData.
+        :param data: The dictionary representation of the FIBFMCorrelationData.
+        :return: The FIBFMCorrelationData object.
+        """
+        correlation_data = FIBFMCorrelationData()
+        correlation_data.fm_fiducials = [Target.from_dict(fid) for fid in data["fm_fiducials"]]
+        correlation_data.fm_pois = [Target.from_dict(poi) for poi in data["fm_pois"]]
+        correlation_data.fib_fiducials = [Target.from_dict(fid) for fid in data["fib_fiducials"]]
+        correlation_data.fib_projected_pois = [Target.from_dict(poi) for poi in data["fib_projected_pois"]]
+        correlation_data.fib_projected_fiducials = [Target.from_dict(fid) for fid in data["fib_projected_fiducials"]]
+        correlation_data.fib_surface_fiducial = Target.from_dict(data["fib_surface_fiducial"]) if data["fib_surface_fiducial"] else None
+        correlation_data.correlation_result = data["correlation_result"]
+        correlation_data.fm_stream_key = data["fm_stream_key"]
+        correlation_data.fib_stream_key = data["fib_stream_key"]
+        return correlation_data
+
 
 class CryoFeature(object):
     """
@@ -124,47 +161,10 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
     flist = []
     for feature in features:
-        # TODO add stream names and other values
-        correlation_data = {}
-        if feature.correlation_data:
-            items = feature.correlation_data.items()
-            for key, ct_class in items:
-                all_targets = []
-                correlation_data[key] = {}
-                correlation_data[key]['coordinates'] = []
-                correlation_data[key]['index'] = []
-                correlation_data[key]['type'] = []
-                correlation_data[key]['name'] = []
-                correlation_data[key]['fm_focus_position'] = []
-                correlation_data[key]['correlation_result'] = ct_class.correlation_result
-                if ct_class.fm_stream_key:
-                    correlation_data[key]['fm_stream_key'] = ct_class.fm_stream_key
-                if ct_class.fib_stream_key:
-                    correlation_data[key]['fib_stream_key'] = ct_class.fib_stream_key
-                if ct_class.fm_fiducials:
-                    all_targets.append(ct_class.fm_fiducials)
-                if ct_class.fm_pois:
-                    all_targets.append(ct_class.fm_pois)
-                if ct_class.fib_fiducials:
-                    all_targets.append(ct_class.fib_fiducials)
-                if ct_class.fib_projected_fiducials:
-                    all_targets.append(ct_class.fib_projected_fiducials)
-                if ct_class.fib_projected_pois:
-                    all_targets.append(ct_class.fib_projected_pois)
-                if ct_class.fib_surface_fiducial:
-                    all_targets.append(ct_class.fib_surface_fiducial)
-                # flatten the list of lists
-                all_targets = list(
-                    itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in all_targets))
-                for target in all_targets:
-                    correlation_data[key]['coordinates'].append(target.coordinates.value)
-                    correlation_data[key]['index'].append(target.index.value)
-                    correlation_data[key]['type'].append(target.type.value)
-                    correlation_data[key]['name'].append(target.name.value)
-                    correlation_data[key]['fm_focus_position'].append(target.fm_focus_position.value)
-
-        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value, 'correlation_data': correlation_data}
+        feature_item = {'name': feature.name.value,
+                        'pos': feature.pos.value,
+                        'status': feature.status.value,
+                        'correlation_data': {k: v.to_dict() for k, v in feature.correlation_data.items()}} if feature.correlation_data  else None
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -178,71 +178,17 @@ class FeaturesDecoder(json.JSONDecoder):
         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
     def object_hook(self, obj):
-        if 'coordinates' in obj and not 'pos' in obj:
-            return obj
-
-        if "Active" in obj:
-            return obj
-
-        # Either the object is the feature list or the feature objects inside it
         if 'name' in obj and 'pos' in obj:
+            correlation_data = obj["correlation_data"]
             pos = obj['pos']
             feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
             feature.status.value = obj['status']
-            # Check if correlation_data exist and decode them
-            if 'correlation_data' in obj:
-                correlation_data = self.decode_correlation_data(obj['correlation_data'])
-                feature.correlation_data = correlation_data
+            feature.correlation_data = {k: FIBFMCorrelationData.from_dict(v) for k, v in correlation_data.items()}
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
 
-    def decode_correlation_data(self, correlation_data_obj):
-        """
-        Decodes the correlation_data dictionary into the appropriate CryoFeature data structure.
-        """
-        decoded_correlation_data = {}
-        if not correlation_data_obj:
-            return decoded_correlation_data
-        for key, ct_obj in correlation_data_obj.items():
-            # Initialize the CryoFeature correlation target class instance
-            correlation_target = FIBFMCorrelationData()
-            coordinates = ct_obj.get('coordinates', [])
-            indices = ct_obj.get('index', [])
-            types = ct_obj.get('type', [])
-            names = ct_obj.get('name', [])
-            fm_focus_positions = ct_obj.get('fm_focus_position', [])
-
-            if ct_obj.get('fm_stream_key', None):
-                correlation_target.fm_stream_key = ct_obj.get('fm_stream_key', None)
-            if ct_obj.get('fib_stream_key', None):
-                correlation_target.fib_stream_key = ct_obj.get('fib_stream_key', None)
-
-            for i in range(len(coordinates)):
-                target = Target(
-                    x =coordinates[i][0],
-                    y =coordinates[i][1],
-                    z =coordinates[i][2],
-                    index=indices[i],
-                    type=types[i],
-                    name=names[i],
-                    fm_focus_position=fm_focus_positions[i] )
-                if "FIB" in names[i] and types[i] == FIDUCIAL:
-                    correlation_target.fib_fiducials.append(target)
-                elif "FIB" in names[i] and types[i] == PROJECTED_FIDUCIAL:
-                    correlation_target.fib_projected_fiducials.append(target)
-                elif "FIB" in names[i] and types[i] == PROJECTED_POI:
-                    correlation_target.fib_projected_pois.append(target)
-                elif "FIB" in names[i] and types[i] == SURFACE_FIDUCIAL:
-                    correlation_target.fib_surface_fiducial = target
-                elif "FM" in names[i] and types[i] == FIDUCIAL:
-                    correlation_target.fm_fiducials.append(target)
-                elif "POI" in names[i] and types[i] == POI:
-                    correlation_target.fm_pois.append(target)
-
-            decoded_correlation_data[key] = correlation_target
-
-        return decoded_correlation_data
+        return obj
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """

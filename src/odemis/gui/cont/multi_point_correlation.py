@@ -375,7 +375,7 @@ class CorrelationPointsController(object):
                 elif "FM" in target.name.value:
                     fm_fiducials.append(target)
                 elif "POI" in target.name.value:
-                    self.correlation_target.fm_pois = target
+                    self.correlation_target.fm_pois.append(target)
             if fib_fiducials:
                 fib_fiducials.sort(key=lambda x: x.index.value)
                 self.correlation_target.fib_fiducials = fib_fiducials
@@ -393,7 +393,7 @@ class CorrelationPointsController(object):
         """
         if self.correlation_target:
             if ((len(self.correlation_target.fib_fiducials) >= 4 and len(
-                    self.correlation_target.fm_fiducials) >= 4 and self.correlation_target.fm_pois and len(
+                    self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) >=1  and len(
                 self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
                     (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
                 return True
@@ -460,7 +460,7 @@ class CorrelationPointsController(object):
             fm_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(fm_coord.coordinates.value[0:2], check_bbox=False)
             fm_coords.append([fm_coord_2d[0], fm_coord_2d[1], fm_coord.coordinates.value[2]])
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
-        poi_coord = self.correlation_target.fm_pois
+        poi_coord = self.correlation_target.fm_pois[0]
         poi_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(poi_coord.coordinates.value[0:2], check_bbox=False)
         poi_coords.append([poi_coord_2d[0], poi_coord_2d[1], poi_coord.coordinates.value[2]])
         poi_coords = numpy.array(poi_coords, dtype=numpy.float32)
