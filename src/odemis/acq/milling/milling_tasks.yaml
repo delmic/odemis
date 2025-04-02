@@ -87,7 +87,7 @@
       width: 0.5e-06
       height: 1.5e-05
       depth: 1.0e-06
-      spacing: 2.0e-05
+      spacing: 1.0e-05
       center_x: 0
       center_y: 0
       pattern: 'microexpansion'

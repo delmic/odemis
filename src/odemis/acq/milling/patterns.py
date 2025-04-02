@@ -215,7 +215,7 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
         width = self.width.value
         height = self.height.value
         depth = self.depth.value
-        spacing = self.spacing.value / 2
+        spacing = self.spacing.value
         center_x, center_y = self.center.value
 
         patterns = [
