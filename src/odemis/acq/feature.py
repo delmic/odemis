@@ -1,7 +1,7 @@
 import glob
+import itertools
 import json
 import logging
-import math
 import os
 import threading
 import time
@@ -20,7 +20,7 @@ from odemis.acq.acqmng import (
 from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.move import FM_IMAGING, POSITION_NAMES, MicroscopePostureManager
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
-from odemis.acq.stream import Stream
+from odemis.acq.stream import Stream, StaticFluoStream
 from odemis.dataio import find_fittest_converter
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
@@ -36,19 +36,111 @@ FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
     "Discarded",
 )
 
+FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL, PROJECTED_POI = (
+    "Fiducial",
+    "PointOfInterest",
+    "SurfaceFiducial",
+    "ProjectedPoints",
+    "ProjectedPOI",
+)
+
+
+class FIBFMCorrelationData:
+    """
+    Class consisting of parameters related to the multipoint correlation between FIB and FM. The multipoint correlation
+    uses external three-dimensional correlation toolbox (3DCT) to perform correlation. This class is used to store the input
+    and output parameters of the correlation. The input parameters are the fiducials, points of interest in the FM
+    image and the position of top surface of the lamella. Fiducials are points which are distinctly visible in both views
+    whereas point of interest is visible more in FM than FIB. The multipoint correlation helps in finding the POI in FIB
+    by using the FM-FIB fiducial pairs and point of interest in FM. The output parameters are the correlation results,
+    the projected fiducials and points of interest in the FIB image. The projected fiducials are the reprojection of FIB
+    fiducaials according to the correlation results. Minimum 4 FM and FIB fiducial pairs with one point of interest
+    in FM is required to execute correlation. This class is used to store the correlation data for a feature
+    at a defined status.
+    """
+
+    def __init__(self):
+        # Input parameters of multipoint correlation. The input is provided by the user in the GUI
+        # The fm_pois are the points of interest in the FM image for which the poi in FIB is calculated using
+        # correlation. The fm_fiducials and fib fiducials are pairs of distinct fiducials in FM and FIB images
+        # respectively which are used to calculate the transformation matrix between the two images.
+        self.fm_pois: List[Target] = []
+        self.fm_fiducials: List[Target] = []
+        self.fib_fiducials: List[Target] = []
+        # The fib surface fiducial is the target information provided by the user indicating the top surface of lamella
+        # in FIB image. This is used to correct the projected fiducials/poi in the FIB image based on the thickness of
+        # the lamella.
+        self.fib_surface_fiducial : Target = None
+        self.fib_stream = None #:StaticSEMStream = None or StaticFIBStream = None
+        self.fm_streams: List[StaticFluoStream] = []
+        # key to find the stream used from all the acquired streams
+        # key is a tuple of (stream shape, MD_POS)
+        self.fib_stream_key = None
+        self.fm_stream_key = None
+
+        # Output parameters of multipoint correlation. The output is calculated from run_correlation function
+        self.correlation_result = {}
+        self.fib_projected_pois: List[Target] = []
+        self.fib_projected_fiducials: List[Target] = []
+
+    def clear(self):
+        """Clear output parameters when any input parameters are changed"""
+        self.correlation_result = {}
+        self.fib_projected_pois = []
+        self.fib_projected_fiducials = []
+
+    def to_dict(self) -> Dict[str, List[Dict[str, List]]]:
+        """
+        Convert the FIBFMCorrelationData to a dictionary.
+        :return: The dictionary representation of the FIBFMCorrelationData.
+        """
+        data = {
+            "fm_fiducials": [fid.to_dict() for fid in self.fm_fiducials],
+            "fm_pois": [poi.to_dict() for poi in self.fm_pois],
+            "fib_fiducials": [fid.to_dict() for fid in self.fib_fiducials],
+            "fib_projected_pois": [poi.to_dict() for poi in self.fib_projected_pois],
+            "fib_projected_fiducials": [fid.to_dict() for fid in self.fib_projected_fiducials],
+            "fib_surface_fiducial": self.fib_surface_fiducial.to_dict() if self.fib_surface_fiducial else None,
+            "correlation_result": self.correlation_result,
+            "fm_stream_key": self.fm_stream_key,
+            "fib_stream_key": self.fib_stream_key,
+        }
+        return data
+
+    @staticmethod
+    def from_dict(data: Dict[str, List[Dict[str, List]]]) -> "FIBFMCorrelationData":
+        """
+        Convert the dictionary to FIBFMCorrelationData.
+        :param data: The dictionary representation of the FIBFMCorrelationData.
+        :return: The FIBFMCorrelationData object.
+        """
+        correlation_data = FIBFMCorrelationData()
+        correlation_data.fm_fiducials = [Target.from_dict(fid) for fid in data["fm_fiducials"]]
+        correlation_data.fm_pois = [Target.from_dict(poi) for poi in data["fm_pois"]]
+        correlation_data.fib_fiducials = [Target.from_dict(fid) for fid in data["fib_fiducials"]]
+        correlation_data.fib_projected_pois = [Target.from_dict(poi) for poi in data["fib_projected_pois"]]
+        correlation_data.fib_projected_fiducials = [Target.from_dict(fid) for fid in data["fib_projected_fiducials"]]
+        correlation_data.fib_surface_fiducial = Target.from_dict(data["fib_surface_fiducial"]) if data["fib_surface_fiducial"] else None
+        correlation_data.correlation_result = data["correlation_result"]
+        correlation_data.fm_stream_key = data["fm_stream_key"]
+        correlation_data.fib_stream_key = data["fib_stream_key"]
+        return correlation_data
+
 
 class CryoFeature(object):
     """
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, x, y, z, streams=None, correlation_data=None):
         """
         :param name: (string) the feature name
         :param x: (float) the X axis of the feature position
         :param y: (float) the Y axis of the feature position
         :param z: (float) the Z axis of the feature position
         :param streams: (List of StaticStream) list of acquired streams on this feature
+        :param correlation_data: (Dict[str,FIBFMCorrelationData]) Dictionary mapping the feature status to
+        FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
         """
         self.name = model.StringVA(name)
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
@@ -58,6 +150,7 @@ class CryoFeature(object):
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()
+        self.correlation_data = correlation_data
 
 
 def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
@@ -68,8 +161,11 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     """
     flist = []
     for feature in features:
-        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+        feature_item = {'name': feature.name.value,
+                        'pos': feature.pos.value,
+                        'status': feature.status.value,
+                        'correlation_data': {k: v.to_dict() for k, v in feature.correlation_data.items()} if feature.correlation_data  else {
+            }}
         flist.append(feature_item)
     return {'feature_list': flist}
 
@@ -83,15 +179,17 @@ class FeaturesDecoder(json.JSONDecoder):
         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
     def object_hook(self, obj):
-        # Either the object is the feature list or the feature objects inside it
-        if 'name' in obj:
+        if 'name' in obj and 'pos' in obj:
+            correlation_data = obj["correlation_data"]
             pos = obj['pos']
             feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
             feature.status.value = obj['status']
+            feature.correlation_data = {k: FIBFMCorrelationData.from_dict(v) for k, v in correlation_data.items()}
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
 
+        return obj
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
@@ -566,3 +664,51 @@ def acquire_at_features(
     executeAsyncTask(future, task.run)
 
     return future
+
+
+class Target:
+    def __init__(self, x:float, y:float, z:float, name:str, type:str, index: int,  fm_focus_position: float, size: float = None ):
+        """
+        Target class to store the target information for multipoint correlation. The target can be a fiducial, point of
+        interest, surface fiducial, projected fiducial or projected point of interest. The target information is used to
+        calculate the transformation matrix between the FIB and FM images. The target information is provided by the user
+        in the GUI. The target information is saved in the feature data structure.
+        :param x: physical position in x in meters
+        :param y: physical position in y in meters
+        :param z: physical position in z in meters
+        :param name: name of the target saved as <type>-<index>. For example, "FM-1", "POI-2", "FIB-3", "PP", "PPOI"
+        :param type: type of the given target like Fiducial, PointOfInterest, ProjectedPoints, ProjectedPOI or SurfaceFiducial
+        :param index: index of the target in the given type. For example, "FM-1", "FM-2", "FM-3"...
+        :param fm_focus_position: position of the focus (objective in cased of Meteor) in meters
+        """
+        self.coordinates = model.ListVA((x, y, z), unit="m")
+        self.type = model.StringEnumerated(type, choices={FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL,
+                                                          PROJECTED_POI})
+        self.name = model.StringVA(name)
+        # Warning: The index and target name are in sync. To increase the index limit more than 9, please first change the logic of finding indices from the
+        # target name in add_new_target() in tab_gui_data.py and
+        # _on_current_coordinates_changes(), _on_cell_changing in  multi_point_correlation.py
+        self.index = model.IntContinuous(index, range=(1, 9))
+        self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")
+
+    def to_dict(self) -> dict:
+        return {
+            "coordinates": self.coordinates.value,
+            "type": self.type.value,
+            "name": self.name.value,
+            "index": self.index.value,
+            "fm_focus_position": self.fm_focus_position.value,
+        }
+
+    @staticmethod
+    def from_dict(d: dict) -> "Target":
+        x, y, z = d["coordinates"]
+        return Target(
+            x=x,
+            y=y,
+            z=z,
+            name=d["name"],
+            type=d["type"],
+            index=d["index"],
+            fm_focus_position=d["fm_focus_position"],
+        )
