@@ -1871,6 +1871,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             for s in self._streams:
                 s._unlinkHwVAs()
+            self._restoreHardwareSettings()
             self._dc_estimator = None
             self._current_future = None
             self._acq_data = [[] for _ in self._streams]  # regain a bit of memory
@@ -2348,6 +2349,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             for s in self._streams:
                 s._unlinkHwVAs()
+            self._restoreHardwareSettings()
             self._acq_data = [[] for _ in self._streams]  # regain a bit of memory
             self._dc_estimator = None
             self._current_future = None
