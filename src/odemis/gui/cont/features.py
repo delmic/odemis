@@ -353,7 +353,7 @@ class CryoFeatureController(object):
                                                                     ctrl_2_va=self._on_ctrl_feature_z_change,
                                                                     va_2_ctrl=self._on_feature_focus_pos)
 
-        # if FIBSEM mode, and milling tasks are available,, re-draw
+        # if FIBSEM mode, and milling tasks are available, re-draw
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._tab.milling_task_controller.set_milling_tasks(feature.milling_tasks)
             # self._panel.Layout()
