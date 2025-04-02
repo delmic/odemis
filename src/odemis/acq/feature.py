@@ -164,7 +164,8 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
         feature_item = {'name': feature.name.value,
                         'pos': feature.pos.value,
                         'status': feature.status.value,
-                        'correlation_data': {k: v.to_dict() for k, v in feature.correlation_data.items()}} if feature.correlation_data  else None
+                        'correlation_data': {k: v.to_dict() for k, v in feature.correlation_data.items()} if feature.correlation_data  else {
+            }}
         flist.append(feature_item)
     return {'feature_list': flist}
 
