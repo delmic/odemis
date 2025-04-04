@@ -35,6 +35,7 @@ from .fastem_project_roas_tab import FastEMProjectROAsTab
 from .fastem_project_sections_tab import FastEMProjectSectionsTab
 from .fastem_project_settings_tab import FastEMProjectSettingsTab
 from .fastem_setup_tab import FastEMSetupTab
+from .fibsem_tab import FibsemTab
 from .localization_tab import LocalizationTab
 from .mimas_align_tab import MimasAlignTab
 from .secom_align_tab import SecomAlignTab
