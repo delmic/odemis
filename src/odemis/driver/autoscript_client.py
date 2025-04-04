@@ -1125,7 +1125,7 @@ class Scanner(model.Emitter):
         if "choices" in beam_current_info:
             self.probeCurrent = model.FloatEnumerated(
                 value=self.parent.get_beam_current(self.channel),
-                choices=beam_current_info["choices"],
+                choices=set(beam_current_info["choices"]),
                 unit=beam_current_info["unit"],
                 setter=self._setCurrent)
         else:
