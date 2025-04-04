@@ -674,11 +674,15 @@ class IndependentDetector(model.Detector):
         the Dataflow.
         """
         try:
+            first_frame = True
             while not self._acquisition_must_stop.is_set():
                 dwelltime = self.dwellTime.value
                 resolution = self.resolution.value
                 duration = numpy.prod(resolution) * dwelltime
                 self.data._waitSync()
+                if first_frame:
+                    time.sleep(0.005)  # simulate a little bit of delay to start
+                    first_frame = False
                 img = self._simulate_image()
                 if self._acquisition_must_stop.wait(duration):
                     break
