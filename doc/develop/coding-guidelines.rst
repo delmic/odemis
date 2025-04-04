@@ -208,7 +208,7 @@ For e.g. 4.1 standard and internal imports
       from odemis.gui import FG_COLOUR_DIS
       from odemis.gui.comp.buttons import ImageToggleButton
       from odemis.model import (MD_AT_AR, MD_AT_CL, MD_AT_EK, MD_AT_EM, MD_AT_FLUO,
-                                MD_AT_SLIT, MD_AT_SPECTRUM, MD_AT_TEMPORAL,
+                                MD_AT_ALIGN_OVERLAY, MD_AT_SPECTRUM, MD_AT_TEMPORAL,
                                 MD_AT_TEMPSPECTRUM, MD_AT_FIB)
 
 
