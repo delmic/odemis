@@ -21,9 +21,10 @@ This file is part of Odemis.
 
 """
 
-from builtins import range  # For Python 2 & 3
-
 import math
+from typing import Set, Tuple
+
+import numpy
 
 
 def rasterize_line(p0, p1, width=1):
@@ -142,3 +143,106 @@ def point_in_polygon(p, polygon):
         p1x, p1y = p2x, p2y
 
     return inside
+
+
+def get_polygon_grid_cells(polygon_vertices: numpy.ndarray, include_neighbours: bool = False) -> Set[Tuple[int, int]]:
+    """
+    Returns the set of grid cells (tiles) that are touched or intersected by the edges of a polygon.
+
+    This function is useful when you want to determine which grid-based tiles (e.g. pixels, data acquisition fields) are
+    crossed by the boundary of a polygon. This is commonly needed in contexts like:
+    - rasterizing a polygon onto a discrete grid
+
+    The polygon is defined in grid coordinates (rows, columns), and must be "closed" — i.e. the last point should
+    connect back to the first one. If not already closed, the function will auto-close the polygon.
+
+    :param polygon_vertices: NumPy array of shape (N, 2), where each row is (row, col) — the corners of a closed polygon.
+    :param include_neighbours: If True, includes adjacent grid cells around each edge point. This is useful for ensuring
+                               complete fill coverage or avoiding boundary artifacts.
+
+    :return: A set of (row, col) tuples representing the intersected grid cells (tiles).
+    :raises ValueError: If the polygon has less than 3 vertices or if the vertices are not in 2D format.
+
+    Note: Efficiently implemented using Bresenham's line algorithm for minimal memory and fast performance.
+    #  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █
+    #  █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █
+    #  █ █ ░ ░ █ █ █ █ █ █ █ █ █ █ █
+    #  █ █ █ █ ░ ░ █ █ █ █ █ █ █ █ █
+    #  █ █ █ █ █ █ ░ █ █ █ █ █ █ █ █
+    #  █ █ █ █ █ █ █ ░ ░ █ █ █ █ █ █
+    #  █ █ █ █ █ █ █ █ █ ░ ░ █ █ █ █
+    #  █ █ █ █ █ █ █ █ █ █ █ ░ █ █ █
+    #  █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █
+    #  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █
+    #  \___________________________/
+    #         Bresenham's Line
+    #
+    # Legend:
+    # '█' - Background grid
+    # '░' - Cells forming the Bresenham line
+    # '\' - Approximate direction of the line
+    #
+    #  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █
+    #  █ █ █ █ █ █ █ █ █ █ █ █ █ ░ ░ ░ ░ ░ ░ █ █ █ █ █ █
+    #  █ █ █ █ █ █ █ █ █ █ ░ ░ ░ █ █ █ █ █ ░ ░ █ █ █ █ █
+    #  █ █ █ █ █ █ █ █ ░ ░ █ █ █ █ █ █ █ █ █ ░ ░ █ █ █ █
+    #  █ █ █ █ █ █ ░ ░ █ █ █ █ █ █ █ █ █ █ █ █ ░ ░ █ █ █
+    #  █ █ █ █ ░ ░ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █
+    #  █ █ █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █
+    #  █ █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █
+    #  █ █ █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █
+    #  █ █ █ █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █ █
+    #  █ █ █ █ █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █ █ ░ █ █ █ █
+    #  █ █ █ █ █ █ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ █ █ █ █ █
+    #  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █
+    #  \_______________________________________________/
+    #  Polygon intersections using Bresenham's Line algorithm
+    #
+    # Legend:
+    # '█' - Background grid
+    # '░' - Cells forming the polygon's outline
+    # '\' - Visual boundary
+    # if include_neighbours is True, the adjacent cells of '░' will also be included in the output set.
+    """
+    if polygon_vertices.shape[0] < 3:
+        raise ValueError("The polygon must have at least 3 vertices.")
+    if polygon_vertices.shape[1] != 2:
+        raise ValueError("The polygon vertices should be a 2D array with shape (N, 2).")
+
+    # Auto-close the polygon if it's not closed
+    if not numpy.array_equal(polygon_vertices[0], polygon_vertices[-1]):
+        polygon_vertices = numpy.vstack([polygon_vertices, polygon_vertices[0]])
+
+    intersections = set()
+    for i in range(len(polygon_vertices) - 1):
+        row1, col1 = polygon_vertices[i]
+        row2, col2 = polygon_vertices[i + 1]
+
+        dx = abs(row2 - row1)
+        dy = abs(col2 - col1)
+        sx = 1 if row1 < row2 else -1
+        sy = 1 if col1 < col2 else -1
+        err = dx - dy
+
+        while True:
+            intersections.add((row1, col1))
+
+            if include_neighbours:
+                # Add adjacent grid cells to ensure complete coverage
+                intersections.add((row1 + sx, col1))
+                intersections.add((row1 - sx, col1))
+                intersections.add((row1, col1 + sy))
+                intersections.add((row1, col1 - sy))
+
+            if row1 == row2 and col1 == col2:
+                break
+
+            e2 = err * 2
+            if e2 > -dy:
+                err -= dy
+                row1 += sx
+            if e2 < dx:
+                err += dx
+                col1 += sy
+
+    return intersections
