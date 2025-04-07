@@ -154,6 +154,7 @@ jobs:
         python3 -m unittest src/odemis/acq/stitching/test/registrar_test.py --verbose
         python3 -m unittest src/odemis/acq/stitching/test/stitching_test.py --verbose
         python3 -m unittest src/odemis/acq/stitching/test/weaver_test.py --verbose
+        python3 -m unittest src.odemis.acq.stitching.test.tiledacq_test.TiledAcquisitionTaskTestCase --verbose
 
     - name: Run tests from odemis.acq.calibration
       if: ${{ !cancelled() }}
@@ -209,3 +210,9 @@ jobs:
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src.odemis.acq.test.fastem_test.TestFastEMAcquisitionTaskMock --verbose
+
+    - name: Run tests from odemis.util.raster
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/raster_test.py --verbose

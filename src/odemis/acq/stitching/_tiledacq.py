@@ -25,29 +25,48 @@ import statistics
 import threading
 import time
 from concurrent.futures import CancelledError, TimeoutError
-from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
+from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 from enum import Enum
-from typing import List, Tuple, Optional, Dict
+from itertools import groupby
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy
 import psutil
+from scipy.ndimage import binary_fill_holes
 from scipy.spatial import Delaunay
+from shapely.geometry import Polygon, box
 
-from odemis import model, dataio
+from odemis import dataio, model
 from odemis.acq import acqmng
-from odemis.acq.align.autofocus import AutoFocus, MTD_EXHAUSTIVE
-from odemis.util.focus import MeasureOpticalFocus
-from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
-from odemis.acq.stitching._constants import WEAVER_MEAN, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
+from odemis.acq.align.autofocus import MTD_EXHAUSTIVE, AutoFocus
+from odemis.acq.align.roi_autofocus import (
+    autofocus_in_roi,
+    estimate_autofocus_in_roi_time,
+)
+from odemis.acq.stitching._constants import (
+    REGISTER_GLOBAL_SHIFT,
+    REGISTER_IDENTITY,
+    WEAVER_MEAN,
+)
 from odemis.acq.stitching._simple import register, weave
-from odemis.acq.stream import Stream, EMStream, ARStream, \
-    SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
-    CLStream
+from odemis.acq.stream import (
+    ARStream,
+    CLStream,
+    EMStream,
+    FluoStream,
+    MultipleDetectorStream,
+    SpectrumStream,
+    Stream,
+    executeAsyncTask,
+    util,
+)
 from odemis.model import DataArray
-from odemis.util import dataio as udataio, img, linalg, rect_intersect
+from odemis.util import dataio as udataio
+from odemis.util import img, linalg, rect_intersect
+from odemis.util.focus import MeasureOpticalFocus
 from odemis.util.img import assembleZCube
 from odemis.util.linalg import generate_triangulation_points
-from odemis.util.raster import point_in_polygon
+from odemis.util.raster import get_polygon_grid_cells, point_in_polygon
 
 # TODO: Find a value that works fine with common cases
 # Ratio of the allowed difference of tile focus from good focus
@@ -81,13 +100,15 @@ class TiledAcquisitionTask(object):
     The goal of this task is to acquire a set of tiles then stitch them together
     """
 
-    def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
+    def __init__(self, streams, stage, region, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
                  focus_points=None, focus_range=None):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
-        :param area: (float, float, float, float) left, top, right, bottom points of acquisition area
+        :param region: Either:
+            - (Tuple[float, float, float, float]) Bounding box as (xmin, ymin, xmax, ymax)
+            - (List[Tuple[float, float]]) List of (x, y) points defining a polygon
         :param overlap: (float) the amount of overlap between each acquisition
         :param settings_obs: (SettingsObserver or None) class that contains a list of all VAs
             that should be saved as metadata
@@ -111,19 +132,16 @@ class TiledAcquisitionTask(object):
         self._focus_range = focus_range
         # Average time taken for each tile acquisition
         self.average_acquisition_time = None
+        self._overlap = overlap
+        self._polygon = None
         if future is not None:
             self._future.running_subf: future.Future = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
-        # Get total area as a tuple of width, height from ltrb area points
-        normalized_area = util.normalize_rect(area)
-        if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
-            logging.warning("Acquisition area {} rearranged into {}".format(area, normalized_area))
 
-        self._area = normalized_area
-        height = normalized_area[3] - normalized_area[1]
-        width = normalized_area[2] - normalized_area[0]
-        self._area_size = (width, height)
-        self._overlap = overlap
+        # Convert the region input into a polygon
+        self._polygon = self._convert_region_to_polygon(region)
+        xmin, ymin, xmax, ymax = self._polygon.bounds
+        self._area_size = (xmax - xmin, ymax - ymin)
 
         # Note: we used to change the stream horizontalFoV VA to the max, if available (eg, SEM).
         # However, it's annoying if the caller actually cares about the FoV (eg,
@@ -138,7 +156,9 @@ class TiledAcquisitionTask(object):
         self._sfov = self._guessSmallestFov(streams)
         logging.debug("Smallest FoV: %s", self._sfov)
 
-        (self._nx, self._ny), self._starting_pos = self._getNumberOfTiles()
+        self._starting_pos, self._tile_indices = self._get_tile_coverage()
+        self._number_of_tiles = len(self._tile_indices)
+        logging.debug("Calculated number of tiles %s", self._number_of_tiles)
 
         # save actual time take for tile acquisition, stage movement from one tile to another
         # and stitching time for each tile. The keys tell the action, i.e. move or stitch and the time
@@ -222,6 +242,35 @@ class TiledAcquisitionTask(object):
         self._weaver = weaver
         self._focus_plane = {}
 
+    def _convert_region_to_polygon(
+            self,
+            region: Union[Tuple[float, float, float, float], List[Tuple[float, float]]]
+        ) -> Polygon:
+        """
+        Convert the region input into a polygon.
+        :param region: Either a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points.
+        :return: A polygon representing the region.
+        :raise: ValueError if the region does not form a valid polygon.
+        :raise: ValueError if the region is not a bounding box or a list of points.
+        """
+        if isinstance(region, tuple) and len(region) == 4:
+            # Normalize the bounding box to ensure the order is correct
+            xmin, ymin, xmax, ymax = util.normalize_rect(region)
+            if region[0] != xmin or region[1] != ymin:
+                logging.warning("Acquisition area %s rearranged into %s", region, (xmin, ymin, xmax, ymax))
+            points = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
+        elif isinstance(region, list) and all(isinstance(point, tuple) and len(point) == 2 for point in region):
+            points = region
+        else:
+            raise ValueError(
+                "Region must either be a bounding box (xmin, ymin, xmax, ymax) or a list of (x, y) points."
+            )
+
+        polygon = Polygon(points)
+        if not polygon.is_valid:
+            raise ValueError("The provided region does not form a valid polygon.")
+        return polygon
+
     def _getFov(self, sd):
         """
         sd (Stream or DataArray): If it's a stream, it must be a live stream,
@@ -251,22 +300,20 @@ class TiledAcquisitionTask(object):
         return (min(f[0] for f in fovs),
                 min(f[1] for f in fovs))
 
-    def _getNumberOfTiles(self):
+    def _get_tile_coverage(self) -> Tuple[Dict[str, float], List[Tuple[int, int]]]:
         """
-        Calculate needed number of tiles (horizontal and vertical) to cover the whole area,
-        and the adjusted position of the first tile.
+        Calculate the exact tiles required to cover the region.
         return:
-            nb (int, int): number of tile in X, Y
-            starting_position (float, float): center of the first tile (at the top-left)
+            starting_position: center of the first tile (at the top-left)
+            tile_indices: List of (col, row) indices for the tiles
         """
+        if self._polygon is None:
+            raise ValueError("Polygon shape is not defined.")
+
         # The size of the smallest tile, non-including the overlap, which will be
         # lost (and also indirectly represents the precision of the stage)
         reliable_fov = ((1 - self._overlap) * self._sfov[0], (1 - self._overlap) * self._sfov[1])
 
-        logging.debug("Would need tiles: nx= %s, ny= %s",
-                      abs(self._area_size[0] / reliable_fov[0]),
-                      abs(self._area_size[1] / reliable_fov[1])
-                      )
         # Round up the number of tiles needed. With a twist: if we'd need less
         # than 1% of a tile extra, round down. This handles floating point
         # errors and other manual rounding when when the requested area size is
@@ -275,22 +322,64 @@ class TiledAcquisitionTask(object):
                      for s, f in zip(self._area_size, reliable_fov)]
         nx = math.ceil(area_size[0] / reliable_fov[0])
         ny = math.ceil(area_size[1] / reliable_fov[1])
-        logging.debug("Calculated number of tiles nx= %s, ny= %s" % (nx, ny))
 
         # We have a little bit more tiles than needed, we then have two choices
         # on how to spread them:
         # 1. Increase the total area acquired (and keep the overlap)
         # 2. Increase the overlap (and keep the total area)
         # We pick alternative 1 (no real reason)
-        center = (self._area[0] + self._area[2]) / 2, (self._area[1] + self._area[3]) / 2
-        total_size = nx * reliable_fov[0], ny * reliable_fov[1]
+        xmin, ymin, xmax, ymax = self._polygon.bounds
+        center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
+        total_size = (
+            nx * reliable_fov[0] + self._sfov[0] * self._overlap,
+            ny * reliable_fov[1] + self._sfov[1] * self._overlap,
+        )
+        xmin = center[0] - total_size[0] / 2
+        ymax = center[1] + total_size[1] / 2
 
-        # Compute the top-left of the "bigger" area, and from it, shift by half
-        # the size of the smallest tile.
-        starting_pos = {'x': center[0] - total_size[0] / 2 + reliable_fov[0] / 2,  # left
-                        'y': center[1] + total_size[1] / 2 - reliable_fov[1] / 2}  # top
+        # Create an empty grid for storing intersected tiles
+        # An intersected tile is any tile in the grid that intersects with (or falls within) the given polygon
+        tile_grid = numpy.zeros((ny, nx), dtype=bool)
 
-        return (nx, ny), starting_pos
+        # Vectorized conversion of polygon points to grid coordinates
+        points = numpy.array(self._polygon.exterior.coords)
+        rows = numpy.floor((ymax - points[:, 1]) / reliable_fov[1]).astype(int)
+        cols = numpy.floor((points[:, 0] - xmin) / reliable_fov[0]).astype(int)
+
+        # Create array of (row, col) vertices
+        polygon_vertices = numpy.stack((rows, cols), axis=1)
+
+        intersected_tiles = get_polygon_grid_cells(polygon_vertices, include_neighbours=True)
+
+        # The intersected tiles contains tiles which can be inside the polygon, outside the polygon and tiles which
+        # actually intersect with the polygon. We only need the tiles which actually intersect the polygon, to binary
+        # fill the holes and get the tile indices.
+        for row, col in intersected_tiles:
+            if not (0 <= row < ny and 0 <= col < nx):  # Certainly out of the polygon => not worthy to acquire
+                continue
+            # Define the bounds of the current tile
+            tile_bounds = box(
+                xmin + col * reliable_fov[0],
+                ymax - (row + 1) * reliable_fov[1],
+                xmin + (col + 1) * reliable_fov[0],
+                ymax - row * reliable_fov[1]
+            )
+            # Check if the tile intersects with the polygon shape
+            if self._polygon.intersects(tile_bounds):
+                tile_grid[row, col] = True
+
+        # Fill any holes in the grid to get contiguous tiles
+        filled_grid = binary_fill_holes(tile_grid)
+        rows, cols = numpy.nonzero(filled_grid)
+        tile_indices = list(zip(cols.tolist(), rows.tolist()))
+
+        # Calculate the starting position (top-left of the grid)
+        starting_position = {
+            "x": xmin + reliable_fov[0] / 2,
+            "y": ymax - reliable_fov[1] / 2
+        }
+
+        return starting_position, tile_indices
 
     def _cancelAcquisition(self, future):
         """
@@ -306,31 +395,31 @@ class TiledAcquisitionTask(object):
             logging.debug("Acquisition cancelled.")
         return True
 
-    def _generateScanningIndices(self, rep):
+    def _sort_tile_indices_zigzag(self, tile_indices: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         """
-        Generate the explicit X/Y position of each tile, in the scanning order
-        # Go left/down, with every second line backward:
-        # similar to writing/scanning convention, but move of just one unit
-        # every time.
+        Sort the given tile indices in a zigzag scanning order.
+        # Below is an example for a 5x3 tile grid:
         # A-->-->-->--v
         #             |
         # v--<--<--<---
         # |
         # --->-->-->--Z
-        rep (int, int): X, Y number of tiles
-        return (generator of tuple(int, int)): x/y positions, starting from 0,0
+        :param tile_indices: List of (int, int) tuples representing the tile indices
+        :return: List of (int, int) tuples sorted in a zigzag scanning order
         """
-        # For now we do forward/backward on X (fast), and Y (slowly)
-        direction = 1
-        for iy in range(rep[1]):
-            if direction == 1:
-                for ix in range(rep[0]):
-                    yield (ix, iy)
-            else:
-                for ix in range(rep[0] - 1, -1, -1):
-                    yield (ix, iy)
+        # Sort tile_indices by row first, then column
+        tile_indices.sort(key=lambda t: (t[1], t[0]))
 
-            direction *= -1
+        # Group indices by rows and apply zigzag pattern
+        sorted_indices = []
+        for row, group in groupby(tile_indices, key=lambda t: t[1]):
+            group = list(group)
+            # Reverse the order of the group if the row is odd
+            if row % 2 == 1:
+                group.reverse()
+            sorted_indices.extend(group)
+
+        return sorted_indices
 
     def _moveToTile(self, idx, prev_idx, tile_size):
         """
@@ -343,9 +432,9 @@ class TiledAcquisitionTask(object):
         # don't move on the axis that is not supposed to have changed
         m = {}
         idx_change = numpy.subtract(idx, prev_idx)
-        if idx_change[0]:
+        if idx[0] != prev_idx[0]:  # x-axis changed
             m["x"] = self._starting_pos["x"] + idx[0] * tile_size[0] * overlap
-        if idx_change[1]:
+        if idx[1] != prev_idx[1]:  # y-axis changed
             m["y"] = self._starting_pos["y"] - idx[1] * tile_size[1] * overlap
 
         logging.debug("Moving to tile %s at %s m", idx, m)
@@ -488,7 +577,7 @@ class TiledAcquisitionTask(object):
         """
         # Number of pixels for acquisition
         pxs = sum(self._estimateStreamPixels(s) for s in self._streams)
-        pxs *= self._nx * self._ny
+        pxs *= self._number_of_tiles
 
         # Memory calculation
         mem_est = pxs * self.MEMPP
@@ -507,7 +596,7 @@ class TiledAcquisitionTask(object):
         :returns: (float) estimated required time
         """
         if remaining is None:
-            remaining = self._nx * self._ny
+            remaining = self._number_of_tiles
 
         # After the acquisition of first tile, update the time taken for subsequent tiles based on time taken for
         # previous tiles
@@ -527,7 +616,7 @@ class TiledAcquisitionTask(object):
                 if pxs > max_pxs:
                     max_pxs = pxs
 
-        stitch_time = (self._nx * self._ny * max_pxs * self._overlap) / STITCH_SPEED
+        stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
         try:
             # move_speed is a default speed but not an actual stage speed due to which
             # extra time is added based on observed time taken to move stage from one tile position to another
@@ -604,7 +693,7 @@ class TiledAcquisitionTask(object):
         :return DataArray: Acquired da for the current tile stream
         """
         # Update the progress bar
-        self._future.set_progress(end=self.estimateTime((self._nx * self._ny) - i) + time.time())
+        self._future.set_progress(end=self.estimateTime(self._number_of_tiles - i) + time.time())
         # Acquire data array for passed stream
         self._future.running_subf = acqmng.acquire([stream], self._settings_obs)
         das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
@@ -646,12 +735,8 @@ class TiledAcquisitionTask(object):
         :return: (list of list of DataArrays): list of acquired data for each stream on each tile
         """
         da_list = []  # for each position, a list of DataArrays
-        prev_idx = [0, 0]
+        prev_idx = (-1, -1)  # start with a non-existing tile index so that the first tile is always moved to and acquired
         i = 0
-        # Make sure to begin from starting position
-        logging.debug("Moving to tile (0, 0) at %s m", self._starting_pos)
-        self._future.running_subf = self._stage.moveAbs(self._starting_pos)
-        self._future.running_subf.result()
 
         self._save_time = {"acq": [], "stitch": [], "move": [], "save": []}
         # The increase in the number of scanning indices increase with overlap between tiles. The time take
@@ -661,7 +746,12 @@ class TiledAcquisitionTask(object):
         self._save_time["stitch"] = [0]
         move_to_tile_start = None
         start_time = time.time()
-        for ix, iy in self._generateScanningIndices((self._nx, self._ny)):
+
+        # Sort the tile_indices in zigzag order to optimize the stage movement
+        zigzag_indices = self._sort_tile_indices_zigzag(self._tile_indices)
+
+        for ix, iy in zigzag_indices:
+            logging.debug("Acquiring tile %dx%d", ix, iy)
 
             if i > 0:
                 self.average_acquisition_time = (time.time() - start_time) / i
