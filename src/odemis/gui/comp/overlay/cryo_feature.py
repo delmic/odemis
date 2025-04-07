@@ -360,6 +360,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             "z": self.tab_data.main.stage.position.value["z"],
         }
         pos = self.pm.from_sample_stage_to_stage_position(new_pos)
+
         return pos
 
     def _get_feature_position_at_view_posture(self, feature: CryoFeature) -> Dict[str, float]:

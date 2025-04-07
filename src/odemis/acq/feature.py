@@ -65,7 +65,8 @@ class CryoFeature(object):
         :param streams: (List of StaticStream) list of acquired streams on this feature
         """
         self.name = model.StringVA(name)
-        self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare
+        self.position = model.VigilantAttribute(name, unit="m") # sample stage aka "ideal stage", with x, y, z axes
+        self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare, in the first posture found # TODO: drop
         self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
@@ -164,7 +165,8 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
             feature.set_posture_position(posture=posture, position=position)
         except Exception as e:
             logging.error(f"Error while converting feature position to {posture} posture: {e}")
-            return None
+            raise
+
     return position
 
 def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:

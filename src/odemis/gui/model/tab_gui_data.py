@@ -25,7 +25,7 @@ import logging
 import math
 from abc import ABCMeta
 from enum import Enum
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import odemis.acq.stream as acqstream
 from odemis import model
@@ -255,9 +255,12 @@ class CryoGUIData(MicroscopyGUIData):
 
     def add_new_feature(self, stage_position: Dict[str, float],
                         fm_focus_position: Dict[str, float] = None,
-                        f_name: str = None) -> CryoFeature:
+                        f_name: Optional[str] = None) -> CryoFeature:
         """
         Create a new feature and add it to the features list
+        :param stage_position: the position of the feature in stage-bare coordinates. The posture is
+        guessed from the position
+        :param f_name: the name of the feature. If None, a unique name is generated.
         """
         # set the posture position
         pm = self.main.posture_manager

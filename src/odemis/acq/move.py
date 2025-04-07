@@ -477,7 +477,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param translation: translation from sample to stage
         :param shear: shear from sample to stage
         """
-        self._axes_dep = {"x": axes[0], "y": axes[1]}
+        self._axes_dep = {"x": axes[0], "y": axes[1]}  # Should be called y, z... or even better: also take x as first axis
         self._metadata[model.MD_POS_COR] = translation
         self._metadata[model.MD_ROTATION_COR] = rotation
         self._metadata[model.MD_PIXEL_SIZE_COR] = scale
@@ -687,7 +687,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         vpos = self._get_pos_vector({"x": pos.get("y", 0), "y": pos.get("z", 0)}, absolute=False)
 
         # return the new position
-        new_pos = pos.copy()
+        new_pos = {}
+        new_pos["x"] = pos["x"]
         new_pos.update(vpos)
 
         return new_pos
@@ -707,9 +708,15 @@ class MeteorPostureManager(MicroscopePostureManager):
         orientation = self.get_posture_orientation(posture)
 
         # return the new position
-        new_pos = pos.copy()
+        new_pos = {}
+        new_pos["x"] = pos["x"]
         new_pos.update(orientation)
         new_pos.update(vpos)
+
+        logging.debug("For posture %s, pos %s -> pos bare %s", posture, pos, new_pos)
+        detected_posture = self.getCurrentPostureLabel(new_pos)
+        if detected_posture != posture:
+            logging.warning("Posture detected %s does not match expected posture %s", detected_posture, posture)
 
         return new_pos
 
@@ -745,10 +752,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         posture = self.current_posture.value
         pinv = numpy.dot(q, self._inv_transforms2[posture])
 
-        ppos = pos.copy()
+        ppos = {}
         ppos["x"] = pinv[0]
-        ppos["y"] = pinv[1]
-        ppos["z"] = pinv[2]
+        ppos[self._axes_dep["x"]] = pinv[1]
+        ppos[self._axes_dep["y"]] = pinv[2]
         return ppos
 
     def from_sample_stage_to_stage_position2(self, pos: Dict[str, float]) -> Dict[str, float]:
@@ -765,10 +772,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         # add orientation (rx, rz)
         orientation = self.get_posture_orientation(posture)
 
-        ppos = pos.copy()
+        ppos = {}
         ppos["x"] = pinv[0]
-        ppos["y"] = pinv[1]
-        ppos["z"] = pinv[2]
+        ppos[self._axes_dep["x"]] = pinv[1]
+        ppos[self._axes_dep["y"]] = pinv[2]
         ppos.update(orientation)
         return ppos
 
@@ -779,7 +786,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         :return: position in the sample-stage coordinates
         """
 
-        p = numpy.array([pos["x"], pos["y"], pos["z"]])
+        p = numpy.array([pos["x"], pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
 
         # QUERY: for projecting other postures, should we use the current posture or the target posture?
         # we should, but currently to_sample_stage... is only used to project features onto the screen,
@@ -1472,7 +1479,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed position.
         """
-        return NotImplemented
+        raise NotImplementedError()
 
     def _transformFromMeteorToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1480,7 +1487,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
-        return NotImplemented
+        raise NotImplementedError()
 
     def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from chamber to stage bare coordinates.
@@ -1512,6 +1519,22 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
             raise KeyError("The stage misses %s axes" % missed_axes)
         self.fib_column_tilt = ZEISS_FIB_COLUMN_TILT
+
+        if self.pre_tilt is None: # pre-tilt not available in the stage calib metadata
+            # First version of the microscope file had it hard-coded on the Linked YM wrapper component
+            comp = model.getComponent(name="Linked YM")
+            self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
+
+        # Automatic conversion to sample-stage axes
+        self._initialise_transformation(axes=["y", "m"], rotation=self.pre_tilt)
+        self.postures = [SEM_IMAGING, FM_IMAGING]
+        self.use_3d_transforms = True
+
+    def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+        new_pos = super().from_sample_stage_to_stage_position(pos)
+        # No knowledge about "z", so just copy it. As it's the same posture, it should be correct
+        new_pos["z"] = self.stage.position.value["z"]
+        return new_pos
 
     def check_calib_data(self, required_keys: set):
         """
