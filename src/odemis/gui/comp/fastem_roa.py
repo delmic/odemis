@@ -19,14 +19,17 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import math
 import threading
-from typing import List, Tuple, Optional
+from abc import ABCMeta, abstractmethod
+from typing import List, Tuple
 
 import numpy
 from scipy.ndimage import binary_fill_holes
 from shapely.geometry import Polygon, box
 
 from odemis import model
+from odemis.acq.fastem import STAGE_PRECISION
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
@@ -34,11 +37,85 @@ from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.model import CALIBRATION_2, CALIBRATION_3
 from odemis.util.raster import get_polygon_grid_cells
 
-# The threshold is used to check if the ROA bounding box is larger in size
+# The threshold is used to check if the ROA/ROI bounding box is larger in size
 ACQ_SIZE_THRESHOLD = 0.002  # 2 mm
+# The limit is used to check if the ROI grid rects will be more
+HFW_LIMIT = 0.0005  # 500 μm
 
 
-class FastEMROA:
+class FastEMROABase(metaclass=ABCMeta):
+    """
+    Base class for FastEM ROA (region of acquisition).
+    """
+
+    def __init__(self, shape, main_data, overlap=0.06, name="", slice_index=0):
+        """
+        :param shape: (EditableShape or None) The shape representing the region of acquisition in the canvas.
+        :param main_data: (MainGUIData) The data corresponding to the entire GUI.
+        :param overlap: (float), optional
+            The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
+            overlap by 20%. By default, the overlap is 0.06, this means there is 6% overlap between the fields.
+        :param name: (str) Name of the region of acquisition (ROA).
+        :param slice_index: (int) The slice index of the region of acquisition.
+        """
+        self.shape = shape
+        self.name = model.StringVA(name)
+        self.slice_index = model.IntVA(slice_index)
+        self.main_data = main_data
+        # Shape represented using shapely.geometry.Polygon
+        self.polygon_shape = None
+        # List of tuples(int, int) containing the position indices of each field to be acquired.
+        # Automatically updated when the coordinates change.
+        self.field_indices = []
+        # List of tuples(Vec, Vec) containing the start and end position of rectangle representing a field to be acquired.
+        # Calculated based on field_indices
+        # Automatically updated when the coordinates change.
+        self.field_rects: List[Tuple[Vec, Vec]] = []
+        self.overlap = overlap
+
+    @abstractmethod
+    def calculate_field_indices(self):
+        """
+        Calculate and assign the field indices required to cover a polygon,
+        considering overlap between cells. The field_indices attribute is updated
+        and not returned by the function.
+        """
+        pass
+
+    @abstractmethod
+    def calculate_grid_rects(self):
+        """
+        Calculate the bounding rectangles for the grid cells that cover the polygon shape.
+        The field_rects attribute is updated and not returned by the function. The
+        field_indices attribute must be updated first using calculate_field_indices().
+        """
+        pass
+
+    @abstractmethod
+    def to_dict(self) -> dict:
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def from_dict(roa: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+        """
+        pass
+
+    @abstractmethod
+    def estimate_acquisition_time(self, acq_dwell_time: float):
+        """
+        Computes the approximate time it will take to run the acquisition.
+        """
+        pass
+
+
+class FastEMROA(FastEMROABase):
     """
     Representation of a FastEM ROA (region of acquisition).
     The region of acquisition is a megafield image, which consists of a sequence of single field images. Each single
@@ -58,27 +135,14 @@ class FastEMROA:
         :param slice_index: (int) The slice index of the region of acquisition. It is the z_position of the megafield
                      as stored on the external storage.
         """
-        self.shape = shape
-        self.name = model.StringVA(name)
-        self.slice_index = model.IntVA(slice_index)
-        self._main_data = main_data
+        super().__init__(shape, main_data, overlap, name, slice_index)
         self.roc_2 = model.VigilantAttribute(None)  # FastEMROC
         self.roc_3 = model.VigilantAttribute(None)  # FastEMROC
-        self._asm = self._main_data.asm
-        self._multibeam = self._main_data.multibeam
-        self._descanner = self._main_data.descanner
-        self._detector = self._main_data.mppc
+        self._asm = self.main_data.asm
+        self._multibeam = self.main_data.multibeam
+        self._descanner = self.main_data.descanner
+        self._detector = self.main_data.mppc
 
-        # Shape represented using shapely.geometry.Polygon
-        self.polygon_shape = None
-        # List of tuples(int, int) containing the position indices of each field to be acquired.
-        # Automatically updated when the coordinates change.
-        self.field_indices = []
-        # List of tuples(Vec, Vec) containing the start and end position of rectangle representing a field to be acquired.
-        # Calculated based on field_indices
-        # Automatically updated when the coordinates change.
-        self.field_rects: List[Tuple[Vec, Vec]] = []
-        self.overlap = overlap
         self.shape.points.subscribe(self.on_points, init=True)
 
     def to_dict(self) -> dict:
@@ -123,7 +187,7 @@ class FastEMROA:
         """Update the ROC 2 and 3 values based on ROA shape's position."""
         if self.shape:
             posx, posy = self.shape.get_position()
-            current_sample = self._main_data.current_sample.value
+            current_sample = self.main_data.current_sample.value
             if current_sample:
                 scintillator = current_sample.find_closest_scintillator((posx, posy))
                 if scintillator:
@@ -152,11 +216,11 @@ class FastEMROA:
             else:
                 self.calculate_field_indices()
 
-    def estimate_acquisition_time(self, acq_dwell_time: Optional[float] = None):
+    def estimate_acquisition_time(self, acq_dwell_time: float):
         """
         Computes the approximate time it will take to run the ROA (megafield) acquisition.
 
-        :param acq_dwell_time: (float or None) The acquisition dwell time.
+        :param acq_dwell_time: (float) The acquisition dwell time.
         :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s.
         """
         field_time = self._detector.getTotalFieldScanTime(acq_dwell_time) + 1.5  # there is about 1.5 seconds overhead per field
@@ -245,6 +309,273 @@ class FastEMROA:
             start_pos_y = ymax - (row + 1) * r_grid_width
             end_pos_x = start_pos_x + field_size[0]
             end_pos_y = start_pos_y + field_size[1]
+            p_start_pos = Vec(start_pos_x, start_pos_y)
+            p_end_pos = Vec(end_pos_x, end_pos_y)
+            rects.append((p_start_pos, p_end_pos))
+
+        # Assign the calculated field rectangles
+        self.field_rects = rects
+
+
+class FastEMROI(FastEMROABase):
+    """
+    Representation of a FastEM ROI (region of interest).
+    The region of interest is an overview image, which consists of a sequence of single-beam field images.
+    """
+
+    def __init__(self, shape, main_data, hfw, res, name="", slice_index=0):
+        """
+        :param shape: (EditableShape or None) The shape representing the region of acquisition in the canvas.
+        :param main_data: (MainGUIData) The data corresponding to the entire GUI.
+        :param hfw: (float) The horizontal field width of the region of interest (ROI) in m.
+        :param res: (tuple) The resolution of the ROI in pixels.
+        :param name: (str) Name of the ROI.
+        :param slice_index: (int) The slice index of the region of interest.
+        """
+        overlap = STAGE_PRECISION / hfw
+        super().__init__(shape, main_data, overlap, name, slice_index)
+        self._area_size = (0, 0)
+        self._xmin = None
+        self._ymax = None
+        self.hfw = model.FloatVA(hfw)
+        self.res = model.TupleVA(tuple(res))
+
+        self._stage = self.main_data.stage
+        self._emitter = self.main_data.ebeam
+        md_emt = self._emitter.getMetadata()
+        self._detector = self.main_data.mppc
+        md_det = self._detector.getMetadata()
+        self._pxs_cor = md_det.get(model.MD_PIXEL_SIZE_COR, md_emt.get(model.MD_PIXEL_SIZE_COR, (1, 1)))
+        self._fov = (hfw * self._pxs_cor[0], hfw * self._pxs_cor[1] * res[1] / res[0])
+        self.shape.points.subscribe(self.on_points, init=True)
+        self.hfw.subscribe(self._on_hfw)
+        self.res.subscribe(self._on_res)
+
+    def to_dict(self) -> dict:
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        return {
+            "name": self.name.value,
+            "slice_index": self.slice_index.value,
+            "hfw": self.hfw.value,
+            "resolution": self.res.value,
+            "shape": self.shape.to_dict() if hasattr(self.shape, 'to_dict') else {},
+        }
+
+    @staticmethod
+    def from_dict(roi: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param roa: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (FastEMROI) reconstructed FastEMROI class.
+        """
+        name = roi["name"]
+        slice_index  = int(roi["slice_index"])
+        hfw = roi["hfw"]
+        res = roi["resolution"]
+        shape_data = roi["shape"]
+        shape_type = shape_data["type"]
+        if shape_type == RectangleOverlay.__name__:
+            shape = RectangleOverlay.from_dict(shape_data, tab_data)
+        elif shape_type == EllipseOverlay.__name__:
+            shape = EllipseOverlay.from_dict(shape_data, tab_data)
+        elif shape_type == PolygonOverlay.__name__:
+            shape = PolygonOverlay.from_dict(shape_data, tab_data)
+        else:
+            raise ValueError("Unknown shape type.")
+        roi = FastEMROI(shape, tab_data.main, hfw=hfw, res=res, name=name, slice_index=slice_index)
+        return roi
+
+    def on_points(self, points):
+        """Recalculate the field indices and rectangles when the points of the ROI have changed
+        (e.g. resize, moving).
+        :param points: list of nested points (x, y) representing the shape in physical coordinates.
+        """
+        if points:
+            # Update the polygon shape
+            self.polygon_shape = Polygon(points)
+            xmin, ymin, xmax, ymax = self.polygon_shape.bounds
+            self._area_size = (xmax - xmin, ymax - ymin)
+            # If the ROI bounding box is larger in size and the HFW is smaller than the limit,
+            # use threading so that the drawing operations are not affected
+            if (
+                (abs(self._area_size[0]) >= ACQ_SIZE_THRESHOLD or abs(self._area_size[1]) >= ACQ_SIZE_THRESHOLD)
+                and self.hfw.value <= HFW_LIMIT
+            ):
+                thread = threading.Thread(target=self.calculate_field_indices)
+                thread.daemon = True
+                thread.start()
+            else:
+                self.calculate_field_indices()
+
+    def _on_hfw(self, hfw):
+        """Callback function on HFW change."""
+        # Update the overlap based on the new HFW value
+        self.overlap = STAGE_PRECISION / hfw
+        # Update the field of view (FoV) based on the new HFW value
+        self._fov = (hfw * self._pxs_cor[0], hfw * self._pxs_cor[1] * self.res.value[1] / self.res.value[0])
+
+    def _on_res(self, res):
+        """Callback function on resolution change."""
+        # Update the field of view (FoV) based on the new resolution value
+        self._fov = (self.hfw.value * self._pxs_cor[0], self.hfw.value * self._pxs_cor[1] * res[1] / res[0])
+
+    def estimate_acquisition_time(self, acq_dwell_time: float):
+        """
+        Computes the approximate time it will take to run the ROI acquisition.
+
+        :param acq_dwell_time: (float) The acquisition dwell time.
+        :return (0 <= float): The estimated time for the ROI acquisition in s.
+        """
+        def count_stage_moves(field_indices):
+            """Counts horizontal and vertical moves based on tile order."""
+            indices = numpy.array(field_indices)
+
+            # Compute differences between consecutive tiles
+            diffs = numpy.diff(indices, axis=0)
+
+            # Count horizontal and vertical moves
+            horizontal_moves = numpy.count_nonzero(diffs[:, 0])  # Count nonzero x-differences
+            vertical_moves = numpy.count_nonzero(diffs[:, 1])    # Count nonzero y-differences
+
+            return horizontal_moves, vertical_moves
+
+        num_tiles = len(self.field_indices)  # Total number of tiles
+
+        # Time for tile acquisition
+        acq_time_tile = self.res.value[0] * self.res.value[1] * acq_dwell_time
+
+        # Total acquisition time for imaging (all tiles)
+        # add 2s to account for switching from one tile to next tile
+        # this time is added in TiledAcquisitionTask.estimateTime
+        acq_time = num_tiles * (acq_time_tile + 2)
+
+        # Stage movement time calculations
+        stage_speed_x = self._stage.speed.value['x']  # Speed of stage in x-direction [m/s]
+        stage_speed_y = self._stage.speed.value['y']  # Speed of stage in y-direction [m/s]
+
+        # Count horizontal and vertical moves
+        horizontal_moves, vertical_moves = count_stage_moves(self.field_indices)
+
+        # Horizontal movement: Total time for moving across rows
+        time_x = (horizontal_moves * self._fov[0]) / stage_speed_x
+
+        # Vertical movement: Time for repositioning to the next row
+        time_y = (vertical_moves * self._fov[1]) / stage_speed_y
+
+        # Total stage movement time
+        stage_time = time_x + time_y
+
+        # The stage movement precision is quite good (just a few pixels). The stage's
+        # position reading is much better, and we can assume it's below a pixel.
+        # So as long as we are sure there is some overlap, the tiles will be positioned
+        # correctly and without gap.
+        # Estimate stitching time based on number of pixels in the overlapping part
+        max_pxs = self.res.value[0] * self.res.value[1]
+        stitch_time = (num_tiles * max_pxs * self.overlap) / 1e8  # 1e8 is stitching speed
+
+        # Combine imaging time, stage movement time and stitch time
+        total_time = acq_time + stage_time + stitch_time
+
+        return total_time
+
+    def calculate_field_indices(self):
+        """
+        Calculate and assign the field indices required to cover a polygon,
+        considering overlap between cells. The field_indices attribute is updated
+        and not returned by the function.
+        """
+        if self.polygon_shape is None:
+            raise ValueError("Polygon shape is not defined.")
+
+        # The size of the smallest tile, non-including the overlap, which will be
+        # lost (and also indirectly represents the precision of the stage)
+        reliable_fov = ((1 - self.overlap) * self._fov[0], (1 - self.overlap) * self._fov[1])
+
+        # Round up the number of tiles needed. With a twist: if we'd need less
+        # than 1% of a tile extra, round down. This handles floating point
+        # errors and other manual rounding when when the requested area size is
+        # exactly a multiple of the FoV.
+        area_size = [(s - f * 0.01) if s > f else s
+                     for s, f in zip(self._area_size, reliable_fov)]
+        nx = math.ceil(area_size[0] / reliable_fov[0])
+        ny = math.ceil(area_size[1] / reliable_fov[1])
+
+        # We have a little bit more tiles than needed, we then have two choices
+        # on how to spread them:
+        # 1. Increase the total area acquired (and keep the overlap)
+        # 2. Increase the overlap (and keep the total area)
+        # We pick alternative 1 (no real reason)
+        xmin, ymin, xmax, ymax = self.polygon_shape.bounds
+        center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
+        total_size = (
+            nx * reliable_fov[0] + self._fov[0] * self.overlap,
+            ny * reliable_fov[1] + self._fov[1] * self.overlap,
+        )
+        xmin = center[0] - total_size[0] / 2
+        ymax = center[1] + total_size[1] / 2
+        self._xmin = xmin
+        self._ymax = ymax
+
+        # Create an empty grid for storing intersected tiles
+        # An intersected tile is any tile in the grid that intersects with (or falls within) the given polygon
+        tile_grid = numpy.zeros((ny, nx), dtype=bool)
+
+        # Vectorized conversion of polygon points to grid coordinates
+        points = numpy.array(self.polygon_shape.exterior.coords)
+        rows = numpy.floor((ymax - points[:, 1]) / reliable_fov[1]).astype(int)
+        cols = numpy.floor((points[:, 0] - xmin) / reliable_fov[0]).astype(int)
+
+        # Create array of (row, col) vertices
+        polygon_vertices = numpy.stack((rows, cols), axis=1)
+
+        intersected_tiles = get_polygon_grid_cells(polygon_vertices, include_neighbours=True)
+
+        for row, col in intersected_tiles:
+            if 0 <= row < ny and 0 <= col < nx:
+                # Define the bounds of the current tile
+                tile_bounds = box(
+                    xmin + col * reliable_fov[0],
+                    ymax - (row + 1) * reliable_fov[1],
+                    xmin + (col + 1) * reliable_fov[0],
+                    ymax - row * reliable_fov[1]
+                )
+                # Check if the tile intersects with the polygon shape
+                if self.polygon_shape.intersects(tile_bounds):
+                    tile_grid[row, col] = True
+
+        # Fill any holes in the grid to get contiguous tiles
+        filled_grid = binary_fill_holes(tile_grid)
+        rows, cols = numpy.nonzero(filled_grid)
+        tile_indices = list(zip(cols.tolist(), rows.tolist()))
+        self.field_indices = tile_indices
+
+    def calculate_grid_rects(self):
+        """
+        Calculate the bounding rectangles for the grid cells that cover the polygon shape.
+        The field_rects attribute is updated and not returned by the function. The
+        field_indices attribute must be updated first using calculate_field_indices().
+        """
+        if self._xmin is None or self._ymax is None:
+            return
+        # Extract bounding box coordinates from the polygon shape
+        rects = []
+
+        # Calculate grid dimensions considering overlap
+        r_grid_width = self._fov[1] * (1 - self.overlap)
+        c_grid_width = self._fov[0] * (1 - self.overlap)
+
+        # Iterate through each field index to compute the bounding rectangles
+        for col, row in self.field_indices:
+            start_pos_x = self._xmin + col * c_grid_width
+            start_pos_y = self._ymax - (row + 1) * r_grid_width
+            end_pos_x = start_pos_x + self._fov[0]
+            end_pos_y = start_pos_y + self._fov[1]
             p_start_pos = Vec(start_pos_x, start_pos_y)
             p_end_pos = Vec(end_pos_x, end_pos_y)
             rects.append((p_start_pos, p_end_pos))
