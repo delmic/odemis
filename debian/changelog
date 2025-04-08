@@ -1,3 +1,16 @@
+odemis (3.6.3-1) focal; urgency=medium
+
+  * New version: 3.6.3
+  * Main bug fixes:
+    - Limit dwell time of time-correlator to ~15 min (SPARC)
+    - Make sure the GUI is always started with the configured log-level
+    - Tescan: when blanking/unblanking e-beam, wait for the beam to be ready
+    - Tescan: if stage fails to move to requested position, report an error
+    - Andor Newton/iDus: never needs shutter when acquiring a spectrum
+    - TFS: make sure to not wait too long after moving a very small distance
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 08 Apr 2025 10:22:18 +0200
+
 odemis (3.6.2-1) focal; urgency=medium
 
   * New version: 3.6.2
