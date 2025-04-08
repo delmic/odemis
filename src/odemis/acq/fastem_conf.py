@@ -71,17 +71,20 @@ SCANNER_CONFIG = {
 }
 
 
-def configure_scanner(scanner, mode):
+def configure_scanner(scanner, mode, conf=None):
     """
     Configure the scanner for the requested mode by setting the VAs in the right order.
     :param scanner: (Scanner) The scanner component.
     :param mode: (OVERVIEW_MODE, LIVESTREAM_MODE, MEGAFIELD_MODE) The acquisition mode.
+    :param conf: (dict) The configuration dictionary containing keys same as the default configuration
+                 for the mode, see SCANNER_CONFIG. If None, the default configuration for the mode is used.
     """
 
-    try:
-        conf = SCANNER_CONFIG[mode]
-    except KeyError:
-        raise ValueError("Invalid mode %s." % mode)
+    if conf is None:
+        try:
+            conf = SCANNER_CONFIG[mode]
+        except KeyError:
+            raise ValueError("Invalid mode %s." % mode)
 
     scanner.multiBeamMode.value = conf["multiBeamMode"]
     scanner.external.value = conf["external"]
