@@ -142,9 +142,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if feature:
                 logging.info("moving to feature {}".format(feature.name.value))
                 # convert from stage position to view position
-                position = self._get_feature_position_at_view_posture(feature)
-                view_pos = self.pm.to_sample_stage_from_stage_position(position)
-                self.cnvs.view.moveStageTo((view_pos["x"], view_pos["y"]))
+                position_bare = self._get_feature_position_at_view_posture(feature)
+                # TODO: move this code into a dedicated method of CryoGUIData, and share it with CryoFeatureController
+                #view_pos = self.pm.to_sample_stage_from_stage_position(position)
+                #self.cnvs.view.moveStageTo((view_pos["x"], view_pos["y"]))
+                self.pm.stage.moveAbs(position_bare)
+                # if fm imaging, move focus too
+                if self.pm.current_posture.value == FM_IMAGING:
+                    self.tab_data.main.focus.moveAbs(feature.fm_focus_position.value)
                 self.tab_data.main.currentFeature.value = feature
             else:
                 # Move to selected point (if normally allowed to move)
