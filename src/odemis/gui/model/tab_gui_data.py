@@ -282,6 +282,8 @@ class CryoGUIData(MicroscopyGUIData):
         for p in pm.postures: # calculate the position at all postures
             get_feature_position_at_posture(pm, feature, p)
 
+        logging.debug("Adding new feature %s at stage position %s, postures are: %s", f_name, stage_position, feature.posture_positions)
+
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
         return feature
