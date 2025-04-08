@@ -36,7 +36,7 @@ from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
-from odemis.acq.move import MicroscopePostureManager, SEM_IMAGING, FM_IMAGING
+from odemis.acq.move import MicroscopePostureManager, SEM_IMAGING, FM_IMAGING, UNKNOWN
 
 MODE_EDIT_FEATURES = 1
 MODE_SHOW_FEATURES = 2
@@ -242,6 +242,11 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         def in_radius(c_x, c_y, r, x, y):
             return math.hypot(c_x - x, c_y - y) <= r
 
+        # TODO: can be dropped once the CryoFeature class has a position in (absolute) sample stage
+        #  coordinates, and it's used in this overlay.
+        if self.pm.current_posture.value == UNKNOWN:
+            return None
+
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
         for feature in self.tab_data.main.features.value:
             position = self._get_feature_position_at_view_posture(feature)
@@ -276,6 +281,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         Draw all the features, on their location, indicating their status and whether it's selected or hovered on.
         """
         if not self.show:
+            return
+
+        if self.pm.current_posture.value == UNKNOWN:
+            logging.debug("Not drawing features, current posture is UNKNOWN")
             return
 
         # Show each feature icon and label if applicable
@@ -349,12 +358,17 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         return pos
 
     def _get_feature_position_at_view_posture(self, feature: CryoFeature) -> Dict[str, float]:
-        """Get the feature position at the view posture, create it if it doesn't exist"""
+        """Get the feature position at the view posture, create it if it doesn't exist
+        :raise IndexError: if the current posture is UNKNOWN
+        """
+        posture = self.pm.current_posture.value
+        if posture == UNKNOWN:
+            raise IndexError("Cannot get feature position at unknown posture")
 
         return get_feature_position_at_posture(
             pm=self.pm,
             feature=feature,
-            posture=self.pm.current_posture.value, #self.view_posture,
+            posture=posture,
         )
 
     def _on_view_posture_change(self, posture):

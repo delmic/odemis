@@ -23,6 +23,7 @@ from odemis.acq.milling.tasks import __file__ as milling_tasks_file
 from odemis.acq.move import (
     FM_IMAGING,
     MILLING,
+    UNKNOWN,
     POSITION_NAMES,
     MicroscopePostureManager,
 )
@@ -150,6 +151,9 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
     :param posture: the posture to get the position for
     :param recalculate: if True, force recalculate the position, otherwise use the existing one
     :return: the position for the given posture"""
+    if posture == UNKNOWN:
+        raise ValueError("Cannot compute position for UNKNOWN posture")
+
     position = feature.get_posture_position(posture)
 
     # if the position doesn't exist at that posture, create it
