@@ -35,6 +35,9 @@ from .fastem_project_roas_tab import FastEMProjectROAsTab
 from .fastem_project_sections_tab import FastEMProjectSectionsTab
 from .fastem_project_settings_tab import FastEMProjectSettingsTab
 from .fastem_setup_tab import FastEMSetupTab
+from .fastem_single_beam_tab import FastEMSingleBeamTab
+from .fastem_multi_beam_tab import FastEMMultiBeamTab
+from .fastem_project_rois_tab import FastEMProjectROIsTab
 from .localization_tab import LocalizationTab
 from .mimas_align_tab import MimasAlignTab
 from .secom_align_tab import SecomAlignTab

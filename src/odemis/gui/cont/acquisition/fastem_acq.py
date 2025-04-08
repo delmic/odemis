@@ -57,15 +57,17 @@ from odemis.gui import (
     img,
 )
 from odemis.gui.comp import buttons
-from odemis.gui.comp.fastem_roa import FastEMROA
+from odemis.gui.comp.fastem_roa import FastEMROA, FastEMROI
 from odemis.gui.comp.fastem_user_settings_panel import (
-    DWELL_TIME_ACQUISITION,
-    DWELL_TIME_OVERVIEW_IMAGE,
+    DWELL_TIME_MULTI_BEAM,
+    DWELL_TIME_SINGLE_BEAM,
+    IMMERSION,
 )
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_config
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.conf.util import process_setting_metadata
+from odemis.gui.cont.fastem_grid import ROIColumnNames
 from odemis.gui.cont.fastem_project_tree import (
     EVT_TREE_NODE_CHANGE,
     NodeType,
@@ -199,10 +201,10 @@ class FastEMOverviewAcquiController(object):
         self._brightness_ctrl.Bind(wx.EVT_SLIDER, self._on_brightness_ctrl)
         self._dwell_time_ctrl.Bind(wx.EVT_SLIDER, self._on_dwell_time_ctrl)
         self._load_overview_img_ctrl.Bind(wx.EVT_TEXT, self._on_overview_img_load_ctrl)
-        self._main_data_model.user_dwell_time_overview.subscribe(
+        self._main_data_model.user_dwell_time_sb.subscribe(
             self._on_user_dwell_time, init=True
         )
-        self._tab_data_model.is_optical_autofocus_done.subscribe(
+        self._main_data_model.is_optical_autofocus_done.subscribe(
             self._on_va_change, init=True
         )
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
@@ -236,7 +238,7 @@ class FastEMOverviewAcquiController(object):
         view = self._main_tab_data.focussedView.value
         if view:
             scintillator_num = int(view.name.value)
-            self.overview_acq_data[scintillator_num][DWELL_TIME_OVERVIEW_IMAGE] = float(
+            self.overview_acq_data[scintillator_num][DWELL_TIME_SINGLE_BEAM] = float(
                 ctrl.GetValue()
             )
         self.update_acquisition_time()
@@ -265,7 +267,7 @@ class FastEMOverviewAcquiController(object):
                 self.overview_acq_data[scintillator_num][BRIGHTNESS]
             )
             self._dwell_time_ctrl.SetValue(
-                self.overview_acq_data[scintillator_num][DWELL_TIME_OVERVIEW_IMAGE]
+                self.overview_acq_data[scintillator_num][DWELL_TIME_SINGLE_BEAM]
             )
             self.check_acquire_button()
             self.update_acquisition_time()  # to update the message
@@ -289,8 +291,8 @@ class FastEMOverviewAcquiController(object):
                 BRIGHTNESS
             ] = self._main_data_model.sed.brightness.value
             self.overview_acq_data[scintillator_num][
-                DWELL_TIME_OVERVIEW_IMAGE
-            ] = self._main_data_model.user_dwell_time_overview.value
+                DWELL_TIME_SINGLE_BEAM
+            ] = self._main_data_model.user_dwell_time_sb.value
 
     def _on_user_dwell_time(self, value):
         """
@@ -301,7 +303,7 @@ class FastEMOverviewAcquiController(object):
         """
         self._dwell_time_ctrl.SetValue(value)
         for scintillator_num in self.overview_acq_data.keys():
-            self.overview_acq_data[scintillator_num][DWELL_TIME_OVERVIEW_IMAGE] = value
+            self.overview_acq_data[scintillator_num][DWELL_TIME_SINGLE_BEAM] = value
         self.update_acquisition_time()
 
     def _on_overview_img_load_ctrl(self, _):
@@ -325,7 +327,7 @@ class FastEMOverviewAcquiController(object):
     def check_acquire_button(self):
         self.btn_acquire.Enable(
             True
-            if self._tab_data_model.is_optical_autofocus_done.value
+            if self._main_data_model.is_optical_autofocus_done.value
             and self._main_tab_data.focussedView.value
             else False
         )
@@ -334,14 +336,14 @@ class FastEMOverviewAcquiController(object):
     def _on_is_calibrating(self, mode):
         self.btn_acquire.Enable(
             True
-            if self._tab_data_model.is_optical_autofocus_done.value
+            if self._main_data_model.is_optical_autofocus_done.value
             and self._main_tab_data.focussedView.value and not mode
             else False
         )
 
     def update_acquisition_time(self, _=None):
         lvl = None  # icon status shown
-        if not self._tab_data_model.is_optical_autofocus_done.value:
+        if not self._main_data_model.is_optical_autofocus_done.value:
             lvl = logging.WARN
             txt = "System is not calibrated, please run Optical Autofocus."
         elif not self._main_tab_data.focussedView.value:
@@ -448,11 +450,8 @@ class FastEMOverviewAcquiController(object):
             f = fastem.acquireTiledArea(
                 self._tab_data_model.semStream, self._main_data_model.stage, bbox
             )
-            t = fastem.estimateTiledAcquisitionTime(
-                self._tab_data_model.semStream, self._main_data_model.stage, bbox
-            )
             f.add_done_callback(partial(self.on_acquisition_done, num=num))
-            acq_futures[f] = t
+            acq_futures[f] = f.start_time - f.end_time
             self.acq_future = model.ProgressiveBatchFuture(acq_futures)
             self.acq_future.add_done_callback(self.full_acquisition_done)
             self._fs_connector = ProgressiveFutureConnector(
@@ -522,9 +521,9 @@ class FastEMOverviewAcquiController(object):
             )
 
 
-class FastEMAcquiController(object):
+class FastEMSingleBeamAcquiController(object):
     """
-    Takes care of the acquisition button and process in the FastEM acquisition tab.
+    Takes care of the acquisition button and process in the FastEM single-beam tab.
     """
 
     def __init__(self, tab_data, tab_panel, main_tab_data, project_tree_ctrl):
@@ -532,7 +531,394 @@ class FastEMAcquiController(object):
         :param tab_data: the FastEMAcquisitionTab tab data.
         :param tab_panel: (wx.Frame) The frame which contains the viewport.
         :param main_tab_data: the FastEMMainTab tab data.
-        :param project_tree_ctrl: (FastEMProjectTreeCtrl) The project tree control class.
+        :param project_tree_ctrl: (FastEMProjectTreeCtrl) The project tree control class
+                                  for single-beam.
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._tab_panel = tab_panel
+        self.main_tab_data = main_tab_data
+        self.project_tree_ctrl = project_tree_ctrl
+        self.project_tree_ctrl.Bind(
+            EVT_TREE_NODE_CHANGE, self._on_project_tree_node_change
+        )
+
+        # Setup the controls
+        self.acq_panel = SettingsPanel(
+            self._tab_panel.pnl_acq, size=(400, 40)
+        )
+        chk_ebeam_off_lbl, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
+            "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
+        )
+        chk_ebeam_off_lbl.SetToolTip(
+            "Automatically turned off the e-beam after acquisition is complete."
+        )
+
+        # ROI count
+        self.roi_count = 0
+        self.overview_streams = None
+
+        # For acquisition
+        self.btn_acquire = self._tab_panel.btn_acquire
+        self.btn_cancel = self._tab_panel.btn_cancel
+        self.gauge_acq = self._tab_panel.gauge_acq
+        self.lbl_acqestimate = self._tab_panel.lbl_acq_estimate
+        self.txt_num_rois = self._tab_panel.txt_num_roas
+        self.txt_num_rois.SetValue("0")
+        self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
+        self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+        self.acq_future = None  # ProgressiveBatchFuture
+        self._fs_connector = None  # ProgressiveFutureConnector
+
+        # Link buttons
+        self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+        # Hide gauge, disable acquisition button
+        self.gauge_acq.Hide()
+        self._tab_panel.Parent.Layout()
+        self.btn_acquire.Enable(False)
+
+        self._main_data_model.is_optical_autofocus_done.subscribe(
+            self._on_va_change, init=True
+        )
+        self.main_tab_data.project_settings_data.subscribe(self._on_update_acquisition_time)
+        self._roi_future_connector = []
+        self._on_roi_acquisition_done_sub_callback = {}
+        self._set_next_roi_settings_callback = {}
+
+        self.project_rois: Dict[str, Tuple[FastEMROI, Dict, NodeWindow]] = {}
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    def enable_project_tree_ctrl_checkboxes(self, flag: bool = True):
+        """
+        Enable or disable checkboxes for all items in the project tree control.
+
+        :param flag: If True, enables the checkboxes. If False, disables them.
+            Defaults to True.
+        """
+        items = self.project_tree_ctrl.get_all_items()
+        for item in items:
+            window = self.project_tree_ctrl.GetItemWindow(item)
+            window.checkbox.Enable(flag)
+
+    def _on_project_tree_node_change(self, evt):
+        """
+        Handle changes in the project tree node.
+
+        This function clears the current list of ROIs, counts them, and processes
+        selected nodes in the project tree control. It subscribes to various events
+        for selected ROIs, updates the total count, and refreshes acquisition-related
+        UI elements.
+        """
+        self.project_rois.clear()
+        self.roi_count = 0
+        items = self.project_tree_ctrl.get_all_items()
+        for item in items:
+            node = self.project_tree_ctrl.GetPyData(item)
+            window = self.project_tree_ctrl.GetItemWindow(item)
+            if window.checkbox.IsChecked():
+                if node.type == NodeType.PROJECT and node.name not in self.project_rois:
+                    self.project_rois[node.name] = []
+                elif node.type == NodeType.ROI:
+                    project_node = node.project_node()
+                    roa = node.row.roa
+                    data = node.row.data
+                    if project_node.name not in self.project_rois:
+                        self.project_rois[project_node.name] = []
+                    self.project_rois[project_node.name].append((roa, data, window))
+                    roa.shape.points.subscribe(self._on_update_acquisition_time)
+                    self.roi_count += 1
+        self.txt_num_rois.SetValue("%s" % self.roi_count)
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    def _on_update_acquisition_time(self, _=None):
+        """
+        Callback that listens to changes that influence the estimated acquisition time
+        and updates the displayed acquisition time in the GUI accordingly.
+        """
+        self.update_acquisition_time()
+
+    def _on_va_change(self, _):
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
+
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
+    def check_acquire_button(self):
+        self.btn_acquire.Enable(
+            True
+            if self._main_data_model.is_optical_autofocus_done.value
+            and self.main_tab_data.focussedView.value
+            else False
+        )
+
+    @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
+    def update_acquisition_time(self):
+        lvl = None  # icon status shown
+        if self.roi_count == 0:
+            lvl = logging.WARN
+            txt = "No region of interest selected"
+        elif not self._main_data_model.is_optical_autofocus_done.value:
+            lvl = logging.WARN
+            txt = "System is not calibrated, please run Optical Autofocus."
+        elif not self.main_tab_data.focussedView.value:
+            lvl = logging.WARN
+            txt = "No scintillator selected for single-beam acquisition."
+        else:
+            acq_time = 0
+            for _, rois in self.project_rois.items():
+                for roi, data, _ in rois:
+                    acq_time += roi.estimate_acquisition_time(
+                        acq_dwell_time=data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
+                    )
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
+            txt = "Estimated time is {}."
+            txt = txt.format(units.readable_time(acq_time))
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
+        self._set_status_message(txt, lvl)
+
+    @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
+    def _set_status_message(self, text, level=None):
+        self.lbl_acqestimate.SetLabel(text)
+        # update status icon to show the logging level
+        self.bmp_acq_status_info.Show(level in (logging.INFO, logging.DEBUG))
+        self.bmp_acq_status_warn.Show(level == logging.WARN)
+        self._tab_panel.Layout()
+
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
+    def _reset_acquisition_gui(self, text=None, level=None):
+        """
+        Set back every GUI elements to be ready for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        level (None or logging.*): logging level of the text, shown as an icon.
+          If None, no icon is shown.
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Show()
+        self.btn_acquire.Enable()
+        self.gauge_acq.Hide()
+        self.enable_project_tree_ctrl_checkboxes()
+        self._tab_panel.Layout()
+        self.acq_future = None
+        self._fs_connector = None
+        self._roi_future_connector.clear()
+        self._on_roi_acquisition_done_sub_callback.clear()
+        self._set_next_roi_settings_callback.clear()
+        self._main_data_model.is_acquiring.value = False
+
+        if text is not None:
+            self._set_status_message(text)
+        else:
+            self.update_acquisition_time()
+
+    # already running in main GUI thread as it receives event from GUI
+    def on_acquisition(self, evt):
+        """
+        Start the acquisition (really)
+        """
+        self._main_data_model.is_acquiring.value = True
+        self.btn_acquire.Enable(False)
+        self.btn_acquire.Hide()
+        self.btn_cancel.Enable()
+        self.btn_cancel.Show()
+        self.gauge_acq.Show()
+        self.enable_project_tree_ctrl_checkboxes(False)
+        self._tab_panel.Layout()
+
+        self.overview_streams = self._main_data_model.overview_streams.value.copy()
+        self.gauge_acq.Range = self.roi_count
+        self.gauge_acq.Value = 0
+
+        total_t = 0
+        acq_futures = {}
+        is_set_first_roa_settings = False
+        project_names = list(self.project_rois.keys())
+
+        flattened_rois = []  # List of tuples: (immersion, roi, data, window)
+        for project_name in project_names:
+            immersion = self.main_tab_data.project_settings_data.value[project_name][IMMERSION]
+            rois = self.project_rois[project_name]
+            for roi_tuple in rois:
+                flattened_rois.append((immersion, *roi_tuple))
+
+        # Create a list of futures for each ROI
+        for idx, (immersion, roi, data, window) in enumerate(flattened_rois):
+            try:
+                if not is_set_first_roa_settings:
+                    self._main_data_model.ebeam.dwellTime.value = data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
+                    self._main_data_model.sed.brightness.value = data[ROIColumnNames.BRIGHTNESS.value]
+                    self._main_data_model.sed.contrast.value = data[ROIColumnNames.CONTRAST.value]
+                    is_set_first_roa_settings = True
+
+                scanner_conf = {
+                    "multiBeamMode": False,
+                    "external": False,  # fullframe mode; controlled by SEM itself
+                    # manual: unblank when acquiring and the beam is blanked after the acquisition. Note that autoblanking does not
+                    # work reliably for the XTTKDetector, therefore (contrary to Odemis convention) we need to unblank
+                    # the beam here.
+                    "blanker": False,
+                    "immersion": immersion,  # disable to get a larger field of view
+                    "horizontalFoV": roi.hfw.value,  # maximum FoV without seeing the pole-piece (with T1, immersion off).
+                    # XT usually uses a rectangular ratio for the resolution such as 1536 x 1024. Thus, for a fixed FoV the maximum
+                    # width is reached earlier, but the heights could be in principle still increased. By using a more square
+                    # aspect ratio, it is possible to increase the physically scanned area per tile and thus reduce the number
+                    # of tiles that need to be acquired.
+                    "resolution": roi.res.value,  # [px]
+                }
+                f = fastem.acquireNonRectangularTiledArea(
+                    roi,
+                    self._tab_data_model.semStream,
+                    self._main_data_model.stage,
+                    data[ROIColumnNames.DWELL_TIME.value] * 1e-6,  # [s]
+                    scanner_conf
+                )
+
+                # Add a callback to set the next ROI settings
+                if idx < len(flattened_rois) - 1:
+                    next_roi_data = flattened_rois[idx + 1][2]  # Get the next ROI 'data'
+                    set_next_roa_settings_callback = partial(self.set_next_roi_settings, next_roi_data=next_roi_data)
+                    self._set_next_roi_settings_callback[roi] = set_next_roa_settings_callback
+                    f.add_done_callback(set_next_roa_settings_callback)
+
+                roi_sub_callback = partial(
+                    self.on_roi_acquisition_done, roi=roi, window=window
+                )
+                self._on_roi_acquisition_done_sub_callback[roi] = roi_sub_callback
+                f.add_done_callback(roi_sub_callback)
+                t = f.end_time - f.start_time
+                total_t += t
+                f.set_progress(start=time.time(), end=time.time() + total_t)
+                self._roi_future_connector.append(
+                    ProgressiveFutureConnector(f, window.gauge)
+                )
+                acq_futures[f] = t
+            except Exception:
+                logging.exception("Failed to start ROI acquisition")
+                self._reset_acquisition_gui(
+                    "Acquisition failed (see log panel).", level=logging.WARNING
+                )
+
+        self.acq_future = model.ProgressiveBatchFuture(acq_futures)
+        acquisition_done_callback = partial(
+            self.full_acquisition_done, estimated_time=total_t
+        )
+        self.acq_future.add_done_callback(acquisition_done_callback)
+        self._fs_connector = ProgressiveFutureConnector(
+            self.acq_future, self.gauge_acq, self.lbl_acqestimate
+        )
+
+    def set_next_roi_settings(self, _, next_roi_data):
+        """
+        Callback called when a ROA acquisition is finished (either successfully,
+        cancelled or failed)
+        """
+        try:
+            self._main_data_model.ebeam.dwellTime.value = next_roi_data[ROIColumnNames.DWELL_TIME.value] * 1e-6
+            self._main_data_model.sed.brightness.value = next_roi_data[ROIColumnNames.BRIGHTNESS.value]
+            self._main_data_model.sed.contrast.value = next_roi_data[ROIColumnNames.CONTRAST.value]
+        except Exception:
+            logging.exception("Failed to set next ROI settings")
+
+    @call_in_wx_main
+    def on_roi_acquisition_done(self, future, roi, window):
+        """
+        Callback called when a ROA acquisition is finished (either successfully,
+        cancelled or failed)
+        """
+        def update_status(text: str, color: str):
+            window.status_text.SetForegroundColour(color)
+            window.status_text.SetLabelText(text)
+
+        success = False
+        try:
+            da = future.result()
+            update_status("Finished", FG_COLOUR_EDIT)
+            success = True
+        except CancelledError:
+            update_status("Cancelled", FG_COLOUR_WARNING)
+            success = False
+        except Exception:
+            update_status("Failed", FG_COLOUR_ERROR)
+            success = False
+        finally:
+            window.Layout()
+            window.Refresh()
+
+        if success:
+            # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
+            current_sample = self._main_data_model.current_sample.value
+            current_user = self._main_data_model.current_user.value
+            if current_sample:
+                user_dir = os.path.join(OVERVIEW_IMAGES_DIR, current_user)
+                os.makedirs(user_dir, exist_ok=True)
+                fn = os.path.join(user_dir, f"fastem_{id(roi.shape)}.ome.tiff")
+                dataio.tiff.export(fn, da, pyramid=True)
+                da = open_acquisition(fn)
+                s = data_to_static_streams(da)[0]
+                s = FastEMOverviewStream(s.name.value, s.raw[0])
+                self.overview_streams[roi.shape] = s
+                os.remove(fn)
+
+    def on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        if self.acq_future is None:
+            msg = "Tried to cancel acquisition while it was not started"
+            logging.warning(msg)
+            self._reset_acquisition_gui()
+            return
+
+        self.acq_future.cancel()
+        fastem._executor.cancel()
+        # all the rest will be handled by full_acquisition_done()
+
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
+    def full_acquisition_done(self, future, estimated_time=0):
+        """
+        Callback called when the acquisition is finished (either successfully or
+        cancelled)
+        """
+        estimated_time = units.readable_time(math.ceil(estimated_time))
+        try:
+            future.result()
+            self._reset_acquisition_gui(
+                f"Acquisition done, estimated time is {estimated_time}.",
+                level=logging.INFO,
+            )
+        except CancelledError:
+            self._reset_acquisition_gui(
+                f"Acquisition cancelled, estimated time is {estimated_time}."
+            )
+        except Exception:
+            # leave the gauge, to give a hint on what went wrong.
+            logging.exception("Acquisition failed")
+            self._reset_acquisition_gui(
+                "Acquisition failed (see log panel).", level=logging.WARNING
+            )
+        finally:
+            # Update the overview streams in the main data model
+            self._main_data_model.overview_streams.value = self.overview_streams
+            if self.chk_ebeam_off.IsChecked():
+                # Turn off e-beam if the checkbox is ticked
+                self._main_data_model.emState.value = STATE_OFF
+
+
+class FastEMMultiBeamAcquiController(object):
+    """
+    Takes care of the acquisition button and process in the FastEM multi-beam tab.
+    """
+
+    def __init__(self, tab_data, tab_panel, main_tab_data, project_tree_ctrl):
+        """
+        :param tab_data: the FastEMAcquisitionTab tab data.
+        :param tab_panel: (wx.Frame) The frame which contains the viewport.
+        :param main_tab_data: the FastEMMainTab tab data.
+        :param project_tree_ctrl: (FastEMProjectTreeCtrl) The project tree control class
+                                  for multi-beam.
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
@@ -753,7 +1139,7 @@ class FastEMAcquiController(object):
                         ],
                         acq_dwell_time=self.main_tab_data.project_settings_data.value[
                             project_name
-                        ][DWELL_TIME_ACQUISITION],
+                        ][DWELL_TIME_MULTI_BEAM],
                     )
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = "Estimated time is {}."
@@ -910,7 +1296,7 @@ class FastEMAcquiController(object):
         project_names = list(self.project_roas.keys())
         self._main_data_model.multibeam.dwellTime.value = (
             self.main_tab_data.project_settings_data.value[project_names[0]][
-                DWELL_TIME_ACQUISITION
+                DWELL_TIME_MULTI_BEAM
             ]
         )
         logging.debug(
@@ -955,7 +1341,7 @@ class FastEMAcquiController(object):
                     stop_acq_on_failure=stop_acq_on_failure,
                     acq_dwell_time=self.main_tab_data.project_settings_data.value[
                         project_name
-                    ][DWELL_TIME_ACQUISITION],
+                    ][DWELL_TIME_MULTI_BEAM],
                 )
                 # If this is the last ROA in the current project, set the dwell time for the next project
                 # on completion of current project's future
@@ -996,15 +1382,14 @@ class FastEMAcquiController(object):
         )
         self.acq_future.add_done_callback(acquisition_done_callback)
 
-    def set_next_project_dwell_time(self, future, next_project_name):
+    def set_next_project_dwell_time(self, _, next_project_name):
         """
         Set the dwell time for the next project.
         """
         try:
-            future.result()
             self._main_data_model.multibeam.dwellTime.value = (
                 self.main_tab_data.project_settings_data.value[next_project_name][
-                    DWELL_TIME_ACQUISITION
+                    DWELL_TIME_MULTI_BEAM
                 ]
             )
             logging.debug(
@@ -1659,7 +2044,7 @@ class FastEMCalibrationController:
             self._tab_data_model.is_calibrating.value = False
             self._tab_panel.btn_acq.Enable(
                 True
-                if self._tab_data_model.is_optical_autofocus_done.value
+                if self._main_data_model.is_optical_autofocus_done.value
                 and focussed_view
                 else False
             )
