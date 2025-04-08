@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import math
-from enum import Enum
 from typing import List, Optional
 
 import wx
@@ -29,6 +28,7 @@ from wx.grid import EVT_GRID_CELL_CHANGING, GridCellFloatEditor, GridCellNumberE
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.gui.comp.fastem_roa import FastEMROA
+from odemis.gui.cont.fastem_grid import RibbonColumnNames, SectionColumnNames
 from odemis.gui.cont.fastem_grid_base import (
     DEFAULT_PARENT,
     EVT_GRID_ROW_CHANGED,
@@ -37,22 +37,10 @@ from odemis.gui.cont.fastem_grid_base import (
     GridBase,
     Row,
 )
-from odemis.gui.cont.tabs.fastem_project_ribbons_tab import RibbonColumnNames
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
 from odemis.util.filename import make_compliant_string
-
-
-class SectionColumnNames(Enum):
-    NAME = "Name"
-    SLICE_IDX = "Slice Index"
-    POSX = "Position.X [m]"
-    POSY = "Position.Y [m]"
-    SIZEX = "Size.X"
-    SIZEY = "Size.Y"
-    ROT = "Rotation [°]"
-    PARENT = "Parent"
 
 
 class SectionRow(Row):
