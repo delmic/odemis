@@ -232,6 +232,13 @@
             </object>
           </object>
           <object class="sizeritem">
+            <object class="wxStaticLine">
+              <size>-1, 1</size>
+              <flag>wxEXPAND</flag>
+              <bg>#333333</bg>
+            </object>
+          </object>
+          <object class="sizeritem">
             <object class="wxPanel" name="pnl_tabs">
               <flag>wxEXPAND</flag>
               <bg>#333333</bg>

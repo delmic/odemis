@@ -201,7 +201,7 @@
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_acq">
                             <bg>#333333</bg>
-                            <icon>../../img/icon/ico_acqui.png</icon>
+                            <icon>../../img/icon/ico_single_beam.png</icon>
                             <height>48</height>
                             <face_colour>blue</face_colour>
                             <label>START</label>

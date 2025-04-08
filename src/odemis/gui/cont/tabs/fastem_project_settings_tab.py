@@ -23,14 +23,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import wx
 
 import odemis.gui.model as guimod
+from odemis.acq.fastem import STAGE_PRECISION
+from odemis.gui import BG_COLOUR_LEGEND, BG_COLOUR_MAIN, BG_COLOUR_SEPARATOR, img
 from odemis.gui.comp.fastem_user_settings_panel import (
     CONTROL_CONFIG,
-    DWELL_TIME_ACQUISITION,
+    DWELL_TIME_MULTI_BEAM,
+    DWELL_TIME_SINGLE_BEAM,
+    HFW,
+    IMMERSION,
     OVERVOLTAGE,
+    PIXEL_SIZE,
+    RESOLUTION,
     VOLTAGE,
 )
+from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.conf.util import format_choices, hfw_choices
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.util import units
 
 
 class FastEMProjectSettingsTab(Tab):
@@ -48,6 +58,7 @@ class FastEMProjectSettingsTab(Tab):
         :param main_tab_data: The FastEMMainTab tab data.
         """
         self.tab_data = guimod.MicroscopyGUIData(main_data)
+        self.main_data = main_data
         self.main_tab_data = main_tab_data
         self.panel = panel
         super().__init__(name, button, panel, main_frame, self.tab_data)
@@ -55,26 +66,97 @@ class FastEMProjectSettingsTab(Tab):
         # need to wait for the tab to be shown on the first time.
         self._initialized_after_show = False
 
-        self.dwell_time_acquisition_ctrl = None
+        self.dwell_time_mb_ctrl = None
+        self.dwell_time_sb_ctrl = None
+        self.hfw_ctrl = None
+        self.resolution_ctrl = None
+        self.pixel_size_ctrl = None
+        self.immersion_mode_ctrl = None
+        self._immersion_mode_hfw_choices = {}
+        self._fill_hfw_choices()
 
-        self.project_settings = SettingsPanel(
-            panel, size=(int(panel.Parent.Size[0] / 2.5), int(panel.Parent.Size[1] / 1.5))
+        # Split the panel into two sub-panels
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Left panel is for single beam settings
+        # Create a scrolled window for the left panel since it has more controls
+        left_panel = wx.ScrolledWindow(
+            panel,
+            size=(int(panel.Parent.Size[0] / 2.5), panel.Size[1]),
+            style=wx.VSCROLL,
+        )
+        left_panel.SetScrollRate(5, 5)
+        left_panel.SetBackgroundColour("#4D4D4D")
+        left_sizer = wx.BoxSizer(wx.VERTICAL)
+        single_beam_caption = CaptionBar(left_panel, "SINGLE-BEAM", False)
+        single_beam_caption.set_logo(img.getBitmap("icon/ico_single_beam.png"))
+        single_beam_caption.SetForegroundColour(BG_COLOUR_LEGEND)
+        single_beam_panel = wx.Panel(
+            left_panel, name="pnl_single_beam_settings", size=left_panel.Size
+        )
+        single_beam_panel.SetBackgroundColour(BG_COLOUR_MAIN)
+        left_sizer.Add(single_beam_caption, 0, wx.EXPAND)
+        left_sizer.Add(single_beam_panel, 1, wx.EXPAND | wx.TOP, 5)
+        left_panel.SetSizer(left_sizer)
+
+        # Right panel is for multi beam settings
+        right_panel = wx.Panel(
+            panel, size=(int(panel.Parent.Size[0] / 2.5), panel.Size[1])
+        )
+        right_panel.SetBackgroundColour("#4D4D4D")
+        right_sizer = wx.BoxSizer(wx.VERTICAL)
+        multi_beam_caption = CaptionBar(right_panel, "MULTI-BEAM", False)
+        multi_beam_caption.set_logo(img.getBitmap("icon/ico_multi_beam.png"))
+        multi_beam_caption.SetForegroundColour(BG_COLOUR_LEGEND)
+        multi_beam_panel = wx.Panel(
+            right_panel, name="pnl_multi_beam_settings", size=right_panel.Size
+        )
+        multi_beam_panel.SetBackgroundColour(BG_COLOUR_MAIN)
+        right_sizer.Add(multi_beam_caption, 0, wx.EXPAND)
+        right_sizer.Add(multi_beam_panel, 1, wx.EXPAND | wx.TOP, 5)
+        right_panel.SetSizer(right_sizer)
+
+        divider_line = wx.StaticLine(panel, style=wx.LI_VERTICAL, size=(1, -1))
+        divider_line.SetBackgroundColour(BG_COLOUR_SEPARATOR)
+
+        # Add components to the horizontal sizer
+        h_sizer.Add(left_panel, 1, wx.EXPAND | wx.ALL)
+        h_sizer.Add(divider_line, 0, wx.EXPAND | wx.TOP | wx.BOTTOM)
+        h_sizer.Add(right_panel, 1, wx.EXPAND | wx.ALL)
+
+        # Apply sizer to main panel
+        self.panel.SetSizer(h_sizer)
+
+        self.single_beam_settings = SettingsPanel(
+            single_beam_panel, size=single_beam_panel.Size
+        )
+        self.multi_beam_settings = SettingsPanel(
+            multi_beam_panel, size=multi_beam_panel.Size
         )
 
-        self._create_project_settings_entries()
+        # Create the controls for the single beam and multi beam settings
+        self._create_ctrl_entries()
         self.main_tab_data.current_project.subscribe(
             self._on_current_project, init=True
         )
-        self.tab_data.main.user_dwell_time_acquisition.subscribe(
-            self._on_user_dwell_time_acquisition
-        )
+        self.tab_data.main.user_dwell_time_mb.subscribe(self._on_user_dwell_time_mb)
+        self.tab_data.main.user_dwell_time_sb.subscribe(self._on_user_dwell_time_sb)
 
-    def _on_user_dwell_time_acquisition(self, dwell_time):
-        """Handles changes to the user dwell time acquisition and updates the control and data model."""
-        self.dwell_time_acquisition_ctrl.SetValue(dwell_time)
+    def _on_user_dwell_time_sb(self, dwell_time):
+        """Handles changes to the user dwell time for single-beam and updates the control and data model."""
+        self.dwell_time_sb_ctrl.SetValue(dwell_time)
         settings_data = self.main_tab_data.project_settings_data.value
         for project in settings_data.keys():
-            settings_data[project][DWELL_TIME_ACQUISITION] = dwell_time
+            settings_data[project][DWELL_TIME_SINGLE_BEAM] = dwell_time
+        self.main_tab_data.project_settings_data._set_value(
+            settings_data, must_notify=True
+        )
+
+    def _on_user_dwell_time_mb(self, dwell_time):
+        """Handles changes to the user dwell time for multi-beam and updates the control and data model."""
+        self.dwell_time_mb_ctrl.SetValue(dwell_time)
+        settings_data = self.main_tab_data.project_settings_data.value
+        for project in settings_data.keys():
+            settings_data[project][DWELL_TIME_MULTI_BEAM] = dwell_time
         self.main_tab_data.project_settings_data._set_value(
             settings_data, must_notify=True
         )
@@ -83,107 +165,383 @@ class FastEMProjectSettingsTab(Tab):
         """Updates the controls when the current project changes."""
         if len(current_project) > 0:
             if current_project in self.main_tab_data.project_settings_data.value:
-                self.dwell_time_acquisition_ctrl.SetValue(
+                self.dwell_time_mb_ctrl.SetValue(
                     self.main_tab_data.project_settings_data.value[current_project][
-                        DWELL_TIME_ACQUISITION
+                        DWELL_TIME_MULTI_BEAM
                     ]
+                )
+                self.dwell_time_sb_ctrl.SetValue(
+                    self.main_tab_data.project_settings_data.value[current_project][
+                        DWELL_TIME_SINGLE_BEAM
+                    ]
+                )
+                current_immersion = self.immersion_mode_ctrl.GetValue()
+                immersion = self.main_tab_data.project_settings_data.value[current_project][
+                    IMMERSION
+                ]
+                self.immersion_mode_ctrl.SetValue(immersion)
+                hfw = self.main_tab_data.project_settings_data.value[current_project][
+                    HFW
+                ]
+                if current_immersion != immersion:
+                    self._reset_hfw_ctrl(hfw, immersion)
+                else:
+                    self.hfw_ctrl.SetValue(hfw)
+                    self.main_data.user_hfw_sb.value = self.hfw_ctrl.GetClientData(
+                        self.hfw_ctrl.FindString(hfw)
+                    )
+                resolution = self.main_tab_data.project_settings_data.value[
+                    current_project
+                ][RESOLUTION]
+                self.resolution_ctrl.SetValue(resolution)
+                self.pixel_size_ctrl.SetValue(
+                    self.main_tab_data.project_settings_data.value[current_project][
+                        PIXEL_SIZE
+                    ]
+                )
+                self.main_data.user_resolution_sb.value = (
+                    self.resolution_ctrl.GetClientData(
+                        self.resolution_ctrl.FindString(resolution)
+                    )
                 )
             else:
                 self.main_tab_data.project_settings_data.value[current_project] = {}
                 self.main_tab_data.project_settings_data.value[current_project][
-                    DWELL_TIME_ACQUISITION
-                ] = self.tab_data.main.user_dwell_time_acquisition.value
+                    DWELL_TIME_MULTI_BEAM
+                ] = self.dwell_time_mb_ctrl.GetValue()
+                self.main_tab_data.project_settings_data.value[current_project][
+                    DWELL_TIME_SINGLE_BEAM
+                ] = self.dwell_time_sb_ctrl.GetValue()
+                self.main_tab_data.project_settings_data.value[current_project][
+                    HFW
+                ] = self.hfw_ctrl.GetValue()
+                self.main_tab_data.project_settings_data.value[current_project][
+                    RESOLUTION
+                ] = self.resolution_ctrl.GetValue()
+                self.main_tab_data.project_settings_data.value[current_project][
+                    IMMERSION
+                ] = self.immersion_mode_ctrl.GetValue()
+                self.main_tab_data.project_settings_data.value[current_project][
+                    PIXEL_SIZE
+                ] = self.pixel_size_ctrl.GetValue()
 
-    def on_control_event(self, evt):
-        """Handles control events from the various input elements in the tab."""
+    def _fill_hfw_choices(self):
+        """Fills the HFW choices based on the current immersion mode."""
+        init_immersion = self.tab_data.main.ebeam.immersion.value
+        horizontal_fw_choices = hfw_choices(
+            None, self.tab_data.main.ebeam.horizontalFoV, None
+        )
+        hfw_unit = self.tab_data.main.ebeam.horizontalFoV.unit
+        hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
+        self._immersion_mode_hfw_choices[init_immersion] = (
+            hfw_choices_formatted,
+            choices_si_prefix,
+            hfw_unit,
+        )
+        self.tab_data.main.ebeam.immersion.value = not init_immersion
+        horizontal_fw_choices = hfw_choices(
+            None, self.tab_data.main.ebeam.horizontalFoV, None
+        )
+        hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
+        self._immersion_mode_hfw_choices[not init_immersion] = (
+            hfw_choices_formatted,
+            choices_si_prefix,
+            hfw_unit,
+        )
+        self.tab_data.main.ebeam.immersion.value = init_immersion
+
+    def on_evt_hfw_sb_ctrl(self, evt):
         ctrl = evt.GetEventObject()
         if not ctrl:
             return
-        entry = ctrl.GetName()
 
-        if evt.GetEventType() == wx.EVT_TEXT_ENTER.typeId:
-            if entry == OVERVOLTAGE:
-                # Call on_text_enter explicitly as it is not binded
-                ctrl.on_text_enter(evt)
-                value = ctrl.GetValue()
-                if len(self.main_tab_data.current_project.value) > 0:
-                    self.main_tab_data.project_settings_data.value[
-                        self.main_tab_data.current_project.value
-                    ][entry] = value
-                    self.tab_data.main.mppc.overVoltage.value = value
-        elif evt.GetEventType() == wx.EVT_COMBOBOX.typeId:
-            value = ctrl.GetValue()
-            if entry == VOLTAGE:
-                if len(self.main_tab_data.current_project.value) > 0:
-                    self.main_tab_data.project_settings_data.value[
-                        self.main_tab_data.current_project.value
-                    ][entry] = value
-                    self.tab_data.main.ebeam.accelVoltage.value = ctrl.GetClientData(
-                        ctrl.GetSelection()
+        value = ctrl.GetClientData(ctrl.GetSelection())
+        if value != self.main_data.user_hfw_sb.value:
+            self.main_data.user_hfw_sb.value = value
+            resolution = self.resolution_ctrl.GetClientData(
+                self.resolution_ctrl.GetSelection()
+            )
+            # Update the pixel size control
+            self.pixel_size_ctrl.SetValue(
+                units.readable_str(value / resolution[0], unit="m", sig=4)
+            )
+            settings_data = self.main_tab_data.project_settings_data.value
+            current_project = self.main_tab_data.current_project.value
+            settings_data[current_project][HFW] = ctrl.GetValue()
+            settings_data[current_project][PIXEL_SIZE] = self.pixel_size_ctrl.GetValue()
+            self.main_tab_data.project_settings_data._set_value(
+                settings_data, must_notify=True
+            )
+
+    def _create_hfw_sb_entry(self):
+        """Creates the control for single beam HFW."""
+        _, ctrl = self.single_beam_settings.add_combobox_control(HFW)
+        self.hfw_ctrl = ctrl
+
+        hfw_choices_formatted, choices_si_prefix, hfw_unit = (
+            self._immersion_mode_hfw_choices[self.tab_data.main.ebeam.immersion.value]
+        )
+        # Set choices
+        if choices_si_prefix:
+            for choice, formatted in hfw_choices_formatted:
+                if choice > STAGE_PRECISION:
+                    ctrl.Append(
+                        "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
                     )
-        elif evt.GetEventType() == wx.EVT_SLIDER.typeId:
-            value = ctrl.GetValue()
-            if entry == DWELL_TIME_ACQUISITION:
-                if len(self.main_tab_data.current_project.value) > 0:
-                    settings_data = self.main_tab_data.project_settings_data.value
-                    settings_data[self.main_tab_data.current_project.value][
-                        entry
-                    ] = value
-                    self.main_tab_data.project_settings_data._set_value(
-                        settings_data, must_notify=True
+        else:
+            for choice, formatted in hfw_choices_formatted:
+                if choice > STAGE_PRECISION:
+                    ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
+        ctrl.SetSelection(0)
+        self.main_data.user_hfw_sb.value = ctrl.GetClientData(ctrl.GetSelection())
+        ctrl.SetName(HFW)
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_hfw_sb_ctrl)
+
+    def on_evt_resolution_sb_ctrl(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetClientData(ctrl.GetSelection())
+        if value != self.main_data.user_resolution_sb.value:
+            self.main_data.user_resolution_sb.value = value
+            hfw = self.hfw_ctrl.GetClientData(self.hfw_ctrl.GetSelection())
+            # Update the pixel size control
+            self.pixel_size_ctrl.SetValue(
+                units.readable_str(hfw / value[0], unit="m", sig=4)
+            )
+            settings_data = self.main_tab_data.project_settings_data.value
+            current_project = self.main_tab_data.current_project.value
+            settings_data[current_project][RESOLUTION] = ctrl.GetValue()
+            settings_data[current_project][PIXEL_SIZE] = self.pixel_size_ctrl.GetValue()
+            self.main_tab_data.project_settings_data._set_value(
+                settings_data, must_notify=True
+            )
+
+    def _create_resolution_sb_entry(self):
+        """Creates the control for single beam resolution."""
+        # Format the provided choices
+        _, ctrl = self.single_beam_settings.add_combobox_control(RESOLUTION)
+        self.resolution_ctrl = ctrl
+        res_unit = self.tab_data.main.ebeam.resolution.unit
+        res_choices_formatted, choices_si_prefix = format_choices(
+            self.tab_data.main.ebeam.resolution.choices
+        )
+        # Set choices
+        if choices_si_prefix:
+            for choice, formatted in res_choices_formatted:
+                ctrl.Append("%s %s" % (formatted, choices_si_prefix + res_unit), choice)
+        else:
+            for choice, formatted in res_choices_formatted:
+                ctrl.Append("%s%s" % (formatted, res_unit), choice)
+        ctrl.SetSelection(0)
+        self.main_data.user_resolution_sb.value = ctrl.GetClientData(
+            ctrl.GetSelection()
+        )
+        ctrl.SetName(RESOLUTION)
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_resolution_sb_ctrl)
+
+    def _create_pixel_size_sb_entry(self):
+        """Creates the control for single beam pixel size."""
+        _, self.pixel_size_ctrl = self.single_beam_settings.add_text_field(
+            PIXEL_SIZE, readonly=True
+        )
+        hfw = self.hfw_ctrl.GetClientData(self.hfw_ctrl.GetSelection())
+        resolution = self.resolution_ctrl.GetClientData(
+            self.resolution_ctrl.GetSelection()
+        )
+        self.pixel_size_ctrl.SetValue(
+            units.readable_str(hfw / resolution[0], unit="m", sig=4)
+        )
+
+    def on_dwell_time_sb_entry(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        if len(self.main_tab_data.current_project.value) > 0:
+            settings_data = self.main_tab_data.project_settings_data.value
+            settings_data[self.main_tab_data.current_project.value][
+                DWELL_TIME_SINGLE_BEAM
+            ] = value
+            self.main_tab_data.project_settings_data._set_value(
+                settings_data, must_notify=True
+            )
+
+    def _create_dwell_time_sb_entry(self):
+        """Creates the control for single beam dwell time."""
+        _, ctrl = self.single_beam_settings.add_float_slider(
+            "Dwell time",
+            value=self.tab_data.main.user_dwell_time_sb.value,
+            conf=CONTROL_CONFIG[DWELL_TIME_SINGLE_BEAM],
+        )
+        self.dwell_time_sb_ctrl = ctrl
+        ctrl.SetName(DWELL_TIME_SINGLE_BEAM)
+        ctrl.Bind(wx.EVT_SLIDER, self.on_dwell_time_sb_entry)
+
+    def _reset_hfw_ctrl(self, hfw: float, immersion_mode: bool):
+        """
+        Resets the HFW control based on the immersion mode.
+
+        :param hfw: The HFW value.
+        :param immersion_mode: The immersion mode.
+        """
+        self.hfw_ctrl.Clear()
+        hfw_choices_formatted, choices_si_prefix, hfw_unit = (
+            self._immersion_mode_hfw_choices[immersion_mode]
+        )
+        # Set choices bsed on the immersion mode
+        if choices_si_prefix:
+            for choice, formatted in hfw_choices_formatted:
+                if choice > STAGE_PRECISION:
+                    self.hfw_ctrl.Append(
+                        "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
                     )
+        else:
+            for choice, formatted in hfw_choices_formatted:
+                if choice > STAGE_PRECISION:
+                    self.hfw_ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
+        # Based on the immersion mode the choices of HFW are different
+        # If the current HFW is not in the list of choices, set the first choice
+        if (
+            self.hfw_ctrl.FindString(hfw, caseSensitive=True)
+            == wx.NOT_FOUND
+        ):
+            self.hfw_ctrl.SetSelection(0)
+            self.main_data.user_hfw_sb.value = self.hfw_ctrl.GetClientData(
+                self.hfw_ctrl.GetSelection()
+            )
+        else:
+            self.hfw_ctrl.SetValue(hfw)
+            self.main_data.user_hfw_sb.value = self.hfw_ctrl.GetClientData(
+                self.hfw_ctrl.FindString(hfw)
+            )
 
-    def _bind_project_settings_control_events(self, ctrl, entry):
-        """Binds the appropriate event handlers to the project settings controls."""
-        if entry == VOLTAGE:
-            ctrl.Bind(wx.EVT_COMBOBOX, self.on_control_event)
-        if entry == DWELL_TIME_ACQUISITION:
-            ctrl.Bind(wx.EVT_SLIDER, self.on_control_event)
-        if entry == OVERVOLTAGE:
-            ctrl.Unbind(wx.EVT_TEXT_ENTER, handler=ctrl.on_text_enter)
-            ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_control_event)
+    def on_immersion_mode_sb_entry(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
 
-    def _create_project_settings_entries(self):
-        """Creates and initializes the controls for project-specific settings."""
-        control_definitions = [
-            # For now, Voltage and Overvoltage can only be set in the user settings panel
-            # Don't have them for project specific settings
-            # (VOLTAGE, CONTROL_CONFIG[VOLTAGE]),
-            # (OVERVOLTAGE, CONTROL_CONFIG[OVERVOLTAGE]),
-            (DWELL_TIME_ACQUISITION, CONTROL_CONFIG[DWELL_TIME_ACQUISITION]),
-        ]
-        for entry, conf in control_definitions:
-            if entry == OVERVOLTAGE:
-                _, ctrl = self.project_settings.add_float_field(
-                    entry,
-                    value=self.tab_data.main.mppc.overVoltage.value,
-                    conf=conf,
-                )
-            elif entry == DWELL_TIME_ACQUISITION:
-                lbl, ctrl = self.project_settings.add_float_slider(
-                    entry,
-                    value=self.tab_data.main.user_dwell_time_acquisition.value,
-                    conf=conf,
-                )
-                self.dwell_time_acquisition_ctrl = ctrl
-                # Wrap the label text because its too long
-                lbl.Wrap(100)
-            elif entry == VOLTAGE:
-                voltage = self.tab_data.main.ebeam.accelVoltage.value
-                idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(int(voltage))
-                value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
-                _, ctrl = self.project_settings.add_combobox_control(
-                    entry, value=value, conf=conf
-                )
+        value = ctrl.GetValue()
+        if len(self.main_tab_data.current_project.value) > 0:
+            settings_data = self.main_tab_data.project_settings_data.value
+            settings_data[self.main_tab_data.current_project.value][IMMERSION] = value
+            current_hfw = self.hfw_ctrl.GetValue()
+            self._reset_hfw_ctrl(current_hfw, value)
+            self.main_tab_data.project_settings_data._set_value(
+                settings_data, must_notify=True
+            )
 
-            ctrl.SetName(entry)
-            self._bind_project_settings_control_events(ctrl, entry)
+    def _create_immersion_mode_sb_entry(self):
+        """Creates the control for single beam immersion mode."""
+        _, ctrl = self.single_beam_settings.add_checkbox_control(
+            IMMERSION,
+            value=self.tab_data.main.ebeam.immersion.value,
+            pos_col=2,
+            span=(1, 1),
+        )
+        self.immersion_mode_ctrl = ctrl
+        ctrl.SetName(IMMERSION)
+        ctrl.Bind(wx.EVT_CHECKBOX, self.on_immersion_mode_sb_entry)
+
+    def on_overvoltage_mb_event(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        # Call on_text_enter explicitly as it is not binded
+        ctrl.on_text_enter(evt)
+        value = ctrl.GetValue()
+        if len(self.main_tab_data.current_project.value) > 0:
+            self.main_tab_data.project_settings_data.value[
+                self.main_tab_data.current_project.value
+            ][OVERVOLTAGE] = value
+            self.tab_data.main.mppc.overVoltage.value = value
+
+    def _create_overvoltage_mb_entry(self):
+        """Creates the control for multi-beam overvoltage."""
+        _, ctrl = self.multi_beam_settings.add_float_field(
+            OVERVOLTAGE,
+            value=self.tab_data.main.mppc.overVoltage.value,
+            conf=CONTROL_CONFIG[OVERVOLTAGE],
+        )
+        ctrl.SetName(OVERVOLTAGE)
+        ctrl.Unbind(wx.EVT_TEXT_ENTER, handler=ctrl.on_text_enter)
+        ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_overvoltage_mb_event)
+
+    def on_voltage_mb_entry(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        if len(self.main_tab_data.current_project.value) > 0:
+            self.main_tab_data.project_settings_data.value[
+                self.main_tab_data.current_project.value
+            ][VOLTAGE] = value
+            self.tab_data.main.ebeam.accelVoltage.value = ctrl.GetClientData(
+                ctrl.GetSelection()
+            )
+
+    def _create_voltage_mb_entry(self):
+        """Creates the control for multi-beam voltage."""
+        voltage = self.tab_data.main.ebeam.accelVoltage.value
+        idx = CONTROL_CONFIG[VOLTAGE]["choices"].index(int(voltage))
+        value = CONTROL_CONFIG[VOLTAGE]["labels"][idx]
+        _, ctrl = self.multi_beam_settings.add_combobox_control(
+            VOLTAGE, value=value, conf=CONTROL_CONFIG[VOLTAGE]
+        )
+        ctrl.SetName(VOLTAGE)
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_voltage_mb_entry)
+
+    def on_dwell_time_mb_entry(self, evt):
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        value = ctrl.GetValue()
+        if len(self.main_tab_data.current_project.value) > 0:
+            settings_data = self.main_tab_data.project_settings_data.value
+            settings_data[self.main_tab_data.current_project.value][
+                DWELL_TIME_MULTI_BEAM
+            ] = value
+            self.main_tab_data.project_settings_data._set_value(
+                settings_data, must_notify=True
+            )
+
+    def _create_dwell_time_mb_entry(self):
+        """Creates the control for multi-beam dwell time."""
+        lbl, ctrl = self.multi_beam_settings.add_float_slider(
+            "Dwell Time",
+            value=self.tab_data.main.user_dwell_time_mb.value,
+            conf=CONTROL_CONFIG[DWELL_TIME_MULTI_BEAM],
+        )
+        self.dwell_time_mb_ctrl = ctrl
+        # Wrap the label text because its too long
+        lbl.Wrap(100)
+        ctrl.SetName(DWELL_TIME_MULTI_BEAM)
+        ctrl.Bind(wx.EVT_SLIDER, self.on_dwell_time_mb_entry)
 
     def Show(self, show=True):
         super().Show(show)
 
         if show and not self._initialized_after_show:
             self._initialized_after_show = True
+
+    def _create_ctrl_entries(self):
+        """Creates the controls for the single beam and multi beam settings."""
+        # Create the controls for the single beam settings
+        self._create_hfw_sb_entry()
+        self._create_resolution_sb_entry()
+        self._create_pixel_size_sb_entry()
+        self._create_dwell_time_sb_entry()
+        self._create_immersion_mode_sb_entry()
+        # Create the controls for the multi beam settings
+        # TODO: Uncomment when voltage and overvoltage are implemented
+        # self._create_voltage_mb_entry()
+        # self._create_overvoltage_mb_entry()
+        self._create_dwell_time_mb_entry()
 
     @classmethod
     def get_display_priority(cls, main_data):

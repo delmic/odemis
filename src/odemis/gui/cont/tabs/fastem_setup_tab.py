@@ -242,7 +242,7 @@ class FastEMSetupTab(Tab):
             self._on_optical_autofocus_done
         )  # also handles cancelling and exceptions
         self._update_button_controls(self.btn_optical_autofocus)
-        self.tab_data.is_optical_autofocus_done.value = False
+        self.tab_data.main.is_optical_autofocus_done.value = False
 
     @call_in_wx_main
     def _on_optical_autofocus_done(self, future, _=None):
@@ -261,15 +261,15 @@ class FastEMSetupTab(Tab):
 
         try:
             future.result()  # wait until the calibration is done
-            self.tab_data.is_optical_autofocus_done.value = True
+            self.tab_data.main.is_optical_autofocus_done.value = True
             logging.debug("Optical Autofocus calibration successful")
         except CancelledError:
-            self.tab_data.is_optical_autofocus_done.value = (
+            self.tab_data.main.is_optical_autofocus_done.value = (
                 False  # don't enable overview image acquisition
             )
             logging.debug("Optical Autofocus calibration cancelled")
         except Exception as ex:
-            self.tab_data.is_optical_autofocus_done.value = (
+            self.tab_data.main.is_optical_autofocus_done.value = (
                 False  # don't enable overview image acquisition
             )
             logging.exception(
