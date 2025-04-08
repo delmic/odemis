@@ -466,7 +466,7 @@ class StreamView(View):
             logging.info("Movements of the stage in x limited to %s m, restricting movement to %s m.",
                          stage_limits["x"], pos["x"])
 
-        if not stage_limits["y"][0] <= pos["x"] <= stage_limits["y"][1]:
+        if not stage_limits["y"][0] <= pos["y"] <= stage_limits["y"][1]:
             pos["y"] = max(stage_limits["y"][0], min(pos["y"], stage_limits["y"][1]))
             logging.info("Movements of the stage in y limited to %s m, restricting movement to %s m.",
                          stage_limits["y"], pos["y"])
