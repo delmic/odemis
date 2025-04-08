@@ -566,21 +566,37 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         ###### 3D TRANSFORMS ######
 
-        # NOTE: transformations are defined as stage -> sample stage
-        # the inverse transformation is used for sample stage -> stage
+        # NOTE: transformations are defined as sample stage -> stage bare
+        # the inverse transformation is used for stage bare -> sample stage
+
+        # The shear & scale parameters are for the 2nd and 3rd axes (y and z) in FM imaging
+        shear_matrix_3d = numpy.array([
+            [1, 0, 0],         # x-axis remains unaffected
+            [0, 1, shear[0]],  # y-axis shear
+            [0, shear[1], 1],  # z-axis shear
+        ])
+
+        scale_matrix_3d = numpy.array([
+            [1, 0, 0],  # x-axis remains unaffected
+            [0, scale[0], 0],  # y-axis scale
+            [0, 0, scale[1]],  # z-axis scale
+        ])
 
         # pre-tilt is rotation around the stage-bare x axis
         rx = self.pre_tilt
 
-        # note: this is currently for tfs, which does not have scale, shear or translation
-        # rotation around x axis: fm = tf, sem = tf_inv
-        tf, tf_inv = get_rotation_transforms(rx=rx)
+        # FM imaging
+        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
+        rot_matrix_3d, rot_matrix_3d_inv = get_rotation_transforms(rx=rx)
+        tf = scale_matrix_3d @ shear_matrix_3d @ rot_matrix_3d
+        tf_inv = numpy.linalg.inv(tf)
 
         # NOTE: not yet implemented, see meteor-1100-fibsem-tab
         sr = 0
         if not self.use_scan_rotation:
             sr = 0
 
+        # TODO: also need shear and scale for SEM_IMAGING and MILLING postures, each different.
         # get scan rotation matrix (rz -> rx)
         tf_sr, tf_inv_sr = get_rotation_transforms(rx=rx, rz=sr)
         logging.debug(f"tf_matrix: {tf}, tf_sr: {tf_sr}")
@@ -750,7 +766,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         q = numpy.array([pos.get("x", 0), pos.get("y", 0), pos.get("z", 0)])
         # inverse transform
         posture = self.current_posture.value
-        pinv = numpy.dot(q, self._inv_transforms2[posture])
+        pinv = self._transforms2[posture] @ q
 
         ppos = {}
         ppos["x"] = pinv[0]
@@ -767,7 +783,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         # inverse transform
         q = numpy.array([pos["x"], pos["y"], pos["z"]])
         posture = self.current_posture.value
-        pinv = numpy.dot(q, self._inv_transforms2[posture])
+        pinv = self._transforms2[posture] @ q
 
         # add orientation (rx, rz)
         orientation = self.get_posture_orientation(posture)
@@ -792,7 +808,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         # we should, but currently to_sample_stage... is only used to project features onto the screen,
         # and they are displayed in the current posture, so it is fine to use the current posture
         posture = self.current_posture.value
-        q = numpy.dot(p, self._transforms2[posture])
+        q = self._inv_transforms2[posture] @ p
 
         qpos = {}
         qpos["x"] = q[0]
@@ -1856,6 +1872,23 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             missed_axes = {'x', 'y', 'z', 'rx', 'rz'} - self.stage.axes.keys()
             raise KeyError("The stage misses %s axes" % missed_axes)
         self.fib_column_tilt = TESCAN_FIB_COLUMN_TILT
+
+        if self.pre_tilt is None: # pre-tilt not available in the stage calib metadata
+            # First version of the microscope file had it hard-coded on the Linked YM wrapper component
+            comp = model.getComponent(name="Linked YZ")
+            self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
+
+        # Y/Z axes are not perpendicular. The angle depends on rx (if rx==0°, they are perpendicular)
+        # To compensate for this, we use shear and scale.
+        stage_md = self.stage.getMetadata()
+        rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
+        shear = (-math.tan(rx_fm), 0)
+        scale = (1, 1 / math.cos(rx_fm))
+
+        # Automatic conversion to sample-stage axes
+        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt, shear=shear, scale=scale)
+        self.postures = [SEM_IMAGING, FM_IMAGING]
+        self.use_3d_transforms = True
 
     def check_calib_data(self, required_keys: set):
         """
