@@ -29,11 +29,13 @@ from wx.grid import (
     EVT_GRID_CELL_CHANGING,
     EVT_GRID_CELL_LEFT_CLICK,
     EVT_GRID_LABEL_LEFT_CLICK,
+    GRID_FLOAT_FORMAT_DEFAULT,
     Grid,
     GridCellAttr,
     GridCellBoolEditor,
     GridCellBoolRenderer,
     GridCellEditor,
+    GridCellFloatEditor,
     GridCellTextEditor,
 )
 
@@ -147,6 +149,67 @@ class DynamicGridCellComboBoxEditor(GridCellEditor):
         # Fetch the new value from the editor control and set it in the grid
         new_value = self._control.GetValue()
         grid.SetCellValue(row, col, new_value)
+
+
+class GridCellFloatRangeEditor(GridCellFloatEditor):
+    """
+    GridCellFloatRangeEditor(min=None, max=None, width=-1, precision=-1, format=GRID_FLOAT_FORMAT_DEFAULT)
+
+    The editor for floating point numbers data with optional min and max constraints.
+    """
+
+    def __init__(self, min=None, max=None, width=-1, precision=-1, format=GRID_FLOAT_FORMAT_DEFAULT):
+        """
+        GridCellFloatRangeEditor(min=None, max=None, width=-1, precision=-1, format=GRID_FLOAT_FORMAT_DEFAULT)
+
+        The editor for floating point numbers data with optional min and max constraints.
+        """
+        super().__init__(width, precision, format)
+        self.min = min
+        self.max = max
+        self.latest_value = None
+
+    def SetParameters(self, params):
+        """
+        SetParameters(params)
+
+        The parameters string format is "min,max[,width[,precision[,format]]]".
+        """
+        parts = params.split(',')
+        try:
+            if parts[0]:
+                self.min = float(parts[0])
+            if len(parts) > 1 and parts[1]:
+                self.max = float(parts[1])
+            super().SetParameters(','.join(parts[2:]))
+        except (ValueError, IndexError):
+            pass  # Handle invalid parameter format gracefully
+
+    def EndEdit(self, row, col, grid, oldval):
+        """
+        EndEdit(row, col, grid, oldval)
+
+        End editing the cell, enforcing min and max constraints.
+        """
+        value = grid.GetCellValue(row, col).strip()
+        try:
+            float_value = float(value)
+            if self.min is not None and float_value < self.min:
+                float_value = self.min
+            if self.max is not None and float_value > self.max:
+                float_value = self.max
+            self.latest_value = str(float_value)
+        except ValueError:
+            self.latest_value = oldval
+        return self.latest_value
+
+    def ApplyEdit(self, row, col, grid):
+        """
+        ApplyEdit(row, col, grid)
+
+        Effectively save the changes in the grid.
+        """
+        grid.SetCellValue(row, col, self.latest_value)
 
 
 class RowChangedEvent(wx.PyCommandEvent):
@@ -575,6 +638,13 @@ class GridBase(Grid):
         row.roa.shape.points.unsubscribe(row.roa.on_points)
         row.roa.shape.points.unsubscribe(self._row_shape_points_sub_callback[row])
         row.roa.shape.selected.unsubscribe(self._row_shape_selected_sub_callback[row])
+        # Special case for overview streams
+        # Remove the shape from the overview streams if it exists
+        if hasattr(row.roa.main_data, "overview_streams"):
+            ovv_ss = row.roa.main_data.overview_streams.value.copy()
+            if row.roa.shape in ovv_ss:
+                del ovv_ss[row.roa.shape]
+                row.roa.main_data.overview_streams.value = ovv_ss
         row.roa.shape.cnvs.remove_shape(row.roa.shape)
         row.roa.shape = None
         del self._row_shape_points_sub_callback[row]
