@@ -28,8 +28,8 @@ from wx.grid import EVT_GRID_CELL_CHANGING, GridCellFloatEditor, GridCellNumberE
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.gui.comp.fastem_roa import FastEMROA
-from odemis.gui.cont.fastem_grid import RibbonColumnNames, SectionColumnNames
-from odemis.gui.cont.fastem_grid_base import (
+from odemis.gui.cont.fastem_project_grid import RibbonColumnNames, SectionColumnNames
+from odemis.gui.cont.fastem_project_grid_base import (
     DEFAULT_PARENT,
     EVT_GRID_ROW_CHANGED,
     Column,
@@ -370,6 +370,6 @@ class FastEMProjectSectionsTab(Tab):
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
-            return 3
+            return 4
         else:
             return None

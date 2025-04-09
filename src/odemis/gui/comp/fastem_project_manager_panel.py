@@ -34,19 +34,15 @@ import wx
 from odemis.gui import SELECTION_COLOUR, img
 from odemis.gui.comp import popup
 from odemis.gui.comp.fastem_roa import FastEMROA, FastEMROI
-from odemis.gui.comp.fastem_user_settings_panel import (
-    CONTROL_CONFIG,
-    DWELL_TIME_SINGLE_BEAM,
-)
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.file import AcquisitionConfig
-from odemis.gui.cont.fastem_grid import (
+from odemis.gui.cont.fastem_project_grid import (
     RibbonColumnNames,
     ROAColumnNames,
     ROIColumnNames,
     SectionColumnNames,
 )
-from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT, GridBase, Row
+from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT, GridBase, Row
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
 from odemis.gui.cont.tabs.fastem_project_ribbons_tab import (
     FastEMProjectRibbonsTab,
@@ -695,7 +691,6 @@ class FastEMProjectManagerPanel:
         self.detached_frame = None
         self.detached = False
         self._shape_points_sub_callback = {}
-        self.sb_dwell_time_config = CONTROL_CONFIG[DWELL_TIME_SINGLE_BEAM]
 
         detach_btn.SetToolTip(
             "Detach the project manager panel. Close the detached panel to re-attach to the main window."
@@ -943,7 +938,7 @@ class FastEMProjectManagerPanel:
                     ROIColumnNames.ROT.value: int(math.degrees(shape.rotation)),
                     ROIColumnNames.CONTRAST.value: round(self.main_data.sed.contrast.value, 4),
                     ROIColumnNames.BRIGHTNESS.value: round(self.main_data.sed.brightness.value, 4),
-                    ROIColumnNames.DWELL_TIME.value: round(self.main_data.ebeam.dwellTime.value * 1e6, 4),
+                    ROIColumnNames.DWELL_TIME.value: round(self.main_data.ebeam.dwellTime.value * 1e6, 4),  # [µs]
                     ROIColumnNames.FIELDS.value: "",
                 }
                 row = ROIRow(row_data, roa)

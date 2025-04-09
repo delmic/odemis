@@ -165,24 +165,21 @@ class FastEMProjectSettingsTab(Tab):
         """Updates the controls when the current project changes."""
         if len(current_project) > 0:
             if current_project in self.main_tab_data.project_settings_data.value:
-                self.dwell_time_mb_ctrl.SetValue(
-                    self.main_tab_data.project_settings_data.value[current_project][
-                        DWELL_TIME_MULTI_BEAM
-                    ]
+                current_settings = self.main_tab_data.project_settings_data.value[
+                    current_project
+                ]
+                dwell_time_mb = current_settings.get(
+                    DWELL_TIME_MULTI_BEAM, self.dwell_time_mb_ctrl.GetValue()
                 )
-                self.dwell_time_sb_ctrl.SetValue(
-                    self.main_tab_data.project_settings_data.value[current_project][
-                        DWELL_TIME_SINGLE_BEAM
-                    ]
+                self.dwell_time_mb_ctrl.SetValue(dwell_time_mb)
+                dwell_time_sb = current_settings.get(
+                    DWELL_TIME_SINGLE_BEAM, self.dwell_time_sb_ctrl.GetValue()
                 )
+                self.dwell_time_sb_ctrl.SetValue(dwell_time_sb)
                 current_immersion = self.immersion_mode_ctrl.GetValue()
-                immersion = self.main_tab_data.project_settings_data.value[current_project][
-                    IMMERSION
-                ]
+                immersion = current_settings.get(IMMERSION, current_immersion)
                 self.immersion_mode_ctrl.SetValue(immersion)
-                hfw = self.main_tab_data.project_settings_data.value[current_project][
-                    HFW
-                ]
+                hfw = current_settings.get(HFW, self.hfw_ctrl.GetValue())
                 if current_immersion != immersion:
                     self._reset_hfw_ctrl(hfw, immersion)
                 else:
@@ -190,15 +187,14 @@ class FastEMProjectSettingsTab(Tab):
                     self.main_data.user_hfw_sb.value = self.hfw_ctrl.GetClientData(
                         self.hfw_ctrl.FindString(hfw)
                     )
-                resolution = self.main_tab_data.project_settings_data.value[
-                    current_project
-                ][RESOLUTION]
-                self.resolution_ctrl.SetValue(resolution)
-                self.pixel_size_ctrl.SetValue(
-                    self.main_tab_data.project_settings_data.value[current_project][
-                        PIXEL_SIZE
-                    ]
+                resolution = current_settings.get(
+                    RESOLUTION, self.resolution_ctrl.GetValue()
                 )
+                self.resolution_ctrl.SetValue(resolution)
+                pixel_size = current_settings.get(
+                    PIXEL_SIZE, self.pixel_size_ctrl.GetValue()
+                )
+                self.pixel_size_ctrl.SetValue(pixel_size)
                 self.main_data.user_resolution_sb.value = (
                     self.resolution_ctrl.GetClientData(
                         self.resolution_ctrl.FindString(resolution)
@@ -404,10 +400,7 @@ class FastEMProjectSettingsTab(Tab):
                     self.hfw_ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
         # Based on the immersion mode the choices of HFW are different
         # If the current HFW is not in the list of choices, set the first choice
-        if (
-            self.hfw_ctrl.FindString(hfw, caseSensitive=True)
-            == wx.NOT_FOUND
-        ):
+        if self.hfw_ctrl.FindString(hfw, caseSensitive=True) == wx.NOT_FOUND:
             self.hfw_ctrl.SetSelection(0)
             self.main_data.user_hfw_sb.value = self.hfw_ctrl.GetClientData(
                 self.hfw_ctrl.GetSelection()
