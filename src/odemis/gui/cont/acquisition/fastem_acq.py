@@ -67,7 +67,7 @@ from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_config
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.conf.util import process_setting_metadata
-from odemis.gui.cont.fastem_grid import ROIColumnNames
+from odemis.gui.cont.fastem_project_grid import ROIColumnNames
 from odemis.gui.cont.fastem_project_tree import (
     EVT_TREE_NODE_CHANGE,
     NodeType,
@@ -816,7 +816,7 @@ class FastEMSingleBeamAcquiController(object):
         cancelled or failed)
         """
         try:
-            self._main_data_model.ebeam.dwellTime.value = next_roi_data[ROIColumnNames.DWELL_TIME.value] * 1e-6
+            self._main_data_model.ebeam.dwellTime.value = next_roi_data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
             self._main_data_model.sed.brightness.value = next_roi_data[ROIColumnNames.BRIGHTNESS.value]
             self._main_data_model.sed.contrast.value = next_roi_data[ROIColumnNames.CONTRAST.value]
         except Exception:

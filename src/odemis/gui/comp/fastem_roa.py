@@ -45,7 +45,7 @@ HFW_LIMIT = 0.0005  # 500 μm
 
 class FastEMROABase(metaclass=ABCMeta):
     """
-    Base class for FastEM ROA (region of acquisition).
+    Base class for FastEM ROA (region of acquisition) and FastEM ROI (region of interest).
     """
 
     def __init__(self, shape, main_data, overlap=0.06, name="", slice_index=0):
