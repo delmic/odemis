@@ -33,8 +33,8 @@ from wx.grid import (
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.gui.comp.fastem_roa import FastEMROA
-from odemis.gui.cont.fastem_grid import ROAColumnNames, SectionColumnNames
-from odemis.gui.cont.fastem_grid_base import (
+from odemis.gui.cont.fastem_project_grid import ROAColumnNames, SectionColumnNames
+from odemis.gui.cont.fastem_project_grid_base import (
     DEFAULT_PARENT,
     EVT_GRID_ROW_CHANGED,
     Column,
@@ -413,6 +413,6 @@ class FastEMProjectROAsTab(Tab):
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
-            return 4
+            return 5
         else:
             return None

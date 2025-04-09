@@ -153,16 +153,18 @@ class DynamicGridCellComboBoxEditor(GridCellEditor):
 
 class GridCellFloatRangeEditor(GridCellFloatEditor):
     """
-    GridCellFloatRangeEditor(min=None, max=None, width=-1, precision=-1, format=GRID_FLOAT_FORMAT_DEFAULT)
-
-    The editor for floating point numbers data with optional min and max constraints.
+    A custom GridCellFloatEditor that allows for floating point numbers with min/max constraints.
     """
 
     def __init__(self, min=None, max=None, width=-1, precision=-1, format=GRID_FLOAT_FORMAT_DEFAULT):
         """
-        GridCellFloatRangeEditor(min=None, max=None, width=-1, precision=-1, format=GRID_FLOAT_FORMAT_DEFAULT)
-
         The editor for floating point numbers data with optional min and max constraints.
+
+        :param min: (Optional[float]) The minimum value allowed.
+        :param max: (Optional[float]) The maximum value allowed.
+        :param width: (int) The width of the editor (default is -1).
+        :param precision: (int) The number of decimal places to display (default is -1).
+        :param format: (str) The format string for displaying the value (default is GRID_FLOAT_FORMAT_DEFAULT).
         """
         super().__init__(width, precision, format)
         self.min = min
@@ -171,7 +173,7 @@ class GridCellFloatRangeEditor(GridCellFloatEditor):
 
     def SetParameters(self, params):
         """
-        SetParameters(params)
+        Set the parameters for the editor.
 
         The parameters string format is "min,max[,width[,precision[,format]]]".
         """
@@ -187,11 +189,9 @@ class GridCellFloatRangeEditor(GridCellFloatEditor):
 
     def EndEdit(self, row, col, grid, oldval):
         """
-        EndEdit(row, col, grid, oldval)
-
-        End editing the cell, enforcing min and max constraints.
+        Override the EndEdit method to apply min/max constraints.
         """
-        value = grid.GetCellValue(row, col).strip()
+        value = self.GetValue().strip()
         try:
             float_value = float(value)
             if self.min is not None and float_value < self.min:
@@ -205,9 +205,7 @@ class GridCellFloatRangeEditor(GridCellFloatEditor):
 
     def ApplyEdit(self, row, col, grid):
         """
-        ApplyEdit(row, col, grid)
-
-        Effectively save the changes in the grid.
+        Ovverride the ApplyEdit method to set the value in the grid.
         """
         grid.SetCellValue(row, col, self.latest_value)
 

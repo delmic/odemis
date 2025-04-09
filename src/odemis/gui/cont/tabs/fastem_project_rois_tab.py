@@ -31,8 +31,8 @@ from odemis.gui.comp.fastem_user_settings_panel import (
     CONTROL_CONFIG,
     DWELL_TIME_SINGLE_BEAM,
 )
-from odemis.gui.cont.fastem_grid import ROIColumnNames
-from odemis.gui.cont.fastem_grid_base import (
+from odemis.gui.cont.fastem_project_grid import ROIColumnNames
+from odemis.gui.cont.fastem_project_grid_base import (
     Column,
     GridBase,
     GridCellFloatRangeEditor,
@@ -318,8 +318,8 @@ class FastEMProjectROIsTab(Tab):
                 ROIColumnNames.DWELL_TIME.value,
                 editor_cls=GridCellFloatRangeEditor,
                 editor_args={
-                    "min": dwell_time_config["min_val"] * 1e6,  # Convert to microseconds
-                    "max": dwell_time_config["max_val"] * 1e6,  # Convert to microseconds
+                    "min": dwell_time_config["min_val"] * 1e6,  # [µs]
+                    "max": dwell_time_config["max_val"] * 1e6,  # [µs]
                     "precision": 4
                 },
             ),
@@ -360,6 +360,6 @@ class FastEMProjectROIsTab(Tab):
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
-            return 4
+            return 2
         else:
             return None

@@ -34,19 +34,15 @@ import wx
 from odemis.gui import SELECTION_COLOUR, img
 from odemis.gui.comp import popup
 from odemis.gui.comp.fastem_roa import FastEMROA, FastEMROI
-from odemis.gui.comp.fastem_user_settings_panel import (
-    CONTROL_CONFIG,
-    DWELL_TIME_SINGLE_BEAM,
-)
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.file import AcquisitionConfig
-from odemis.gui.cont.fastem_grid import (
+from odemis.gui.cont.fastem_project_grid import (
     RibbonColumnNames,
     ROAColumnNames,
     ROIColumnNames,
     SectionColumnNames,
 )
-from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT, GridBase, Row
+from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT, GridBase, Row
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
 from odemis.gui.cont.tabs.fastem_project_ribbons_tab import (
     FastEMProjectRibbonsTab,
@@ -695,7 +691,6 @@ class FastEMProjectManagerPanel:
         self.detached_frame = None
         self.detached = False
         self._shape_points_sub_callback = {}
-        self.sb_dwell_time_config = CONTROL_CONFIG[DWELL_TIME_SINGLE_BEAM]
 
         detach_btn.SetToolTip(
             "Detach the project manager panel. Close the detached panel to re-attach to the main window."
@@ -721,12 +716,20 @@ class FastEMProjectManagerPanel:
             "Import a scintillator holders projects data from a JSON file."
         )
         panel.btn_import.Bind(wx.EVT_BUTTON, self._on_btn_import)
+        self.project_settings_tab.dwell_time_sb_ctrl.Bind(
+            wx.EVT_SLIDER,
+            lambda evt: (
+                self._on_dwell_time_sb_entry(evt),
+                self.project_settings_tab.on_dwell_time_sb_entry(evt),
+            ),
+        )
         tab_data.active_project_tab.subscribe(self._on_active_project_tab, init=True)
         tab_data.shapes.subscribe(self._on_shapes, init=True)
         tab_data.current_project.subscribe(self._on_current_project)
         self.main_data.is_acquiring.subscribe(self._on_is_acquiring)
         self.main_data.user_hfw_sb.subscribe(self._on_user_hfw_sb)
         self.main_data.user_resolution_sb.subscribe(self._on_user_resolution_sb)
+        self.tab_data.main.user_dwell_time_sb.subscribe(self._on_user_dwell_time_sb)
 
     @call_in_wx_main
     def _on_is_acquiring(self, is_acquiring):
@@ -943,7 +946,9 @@ class FastEMProjectManagerPanel:
                     ROIColumnNames.ROT.value: int(math.degrees(shape.rotation)),
                     ROIColumnNames.CONTRAST.value: round(self.main_data.sed.contrast.value, 4),
                     ROIColumnNames.BRIGHTNESS.value: round(self.main_data.sed.brightness.value, 4),
-                    ROIColumnNames.DWELL_TIME.value: round(self.main_data.ebeam.dwellTime.value * 1e6, 4),
+                    ROIColumnNames.DWELL_TIME.value: round(
+                        self.project_settings_tab.dwell_time_sb_ctrl.GetValue() * 1e6, 4
+                    ),  # [µs]
                     ROIColumnNames.FIELDS.value: "",
                 }
                 row = ROIRow(row_data, roa)
@@ -1181,6 +1186,42 @@ class FastEMProjectManagerPanel:
             ctrl.SetValue(value)
             self.setup_grid_for_project(value)
             self.tab_data.current_project.value = value
+
+    def _update_project_rois_dwell_time(self, project_node, dwell_time):
+        """
+        Updates the dwell time for all ROIs in the project.
+        :param project_node: (FastEMTreeNode) The project node containing the ROIs.
+        :param dwell_time: (float) The new dwell time to be set for the ROIs in seconds.
+        """
+        rois = project_node.find_nodes_by_type(NodeType.ROI)
+        for roi in rois:
+            if roi.row.data[ROIColumnNames.DWELL_TIME.value] != dwell_time * 1e6:
+                roi.row.data[ROIColumnNames.DWELL_TIME.value] = round(dwell_time * 1e6, 4)  # [µs]
+                rois_grid, _, _, _ = self.project_grids_data[project_node.name]
+                rois_grid.update_row(roi.row, autosize=False)
+        self.project_rois_tab.grid.AutoSizeColumns()
+
+    def _on_dwell_time_sb_entry(self, evt):
+        """
+        Handles the event when the single beam dwell time control is changed.
+        Updates the dwell time for all the ROIs in the current project.
+        """
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        dwell_time = ctrl.GetValue()
+        project_node_sb = self.tab_data.project_tree_sb.find_node(self.tab_data.current_project.value)
+        self._update_project_rois_dwell_time(project_node_sb, dwell_time)
+
+    def _on_user_dwell_time_sb(self, dwell_time):
+        """
+        Handles changes to the user dwell time for single beam.
+        Updates the dwell time for all the ROIs.
+        """
+        project_nodes_sb = self.tab_data.project_tree_sb.find_nodes_by_type(NodeType.PROJECT)
+        for project_node_sb in project_nodes_sb:
+            self._update_project_rois_dwell_time(project_node_sb, dwell_time)
 
     def _on_user_hfw_sb(self, hfw):
         """Callback for user HFW change, updating the HFW in the project settings tab."""

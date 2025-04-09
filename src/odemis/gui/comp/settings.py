@@ -130,8 +130,8 @@ class SettingsPanel(wx.Panel):
 
         This method should only be called from another control-adding method!
 
-        :param label_text: The text for the label.
-        :param icon_path: Path to the icon image (optional).
+        :param label_text: (str) The text for the label.
+        :param icon_path: (Optional[str]) Path to the icon image.
         """
 
         self.clear_default_message()

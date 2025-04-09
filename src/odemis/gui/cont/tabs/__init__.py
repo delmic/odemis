@@ -49,4 +49,3 @@ from .sparc2_align_tab import Sparc2AlignTab
 from .sparc2_chamber_tab import ChamberTab
 from .tab_bar_controller import TabBarController
 from .tab import Tab
-

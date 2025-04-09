@@ -45,7 +45,7 @@ HFW_LIMIT = 0.0005  # 500 μm
 
 class FastEMROABase(metaclass=ABCMeta):
     """
-    Base class for FastEM ROA (region of acquisition).
+    Base class for FastEM ROA (region of acquisition) and FastEM ROI (region of interest).
     """
 
     def __init__(self, shape, main_data, overlap=0.06, name="", slice_index=0):
@@ -108,7 +108,7 @@ class FastEMROABase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def estimate_acquisition_time(self, acq_dwell_time: float):
+    def estimate_acquisition_time(self, acq_dwell_time: float) -> float:
         """
         Computes the approximate time it will take to run the acquisition.
         """
@@ -200,7 +200,7 @@ class FastEMROA(FastEMROABase):
     def on_points(self, points):
         """Recalculate the field indices and rectangles when the points of the region of acquisition (ROA) have changed
         (e.g. resize, moving). Also assign the region of calibration (ROC) 2 and 3.
-        :param points: list of nested points (x, y) representing the shape in physical coordinates.
+        :param points: (List[Tuple[float, float]]) list of points (x, y) representing the shape in physical coordinates.
         """
         if points:
             # Update the ROC 2 and 3 values
@@ -216,7 +216,7 @@ class FastEMROA(FastEMROABase):
             else:
                 self.calculate_field_indices()
 
-    def estimate_acquisition_time(self, acq_dwell_time: float):
+    def estimate_acquisition_time(self, acq_dwell_time: float) -> float:
         """
         Computes the approximate time it will take to run the ROA (megafield) acquisition.
 
@@ -233,6 +233,7 @@ class FastEMROA(FastEMROABase):
         Calculate and assign the field indices required to cover a polygon,
         considering overlap between cells. The field_indices attribute is updated
         and not returned by the function.
+        :raises ValueError: If the polygon shape is not defined.
         """
         if self.polygon_shape is None:
             return
@@ -394,7 +395,7 @@ class FastEMROI(FastEMROABase):
     def on_points(self, points):
         """Recalculate the field indices and rectangles when the points of the ROI have changed
         (e.g. resize, moving).
-        :param points: list of nested points (x, y) representing the shape in physical coordinates.
+        :param points: (List[Tuple[float, float]]) list of points (x, y) representing the shape in physical coordinates.
         """
         if points:
             # Update the polygon shape
@@ -425,7 +426,7 @@ class FastEMROI(FastEMROABase):
         # Update the field of view (FoV) based on the new resolution value
         self._fov = (self.hfw.value * self._pxs_cor[0], self.hfw.value * self._pxs_cor[1] * res[1] / res[0])
 
-    def estimate_acquisition_time(self, acq_dwell_time: float):
+    def estimate_acquisition_time(self, acq_dwell_time: float) -> float:
         """
         Computes the approximate time it will take to run the ROI acquisition.
 
@@ -489,6 +490,7 @@ class FastEMROI(FastEMROABase):
         Calculate and assign the field indices required to cover a polygon,
         considering overlap between cells. The field_indices attribute is updated
         and not returned by the function.
+        :raises ValueError: If the polygon shape is not defined.
         """
         if self.polygon_shape is None:
             raise ValueError("Polygon shape is not defined.")

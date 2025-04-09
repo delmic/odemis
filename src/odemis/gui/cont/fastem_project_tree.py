@@ -29,7 +29,7 @@ import wx.lib.newevent
 from wx.lib.agw.customtreectrl import CustomTreeCtrl, GenericTreeItem
 
 from odemis.gui import BG_COLOUR_MAIN, FG_COLOUR_DIS, FG_COLOUR_MAIN
-from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT
+from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT
 
 
 class NodeChangeType(IntEnum):
@@ -54,7 +54,7 @@ class NodeType(IntEnum):
 TreeNodeChangeEvent, EVT_TREE_NODE_CHANGE = wx.lib.newevent.NewEvent()
 # Define a mapping to determine the sorting precedence of different node types.
 # Lower numerical values indicate higher priority in the sort order:
-TYPE_PRIORITY = {NodeType.ROI: 1, NodeType.RIBBON: 2, NodeType.SECTION: 2, NodeType.ROA: 3}
+TYPE_PRIORITY = {NodeType.ROI: 1, NodeType.RIBBON: 2, NodeType.SECTION: 3, NodeType.ROA: 4}
 
 
 class FastEMTreeNode:
