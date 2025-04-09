@@ -4227,7 +4227,7 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         """
         ebics = stream.IndependentEBICStream("test ebic", self.ebic, self.ebic.data,
                                              self.ebeam, self.sed.data,
-                                             detvas={"dwellTime"})
+                                             emtvas={"dwellTime"})
 
         self._images = []
         ebics.image.subscribe(self._on_image)
@@ -4238,14 +4238,14 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         ebics.repetition.value = (15, 26)
 
         # set GUI VAs
-        ebics.detDwellTime.value = 1e-3  # s
+        ebics.emtDwellTime.value = 0.5e-3  # s
 
         # update stream (live)
         ebics.should_update.value = True
         # activate/play stream, optical path should be corrected immediately (no need to wait)
         ebics.is_active.value = True
 
-        # Wait long enough that *several* images are acquired
+        # Wait long enough that *several* (~5) images are acquired
         time.sleep(4)
         ebics.is_active.value = False
 
@@ -4253,7 +4253,7 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         time.sleep(0.2)
 
         nb_images = len(self._images)
-        self.assertGreater(nb_images, 1, "Not several EBIC images received after 4s")
+        self.assertGreater(nb_images, 2, "Not several EBIC images received after 4s")
         self.assertIsInstance(self._images[0], model.DataArray)
         # check if metadata is correctly stored
         md = self._images[0].metadata
@@ -4280,20 +4280,20 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
                                 emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         ebics = stream.IndependentEBICStream("test ebic", self.ebic, self.ebic.data,
                                              self.ebeam, self.sed.data,
-                                             detvas={"dwellTime"})
+                                             emtvas={"dwellTime"})
         sms = stream.SEMMDStream("test sem-md", [sems, ebics])
 
         # Now, proper acquisition
         ebics.roi.value = (0, 0.2, 0.3, 0.6)
 
         # dwell time of sems shouldn't matter
-        ebics.detDwellTime.value = 2e-6  # s
+        ebics.emtDwellTime.value = 2e-6  # s
 
         ebics.repetition.value = (500, 700)
         exp_pos, exp_pxs, exp_res = roi_to_phys(ebics)
 
         # Start acquisition
-        timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+        timeout = 5 + 1.5 * sms.estimateAcquisitionTime()
         start = time.time()
         f = sms.acquire()
 

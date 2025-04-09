@@ -1529,6 +1529,7 @@ class IndependentEBICStream(EBICSettingsStream):
 
         self._emitter_dataflow = emt_dataflow
         self._latest_emitter_md = {}  # the metadata of the emitter, to be copied onto the detector data
+        self._emitter_data_received = threading.Event()  # set when the emitter data (corresponding to one scan) is received
         self._acq_start_lock = threading.Lock()  # To be taken when starting/stopping acquisition
 
         # Change the standard dwell time setter to set both the detector and the emitter.
@@ -1550,6 +1551,11 @@ class IndependentEBICStream(EBICSettingsStream):
         """
         # Override standard method (on LiveStream), which checks whether the acquisition time has
         # changed "a lot", and in such case stop and restart the acquisition.
+        # Compared to the standard method, here, in adition to the detector, the scanner must also
+        # be restarted, which is more complex (see _restart_acquisition()). In addition, currently,
+        # this function is called just after active is set (although it's not stricly necessary), and
+        # this can trigger a restart while we are still starting the acquisition. All this is possible
+        # to handle, but for now, we keep it simple and just don't implement the functionality.
 
         prev_dur = self._prev_dur
         self._prev_dur = self.estimateAcquisitionTime()
@@ -1562,10 +1568,13 @@ class IndependentEBICStream(EBICSettingsStream):
             # very short anyway, not worthy
             return
 
-        logging.debug("Restarting acquisition because it lasts %f s", prev_dur)
-        # Use the dedicated restart method, in a thread as it shouldn't be blocking.
-        t = threading.Thread(target=self._restart_acquisition)
-        t.start()
+        # TODO: this code works... but it should not be called when the stream just becomes active
+        # as it conflicts with _startAcquisition() (or _startAcquisition() shouldn't be called)
+        # For now, it's disabled, as it's not a big deal if the acquisition time is not updated.
+        # logging.debug("Restarting acquisition because it lasts %f s", prev_dur)
+        # # Use the dedicated restart method, in a thread as it shouldn't be blocking.
+        # t = threading.Thread(target=self._restart_acquisition, args=(False,))
+        # t.start()
 
     def _onNewEmitterData(self, dataflow: model.DataFlow, data: model.DataArray) -> None:
         """
@@ -1578,6 +1587,7 @@ class IndependentEBICStream(EBICSettingsStream):
         useful_md = {k: v for k, v in data.metadata.items() if k in SCANNER_POS_MD}
         self._latest_emitter_md = useful_md
         self._updateMD(useful_md)
+        self._emitter_data_received.set()
 
     def _updateMD(self, md: Dict[str, Any]) -> None:
         """
@@ -1611,22 +1621,31 @@ class IndependentEBICStream(EBICSettingsStream):
         # continuous acquisition.
         # We cannot re-subscribe to the dataflow directly from here, as it's called from the dataflow,
         # which would cause a deadlock. So we do this in a separate thread.
-        t = threading.Thread(target=self._restart_acquisition)
+        t = threading.Thread(target=self._restart_acquisition, args=(True,))
         t.start()
 
-    def _restart_acquisition(self):
+    def _restart_acquisition(self, expect_emt_data: bool):
         """
-        Stops and immediately restarts the acquisition.
+        Stops and restarts the acquisition.
         This is to force the detectors to start a new acquisition, synchronized with the scanner.
+        :param expect_emt_data: if True, will wait a little bit to make sure the emitter
+        (aka e-beam/se-detector) data has also been received before stopping.
         """
         try:
             with self._acq_start_lock:
                 if self.is_active.value:
+                    # Make sure that the emitter data is received before restarting the acquisition,
+                    # otherwise, we might miss its metadata.
+                    if expect_emt_data:
+                        if not self._emitter_data_received.wait(0.5):  # 0.5s = a really long time (unlikely to happen)
+                            logging.warning("Emitter data not received, but will restart the acquisition")
+
                     logging.debug("Will stop and restart the acquisition")
                     self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
                     self._dataflow.unsubscribe(self._onNewData)
 
                     self._dataflow.subscribe(self._onNewData)
+                    self._emitter_data_received.clear()
                     time.sleep(0.1)  # wait a bit, to ensure the detector is ready
                     self._emitter_dataflow.subscribe(self._onNewEmitterData)
         except Exception:
@@ -1637,9 +1656,9 @@ class IndependentEBICStream(EBICSettingsStream):
         Overrides the standard _onActive to start/stop the emitter as well.
         """
         if active:
-            # Set the emitter to the right settings
-            self._onDwellTime(self._scanner.dwellTime.value)
-            self._onResolution(self._scanner.resolution.value)
+            # Make sure the detector settings are up-to-date
+            # Note: the dwell time is set via _linkHwVAs()
+            self._set_det_resolution()
 
         with self._acq_start_lock:
             super()._onActive(active)
@@ -1655,6 +1674,7 @@ class IndependentEBICStream(EBICSettingsStream):
         super()._startAcquisition(future)
 
         # ...then start the emitter
+        self._emitter_data_received.clear()
         time.sleep(0.1)  # wait a bit, to ensure the detector is ready
         self._emitter_dataflow.subscribe(self._onNewEmitterData)
 
@@ -1708,16 +1728,20 @@ class IndependentEBICStream(EBICSettingsStream):
         emt_dt = self._set_hw_dwell_time(self.emtDwellTime.value)
         self.emtDwellTime.value = emt_dt
 
+    def _set_det_resolution(self):
+        res = self._scanner.resolution.value
+        self._detector.resolution.value = res
+
+        if self._detector.resolution.value != res:
+            logging.warning("Failed to set the resolution of %s to %s: %s accepted",
+                            self._detector.name, res, self._detector.resolution.value)
+
     def _onResolution(self, value: Tuple[int, int]):
         """
         Overrides the standard _onResolution to set the dwell time on the emitter as well.
         """
         if self.is_active.value:
-            self._detector.resolution.value = value
-
-            if self._detector.resolution.value != value:
-                logging.warning("Failed to set the resolution of %s to %s: %s accepted",
-                                self._detector.name, value, self._detector.resolution.value)
+            self._set_det_resolution()
 
         super()._onResolution(value)
 
