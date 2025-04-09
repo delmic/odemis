@@ -818,7 +818,7 @@ def acquireNonRectangularTiledArea(roi, stream, stage, acq_dwell_time, scanner_c
         if vaname in stream.emt_vas:
             raise ValueError("Stream shouldn't have its own VA %s" % (vaname,))
 
-    if set(stage.axes) < {"x", "y"}:
+    if not set(("x", "y")).issubset(set(stage.axes)):
         raise ValueError("Stage needs axes x and y, but has %s" % (stage.axes.keys(),))
     if model.hasVA(stage, "referenced"):
         refd = stage.referenced.value
@@ -878,7 +878,7 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
         if vaname in stream.emt_vas:
             raise ValueError("Stream shouldn't have its own VA %s" % (vaname,))
 
-    if set(stage.axes) < {"x", "y"}:
+    if not set(("x", "y")).issubset(set(stage.axes)):
         raise ValueError("Stage needs axes x and y, but has %s" % (stage.axes.keys(),))
     if model.hasVA(stage, "referenced"):
         refd = stage.referenced.value

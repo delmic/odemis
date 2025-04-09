@@ -31,17 +31,14 @@ from odemis.gui.cont.tabs.tab_bar_controller import TabController
 class FastEMAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data, main_tab_data):
         """
-        FASTEM acquisition tab for calibrating the system and acquiring regions of
-        acquisition (ROAs), which are organized in projects.
+        FASTEM acquisition tab for acquiring single-beam and multi-beam acquisitions,
+        which are organized in projects.
 
         During creation, the following controllers are created:
 
-        ProjectList
-          Manages the projects.
-
-        AcquisitionController
-          Takes care of what happens after the "Start" button is pressed,
-          calls functions of the acquisition manager.
+        Single Beam Tab Controller
+        Multi Beam Tab Controller
+        Tab Controller for switching between the two tabs
         """
 
         tab_data = guimod.FastEMAcquisitionGUIData(main_data, panel)

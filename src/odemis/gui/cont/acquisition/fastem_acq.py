@@ -67,7 +67,7 @@ from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_config
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.conf.util import process_setting_metadata
-from odemis.gui.cont.fastem_grid import ROIColumnNames
+from odemis.gui.cont.fastem_project_grid import ROIColumnNames
 from odemis.gui.cont.fastem_project_tree import (
     EVT_TREE_NODE_CHANGE,
     NodeType,
@@ -812,11 +812,12 @@ class FastEMSingleBeamAcquiController(object):
 
     def set_next_roi_settings(self, _, next_roi_data):
         """
-        Callback called when a ROA acquisition is finished (either successfully,
+        Callback called when a ROI acquisition is finished (either successfully,
         cancelled or failed)
+        :param next_roi_data: (dict) the data of the next ROI.
         """
         try:
-            self._main_data_model.ebeam.dwellTime.value = next_roi_data[ROIColumnNames.DWELL_TIME.value] * 1e-6
+            self._main_data_model.ebeam.dwellTime.value = next_roi_data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
             self._main_data_model.sed.brightness.value = next_roi_data[ROIColumnNames.BRIGHTNESS.value]
             self._main_data_model.sed.contrast.value = next_roi_data[ROIColumnNames.CONTRAST.value]
         except Exception:
@@ -825,8 +826,11 @@ class FastEMSingleBeamAcquiController(object):
     @call_in_wx_main
     def on_roi_acquisition_done(self, future, roi, window):
         """
-        Callback called when a ROA acquisition is finished (either successfully,
+        Callback called when a ROI acquisition is finished (either successfully,
         cancelled or failed)
+        :future: (ProgressiveFuture) the future of the acquisition.
+        :param roi: (FastEMROI) the ROI object.
+        :param window: (NodeWindow) the window of the ROI.
         """
         def update_status(text: str, color: str):
             window.status_text.SetForegroundColour(color)
@@ -847,20 +851,22 @@ class FastEMSingleBeamAcquiController(object):
             window.Layout()
             window.Refresh()
 
-        if success:
-            # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
-            current_sample = self._main_data_model.current_sample.value
-            current_user = self._main_data_model.current_user.value
-            if current_sample:
-                user_dir = os.path.join(OVERVIEW_IMAGES_DIR, current_user)
-                os.makedirs(user_dir, exist_ok=True)
-                fn = os.path.join(user_dir, f"fastem_{id(roi.shape)}.ome.tiff")
-                dataio.tiff.export(fn, da, pyramid=True)
-                da = open_acquisition(fn)
-                s = data_to_static_streams(da)[0]
-                s = FastEMOverviewStream(s.name.value, s.raw[0])
-                self.overview_streams[roi.shape] = s
-                os.remove(fn)
+        if not success:
+            return
+
+        # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
+        current_sample = self._main_data_model.current_sample.value
+        current_user = self._main_data_model.current_user.value
+        if current_sample:
+            user_dir = os.path.join(OVERVIEW_IMAGES_DIR, current_user)
+            os.makedirs(user_dir, exist_ok=True)
+            fn = os.path.join(user_dir, f"fastem_{id(roi.shape)}.ome.tiff")
+            dataio.tiff.export(fn, da, pyramid=True)
+            da = open_acquisition(fn)
+            s = data_to_static_streams(da)[0]
+            s = FastEMOverviewStream(s.name.value, s.raw[0])
+            self.overview_streams[roi.shape] = s
+            os.remove(fn)
 
     def on_cancel(self, evt):
         """
@@ -881,6 +887,7 @@ class FastEMSingleBeamAcquiController(object):
         """
         Callback called when the acquisition is finished (either successfully or
         cancelled)
+        :param estimated_time: (float) the estimated time of the acquisition.
         """
         estimated_time = units.readable_time(math.ceil(estimated_time))
         try:
