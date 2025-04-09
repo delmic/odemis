@@ -35,11 +35,15 @@ import wx
 
 from odemis import model
 from odemis.acq.align import z_localization
+from odemis.acq.move import FM_IMAGING
 from odemis.acq.stream import FluoStream
 from odemis.gui import conf
 from odemis.gui.comp import popup
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
+from odemis.gui.util.widgets import (
+    ProgressiveFutureConnector,
+    VigilantAttributeConnector,
+)
 from odemis.util import units
 from odemis.util.filename import create_filename
 
@@ -198,7 +202,10 @@ class CryoZLocalizationController(object):
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             raise ValueError("Select a feature first to specify the Z localization in X/Y")
-        pos = feature.pos.value[:2]
+        if self._tab_data.main.posture_manager.current_posture.value != FM_IMAGING:
+            raise ValueError("The current posture is not FM imaging, cannot do Z localization")
+        stage_pos = feature.get_posture_position(FM_IMAGING)
+        pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(stage_pos)
 
         # Disable the GUI and show the progress bar
         self._tab.streambar_controller.pauseStreams()
@@ -217,7 +224,7 @@ class CryoZLocalizationController(object):
         # The angles of stigmatorAngle should come from MD_CALIB, so it's relatively safe
         angle = self._tab_data.stigmatorAngle.value
 
-        self._acq_future = z_localization.measure_z(self._stigmator, angle, pos, s, logpath=fn)
+        self._acq_future = z_localization.measure_z(self._stigmator, angle, (pos["x"], pos["y"]), s, logpath=fn)
         self._panel.btn_z_localization.SetLabel("Cancel")
 
         self._acq_future_connector = ProgressiveFutureConnector(self._acq_future,
@@ -248,8 +255,7 @@ class CryoZLocalizationController(object):
 
             # Update the feature Z pos, and move there
             feature = self._tab_data.main.currentFeature.value
-            pos = feature.pos.value[:2]
-            feature.pos.value = pos + (zpos,)
+            feature.fm_focus_position.value = {"z": zpos}
             if warning:
                 # Update the Z pos, but do not move there.
                 logging.warning("Z pos shift detected of %s, but not going there as it had warning %s", zshift, warning)

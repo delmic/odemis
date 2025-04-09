@@ -87,8 +87,8 @@
     },
     affects: ["Camera", "EBeam"],
     metadata: {
-        # Should match exactly the FM imaging range metadata for the "Stage" component!
-        POS_ACTIVE_RANGE: {"x": [-44.e-3, 0.e-3], "y": [-23.e-3, 3.e-3]}
+        # Should match exactly the FM imaging range metadata for the "Stage" component, once converted
+        POS_ACTIVE_RANGE: {"x": [-44.e-3, 0.e-3], "y": [-0.04, 0.04]}
     },
 }
 
