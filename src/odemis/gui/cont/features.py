@@ -1,11 +1,9 @@
 import copy
 import logging
-import math
 import os
 
 import wx
 from typing import Dict, List
-from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -23,9 +21,7 @@ from odemis.acq.move import (
     POSITION_NAMES,
     SEM_IMAGING,
     FIB_IMAGING,
-    MeteorTFS2PostureManager,
 )
-from odemis.dataio.tiff import export
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.model import TOOL_FEATURE

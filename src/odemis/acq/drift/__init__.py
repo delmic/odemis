@@ -367,10 +367,24 @@ def align_reference_image(
     if ref_image.metadata[model.MD_PIXEL_SIZE] != new_image.metadata[model.MD_PIXEL_SIZE]:
         raise ValueError("The images must have the same pixel size.")
 
+    # get the real data, if the image is a shadow (e.g. when loaded from disk)
+    if isinstance(ref_image, model.DataArrayShadow):
+        ref_image = ref_image.getData()
+    if isinstance(new_image, model.DataArrayShadow):
+        new_image = new_image.getData()
+
     shift_px = MeasureShift(ref_image, new_image, 2)
 
     pixelsize = ref_image.metadata[model.MD_PIXEL_SIZE]
     shift_m = (shift_px[0] * pixelsize[0], shift_px[1] * pixelsize[1])
+
+    # correct for scan rotation influence
+    if model.hasVA(scanner, "rotation"):
+        scan_rotation = scanner.rotation.value
+        cos_r = numpy.cos(scan_rotation)
+        sin_r = numpy.sin(scan_rotation)
+        shift_m = (shift_m[0] * cos_r - shift_m[1] * sin_r,
+                   shift_m[0] * sin_r + shift_m[1] * cos_r)
 
     previous_shift = scanner.shift.value
     shift = (shift_m[0] + previous_shift[0], shift_m[1] + previous_shift[1])  # m
