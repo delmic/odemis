@@ -29,7 +29,7 @@ import socket
 import threading
 import time
 import weakref
-from typing import Dict
+from typing import Literal, Callable, Any, Dict
 
 import numpy
 from tescan import sem, CancelledError
@@ -48,11 +48,95 @@ ACQ_CMD_TERM = 2
 TESCAN_PXL_LIMIT = 100
 PROBE_CURRENT_RANGE = (10e-12, 100e-9)
 
+# Maps canonical method names (SEM) to FIB equivalents.
+# These methods are present in TESCAN's SharkSEM API.
+FIB_NAME_MAP: Dict[str, str] = {
+    "GUISetScanning": "FibGUISetScan",
+    "DtSelect": "FibDtSelect",
+    "DtEnable": "FibDtEnable",
+    "DtAutoSignal": "FibDtAutoSig",
+    "HVGetVoltage": "FibHVGetVoltage",
+    "HVGetBeam": "FibHVGetBeam",
+    "HVBeamOn": "FibHVBeamOn",
+    "HVBeamOff": "FibHVBeamOff",
+    "ScStopScan": "FibScStopScan",
+    "GetViewField": "FibGetViewField",
+    "SetViewField": "FibSetViewField",
+    "FetchImage": "FibFetchImage",
+    "ScScanLine": "FibScScanLine",
+    "ScScanXY": "FibScScanXY",
+    "ScGetExternal": "FibScGetExtern",
+    # NOTE: No equivalent for FIB in API
+    "GetBeamCurrent": None,
+    "SetBeamCurrent": None,
+    "ScGetBlanker": None,
+    "ScSetBlanker": None,
+    "HVEnumIndexes": None,
+    "HVSetVoltage": None,
+    "GetWD": None,
+    "SetWD": None,
+}
+
+
+class DeviceHandler:
+    """
+    A handler class to dynamically map and invoke methods for SEM and FIB devices.
+
+    This class provides a unified interface to interact with SEM and FIB via the SharkSEM API. It uses a mapping
+    (`FIB_NAME_MAP`) to translate SEM method names to their FIB equivalents, if available, and dynamically invokes the
+    appropriate method on the device.
+    """
+    def __init__(self, device: sem.Sem):
+        """
+        Initializes the DeviceHandler with a TESCAN SEM controller.
+
+        :param device: the TESCAN SEM controller
+        """
+        self.device = device
+
+    def __getattr__(self, name: str) -> Callable[[Literal["electron", "ion"], Any], Any]:
+        """
+        Dynamically resolves and invokes the appropriate method for the given device type.
+
+        name: The name of the method to invoke. Using the SEM method name as canonical.
+        """
+        def method(device_type: Literal["electron", "ion"], *args, **kwargs):
+            """
+            Resolves and invokes the appropriate method for the specified device type (electron for SEM or ion for FIB).
+
+            :param device_type: The type of device to invoke the method on. Use "electron" or "ion'.
+            :param *args: Positional arguments to pass to the resolved method.
+            :param **kwargs: Keyword arguments to pass to the resolved method.
+
+            :returns: The result of the invoked method.
+
+            :raises AttributeError: If the method name does not have an equivalent in FIB or if the
+                method does not exist in the SharkSEM API.
+            :raises ValueError: If an unknown device type is provided.
+            """
+            if device_type == "electron":
+                # Try to get SEM method from device. Raises AttributeError if not existing.
+                func = getattr(self.device, name)
+
+            elif device_type == "ion":
+                fib_name = FIB_NAME_MAP.get(name)
+                if not fib_name:
+                    raise AttributeError(f"No FIB equivalent for '{name}'")
+                try:
+                    func = getattr(self.device, fib_name)
+                except AttributeError:
+                    raise AttributeError(f"FIB equivalent method '{fib_name}' for '{name}' does not exist in the API")
+
+            else:
+                raise ValueError(f"Unknown device_type: {device_type}")
+            return func(*args, **kwargs)
+        return method
+
 
 class SEM(model.HwComponent):
     """
-    This is an extension of the model.HwComponent class. It instantiates the scanner
-    and se-detector children components and provides an update function for its
+    This is an extension of the model.HwComponent class. It instantiates the (fib-)scanner
+    and se-detector(-ion) children components and provides an update function for its
     metadata.
     """
 
@@ -81,6 +165,10 @@ class SEM(model.HwComponent):
         self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
+        # Instantiate a device handler, since there will be a lot of equivalent, but slightly different calls for
+        # FIB and SEM.
+        self._device_handler = DeviceHandler(self._device)
+
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
@@ -96,10 +184,13 @@ class SEM(model.HwComponent):
 
         # If no detectors, no need to annoy the user by stopping the current scanning
         hasdet = any(n.startswith("detector") for n in children.keys())
+        # TODO: do we still want this? And also for FIB?
+        # I could not find a FIB ScSetBlanker equivalent in the API.
         if hasdet:
             # important: stop the scanning before we start scanning or before
             # automatic procedures, even before we configure the detectors
-            self._device.ScStopScan()
+            self._device_handler.ScStopScan("electron")
+            self._device_handler.ScStopScan("ion")
             # Blanker is automatically enabled when no scanning takes place
             self._device.ScSetBlanker(1, 2)
 
@@ -109,23 +200,37 @@ class SEM(model.HwComponent):
                                                       self._device.TcpGetVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
-        # create the detector children
+        scanner_types = ["scanner", "fib-scanner"]  # All allowed scanners types
+        if not any(scanner_type in children for scanner_type in scanner_types):
+            raise KeyError("SEM was not given any scanner as child. "
+                           "One of 'scanner', 'fib-scanner' need to be included as child")
+
         self._detectors = {}
+        self._scanners = {}
+        # Check for detectors and scanners. We don't use the component's role, since that is mainly used for UI
+        # purposes.
         for name, ckwargs in children.items():
-            if name.startswith("detector"):
-                self._detectors[name] = Detector(parent=self, daemon=daemon, **ckwargs)
-                self.children.value.add(self._detectors[name])
-        if not self._detectors:
-            logging.info("TescanSEM was not given a 'detector' child")
+            device_type = "ion" if "fib" in name else "electron"
+            if "detector" in name:
+                component = Detector(parent=self, daemon=daemon, _device_type=device_type, **ckwargs)
+                self._detectors[name] = component
+            elif "scanner" in name:
+                component = Scanner(parent=self, daemon=daemon, _device_type=device_type, **ckwargs)
+                self._scanners[name] = component
+            else:
+                continue
 
-        # create the scanner child
+            self.children.value.add(component)
+
+        # create the focus child
+        # TODO: handle for FIB
         try:
-            kwargs = children["scanner"]
+            kwargs = children["focus"]
         except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'scanner' child")
-
-        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._scanner)
+            logging.info("TescanSEM was not given a 'focus' child")
+        else:
+            self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._focus)
 
         # create the stage child
         try:
@@ -135,15 +240,6 @@ class SEM(model.HwComponent):
         else:
             self._stage = Stage(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._stage)
-
-        # create the focus child
-        try:
-            kwargs = children["focus"]
-        except (KeyError, TypeError):
-            logging.info("TescanSEM was not given a 'focus' child")
-        else:
-            self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._focus)
 
         # create the camera child
         try:
@@ -198,7 +294,7 @@ class SEM(model.HwComponent):
         will be added on the next acquisition.
         raises KeyError if the detector is already being acquired.
         """
-        self._device.GUISetScanning(0)
+        self._device_handler.GUISetScanning(detector._device_type, 0)
         # to be thread-safe (simultaneous calls to start/stop_acquire())
         with self._acquisition_mng_lock:
             if detector in self._acquisitions:
@@ -267,9 +363,6 @@ class SEM(model.HwComponent):
 
                 detectors = tuple(self._acq_wait_detectors_ready())  # ordered
                 if detectors:
-                    with self._acq_progress_lock:
-                        # Beam ON
-                        self._device.ScSetBlanker(1, 0)
                     # write and read the raw data
                     try:
                         rdas = self._acquire_detectors(detectors)
@@ -304,9 +397,11 @@ class SEM(model.HwComponent):
                         last_gc = time.time()
                 else:  # nothing to acquire => rest
                     with self._acq_progress_lock:
-                        self._device.ScStopScan()
-                        # Beam blanker back to automatic
-                        self._device.ScSetBlanker(1, 2)
+                        for detector in detectors:
+                            self._device_handler.ScStopScan(detector._device_type)
+                            if detector._device_type == "electron":
+                                # Beam blanker back to automatic
+                                self._device.ScSetBlanker(1, 2)
                     gc.collect()
                     # wait until something new comes in
                     self._check_cmd_q(block=True)
@@ -318,9 +413,11 @@ class SEM(model.HwComponent):
         finally:
             try:
                 with self._acq_progress_lock:
-                    self._device.ScStopScan()
-                    # Beam blanker back to automatic
-                    self._device.ScSetBlanker(1, 2)
+                    for detector in detectors:
+                        self._device_handler.ScStopScan(detector._device_type)
+                        if detector._device_type == "electron":
+                            # Beam blanker back to automatic
+                            self._device.ScSetBlanker(1, 2)
             except Exception:
                 # can happen if the driver already terminated
                 pass
@@ -349,12 +446,14 @@ class SEM(model.HwComponent):
         """
         with self._acquisition_init_lock:
             self._acquisition_must_stop.set()
-            self._device.ScStopScan()
+            for d in self._acquisitions:
+                self._device_handler.ScStopScan(d._device_type)
             self._device.CancelRecv()
-            if self._scanner.resolution.value == (1, 1):
-                # flush remaining data in data buffer
-                self.flush()
-                self.pre_res = None
+            for s in self._scanners.values():
+                if s.resolution.value == (1, 1):
+                    # flush remaining data in data buffer
+                    self.flush()
+                    self.pre_res = None
 
     def _acq_wait_detectors_ready(self):
         """
@@ -385,35 +484,45 @@ class SEM(model.HwComponent):
         """
         rdas = []
         for d in detectors:
-            rbuf = self._single_acquisition(d.channel)
+            with self._acq_progress_lock:
+                # Beam ON
+                if d._device_type == "electron":
+                    self._device_handler.ScSetBlanker(d._device_type, 1, 0)
+                    # NOTE: no FIB support for blanking seemingly
+            rbuf = self._single_acquisition(d)
             rdas.append(rbuf)
 
         return rdas
 
-    def _single_acquisition(self, channel):
+    def _single_acquisition(self, detector):
+        channel = detector.channel
+        if detector._device_type == "electron":
+            scanner = self._scanners["scanner"]
+        elif detector._device_type == "ion":
+            scanner = self._scanners["fib-scanner"]
         with self._acquisition_init_lock:
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
-            pxs = self._scanner.pixelSize.value  # m/px
+            pxs = scanner.pixelSize.value  # m/px
 
-            pxs_pos = self._scanner.translation.value
-            scale = self._scanner.scale.value
-            res = (self._scanner.resolution.value[0],
-                   self._scanner.resolution.value[1])
+            pxs_pos = scanner.translation.value
+            scale = scanner.scale.value
+            res = (scanner.resolution.value[0],
+                   scanner.resolution.value[1])
 
             metadata = dict(self._metadata)
             phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = self._scanner.pixelToPhy(pxs_pos)
+            trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = self._scanner.rotation.value
-            metadata[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
+            metadata[model.MD_ROTATION] = scanner.rotation.value
+            metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
 
-            scaled_shape = (self._scanner._shape[0] / scale[0], self._scanner._shape[1] / scale[1])
+            scaled_shape = (scanner._shape[0] / scale[0], scanner._shape[1] / scale[1])
             scaled_trans = (pxs_pos[0] / scale[0], pxs_pos[1] / scale[1])
             center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
             l = int(center[0] + scaled_trans[0] - (res[0] / 2))
@@ -421,8 +530,9 @@ class SEM(model.HwComponent):
             r = l + res[0] - 1
             b = t + res[1] - 1
 
-            dt = self._scanner.dwellTime.value * 1e9
-            logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
+            dt = scanner.dwellTime.value * 1e9
+            device_dict = {"ion": "FIB", "electron": "SEM"}
+            logging.debug(f"Acquiring {device_dict[detector._device_type]} image of {res} with dwell time {dt} ns")
 
             # make sure socket settings are always set
             self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -433,7 +543,7 @@ class SEM(model.HwComponent):
                         (self._roi != (l, t, r, b)) or
                         (self._dt != dt) or
                         (self.pre_res != res)):
-                    self._device.ScStopScan()
+                    self._device_handler.ScStopScan(detector._device_type)
                     # flush remaining data in data buffer
                     self.flush()
                     # need to reset
@@ -443,7 +553,7 @@ class SEM(model.HwComponent):
                 # TODO: it shouldn't be necessary to stop *and* flush every time.
                 # Need to find out in which conditions this is required and only doing then.
                 # It seems that at least if self.pre_res == (1, 1), then it's needed.
-                self._device.ScStopScan()
+                self._device_handler.ScStopScan(detector._device_type)
                 # flush remaining data in data buffer
                 self.flush()
 
@@ -455,41 +565,41 @@ class SEM(model.HwComponent):
                         (self._roi != (l, t, r, b)) or
                         (self._dt != dt) or
                         (self.pre_res != res)):
-                        self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
+                        self._device_handler.ScScanLine(detector._device_type, 1, scaled_shape[0], scaled_shape[1],
                                              l + 1, t + 1, r + 1, b + 1, (dt / TESCAN_PXL_LIMIT), TESCAN_PXL_LIMIT, 0)
                         self._scaled_shape = scaled_shape
                         self._roi = (l, t, r, b)
                         self._dt = dt
                 else:
-                    self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
+                    self._device_handler.ScScanXY(detector._device_type, 0, scaled_shape[0], scaled_shape[1],
                                          l, t, r, b, 1, dt)
                 # we must stop the scanning even after single scan
                 # fetch the image (blocking operation), ndarray is returned
                 if res == (1, 1):
-                    sem_pxs = self._device.FetchImage(channel, TESCAN_PXL_LIMIT)
+                    pxs = self._device_handler.FetchImage(detector._device_type, channel, TESCAN_PXL_LIMIT)
                     # Since we acquired TESCAN_PXL_LIMIT integrations of
                     # dt/TESCAN_PXL_LIMIT we now get the mean signal and return
                     # it as the result
-                    sem_pxs = numpy.frombuffer(sem_pxs, dtype=">u2")
-                    sem_img = numpy.array([sem_pxs.mean()])
-                    logging.debug("Received e-beam spot value %g", sem_img[0])
+                    pxs = numpy.frombuffer(pxs, dtype=">u2")
+                    img = numpy.array([pxs.mean()])
+                    logging.debug("Received e-beam spot value %g", img[0])
                 else:
-                    sem_img = self._device.FetchImage(channel, res[0] * res[1])
-                    sem_img = numpy.frombuffer(sem_img, dtype=">u2")
-                    logging.debug("Received SEM image of length %s", len(sem_img))
+                    img = self._device_handler.FetchImage(detector._device_type, channel, res[0] * res[1])
+                    img = numpy.frombuffer(img, dtype=">u2")
+                    logging.debug(f"Received {detector._device_type.upper()} image of length {len(img)}")
             except CancelledError:
                 raise CancelledError("Acquisition cancelled during scanning")
 
             if res != (1, 1):
                 # we must stop the scanning even after single scan
-                self._device.ScStopScan()
+                self._device_handler.ScStopScan(detector._device_type)
             self.pre_res = res
             try:
-                sem_img.shape = res[::-1]
+                img.shape = res[::-1]
             except Exception:
                 logging.exception("Failed to update the image shape")
 
-            return model.DataArray(sem_img, metadata)
+            return model.DataArray(img, metadata)
 
     def terminate(self):
         """
@@ -510,7 +620,8 @@ class SEM(model.HwComponent):
             acq_thread.join(10)
 
         # Terminate components
-        self._scanner.terminate()
+        for s in self._scanners.values():
+            s.terminate()
         for d in self._detectors.values():
             d.terminate()
         if hasattr(self, "_stage"):
@@ -540,20 +651,23 @@ class Scanner(model.Emitter):
     etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
     """
-    def __init__(self, name, role, parent, fov_range, current_range=PROBE_CURRENT_RANGE, **kwargs):
+    def __init__(self, name, role, parent, fov_range, _device_type=None, current_range=PROBE_CURRENT_RANGE, **kwargs):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+        self._device_type = _device_type if _device_type is not None else "electron"
 
+        # TODO: find out if this is the same for FIB. Check examples?
         self._shape = (2048, 2048)
 
         # This is the field of view when in Tescan Software magnification = 100
         # and working distance = 0,27 m (maximum WD of Mira TC). When working
         # distance is changed (for example when we focus) magnification mention
         # in odemis and Tescan software are expected to be different.
+        # TODO: check if the same for FIB
         self._hfw_nomag = 0.195565  # m
 
         # Get current field of view and compute magnification
-        fov = self.parent._device.GetViewField() * 1e-3
+        fov = self.parent._device_handler.GetViewField(self._device_type) * 1e-3
         mag = self._hfw_nomag / fov
 
         # Field of view in Tescan is set in mm
@@ -607,40 +721,53 @@ class Scanner(model.Emitter):
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
-        # Range is according to min and max voltages accepted by Tescan API
-        volt_range = self.GetVoltagesRange()
-        volt = self.parent._device.HVGetVoltage()
-        self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V",
-                                                  setter=self._setVoltage)
-        self.accelVoltage.subscribe(self._onVoltage)
+        volt = self.parent._device_handler.HVGetVoltage(self._device_type)
 
-        pc = self.parent._device.GetBeamCurrent() * 1e-12  # Convert from pA to A
-        # For limits of current, values from the Tescan UI are used, since the API did not specify any.
-        self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
-                                                    setter=self._setPC)
-        self.probeCurrent.subscribe(self._onPC)
+        if self._device_type == "electron":
+            # Range is according to min and max voltages accepted by Tescan API
+            volt_range = self.GetVoltagesRange()
+            self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V",
+                                                    setter=self._setVoltage)
+            self.accelVoltage.subscribe(self._onVoltage)
+        elif self._device_type == "ion":
+            self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
+            # NOTE: There seems to be no metadata for FIB voltage, unlike for SEM
+            # so no callback here
+
+        if self._device_type == "electron":
+            pc = self.parent._device.GetBeamCurrent() * 1e-12  # Convert from pA to A
+            # For limits of current, values from the Tescan UI are used, since the API did not specify any.
+            self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
+                                                        setter=self._setPC)
+            self.probeCurrent.subscribe(self._onPC)
 
         # TODO: Use BooleanVA instead
         # 0 turns off the e-beam, 1 turns it on
-        power = self.parent._device.HVGetBeam()  # Don't change state
+        power = self.parent._device_handler.HVGetBeam(self._device_type)  # Don't change state
+        # TODO: Find out the following: Currently this value is instantiated but never altered.
+        # Should we turn the power on when starting acquisition, since now you will detect a black square/
+        # Or is turning it on this way a safety risk?
         self.power = model.IntEnumerated(power, {0, 1}, unit="",
                                          setter=self._setPower)
-
         if self.parent._detectors:
             # None implies that there is a blanker but it is set automatically.
             # Mostly used in order to know if the module supports beam blanking
             # when accessing it from outside.
             # TODO: also support True/False choices with detectors
             self.blanker = model.VAEnumerated(None, choices={None})
-        else:
-            bmode = self.parent._device.ScGetBlanker(1)
+        elif self._device_type == "electron":
+            bmode = self.parent._device_handler.ScGetBlanker(self._device_type, 1)
             blanked = (bmode != 0)
             self.blanker = model.BooleanVA(blanked, setter=self._setBlanker)
+        elif self._device_type == "ion":
+            # NOTE: workaround for check in SecomStateController (which is a generic controller, contrary to it's name)
+            self.blanker = model.VAEnumerated(None, choices={None})
+        # NOTE: for now, the FIB seemingly does not have blanking available through the API.
 
         # To select "external" scan, which is used to control the scan via the
         # analog interface. So mostly useful when this driver is used only for
         # controlling the e-beam settings, and a DAQ board is used for scanning.
-        emode = self.parent._device.ScGetExternal()
+        emode = self.parent._device_handler.ScGetExternal(self._device_type)
         self.external = model.BooleanVA(bool(emode), setter=self._setExternal)
 
         # Timer polling VAs so we keep up to date with changes made via Tescan UI
@@ -663,7 +790,7 @@ class Scanner(model.Emitter):
         prev_fov = self.horizontalFoV.value
 
         with self.parent._acq_progress_lock:
-            new_fov = self.parent._device.GetViewField() * 1e-3
+            new_fov = self.parent._device_handler.GetViewField(self._device_type) * 1e-3
 
         if prev_fov != new_fov:
             self.horizontalFoV._value = new_fov
@@ -675,8 +802,8 @@ class Scanner(model.Emitter):
         # out of range
         with self.parent._acq_progress_lock:
             # FOV to mm to comply with Tescan API
-            self.parent._device.SetViewField(value * 1e3)
-            cur_fov = self.parent._device.GetViewField() * 1e-3
+            self.parent._device_handler.SetViewField(self._device_type, value * 1e3)
+            cur_fov = self.parent._device_handler.GetViewField(self._device_type) * 1e-3
         return cur_fov
 
     def _updateMagnification(self):
@@ -685,7 +812,7 @@ class Scanner(model.Emitter):
 
     def _setVoltage(self, volt):
         with self.parent._acq_progress_lock:
-            self.parent._device.HVSetVoltage(volt)
+            self.parent._device_handler.HVSetVoltage(self._device_type, volt)
         # Adjust brightness and contrast
         # TODO: should be part of the detector (and up to the client)
         # with self.parent._acq_progress_lock:
@@ -700,13 +827,13 @@ class Scanner(model.Emitter):
 
         power = util.find_closest(value, powers)
         if power == 0:
-            self.parent._device.HVBeamOff()
+            self.parent._device_handler.HVBeamOff(self._device_type)
         else:
-            self.parent._device.HVBeamOn()
+            self.parent._device_handler.HVBeamOn(self._device_type)
         return power
 
     def _setPC(self, value):
-        self.parent._device.SetBeamCurrent(value * 1e12)  # Convert from A to pA
+        self.parent._device_handler.SetBeamCurrent(self._device_type, value * 1e12)  # Convert from A to pA
         return value
 
     def _onPC(self, current):
@@ -717,7 +844,7 @@ class Scanner(model.Emitter):
         return (list of float): accelerating voltage values ordered by index
         """
         voltages = []
-        avs = self.parent._device.HVEnumIndexes()
+        avs = self.parent._device_handler.HVEnumIndexes(self._device_type)
         vol = re.findall(r'\=(.*?)\n', avs)
         for i in enumerate(vol):
             voltages.append(float(i[1]))
@@ -737,7 +864,7 @@ class Scanner(model.Emitter):
         mode = 2 if blanked else 0
         with self.parent._acq_progress_lock:
             logging.debug("Setting blanker to %d", mode)
-            self.parent._device.ScSetBlanker(1, mode)
+            self.parent._device_handler.ScSetBlanker(self._device_type, 1, mode)
         # The command is not blocking, but tests on a SEM showed it takes around 0.75s after unblanking
         # for the e-beam to actually be ready. So explicitly wait to ensure that if a code acquires
         # right after unblanking, the data will be correct. Use 1s to be really safe.
@@ -746,9 +873,9 @@ class Scanner(model.Emitter):
         return blanked
 
     def _setExternal(self, external):
-        logging.debug("Setting external mode to %s", external)
+        logging.debug("Setting SEM external mode to %s", external)
         # 1 if external, 0 if not
-        self.parent._device.ScSetExternal(int(external))
+        self.parent._device_handler.ScSetExternal(self._device_type, int(external))
         # Tests on a SEM showed that, contrarily to the blanker, external mode switch is very fast.
         # So there is not need to wait explicitly after changing the value.
         return external
@@ -771,6 +898,7 @@ class Scanner(model.Emitter):
 
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+        # TODO: figure out if this still makes sense for FIB
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setScale(self, value):
@@ -847,32 +975,36 @@ class Scanner(model.Emitter):
     def _pollVAs(self):
         try:
             with self.parent._acquisition_init_lock:
-                logging.debug("Updating FoV, voltage and current")
+                if self._device_type == "electron":
+                    logging.debug(f"Updating SEM FoV, voltage and current")
+                elif self._device_type == "ion":
+                    logging.debug(f"Updating FIB FoV and voltage")
                 self._updateHorizontalFOV()
                 # TODO: update power
                 with self.parent._acq_progress_lock:
                     prev_volt = self.accelVoltage._value
-                    new_volt = self.parent._device.HVGetVoltage()
+                    new_volt = self.parent._device_handler.HVGetVoltage(self._device_type)
                     if prev_volt != new_volt:
                         # Skip the setter
                         self.accelVoltage._value = new_volt
                         self.accelVoltage.notify(new_volt)
+                    if self._device_type == "electron":
+                        prev_pc = self.probeCurrent._value
+                        new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
+                        if prev_pc != new_pc:
+                            self.probeCurrent._value = new_pc
+                            self.probeCurrent.notify(new_pc)
 
-                    prev_pc = self.probeCurrent._value
-                    new_pc = self.parent._device.GetBeamCurrent() * 1e-12  # Convert from pA to A
-                    if prev_pc != new_pc:
-                        self.probeCurrent._value = new_pc
-                        self.probeCurrent.notify(new_pc)
+                        # if blanker is in auto, don't change its value
+                        # NOTE: FIB does not allow for blanker control, seemingly
+                        if self.blanker.value is not None:
+                            bmode = self.parent._device_handler.ScGetBlanker(self._device_type, 1)
+                            blanked = (bmode != 0)
+                            if blanked != self.blanker._value:
+                                self.blanker._value = blanked
+                                self.blanker.notify(blanked)
 
-                    # if blanker is in auto, don't change its value
-                    if self.blanker.value is not None:
-                        bmode = self.parent._device.ScGetBlanker(1)
-                        blanked = (bmode != 0)
-                        if blanked != self.blanker._value:
-                            self.blanker._value = blanked
-                            self.blanker.notify(blanked)
-
-                    new_ext = bool(self.parent._device.ScGetExternal())
+                    new_ext = bool(self.parent._device_handler.ScGetExternal(self._device_type))
                     if new_ext != self.external._value:
                         self.external._value = new_ext
                         self.external.notify(new_ext)
@@ -892,19 +1024,21 @@ class Detector(model.Detector):
     of the SEM. It sets up a Dataflow and notifies it every time that an SEM image
     is captured.
     """
-    def __init__(self, name, role, parent, channel, detector, **kwargs):
+    def __init__(self, name, role, parent, channel, detector, _device_type=None, **kwargs):
         """
         channel (0<= int): input channel from which to read
         detector (0<= int): detector index
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self._device_type = _device_type if _device_type is not None else "electron"
+
         self._channel = channel
         self._detector = detector
-        self.parent._device.DtSelect(self._channel, self._detector)
-        self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
+        self.parent._device_handler.DtSelect(self._device_type, self._channel, self._detector)
+        self.parent._device_handler.DtEnable(self._device_type, self._channel, 1, 16)  # 16 bits
         # adjust brightness and contrast
-        self.parent._device.DtAutoSignal(self._channel)
+        self.parent._device_handler.DtAutoSignal(self._device_type, self._channel)
 
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
@@ -926,7 +1060,7 @@ class Detector(model.Detector):
         return self._detector
 
     def terminate(self):
-        self.parent._device.DtEnable(self._channel, 0, 16)
+        self.parent._device_handler.DtEnable(self._device_type, self._channel, 0, 16)
 
 
 class SEMDataFlow(model.DataFlow):
@@ -1320,7 +1454,7 @@ class EbeamFocus(model.Actuator):
             # Obtain the finally reached position after move is performed.
             self._updatePosition()
         # Changing WD results to change in fov
-        self.parent._scanner._updateHorizontalFOV()
+        self.parent._scanners["scanner"]._updateHorizontalFOV()
 
     @isasync
     def moveRel(self, shift):
@@ -1360,6 +1494,43 @@ class EbeamFocus(model.Actuator):
             self._executor.shutdown()
             self._executor = None
 
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        shift = self._applyInversion(shift)
+
+        for axis, change in shift.items():
+            self._position[axis] += change
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
+
+        for axis, new_pos in pos.items():
+            self._position[axis] = new_pos
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
+
+    def stop(self, axes=None):
+        # Empty the queue for the given axes
+        self._executor.cancel()
+        logging.info("Cancelled moved on all axes: %s", ", ".join(self.axes))
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
 
 class ChamberView(model.DigitalCamera):
     """
