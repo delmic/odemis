@@ -1064,8 +1064,6 @@ class FastEMSetupGUIData(MicroscopyGUIData):
         assert main.microscope is not None
         super(FastEMSetupGUIData, self).__init__(main)
 
-        # Indicates the calibration state; True: is calibrated successfully; False: not yet calibrated
-        self.is_optical_autofocus_done = model.BooleanVA(False)
         # Indicates the microscope state; True: is currently calibrating; False: not in calibration mode
         self.is_calibrating = model.BooleanVA(False)
 
@@ -1084,14 +1082,21 @@ class FastEMMainTabGUIData(MicroscopyGUIData):
         self.viewLayout._value = VIEW_LAYOUT_DYNAMIC
         # Toggle between FastEMSetupTab and FastEMAcquisitionTab
         self.active_tab = model.VAEnumerated(None, choices={None: ""})
-        # Toggle between FastEMProjectSettingsTab, FastEMProjectRibbonsTab, FastEMProjectSectionsTab, FastEMProjectROAsTab
+        # Toggle between FastEMProjectSettingsTab, FastEMProjectROIsTab, FastEMProjectRibbonsTab,
+        # FastEMProjectSectionsTab, FastEMProjectROAsTab
         self.active_project_tab = model.VAEnumerated(None, choices={None: ""})
+        # Toggle between FastEMSingleBeamTab and FastEMMultiBeamTab
+        self.active_acquisition_tab = model.VAEnumerated(None, choices={None: ""})
         # Shared VA which stores all EditableShape in any canvas
         self.shapes = model.ListVA([])
         # Shared VA which the shape to copy object of a canvas
         self.shape_to_copy = model.VigilantAttribute(None, readonly=True)
-        # The project tree which connects the grids and FastEMProjectTreeCtrl, also it stores data necessary for import / export
-        self.projects_tree = FastEMTreeNode("All Projects", NodeType.ALL_PROJECTS)
+        # The project tree which connects the ROI grids and single-beam FastEMProjectTreeCtrl
+        # it also stores data necessary for import / export
+        self.project_tree_sb = FastEMTreeNode("All Projects", NodeType.ALL_PROJECTS)
+        # The project tree which connects the Ribbons, Sections, ROAs grids and muti-beam FastEMProjectTreeCtrl
+        # it also stores data necessary for import / export
+        self.project_tree_mb = FastEMTreeNode("All Projects", NodeType.ALL_PROJECTS)
         # The current project in use
         self.current_project = model.StringVA("Project-1")
         # The project settings data, needed during acquisition

@@ -130,6 +130,25 @@
                   <border>10</border>
                 </object>
                 <object class="sizeritem">
+                  <object class="TabButton" name="btn_tab_rois">
+                    <icon>../../img/icon/ico_single_beam.png</icon>
+                    <label>ROIS</label>
+                    <size>160,30</size>
+                    <face_colour>def</face_colour>
+                    <fg>#E5E5E5</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+                  <border>10</border>
+                </object>
+                <object class="sizeritem">
                   <object class="TabButton" name="btn_tab_ribbons">
                     <label>RIBBONS</label>
                     <size>160,30</size>
@@ -167,6 +186,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="TabButton" name="btn_tab_roas">
+                    <icon>../../img/icon/ico_multi_beam.png</icon>
                     <label>ROAS</label>
                     <size>160,30</size>
                     <face_colour>def</face_colour>

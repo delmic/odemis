@@ -794,6 +794,63 @@ class AcquisitionTask(object):
 STAGE_PRECISION = 29e-6  # m, acceptable precision of the stage position, is used to determine the overview overlap
 
 
+def acquireNonRectangularTiledArea(roi, stream, stage, acq_dwell_time, scanner_conf, live_stream=None):
+    """
+    Start an overview acquisition task for a given region.
+
+    :param roi: (FastEMROI) The region of interest to be acquired.
+    :param stream: (SEMStream) The stream used for the acquisition.
+        It must have the detector and emitter connected to the TFS XT client detector and scanner.
+        It should be in focus.
+        It must NOT have the following local VAs: horizontalFoV, resolution, scale
+        (because the VAs of the hardware will be changed directly, and so they should not be changed by the stream).
+    :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
+        The x and y axes are aligned with the x and y axes of the ebeam scanner. Axes should already be referenced.
+    :param acq_dwell_time: (float) The acquisition dwell time in seconds.
+    :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
+    :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
+        to build up live the whole acquisition. NOT SUPPORTED YET.
+
+    :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
+             It returns the complete DataArray.
+    """
+    for vaname in ("horizontalFoV", "resolution", "scale"):
+        if vaname in stream.emt_vas:
+            raise ValueError("Stream shouldn't have its own VA %s" % (vaname,))
+
+    if not set(("x", "y")).issubset(set(stage.axes)):
+        raise ValueError("Stage needs axes x and y, but has %s" % (stage.axes.keys(),))
+    if model.hasVA(stage, "referenced"):
+        refd = stage.referenced.value
+        for a in ("x", "y"):
+            if a in refd:
+                if not refd[a]:
+                    raise ValueError("Stage axis '%s' is not referenced. Reference it first" % (a,))
+            else:
+                logging.warning("Going to use the stage in absolute mode, but it doesn't report %s in .referenced VA",
+                                a)
+
+    else:
+        logging.warning("Going to use the stage in absolute mode, but it doesn't have .referenced VA")
+
+    if live_stream:
+        raise NotImplementedError("live_stream not supported")
+
+    # Make a SEMStream copy of the stream, because it is a FastEMSEMStream object, which in its prepare method
+    # overwrites the scanner configuration from overview mode to liveview mode.
+    sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
+
+    est_dur = roi.estimate_acquisition_time(acq_dwell_time)
+    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
+
+    # Connect the future to the task and run it in a thread.
+    # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
+    overview_acq = OverviewAcquisition(future=f)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, roi.shape.points.value, live_stream, scanner_conf)
+
+    return f
+
+
 def acquireTiledArea(stream, stage, area, live_stream=None):
     """
     Start an overview acquisition task for a given area.
@@ -821,7 +878,7 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
         if vaname in stream.emt_vas:
             raise ValueError("Stream shouldn't have its own VA %s" % (vaname,))
 
-    if set(stage.axes) < {"x", "y"}:
+    if not set(("x", "y")).issubset(set(stage.axes)):
         raise ValueError("Stage needs axes x and y, but has %s" % (stage.axes.keys(),))
     if model.hasVA(stage, "referenced"):
         refd = stage.referenced.value
@@ -939,7 +996,7 @@ class OverviewAcquisition(object):
         self._sub_future.cancel()
         return True
 
-    def run(self, stream, stage, area, live_stream):
+    def run(self, stream, stage, area, live_stream, scanner_conf=None):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
@@ -960,7 +1017,7 @@ class OverviewAcquisition(object):
         # This value is set back after acquireTiledArea future's result.
         current_immersion_mode = stream.emitter.immersion.value
 
-        fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE)
+        fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE, conf=scanner_conf)
 
         # The stage movement precision is quite good (just a few pixels). The stage's
         # position reading is much better, and we can assume it's below a pixel.

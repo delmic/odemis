@@ -158,6 +158,11 @@ class FastEMMainTab(Tab):
             main_data,
             tab_data,
         )
+        # Share the semStream between the setup and single beam tab data models to ensure that
+        # the same stream is used for both tabs, needed for single beam overview image acquisition
+        self.acquisition_tab.single_beam_tab.tab_data_model.semStream = (
+            self.setup_tab.tab_data_model.semStream
+        )
 
         self.tab_controller = TabController(
             [self.setup_tab, self.acquisition_tab],
@@ -373,16 +378,26 @@ class FastEMMainTab(Tab):
         self.acquisition_tab.panel.SetSize(
             (-1, self.acquisition_tab.panel.Parent.GetSize().y)
         )
+        self.acquisition_tab.single_beam_tab.panel.SetSize(
+            (-1, self.acquisition_tab.single_beam_tab.panel.Parent.GetSize().y)
+        )
+        self.acquisition_tab.multi_beam_tab.panel.SetSize(
+            (-1, self.acquisition_tab.multi_beam_tab.panel.Parent.GetSize().y)
+        )
         self.setup_tab.panel.Layout()
         self.setup_tab.active_scintillator_panel.Layout()
         self.setup_tab.overview_acq_controller.overview_acq_panel.Layout()
         self.setup_tab.calibration_controller.calibration_panel.Layout()
         self.acquisition_tab.panel.Layout()
+        self.acquisition_tab.single_beam_tab.panel.Layout()
+        self.acquisition_tab.multi_beam_tab.panel.Layout()
         self.setup_tab.panel.Refresh()
         self.setup_tab.active_scintillator_panel.Refresh()
         self.setup_tab.overview_acq_controller.overview_acq_panel.Refresh()
         self.setup_tab.calibration_controller.calibration_panel.Refresh()
         self.acquisition_tab.panel.Refresh()
+        self.acquisition_tab.single_beam_tab.panel.Refresh()
+        self.acquisition_tab.multi_beam_tab.panel.Refresh()
 
     def _toggle_user_settings_panel(self, _):
         shown = not self.panel.pnl_user_settings.IsShown()
