@@ -1,34 +1,25 @@
       <font size="2">
-        <b><font size="2.5">Streak camera hardware alignment</font></b>
+        <b><font size="2.5">Streak camera alignment</font></b>
           <ol>
-            <li>Limit the pixel intensity to max. 1000 cts/100ms.</li>
-            <li>Blank or turn off the e-beam.</li>
-            <li>Close the shutter and the slit of the streak camera, then move the streak camera backwards.</li>
+            <li>Limit the pixel intensity to max. 1000 cts/100ms at all times.</li>
             <li>Put the camera in focus mode (unchecked).</li>
-            <li>Open the shutter and carefully open the slit until the signal is visible in the displayed live view.</li>
-            <li>Adjust the rotation and height of the slit such that the complete photocathode is illuminated.</li>
-            <li>Adjust the focus ring of the input optics to maximize the pixel intensity.</li>
-            <li>Close the slit and move the streak camera back against the SPARC.</li>
             <li>Turn on the calibration light and close the slit of the spectrograph by toggling the manual
                 focus button.
-                Open the slit of the streak camera to get the signal in live view. Maximize the intensity
+                Open the slit and shutter of the streak camera to get the signal in live view. Maximize the intensity
                 by moving the focus of the spectrograph manually. If no signal can be found, most likely the
                 detector offset is completely off. First roughly adjust the detector offset (see next step)
                 and then adjust the spectrograph focus.</li>
             <li>Adjust the spectrograph detector offset by adjusting the offset value based on the horizontal
                 position of the spot on the displayed image (change offset using shrkconfig commands in terminal).
-                The spot should be centered on the horizontal wavelength axis. Turn the calibration light off by
+                The spot should be centered on the horizontal wavelength axis (0 pixel). Turn the calibration light off by
                 untoggling the manual focus button.</li>
             <li>Optional: Perform a fine spectral calibration by toggling the manual focus button,
                 selecting a grating and setting the center wavelength. Position the peaks of the calibration
                 light (Ar) using the shrkconfig commands in the terminal (see manual: Ar spectrum).</li>
-            <li>Turn on the e-beam and find the CL spot by adjusting the height of the streak camera with
-                the lab-jack.</li>
-            <li>Select the magnification corresponding to the input optics of the camera
-                in the streak tab.</li>
+            <li>Turn on the e-beam and find the CL spot by adjusting the Y-direction of the FSLT lens</li>
           </ol>
         <br/>
-	<br/>
+       <br/>
       </font>
       <font size="2">
         <b><font size="2.5">Trigger delay calibration</font></b>
@@ -46,5 +37,5 @@
             <li>Save the calibration file specifying the e-beam voltage.</li>
           </ol>
         <br/>
-	<br/>
+       <br/>
       </font>
