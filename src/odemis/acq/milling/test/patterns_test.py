@@ -214,7 +214,7 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertAlmostEqual(patterns[0].height.value, self.height)
         self.assertAlmostEqual(patterns[0].depth.value, self.depth)
         self.assertAlmostEqual(patterns[0].rotation.value, 0)
-        numpy.testing.assert_array_almost_equal(patterns[0].center.value, (-self.spacing / 2, 0))
+        numpy.testing.assert_array_almost_equal(patterns[0].center.value, (-self.spacing, 0))
         self.assertEqual(patterns[0].scan_direction.value, "TopToBottom")
 
         self.assertEqual(patterns[1].name.value, f"{self.name} (Right)")
@@ -222,5 +222,5 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertAlmostEqual(patterns[1].height.value, self.height)
         self.assertAlmostEqual(patterns[1].depth.value, self.depth)
         self.assertAlmostEqual(patterns[1].rotation.value, 0)
-        numpy.testing.assert_array_almost_equal(patterns[1].center.value, (self.spacing / 2, 0))
+        numpy.testing.assert_array_almost_equal(patterns[1].center.value, (self.spacing, 0))
         self.assertEqual(patterns[1].scan_direction.value, "TopToBottom")
