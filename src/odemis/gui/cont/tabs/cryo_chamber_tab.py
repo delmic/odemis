@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
+import itertools
 import logging
 import math
 import os.path
@@ -159,7 +160,7 @@ class CryoChamberTab(Tab):
             self.position_btns = {LOADING: self.panel.btn_switch_loading, THREE_BEAMS: self.panel.btn_switch_imaging,
                                   ALIGNMENT: self.panel.btn_switch_align, COATING: self.panel.btn_switch_coating,
                                   SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
-            self._grid_btns = ()
+            self._grid_btns = {}
             self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
                                 self.panel.stage_align_btn_m_aligner_x: ("x", -1),
                                 self.panel.stage_align_btn_p_aligner_y: ("y", 1),
@@ -201,15 +202,24 @@ class CryoChamberTab(Tab):
                 if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
                     raise ValueError(f"Focuser {fmd_key} metadata ({fmd_value}) does not have the required axes {required_axis}.")
 
-            # the meteor buttons
-            self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging,
-                                  FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                                  MILLING: self.panel.btn_switch_milling,
-                                  FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-                                  GRID_2: self.panel.btn_switch_grid2,
-                                  GRID_1: self.panel.btn_switch_grid1}
-            self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+            # All the meteor buttons
+            self.position_btns = {
+                SEM_IMAGING: self.panel.btn_switch_sem_imaging,
+                FM_IMAGING: self.panel.btn_switch_fm_imaging,
+                MILLING: self.panel.btn_switch_milling,
+                FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+           }
+            # Remove the ones which are not supported on this system
+            self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
+                                  if posture in main_data.posture_manager.postures}
 
+            # Grid buttons (for switching between grids)
+            # For now, hard-coded to 2 grids. Could be extended to be more flexible, once some METEOR
+            # support a different number of grids (see MIMAS or FASTEM).
+            self._grid_btns = {
+                  GRID_1: self.panel.btn_switch_grid1,
+                  GRID_2: self.panel.btn_switch_grid2,
+            }
             # show load project button
             self.btn_load_project.Show()
 
@@ -223,7 +233,7 @@ class CryoChamberTab(Tab):
                 MILLING: self.panel.btn_switch_milling_chamber_tab
             }
 
-            self._grid_btns = ()
+            self._grid_btns = {}
 
             # TODO: add Tilt angle control, like on the ENZEL, but outside the advanced panel
 
@@ -232,10 +242,8 @@ class CryoChamberTab(Tab):
         self._end_pos = self._start_pos
 
         # Event binding for position control
-        for btn in self.position_btns.values():
+        for btn in itertools.chain(self.position_btns.values(), self._grid_btns.values()):
             btn.Show()
-            if btn == self.panel.btn_switch_fib_imaging:
-                btn.Hide()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
@@ -614,10 +622,7 @@ class CryoChamberTab(Tab):
         Toggle currently pressed button (if any) and untoggle rest of switch buttons
         """
         moving = not self._move_future.done()
-
         for button in self.position_btns.values():
-            if button in self._grid_btns:
-                continue
             if button == currently_pressed:
                 if moving:
                     button.SetValue(BTN_TOGGLE_PROGRESS)
@@ -631,7 +636,7 @@ class CryoChamberTab(Tab):
         Toggle currently pressed button (if any) and untoggle rest of grid buttons
         """
         # METEOR-only code for now
-        for button in self._grid_btns:
+        for button in self._grid_btns.values():
             if button == currently_pressed:
                 button.SetValue(BTN_TOGGLE_COMPLETE)
             else:
@@ -684,7 +689,7 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             # enabling/disabling meteor buttons
-            for button in self.position_btns.values():
+            for button in itertools.chain(self.position_btns.values(), self._grid_btns.values()):
                 button.Enable(current_posture != UNKNOWN)
 
             # turn on (green) the current position button green
@@ -693,7 +698,7 @@ class CryoChamberTab(Tab):
 
             # It's a common mistake that the stage.POS_ACTIVE_RANGE is incorrect.
             # If so, the sample moving will be very odd, as the move is clipped to
-            # the range. So as soon as we reach FM_IMAGING, we check that at the
+            # the range. So as soon as we reach FM_IMAGING, we check that the
             # current position is within range, if not, most likely that range is wrong.
             if current_posture == FM_IMAGING:
                 imaging_stage = self.tab_data_model.main.stage
@@ -707,8 +712,9 @@ class CryoChamberTab(Tab):
                                             stage_pos, imaging_rng)
                             break
 
+            # Turn on (green) the Grid button
             current_grid_label = self.posture_manager.getCurrentGridLabel()
-            btn = self.position_btns.get(current_grid_label)
+            btn = self._grid_btns.get(current_grid_label)
             self._toggle_grid_buttons(btn)
 
         elif self._role == 'mimas':
@@ -811,7 +817,7 @@ class CryoChamberTab(Tab):
 
         # Toggle the current button (orange) and enable cancel
         # target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])  # orange
-        if target_button in self._grid_btns:
+        if target_button in self._grid_btns.values():
             self._toggle_grid_buttons(target_button)
         else:
             self._toggle_switch_buttons(target_button)
@@ -868,7 +874,9 @@ class CryoChamberTab(Tab):
             return
 
         # Get the required target_position from the pressed button
-        self._target_posture = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
+        all_btns = self.position_btns.copy()
+        all_btns.update(self._grid_btns)
+        self._target_posture = next((m for m in all_btns.keys() if target_button == all_btns[m]),
                                      None)
         if self._target_posture is None:
             logging.error("Unknown target button: %s", target_button)
@@ -889,8 +897,8 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING]
+                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING, FIB_IMAGING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
