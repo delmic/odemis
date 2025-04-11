@@ -317,17 +317,15 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
         self.fib_column_tilt = TFS_FIB_COLUMN_TILT
 
-        # feature flags, for features still in testing
-        # NOTE: use_linked_sem_focus_compensation:
-        # when true, the SEM focus is restored to the eucentric focus when moving the stage
-        # this is done on TFS systems to compensate for the SEM focus changing when the stage is moved (due to stage linking)
-        # NOTE: these flags will be removed, along with 2D transforms, once 3D transforms and scan rotation are fully tested.
+        # use_linked_sem_focus_compensation: when True, the SEM focus is restored to the eucentric
+        # focus when moving the stage. This is done on TFS systems to compensate
+        # for the SEM focus changing when the stage is moved in Z (due to stage linking).
+        # In this case, MD_CALIB["SEM-Eucentric-Focus"] specifies the fixed focus position to use.
         self.use_linked_sem_focus_compensation: bool = md_calib.get("use_linked_sem_focus_compensation", False)
 
         # current posture va
         self.current_posture = model.VigilantAttribute(UNKNOWN)
         self.stage.position.subscribe(self._update_posture, init=True)
-
 
         # set the transforms between different postures
         self._posture_transforms = {
@@ -1002,19 +1000,18 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-            elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING):
-                # save rotation and tilt in SEM before switching to FM imaging
-                # to restore rotation and tilt while switching back from FM -> SEM
-                if current_label == SEM_IMAGING and target == FM_IMAGING:
-                    # save the current SEM rotation and tilt
-                    # NOTE: prior to TFS3, no distinction was made between SEM and MILL positions, and these
-                    # were dynamically updated based on the current SEM position when switching to FM
-                    # in TFS3, we have a separate MILLING position, and the SEM position is
-                    # no longer updated when switching to FM. The dynamic updating is maintained for older systems.
-                    if not isinstance(self, MeteorTFS3PostureManager):
-                        current_value = self.stage.position.value
-                        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
-                                                                                'rz': current_value['rz']}})
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING):
+                # NOTE: prior to TFS3, no distinction was made between SEM and MILL positions, and these
+                # were dynamically updated based on the current SEM position when switching to FM,
+                # and used to restore the same position when switching back from FM -> SEM.
+                # From TFS3, there is a separate MILLING position, so the SEM position has really a
+                # fixed rotation and tilt.
+                if (isinstance(self, MeteorTFS1PostureManager)
+                    and current_label == SEM_IMAGING and target == FM_IMAGING
+                   ):
+                    current_value = self.stage.position.value
+                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                                                                             'rz': current_value['rz']}})
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
@@ -1050,16 +1047,24 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
     def __init__(self, microscope):
         MeteorPostureManager.__init__(self, microscope)
         # Check required metadata used during switching
-        self.required_keys.add(model.MD_FAV_MILL_POS_ACTIVE)
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(required_keys=self.required_keys)
-        self.check_calib_data(required_keys={model.MD_SAMPLE_PRE_TILT, "dx", "dy"}) # TODO: add "SEM-Eucentric-Focus"
+        required_calib = {model.MD_SAMPLE_PRE_TILT, "dx", "dy"}
+        # Note: when use_linked_sem_focus_compensation is set, "SEM-Eucentric-Focus" can be defined,
+        # but it has a default value, so it is never required.
+        self.check_calib_data(required_calib)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
-        self.postures = [SEM_IMAGING, FM_IMAGING, MILLING]  # TODO: also support FIB_IMAGING
+        self.postures = [SEM_IMAGING, FM_IMAGING]
+        # These positions are "optional", and only used with Odemis advanced
+        stage_md = self.stage.getMetadata()
+        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+            self.postures.append(MILLING)
+        if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
+            self.postures.append(FIB_IMAGING)
 
     def create_sample_stage(self):
         self.sample_stage = SampleStage(name="Sample Stage",
@@ -1122,20 +1127,8 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed position.
         """
-        stage_md = self.stage.getMetadata()
-        transformed_pos = pos.copy()
-        md_calib = stage_md[model.MD_CALIB]
-        fm_pos_active = self.get_posture_orientation(FM_IMAGING)
-
-        # check if the stage positions have rz axes
-        if not ("rz" in pos and "rz" in fm_pos_active):
-            raise ValueError(f"The stage position does not have rz axis. pos={pos}, fm_pos_active={fm_pos_active}")
-
-        transformed_pos["x"] = pos["x"] + md_calib["trans-dx"]
-        transformed_pos["y"] = pos["y"] + md_calib["trans-dy"]
-        transformed_pos.update(fm_pos_active)
-
-        return transformed_pos
+        # TODO: check this is correct
+        return self._transformFromSEMToMeteor(self._transformFromFIBToSEM(pos))
 
     def _transformFromMeteorToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1143,20 +1136,8 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
-        stage_md = self.stage.getMetadata()
-        transformed_pos = pos.copy()
-        md_calib = stage_md[model.MD_CALIB]
-        fib_pos_active = self.get_posture_orientation(FIB_IMAGING)
-
-        # check if the stage positions have rz axes
-        if not ("rz" in pos and "rz" in fib_pos_active):
-            raise ValueError(f"The stage position does not have rz axis. pos={pos}, fib_pos_active={fib_pos_active}")
-
-        transformed_pos["x"] = pos["x"] - md_calib["trans-dx"]
-        transformed_pos["y"] = pos["y"] - md_calib["trans-dy"]
-        transformed_pos.update(fib_pos_active)
-
-        return transformed_pos
+        # TODO: check this is correct
+        return self._transformFromSEMToFIB(self._transformFromMeteorToSEM(pos))
 
     def _transformFromSEMToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
         """

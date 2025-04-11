@@ -841,7 +841,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_channel(channel)
 
-    def acquire_image(self, channel: str) -> Tuple[numpy.ndarray, Dict[str, Any]]:
+    def acquire_image(self, channel: str, frame_settings: Optional[Dict] = None) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
         Acquire an image from the detector (blocking).
         :param channel: Name of one of the channels.
@@ -849,7 +849,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.acquire_image(channel)
+            return self.server.acquire_image(channel, frame_settings)
 
     def get_last_image(self, channel: str, wait_for_frame: bool = True) -> Tuple[numpy.ndarray, Dict[str, Any]]:
         """
@@ -1525,6 +1525,7 @@ class Detector(model.Detector):
                     md[model.MD_BEAM_FIELD_OF_VIEW] = self._scanner.horizontalFoV.value
                     md[model.MD_ACQ_TYPE] = self._scanner._acq_type
                     md[model.MD_ACQ_DATE] = time.time()
+                    md[model.MD_STAGE_POSITION_RAW] = self.parent._stage.position.value
                     md.update(self._metadata)
 
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
