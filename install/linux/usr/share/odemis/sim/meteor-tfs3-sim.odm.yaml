@@ -1,7 +1,5 @@
-# For now, this is esssentially just a FM microscope, as the FIB part is handled
-# separately by the SEM
-
-"METEOR TFSv3": {
+# Simulates a METEOR on TFS SEM, without control of the FIB
+"METEOR TFSv3 Sim": {
     class: Microscope,
     role: meteor,
 }
@@ -10,7 +8,7 @@
     class: simsem.SimSEM,
     role: null,
     init: {
-           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+        image: "simsem-fake-output.h5", # any large 16 bit image is fine
     },
     children: {
         scanner: "EBeam",
@@ -20,26 +18,21 @@
 }
 
 "EBeam": {
-    # Internal child of SimSEM, so no class
-    role: e-beam,  # Not required for the meteor
+    role: e-beam,
     init: {},
     affects: ["SE Detector"],
 }
 
+"SE Detector": {
+    role: se-detector,
+    init: {},
+}
+
 "EBeam Focus": {
-    # role: ebeam-focus,
-    role: null,
+    role: ebeam-focus,
     init: {},
     affects: ["EBeam"]
 }
-
-"SE Detector": {
-    # Internal child of SimSEM, so no class
-    # role: se-detector,
-    role: null,
-    init: {},
-}
-
 
 # Normally provided by the SEM
 "Stage": {
@@ -59,20 +52,21 @@
         FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 29.e-3 },
         # XYZ ranges for SEM & METEOR
         SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 37.e-3]},
-        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 37.e-3]},
+        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 34.e-3]},
         # Grid centers in SEM range
         # Adjusted so that at init (0,0), it's at the Grid 1 (except for Z).
         SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 32.e-3}},
         CALIB: {
-            "version": "tfs_3", 
+            "version": "tfs_3",
             "dx": 0.0506252, "dy": 0.0049832,  # mirroring values between SEM - METEOR
             "pre-tilt": 0.6108652381980153,  # rad, 35°
-            "use_linked_sem_focus_compensation": false,
+            "use_linked_sem_focus_compensation": false,  # if True, use SEM-Eucentric-Focus
+            "SEM-Eucentric-Focus": 7.0e-3, # m, fixed e-beam focus position, aquilos=7.0e-3, hydra=4.0e-3
         },
         # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
         FAV_FM_POS_ACTIVE: {"rx": 0.29670597283903605  , "rz":  3.141592653589793}, # 17° - 180°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°, 0° rotation
-        FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},    # Note that milling angle (rx) can be changed per session  
+        FAV_MILL_POS_ACTIVE: {"rx": 0.314159, "rz": 0},  # Note that milling angle (rx) can be changed per session
     },
 }
 

@@ -1,11 +1,10 @@
-# To start the xtadapter in autoscript simulator mode:
-# cd path/to/xtlib-adapter/xtadapter
-# python server_autoscript.py sim
-# the server will be started, and listening on localhost:4242
+# Simulates a METEOR on TFS SEM, with control of the FIB (milling)
+# It requires the separate xtadapter-autoscript simulator. To start it, do:
+# python3 path/to/xtlib-adapter/xtadapter/server_autoscript.py sim
 
-METEOR-FIBSEM-Sim: {
+"METEOR TFSv3 FIB Sim": {
     class: Microscope,
-    role: meteor
+    role: meteor,
 }
 
 "FIBSEM": {
@@ -27,11 +26,10 @@ METEOR-FIBSEM-Sim: {
   }
 }
 
-
 "Electron-Beam": {
     role: e-beam,
     init: {
-        hfw_nomag: 0.25, # hfw when mag == 100x
+        hfw_nomag: 0.25, # hfw when mag == 1x
     }
 }
 
@@ -41,7 +39,6 @@ METEOR-FIBSEM-Sim: {
     properties: {
         medianFilter: 3,
     }
-
 }
 
 "Electron-Focus": {
@@ -53,7 +50,7 @@ METEOR-FIBSEM-Sim: {
 "Ion-Beam": {
     role: "ion-beam",
     init: {
-        hfw_nomag: 0.25, # hfw when mag == 100x
+        hfw_nomag: 0.25, # hfw when mag == 1x
     }
 }
 
@@ -70,6 +67,7 @@ METEOR-FIBSEM-Sim: {
     init: {},
     affects: ["Ion-Beam"]
 }
+
 # Normally provided by the SEM
 "Stage": {
     role: stage-bare,
@@ -84,17 +82,17 @@ METEOR-FIBSEM-Sim: {
         # Grid centers in SEM range
         # Adjusted so that at init (0,0,0), it's at the Grid 1.
         SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 5.0e-3, 'y': 0, 'z': 32.e-3}},
-        CALIB: {"version": "tfs_3",
-                "dx": 0.0506252, "dy": 0.0049832,
-                "trans-dx": 0.0488, "trans-dy": 0.0,
-                "pre-tilt":  0.6108652381980153, # 35°
-                "SEM-Eucentric-Focus": 7.0e-3, # aquilos=7.0e-3, hydra=4.0e-3
-                "use_linked_sem_focus_compensation": false,
-                "use_3d_transforms": true,
-                "use_scan_rotation": true,},
+        CALIB: {
+            "version": "tfs_3",
+            "dx": 0.0506252, "dy": 0.0049832,  # mirroring values between SEM - METEOR
+            "pre-tilt": 0.6108652381980153,  # rad, 35°
+            "use_linked_sem_focus_compensation": True,  # if True, use SEM-Eucentric-Focus
+            "SEM-Eucentric-Focus": 7.0e-3, # m, fixed e-beam focus position, aquilos=7.0e-3, hydra=4.0e-3
+        },
+        # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
         FAV_FM_POS_ACTIVE: {"rx": 0.2967059728390360  , "rz":  3.141592653589793}, # 17° - 180°
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
-        FAV_MILL_POS_ACTIVE: {"rx": 0.29, "rz": 0},
+        FAV_MILL_POS_ACTIVE: {"rx": 0.29, "rz": 0},  # Note that milling angle (rx) can be changed per session
         FAV_FIB_POS_ACTIVE: {"rx": 0.29670597283903605 , "rz": 3.141592653589793},
     },
 }
@@ -148,7 +146,7 @@ METEOR-FIBSEM-Sim: {
         port: "/dev/fake6", # Simulator
         address: null, # Simulator
         axes: ["fw"],
-        ustepsize: [1.227184e-6], # [rad/µstep]
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
         refproc: "Standard",
@@ -166,7 +164,7 @@ METEOR-FIBSEM-Sim: {
             "fw": 50.e-3,  # rad
         },
     },
-    children: {"slave": "Optical Actuators"},
+    dependencies: {"slave": "Optical Actuators"},
 }
 
 "Filter Wheel": {
@@ -191,7 +189,6 @@ METEOR-FIBSEM-Sim: {
     # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
     affects: ["Camera"],
 }
-
 
 # CLS3252dsc-1
 "Optical Focus": {
