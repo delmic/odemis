@@ -427,7 +427,7 @@ class MenuController(object):
         subprocess.Popen("odemis-bug-report")
 
     def _on_ai_support(self, evt):
-        AI_SUPPORT_URL = "http://localhost:5173?system={role}+session={session_id}"
+        AI_SUPPORT_URL = "http://localhost:5173?system={role}&session={session_id}"
         AI_SUPPORT_PATH_ROOT = os.path.expanduser("~/delmic-support-ai-connect/")
         # Pick a session ID, based on the timestamp
         session_id = str(int(time.time()))
