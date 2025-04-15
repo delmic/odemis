@@ -20,6 +20,9 @@ see http://www.gnu.org/licenses/.
 """
 
 import logging
+import time
+import webbrowser
+
 from odemis import model, gui
 from odemis.acq import stream
 from odemis.gui import DYE_LICENCE
@@ -137,6 +140,8 @@ class MenuController(object):
             main_frame.menu_item_bugreport.Enable(False)
         else:
             main_frame.Bind(wx.EVT_MENU, self._on_bugreport, id=main_frame.menu_item_bugreport.GetId())
+
+        main_frame.Bind(wx.EVT_MENU, self._on_ai_support, id=main_frame.menu_item_ai_support.GetId())
 
         # /Help/Check for update
         if os.name == 'nt' and getattr(sys, 'frozen', False):
@@ -420,6 +425,38 @@ class MenuController(object):
     def _on_bugreport(self, evt):
         # Popen, so that it's non-blocking
         subprocess.Popen("odemis-bug-report")
+
+    def _on_ai_support(self, evt):
+        AI_SUPPORT_URL = "http://localhost:5173?system={role}+session={session_id}"
+        AI_SUPPORT_PATH_ROOT = os.path.expanduser("~/delmic-support-ai-connect/")
+        # Pick a session ID, based on the timestamp
+        session_id = str(int(time.time()))
+        # read the system role
+        role = self._main_data.role
+
+        log_path = os.path.join(AI_SUPPORT_PATH_ROOT, session_id)
+        # Create the directory if it doesn't exist
+        os.makedirs(log_path, exist_ok=True)
+        # Take the log files, and keep the last 500 lines
+        log_files = [
+            '/var/log/odemis.log',
+            os.path.expanduser('~/odemis-gui.log'),
+        ]
+        for log_file in log_files:
+            if os.path.exists(log_file):
+                with open(log_file, 'r') as f:
+                    lines = f.readlines()
+                lines = lines[-500:]
+                # Write to the AI support directory
+                with open(os.path.join(log_path, os.path.basename(log_file)), 'w') as f:
+                    f.writelines(lines)
+
+        logging.debug("AI support files copied to %s", log_path)
+
+        # Open browser with the right URL
+        url = AI_SUPPORT_URL.format(role=role, session_id=session_id)
+        logging.debug("Opening AI support URL: %s", url)
+        webbrowser.open(url)
 
     def _on_about(self, evt):
 

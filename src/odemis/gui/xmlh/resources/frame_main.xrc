@@ -159,6 +159,12 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_ai_support">
+          <label>Interactive support...</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenu">
           <label>Development</label>
           <object class="wxMenuItem" name="menu_item_devmanual">

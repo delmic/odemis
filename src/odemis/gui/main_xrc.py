@@ -228,6 +228,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_rawpixel = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_rawpixel"))
         self.menu_item_show_correlation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_show_correlation"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
+        self.menu_item_ai_support = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_ai_support"))
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
@@ -2695,6 +2696,12 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
           <label>User manual</label>
           <accel>F1</accel>
           <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_ai_support">
+          <label>Interactive support...</label>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
