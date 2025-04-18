@@ -29,7 +29,7 @@ import wx.lib.newevent
 from wx.lib.agw.customtreectrl import CustomTreeCtrl, GenericTreeItem
 
 from odemis.gui import BG_COLOUR_MAIN, FG_COLOUR_DIS, FG_COLOUR_MAIN
-from odemis.gui.cont.fastem_grid_base import DEFAULT_PARENT
+from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT
 
 
 class NodeChangeType(IntEnum):
@@ -45,15 +45,16 @@ class NodeChangeType(IntEnum):
 class NodeType(IntEnum):
     ALL_PROJECTS = 0
     PROJECT = 1
-    RIBBON = 2
-    SECTION = 3
-    ROA = 4
+    ROI = 2
+    RIBBON = 3
+    SECTION = 4
+    ROA = 5
 
 
 TreeNodeChangeEvent, EVT_TREE_NODE_CHANGE = wx.lib.newevent.NewEvent()
 # Define a mapping to determine the sorting precedence of different node types.
 # Lower numerical values indicate higher priority in the sort order:
-TYPE_PRIORITY = {NodeType.RIBBON: 1, NodeType.SECTION: 2, NodeType.ROA: 3}
+TYPE_PRIORITY = {NodeType.ROI: 1, NodeType.RIBBON: 2, NodeType.SECTION: 3, NodeType.ROA: 4}
 
 
 class FastEMTreeNode:
@@ -229,13 +230,11 @@ class FastEMTreeNode:
         if self.type == NodeType.ALL_PROJECTS:
             return child_type == NodeType.PROJECT
         elif self.type == NodeType.PROJECT:
-            return child_type in (NodeType.RIBBON, NodeType.SECTION, NodeType.ROA)
+            return child_type in (NodeType.ROI, NodeType.RIBBON, NodeType.SECTION, NodeType.ROA)
         elif self.type == NodeType.RIBBON:
             return child_type == NodeType.SECTION
         elif self.type == NodeType.SECTION:
             return child_type == NodeType.ROA
-        elif self.type == NodeType.ROA:
-            return False
         else:
             return False
 

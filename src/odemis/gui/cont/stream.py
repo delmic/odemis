@@ -1391,7 +1391,7 @@ class FastEMStreamController(StreamController):
         # HACK manually create the checkbox using custom gb_sizer's pos and span
         # The hack is needed because self.stream_paneladd_checkbox_control cannot be overridden,
         # which has pos=(self.num_rows, 1) and span=(1, 2)
-        _ = self.stream_panel._add_side_label("Immersion Mode")
+        _ = self.stream_panel._add_side_label("Immersion mode")
         cbox_immersion_mode = wx.CheckBox(self.stream_panel._panel, wx.ID_ANY,
                                           style=wx.ALIGN_RIGHT | wx.NO_BORDER)
 

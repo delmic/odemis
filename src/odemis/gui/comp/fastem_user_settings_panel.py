@@ -42,11 +42,15 @@ USER_PROFILE = "User profile"
 CURRENT = "Current"
 VOLTAGE = "Voltage"
 OVERVOLTAGE = "Overvoltage"
-DWELL_TIME_OVERVIEW_IMAGE = "Dwell time (overview image)"
-DWELL_TIME_ACQUISITION = "Dwell time (acquisition)"
+DWELL_TIME_SINGLE_BEAM = "Dwell time (single-beam)"
+DWELL_TIME_MULTI_BEAM = "Dwell time (multi-beam)"
 SAMPLE_CARRIER = "Sample carrier"
 SELECTED_SCINTILLATORS = "Selected scintillators"
 USER_NOTE = "User note"
+IMMERSION = "Immersion mode"
+RESOLUTION = "Resolution"
+HFW = "HFW"
+PIXEL_SIZE = "Pixel size"
 # Control config for the entries
 CONTROL_CONFIG = {
     USER_PROFILE: {
@@ -66,8 +70,8 @@ CONTROL_CONFIG = {
         "key_step_min": 0.1,
         "accuracy": 3,
     },
-    DWELL_TIME_OVERVIEW_IMAGE: {},
-    DWELL_TIME_ACQUISITION: {},
+    DWELL_TIME_SINGLE_BEAM: {},
+    DWELL_TIME_MULTI_BEAM: {},
     SAMPLE_CARRIER: {
         "style": wx.CB_READONLY,
     },
@@ -131,10 +135,10 @@ class FastEMUserSettingsPanel(object):
             # CURRENT: CONTROL_CONFIG[CURRENT]["labels"][0],
             VOLTAGE: CONTROL_CONFIG[VOLTAGE]["labels"][0],
             OVERVOLTAGE: CONTROL_CONFIG[OVERVOLTAGE]["min_val"],
-            DWELL_TIME_OVERVIEW_IMAGE: CONTROL_CONFIG[DWELL_TIME_OVERVIEW_IMAGE][
+            DWELL_TIME_SINGLE_BEAM: CONTROL_CONFIG[DWELL_TIME_SINGLE_BEAM][
                 "min_val"
             ],
-            DWELL_TIME_ACQUISITION: CONTROL_CONFIG[DWELL_TIME_ACQUISITION]["min_val"],
+            DWELL_TIME_MULTI_BEAM: CONTROL_CONFIG[DWELL_TIME_MULTI_BEAM]["min_val"],
         }
 
     def _init_user_profile_config(self):
@@ -196,8 +200,8 @@ class FastEMUserSettingsPanel(object):
             "unit": overvoltage.unit,
         }
         CONTROL_CONFIG[OVERVOLTAGE].update(overvoltage_conf)
-        CONTROL_CONFIG[DWELL_TIME_OVERVIEW_IMAGE].update(dwell_time_overview_conf)
-        CONTROL_CONFIG[DWELL_TIME_ACQUISITION].update(dwell_time_acq_conf)
+        CONTROL_CONFIG[DWELL_TIME_SINGLE_BEAM].update(dwell_time_overview_conf)
+        CONTROL_CONFIG[DWELL_TIME_MULTI_BEAM].update(dwell_time_acq_conf)
         CONTROL_CONFIG[SAMPLE_CARRIER].update(
             {"choices": list(self.main_data.samples.value.keys())}
         )
@@ -295,10 +299,10 @@ class FastEMUserSettingsPanel(object):
             if ctrl:
                 value = self.user_profile_data[self.main_data.current_user.value][entry]
                 ctrl.SetValue(value)
-                if entry == DWELL_TIME_OVERVIEW_IMAGE:
-                    self.main_data.user_dwell_time_overview.value = float(value)
-                elif entry == DWELL_TIME_ACQUISITION:
-                    self.main_data.user_dwell_time_acquisition.value = float(value)
+                if entry == DWELL_TIME_SINGLE_BEAM:
+                    self.main_data.user_dwell_time_sb.value = float(value)
+                elif entry == DWELL_TIME_MULTI_BEAM:
+                    self.main_data.user_dwell_time_mb.value = float(value)
                 elif entry == OVERVOLTAGE:
                     self._set_overvoltage_ctrl_value(ctrl, float(value))
                 elif entry == VOLTAGE:
@@ -397,9 +401,9 @@ class FastEMUserSettingsPanel(object):
 
         value = ctrl.GetValue()
         self.user_profile_data[self.main_data.current_user.value][
-            DWELL_TIME_OVERVIEW_IMAGE
+            DWELL_TIME_SINGLE_BEAM
         ] = value
-        self.main_data.user_dwell_time_overview.value = float(value)
+        self.main_data.user_dwell_time_sb.value = float(value)
         self.write_user_profile_data()
 
     def on_evt_slider_dwell_time_acquisition_ctrl(self, evt):
@@ -409,9 +413,9 @@ class FastEMUserSettingsPanel(object):
 
         value = ctrl.GetValue()
         self.user_profile_data[self.main_data.current_user.value][
-            DWELL_TIME_OVERVIEW_IMAGE
+            DWELL_TIME_SINGLE_BEAM
         ] = value
-        self.main_data.user_dwell_time_acquisition.value = float(value)
+        self.main_data.user_dwell_time_mb.value = float(value)
         self.write_user_profile_data()
 
     def on_evt_button_selected_scintillators_ctrl(self, evt):
@@ -527,32 +531,34 @@ class FastEMUserSettingsPanel(object):
 
     def _create_dwell_time_overview_ctrl_entry(self):
         value = self.user_profile_data[self.main_data.current_user.value][
-            DWELL_TIME_OVERVIEW_IMAGE
+            DWELL_TIME_SINGLE_BEAM
         ]
         lbl, ctrl = self.user_settings_panel.add_float_slider(
-            DWELL_TIME_OVERVIEW_IMAGE,
+            DWELL_TIME_SINGLE_BEAM,
             value=value,
-            conf=CONTROL_CONFIG[DWELL_TIME_OVERVIEW_IMAGE],
+            conf=CONTROL_CONFIG[DWELL_TIME_SINGLE_BEAM],
+            icon_path="icon/ico_single_beam.png"
         )
         # Wrap the label text because its too long
         lbl.Wrap(100)
-        self.main_data.user_dwell_time_overview.value = float(value)
-        ctrl.SetName(DWELL_TIME_OVERVIEW_IMAGE)
+        self.main_data.user_dwell_time_sb.value = float(value)
+        ctrl.SetName(DWELL_TIME_SINGLE_BEAM)
         ctrl.Bind(wx.EVT_SLIDER, self.on_evt_slider_dwell_time_overview_image_ctrl)
 
     def _create_dwell_time_acquisition_ctrl_entry(self):
         value = self.user_profile_data[self.main_data.current_user.value][
-            DWELL_TIME_ACQUISITION
+            DWELL_TIME_MULTI_BEAM
         ]
         lbl, ctrl = self.user_settings_panel.add_float_slider(
-            DWELL_TIME_ACQUISITION,
+            DWELL_TIME_MULTI_BEAM,
             value=value,
-            conf=CONTROL_CONFIG[DWELL_TIME_ACQUISITION],
+            conf=CONTROL_CONFIG[DWELL_TIME_MULTI_BEAM],
+            icon_path="icon/ico_multi_beam.png"
         )
         # Wrap the label text because its too long
         lbl.Wrap(100)
-        self.main_data.user_dwell_time_acquisition.value = float(value)
-        ctrl.SetName(DWELL_TIME_ACQUISITION)
+        self.main_data.user_dwell_time_mb.value = float(value)
+        ctrl.SetName(DWELL_TIME_MULTI_BEAM)
         ctrl.Bind(wx.EVT_SLIDER, self.on_evt_slider_dwell_time_acquisition_ctrl)
 
     def _create_sample_carrier_ctrl_entry(self):

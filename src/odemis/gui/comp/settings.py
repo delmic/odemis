@@ -125,18 +125,32 @@ class SettingsPanel(wx.Panel):
 
     # Control methods
 
-    def _add_side_label(self, label_text):
-        """ Add a static text label to the left column at the current row
+    def _add_side_label(self, label_text, icon_path=None):
+        """ Add a label with an optional icon to the left column at the current row.
 
-        This method should only be called from another control adding method!
+        This method should only be called from another control-adding method!
 
+        :param label_text: (str) The text for the label.
+        :param icon_path: (Optional[str]) Path to the icon image.
         """
 
         self.clear_default_message()
 
+        # Create a horizontal sizer to hold the icon and text
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Add icon if provided
+        if icon_path:
+            icon = img.getBitmap(icon_path)
+            icon_ctrl = wx.StaticBitmap(self, -1, icon)
+            h_sizer.Add(icon_ctrl, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+
         # Create label
         lbl_ctrl = wx.StaticText(self, -1, str(label_text))
-        self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
+        h_sizer.Add(lbl_ctrl, flag=wx.ALIGN_CENTER_VERTICAL)
+
+        # Add combined sizer to grid sizer
+        self.gb_sizer.Add(h_sizer, (self.num_rows, 0),
                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl
@@ -220,10 +234,10 @@ class SettingsPanel(wx.Panel):
 
         return lbl_ctrl, value_ctrl
 
-    def _add_slider(self, klass, label_text, value, conf):
+    def _add_slider(self, klass, label_text, value, conf, icon_path=None):
         """ Add a slider of type 'klass' to the settings panel """
 
-        lbl_ctrl = self._add_side_label(label_text)
+        lbl_ctrl = self._add_side_label(label_text, icon_path=icon_path)
         value_ctrl = klass(self, value=value, **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -253,7 +267,7 @@ class SettingsPanel(wx.Panel):
         return self._add_slider(UnitIntegerSlider, label_text, value, conf)
 
     @control_bookkeeper
-    def add_float_slider(self, label_text, value=None, conf=None):
+    def add_float_slider(self, label_text, value=None, conf=None, icon_path=None):
         """ Add a float value slider to the settings panel
 
         :param label_text: (str) Label text to display
@@ -261,7 +275,7 @@ class SettingsPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
-        return self._add_slider(UnitFloatSlider, label_text, value, conf)
+        return self._add_slider(UnitFloatSlider, label_text, value, conf, icon_path)
 
     @control_bookkeeper
     def add_int_field(self, label_text, value=None, pos_col=1, span=wx.DefaultSpan, conf=None):

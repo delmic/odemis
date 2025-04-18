@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import math
-from enum import Enum
 from typing import List
 
 import wx
@@ -28,20 +27,11 @@ from wx.grid import GridCellFloatEditor, GridCellNumberEditor
 
 import odemis.gui.model as guimod
 from odemis.gui.comp.fastem_roa import FastEMROA
-from odemis.gui.cont.fastem_grid_base import Column, GridBase, Row
+from odemis.gui.cont.fastem_project_grid import RibbonColumnNames
+from odemis.gui.cont.fastem_project_grid_base import Column, GridBase, Row
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util import units
 from odemis.util.filename import make_compliant_string
-
-
-class RibbonColumnNames(Enum):
-    NAME = "Name"
-    SLICE_IDX = "Ribbon Index"
-    POSX = "Position.X [m]"
-    POSY = "Position.Y [m]"
-    SIZEX = "Size.X"
-    SIZEY = "Size.Y"
-    ROT = "Rotation [°]"
 
 
 class RibbonRow(Row):
@@ -296,6 +286,6 @@ class FastEMProjectRibbonsTab(Tab):
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
         if main_data.role in ("mbsem",):
-            return 2
+            return 3
         else:
             return None
