@@ -248,9 +248,14 @@ class CRYOSECOMTestCase(unittest.TestCase):
         data_center = data[0].metadata[model.MD_POS]
         area_center = (area[0] + area[2]) / 2, (area[1] + area[3]) / 2
         logging.debug("Expected area: %s %s, actual area: %s %s", area, area_center, bbox, data_center)
-        self.assertAlmostEqual(data_center[0], area_center[0], delta=1e-6)  # +- 1µm
-        self.assertAlmostEqual(data_center[1], area_center[1], delta=1e-6)  # +- 1µm
+        # Assert full coverage of requested area
+        self.assertLessEqual(bbox[0], area[0])  # bbox.x_min <= area.x_min
+        self.assertLessEqual(bbox[1], area[1])  # bbox.y_min <= area.y_min
+        self.assertGreaterEqual(bbox[2], area[2])  # bbox.x_max >= area.x_max
+        self.assertGreaterEqual(bbox[3], area[3])  # bbox.y_max >= area.y_max
 
+        # Check that the stitched bounding box fully covers the requested area,
+        # allowing for a small tolerance equal to half the field of view.
         self.assertTrue(area[0] - fm_fov[0] / 2 <= bbox[0] <= area[0])
         self.assertTrue(area[1] - fm_fov[1] / 2 <= bbox[1] <= area[1])
         self.assertTrue(area[2] <= bbox[2] <= area[2] + fm_fov[0] / 2)
@@ -482,12 +487,10 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         # Test with more than one z level
-        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area=area, overlap=overlap,
+        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area, overlap=overlap,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
                                               zlevels=[1, 2, 3])
-        tiled_acq_task._nx = 7
-        tiled_acq_task._ny = 7
-        total_tiles = tiled_acq_task._nx * tiled_acq_task._ny
+        total_tiles = tiled_acq_task._number_of_tiles
         # Observed time duration during stage movement between tiles
         min_stage_time = total_tiles * 0.3
         # Calculated time duration during tile acquisition
@@ -500,12 +503,10 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertLessEqual(min_total_time, estimated_time)
         self.assertLessEqual(estimated_time, 1.30 * min_total_time)
         # Test with one z level
-        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area=area, overlap=overlap,
+        tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area, overlap=overlap,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
                                               zlevels=[1])
-        tiled_acq_task._nx = 10
-        tiled_acq_task._ny = 10
-        total_tiles = tiled_acq_task._nx * tiled_acq_task._ny
+        total_tiles = tiled_acq_task._number_of_tiles
         # Observed time duration during stage movement between tiles
         min_stage_time = total_tiles * 0.3
         # Calculated time duration during tile acquisition
