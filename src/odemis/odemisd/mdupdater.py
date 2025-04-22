@@ -341,9 +341,7 @@ class MetadataUpdater(model.Component):
 
         pos = filter.position.value
         bandwidth = filter.axes["band"].choices[pos["band"]]
-        if bandwidth == model.BAND_PASS_THROUGH:  # "pass-through" == no filter
-            return None
-        elif isinstance(bandwidth, str):  # Sometimes the filter is just a name like "red".
+        if isinstance(bandwidth, str):  # "pass-through" or sometimes the filter is just a name like "red".
             return bandwidth
         # Last, and most common, option: tuple/list of 2 floats (min, max)
         elif (isinstance(bandwidth, (tuple, list))
@@ -444,7 +442,6 @@ class MetadataUpdater(model.Component):
         def updateOutWLRange(pos, fl=filter, comp_affected=comp_affected):
             spec = self._det_to_spectrograph.get(comp_affected.name)  # can be None
             self.updateOutWavelength(comp_affected, fl, spec)
-
             # apply lateral chromatic correction to align with the reference channel
             apply_transform = fl.getMetadata().get(model.MD_CHROMATIC_COR, None)
             if apply_transform:
