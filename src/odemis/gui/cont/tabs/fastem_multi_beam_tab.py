@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
 """
-@author: Rinze de Laat, Éric Piel, Philip Winkler, Victoria Mavrikopoulou,
-         Anders Muskens, Bassim Lazem, Nandish Patel
+@author: Nandish Patel
 
-Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2025 Nandish Patel, Delmic
 
 This file is part of Odemis.
 
@@ -21,24 +20,25 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 import odemis.gui.model as guimod
-from odemis.gui import main_xrc
-from odemis.gui.cont.tabs.fastem_multi_beam_tab import FastEMMultiBeamTab
-from odemis.gui.cont.tabs.fastem_single_beam_tab import FastEMSingleBeamTab
+from odemis.gui.comp.fastem_project_list_panel import FastEMProjectList
+from odemis.gui.cont.acquisition import FastEMMultiBeamAcquiController
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.cont.tabs.tab_bar_controller import TabController
 
 
-class FastEMAcquisitionTab(Tab):
+class FastEMMultiBeamTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data, main_tab_data):
         """
-        FASTEM acquisition tab for acquiring single-beam and multi-beam acquisitions,
-        which are organized in projects.
+        FASTEM multi-beam tab for acquiring regions of acquisition (ROAs), which are
+        organized in projects.
 
         During creation, the following controllers are created:
 
-        Single Beam Tab Controller
-        Multi Beam Tab Controller
-        Tab Controller for switching between the two tabs
+        ProjectList
+          Manages the projects.
+
+        AcquisitionController
+          Takes care of what happens after the "Start" button is pressed,
+          calls functions of the acquisition manager.
         """
 
         tab_data = guimod.FastEMAcquisitionGUIData(main_data, panel)
@@ -50,32 +50,19 @@ class FastEMAcquisitionTab(Tab):
 
         self.main_tab_data = main_tab_data
 
-        single_beam_panel = main_xrc.xrcpnl_tab_fastem_single_beam(panel.pnl_acqui_tabs)
-        multi_beam_panel = main_xrc.xrcpnl_tab_fastem_multi_beam(panel.pnl_acqui_tabs)
-
-        self.single_beam_tab = FastEMSingleBeamTab(
-            "Single Beam",
-            panel.btn_tab_single_beam,
-            single_beam_panel,
-            main_frame,
-            main_data,
-            main_tab_data,
-        )
-        self.multi_beam_tab = FastEMMultiBeamTab(
-            "Multi Beam",
-            panel.btn_tab_multi_beam,
-            multi_beam_panel,
-            main_frame,
-            main_data,
-            main_tab_data,
+        self.project_list = FastEMProjectList(
+            panel.pnl_projects,
+            main_tab_data=main_tab_data,
+            size=panel.pnl_projects.Size,
+            project_tree=main_tab_data.project_tree_mb,
         )
 
-        self.tab_controller = TabController(
-            [self.single_beam_tab, self.multi_beam_tab],
-            main_tab_data.active_acquisition_tab,
-            main_frame,
-            main_data,
-            self.single_beam_tab,
+        # Acquisition controller
+        self._acquisition_controller = FastEMMultiBeamAcquiController(
+            tab_data,
+            panel,
+            main_tab_data,
+            self.project_list.tree_ctrl,
         )
 
     def Show(self, show=True):

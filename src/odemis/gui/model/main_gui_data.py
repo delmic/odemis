@@ -773,12 +773,18 @@ class FastEMMainGUIData(MainGUIData):
         self.current_user = model.StringVA()
         # The current sample in use
         self.current_sample = model.VigilantAttribute(None)
-        # User preferred dwell time for overview image acquisition
-        self.user_dwell_time_overview = model.FloatVA()
-        # User preferred dwell time for project acquisition
-        self.user_dwell_time_acquisition = model.FloatVA()
+        # User preferred dwell time for single-beam acquisition
+        self.user_dwell_time_sb = model.FloatVA()
+        # User preferred dwell time for multi-beam acquisition
+        self.user_dwell_time_mb = model.FloatVA()
         # Indicates the calibration state for Calibration 1
         self.is_calib_1_done = model.BooleanVA(False)
+        # Indicates the optical autofocus calibration state; True: is calibrated successfully; False: not yet calibrated
+        self.is_optical_autofocus_done = model.BooleanVA(False)
+        # The user preferred horizontal field width for single-beam acquisition
+        self.user_hfw_sb = model.FloatVA()
+        # The user preferred resolution for single-beam acquisition
+        self.user_resolution_sb = model.TupleVA()
 
     def _reset_is_aligned(self, _):
         self.is_aligned.value = False

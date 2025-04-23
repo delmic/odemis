@@ -29,8 +29,8 @@ of microscope images.
 
 from .cryo_acq import CryoAcquiController
 from .cryo_z_localization import CryoZLocalizationController
-from .fastem_acq import (FastEMAcquiController, FastEMCalibrationController,
-                         FastEMOverviewAcquiController)
+from .fastem_acq import (FastEMCalibrationController, FastEMMultiBeamAcquiController,
+                         FastEMOverviewAcquiController, FastEMSingleBeamAcquiController)
 from .overview_stream_acq import OverviewStreamAcquiController
 from .secom_acq import SecomAcquiController
 from .snapshot import SnapshotController
