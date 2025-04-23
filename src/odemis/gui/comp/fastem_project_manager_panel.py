@@ -771,8 +771,10 @@ class FastEMProjectManagerPanel:
             return
 
         self.is_import_btn_pressed = True
-        self.import_export_manager.import_from_file(filepath)
-        self.is_import_btn_pressed = False
+        try:
+            self.import_export_manager.import_from_file(filepath)
+        finally:
+            self.is_import_btn_pressed = False
 
     def _on_move_up(self, evt):
         """Moves selected row/s up in the grid."""
