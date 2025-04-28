@@ -32,6 +32,8 @@ from math import pi
 from typing import Optional, Dict, Tuple
 
 import numpy
+
+import odemis.acq.feature
 from ConsoleClient.Communication.Connection import Connection
 
 from odemis import model, util
@@ -686,7 +688,7 @@ class pneumaticSuspension(model.HwComponent):
         :return (bool): goal position of the valve set to the server: (True: "open", False: "closed")
         """
         logging.debug("Setting valve to %s." % goal)
-        self._valve.Target = VALVE_OPEN if goal else VALVE_CLOSED
+        odemis.acq.feature.Target = VALVE_OPEN if goal else VALVE_CLOSED
         return goal
 
     def terminate(self):
@@ -774,7 +776,7 @@ class vacuumChamber(model.Actuator):
         """
         if parameter is None:
             parameter = self._chamber.VacuumStatus
-        if parameter.Actual == parameter.Target:
+        if parameter.Actual == odemis.acq.feature.Target:
             logging.debug("Target vacuum state reached.")
             self._vacuumStatusReached.set()
         else:
@@ -817,7 +819,7 @@ class vacuumChamber(model.Actuator):
         """
         logging.debug("Setting vacuum status to %s.", goal)
         self._vacuumStatusReached.clear()  # to make sure it will wait
-        self._chamber.VacuumStatus.Target = goal
+        odemis.acq.feature.Target = goal
         if not self._vacuumStatusReached.wait(1800):  # wait maximally 30 minutes (generally takes no more than 10)
             raise TimeoutError("Something went wrong awaiting a change in the vacuum status.")
         self._updatePosition()
@@ -848,11 +850,11 @@ class vacuumChamber(model.Actuator):
         """
         if not axes or "vacuum" in axes:
             logging.debug("Stopping vacuum.")
-            self.parent.datamodel.HybridPlatform.Cancel.Target = True  # tell the server to stop what it's doing
+            odemis.acq.feature.Target = True  # tell the server to stop what it's doing
             self._changeVacuum(int(self._chamber.VacuumStatus.Actual))  # the current target is the current state and
             # wait. This assures the executor does not infinitely wait until VacuumStatus.Actual equals
             # VacuumStatus.Target
-            self.parent.datamodel.HybridPlatform.Cancel.Target = True  # tell the server to stop what it's doing again
+            odemis.acq.feature.Target = True  # tell the server to stop what it's doing again
             self._executor.cancel()
 
     def terminate(self):
@@ -1125,12 +1127,12 @@ class GIS(model.Actuator):
         # Check whether a move is completed
         # Note: as of 2023-02-16, .AtTarget is always False, even when it's at target,
         # so explicitly compare target vs actual.
-        if not self._armPositionReached.is_set() and self._positionPar.Actual == self._positionPar.Target:
+        if not self._armPositionReached.is_set() and self._positionPar.Actual == odemis.acq.feature.Target:
             logging.debug("Target arm position reached.")
             self._armPositionReached.set()
             # Don't clear when it's not in target, as it's not related to "our" move
 
-        if not self._reservoirPositionReached.is_set() and self._reservoirPar.Actual == self._reservoirPar.Target:
+        if not self._reservoirPositionReached.is_set() and self._reservoirPar.Actual == odemis.acq.feature.Target:
             logging.debug("Target reservoir position reached.")
             self._reservoirPositionReached.set()
 
@@ -1149,10 +1151,10 @@ class GIS(model.Actuator):
             self._armPositionReached.clear()  # to ensure it waits
             if goal["arm"]:
                 logging.debug("Moving GIS to working position.")
-                self._positionPar.Target = STR_WORK
+                odemis.acq.feature.Target = STR_WORK
             else:
                 logging.debug("Moving GIS to parking position.")
-                self._positionPar.Target = STR_PARK
+                odemis.acq.feature.Target = STR_PARK
 
         # if the gas flow needs to change
         if "reservoir" in goal and goal["reservoir"] != self.position.value["reservoir"]:
@@ -1161,10 +1163,10 @@ class GIS(model.Actuator):
             self._reservoirPositionReached.clear()  # to ensure it waits
             if goal["reservoir"]:
                 logging.debug("Starting gas flow.")
-                self._reservoirPar.Target = STR_OPEN
+                odemis.acq.feature.Target = STR_OPEN
             else:
                 logging.debug("Stopping gas flow.")
-                self._reservoirPar.Target = STR_CLOSED
+                odemis.acq.feature.Target = STR_CLOSED
 
         # wait for both axes to reach their new position
         if not self._reservoirPositionReached.wait(timeout=30):
@@ -1325,7 +1327,7 @@ class GISReservoir(model.HwComponent):
                             "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %r.", parameter)
         if attr_name != "Target":
             return
-        new_value = float(self._temperaturePar.Target)
+        new_value = float(odemis.acq.feature.Target)
         logging.debug("Target temperature changed to %f.", new_value)
         self.targetTemperature._value = new_value  # to not call the setter
         self.targetTemperature.notify(new_value)
@@ -1338,8 +1340,8 @@ class GISReservoir(model.HwComponent):
         :return (float): Temperature in °C the target temperature is set to
         """
         logging.debug("Setting target temperature to %f." % goal)
-        self._temperaturePar.Target = goal
-        return float(self._temperaturePar.Target)
+        odemis.acq.feature.Target = goal
+        return float(odemis.acq.feature.Target)
 
     def terminate(self):
         """
@@ -1484,7 +1486,7 @@ class OrsayParameterConnector:
                     if self._minpar[i].Actual is not None:
                         mn = self._minpar[i].Actual
                     else:
-                        mn = self._minpar[i].Target
+                        mn = odemis.acq.feature.Target
 
                     if p.Min is not None and p.Min != mn:
                         logging.warning("%s.Min and %s contain different, non-None values."
@@ -1499,7 +1501,7 @@ class OrsayParameterConnector:
                     if self._maxpar[i].Actual is not None:
                         mx = self._maxpar[i].Actual
                     else:
-                        mx = self._maxpar[i].Target
+                        mx = odemis.acq.feature.Target
                     if p.Max is not None and p.Max != mx:
                         logging.warning("%s.Max and %s contain different, non-None values."
                                         "Contact Orsay Physics about this!",
@@ -1599,9 +1601,9 @@ class OrsayParameterConnector:
 
         if self._va_is_tuple:
             for p, t in zip(self._parameters, target):
-                p.Target = t
+                odemis.acq.feature.Target = t
         else:
-            self._parameters[0].Target = target
+            odemis.acq.feature.Target = target
 
         return goal
 
@@ -1898,7 +1900,7 @@ class FIBVacuum(model.HwComponent):
         changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
-            self._interlockInChamber.Reset.Target = 0
+            odemis.acq.feature.Target = 0
             logging.debug("Attempting to reset the HybridInterlockInChamberVac interlock.")
         return self.interlockInChamberTriggered.value
 
@@ -1917,7 +1919,7 @@ class FIBVacuum(model.HwComponent):
         changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
-            self._interlockOutChamber.Reset.Target = 0
+            odemis.acq.feature.Target = 0
             logging.debug("Attempting to reset the HybridPlatform.AnalysisChamber.ItlkOutChamberVac interlock.")
         return self.interlockOutChamberTriggered.value
 
@@ -1937,7 +1939,7 @@ class FIBVacuum(model.HwComponent):
         changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
-            self._interlockOutHVPS.Reset.Target = 0
+            odemis.acq.feature.Target = 0
             logging.debug("Attempting to reset the HybridInterlockOutHVPS interlock.")
         return self.interlockOutHVPSTriggered.value
 
@@ -1957,7 +1959,7 @@ class FIBVacuum(model.HwComponent):
         changing the VA's value, and if the reset was not succesful, the VA's value should not change.
         """
         if not value:
-            self._interlockOutSED.Reset.Target = 0
+            odemis.acq.feature.Target = 0
             logging.debug("Attempting to reset the HybridInterlockOutSED interlock.")
         return self.interlockOutSEDTriggered.value
 
@@ -2007,7 +2009,7 @@ class FIBSource(model.HwComponent):
         self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
         self._lifetimeConnector = None
         # Make sure the microscope is in regulation mode
-        self.parent.datamodel.HVPSFloatingIon.BeamCurrent_Enabled.Target = True
+        odemis.acq.feature.Target = True
         self.currentRegulation = model.BooleanVA(True, readonly=True)
         self._currentRegulationConnector = None
         self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
@@ -2475,7 +2477,7 @@ class FIBBeam(model.HwComponent):
 
         im_size = "%d %d" % (value[0], value[1])
 
-        if self._ionColumn.ImageSize.Target != im_size:
+        if odemis.acq.feature.Target != im_size:
             # Wait until the image format has updated image area. This is
             # needed, because changing the image format on the server
             # automatically sets the ImageArea to full FoV. We don't want that.
@@ -2510,7 +2512,7 @@ class FIBBeam(model.HwComponent):
            timeout was reached.
         """
         logging.debug("Requesting %s to %s.", param.Name, value)
-        param.Target = value
+        odemis.acq.feature.Target = value
 
         # Now wait until the Actual value has reached the requested value
         # We could use Subscribe() to be more efficient, but to keep the code,
@@ -2524,13 +2526,13 @@ class FIBBeam(model.HwComponent):
                 return True
 
             logging.debug("Waiting for %s == %s (currently = %s, target = %s).",
-                          param.Name, value, param.Actual, param.Target)
+                          param.Name, value, param.Actual, odemis.acq.feature.Target)
             time.sleep(0.05)
 
             now = time.time()
             if now > resend_t:
                 logging.debug("Retrying to update %s to %s", param.Name, value)
-                param.Target = value
+                odemis.acq.feature.Target = value
                 resend_t = now + resend  # s
         else:
             logging.warning("%s not updated, giving up waiting for %s, now at %s",
@@ -2758,7 +2760,7 @@ class Light(model.Emitter):
         """
         power = int(goal[0])
         logging.debug("Turning Chamber light %s.", "on" if power else "off")
-        self._parameter.Target = power
+        odemis.acq.feature.Target = power
         return [1.0 if power else 0.0]
 
     def terminate(self):
@@ -3001,7 +3003,7 @@ class Scanner(model.Emitter):
 
                 device = getattr(self.parent.datamodel, device_name)
                 param = getattr(device, param_name)
-                if param.Target != expected:
+                if odemis.acq.feature.Target != expected:
                     logging.debug("Preset %s not matching present setting as %s.%s != %s",
                                   preset_name, device_name, param_name, expected)
                     break  # Check next preset
@@ -3286,7 +3288,7 @@ class Dataflow(model.DataFlow):
         self._first_img_nbr = current_img_nbr + 2
 
         datamodel.Miss.ImageTrackingNumberScanOne.Subscribe(self._listenerImageTrackNumber)
-        opmode.Target = 1  # scan
+        odemis.acq.feature.Target = 1  # scan
 
         # Wait until it's really started, to avoid stopping during that time.
         # It also helps to detect bad cases where the server is blocked.
@@ -3303,7 +3305,7 @@ class Dataflow(model.DataFlow):
             # Report the error, and reset the scanner, hoping it'll work better next time
             logging.warning("Scanner still not started, state is %s, image number is %s (started at %s)",
                             opmode.Actual, datamodel.Miss.ImageTrackingNumberScanOne.Actual, current_img_nbr)
-            opmode.Target = 0
+            odemis.acq.feature.Target = 0
             raise IOError("Scanner failed to start")
 
     def stop_generate(self):
@@ -3315,7 +3317,7 @@ class Dataflow(model.DataFlow):
         opmode = datamodel.Scanner.OperatingMode
 
         datamodel.Miss.ImageTrackingNumberScanOne.Unsubscribe(self._listenerImageTrackNumber)
-        datamodel.Scanner.OperatingMode.Target = 0  # no scan
+        odemis.acq.feature.Target = 0  # no scan
 
         # Wait until it's really stopped (typically, it can take up to 300 ms)
         timeout = time.time() + 5  # s
@@ -3326,7 +3328,7 @@ class Dataflow(model.DataFlow):
             time.sleep(0.05)
         else:
             logging.warning("Scanner still not stopped: %s", opmode.Actual)
-            opmode.Target = 0
+            odemis.acq.feature.Target = 0
             raise IOError("Scanner failed to stop")
 
     def _listenerImageTrackNumber(self, param, attr: str):
@@ -3666,9 +3668,9 @@ class FIBAperture(model.Actuator):
         logging.debug(f"Moving the aperture to position {pos}")
         tend = time.time() + timeout
         if "x" in pos:
-            self._hybridAperture.XPosition.Target = pos["x"]
+            odemis.acq.feature.Target = pos["x"]
         if "y" in pos:
-            self._hybridAperture.YPosition.Target = pos["y"]
+            odemis.acq.feature.Target = pos["y"]
 
         def posReached():
             # The aperture stage is expected to have a precision of 1 mu
@@ -3711,7 +3713,7 @@ class FIBAperture(model.Actuator):
 
     def _doReference(self, timeout=10):
         tend = time.time() + timeout
-        self._hybridAperture.Calibrated.Target = True
+        odemis.acq.feature.Target = True
         # Wait until the calibrating process finished and the calibrated parameter is set to True
         while self._hybridAperture.Calibrating.Actual in TRUE_VALUES \
                 or not self._hybridAperture.Calibrated.Actual in TRUE_VALUES:
@@ -3726,8 +3728,8 @@ class FIBAperture(model.Actuator):
         """
         Cancel all queued motions in the executor
         """
-        self._hybridAperture.XAxis.IsMoving.Target = False
-        self._hybridAperture.YAxis.IsMoving.Target = False
+        odemis.acq.feature.Target = False
+        odemis.acq.feature.Target = False
 
         logging.debug("Cancelling the executor")
         self._executor.cancel()
