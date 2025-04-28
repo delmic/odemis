@@ -29,8 +29,9 @@ from typing import Dict, Tuple, Optional
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature, get_feature_position_at_posture
+from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Target, FIDUCIAL, POI, SURFACE_FIDUCIAL
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
+from odemis.acq.stream import StaticFluoStream
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -42,6 +43,9 @@ from odemis.gui.model._constants import (
     STATE_ON,
     TOOL_DICHO,
     TOOL_FEATURE,
+    TOOL_REGION_OF_INTEREST,
+    TOOL_FIDUCIAL,
+    TOOL_SURFACE_FIDUCIAL,
     TOOL_LABEL,
     TOOL_LINE,
     TOOL_NONE,
@@ -476,7 +480,81 @@ class CryoCorrelationGUIData(CryoGUIData):
         self.selected_stream = model.VigilantAttribute(None)
 
         # for export tool
-        self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+
+
+class CryoTdctCorrelationGUIData(CryoGUIData):
+    """ Represent an interface used to correlate using 3DCT.
+
+    Used for METEOR systems.
+
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+
+        # the streams to correlate among all streams in .streams
+        self.selected_stream = model.VigilantAttribute(None)
+        # point on FIB stream to locate sample surface
+        self.fib_surface_point = model.VigilantAttribute(None)
+        # Output of 3DCT
+        self.projected_points: List[Target] = []
+
+        # for export tool
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+
+    def add_new_target(self, x, y, type, z=None):
+        """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
+        :param x: (float) x position of the target
+        :param y: (float) y position of the target
+        :param type: (str) type of the given targrt like Fiducial, PointOfInterest or SurfaceFiducial
+        :param z: (float) optional z position for the given target. For target in FM, z is compulsory and for the target
+         in FIB, z is None.
+        :return: (Target or error) Target if parameters are valid otherwise logs error.
+        """
+
+        fm_focus_position = self.main.focus.position.value['z']
+        existing_names = [str(f.name.value) for f in self.main.targets.value]
+
+        if self.views.value[0] == self.focussedView.value: # FM view
+            if type == FIDUCIAL:
+                t_name = make_unique_name("FM-1", existing_names)
+                # get the last digit of the t_name
+                # TODO limited to 9 fiducial pairs
+                index = int(t_name[-1])
+                target = Target(x, y, z=0, name=t_name, type=type,
+                                        index=index, fm_focus_position=fm_focus_position)
+
+            elif type == POI:
+                target = Target(x, y, z=0, name="POI-1", type=type,
+                                        index=1, fm_focus_position=fm_focus_position)
+
+        elif self.views.value[1] == self.focussedView.value: # FIB view
+            if type == SURFACE_FIDUCIAL:
+                target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
+                                fm_focus_position=fm_focus_position)
+                self.fib_surface_point.value = target
+                return target
+            t_name = make_unique_name("FIB-1", existing_names)
+            index = int(t_name[-1])
+            target = Target(x, y, z=0, name=t_name, type=type, index=index,
+                            fm_focus_position=fm_focus_position)
+
+        else:
+            raise ValueError("Invalid selected view")
+
+        if self.focussedView.value.name.value == "FLM Overview" and z is None:
+            logging.error("No z-index found in the given streams. Please select a stream with z-index.")
+            return
+
+        self.main.targets.value.append(target)
+        self.main.currentTarget.value = target
+        return target
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):
