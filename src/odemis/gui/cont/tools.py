@@ -173,14 +173,14 @@ TOOLS = {
             "btn_poi_icon",
             model.TOOL_REGION_OF_INTEREST,
             model.TOOL_NONE,
-            "Create/Move region of interest"
+            "Create/Move region of interest Shift+Click"
         ),
     model.TOOL_FIDUCIAL:
         ModeTool(
             "btn_fiducial_icon",
             model.TOOL_FIDUCIAL,
             model.TOOL_NONE,
-            "Create/Move fiducial"
+            "Create/Move fiducial Ctrl+Click"
         ),
     model.TOOL_SURFACE_FIDUCIAL:
         ModeTool(

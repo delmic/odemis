@@ -140,7 +140,7 @@ class CorrelationDialogController(object):
         try:
             cor_dialog = CorrelationDialog(
                 self._tab.main_frame, self._tab_data_model)
-            parent_size = [v * 0.9 for v in self._tab.main_frame.GetSize()]
+            parent_size = [int(v * 0.9) for v in self._tab.main_frame.GetSize()]
 
             cor_dialog.SetSize(parent_size)
             cor_dialog.Center()

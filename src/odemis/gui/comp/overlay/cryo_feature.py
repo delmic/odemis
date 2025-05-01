@@ -24,12 +24,13 @@ This file is part of Odemis.
 
 import logging
 import math
+from typing import Dict
 
 import cairo
 import odemis.gui as gui
 import odemis.gui.img as guiimg
 import wx
-from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE,
+from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, FEATURE_READY_TO_MILL,
                                 FEATURE_POLISHED, FEATURE_ROUGH_MILLED, POI, FIDUCIAL, SURFACE_FIDUCIAL, PROJECTED_POI,
                                 PROJECTED_FIDUCIAL, get_feature_position_at_posture)
 from odemis.gui.comp.canvas import CAN_DRAG
@@ -462,7 +463,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         :param v_pos: (int, int) the coordinates in the view
         """
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-        self._selected_target.pos.value = [p_pos[0], p_pos[1], self._selected_feature.pos.value[2]]
+        self._selected_target.pos.value = [p_pos[0], p_pos[1], self._selected_target.pos.value[2]]
         self.cnvs.update_drawing()
 
     def _detect_point_inside_target(self, v_pos):

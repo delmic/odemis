@@ -39,8 +39,9 @@ from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_s
 from odemis.acq.feature import save_features, FIBFMCorrelationData, Target
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticStream, StaticFIBStream
 from odemis.gui import conf
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.model import ListVA
+from odemis.util.dataio import data_to_static_streams
 from odemis.util.interpolation import interpolate_z_stack
 
 
@@ -126,9 +127,11 @@ class CorrelationPointsController(object):
             if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
                 stream_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
                 streams_list.append(StaticFluoStream(stream.name.value, stream_interpolated))
-            else:
-                streams_list.append(stream)
-
+        # TODO is there only one reference image in the feature?
+        acquired_fibsem_streams = data_to_static_streams([self._tab_data_model.main.currentFeature.value.reference_image])
+        for s in acquired_fibsem_streams:
+            if isinstance(s, StaticFIBStream) or isinstance(s, StaticSEMStream):
+                streams_list.append(s)
         self.streams_list = streams_list
 
         if self._tab_data_model.main.currentFeature.value.correlation_data:
@@ -144,7 +147,7 @@ class CorrelationPointsController(object):
                 # Will load the streams from the given streams
                 self.group_streams()
                 self._add_stream_group()
-            # TODO uncomment in the final version
+            # TODO remove in the final version
             # if self.correlation_target.fib_stream:
             #     self.group_streams([self.correlation_target.fib_stream])
 
@@ -232,19 +235,26 @@ class CorrelationPointsController(object):
         Based on the stream groups, add the streams to the stream bar such that the stream panels of one
         group are visible and open together while the other groups are set to invisible and collapsed.
         """
-        if self.correlation_target.fm_stream_key:
-        # Load the FM streams
-            if self.correlation_target.fm_stream_key:
-                # Convert the list of lists to a tuple of tuples
-                fm_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fm_stream_key)
-                if fm_stream_key_tuple in self.stream_groups:
-                    self.correlation_target.fm_streams = []
-                    indices = self.stream_groups[fm_stream_key_tuple]
-                    for index in indices:
-                        stream = self.streams_list[index]
-                        ssc = self._panel.streambar_controller.addStream(stream, play=False)
-                        ssc.stream_panel.show_remove_btn(True)
-                        self.correlation_target.fm_streams.append(stream)
+        # # Load the FM streams
+        if self.correlation_target.fm_stream_key or self.correlation_target.fib_stream_key:
+            # Convert the list of lists to a tuple of tuples
+            fm_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fm_stream_key)
+            fib_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fib_stream_key)
+            if fm_stream_key_tuple in self.stream_groups:
+                self.correlation_target.fm_streams = []
+                indices = self.stream_groups[fm_stream_key_tuple]
+                for index in indices:
+                    stream = self.streams_list[index]
+                    ssc = self._panel.streambar_controller.addStream(stream, play=False)
+                    ssc.stream_panel.show_remove_btn(True)
+                    self.correlation_target.fm_streams.append(stream)
+            if fib_stream_key_tuple in self.stream_groups:
+                self.correlation_target.fib_stream = None
+                indices = self.stream_groups[fib_stream_key_tuple]
+                for index in indices:
+                    stream = self.streams_list[index]
+                    self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
+                    self.correlation_target.fib_stream = stream
         else:
 
             for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
@@ -252,16 +262,14 @@ class CorrelationPointsController(object):
 
                 for index in indices:
                     stream = self.streams_list[index]
-                    # TODO check for group in the stream name in the final version
                     stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
                     ssc =  self._panel.streambar_controller.addStream(stream, play=False)
                     ssc.stream_panel.show_remove_btn(True)
                     self.correlation_target.fm_stream_key = key
-                    # When the FM streams are saved, it will be loaded in the init
-                    # TODO below line should not be here in the final version
                     self.correlation_target.fm_streams.append(stream)
-                    if not isinstance(stream, StaticFluoStream):
+                    if isinstance(stream, StaticSEMStream) or isinstance(stream, StaticFIBStream):
                         self.correlation_target.fib_stream_key = key
+                        self.correlation_target.fib_stream = stream
                         ssc.stream_panel.set_visible(True)
                         ssc.stream_panel.collapse(False)
 
@@ -274,32 +282,33 @@ class CorrelationPointsController(object):
         position. The FIB streams are added directly.
         :param streams: (list[StaticStream]) new streams to add
         """
-        if streams:
-            # Load the FIB streams through the add streams button. In the final version, the FIB stream will be
-            # loaded automatically and add streams button will be removed.
-            # TODO remove special treatment for FIB
-            streams_list = streams
-            for stream_index, stream in enumerate(streams_list):
-                if isinstance(stream, StaticStream):
-                    # Add FIB stream
-                    ssc =  self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
-                    ssc.stream_panel.show_remove_btn(True)
-                    if isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
-                        # Check if the FIB stream is already loaded. If it is, replace the previous stream with the new
-                        if not self.correlation_target.fib_stream:
-                            self.correlation_target.fib_stream = stream
-                            # Load the FIB fiducials if they are not already loaded
-                            if all("FIB" not in target.name.value for target in
-                                   self._tab_data_model.main.targets.value):
-                                if self.correlation_target.fib_fiducials:
-                                    self._tab_data_model.main.targets.value.extend(
-                                        self.correlation_target.fib_fiducials)
-                        elif stream != self.correlation_target.fib_stream:
-                            self._panel.streambar_controller.removeStreamPanel(self.correlation_target.fib_stream)
-                            self.correlation_target.fib_stream = stream
-            return
-        else:
-            stream_groups = {}
+        # if streams:
+        #     # Load the FIB streams through the add streams button. In the final version, the FIB stream will be
+        #     # loaded automatically and add streams button will be removed.
+        #     # TODO remove special treatment for FIB
+        #     streams_list = streams
+        #     for stream_index, stream in enumerate(streams_list):
+        #         if isinstance(stream, StaticStream):
+        #             # Add FIB stream
+        #             ssc =  self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
+        #             ssc.stream_panel.show_remove_btn(True)
+        #             if isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
+        #                 # Check if the FIB stream is already loaded. If it is, replace the previous stream with the new
+        #                 if not self.correlation_target.fib_stream:
+        #                     self.correlation_target.fib_stream = stream
+        #                     # Load the FIB fiducials if they are not already loaded
+        #                     if all("FIB" not in target.name.value for target in
+        #                            self._tab_data_model.main.targets.value):
+        #                         if self.correlation_target.fib_fiducials:
+        #                             self._tab_data_model.main.targets.value.extend(
+        #                                 self.correlation_target.fib_fiducials)
+        #                 elif stream != self.correlation_target.fib_stream:
+        #                     self._panel.streambar_controller.removeStreamPanel(self.correlation_target.fib_stream)
+        #                     self.correlation_target.fib_stream = stream
+        #     return
+        # else:
+        #     stream_groups = {}
+        stream_groups = {}
 
         # Group the FM streams related to the current feature based on the shape and current position. THe FM streams
         # which have z stack are considered for grouping, the other FM streams without z stack are ignored.
@@ -332,12 +341,10 @@ class CorrelationPointsController(object):
                 if key not in stream_groups:
                     stream_groups[key] = set()
                 stream_groups[key].add(stream_index)
-                # TODO check fib stream index
-                self.correlation_target.fib_stream = stream
-                self.correlation_target.fib_stream_key = key
-                # Add FIB stream
-                ssc = self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
-                ssc.stream_panel.show_remove_btn(True)
+                # ssc = self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
+                # ssc.stream_panel.show_remove_btn(True)
+                # self.correlation_target.fib_stream_key = key
+                # self.correlation_target.fib_stream = stream
 
         self.stream_groups = stream_groups
 
@@ -410,6 +417,7 @@ class CorrelationPointsController(object):
         else:
             return False
 
+    @wxlimit_invocation(3)
     def _queue_latest_change(self):
         """Queue the latest change to process the correlation result."""
         while not self.change_queue.empty():

@@ -54,11 +54,11 @@ from odemis.acq.stream import (
     SEMStream,
     StaticStream,
     StaticFluoStream,
-    Stream,
+    Stream, StaticFIBStream,
 )
 from odemis.gui import conf
 from odemis.gui import model as guimod
-from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG, LICENCE_CORRELATION_ENABLED
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
     OverviewStreamAcquiController, CorrelationDialogController,
@@ -128,14 +128,6 @@ class CryoAcquiController(object):
         )
         # for "acquire overview" button
         self._panel.btn_acquire_overview.Bind(wx.EVT_BUTTON, self._on_acquire_overview)
-        # This a temporary button in the localisation tab. Once tested and FIBSEM tab is available,
-        # it will be moved to the FIBSEM tab.
-        # TODO move this button to the FIBSEM tab where the button will be enabled only if the requirements are met
-        # To enable the feature and feature status, relevant fm and fib streams
-        # should be present. Rignt now, button is always enabled for the testing environment
-        self.txt_tdct = self._panel.txt_tdct
-        self.txt_tdct.Show(True)
-        self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
         # for "cancel" button
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
@@ -187,9 +179,16 @@ class CryoAcquiController(object):
 
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
+        self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
 
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self.txt_tdct = self._panel.txt_tdct
+            self.txt_tdct.Show(LICENCE_CORRELATION_ENABLED)
+            self._panel.btn_tdct.Show(LICENCE_CORRELATION_ENABLED)
+            self._panel.btn_tdct.Enable(False)
+            self._panel.txt_tdct.Enable(False)
+            self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
             self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
             self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
             self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
@@ -205,6 +204,37 @@ class CryoAcquiController(object):
 
         # refresh the GUI
         self._panel.Layout()
+
+    def _on_current_feature(self, feature: CryoFeature):
+        """
+        Called when the current feature changes
+        """
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._check_correlation_controls()
+
+    def _check_correlation_controls(self):
+        """
+        Enable or disable the correlation controls
+        """
+        if not self._tab_data.main.currentFeature.value:
+            return
+        streams_list = self._tab_data.main.currentFeature.value.streams.value
+        check_zindex = False
+        check_fib_stream = False
+        for stream_index, stream in enumerate(streams_list):
+            if isinstance(stream, StaticFluoStream) and not check_zindex:
+                check_zindex = getattr(stream, "zIndex", None)
+                break
+
+        if self._tab_data.main.currentFeature.value.reference_image is not None:
+            check_fib_stream = True
+
+        if check_zindex and check_fib_stream:
+            self._panel.btn_tdct.Enable(True)
+            self._panel.txt_tdct.Enable(True)
+        else:
+            self._panel.btn_tdct.Enable(False)
+            self._panel.txt_tdct.Enable(False)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -522,6 +552,20 @@ class CryoAcquiController(object):
                     filename = self._create_cryo_filename(base_filename,
                                                           d.metadata[model.MD_ACQ_TYPE])
                     exporter.export(filename, d, thumb_nail)
+
+                    # view = self.tab_data_model.views.value[1]
+                    # self.tab_data_model.focussedView.value = view
+                    # for s in data_to_static_streams(data):
+                    #     if self.tab_data_model.main.currentFeature.value:
+                    #         s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
+                    #         self.tab_data_model.main.currentFeature.value.streams.value.append(s)
+                    #     self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
+                    #     self._acquired_stream_controller.showFeatureStream(s)
+                    # # refit the latest acquired feature so that the new data is fully visible in the
+                    # # acquired view even when the user had moved around/zoomed in
+                    # self.panel.vp_secom_tr.canvas.fit_view_to_content()
+
+
             else:
                 # export fm channels as single image
                 filename = self._create_cryo_filename(base_filename)

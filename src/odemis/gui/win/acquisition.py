@@ -1348,8 +1348,6 @@ class CorrelationDialog(xrcfr_correlation):
             static=True,
         )
 
-        self.streambar_controller.add_action("From file...", self._on_add_file)
-
         # correlation points controller
         self._correlation_points_controller = CorrelationPointsController(self)
 
@@ -1362,66 +1360,6 @@ class CorrelationDialog(xrcfr_correlation):
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.Bind(wx.EVT_CLOSE, self.on_cancel)
-
-    def _on_add_file(self) -> None:
-        """
-        Called when the user requests to extend the current acquisition with
-        an extra file.
-        """
-        self.select_acq_file(True)
-
-    def select_acq_file(self, extend: bool = False):
-        """
-        Open an image file using a file dialog box
-        :return: True if the user did pick a file, False if it was cancelled.
-        """
-        # Find the available formats (and corresponding extensions)
-        formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
-        acq_conf = conf.get_acqui_conf()
-        path = acq_conf.last_path
-
-        wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
-        msg = "Choose a file to load"
-        dialog = wx.FileDialog(self,
-                            message=msg,
-                            defaultDir=path,
-                            defaultFile="",
-                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE,
-                            wildcard=wildcards)
-
-        # Show the dialog and check whether is was accepted or cancelled
-        if dialog.ShowModal() != wx.ID_OK:
-            return False
-
-        # Detect the format to use
-        fmt = formats[dialog.GetFilterIndex()]
-
-        for filename in dialog.GetPaths():
-            logging.debug("Current file set to %s", filename)
-            self.load_data(filename, fmt)
-
-    def load_data(self, filename: str, fmt: str = None) -> None:
-        """
-        Load the data from the file and add it to the current streams
-        :param filename: name of the file to load
-        :param fmt: format of the file to load
-        """
-        data = open_acquisition(filename, fmt)
-        self.load_streams(data)
-
-    @call_in_wx_main
-    def load_streams(self, data: List[model.DataArray]) -> None:
-        """
-        Load the data in the overview viewports
-        :param data: (list[model.DataArray]) list of data arrays to load as streams
-        """
-        # Create streams from data, add to correlation controller
-        streams = data_to_static_streams(data)
-        self.correlation_points_controller.group_streams(streams)
-
-        # fit to content
-        for vp in self.pnl_correlation_grid.viewports:
-            vp.canvas.fit_view_to_content()
 
     @property
     def correlation_points_controller(self):
