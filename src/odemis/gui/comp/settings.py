@@ -136,22 +136,27 @@ class SettingsPanel(wx.Panel):
 
         self.clear_default_message()
 
-        # Create a horizontal sizer to hold the icon and text
-        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        lbl_ctrl = wx.StaticText(self, -1, str(label_text))
 
-        # Add icon if provided
         if icon_path:
+            # Create horizontal sizer to hold icon and label text
+            h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Add icon
             icon = img.getBitmap(icon_path)
             icon_ctrl = wx.StaticBitmap(self, -1, icon)
             h_sizer.Add(icon_ctrl, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
 
-        # Create label
-        lbl_ctrl = wx.StaticText(self, -1, str(label_text))
-        h_sizer.Add(lbl_ctrl, flag=wx.ALIGN_CENTER_VERTICAL)
+            # Add label
+            h_sizer.Add(lbl_ctrl, flag=wx.ALIGN_CENTER_VERTICAL)
 
-        # Add combined sizer to grid sizer
-        self.gb_sizer.Add(h_sizer, (self.num_rows, 0),
-                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            # Add combined sizer to grid sizer
+            self.gb_sizer.Add(h_sizer, (self.num_rows, 0),
+                              flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+        else:
+            # Add label text directly without extra sizer
+            self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
+                              flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl
 
