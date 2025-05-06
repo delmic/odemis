@@ -40,10 +40,10 @@ class SaveFullCellImgPlugin(Plugin):
         # It only makes sense if the FASTEM acquisition tab is present
         try:
             fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
-            self._acquisition_tab = fastem_main_tab.acquisition_tab
+            self._acquisition_tab = fastem_main_tab.acquisition_tab.multi_beam_tab
         except LookupError:
             logging.debug(
-                "Not loading Save full cell images tool since acquisition tab is not present."
+                "Not loading Save full cell images tool since multi-beam acquisition tab is not present."
             )
             return
 
