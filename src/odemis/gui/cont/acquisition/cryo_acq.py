@@ -224,7 +224,8 @@ class CryoAcquiController(object):
         for stream_index, stream in enumerate(streams_list):
             if isinstance(stream, StaticFluoStream) and not check_zindex:
                 check_zindex = getattr(stream, "zIndex", None)
-                break
+                if check_zindex:
+                    break
 
         if self._tab_data.main.currentFeature.value.reference_image is not None:
             check_fib_stream = True
@@ -810,16 +811,24 @@ class CryoAcquiController(object):
             if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
                 z_stack = True
                 self.txt_tdct.SetLabel("Interpolation of Z stacks .... \nMay take a while")
-                wx.CallAfter(self._open_dialog_if_needed, z_stack)
+                wx.CallAfter(self._on_close_dialog, z_stack)
                 return  # Prevent continuing execution here
 
-        wx.MessageBox("The selected feature does not contain a Z-stack stream.\n"
-                      "Please acquire a Z-stack to proceed.", "Info", wx.OK | wx.ICON_INFORMATION)
-
-    def _open_dialog_if_needed(self, z_stack):
+    def _on_close_dialog(self, z_stack):
         if z_stack:
             self.correlation_dialog_controller.open_correlation_dialog()
             self.txt_tdct.SetLabel("")
+
+            # redraw milling position
+            fibsem_tab = self._tab_data.main.getTabByName("meteor-fibsem")
+            if self._tab_data.main.currentFeature.value:
+                correlation_dict = self._tab_data.main.currentFeature.value.correlation_data
+                if self._tab_data.main.currentFeature.value.status.value in correlation_dict:
+                    correlation_data = correlation_dict[self._tab_data.main.currentFeature.value.status.value]
+                    if correlation_data.fib_projected_pois:
+                        target = correlation_data.fib_projected_pois[0]
+                        fibsem_tab.milling_task_controller.draw_milling_tasks(pos=(target.coordinates.value[0],
+                                                                                   target.coordinates.value[1]))
 
     @call_in_wx_main
     def _on_filename(self, name):
