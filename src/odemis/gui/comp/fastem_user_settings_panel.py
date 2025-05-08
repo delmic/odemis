@@ -313,26 +313,24 @@ class FastEMUserSettingsPanel(object):
         if not ctrl:
             return
 
-        value = ctrl.GetValue().strip().lower()
+        value = ctrl.GetValue().strip()
         value = make_compliant_string(value)
         if value and self.original_user:
             if (
                 self.original_user != DEFAULT_USER
                 and self.original_user in ctrl.GetStrings()
             ):
+                self.main_data.current_user.value = value
                 if value not in ctrl.GetStrings():
                     idx = ctrl.FindString(self.original_user)
                     ctrl.SetString(idx, value)
-                    self.main_data.current_user.value = value
                     del self.user_profile_data[self.original_user]
                     self.user_profile_data[value] = self.get_ctrl_values()
-                    self.original_user = value
                     self.write_user_profile_data()
                 else:
-                    ctrl.SetValue(value)
-                    self.main_data.current_user.value = value
                     self.set_ctrl_values()
-                    self.original_user = value
+                ctrl.SetValue(value)
+                self.original_user = value
             else:
                 ctrl.SetValue(DEFAULT_USER)
         else:
@@ -345,7 +343,7 @@ class FastEMUserSettingsPanel(object):
         if not ctrl:
             return
 
-        self.original_user = ctrl.GetValue().strip().lower()
+        self.original_user = ctrl.GetValue().strip()
 
     def on_evt_combobox_user_profile_ctrl(self, evt):
         ctrl = evt.GetEventObject()
@@ -457,7 +455,7 @@ class FastEMUserSettingsPanel(object):
         value = wx.GetTextFromUser(
             "Enter new user:", parent=self.user_profile_add_button_ctrl
         )
-        value = value.strip().lower()
+        value = value.strip()
         value = make_compliant_string(value)
         ctrl = self.user_profile_ctrl
         if value:
