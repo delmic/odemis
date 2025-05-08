@@ -50,10 +50,10 @@ class SetFactoryValues(Plugin):
             self.stage = main_data.stage
             self.mppc = main_data.mppc
             self.ccd = main_data.ccd
-            self._acquisition_tab = fastem_main_tab.acquisition_tab
+            self._acquisition_tab = fastem_main_tab.acquisition_tab.multi_beam_tab
         except LookupError:
             logging.debug(
-                "Not loading set-factory-values tool since acquisition tab is not present."
+                "Not loading set-factory-values tool since multi-beam acquisition tab is not present."
             )
             return
 
