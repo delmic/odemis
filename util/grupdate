@@ -26,7 +26,7 @@ You should have received a copy of the GNU General Public License along with
 grupdate. If not, see http://www.gnu.org/licenses/.
 '''
 # To test:
-# ./util/grupdate -E "boooo" -o summary-booo.log flooboo*.log
+# ./util/grupdate -e "boooo" -o summary-booo.log flooboo*.log
 
 import argparse
 from datetime import datetime
@@ -39,7 +39,7 @@ import gzip
 # logging.getLogger().setLevel(logging.DEBUG)
 
 
-def open_file(fn, mode="rb"):
+def open_file(fn, mode="r"):
     """
     Open a file, which can be compressed
     fn (string): filename. If it ends with .gz, it will be decompressed on the fly
@@ -117,12 +117,12 @@ def read_last_line(fn):
     """
     return (string): last line or "" if file is empty
     """
-    with open(fn, "rb") as f:
+    with open(fn, "r") as f:
         first = f.readline()
         try:
             # Start at the end, and go up until finding an EOL
             f.seek(-2, os.SEEK_END)
-            while f.read(1) != b"\n":
+            while f.read(1) != "\n":
                 f.seek(-2, os.SEEK_CUR)
                 # TODO: handle files with only 1 line
             return f.readline()
