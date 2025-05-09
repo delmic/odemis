@@ -35,7 +35,6 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_FISBEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
-METEOR_FISBEM_CONFIG = "/home/patrick/development/odemis/install/linux/usr/share/odemis/sim/meteor-fibsem-sim.odm.yaml"
 
 # NOTE: Require xt simulator to be running
 class TestAutomatedMillingManager(unittest.TestCase):
