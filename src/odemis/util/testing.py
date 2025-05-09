@@ -152,7 +152,7 @@ def stop_backend():
         else:
             break
     else:
-        raise IOError("Backend still stopping after 15 s")
+        logging.warning("Backend still stopping after 15 s")
 
     model._core._microscope = None  # force reset of the microscope for next connection
 
