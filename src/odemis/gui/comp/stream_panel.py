@@ -737,7 +737,7 @@ class StreamPanel(wx.Panel):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
-        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
+        sizer.Add(btnsizer, 0, flag=wx.EXPAND | wx.BOTTOM, border=5)
         frame.SetSizer(sizer)
         frame.CenterOnScreen()
         return frame
