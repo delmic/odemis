@@ -275,43 +275,43 @@ class FastEMProjectROAsTab(Tab):
                 editor_cls=GridCellNumberEditor,
                 editor_args={"min": 0, "max": 1000000},
             ),
+            Column(2, ROAColumnNames.FIELDS.value, editor_cls=GridCellBoolEditor),
             Column(
-                2,
+                3,
                 ROAColumnNames.PARENT.value,
                 editor_cls=DynamicGridCellComboBoxEditor,
                 editor_args={"choices": [DEFAULT_PARENT]},
             ),
             Column(
-                3,
+                4,
                 ROAColumnNames.POSX.value,
                 editor_cls=GridCellFloatEditor,
                 editor_args={"precision": 9},
             ),
             Column(
-                4,
+                5,
                 ROAColumnNames.POSY.value,
                 editor_cls=GridCellFloatEditor,
                 editor_args={"precision": 9},
             ),
             Column(
-                5,
+                6,
                 ROAColumnNames.SIZEX.value,
                 editor_cls=GridCellFloatEditor,
                 is_read_only=True,
             ),
             Column(
-                6,
+                7,
                 ROAColumnNames.SIZEY.value,
                 editor_cls=GridCellFloatEditor,
                 is_read_only=True,
             ),
             Column(
-                7,
+                8,
                 ROAColumnNames.ROT.value,
                 editor_cls=GridCellNumberEditor,
                 editor_args={"min": 0, "max": 360},
             ),
-            Column(8, ROAColumnNames.FIELDS.value, editor_cls=GridCellBoolEditor),
         ]
         self.grid.set_columns(self.columns)
 
