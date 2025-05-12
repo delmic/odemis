@@ -197,7 +197,6 @@ class FastEMMainTab(Tab):
         self.tab_data_model.main.overview_streams.subscribe(self._on_overview_streams)
         self.tab_data_model.visible_views.subscribe(self._on_visible_views, init=True)
         self.tab_data_model.viewLayout.subscribe(self._on_view_layout, init=True)
-        self.tab_data_model.focussedView.subscribe(self._on_focussed_view, init=True)
         self.tab_data_model.tool.subscribe(self._on_tool, init=True)
 
     @call_in_wx_main
@@ -243,13 +242,6 @@ class FastEMMainTab(Tab):
             logging.warning("Failed to find the current viewport")
         except AttributeError:
             logging.info("Requested to expand the view but not able to")
-
-    def _on_focussed_view(self, focussed_view):
-        for viewport in self.tab_data_model.viewports.value:
-            if viewport.canvas.view.name.value == focussed_view.name.value:
-                viewport.cpol.active.value = True
-            else:
-                viewport.cpol.active.value = False
 
     def _on_tool(self, tool):
         if tool in (TOOL_ELLIPSE, TOOL_RECTANGLE, TOOL_POLYGON, TOOL_RULER):

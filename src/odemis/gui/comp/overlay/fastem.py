@@ -197,13 +197,6 @@ class FastEMScintillatorOverlay(WorldOverlay):
         """
         super(FastEMScintillatorOverlay, self).__init__(cnvs)
         self.shape = scintillator.shape
-        self._colour = (1.0, 1.0, 1.0, 1.0)  # White
-        self._label = self.add_label(
-            str(scintillator.number),
-            align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_CENTER_VERTICAL,
-            colour=self._colour,
-            background=(0.0, 0.0, 0.0, 1.0),  # Black
-        )
         if isinstance(self.shape, RectangleScintillator):
             self._surrounding_rectangles = self._calculate_surrounding_rectangles()
 
@@ -277,11 +270,3 @@ class FastEMScintillatorOverlay(WorldOverlay):
                 ctx.new_sub_path()  # Start a new path to avoid connecting to previous drawings
                 ctx.arc(b_center_pos[0], b_center_pos[1], outer_radius, 0, 2 * math.pi)
                 ctx.stroke()
-
-        # Draw the scintillator number label at the bottom of the shape
-        position = self.shape.position
-        size = self.shape.get_size()
-        p_label_pos = (position[0], position[1] - 0.6 * size[1])
-        b_label_pos = self.cnvs.phys_to_buffer(p_label_pos, offset)
-        self._label.pos = b_label_pos
-        self._write_labels(ctx)
