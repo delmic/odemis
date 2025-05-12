@@ -29,7 +29,7 @@ import wx
 
 import odemis.gui.cont.views as viewcont
 from odemis.acq.stream import EMStream, FastEMSEMStream
-from odemis.gui import img, main_xrc
+from odemis.gui import SELECTION_COLOUR, img, main_xrc
 from odemis.gui.comp.fastem_project_manager_panel import FastEMProjectManagerPanel
 from odemis.gui.comp.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.comp.viewport import FastEMMainViewport
@@ -53,6 +53,7 @@ from odemis.gui.model import (
     StreamView,
 )
 from odemis.gui.util import call_in_wx_main
+from odemis.util.conversion import hex_to_frgba
 
 
 class FastEMMainTab(Tab):
@@ -248,8 +249,12 @@ class FastEMMainTab(Tab):
         for viewport in self.tab_data_model.viewports.value:
             if viewport.canvas.view.name.value == focussed_view.name.value:
                 viewport.cpol.active.value = True
+                colour = hex_to_frgba(SELECTION_COLOUR)
             else:
                 viewport.cpol.active.value = False
+                colour = (1.0, 1.0, 1.0)  # white
+            if viewport.canvas.bg_view_label:
+                viewport.canvas.bg_view_label.colour = colour
 
     def _on_tool(self, tool):
         if tool in (TOOL_ELLIPSE, TOOL_RECTANGLE, TOOL_POLYGON, TOOL_RULER):
