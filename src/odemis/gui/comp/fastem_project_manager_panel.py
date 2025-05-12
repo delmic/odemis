@@ -1101,18 +1101,23 @@ class FastEMProjectManagerPanel:
 
     def update_project_shape_colour(self, project_name):
         """
-        Updates or assigns a color to the shapes associated with a given project.
+        Assigns a color to the given project. Uses a predefined FASTEM_PROJECT_COLOURS if available;
+        otherwise generates a unique one.
 
         :param project_name: (str) The name of the project whose shapes' colors are to be updated.
         """
-        if len(self.project_shape_colour) < len(FASTEM_PROJECT_COLOURS):
-            self.project_shape_colour[project_name] = FASTEM_PROJECT_COLOURS[
-                len(self.project_shape_colour)
-            ]
+        used_colours = list(self.project_shape_colour.values())
+        available_colour = None
+
+        for c in FASTEM_PROJECT_COLOURS:
+            if c not in used_colours:
+                available_colour = c
+                break
+
+        if available_colour is not None:
+            self.project_shape_colour[project_name] = available_colour
         else:
-            self.project_shape_colour[project_name] = generate_unique_color(
-                list(self.project_shape_colour.values())
-            )
+            self.project_shape_colour[project_name] = generate_unique_color(used_colours)
 
     @call_in_wx_main
     def setup_grid_for_project(self, project_name):
