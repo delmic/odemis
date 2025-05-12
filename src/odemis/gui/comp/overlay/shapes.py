@@ -539,7 +539,7 @@ class ShapesOverlay(WorldOverlay):
                 self.remove_shape(shape_state.shape)
             self.cnvs.request_drawing_update()
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0, dash=False):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw all the shapes."""
         for shape in self._shapes.value:
             if shape.cnvs == self.cnvs:
@@ -547,5 +547,4 @@ class ShapesOverlay(WorldOverlay):
                     ctx,
                     shift,
                     scale,
-                    dash=dash,
                 )

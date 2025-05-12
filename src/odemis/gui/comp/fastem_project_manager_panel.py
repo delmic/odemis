@@ -363,6 +363,7 @@ class ProjectManagerImportExport:
                         grid=rois_grid,
                     )
                 )
+                roi_row.roa.shape.dashed = True
                 new_shapes.append(roi_row.roa.shape)
                 project_colour.add(roi["roa"]["shape"]["colour"])
 
@@ -936,6 +937,7 @@ class FastEMProjectManagerPanel:
                 roa.slice_index.value = roi_slice_index
                 roa.name.value = roi_name
                 shape.name.value = f"{roi_name}_{roi_slice_index}"
+                shape.dashed = True
                 row_data = {
                     ROIColumnNames.NAME.value: roi_name,
                     ROIColumnNames.SLICE_IDX.value: roi_slice_index,
