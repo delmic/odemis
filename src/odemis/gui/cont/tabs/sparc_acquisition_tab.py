@@ -31,7 +31,7 @@ import wx
 from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
-from odemis.gui.cont.settings import EBeamBlankerSettingsController
+from odemis.gui.cont.settings import EBeamBlankerSettingsController, GunExciterSettingsController
 from odemis.gui.cont.stream_bar import SparcStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
@@ -244,7 +244,10 @@ class SparcAcquisitionTab(Tab):
 
         tab_data.tool.subscribe(self.on_tool_change)
 
+        # Will show the e-beam "gun exciter" settings (for pulsed e-beam), if available, otherwise will do nothing
+        self._gun_exciter_ctrl = GunExciterSettingsController(panel, tab_data)
         # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
+        # Note: both hardware may be present, but typically only one of them is used at a time
         self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
 
         if main_data.ebeam_blanker and main_data.streak_unit:
