@@ -350,6 +350,10 @@ class ProjectManagerImportExport:
             # Add ROIs
             for roi in rois:
                 roi_row = ROIRow.from_dict(roi, self.project_manager.tab_data)
+                # Importing ROIs using the fastem_import_roi plugin has default row data values
+                # related to the shape's attributes.
+                # Update the row data to reflect them in the grid.
+                roi_row.update_data()
                 roi_node = FastEMTreeNode(
                     f"{roi_row.roa.name.value}_{roi_row.roa.slice_index.value}",
                     NodeType.ROI,
@@ -771,8 +775,10 @@ class FastEMProjectManagerPanel:
             return
 
         self.is_import_btn_pressed = True
-        self.import_export_manager.import_from_file(filepath)
-        self.is_import_btn_pressed = False
+        try:
+            self.import_export_manager.import_from_file(filepath)
+        finally:
+            self.is_import_btn_pressed = False
 
     def _on_move_up(self, evt):
         """Moves selected row/s up in the grid."""
