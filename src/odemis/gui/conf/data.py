@@ -299,6 +299,12 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "ebeam-gun-exciter":
+        OrderedDict((
+            ("power", {
+                 "scale": "cubic",  # If a slider is used (float), then use a non-linear scale
+            }),
+        )),
     "laser-mirror":
         OrderedDict((
             ("dwellTime", {
