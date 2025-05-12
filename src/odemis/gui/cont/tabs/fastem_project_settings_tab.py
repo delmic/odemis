@@ -20,6 +20,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging
+
 import wx
 
 import odemis.gui.model as guimod
@@ -38,9 +40,10 @@ from odemis.gui.comp.fastem_user_settings_panel import (
 )
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.conf.util import format_choices, hfw_choices
+from odemis.gui.conf.data import HW_SETTINGS_CONFIG
+from odemis.gui.conf.util import format_choices, hfw_choices, str_to_value, value_to_str
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.util import units
+from odemis.util import almost_equal, units
 
 
 class FastEMProjectSettingsTab(Tab):
@@ -229,6 +232,7 @@ class FastEMProjectSettingsTab(Tab):
         )
         hfw_unit = self.tab_data.main.ebeam.horizontalFoV.unit
         hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
+        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c > STAGE_PRECISION]
         self._immersion_mode_hfw_choices[init_immersion] = (
             hfw_choices_formatted,
             choices_si_prefix,
@@ -239,6 +243,7 @@ class FastEMProjectSettingsTab(Tab):
             None, self.tab_data.main.ebeam.horizontalFoV, None
         )
         hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
+        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c > STAGE_PRECISION]
         self._immersion_mode_hfw_choices[not init_immersion] = (
             hfw_choices_formatted,
             choices_si_prefix,
@@ -255,7 +260,45 @@ class FastEMProjectSettingsTab(Tab):
         if not ctrl:
             return
 
-        value = ctrl.GetClientData(ctrl.GetSelection())
+        ctrl_value = ctrl.GetValue()
+        i = ctrl.GetSelection()
+        # EVT_COMBOBOX is triggered when the user selects an item from the dropdown
+        if i != wx.NOT_FOUND and ctrl.Items[i] == ctrl_value:
+            value = ctrl.GetClientData(i)
+        # EVT_TEXT_ENTER is triggered when the user enters a value in the text box
+        else:
+            try:
+                value = str_to_value(ctrl_value, self.tab_data.main.ebeam.horizontalFoV)
+            except (ValueError, TypeError):
+                value = self.main_data.user_hfw_sb.value
+            # Check if the entered value is in the list of choices
+            for i in range(ctrl.GetCount()):
+                d = ctrl.GetClientData(i)
+                if (d == value or
+                    (all(isinstance(v, float) for v in (value, d)) and
+                     almost_equal(d, value))
+                   ):
+                    logging.debug("Setting combobox value to %s", ctrl.Items[i])
+                    ctrl.SetSelection(i)
+                    break
+            # A custom value was entered
+            else:
+                logging.debug("No existing label found for value %s in combobox ctrl %d",
+                              value, id(ctrl))
+                hfw_choices_formatted, _, hfw_unit = (
+                    self._immersion_mode_hfw_choices[self.immersion_mode_ctrl.GetValue()]
+                )
+                min_hfw = min(hfw_choices_formatted, key=lambda x: x[0])[0]
+                max_hfw = max(hfw_choices_formatted, key=lambda x: x[0])[0]
+                # Check if the value is within the range of HFW choices
+                if value < min_hfw:
+                    value = min_hfw
+                elif value > max_hfw:
+                    value = max_hfw
+                acc = HW_SETTINGS_CONFIG["e-beam"]["horizontalFoV"]["accuracy"]
+                txt = value_to_str(value, hfw_unit, acc)
+                ctrl.SetValue(txt)
+
         if value != self.main_data.user_hfw_sb.value:
             self.main_data.user_hfw_sb.value = value
             resolution = self.resolution_ctrl.GetClientData(
@@ -284,18 +327,17 @@ class FastEMProjectSettingsTab(Tab):
         # Set choices
         if choices_si_prefix:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    ctrl.Append(
-                        "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
-                    )
+                ctrl.Append(
+                    "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
+                )
         else:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
+                ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
         ctrl.SetSelection(0)
         self.main_data.user_hfw_sb.value = ctrl.GetClientData(ctrl.GetSelection())
         ctrl.SetName(HFW)
         ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_hfw_sb_ctrl)
+        ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_evt_hfw_sb_ctrl)
 
     def on_evt_resolution_sb_ctrl(self, evt):
         """
@@ -402,14 +444,12 @@ class FastEMProjectSettingsTab(Tab):
         # Set choices bsed on the immersion mode
         if choices_si_prefix:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    self.hfw_ctrl.Append(
-                        "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
-                    )
+                self.hfw_ctrl.Append(
+                    "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
+                )
         else:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    self.hfw_ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
+                self.hfw_ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
         # Based on the immersion mode the choices of HFW are different
         # If the current HFW is not in the list of choices, set the first choice
         if self.hfw_ctrl.FindString(hfw, caseSensitive=True) == wx.NOT_FOUND:
