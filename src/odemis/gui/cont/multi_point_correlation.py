@@ -125,8 +125,7 @@ class CorrelationPointsController(object):
         streams_list = []
         for stream in self._tab_data_model.main.currentFeature.value.streams.value:
             if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
-                stream_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
-                streams_list.append(StaticFluoStream(stream.name.value, stream_interpolated))
+                streams_list.append(StaticFluoStream(stream.name.value, stream.raw[0]))
         # TODO is there only one reference image in the feature?
         # acquired_fibsem_streams = data_to_static_streams([self._tab_data_model.main.currentFeature.value.reference_image])
         # for s in acquired_fibsem_streams:
@@ -259,7 +258,10 @@ class CorrelationPointsController(object):
                 indices = self.stream_groups[fm_stream_key_tuple]
                 for index in indices:
                     stream = self.streams_list[index]
-                    ssc = self._panel.streambar_controller.addStream(stream, play=False)#, add_to_view=True)
+                    das_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
+                    stream_interpolated = StaticFluoStream(stream.name.value, das_interpolated)
+                    self.streams_list[index] = stream_interpolated
+                    ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)#, add_to_view=True)
                     ssc.stream_panel.set_visible(True)
                     ssc.stream_panel.collapse(False)
                     self.correlation_target.fm_streams.append(stream)
@@ -286,7 +288,10 @@ class CorrelationPointsController(object):
                         # if key != self.correlation_target.fm_stream_key:
                         #     self.correlation_target.fm_streams = []
                         stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
-                        ssc = self._panel.streambar_controller.addStream(stream, play=False)#, add_to_view=True)
+                        das_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
+                        stream_interpolated = StaticFluoStream(stream.name.value, das_interpolated)
+                        self.streams_list[index] = stream_interpolated
+                        ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)#, add_to_view=True)
                         ssc.stream_panel.show_remove_btn(True)
                         # ssc.stream_panel.set_visible(True)
                         # ssc.stream_panel.collapse(False)
@@ -410,7 +415,7 @@ class CorrelationPointsController(object):
         else:
             return False
 
-    @wxlimit_invocation(3)
+    @wxlimit_invocation(0.05)
     def _queue_latest_change(self):
         """Queue the latest change to process the correlation result."""
         while not self.change_queue.empty():
