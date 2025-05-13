@@ -168,11 +168,17 @@ class ROARow(Row):
         sizex, sizey = self.roa.shape.get_size()
         sizex = units.readable_str(sizex, unit="m", sig=3)
         sizey = units.readable_str(sizey, unit="m", sig=3)
+        current_sample = self.roa.main_data.current_sample.value
+        scintillator = current_sample.find_closest_scintillator((posx, posy))
+        scintillator_num = 0
+        if scintillator is not None:
+            scintillator_num = scintillator.number
         self.data[ROAColumnNames.POSX.value] = posx
         self.data[ROAColumnNames.POSY.value] = posy
         self.data[ROAColumnNames.SIZEX.value] = sizex
         self.data[ROAColumnNames.SIZEY.value] = sizey
         self.data[ROAColumnNames.ROT.value] = round(math.degrees(self.roa.shape.rotation))
+        self.data[ROAColumnNames.SCINTILLATOR_NUM.value] = scintillator_num
         if self.data[ROAColumnNames.FIELDS.value] == "1":
             self.update_shape_grid_rects()
 
@@ -278,36 +284,42 @@ class FastEMProjectROAsTab(Tab):
             Column(2, ROAColumnNames.FIELDS.value, editor_cls=GridCellBoolEditor),
             Column(
                 3,
+                ROAColumnNames.SCINTILLATOR_NUM.value,
+                editor_cls=GridCellNumberEditor,
+                is_read_only=True,
+            ),
+            Column(
+                4,
                 ROAColumnNames.PARENT.value,
                 editor_cls=DynamicGridCellComboBoxEditor,
                 editor_args={"choices": [DEFAULT_PARENT]},
             ),
             Column(
-                4,
+                5,
                 ROAColumnNames.POSX.value,
                 editor_cls=GridCellFloatEditor,
                 editor_args={"precision": 9},
             ),
             Column(
-                5,
+                6,
                 ROAColumnNames.POSY.value,
                 editor_cls=GridCellFloatEditor,
                 editor_args={"precision": 9},
             ),
             Column(
-                6,
+                7,
                 ROAColumnNames.SIZEX.value,
                 editor_cls=GridCellFloatEditor,
                 is_read_only=True,
             ),
             Column(
-                7,
+                8,
                 ROAColumnNames.SIZEY.value,
                 editor_cls=GridCellFloatEditor,
                 is_read_only=True,
             ),
             Column(
-                8,
+                9,
                 ROAColumnNames.ROT.value,
                 editor_cls=GridCellNumberEditor,
                 editor_args={"min": 0, "max": 360},
