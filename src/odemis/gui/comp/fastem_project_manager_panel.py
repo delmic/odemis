@@ -938,6 +938,11 @@ class FastEMProjectManagerPanel:
                 roa.name.value = roi_name
                 shape.name.value = f"{roi_name}_{roi_slice_index}"
                 shape.dashed = True
+                current_sample = self.main_data.current_sample.value
+                scintillator = current_sample.find_closest_scintillator(shape.get_position())
+                scintillator_num = 0
+                if scintillator is not None:
+                    scintillator_num = scintillator.number
                 row_data = {
                     ROIColumnNames.NAME.value: roi_name,
                     ROIColumnNames.SLICE_IDX.value: roi_slice_index,
@@ -952,6 +957,7 @@ class FastEMProjectManagerPanel:
                         self.project_settings_tab.dwell_time_sb_ctrl.GetValue() * 1e6, 4
                     ),  # [µs]
                     ROIColumnNames.FIELDS.value: "",
+                    ROIColumnNames.SCINTILLATOR_NUM.value: scintillator_num,
                 }
                 row = ROIRow(row_data, roa)
                 self.project_rois_tab.grid.add_row(row)
@@ -1035,6 +1041,11 @@ class FastEMProjectManagerPanel:
                 roa.slice_index.value = roa_slice_index
                 roa.name.value = roa_name
                 shape.name.value = f"{roa_name}_{roa_slice_index}"
+                current_sample = self.main_data.current_sample.value
+                scintillator = current_sample.find_closest_scintillator(shape.get_position())
+                scintillator_num = 0
+                if scintillator is not None:
+                    scintillator_num = scintillator.number
                 row_data = {
                     ROAColumnNames.NAME.value: roa_name,
                     ROAColumnNames.SLICE_IDX.value: roa_slice_index,
@@ -1045,6 +1056,7 @@ class FastEMProjectManagerPanel:
                     ROAColumnNames.ROT.value: int(math.degrees(shape.rotation)),
                     ROAColumnNames.PARENT.value: DEFAULT_PARENT,
                     ROAColumnNames.FIELDS.value: "",
+                    ROAColumnNames.SCINTILLATOR_NUM.value: scintillator_num,
                 }
                 row = ROARow(row_data, roa)
                 self.project_roas_tab.grid.add_row(row)
