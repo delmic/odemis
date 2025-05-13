@@ -762,6 +762,12 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                         set_icon(self._feature_icons_selected["FiducialPair"])
                     else:
                         set_icon(self._feature_icons[target.type.value])
+                        # Label the target if the correlation result is there for easy comparison
+                        # with the corresponding projected fiducials
+                        if self.tab_data.projected_points:
+                            self._label.text = (target.index.value)
+                            self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                            self._label.draw(ctx)
                 except KeyError:
                     raise
                 ctx.paint()
@@ -792,4 +798,9 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
 
             set_icon(self._feature_icons[target.type.value])
+            # Label the projected fiducial for easy comparison with corresponding fiducials
+            if target.type.value == PROJECTED_FIDUCIAL:
+                self._label.text = str(target.index.value)
+                self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                self._label.draw(ctx)
             ctx.paint()
