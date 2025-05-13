@@ -509,7 +509,12 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         # Capture key presses and ignore the event
         ctrl_mode = evt.ControlDown()
         shift_mode = evt.ShiftDown()
-        if self.active.value and not ctrl_mode and not shift_mode:
+        if self.active.value and ctrl_mode:
+            self._selected_tool_va.value = TOOL_FIDUCIAL
+        elif self.active.value and shift_mode:
+            self._selected_tool_va.value = TOOL_REGION_OF_INTEREST
+
+        if self.active.value:
             self.tab_data.focussedView.value = self.cnvs.view
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
@@ -538,10 +543,6 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 if target:
                     self.tab_data.main.currentTarget.value = target
                 evt.Skip()
-        elif self.active.value and ctrl_mode:
-            self._selected_tool_va.value = TOOL_FIDUCIAL
-        elif self.active.value and shift_mode:
-            self._selected_tool_va.value = TOOL_REGION_OF_INTEREST
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -550,10 +551,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        # Capture key presses and ignore the event
-        ctrl_mode = evt.ControlDown()
-        shift_mode = evt.ShiftDown()
-        if self.active.value and not ctrl_mode and not shift_mode:
+        if self.active.value:
             DragMixin._on_left_up(self, evt)
             self.clear_drag()
             self.cnvs.update_drawing()
@@ -569,7 +567,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        if self.active.value:
+        if self.active.value and self._mode!=MODE_SHOW_FIDUCIALS:
             v_pos = evt.Position
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
@@ -648,7 +646,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        if self.active.value:
+        if self.active.value and self._mode!=MODE_SHOW_FIDUCIALS:
             v_pos = evt.Position
             if self.left_dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
@@ -678,7 +676,9 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         # Capture key presses and ignore the event
         ctrl_mode = evt.ControlDown()
         shift_mode = evt.ShiftDown()
-        if self.active.value and not ctrl_mode and not shift_mode:
+        if self.active.value and ctrl_mode:
+            self._selected_tool_va.value = TOOL_FIDUCIAL
+        if self.active.value:
             self.tab_data.focussedView.value = self.cnvs.view
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
@@ -704,8 +704,6 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 if target:
                     self.tab_data.main.currentTarget.value = target
                 evt.Skip()
-        elif self.active.value and ctrl_mode:
-            self._selected_tool_va.value = TOOL_FIDUCIAL
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -714,10 +712,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         Handle mouse click left up: Move the selected target to the designated point,
         otherwise let the canvas handle the event when the overlay is active.
         """
-        # Capture key presses and ignore the event
-        ctrl_mode = evt.ControlDown()
-        shift_mode = evt.ShiftDown()
-        if self.active.value and not ctrl_mode and not shift_mode:
+        if self.active.value:
             DragMixin._on_left_up(self, evt)
             self.clear_drag()
             self.cnvs.update_drawing()
