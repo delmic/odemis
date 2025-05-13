@@ -750,7 +750,7 @@ class CorrelationPointsController(object):
             data.append(row_data)
 
         # Sort the data by the Index first, and then by Type in case of a tie
-        data.sort(key=lambda x: (x[GridColumns.Index.value], -ord(x[GridColumns.Type.value][0])))
+        data.sort(key=lambda x: (x[GridColumns.Index.value], -ord(x[GridColumns.Type.value][1])))
 
         # Repopulate the grid with sorted data
         for row, row_data in enumerate(data):
