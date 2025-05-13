@@ -923,7 +923,8 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         """Test if switching to and from sem results in the same stage coordinates"""
         # Update the stage metadata according to the example
         self.stage.updateMetadata({model.MD_CALIB: {"x_0": 1.77472e-03, "y_0": -0.05993e-03, "b_y": -0.297e-03,
-                                                    "z_ct": 4.774e-03, "dx": -40.1e-03, "dy": 0.157e-03}})
+                                                    "z_ct": 4.774e-03, "dx": -40.1e-03, "dy": 0.157e-03,
+                                                    "version": "tescan_1"}})
         self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {"rx": 0.349065850, "rz": 0.523598775}})  # 20°, 30°
         self.stage.updateMetadata(
             {model.MD_FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": -2.6179938779914944}})  # 15°, -150°

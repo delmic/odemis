@@ -27,7 +27,7 @@ import threading
 from abc import abstractmethod
 from concurrent.futures import CancelledError, Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-from typing import Dict, Union, Iterable
+from typing import Dict, Union, Iterable, Optional
 
 import numpy
 import scipy
@@ -327,6 +327,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.current_posture = model.VigilantAttribute(UNKNOWN)
         self.stage.position.subscribe(self._update_posture, init=True)
 
+        # Supported postures for sample stage (can be extended by the subclass)
+        self.postures = (SEM_IMAGING, FM_IMAGING)
+
         # set the transforms between different postures
         self._posture_transforms = {
             FM_IMAGING: {
@@ -382,6 +385,42 @@ class MeteorPostureManager(MicroscopePostureManager):
             return SEM_IMAGING
         # None of the above -> unknown position
         return UNKNOWN
+
+    def getCurrentGridLabel(self) -> Optional[int]:
+        """
+        Detects which grid on the sample shuttle of meteor being viewed
+        :return: (GRID_* or None) the guessed grid. If current posture doesn't allow to distinguish,
+        for instance because it's in LOADING posture, None is returned.
+        """
+        current_pos = self.stage.position.value
+        current_posture = self.getCurrentPostureLabel(current_pos)
+        if current_posture not in self.postures:
+            logging.warning("Cannot detect current grid in posture %s",
+                            POSITION_NAMES[current_posture])
+            return None
+
+        stage_md = self.stage.getMetadata()
+
+        # Grid positions are defined in the stage bare coordinates, on the SEM_IMAGING posture
+        # They only contain the linear axes (x, y, z, m).
+        # The rotation axes are defined on MD_FAV_SEM_POS_ACTIVE.
+        sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+        sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        try:
+            grid1_pos = self.to_posture(sem_grid1_pos, current_posture)
+            grid2_pos = self.to_posture(sem_grid2_pos, current_posture)
+        except ValueError as ex:
+            logging.warning("Cannot detect current grid in posture %s: %s",
+                            POSITION_NAMES[current_posture], ex)
+            return None
+
+        distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
+        distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
+
+        return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
 
     def at_milling_posture(self, pos: Dict[str, float], stage_md: Dict[str, float]) -> bool:
         """Milling posture is not required for all meteor systems, so we need to
@@ -439,14 +478,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
         :return: (dict str->float) the target position of the stage
         :raises ValueError: if the target position is not supported
-        """
-        pass
-
-    def getCurrentGridLabel(self) -> int:
-        """
-        Detects which grid on the sample shuttle of meteor being viewed
-        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
-            or FM, None would be returned.
         """
         pass
 
@@ -821,36 +852,6 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             )
 
         return end_pos
-
-    def getCurrentGridLabel(self) -> int:
-        """
-        Detects which grid on the sample shuttle of meteor being viewed
-        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
-         or FM, None would be returned.
-        """
-        current_pos = self.stage.position.value
-        current_pos_label = self.getCurrentPostureLabel()
-        stage_md = self.stage.getMetadata()
-        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-        if current_pos_label in [SEM_IMAGING, MILLING]:
-            distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
-            distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
-            return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1
-        elif current_pos_label == FM_IMAGING:
-            # add rx, rz from sem fav position, as grid positions do not have rx, rz
-            # rz is now required to calculate transform in _transformFromSEMToMeteor
-            # TODO: add this outside the if statement, after confirming behaviour is the same @patrick
-            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # only rx, rz
-            grid1_pos.update(sem_pos_active)  # x, y, z, rx, rz
-            grid2_pos.update(sem_pos_active)  # x, y, z, rx, rz
-
-            distance_to_grid1 = self._getDistance(current_pos, self._transformFromSEMToMeteor(grid1_pos))
-            distance_to_grid2 = self._getDistance(current_pos, self._transformFromSEMToMeteor(grid2_pos))
-            return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
-        else:
-            logging.warning("Cannot guess between grid 1 and grid2 in %s position" % POSITION_NAMES[current_pos_label])
-            return None
 
     # Note: this transformation consists of translation of along x and y
     # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
@@ -1283,36 +1284,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
 
         return end_pos
 
-    def getCurrentGridLabel(self) -> int:
-        """
-        Detects which grid on the sample shuttle of meteor being viewed
-        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
-         or FM, None would be returned.
-        """
-        current_pos = self.stage.position.value
-        current_pos_label = self.getCurrentPostureLabel()
-        stage_md = self.stage.getMetadata()
-
-        if current_pos_label == SEM_IMAGING:
-            grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE].copy()
-            grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-            grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-            grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-        elif current_pos_label == FM_IMAGING:
-            grid1_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE].copy()
-            grid2_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE]
-            grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-            grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-            grid1_pos = self._transformFromSEMToMeteor(grid1_pos)
-            grid2_pos = self._transformFromSEMToMeteor(grid2_pos)
-        else:
-            logging.warning("Cannot guess between grid 1 and grid2 in %s position" % POSITION_NAMES[current_pos_label])
-            return None
-        distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
-        distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
-
-        return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
-
     # Note: this transformation consists of translation and rotation.
     # The translations are along the x, y and m axes. They are calculated based on
     # the current position and some calibrated values existing in metadata "CALIB".
@@ -1620,41 +1591,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return end_pos
 
-    def getCurrentGridLabel(self) -> int:
-        """
-        Detects which grid on the sample shuttle of meteor being viewed
-        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
-        or FM, None would be returned.
-        """
-        current_pos = self.stage.position.value
-        current_pos_label = self.getCurrentPostureLabel()
-        stage_md = self.stage.getMetadata()
-
-        if current_pos_label == SEM_IMAGING:
-            grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE].copy()
-            grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-            grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-            grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-        elif current_pos_label == FM_IMAGING:
-            grid1_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE].copy()
-            grid2_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE]
-            grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-            grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-            grid1_pos = self._transformFromSEMToMeteor(grid1_pos)
-            grid2_pos = self._transformFromSEMToMeteor(grid2_pos)
-        else:
-            logging.warning("Cannot guess between grid 1 and grid2 in %s position" % POSITION_NAMES[current_pos_label])
-            return None
-        distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
-        distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
-
-        return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
-
-    # Note: this transformation consists of translation and rotation.
-    # The translations are along the x, y and m axes. They are calculated based on
-    # the current position and some calibrated values existing in metadata "CALIB".
-    # The rotations are 180 degree around the rm axis, and a calibrated angle around the rx axis.
-    # These angles exist in the metadata "FM_POS_ACTIVE".
     def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
@@ -1662,6 +1598,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         :param pos: the current stage position.
         :return: the transformed position.
         """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
 
