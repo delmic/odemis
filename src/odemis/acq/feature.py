@@ -296,7 +296,9 @@ class FeaturesDecoder(json.JSONDecoder):
     def object_hook(self, obj):
         # Either the object is the feature list or the feature objects inside it
         if 'name' in obj and 'status' in obj:
-            correlation_data = obj["correlation_data"]
+            correlation_data = {}
+            if "correlation_data" in obj:
+                correlation_data = obj["correlation_data"]
             stage_position = obj['stage_position']
             fm_focus_position = obj['fm_focus_position']
             posture_positions = obj.get('posture_positions', {})
