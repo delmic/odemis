@@ -173,8 +173,8 @@ class ROARow(Row):
         scintillator_num = 0
         if scintillator is not None:
             scintillator_num = scintillator.number
-        self.data[ROAColumnNames.POSX.value] = posx
-        self.data[ROAColumnNames.POSY.value] = posy
+        self.data[ROAColumnNames.POSX.value] = round(posx, 9)
+        self.data[ROAColumnNames.POSY.value] = round(posy, 9)
         self.data[ROAColumnNames.SIZEX.value] = sizex
         self.data[ROAColumnNames.SIZEY.value] = sizey
         self.data[ROAColumnNames.ROT.value] = round(math.degrees(self.roa.shape.rotation))

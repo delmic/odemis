@@ -946,8 +946,8 @@ class FastEMProjectManagerPanel:
                 row_data = {
                     ROIColumnNames.NAME.value: roi_name,
                     ROIColumnNames.SLICE_IDX.value: roi_slice_index,
-                    ROIColumnNames.POSX.value: posx,
-                    ROIColumnNames.POSY.value: posy,
+                    ROIColumnNames.POSX.value: round(posx, 9),
+                    ROIColumnNames.POSY.value: round(posy, 9),
                     ROIColumnNames.SIZEX.value: sizex,
                     ROIColumnNames.SIZEY.value: sizey,
                     ROIColumnNames.ROT.value: int(math.degrees(shape.rotation)),
@@ -982,8 +982,8 @@ class FastEMProjectManagerPanel:
                 row_data = {
                     RibbonColumnNames.NAME.value: ribbon_name,
                     RibbonColumnNames.SLICE_IDX.value: ribbon_slice_index,
-                    RibbonColumnNames.POSX.value: posx,
-                    RibbonColumnNames.POSY.value: posy,
+                    RibbonColumnNames.POSX.value: round(posx, 9),
+                    RibbonColumnNames.POSY.value: round(posy, 9),
                     RibbonColumnNames.SIZEX.value: sizex,
                     RibbonColumnNames.SIZEY.value: sizey,
                     RibbonColumnNames.ROT.value: int(math.degrees(shape.rotation)),
@@ -1013,8 +1013,8 @@ class FastEMProjectManagerPanel:
                 row_data = {
                     SectionColumnNames.NAME.value: section_name,
                     SectionColumnNames.SLICE_IDX.value: section_slice_index,
-                    SectionColumnNames.POSX.value: posx,
-                    SectionColumnNames.POSY.value: posy,
+                    SectionColumnNames.POSX.value: round(posx, 9),
+                    SectionColumnNames.POSY.value: round(posy, 9),
                     SectionColumnNames.SIZEX.value: sizex,
                     SectionColumnNames.SIZEY.value: sizey,
                     SectionColumnNames.ROT.value: int(math.degrees(shape.rotation)),
@@ -1049,8 +1049,8 @@ class FastEMProjectManagerPanel:
                 row_data = {
                     ROAColumnNames.NAME.value: roa_name,
                     ROAColumnNames.SLICE_IDX.value: roa_slice_index,
-                    ROAColumnNames.POSX.value: posx,
-                    ROAColumnNames.POSY.value: posy,
+                    ROAColumnNames.POSX.value: round(posx, 9),
+                    ROAColumnNames.POSY.value: round(posy, 9),
                     ROAColumnNames.SIZEX.value: sizex,
                     ROAColumnNames.SIZEY.value: sizey,
                     ROAColumnNames.ROT.value: int(math.degrees(shape.rotation)),
