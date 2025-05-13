@@ -126,11 +126,7 @@ class CorrelationPointsController(object):
         for stream in self._tab_data_model.main.currentFeature.value.streams.value:
             if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
                 streams_list.append(StaticFluoStream(stream.name.value, stream.raw[0]))
-        # TODO is there only one reference image in the feature?
-        # acquired_fibsem_streams = data_to_static_streams([self._tab_data_model.main.currentFeature.value.reference_image])
-        # for s in acquired_fibsem_streams:
-        #     if isinstance(s, StaticFIBStream) or isinstance(s, StaticSEMStream):
-        #         streams_list.append(s)
+
         self.streams_list = streams_list
 
         if self._tab_data_model.main.currentFeature.value.correlation_data and (self._tab_data_model.main.currentFeature.value.status.value in self._tab_data_model.main.currentFeature.value.correlation_data):
@@ -142,13 +138,8 @@ class CorrelationPointsController(object):
             # targets accordingly.
 
             # Load the streams
-            # if self.correlation_target.fm_stream_key or self.correlation_target.fib_stream_key:
-                # Will load the streams from the given streams
             self.group_streams()
             self._add_stream_group()
-            # TODO remove in the final version
-            # if self.correlation_target.fib_stream:
-            #     self.group_streams([self.correlation_target.fib_stream])
 
             # Load the targets
             targets = []
@@ -177,7 +168,7 @@ class CorrelationPointsController(object):
         self._panel.fp_correlation_panel.Show(True)
 
     @call_in_wx_main
-    def _on_fm_streams_change(self, stream_projections: ListVA) -> None:
+    def _on_fm_streams_visiblity(self, stream_projections: ListVA) -> None:
         """
         Update the stream groups when the user selects the FM stream panel from a different group. The
         group of the selected stream panel will be visible and the other groups will be invisible
@@ -198,11 +189,9 @@ class CorrelationPointsController(object):
             # Get the group this stream belongs to
             group_key = next(
                 (key for key, indices in self.stream_groups.items() if stream_index in indices), None)
-
             # Update visibility for the group
             if self.previous_group == group_key:
                 return
-
             self.previous_group = group_key
             if group_key:
                 self.correlation_target.fm_streams = []
@@ -213,25 +202,20 @@ class CorrelationPointsController(object):
                         ssc = next(
                             (sc for sc in  self._panel.streambar_controller.stream_controllers
                              if sc.stream == stream), None)
-
-
                         if not ssc:
                             logging.error(f"Stream controller not found for stream {stream.name.value}")
                             return
-
                         if isinstance(stream, StaticFluoStream) and not group_key:
                             group_key = key
-
                         if key == group_key:
                             ssc.stream_panel.set_visible(True)
                             ssc.stream_panel.collapse(False)
-                            # self.correlation_target.fm_stream_key = key
-                            # self.correlation_target.fm_streams.append(stream)
-                        else:#if key!=self.correlation_target.fib_stream_key:
+                        else:
                             if hasattr(self._tab_data_model.views.value[0], "removeStream"):
                                 self._tab_data_model.views.value[0].removeStream(stream)
                             ssc.stream_panel.set_visible(False)
                             ssc.stream_panel.collapse(True)
+
 
     def _add_stream_group(self) -> None:
         """
@@ -249,10 +233,9 @@ class CorrelationPointsController(object):
                 centre_pos = tuple([round(pos, 6) for pos in centre_pos])  # to handle floating point precision
                 self.correlation_target.fib_stream_key = (current_shape, centre_pos)
         # # Load the FM streams
-        if self.correlation_target.fm_stream_key:# or self.correlation_target.fib_stream_key:
+        if self.correlation_target.fm_stream_key:
             # Convert the list of lists to a tuple of tuples
             fm_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fm_stream_key)
-            # fib_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fib_stream_key)
             if fm_stream_key_tuple in self.stream_groups:
                 self.correlation_target.fm_streams = []
                 indices = self.stream_groups[fm_stream_key_tuple]
@@ -261,52 +244,28 @@ class CorrelationPointsController(object):
                     das_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
                     stream_interpolated = StaticFluoStream(stream.name.value, das_interpolated)
                     self.streams_list[index] = stream_interpolated
-                    ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)#, add_to_view=True)
+                    ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)
                     ssc.stream_panel.set_visible(True)
                     ssc.stream_panel.collapse(False)
                     self.correlation_target.fm_streams.append(stream)
-            # if fib_stream_key_tuple in self.stream_groups:
-            #     self.correlation_target.fib_stream = None
-            #     indices = self.stream_groups[fib_stream_key_tuple]
-            #     for index in indices:
-            #         stream = self.streams_list[index]
-            #         self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
-            #         self.correlation_target.fib_stream = stream
         else:
-
             for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
                 for index in indices:
                     stream = self.streams_list[index]
-                    # if not isinstance(stream, StaticFluoStream):
-                    #     self.correlation_target.fib_stream_key = key
-                    #     self.correlation_target.fib_stream = stream
-                    #     self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
-                    #     # ssc.stream_panel.set_visible(True)
-                    #     # ssc.stream_panel.collapse(False)
-                    # else:
                     if isinstance(stream, StaticFluoStream):
-                        # if key != self.correlation_target.fm_stream_key:
-                        #     self.correlation_target.fm_streams = []
                         stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
                         das_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
                         stream_interpolated = StaticFluoStream(stream.name.value, das_interpolated)
                         self.streams_list[index] = stream_interpolated
                         ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)#, add_to_view=True)
-                        ssc.stream_panel.show_remove_btn(True)
-                        # ssc.stream_panel.set_visible(True)
-                        # ssc.stream_panel.collapse(False)
-                        # self.correlation_target.fm_stream_key = key
-                        # self.correlation_target.fm_streams.append(stream)
-            # self._on_fm_streams_change()
-
+                        # ssc.stream_panel.show_remove_btn(True)
             # Update the group visibility based on the latest changes
-            self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_change, init=True)
+            self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_visiblity, init=True)
 
-    def group_streams(self, streams: list = None) -> None:
+    def group_streams(self) -> None:
         """
         Add the FIB and FM streams to the stream bar. The FM streams first need to be grouped based on the shape and
-        position. The FIB streams are added directly.
-        :param streams: (list[StaticStream]) new streams to add
+        position. The FIB streams are added directly.\
         """
         stream_groups = {}
 
@@ -334,18 +293,7 @@ class CorrelationPointsController(object):
                 stream_groups[key] -= indices_to_remove
                 # Add the new stream index to the set
                 stream_groups[key].add(stream_index)
-            # elif not  isinstance(stream, StaticFluoStream):# isinstance(stream, StaticFIBStream) or isinstance(stream, StaticSEMStream):
-            #     key = (current_shape, centre_pos)
-            #     if key not in stream_groups:
-            #         stream_groups[key] = set()
-            #     stream_groups[key].add(stream_index)
-                # ssc = self._panel.streambar_controller.addStream(stream, play=False, add_to_view=True)
-                # ssc.stream_panel.show_remove_btn(True)
-                # self.correlation_target.fib_stream_key = key
-                # self.correlation_target.fib_stream = stream
-
         self.stream_groups = stream_groups
-
 
     def _on_key_down_grid(self, event) -> None:
         """Handle key down events on the grid, especially to suppress Enter key default behavior."""
