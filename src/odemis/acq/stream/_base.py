@@ -1256,7 +1256,7 @@ class Stream(object):
 
         self._shouldUpdateImage()
 
-    def getPixelCoordinates(self, p_pos: Tuple[float, float], check_bbox: bool = True) -> Optional[Tuple[int, int]]:
+    def getPixelCoordinates(self, p_pos: Tuple[float, float], check_bbox: bool = True) -> Optional[Tuple[float, float]]:
         """
         Translate physical coordinates into data pixel coordinates
         :param p_pos: the position in physical coordinates (m)
