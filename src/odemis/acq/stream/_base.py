@@ -1282,9 +1282,10 @@ class Stream(object):
         pixel_pos_c = tform.inverse().apply(p_pos)
         # MD_POS is the center of the image, so subtract half of the size to convert to pixel-coordinates
         # A "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
-        pixel_pos = (int(math.floor(pixel_pos_c[0] + size[0] / 2)),
-                     int(math.floor(- (pixel_pos_c[1] - size[1] / 2))))
+        pixel_pos = (pixel_pos_c[0] + size[0] / 2,
+                     - (pixel_pos_c[1] - size[1] / 2))
         if check_bbox:
+            pixel_pos = (int(math.floor(pixel_pos[0])), int(math.floor(pixel_pos[1])))
             if 0 <= pixel_pos[0] < size[0] and 0 <= pixel_pos[1] < size[1]:
                 return pixel_pos
             else:
