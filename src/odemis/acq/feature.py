@@ -170,6 +170,8 @@ class CryoFeature(object):
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()
+        if correlation_data is None:
+            correlation_data = {}
         self.correlation_data = correlation_data
 
         # attributes for automated milling
