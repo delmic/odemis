@@ -44,6 +44,7 @@ from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.model import ListVA
 from odemis.util.dataio import data_to_static_streams
 from odemis.util.interpolation import interpolate_z_stack
+from odemis.util.units import readable_str
 
 
 # create an enum with column labels and position
@@ -389,7 +390,7 @@ class CorrelationPointsController(object):
         self.is_processing = True
         self._do_correlation()
         rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
-        self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {rms:.{GRID_PRECISION}f}")
+        self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
         self.is_processing = False  # Mark that processing is complete
 
     def stop(self):
