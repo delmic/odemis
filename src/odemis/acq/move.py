@@ -1791,10 +1791,10 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     target_pos_sem = self.getTargetPosition(SEM_IMAGING)
                     if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'rx'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'z'}, target_pos_sem)))
 
             if target in (GRID_1, GRID_2):
                 # The current mode doesn't change.
