@@ -650,7 +650,8 @@ class FastEMSingleBeamAcquiController(object):
         self.btn_acquire.Enable(
             True
             if self._main_data_model.is_optical_autofocus_done.value
-            and self.main_tab_data.focussedView.value
+            and self.roi_count
+            and not self._main_data_model.is_acquiring.value
             else False
         )
 
@@ -663,9 +664,6 @@ class FastEMSingleBeamAcquiController(object):
         elif not self._main_data_model.is_optical_autofocus_done.value:
             lvl = logging.WARN
             txt = "System is not calibrated, please run Optical Autofocus."
-        elif not self.main_tab_data.focussedView.value:
-            lvl = logging.WARN
-            txt = "No scintillator selected for single-beam acquisition."
         else:
             acq_time = 0
             for _, rois in self.project_rois.items():
