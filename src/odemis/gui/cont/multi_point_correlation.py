@@ -24,6 +24,7 @@ import itertools
 import logging
 import os
 import queue
+import re
 import threading
 from enum import Enum
 
@@ -388,7 +389,7 @@ class CorrelationPointsController(object):
         self.is_processing = True
         self._do_correlation()
         rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
-        self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {rms}")
+        self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {rms:.{GRID_PRECISION}f}")
         self.is_processing = False  # Mark that processing is complete
 
     def stop(self):
@@ -522,21 +523,24 @@ class CorrelationPointsController(object):
                 # index value for the target should be less than the maximum number of indices for that type
                 indices = []
                 target_swap = None
+                pattern = r"^[^-]+-"  # search the type of fiducial based on name
+                current_name_type = re.search(pattern, current_name).group()
                 for target in self._tab_data_model.main.targets.value:
-                    if target.name.value[:-1] == current_name[:-1]:
+                    target_name_type = re.search(pattern, target.name.value).group()
+                    if target_name_type == current_name_type:
                         indices.append(target.index.value)
                         if target.index.value == int(new_value):
                             target_swap = target
+                            break
 
                 index_max = max(indices)
                 assert 1 <= int(new_value) <= index_max
                 if target_swap:
                     target_swap.index.value = current_index
-                    target_swap.name.value = current_name[:-1] + str(target_swap.index.value)
+                    target_swap.name.value = current_name_type + str(target_swap.index.value)
                     self._on_target_changes(self._tab_data_model.main.targets.value)
                 self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
-                self._tab_data_model.main.currentTarget.value.name.value = current_name[:-1] + str(new_value)
-                # TODO grid set value shouldn't be used, use VA connector and disconnector ?
+                self._tab_data_model.main.currentTarget.value.name.value = current_name_type + str(new_value)
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value,
                                        self._tab_data_model.main.currentTarget.value.name.value)
                 self._tab_data_model.main.currentTarget.value = None
@@ -652,7 +656,7 @@ class CorrelationPointsController(object):
                 if "FIB" != target.name.value[:3]:
                     pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates(
                         (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
-                    if float(self.grid.GetCellValue(row, GridColumns.Z.value)) != float(target.coordinates.value[2]):
+                    if (self.grid.GetCellValue(row, GridColumns.Z.value)) != f"{float(target.coordinates.value[2]):.{GRID_PRECISION}f}":
                         temp_check = True
                     self.grid.SetCellValue(row, GridColumns.Z.value,
                                            f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
@@ -750,7 +754,7 @@ class CorrelationPointsController(object):
             data.append(row_data)
 
         # Sort the data by the Index first, and then by Type in case of a tie
-        data.sort(key=lambda x: (x[GridColumns.Index.value], -ord(x[GridColumns.Type.value][1])))
+        data.sort(key=lambda x: (int(x[GridColumns.Index.value]), -ord(x[GridColumns.Type.value][1])))
 
         # Repopulate the grid with sorted data
         for row, row_data in enumerate(data):

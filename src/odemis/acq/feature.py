@@ -826,10 +826,7 @@ class Target:
         self.type = model.StringEnumerated(type, choices={FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL,
                                                           PROJECTED_POI})
         self.name = model.StringVA(name)
-        # Warning: The index and target name are in sync. To increase the index limit more than 9, please first change the logic of finding indices from the
-        # target name in add_new_target() in tab_gui_data.py and
-        # _on_current_coordinates_changes(), _on_cell_changing in  multi_point_correlation.py
-        self.index = model.IntContinuous(index, range=(1, 9))
+        self.index = model.IntContinuous(index, range=(1, 99))
         self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")
 
     def to_dict(self) -> dict:
