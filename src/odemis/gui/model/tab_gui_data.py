@@ -513,7 +513,7 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
         """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
         :param x: (float) x position of the target
         :param y: (float) y position of the target
-        :param type: (str) type of the given targrt like Fiducial, PointOfInterest or SurfaceFiducial
+        :param type: (str) type of the given target like Fiducial, PointOfInterest or SurfaceFiducial
         :param z: (float) optional z position for the given target. For target in FM, z is compulsory and for the target
          in FIB, z is None.
         :return: (Target or error) Target if parameters are valid otherwise logs error.
