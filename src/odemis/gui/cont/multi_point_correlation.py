@@ -325,11 +325,11 @@ class CorrelationPointsController(object):
             fm_fiducials = []
             self.correlation_target.fm_pois = []
             for target in self._tab_data_model.main.targets.value:
-                if "FIB" in target.name.value:
+                if target.name.value.startswith("FIB"):
                     fib_fiducials.append(target)
-                elif "FM" in target.name.value:
+                elif target.name.value.startswith("FM"):
                     fm_fiducials.append(target)
-                elif "POI" in target.name.value:
+                elif target.name.value.startswith("POI"):
                     self.correlation_target.fm_pois.append(target)
             if fib_fiducials:
                 fib_fiducials.sort(key=lambda x: x.index.value)
@@ -373,8 +373,6 @@ class CorrelationPointsController(object):
                 self.change_queue.get_nowait()  # Remove older, outdated requests
             except queue.Empty:
                 break
-        logging.warning("Multipoint Correlation is running. It will handle the latest change.")
-        self.correlation_txt.SetLabel("Correlation RMS Deviation :  Calculating...")
         self.change_queue.put(True)  # Only enqueue the latest change request
 
     def _process_queue(self):
@@ -557,19 +555,19 @@ class CorrelationPointsController(object):
             y = float(self.grid.GetCellValue(current_row_count, GridColumns.Y.value))
             try:
                 if col_name == GridColumns.X.name:
-                    if "FIB" not in self._tab_data_model.main.currentTarget.value.name.value:
-                        p_coord = self.correlation_target.fm_streams[0].getPhysicalCoordinates((float(new_value),
-                                                                                                y))
-                    else:
+                    if self._tab_data_model.main.currentTarget.value.name.value.startswith("FIB"):
                         p_coord = self.correlation_target.fib_stream.getPhysicalCoordinates((float(new_value),
                                                                                              y))
+                    else:
+                        p_coord = self.correlation_target.fm_streams[0].getPhysicalCoordinates((float(new_value),
+                                                                                                y))
                     self._tab_data_model.main.currentTarget.value.coordinates.value[0] = p_coord[0]
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
                 if col_name == GridColumns.Y.name:
-                    if "FIB" not in self._tab_data_model.main.currentTarget.value.name.value:
-                        p_coord = self.correlation_target.fm_streams[0].getPhysicalCoordinates((x, float(new_value)))
-                    else:
+                    if self._tab_data_model.main.currentTarget.value.name.value.startswith("FIB"):
                         p_coord = self.correlation_target.fib_stream.getPhysicalCoordinates((x, float(new_value)))
+                    else:
+                        p_coord = self.correlation_target.fm_streams[0].getPhysicalCoordinates((x, float(new_value)))
                     self._tab_data_model.main.currentTarget.value.coordinates.value[0] = p_coord[0]
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
                 elif col_name == GridColumns.Z.name and (
@@ -607,12 +605,12 @@ class CorrelationPointsController(object):
         # For new targets, automatically perform Z targeting if MIP is checked for atleast one FM stream
         mip_enabled = any([stream.max_projection.value for stream in self.correlation_target.fm_streams])
 
-        if target and "FIB" not in target.name.value:
+        if target and target.name.value.startswith("FIB"):
+            self.z_targeting_btn.Enable(False)
+        else:
             self.z_targeting_btn.Enable(True)
             if mip_enabled:
                 self._on_z_targeting(None)
-        else:
-            self.z_targeting_btn.Enable(False)
 
         for row in range(self.grid.GetNumberRows()):
             if self._selected_target_in_grid(target, row):
@@ -654,16 +652,17 @@ class CorrelationPointsController(object):
         temp_check = False
         for row in range(self.grid.GetNumberRows()):
             if self._selected_target_in_grid(target, row):
-                if "FIB" != target.name.value[:3]:
+                if target.name.value.startswith("FIB"):
+                    pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
+                        (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
+                else:
                     pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates(
                         (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
-                    if (self.grid.GetCellValue(row, GridColumns.Z.value)) != f"{float(target.coordinates.value[2]):.{GRID_PRECISION}f}":
+                    if (self.grid.GetCellValue(row,
+                                               GridColumns.Z.value)) != f"{float(target.coordinates.value[2]):.{GRID_PRECISION}f}":
                         temp_check = True
                     self.grid.SetCellValue(row, GridColumns.Z.value,
                                            f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
-                else:
-                    pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
-                        (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                 # Get cell value
                 if (self.grid.GetCellValue(row, GridColumns.X.value) != f"{pixel_coords[0]:.{GRID_PRECISION}f}" or
                         self.grid.GetCellValue(row, GridColumns.Y.value) != f"{pixel_coords[1]:.{GRID_PRECISION}f}"):
@@ -700,17 +699,17 @@ class CorrelationPointsController(object):
             current_row_count = self.grid.GetNumberRows()
             self.grid.SelectRow(current_row_count)
             self.grid.AppendRows(1)
-            if "FIB" != target.name.value[:3]:
-                # TODO save the fm and fib stream metadata
+            # Get the pixel coordinates of the target and first set the z value in the grid
+            if target.name.value.startswith("FIB"):
+                pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
+                    (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
+                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
+            else:
                 pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates(
                     (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                 self.grid.SetCellValue(current_row_count, GridColumns.Z.value,
                                        f"{target.coordinates.value[2]:.{GRID_PRECISION}f}")
-            else:
-                pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
-                    (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
-                self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
-
+            # Set x and y position in the grid
             self.grid.SetCellValue(current_row_count, GridColumns.X.value,
                                    f"{pixel_coords[0]:.{GRID_PRECISION}f}")
             self.grid.SetCellValue(current_row_count, GridColumns.Y.value,

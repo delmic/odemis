@@ -26,7 +26,7 @@ import math
 import re
 from abc import ABCMeta
 from enum import Enum
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 import odemis.acq.stream as acqstream
 from odemis import model
