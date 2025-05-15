@@ -96,7 +96,11 @@ def guess_pattern(fn, detect_count=True):
         if m:
             time_match = m.group()
             # Use the current date, with the provided time
-            time_found = datetime.combine(now.date(), datetime.strptime(time_match, time_ptn_strp).time())
+            try:
+                time_found = datetime.combine(now.date(), datetime.strptime(time_match, time_ptn_strp).time())
+            except ValueError:
+                # The "time match" is not a valid time, so skip it
+                continue
 
             if abs(time_found - now) < timedelta(minutes=5):
                 # That's a real match => change the pattern
@@ -105,11 +109,16 @@ def guess_pattern(fn, detect_count=True):
     # Detect count
     cnt = "001"  # will be used in case cnt pattern is added afterwards
     if detect_count:
-        cnt_ptn = r'\d{1,5}'
+        # Find any number (including floats) in the filename pattern, and then, only pick the
+        # ones that look like a count (i.e. int of 1->5 digits).
+        cnt_ptn = r'[0-9]+(\.[0-9]+)?'  # matches ints and "simple" floats (eg "123.4")
         cnt_m = None
-        for m in re.finditer(cnt_ptn, fn_ptn):
-            cnt_m = m
         # if multiple numbers are present, use last
+        for m in re.finditer(cnt_ptn, fn_ptn):
+            num_match = m.group()
+            # Is it an int of 1->5 digits? Then, it is a count.
+            if len(num_match) <= 5 and "." not in num_match:
+                cnt_m = m
         if cnt_m:
             cnt = cnt_m.group()
             fn_ptn = fn_ptn[:cnt_m.start()] + "{cnt}" + fn_ptn[cnt_m.end():]

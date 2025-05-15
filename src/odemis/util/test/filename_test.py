@@ -85,7 +85,10 @@ class TestFilenameSuggestions(unittest.TestCase):
                    'test 1980-08-23': ('test 1980-08-{cnt}', '23'),  # a date, but not *now*
                    'test': ('test-{cnt}', '001'),
                    '%s-cell5' % current_year: ('{year}-cell{cnt}', '5'),
-                   '%s-{cell}{cnt}' % current_year: ('{year}-{{cell}}{{cnt}}', '001')
+                   '%s-{cell}{cnt}' % current_year: ('{year}-{{cell}}{{cnt}}', '001'),
+                    # Bad input times: should fallback to assume it's a (big) number
+                   'test-250123-quite late': ('test-250123-quite late-{cnt}', '001'),  # not a count as it's > 5 digits
+                   'test-29-52-32-quite late': ('test-29-52-{cnt}-quite late', '32'),
                     }
 
         for fn, ptn in fn_ptns.items():
@@ -93,6 +96,20 @@ class TestFilenameSuggestions(unittest.TestCase):
                 self.assertEqual(guess_pattern(fn), ptn)
                 fullfn = os.path.join(PATH, fn) + ext
                 self.assertEqual(guess_pattern(fullfn), ptn)
+
+        # Pattern that only work with extension (because they contain a ".")
+        fn_ptns_ext = {
+            'test-45.3ms': ('test-45.3ms-{cnt}', '001'),
+            'test 3.123': ('test 3.123-{cnt}', '001'),
+            'test .12': ('test .{cnt}', '12'),
+        }
+
+        for fn, ptn in fn_ptns_ext.items():
+            for ext in EXTS:
+                self.assertEqual(ptn, guess_pattern(fn + ext))
+                fullfn = os.path.join(PATH, fn) + ext
+                self.assertEqual(ptn, guess_pattern(fullfn))
+
 
         # test when count is not detected and, by default, set to '001'
         fn_ptns = {
