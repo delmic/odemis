@@ -1820,7 +1820,6 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         # List of overlays which handles creation, editing and removal of a shape class which
         # is a subclass of EditableShape class
         self.shapes_overlay = []
-        self.bg_view_label = None
         self.bg_view_overlay = None
         self.bg_world_overlay = None
         self.is_ctrl_down = False
@@ -1831,7 +1830,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         :param scintillator: The scintillator for which the background overlay need to be drawn.
         """
         self.bg_view_overlay = TextViewOverlay(cnvs=self)
-        self.bg_view_label = self.bg_view_overlay.add_label(str(scintillator.number), font_size=40)
+        self.bg_view_overlay.add_label(str(scintillator.number), font_size=40)
         self.add_view_overlay(self.bg_view_overlay)
         self.bg_world_overlay = FastEMScintillatorOverlay(cnvs=self, scintillator=scintillator)
         self.add_world_overlay(self.bg_world_overlay)
