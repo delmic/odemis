@@ -2,15 +2,6 @@
 "SPARCv2 FSLM": {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Integrated Spectrometer", "External Spectrometer",
-               "Camera", "External Camera",
-               "Spec Filter Wheel", "Spectrometer Selector", "Spectrograph focus",
-               "Mirror Actuators",
-               "Slit",
-               "Lens1 Mover", "Lens2 Switch",
-               "In-Light Aligner",
-              ],
 }
 
 # Light (lamp with known spectrum)
@@ -18,7 +9,7 @@
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 "Power Control Unit": {
@@ -160,7 +151,7 @@
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -207,7 +198,7 @@
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 # Controller for moving the 'stagebox' stage
@@ -330,7 +321,7 @@
         FAV_POS_ACTIVE: {"x": 0.0121716}, # laser out (external)
         FAV_POS_DEACTIVE: {"x": -0.03541916}, # laser in (internal)
         FAV_POS_ACTIVE_DEST: ["External Camera", "External Spectrometer"],
-        # FAV_POS_DEACTIVE_DEST: ["Camera", "Integrated Spectrometer"],
+        FAV_POS_DEACTIVE_DEST: ["Camera", "Integrated Spectrometer"],
     },
     affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
 }
