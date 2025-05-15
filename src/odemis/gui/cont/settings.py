@@ -428,6 +428,10 @@ class SettingsBarController(object):
                     logging.debug("No config found for %s: %s", hw_comp.role, name)
                     va_conf = None
                 va = vas_comp[name]
+                # Don't show read-only settings, unless they are explicitly indicated in the config
+                if va.readonly and name not in vas_config:
+                    continue
+
                 setting_controller.add_setting_entry(name, va, hw_comp, va_conf)
             except TypeError:
                 msg = "Error adding %s setting for: %s"
@@ -797,6 +801,22 @@ class AnalysisSettingsController(SettingsBarController):
 
         self._pnl_calibration.Refresh()
         self.tab_panel.Layout()
+
+
+class GunExciterSettingsController(SettingsBarController):
+    """
+    A whole "bar" just for the ebeam gun exciter settings.
+    Used by the SPARC acquisition tab.
+    If the ebeam gun exciter is not present, the bar is hidden.
+    """
+
+    def __init__(self, tab_panel: wx.Panel, tab_data: MicroscopyGUIData):
+        super().__init__(tab_data)
+        main_data = tab_data.main
+        if main_data.ebeam_gun_exciter:
+            tab_panel.fp_settings_gun_exciter.Show()  # Hidden by default, as this is a rare configuration
+            self._settings_ctrl = SettingsController(tab_panel.fp_settings_gun_exciter, "")
+            self.add_hw_component(main_data.ebeam_gun_exciter, self._settings_ctrl)
 
 
 class EBeamBlankerSettingsController(SettingsBarController):

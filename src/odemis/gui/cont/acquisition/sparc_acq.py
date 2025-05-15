@@ -74,18 +74,26 @@ class SparcAcquiController(object):
             # subscribe to the VA and initialize the warning status
             self._main_data_model.light.interlockTriggered.subscribe(self.on_interlock_change, init=True)
 
-        # Trick: _ebeam_blanker is set *after* on_interlock_change() is called at init.
-        # This way, at init, even if the interlock is already triggered, the blanker is untouched. Only the
-        # warning message is shown. This is to avoid the blanker to change the SEM state at init, as
-        # anyway the user might have been using the system as-is for a while, and it's confusing that
-        # suddenly the e-beam is blanked when the Odemis GUI starts. Especially, this helps the safety
-        # only if the interlock is triggered due to the SPARC cover being open... but they are many
-        # other reasons for the interlock to be triggered.
+            # Trick: _ebeam_blanker is set *after* on_interlock_change() is called at init.
+            # This way, at init, even if the interlock is already triggered, the blanker is untouched. Only the
+            # warning message is shown. This is to avoid the blanker to change the SEM state at init, as
+            # anyway the user might have been using the system as-is for a while, and it's confusing that
+            # suddenly the e-beam is blanked when the Odemis GUI starts. Especially, this helps the safety
+            # only if the interlock is triggered due to the SPARC cover being open... but they are many
+            # other reasons for the interlock to be triggered.
+            if self._main_data_model.ebeam and model.hasVA(self._main_data_model.ebeam, "blanker"):
+                # blanker state before interlock (to restore it when interlock is reset)
+                self._ebeam_blanker = self._main_data_model.ebeam.blanker
+                self._pre_interlock_blanker = self._ebeam_blanker.value
 
-        if self._main_data_model.ebeam and model.hasVA(self._main_data_model.ebeam, "blanker"):
-            # blanker state before interlock (to restore it when interlock is reset)
-            self._ebeam_blanker = self._main_data_model.ebeam.blanker
-            self._pre_interlock_blanker = self._ebeam_blanker.value
+        else:
+            # An e-beam gun exciter is typically a laser, which may have also a readable interlock.
+            # In such case, it's helpful to report the status too.
+            # WARNING: for now, no SPARC has both a laser input and gun exciter, so we don't try to
+            # support both simultaneously... but if that happens, we'll need to adjust this code.
+            if model.hasVA(self._main_data_model.ebeam_gun_exciter, "interlockTriggered"):
+                self._main_data_model.ebeam_gun_exciter.interlockTriggered.subscribe(self.on_interlock_change,
+                                                                                     init=True)
 
         # For file selection
         self.conf = conf.get_acqui_conf()
