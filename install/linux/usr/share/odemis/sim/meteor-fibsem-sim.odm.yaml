@@ -1,6 +1,6 @@
 # Simulates a METEOR on TFS SEM, with control of the FIB (milling)
 # It requires the separate xtadapter-autoscript simulator. To start it, do:
-# python3 path/to/xtlib-adapter/xtadapter/server_autoscript.py sim
+# python3 path/to/xtlib-adapter/xtadapter/server_sim.py --type autoscript --port 4243
 
 "METEOR TFSv3 FIB Sim": {
     class: Microscope,
@@ -13,7 +13,7 @@
   init: {
     # address: "192.168.6.5",  # real
     address: "localhost",    # simulator
-    port: "4242"
+    port: "4243"
   },
   children: {
     stage: "Stage",
