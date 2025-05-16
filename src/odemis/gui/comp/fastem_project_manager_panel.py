@@ -309,13 +309,13 @@ class ProjectManagerImportExport:
             project_settings = project_data.get("settings", None)
             if project_settings is None:
                 raise ValueError(f"{project_name} does not contain settings key")
-            self.project_manager.tab_data.project_settings_data.value[project_name] = (
-                project_settings
-            )
             # Create project node for single beam and multi beam
             if project_name in active_projects:
                 project_name = make_unique_name(project_name, active_projects)
             active_projects.append(project_name)
+            self.project_manager.tab_data.project_settings_data.value[project_name] = (
+                project_settings
+            )
             project_node_sb = FastEMTreeNode(project_name, NodeType.PROJECT)
             project_node_mb = FastEMTreeNode(project_name, NodeType.PROJECT)
             self.project_manager.tab_data.project_tree_sb.add_child(
