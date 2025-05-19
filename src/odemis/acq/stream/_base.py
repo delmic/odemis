@@ -1267,9 +1267,11 @@ class Stream(object):
         raw = self.raw[0]
         md = self._find_metadata(raw.metadata)
         pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+        pxs = pxs[:2]  # Take only X & Y, even if Z is available
         rotation = md.get(model.MD_ROTATION, 0)
         shear = md.get(model.MD_SHEAR, 0)
         translation = md.get(model.MD_POS, (0, 0))
+        translation = translation[:2]  # Take only X & Y, even if Z is available
         size = raw.shape[-1], raw.shape[-2]
         # The `pxs`, `rotation` and `shear` arguments are not directly passed
         # in the `AffineTransform` because the formula of the `AffineTransform`

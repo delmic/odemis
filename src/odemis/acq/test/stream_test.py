@@ -4907,6 +4907,59 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_equal(im[0, 0], [0, 0, 0])
         numpy.testing.assert_equal(im[12, 1], md[model.MD_USER_TINT])
 
+    def test_fluo_3d(self):
+        """Test StaticFluoStream with Z-stack"""
+        md = {
+            model.MD_DESCRIPTION: "green dye",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6, 10e-6),  # m/px
+            model.MD_POS: (13.7e-3, -30e-3, 25e-3),  # m
+            model.MD_EXP_TIME: 1,  # s
+            model.MD_IN_WL: (600e-9, 620e-9),  # m
+            model.MD_OUT_WL: (620e-9, 650e-9),  # m
+            model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
+            model.MD_ROTATION: 0.1,  # rad
+            model.MD_SHEAR: 0,
+        }
+
+        # DataArray
+        da = model.DataArray(numpy.zeros((10, 512, 1024), dtype=numpy.uint16), md)
+        da[:, 10] = 2 ** 10  # bigger value (than 10)
+        da[:, 11] = 2 ** 11  # largest value
+        da[3, 12] = 2 ** 11  # largest value, but only at z == 3
+
+        fls = stream.StaticFluoStream(md[model.MD_DESCRIPTION], da)
+        pj = stream.RGBSpatialProjection(fls)
+
+        # Change zIndex (from 0)
+        fls.zIndex.value = 4
+        fls.max_projection.value = False
+
+        time.sleep(0.5)  # wait a bit for the image to update
+        im = pj.image.value
+        self.assertEqual(im.shape, (512, 1024, 3))
+        numpy.testing.assert_equal(im[0, 0], [0, 0, 0])
+        numpy.testing.assert_equal(im[11, 1], md[model.MD_USER_TINT])
+
+        # check .getRawValue() works with 3D data
+        self.assertEqual(pj.getRawValue((0, 0)), 0)
+        self.assertEqual(pj.getRawValue((4, 11)), 2 ** 11)
+
+        # Activate max_projection => column 12 is also at max intensity (from z == 3)
+        fls.max_projection.value = True
+        time.sleep(0.5)  # wait a bit for the image to update
+        im = pj.image.value
+        self.assertEqual(im.shape, (512, 1024, 3))
+        numpy.testing.assert_equal(im[0, 0], [0, 0, 0])
+        numpy.testing.assert_equal(im[11, 1], md[model.MD_USER_TINT])
+        numpy.testing.assert_equal(im[12, 1], md[model.MD_USER_TINT])
+
+        # check .getRawValue() works with 3D data
+        self.assertEqual(pj.getRawValue((0, 0)), 0)
+        self.assertEqual(pj.getRawValue((4, 11)), 2 ** 11)
+        self.assertEqual(pj.getRawValue((4, 12)), 2 ** 11)
+
     def test_cl(self):
         """Test StaticCLStream"""
         # CL metadata

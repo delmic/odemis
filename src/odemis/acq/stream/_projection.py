@@ -28,7 +28,7 @@ import math
 import gc
 import numpy
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union
 from odemis.acq.stream import POL_POSITIONS
 from odemis.model import TINT_FIT_TO_RGB
 
@@ -922,28 +922,38 @@ class RGBSpatialProjection(RGBProjection):
         """
         return self.stream.getPixelCoordinates(p_pos)
 
-    def getRawValue(self, pixel_pos):
+    def getRawValue(self, pixel_pos: Tuple[int, int]) -> Union[int, float, model.DataArray]:
         """
-        Translate pixel coordinates into raw pixel value
-        Args:
-            pixel_pos(tuple int, int): the position in pixel coordinates
-
-        Returns: the raw "value" of the position. In case the raw data has more than 2 dimensions, it returns an array.
-        Raise LookupError if raw data not found
-
+        Finds the raw value of the given pixel
+        :param pixel_pos: the position in pixel coordinates (X/Y)
+        :return: the raw "value" at the position. In case the raw data has more than 2 dimensions,
+        if the stream has a zIndex VA, it returns the value for the selected Z (or using max_projection).
+        Otherwise, it returns an array of all the values (eg, CTZ dimensions) at the given pixel position.
+        :raise LookupError: if there is not raw data
         """
-
         raw = self.stream.raw
         if not raw:
             raise LookupError("Failed to find raw data for %s stream" % (self.stream,))
+
         # if raw is a DataArrayShadow, the image is pyramidal
-        if isinstance(raw[0], model.DataArrayShadow):
-            tx, px = divmod(pixel_pos[0], raw[0].tile_shape[0])
-            ty, py = divmod(pixel_pos[1], raw[0].tile_shape[1])
-            raw_tile = raw[0].getTile(tx, ty, 0)
+        data = raw[0]
+        if isinstance(data, model.DataArrayShadow):
+            tx, px = divmod(pixel_pos[0], data.tile_shape[0])
+            ty, py = divmod(pixel_pos[1], data.tile_shape[1])
+            raw_tile = data.getTile(tx, ty, 0)
             return raw_tile[py, px]
         else:
-            return raw[0][pixel_pos[1], pixel_pos[0]]
+            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+            if dims == "ZYX" and model.hasVA(self.stream, "zIndex"):
+                # First crop the image to a single pixel, which makes z projection faster
+                data = data[:, pixel_pos[1]:pixel_pos[1]+1, pixel_pos[0]:pixel_pos[0]+1]
+                if model.hasVA(self.stream, "max_projection") and self.stream.max_projection.value:
+                    data = img.max_intensity_projection(data, axis=0)
+                else:
+                    data = img.getYXFromZYX(data, self.stream.zIndex.value)
+                return data[0, 0]
+            else:
+                return data[pixel_pos[1], pixel_pos[0]]
 
     def _onZIndex(self, value):
         self._shouldUpdateImage()
@@ -1196,14 +1206,27 @@ class RGBSpatialProjection(RGBProjection):
 
         Handles tiles as well as regular DataArray's
         """
-        raw = self.stream.raw
+        data = self.stream.raw[0]
 
-        if isinstance(raw[0], model.DataArrayShadow):
+        if isinstance(data, model.DataArrayShadow):
             raw_tiles, _ = self._getTilesFromSelectedArea()
-            raw = img.mergeTiles(raw_tiles)
-            return raw
+            data = img.mergeTiles(raw_tiles)
+            # Note: no need to handle zIndex here, as (for now) DataArrayShadow only come from pyramidal
+            # TIFF images, which don't support Z-stacks
+            return data
         else:
-            return super(RGBSpatialProjection, self).projectAsRaw()
+            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+            if dims == "ZYX" and model.hasVA(self.stream, "zIndex"):
+                if model.hasVA(self.stream, "max_projection") and self.stream.max_projection.value:
+                    data = img.max_intensity_projection(data, axis=0)
+                else:
+                    data = img.getYXFromZYX(data, self.stream.zIndex.value)
+                    data.metadata[model.MD_DIMS] = "YX"
+            else:
+                data = img.ensure2DImage(data)
+
+            md = self._find_metadata(data.metadata)
+            return model.DataArray(data, md)
 
 
 class RGBSpatialSpectrumProjection(RGBSpatialProjection):
