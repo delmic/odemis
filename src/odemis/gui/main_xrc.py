@@ -1378,6 +1378,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.vp_sparc_as = xrc.XRCCTRL(self, "vp_sparc_as")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.fp_settings_gun_exciter = xrc.XRCCTRL(self, "fp_settings_gun_exciter")
         self.fp_settings_ebeam_blanker = xrc.XRCCTRL(self, "fp_settings_ebeam_blanker")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
@@ -17755,6 +17756,15 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem" name="fp_settings_gun_exciter">
+                        <label>GUN EXCITER</label>
+                        <hidden>1</hidden>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
                         <label>EBEAM BLANKER</label>
                         <hidden>1</hidden>

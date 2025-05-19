@@ -130,7 +130,6 @@
     },
 }
 
-
 # In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer
 "Camera": {
@@ -162,7 +161,57 @@
         tracking: {2: "INV"},
         off_voltage: [0.0, null],  # V, null = "output disabled"
     },
-    affects: ["SEM E-beam", "Streak Readout CCD"],
+    affects: ["SEM E-beam", "Streak Readout CCD", "SEM Detector", "CL Detector", "EBIC"],
+}
+
+# Fake laser component, made of a laser and a interlock reader
+"Exciter Laser": {
+    class: simulated.GenericComponent,
+    role: null,
+    init: {
+        vas: {
+            "power": {"value": 0.0, "unit": "W", "range": [0.0, 100.e-3]},
+            "spectra": {"value": [358.e-9, 359.e-9, 360.e-9, 361.e-9, 362.e-9], "unit": "m", "readonly": True},
+            "period": {"value": 1.e-6, "unit": "s", "readonly": True},
+            "hwName": {"value": "Pulsed Laser Sim", "readonly": True},
+        },
+    },
+}
+
+# Laser interlock reading via a DAQ MCC device
+# Provides a "interlockTriggered" VA.
+"Laser Interlock": {
+    class: pwrmccdaq.MCCDevice,
+    role: null,
+    init: {
+        mcc_device: "fake",
+        # di_channels port B 8-15 -> pin 32-39
+        # specified as [name, TTL_HIGH]
+        di_channels: {14: ["interlockTriggered", False]},
+    },
+}
+
+# Simpler simulator, which provides the interlockTriggered VA, read & write,
+# to easily test software reaction to a change.
+#"Laser Interlock": {
+#    class: simulated.GenericComponent,
+#    role: null,
+#    init: {
+#        vas: {
+#            "interlockTriggered": {"value": False},
+#        },
+#    },
+#}
+
+# Merge the two components
+"Ebeam Gun Exciter": {
+    class: compositer.CompositedComponent,
+    role: ebeam-gun-exciter,
+    dependencies: {  # sorted following the "internal roles" alphabetical order
+        "dep0": "Exciter Laser",
+        "dep1": "Laser Interlock",
+    },
+    affects: ["SEM E-beam", "Streak Readout CCD", "SEM Detector", "CL Detector", "EBIC"],
 }
 
 # simple simulated streak camera
