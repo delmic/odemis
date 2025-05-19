@@ -37,7 +37,7 @@ import numbers
 # logging.getLogger().setLevel(logging.DEBUG)
 
 
-def open_file(fn, mode="rb"):
+def open_file(fn, mode="r"):
     """
     Open a file, which can be compressed
     fn (string): filename. If it ends with .gz, it will be decompressed on the fly
