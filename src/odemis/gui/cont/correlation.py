@@ -256,7 +256,10 @@ class CorrelationController(object):
         """add streams to the localization tab
         :param streams: (list[StaticStream]) the streams to add"""
         if self.localization_tab is None:
-            self.localization_tab: LocalizationTab  = self._main_data_model.getTabByName("cryosecom-localization")
+            try:
+                self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
+            except LookupError:
+                return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 
         # TODO: extend this to support non-overviews
         # remove streams from localization tab when they are deleted from correlation tab
@@ -430,7 +433,10 @@ class CorrelationController(object):
         """update the metadata of the stream in the localization tab"""
 
         if self.localization_tab is None:
-            self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
+            try:
+                self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
+            except LookupError:
+                return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 
         # also update the localization tab
         if s in self.localization_tab.tab_data_model.streams.value:
