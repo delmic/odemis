@@ -412,6 +412,8 @@ class MainGUIData(object):
 
         self.hw_settings_config = get_hw_settings_config(self.role)
 
+        self.posture_manager = None  # Posture manager for the microscope  (on METEOR/MIMAS)
+
         # Used by the MIMAS, but needs to be initialized as empty for the SECOM & cryo microscopes.
         self.sample_centers: Dict[str, Tuple[float, float]] = {}  # sample name -> center position (x, y)
 

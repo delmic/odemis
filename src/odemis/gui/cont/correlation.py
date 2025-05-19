@@ -139,7 +139,11 @@ class CorrelationController(object):
 
         # auto correlation SEM<>FM, based on the  stage-bare position found in the image metadata
         self.pm = self._main_data_model.posture_manager
-        self._panel.btn_correlate.Bind(wx.EVT_BUTTON, self.on_auto_correlate)
+        if self.pm:
+            self._panel.btn_correlate.Bind(wx.EVT_BUTTON, self.on_auto_correlate)
+        else:
+            # On the viewer, there is no info on the stage transformation, so cannot do auto correlation
+            self._panel.btn_correlate.Disable()
 
     @call_in_wx_main
     def _update_correlation_cmb(self, streams: list) -> None:
@@ -477,20 +481,28 @@ class CorrelationController(object):
     def on_auto_correlate(self, evt: wx.Event) -> None:
         """"Automatically correlate the SEM/FM overviews based on the SEM stage position"""
 
+        # Use the posture transformation to convert the SEM image position (in stage-bare coordinates)
+        # to equivalent ones in the FM sample stage coordinates
+        # Note: as of 2025-05, this is also needed for the SEM images acquired in Odemis, as the
+        # sample stage origin is different per posture. Once this is fixed, and all postures have the
+        # sample origin, this feature is only useful when importing SEM images from the SEM software.
         for s in self._tab_data_model.streams.value:
+            if not isinstance(s, StaticSEMStream):
+                continue
 
-            # get the metadata from the stream (SEM only)
             md = s.raw[0].metadata
-            emd = md[model.MD_EXTRA_SETTINGS]
-            stage_md = emd["Stage"]
-            pos = stage_md["position"][0]
+            try:
+                emd = md[model.MD_EXTRA_SETTINGS]
+                stage_md = emd["Stage"]
+                pos = stage_md["position"][0]
+            except KeyError:
+                logging.debug(f"Stream {s.name.value} does not have SEM stage position metadata")
+                continue
 
-            if isinstance(s, StaticSEMStream):
-
-                # convert sem stage-bare position to fm sample-stage position
-                fm_pos = self.pm.to_posture(pos, FM_IMAGING)
-                ssp = self.pm.to_sample_stage_from_stage_position(fm_pos)
-                md_pos = (ssp["x"], ssp["y"])
-                # update metadata
-                self._tab_data_model.selected_stream.value = s
-                self._move_stream_to_pos(md_pos)
+            # convert sem stage-bare position to fm sample-stage position
+            fm_pos = self.pm.to_posture(pos, FM_IMAGING)
+            ssp = self.pm.to_sample_stage_from_stage_position(fm_pos)
+            md_pos = (ssp["x"], ssp["y"])
+            # update metadata
+            self._tab_data_model.selected_stream.value = s
+            self._move_stream_to_pos(md_pos)
