@@ -136,6 +136,7 @@ class MainGUIData(object):
         "cl-filter": "cl_filter",
         "lens": "lens",
         "e-beam": "ebeam",
+        "fibsem": "fibsem",
         "chamber-light": "chamber_light",
         "overview-light": "overview_light",
         "pol-analyzer": "pol_analyzer",
@@ -201,6 +202,7 @@ class MainGUIData(object):
         self.ebeam_focus = None  # change the e-beam focus
         self.ebeam_blanker = None  # for advanced blanker control (eg, pulsed)
         self.ebeam_gun_exciter = None  # for advanced e-beam control (eg, pulsed)
+        self.fibsem = None  # Optional component to control the FIB/SEM on METEOR/MIMAS
         self.sed = None  # secondary electron detector
         self.bsd = None  # backscattered electron detector
         self.ebic = None  # electron beam-induced current detector
@@ -308,7 +310,6 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
-            has_fibsem = any([c.role == "fibsem" for c in components])
             if self.role in ("secom", "delphi", "enzel"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
                 if self.role in ("secom", "enzel"):
@@ -318,7 +319,7 @@ class MainGUIData(object):
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus", "stage-bare"]
                 # add additional roles when fibsem control enabled
-                if has_fibsem:
+                if self.fibsem:
                     required_roles += ["e-beam", "se-detector", "ebeam-focus",
                                        "ion-beam", "se-detector-ion", "ion-focus"]
             elif self.role == "mimas":
