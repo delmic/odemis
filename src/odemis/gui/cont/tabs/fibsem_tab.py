@@ -96,6 +96,11 @@ class FibsemTab(Tab):
         panel.vp_secom_bl.canvas.remove_view_overlay(panel.vp_secom_bl.canvas.play_overlay)
         panel.vp_secom_br.canvas.remove_view_overlay(panel.vp_secom_br.canvas.play_overlay)
 
+        # Add a sample overlay to each view (if we have information)
+        if main_data.get_sample_centers(SEM_IMAGING):
+            for vp in (panel.vp_secom_tl, panel.vp_secom_bl):
+                vp.show_sample_overlay(main_data.get_sample_centers(SEM_IMAGING), main_data.sample_radius)
+
         tab_data.focussedView.subscribe(self._on_view, init=True)
 
         self._view_selector = viewcont.ViewButtonController(

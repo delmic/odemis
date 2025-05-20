@@ -31,7 +31,8 @@ from odemis import model
 from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
-from odemis.acq.move import MicroscopePostureManager, MeteorTFS3PostureManager
+from odemis.acq.move import MeteorPostureManager, MicroscopePostureManager, FM_IMAGING, POSITION_NAMES, \
+    GRID_1, GRID_2
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
@@ -561,6 +562,35 @@ class CryoMainGUIData(MainGUIData):
         self.sample_radius = self.SAMPLE_RADIUS_TEM_GRID
         # Bounding-box of the "useful area" relative to the center of a grid
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
+
+    def get_sample_centers(self, posture_lbl: Optional[int] = None) -> Dict[str, Tuple[float]]:
+        """
+        Get the sample centers for the given posture
+        :param posture_lbl: the posture label to use (default is the current one)
+        return (dict): the sample centers with their names and positions
+        """
+        pm = self.posture_manager
+        if not isinstance(pm, MeteorPostureManager):
+            return self.sample_centers
+
+        if not posture_lbl:
+            posture_lbl = pm.current_posture.value
+        if posture_lbl == FM_IMAGING:
+            stage_md = pm.stage.getMetadata()
+            grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+            grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # only rx, rz
+            grid1_pos.update(sem_pos_active)  # x, y, z, rx, rz
+            grid2_pos.update(sem_pos_active)
+            posture_grid1 = pm.to_posture(grid1_pos, posture_lbl)
+            posture_grid2 = pm.to_posture(grid2_pos, posture_lbl)
+            sample_centers = {POSITION_NAMES[GRID_1]: (posture_grid1["x"], posture_grid1["y"]),
+                              POSITION_NAMES[GRID_2]: (posture_grid2["x"], posture_grid2["y"])}
+        else:
+            # By default, we use the sample centres defined in SEM imaging mode
+            sample_centers = self.sample_centers
+
+        return sample_centers
 
 
 class ScintillatorShape(metaclass=ABCMeta):
