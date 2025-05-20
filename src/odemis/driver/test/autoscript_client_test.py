@@ -66,7 +66,7 @@ CONFIG_STAGE = {"name": "Stage", "role": "stage-bare"} # MD?
 
 CONFIG_FIBSEM = {"name": "FIBSEM", "role": "fibsem",
                  "address": "192.168.6.5",
-                 "port": 4242,
+                 "port": 4243,
                  "children": {
                     "sem-scanner": CONFIG_SEM_SCANNER,
                     "sem-detector": CONFIG_SEM_DETECTOR,
