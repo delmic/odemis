@@ -29,7 +29,7 @@ import socket
 import threading
 import time
 import weakref
-from typing import Literal, Callable, Any, Dict
+from typing import List, Literal, Callable, Any, Dict, Tuple
 
 import numpy
 from tescan import sem, CancelledError
@@ -48,6 +48,9 @@ ACQ_CMD_TERM = 2
 TESCAN_PXL_LIMIT = 100
 PROBE_CURRENT_RANGE = (10e-12, 100e-9)
 
+DEFAULT_ION_PRESET = ""
+DEVICE_MAP = {"ion": "FIB", "electron": "SEM"}
+
 # Maps canonical method names (SEM) to FIB equivalents.
 # These methods are present in TESCAN's SharkSEM API.
 FIB_NAME_MAP: Dict[str, str] = {
@@ -55,7 +58,7 @@ FIB_NAME_MAP: Dict[str, str] = {
     "DtSelect": "FibDtSelect",
     "DtEnable": "FibDtEnable",
     "DtAutoSignal": "FibDtAutoSig",
-    "HVGetVoltage": "FibHVGetVoltage",
+    "HVGetVoltage": "FibHVGetVoltage",  # V
     "HVGetBeam": "FibHVGetBeam",
     "HVBeamOn": "FibHVBeamOn",
     "HVBeamOff": "FibHVBeamOff",
@@ -66,11 +69,14 @@ FIB_NAME_MAP: Dict[str, str] = {
     "ScScanLine": "FibScScanLine",
     "ScScanXY": "FibScScanXY",
     "ScGetExternal": "FibScGetExtern",
-    # NOTE: No equivalent for FIB in API
-    "GetBeamCurrent": None,
-    "SetBeamCurrent": None,
+    "GetBeamCurrent": "FibReadFCCurr",  # pA
+    "PresetEnum": "FibEnumPresets",
+    "PresetSetEx": "FibSetPresetEx",  # Id: str, name/value of the preset
+    # Auto blanking for FIB
     "ScGetBlanker": None,
     "ScSetBlanker": None,
+    # All handled via presets for FIB
+    "SetBeamCurrent": None,
     "HVEnumIndexes": None,
     "HVSetVoltage": None,
     "GetWD": None,
@@ -531,8 +537,7 @@ class SEM(model.HwComponent):
             b = t + res[1] - 1
 
             dt = scanner.dwellTime.value * 1e9
-            device_dict = {"ion": "FIB", "electron": "SEM"}
-            logging.debug(f"Acquiring {device_dict[detector._device_type]} image of {res} with dwell time {dt} ns")
+            logging.debug(f"Acquiring {DEVICE_MAP[detector._device_type]} image of {res} with dwell time {dt} ns")
 
             # make sure socket settings are always set
             self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -586,8 +591,7 @@ class SEM(model.HwComponent):
                 else:
                     img = self._device_handler.FetchImage(detector._device_type, channel, res[0] * res[1])
                     img = numpy.frombuffer(img, dtype=">u2")
-                    device_dict = {"ion": "FIB", "electron": "SEM"}
-                    logging.debug(f"Received {device_dict[detector._device_type]} image of length {len(img)}")
+                    logging.debug(f"Received {DEVICE_MAP[detector._device_type]} image of length {len(img)}")
             except CancelledError:
                 raise CancelledError("Acquisition cancelled during scanning")
 
@@ -723,6 +727,7 @@ class Scanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
         volt = self.parent._device_handler.HVGetVoltage(self._device_type)
+        pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
 
         if self._device_type == "electron":
             # Range is according to min and max voltages accepted by Tescan API
@@ -730,17 +735,22 @@ class Scanner(model.Emitter):
             self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V",
                                                     setter=self._setVoltage)
             self.accelVoltage.subscribe(self._onVoltage)
-        elif self._device_type == "ion":
-            self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
-            # NOTE: There seems to be no metadata for FIB voltage, unlike for SEM
-            # so no callback here
 
-        if self._device_type == "electron":
-            pc = self.parent._device.GetBeamCurrent() * 1e-12  # Convert from pA to A
             # For limits of current, values from the Tescan UI are used, since the API did not specify any.
             self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
                                                         setter=self._setPC)
             self.probeCurrent.subscribe(self._onPC)
+        elif self._device_type == "ion":
+            beam_presets = self.get_ion_beam_presets()
+            # Add an empty preset as the first element to serve as the default, since the current preset cannot be
+            # obtained directly via the API. This follows the UX of Essence.
+            beam_presets.insert(0, DEFAULT_ION_PRESET)
+            beam_presets = {preset: preset for preset in beam_presets}
+            self.beamPreset = model.StringEnumerated(DEFAULT_ION_PRESET, beam_presets, setter=self._setIonPreset)
+            # For clarity, still maintain read-only VA's. The values from the preset titles do not match exactly with
+            # the actual device values.
+            self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
+            self.probeCurrent = model.FloatVA(pc, unit="A", readonly=True)
 
         # TODO: Use BooleanVA instead
         # 0 turns off the e-beam, 1 turns it on
@@ -774,6 +784,33 @@ class Scanner(model.Emitter):
         # Timer polling VAs so we keep up to date with changes made via Tescan UI
         self._va_poll = util.RepeatingTimer(5, self._pollVAs, "VAs polling")
         self._va_poll.start()
+
+    def get_ion_beam_presets(self) -> List[str]:
+        """
+        Get the available ion beam presets from the Tescan device and sort them based on voltage and current.
+        """
+        beam_presets = self.parent._device_handler.PresetEnum("ion").split("\n")  # List of strings
+        beam_presets = [p for p in beam_presets if p]  # Filter out any empty presets
+        # Sort based on voltage and current
+        return sorted(beam_presets, key=self.get_preset_weight)
+
+    def get_preset_weight(self, preset: str) -> Tuple[float, float]:
+        """
+        Converts a Tescan preset string into a weight, prioritizes voltage over current.
+        Low values have higher priority.
+        :param preset: the preset string, example: "20 keV; 1 pA;"
+
+        :returns: a weight tuple used for sorting
+        """
+        unit_weights = {
+            'nA': 1,
+            'pA': 1e-3,
+        }
+        voltage, current = re.findall(r"(\d+(?:\.\d+)?)\s*(keV|pA|nA)", preset)
+        voltage_value, _ = voltage
+        current_value, current_unit = current
+        return (float(voltage_value),
+                float(current_value) * unit_weights[current_unit])
 
     # we share metadata with our parent
     def updateMetadata(self, md):
@@ -839,6 +876,10 @@ class Scanner(model.Emitter):
 
     def _onPC(self, current):
         self.parent._metadata[model.MD_EBEAM_CURRENT] = current
+
+    def _setIonPreset(self, preset):
+        self.parent._device_handler.PresetSetEx("ion", preset)
+        return preset
 
     def GetVoltagesRange(self):
         """
@@ -976,26 +1017,25 @@ class Scanner(model.Emitter):
     def _pollVAs(self):
         try:
             with self.parent._acquisition_init_lock:
-                if self._device_type == "electron":
-                    logging.debug(f"Updating SEM FoV, voltage and current")
-                elif self._device_type == "ion":
-                    logging.debug(f"Updating FIB FoV and voltage")
+
+                logging.debug(f"Updating {DEVICE_MAP[self._device_type]} FoV, voltage and current")
                 self._updateHorizontalFOV()
                 # TODO: update power
                 with self.parent._acq_progress_lock:
                     prev_volt = self.accelVoltage._value
                     new_volt = self.parent._device_handler.HVGetVoltage(self._device_type)
+                    prev_pc = self.probeCurrent._value
+                    new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
                     if prev_volt != new_volt:
                         # Skip the setter
                         self.accelVoltage._value = new_volt
                         self.accelVoltage.notify(new_volt)
-                    if self._device_type == "electron":
-                        prev_pc = self.probeCurrent._value
-                        new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
-                        if prev_pc != new_pc:
-                            self.probeCurrent._value = new_pc
-                            self.probeCurrent.notify(new_pc)
 
+                    if prev_pc != new_pc:
+                        self.probeCurrent._value = new_pc
+                        self.probeCurrent.notify(new_pc)
+
+                    if self._device_type == "electron":
                         # if blanker is in auto, don't change its value
                         # NOTE: FIB does not allow for blanker control, seemingly
                         if self.blanker.value is not None:

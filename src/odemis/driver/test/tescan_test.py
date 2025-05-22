@@ -67,7 +67,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
               # change host ip address according to network settings
-              "host": "192.168.2.35"
+              "host": "192.168.1.181"
               }
 
 CONFIG_FIB = {"name": "fib", "role": "sem",
@@ -75,7 +75,7 @@ CONFIG_FIB = {"name": "fib", "role": "sem",
                            "fib-scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STG},
               # change host ip address according to network settings
-              "host": "192.168.2.35"
+              "host": "192.168.1.181"
               }
 
 # This one works with the Mira Simulator
@@ -894,6 +894,22 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
         self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_presets(self):
+        # We should have some presets available by default
+        self.assertGreater(len(self.scanner.beamPreset.choices), 0)
+        # Check if default is set
+        self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+        # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
+        # the future, make sure to update these here.
+        initial_preset = "2 keV; 20 pA"
+        # target_preset = "20 keV; 40 pA"
+        self.scanner.beamPreset.value = initial_preset
+        logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
+        logging.info(f"Current probe current: {self.scanner.probeCurrent.value:.2e}")
+        time.sleep(10)
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, places=2)
+        self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, places=12)
 
     def receive_image(self, dataflow, image):
         """
