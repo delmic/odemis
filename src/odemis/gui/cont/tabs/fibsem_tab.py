@@ -467,8 +467,7 @@ class FibsemTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        has_fibsem = any([c.role == "fibsem" for c in model.getComponents()])
-        if main_data.role == "meteor" and has_fibsem and LICENCE_FIBSEM_ENABLED:
+        if main_data.role == "meteor" and main_data.fibsem and LICENCE_FIBSEM_ENABLED:
             return 2
         else:
             return None
