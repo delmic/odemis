@@ -20,8 +20,9 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import collections
+import itertools
 import logging
-from typing import Optional, Tuple, Dict, Union, Iterable
+from typing import Optional, Tuple, Dict, Union, Iterable, List
 
 from odemis import model
 
@@ -328,11 +329,13 @@ class MetadataUpdater(model.Component):
             bandwidth = spectrograph.getOpeningToWavelength(width)  # always a tuple
             return bandwidth
 
-    def getFilterBandwidth(self, filter: Optional[model.HwComponent]) -> Union[Iterable[float], str, None]:
+    def get_filter_pos(self, filter: Optional[model.HwComponent]
+                       ) -> Union[Tuple[float, float], List[Tuple[float, float]], str, None]:
         """
-        Get the bandwidth of the filter based on the filter settings.
+        Get the position of the filter based on the filter settings.
         :param filter: a (light) "filter" (wheel) component (should have a "band" axis)
         :return: the bandwidth of the filter (min, max) in m,
+                 or multiple bandwidths in the filter (series of min/max) in m,
                  or a string if it's defined just as a name,
                  or None if there is no filter.
         """
@@ -340,19 +343,43 @@ class MetadataUpdater(model.Component):
             return None
 
         pos = filter.position.value
-        bandwidth = filter.axes["band"].choices[pos["band"]]
-        if bandwidth == model.BAND_PASS_THROUGH:  # "pass-through" == no filter
+        return filter.axes["band"].choices[pos["band"]]
+
+    def convert_filter_to_bandwidth(self, pos: Union[Tuple[float, float], List[Tuple[float, float]], str, None]
+                                    ) -> Optional[Tuple[float, float]]:
+        """
+        Convert the position of a filter into a bandwidth.
+        :param pos: the position of the filter
+        :return: the bandwidth of the filter (min, max) in m,
+                 or None if the position indicate there is no filter or is not interpretable
+        """
+        if pos is None or pos == model.BAND_PASS_THROUGH:  # "pass-through" == no filter
             return None
-        elif isinstance(bandwidth, str):  # Sometimes the filter is just a name like "red".
-            return bandwidth
-        # Last, and most common, option: tuple/list of 2 floats (min, max)
-        elif (isinstance(bandwidth, (tuple, list))
-              and len(bandwidth) == 2
-              and all(isinstance(v, float) for v in bandwidth)):
-            return bandwidth
-        else:
-            logging.warning("Invalid filter (%s) bandwidth: %s", filter.name, bandwidth)
+        if isinstance(pos, str):  # Sometimes the filter is just a name like "red", for now we don't handle that
+            logging.info("Filter %s is not a range, assuming it let all light pass for computation",
+                         pos)
             return None
+
+        # Most commonly, it's a list of 2 floats (min, max), but it can also be more specific and
+        # define more precisely the filter range, with more than 2 values.
+        # It can also be multi-band filter, in which case, we simplify it to a range from the smallest
+        # band to the largest band.
+        if isinstance(pos, (tuple, list)):
+            try:
+                if all(isinstance(v, (float, int)) for v in pos):
+                    bandwidth = pos[0], pos[-1]
+                else:  # Assume it's a series of bands
+                    # Bands are not always in order, so just take smallest and largest value
+                    all_wavelengths = list(itertools.chain.from_iterable(pos))
+                    bandwidth = min(all_wavelengths), max(all_wavelengths)
+            except Exception as ex:
+                logging.warning("Invalid filter value: %s: %s", pos, ex)
+                return None
+
+            return bandwidth
+
+        logging.warning("Invalid filter value: %s", pos)
+        return None
 
     def updateOutWavelength(self, comp_affected: model.HwComponent,
                             filter: Optional[model.HwComponent],
@@ -366,7 +393,7 @@ class MetadataUpdater(model.Component):
         :param spectrograph: a spectrograph component (should have a "wavelength" axis)
         Only used if the detector has the role "monochromator".
         """
-        filter_bandwidth = self.getFilterBandwidth(filter)
+        filter_pos = self.get_filter_pos(filter)
 
         # We only need to care about the spectrograph in the case of the monochromator, because for
         # the other types of components (eg, spectrometer), MD_OUT_WL is used exclusively for the
@@ -377,26 +404,24 @@ class MetadataUpdater(model.Component):
             spec_bandwidth = None
 
         if spec_bandwidth is None:  # Standard case, for everything except monochromators
-            bandwidth = filter_bandwidth  # None, str or tuple
-        elif filter_bandwidth is None:
-            bandwidth = spec_bandwidth
-        elif isinstance(filter_bandwidth, str):
-            # We don't support computing the intersection of a string & a tuple -> just trust the spectrograph
-            logging.info("Filter %s is not a range, will use spectrograph bandwidth for MD_OUT_WL", filter_bandwidth)
-            bandwidth = spec_bandwidth
-        else:  # Both are a wavelength range => take the intersection
-            bandwidth = (max(spec_bandwidth[0], filter_bandwidth[0]),
-                         min(spec_bandwidth[1], filter_bandwidth[1]))
-            if bandwidth[0] > bandwidth[1]:  # Empty intersection
-                # In theory, that means the detector receives no light. Maybe that's true,
-                # but it's not helpful to store as metadata. It might also be that the filter
-                # info is not correct. So let's just use the spectrograph bandwidth.
-                logging.warning("No intersection between filter %s and spectrograph %s, will use spectrograph bandwidth",
-                                filter_bandwidth, spec_bandwidth)
+            bandwidth = filter_pos  # None, str or tuple
+        else:
+            filter_bandwidth = self.convert_filter_to_bandwidth(filter_pos)
+            if filter_bandwidth is None:
                 bandwidth = spec_bandwidth
+            else:  # Both are a wavelength range => take the intersection
+                bandwidth = (max(spec_bandwidth[0], filter_bandwidth[0]),
+                             min(spec_bandwidth[1], filter_bandwidth[1]))
+                if bandwidth[0] > bandwidth[1]:  # Empty intersection
+                    # In theory, that means the detector receives no light. Maybe that's true,
+                    # but it's not helpful to store as metadata. It might also be that the filter
+                    # info is not correct. So let's just use the spectrograph bandwidth.
+                    logging.warning("No intersection between filter %s and spectrograph %s, will use spectrograph bandwidth",
+                                    filter_bandwidth, spec_bandwidth)
+                    bandwidth = spec_bandwidth
 
-        logging.debug("Updating %s with intersection of filter %s and spectrograph %s -> %s",
-                      comp_affected.name, filter_bandwidth, spec_bandwidth, bandwidth)
+                logging.debug("Updating %s with intersection of filter %s and spectrograph %s -> %s",
+                              comp_affected.name, filter_bandwidth, spec_bandwidth, bandwidth)
 
         comp_affected.updateMetadata({model.MD_OUT_WL: bandwidth})
 
