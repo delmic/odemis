@@ -989,9 +989,19 @@ def _updateMDFromOME(root, das):
         # the ome stores the Z position in the metadata of each plane
         # but odemis MD_POS is the centre of the image
         if z_positions:
-            for da in das:
+            z_center = statistics.median(z_positions)
+            for ifd in hd_2_ifd.flat:
+                if ifd == -1:
+                    continue
+                try:
+                    da = das[ifd]
+                except IndexError:
+                    logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                    continue
+                if da is None:
+                    continue
                 pos = da.metadata[model.MD_POS]
-                da.metadata[model.MD_POS] = pos[0], pos[1], statistics.median(z_positions)
+                da.metadata[model.MD_POS] = pos[0], pos[1], z_center
 
         # Update metadata of each da, so that they will be merged
         if deltats:
