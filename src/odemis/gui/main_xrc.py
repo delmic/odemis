@@ -38,6 +38,8 @@ def get_resources():
 
 
 
+
+
 class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, *args):
@@ -121,7 +123,7 @@ class xrcfr_correlation(wx.Dialog):
         self.txt_correlation_rms = xrc.XRCCTRL(self, "txt_correlation_rms")
         self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
         self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.btn_close = xrc.XRCCTRL(self, "btn_close")
 
 
 
@@ -1915,14 +1917,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
       <rows>1</rows>
       <growablecols>1</growablecols>
       <growablerows>0</growablerows>
-<!--      <object class="sizeritem">-->
-<!--        <object class="LiveViewport" name="pnl_view_acq">-->
-<!--          <XRCED>-->
-<!--            <assign_var>1</assign_var>-->
-<!--          </XRCED>-->
-<!--        </object>-->
-<!--        <flag>wxEXPAND</flag>-->
-<!--      </object>-->
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
@@ -2013,15 +2007,11 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                 <border>10</border>
                               </object>
                             </object>
-
-                            <!-- Points Table (wxListCtrl) -->
                             <object class="sizeritem">
                               <object class="wxGrid" name="table_grid">
                                 <style>wxWANTS_CHARS</style>
                               </object>
                             </object>
-                            <!--                            <flag>wxALIGN_LEFT</flag>-->
-                            <!--                            <orient>wxVERTICAL</orient>-->
                             <object class="sizeritem">
                               <object class="wxStaticText" name="txt_correlation_rms">
                                 <label>Correlation RMS Deviation :</label>
@@ -2034,8 +2024,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           </object>
                         </object>
                       </object>
-
-
                       <object class="FoldPanelItem" name="fp_correlation_streams">
                         <object class="StreamBar" name="pnl_correlation_streams">
                           <size>300,-1</size>
@@ -2072,7 +2060,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_cancel">
+              <object class="ImageTextButton" name="btn_close">
                 <height>48</height>
                 <face_colour>def</face_colour>
                 <label>Close</label>

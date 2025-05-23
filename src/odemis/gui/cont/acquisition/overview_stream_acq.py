@@ -105,8 +105,8 @@ class OverviewStreamAcquiController(object):
             return None
 
 
-class CorrelationDialogController(object):
-    """Controller to handle the multipoint correlation (3DCT) initialization"""
+class CorrelationDialogController:
+    """Controller to handle the multipoint correlation (3DCT) iniMtialization"""
 
     def __init__(self, tab_data, tab):
         """
@@ -114,8 +114,8 @@ class CorrelationDialogController(object):
         tab: (Tab): the tab which should show the data
         """
         self._tab_data_model = tab_data
-        self._main_data_model = tab_data.main
         self._tab = tab
+        self.cor_dialog = None
 
     def open_correlation_dialog(self):
         """
@@ -138,13 +138,13 @@ class CorrelationDialogController(object):
 
         # create the dialog
         try:
-            cor_dialog = CorrelationDialog(
+            self.cor_dialog = CorrelationDialog(
                 self._tab.main_frame, self._tab_data_model)
             parent_size = [int(v * 0.9) for v in self._tab.main_frame.GetSize()]
 
-            cor_dialog.SetSize(parent_size)
-            cor_dialog.Center()
-            cor_dialog.ShowModal()
+            self.cor_dialog.SetSize(parent_size)
+            self.cor_dialog.Center()
+            self.cor_dialog.ShowModal()
 
         except Exception:
             logging.exception("Failed to create correlation dialog")
@@ -158,5 +158,4 @@ class CorrelationDialogController(object):
             streambar_controller.enable(True)
             streambar_controller.resume()
 
-            cor_dialog.correlation_points_controller.stop()
-            cor_dialog.Destroy()
+            self.cor_dialog.Destroy()

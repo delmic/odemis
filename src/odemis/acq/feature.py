@@ -8,6 +8,7 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from enum import Enum
 from typing import Dict, List, Tuple, Optional
 
 from odemis import model
@@ -49,13 +50,14 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
 MILLING_TASKS_PATH = os.path.join(os.path.dirname(milling_tasks_file), "milling_tasks.yaml")
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 
-FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL, PROJECTED_POI = (
-    "Fiducial",
-    "PointOfInterest",
-    "SurfaceFiducial",
-    "ProjectedPoints",
-    "ProjectedPOI",
-)
+
+# define the target types
+class TargetType(Enum):
+    Fiducial = "Fiducial"
+    PointOfInterest = "Point of Interest"
+    SurfaceFiducial = "Surface Fiducial"
+    ProjectedFiducial = "Projected Points"
+    ProjectedPOI = "Projected POI"
 
 
 class FIBFMCorrelationData:
@@ -810,7 +812,7 @@ def acquire_at_features(
 
 
 class Target:
-    def __init__(self, x:float, y:float, z:float, name:str, type:str, index: int,  fm_focus_position: float, size: float = None ):
+    def __init__(self, x:float, y:float, z:float, name:str, type:str, index: int, fm_focus_position: float):
         """
         Target class to store the target information for multipoint correlation. The target can be a fiducial, point of
         interest, surface fiducial, projected fiducial or projected point of interest. The target information is used to
@@ -819,14 +821,13 @@ class Target:
         :param x: physical position in x in meters
         :param y: physical position in y in meters
         :param z: physical position in z in meters
-        :param name: name of the target saved as <type>-<index>. For example, "FM-1", "POI-2", "FIB-3", "PP", "PPOI"
-        :param type: type of the given target like Fiducial, PointOfInterest, ProjectedPoints, ProjectedPOI or SurfaceFiducial
-        :param index: index of the target in the given type. For example, "FM-1", "FM-2", "FM-3"...
+        :param name: name of the target saved as <type>-<index>. For example, "FM-2", "POI-2", "FIB-3", "PP", "PPOI"
+        :param type: type of the given target like Fiducial, PointOfInterest, SurfaceFiducial, ProjectedFiducial,
+        :param index: index of the target in the given type. For example, "FM-2" -> 2.
         :param fm_focus_position: position of the focus (objective in cased of Meteor) in meters
         """
         self.coordinates = model.ListVA((x, y, z), unit="m")
-        self.type = model.StringEnumerated(type, choices={FIDUCIAL, POI, SURFACE_FIDUCIAL, PROJECTED_FIDUCIAL,
-                                                          PROJECTED_POI})
+        self.type = model.StringEnumerated(type, choices={t.value for t in TargetType})
         self.name = model.StringVA(name)
         self.index = model.IntContinuous(index, range=(1, 99))
         self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")

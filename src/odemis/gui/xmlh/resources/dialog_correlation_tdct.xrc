@@ -7,14 +7,6 @@
       <rows>1</rows>
       <growablecols>1</growablecols>
       <growablerows>0</growablerows>
-<!--      <object class="sizeritem">-->
-<!--        <object class="LiveViewport" name="pnl_view_acq">-->
-<!--          <XRCED>-->
-<!--            <assign_var>1</assign_var>-->
-<!--          </XRCED>-->
-<!--        </object>-->
-<!--        <flag>wxEXPAND</flag>-->
-<!--      </object>-->
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
@@ -105,15 +97,11 @@
                                 <border>10</border>
                               </object>
                             </object>
-
-                            <!-- Points Table (wxListCtrl) -->
                             <object class="sizeritem">
                               <object class="wxGrid" name="table_grid">
                                 <style>wxWANTS_CHARS</style>
                               </object>
                             </object>
-                            <!--                            <flag>wxALIGN_LEFT</flag>-->
-                            <!--                            <orient>wxVERTICAL</orient>-->
                             <object class="sizeritem">
                               <object class="wxStaticText" name="txt_correlation_rms">
                                 <label>Correlation RMS Deviation :</label>
@@ -126,8 +114,6 @@
                           </object>
                         </object>
                       </object>
-
-
                       <object class="FoldPanelItem" name="fp_correlation_streams">
                         <object class="StreamBar" name="pnl_correlation_streams">
                           <size>300,-1</size>
@@ -164,7 +150,7 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_cancel">
+              <object class="ImageTextButton" name="btn_close">
                 <height>48</height>
                 <face_colour>def</face_colour>
                 <label>Close</label>
