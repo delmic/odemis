@@ -107,9 +107,9 @@ class LocalizationTab(Tab):
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
 
         # Add a sample overlay to each view (if we have information)
-        if main_data.sample_centers:
+        if main_data.get_sample_centers(FM_IMAGING):
             for vp in (panel.vp_secom_tl, panel.vp_secom_tr, panel.vp_secom_bl, panel.vp_secom_br):
-                vp.show_sample_overlay(main_data.sample_centers, main_data.sample_radius)
+                vp.show_sample_overlay(main_data.get_sample_centers(FM_IMAGING), main_data.sample_radius)
 
         # Default view is the Live 1
         tab_data.focussedView.value = panel.vp_secom_bl.view

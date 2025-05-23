@@ -711,24 +711,24 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # * Total area
         # * autofocus
 
-        if self._main_data_model.sample_centers:
+        if self._main_data_model.get_sample_centers():
             self.autofocus_chkbox.Show()
-            self.autofocus_roi_ckbox.value = True
+            self.autofocus_roi_ckbox.value = False
 
-            self.whole_grid_chkbox.Value = True
+            self.whole_grid_chkbox.Value = False
 
             # GridSelectionPanel doesn't have xmlh helper, and in addition a refactoring
             # would be needed to allow changing the grid layout after init. So
             # for now we use a placeholder panel, and insert the GridSelectionPanel
             # here at runtime.
-            layout = sample_positions_to_layout(self._main_data_model.sample_centers)
+            layout = sample_positions_to_layout(self._main_data_model.get_sample_centers())
             subsizer = wx.BoxSizer(wx.VERTICAL)
             self.selected_grid_pnl_holder.SetSizer(subsizer)
             self._grids = buttons.GridSelectionPanel(self.selected_grid_pnl_holder, layout)
             subsizer.Add(self._grids, flag=wx.EXPAND)
 
             # Default to selecting all grids
-            self._selected_grids = set(self._main_data_model.sample_centers.keys())
+            self._selected_grids = set(self._main_data_model.get_sample_centers().keys())
 
             # Connect the buttons (and update their status)
             for name, btn in self._grids.buttons.items():
@@ -738,8 +738,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             # Connect, and make sure the status is correct
             self.whole_grid_chkbox.Bind(wx.EVT_CHECKBOX, self._on_whole_grid_chkbox)
             self._on_whole_grid_chkbox()
-
-            self.pnl_view_acq.show_sample_overlay(self._main_data_model.sample_centers,
+            self.pnl_view_acq.show_sample_overlay(self._main_data_model.get_sample_centers(),
                                                   self._main_data_model.sample_radius)
         else:
             self.whole_grid_chkbox.Hide()
@@ -931,7 +930,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             # Cast to list, to have a consistent format with the alternative path
             areas = [area] if area is not None else []
         else:
-            if not self._main_data_model.sample_centers:
+            if not self._main_data_model.get_sample_centers():
                 raise NotImplementedError(
                     "If using the whole grid method, sample centers should be defined."
                 )
@@ -943,7 +942,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                     "a specific MainGUIData model."
                 )
 
-            sample_centers = [pos for name, pos in self._main_data_model.sample_centers.items()
+            sample_centers = [pos for name, pos in self._main_data_model.get_sample_centers().items()
                 if name in self._selected_grids]
 
             areas = get_tiled_bboxes(
