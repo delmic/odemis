@@ -936,14 +936,27 @@ class RGBSpatialProjection(RGBProjection):
         raw = self.stream.raw
         if not raw:
             raise LookupError("Failed to find raw data for %s stream" % (self.stream,))
+
         # if raw is a DataArrayShadow, the image is pyramidal
-        if isinstance(raw[0], model.DataArrayShadow):
-            tx, px = divmod(pixel_pos[0], raw[0].tile_shape[0])
-            ty, py = divmod(pixel_pos[1], raw[0].tile_shape[1])
-            raw_tile = raw[0].getTile(tx, ty, 0)
+        data = raw[0]
+        if isinstance(data, model.DataArrayShadow):
+            tx, px = divmod(pixel_pos[0], data.tile_shape[0])
+            ty, py = divmod(pixel_pos[1], data.tile_shape[1])
+            raw_tile = data.getTile(tx, ty, 0)
             return raw_tile[py, px]
         else:
-            return raw[0][pixel_pos[1], pixel_pos[0]]
+            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+            if dims == "ZYX" and model.hasVA(self.stream, "zIndex"):
+                # First crop the image to a single pixel, which makes z projection faster
+                data = data[:, pixel_pos[1]:pixel_pos[1]+1, pixel_pos[0]:pixel_pos[0]+1]
+                if model.hasVA(self.stream, "max_projection") and self.stream.max_projection.value:
+                    #
+                    data = img.max_intensity_projection(data, axis=0)
+                else:
+                    data = img.getYXFromZYX(data, self.stream.zIndex.value)
+                return data[0, 0]
+            else:
+                return data[pixel_pos[1], pixel_pos[0]]
 
     def _onZIndex(self, value):
         self._shouldUpdateImage()
@@ -1196,14 +1209,27 @@ class RGBSpatialProjection(RGBProjection):
 
         Handles tiles as well as regular DataArray's
         """
-        raw = self.stream.raw
+        raw = self.stream.raw[0]
 
-        if isinstance(raw[0], model.DataArrayShadow):
+        if isinstance(raw, model.DataArrayShadow):
             raw_tiles, _ = self._getTilesFromSelectedArea()
             raw = img.mergeTiles(raw_tiles)
+            # Note: no need to handle zIndex here, as (for now) DataArrayShadow only come from pyramidal
+            # TIFF images, which don't support Z-stacks
             return raw
         else:
-            return super(RGBSpatialProjection, self).projectAsRaw()
+            dims = raw.metadata.get(model.MD_DIMS, "CTZYX"[-raw.ndim::])
+            if dims == "ZYX" and model.hasVA(self.stream, "zIndex"):
+                if model.hasVA(self.stream, "max_projection") and self.stream.max_projection.value:
+                    raw = img.max_intensity_projection(raw, axis=0)
+                else:
+                    raw = img.getYXFromZYX(raw, self.stream.zIndex.value)
+                    raw.metadata[model.MD_DIMS] = "YX"
+            else:
+                raw = img.ensure2DImage(raw)
+
+            md = self._find_metadata(raw.metadata)
+            return model.DataArray(raw, md)
 
 
 class RGBSpatialSpectrumProjection(RGBSpatialProjection):
