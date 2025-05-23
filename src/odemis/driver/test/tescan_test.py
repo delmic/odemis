@@ -67,7 +67,15 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
               # change host ip address according to network settings
-              "host": "192.168.56.11"
+              "host": "192.168.1.181"
+              }
+
+CONFIG_FIB = {"name": "fib", "role": "sem",
+              "children": {"fib-detector": CONFIG_SED,
+                           "fib-scanner": CONFIG_SCANNER,
+                           "stage": CONFIG_STG},
+              # change host ip address according to network settings
+              "host": "192.168.1.181"
               }
 
 # This one works with the Mira Simulator
@@ -773,6 +781,148 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
             self.acq_done.set()
+
+
+class BaseFIBTest(object):
+
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            return
+        cls.sem = tescan.SEM(**cls.CONFIG_HW)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_STG["name"]:
+                cls.stage = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
+            # Doesn't seem to work with the simulator
+            elif child.name == CONFIG_CM["name"]:
+                cls.camera = child
+            elif child.name == CONFIG_PRESSURE["name"]:
+                cls.pressure = child
+            elif child.name == CONFIG_LIGHT["name"]:
+                cls.light = child
+
+    @classmethod
+    def tearDownClass(cls):
+        if TEST_NOHW:
+            return
+
+        cls.sem.terminate()
+        time.sleep(3)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware present")
+
+    def tearDown(self):
+#        print gc.get_referrers(self.camera)
+#        gc.collect()
+        pass
+
+
+class TestFIB(BaseFIBTest, unittest.TestCase):
+    """
+    Tests which can share one SEM device
+    """
+    CONFIG_HW = CONFIG_FIB
+
+    def setUp(self):
+        super().setUp()
+
+        # reset resolution and dwellTime
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = (512, 256)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
+        self.acq_done = threading.Event()
+
+    def compute_expected_duration(self):
+        dwell = self.scanner.dwellTime.value
+        settle = 5.e-6
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_acquire(self):
+        self.scanner.dwellTime.value = 10e-6  # s
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.sed.data.get()
+        hdf5.export("test_fib.h5", model.DataArray(im))
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_cancel_acquisition(self):
+        self.scanner.dwellTime.value = 100e-6  # a little bit more than 10s per frame
+        self.left = 1
+        logging.info("Starting initial (long) acquisition")
+        self.sed.data.subscribe(self.receive_image)
+        time.sleep(1)
+        logging.info("Stopping initial (long) acquisition")
+        self.sed.data.unsubscribe(self.receive_image)
+        start = time.time()
+        self.scanner.dwellTime.value = 1e-6  # shorter dwell time
+        logging.info("Starting short acquisition")
+        self.sed.data.get()
+        logging.info("Finished short acquisition")
+        duration = time.time() - start
+        self.assertLess(duration, 3)
+
+    def test_acquire_high_osr(self):
+        """
+        small resolution, but large osr, to force acquisition not by whole array
+        """
+        self.scanner.resolution.value = (256, 200)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
+        expected_duration = self.compute_expected_duration()  # about 1 min
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_presets(self):
+        # We should have some presets available by default
+        self.assertGreater(len(self.scanner.beamPreset.choices), 0)
+        # Check if default is set
+        self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+        # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
+        # the future, make sure to update these here.
+        initial_preset = "2 keV; 20 pA"
+        # target_preset = "20 keV; 40 pA"
+        self.scanner.beamPreset.value = initial_preset
+        logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
+        logging.info(f"Current probe current: {self.scanner.probeCurrent.value:.2e}")
+        time.sleep(10)
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, places=2)
+        self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, places=12)
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+            self.acq_done.set()
+
 
 if __name__ == "__main__":
     unittest.main()
