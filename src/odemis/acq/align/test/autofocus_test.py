@@ -164,6 +164,11 @@ class TestSparc2AutoFocus(unittest.TestCase):
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
 
+    @classmethod
+    def tearDownClass(cls):
+        # Move the focus back to the good position, because the backend is used in multiple tests
+        cls.focus.moveAbs({"z": cls._good_focus}).result()
+
     def setUp(self):
         self.opm = acq.path.OpticalPathManager(model.getMicroscope())
 
@@ -300,6 +305,11 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
 
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
+
+    @classmethod
+    def tearDownClass(cls):
+        # Move the focus back to the good position, because the backend is used in multiple tests
+        cls.focus.moveAbs({"z": cls._good_focus}).result()
 
     def setUp(self):
         self.opm = acq.path.OpticalPathManager(model.getMicroscope())
