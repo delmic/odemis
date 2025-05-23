@@ -158,6 +158,7 @@ class EllipseOverlay(RectangleOverlay):
         shape = EllipseOverlay(self.cnvs)
         shape.colour = self.colour
         shape.name.value = self.name.value
+        shape.dashed = self.dashed
         shape.restore_state(self.get_state())
         shape.is_created.value = True
         return shape
@@ -279,7 +280,7 @@ class EllipseOverlay(RectangleOverlay):
                 y = a * math.cos(angle) * math.sin(rotation) + b * math.sin(angle) * math.cos(rotation)
                 self._points.append(Vec(center_x + x, center_y + y))
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0, dash=True):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw the selection as a ellipse."""
         line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
@@ -296,7 +297,7 @@ class EllipseOverlay(RectangleOverlay):
 
             # draws the dotted line
             ctx.set_line_width(line_width)
-            if dash:
+            if self.dashed:
                 ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)

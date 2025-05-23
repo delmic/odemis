@@ -131,8 +131,8 @@ class SectionRow(Row):
         sizex, sizey = self.roa.shape.get_size()
         sizex = units.readable_str(sizex, unit="m", sig=3)
         sizey = units.readable_str(sizey, unit="m", sig=3)
-        self.data[SectionColumnNames.POSX.value] = posx
-        self.data[SectionColumnNames.POSY.value] = posy
+        self.data[SectionColumnNames.POSX.value] = round(posx, 9)
+        self.data[SectionColumnNames.POSY.value] = round(posy, 9)
         self.data[SectionColumnNames.SIZEX.value] = sizex
         self.data[SectionColumnNames.SIZEY.value] = sizey
         self.data[SectionColumnNames.ROT.value] = round(
