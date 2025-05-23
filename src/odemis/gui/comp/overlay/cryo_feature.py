@@ -31,8 +31,7 @@ import odemis.gui as gui
 import odemis.gui.img as guiimg
 import wx
 from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, FEATURE_READY_TO_MILL,
-                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, POI, FIDUCIAL, SURFACE_FIDUCIAL, PROJECTED_POI,
-                                PROJECTED_FIDUCIAL, get_feature_position_at_posture)
+                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, TargetType, get_feature_position_at_posture)
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
@@ -405,22 +404,22 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         if self._selected_tool_va:
             self._selected_tool_va.subscribe(self._on_tool, init=True)
 
-        self._feature_icons = {FIDUCIAL: cairo.ImageSurface.create_from_png(
+        self._feature_icons = {TargetType.Fiducial.value: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_unselected.png')),
-        POI: cairo.ImageSurface.create_from_png(
+        TargetType.PointOfInterest.value: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_unselected.png')),
-        PROJECTED_FIDUCIAL: cairo.ImageSurface.create_from_png(
+        TargetType.ProjectedFiducial.value: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/projected_fiducial.png')),
-        PROJECTED_POI: cairo.ImageSurface.create_from_png(
+        TargetType.ProjectedPOI.value: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/projected_poi.png')),
-        SURFACE_FIDUCIAL: cairo.ImageSurface.create_from_png(
+        TargetType.SurfaceFiducial.value: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/surface_fiducial.png'))}
 
-        self._feature_icons_selected = {FIDUCIAL: cairo.ImageSurface.create_from_png(
+        self._feature_icons_selected = {TargetType.Fiducial.value: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_selected.png')),
         "FiducialPair": cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/highlighted_fiducial.png')),
-        POI: cairo.ImageSurface.create_from_png(
+        TargetType.PointOfInterest.value: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/poi_selected.png'))}
 
         self._hover_target = None
@@ -528,7 +527,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     # TODO rename type to PointOfInterest
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=POI)
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.PointOfInterest.value)
             elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
                     # move/drag the selected target
@@ -538,7 +537,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1],
-                                                 type=FIDUCIAL)
+                                                 type=TargetType.Fiducial.value)
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
@@ -689,7 +688,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=SURFACE_FIDUCIAL)
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.SurfaceFiducial.value)
             elif self._mode == MODE_EDIT_FIDUCIALS:
                 if target:
                     # move/drag the selected target
@@ -698,7 +697,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     DragMixin._on_left_down(self, evt)
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=FIDUCIAL)
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.Fiducial.value)
 
             else:
                 if target:
@@ -799,7 +798,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
             set_icon(self._feature_icons[target.type.value])
             # Label the projected fiducial for easy comparison with corresponding fiducials
-            if target.type.value == PROJECTED_FIDUCIAL:
+            if target.type.value == TargetType.ProjectedFiducial.value:
                 self._label.text = str(target.index.value)
                 self._label.pos = (bpos[0] + 15, bpos[1] + 15)
                 self._label.draw(ctx)

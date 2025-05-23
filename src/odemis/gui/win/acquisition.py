@@ -25,6 +25,7 @@ import gc
 import logging
 import math
 import os.path
+import time
 from builtins import str
 from concurrent.futures._base import CancelledError
 from typing import List, Tuple, Optional
@@ -1358,8 +1359,8 @@ class CorrelationDialog(xrcfr_correlation):
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
-        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
-        self.Bind(wx.EVT_CLOSE, self.on_cancel)
+        self.btn_close.Bind(wx.EVT_BUTTON, self.on_close)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
 
     @property
     def correlation_points_controller(self):
@@ -1402,18 +1403,20 @@ class CorrelationDialog(xrcfr_correlation):
         self.streambar_controller = None
 
     def on_close(self, evt):
-        """Close event handler that executes various cleanup actions"""
-        assert self._correlation_points_controller.is_processing == False
-
-        self.EndModal(wx.ID_CANCEL)
-
-    def on_cancel(self, evt):
-        """Handle acquisition cancel button click"""
+        """Handle multipoint correlation when close button is clicked"""
         logging.info("Close button clicked, exiting multipoint correlation window")
         while self._correlation_points_controller.is_processing:
+            time.sleep(0.1)
             continue
         self.remove_all_streams()
-        self.on_close(evt)
+        assert self._correlation_points_controller.is_processing == False
+        self.EndModal(wx.ID_CANCEL)
+
+    def Destroy(self):
+        """Stop the correlation points controller and destroy the dialog"""
+        if self._correlation_points_controller:
+            self._correlation_points_controller.stop()
+        super().Destroy()
 
 
 def ShowAcquisitionFileDialog(parent, filename):

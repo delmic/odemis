@@ -216,26 +216,15 @@ class CryoAcquiController(object):
         """
         Enable or disable the correlation controls
         """
-        if not self._tab_data.main.currentFeature.value:
-            return
-        streams_list = self._tab_data.main.currentFeature.value.streams.value
-        check_zindex = False
-        check_fib_stream = False
-        for stream_index, stream in enumerate(streams_list):
-            if isinstance(stream, StaticFluoStream) and not check_zindex:
-                check_zindex = getattr(stream, "zIndex", None)
-                if check_zindex:
-                    break
-
-        if self._tab_data.main.currentFeature.value.reference_image is not None:
-            check_fib_stream = True
-
-        if check_zindex and check_fib_stream:
-            self._panel.btn_tdct.Enable(True)
-            self._panel.txt_tdct.Enable(True)
-        else:
-            self._panel.btn_tdct.Enable(False)
-            self._panel.txt_tdct.Enable(False)
+        # Enable the correlation controls if the current feature has a reference FIB image and altleast one FM Z stack
+        current_feature = self._tab_data.main.currentFeature.value
+        tdct_available = (
+            current_feature is not None
+            and current_feature.reference_image is not None
+            and any(isinstance(s, StaticFluoStream) and hasattr(s, "zIndex") for s in current_feature.streams.value)
+        )
+        self._panel.btn_tdct.Enable(tdct_available)
+        self._panel.txt_tdct.Enable(tdct_available)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -553,20 +542,6 @@ class CryoAcquiController(object):
                     filename = self._create_cryo_filename(base_filename,
                                                           d.metadata[model.MD_ACQ_TYPE])
                     exporter.export(filename, d, thumb_nail)
-
-                    # view = self.tab_data_model.views.value[1]
-                    # self.tab_data_model.focussedView.value = view
-                    # for s in data_to_static_streams(data):
-                    #     if self.tab_data_model.main.currentFeature.value:
-                    #         s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
-                    #         self.tab_data_model.main.currentFeature.value.streams.value.append(s)
-                    #     self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
-                    #     self._acquired_stream_controller.showFeatureStream(s)
-                    # # refit the latest acquired feature so that the new data is fully visible in the
-                    # # acquired view even when the user had moved around/zoomed in
-                    # self.panel.vp_secom_tr.canvas.fit_view_to_content()
-
-
             else:
                 # export fm channels as single image
                 filename = self._create_cryo_filename(base_filename)

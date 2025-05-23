@@ -22,22 +22,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import itertools
 import logging
-import os
 import queue
 import re
 import threading
+import time
 from enum import Enum
+from typing import List, Union, Optional
 
 import numpy
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis import model
 from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_stack, run_tdct_correlation
-from odemis.acq.feature import save_features, FIBFMCorrelationData, Target
+from odemis.acq.feature import save_features, FIBFMCorrelationData, Target, TargetType
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticStream, StaticFIBStream
 from odemis.gui import conf
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
@@ -59,7 +59,7 @@ class GridColumns(Enum):
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
 
 
-class CorrelationPointsController(object):
+class CorrelationPointsController:
     """
     Displays and modified the points in the grid based on user's interaction. When a minimum of 4 fiducial pairs and
     one poi in FM are present, correlation runs automatically. Any changes to the points will trigger a new correlation.
@@ -106,12 +106,16 @@ class CorrelationPointsController(object):
         # Parameters to keep track of the latest changes and process the correlation result with the latest change
         self.correlation_txt = self._panel.txt_correlation_rms
         self.correlation_txt.Show(True)
-        self.change_queue = queue.Queue()  # Holds the latest change
+        self.change_queue: queue.Queue[Union[bool, None]] = queue.Queue()  # Holds the latest change
         self.worker_thread = threading.Thread(target=self._process_queue, daemon=True)
         self.worker_thread.start()
         self.is_processing = False  # To track if the function is currently processing
-        self.stream_groups = None
-        self.previous_group = None
+        # Create a dictionary to hold the groups of streams based on their shape and centre position
+        # The keys will be tuples of (shape, position)
+        # The values will be sets of stream indices
+        self.stream_groups: Optional[dict[tuple[tuple[int], tuple[float]], list[int]]] = None  # Dictionary to hold the stream groups
+        # Key of the selected group chosen previously
+        self.previous_group: Optional[tuple[tuple[int], tuple[float]]] = None
 
         # Reset targets and current target and populate it based on the current feature
         self.correlation_target = None
@@ -126,14 +130,17 @@ class CorrelationPointsController(object):
         # Interpolate the fm streams such that the pixel size in z is the same as in x and y
         streams_list = []
         for stream in self._tab_data_model.main.currentFeature.value.streams.value:
-            if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
+            if isinstance(stream, StaticFluoStream) and hasattr(stream, "zIndex"):
                 streams_list.append(StaticFluoStream(stream.name.value, stream.raw[0]))
 
         self.streams_list = streams_list
+        correlation_data = self._tab_data_model.main.currentFeature.value.correlation_data
 
-        if self._tab_data_model.main.currentFeature.value.correlation_data and (self._tab_data_model.main.currentFeature.value.status.value in self._tab_data_model.main.currentFeature.value.correlation_data):
-            # Similar logic can be used while enabling the 3DCT button i.e. during the check of relevant conditions.
-            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data[
+        # Check if the correlation data is already present in the current feature
+        # and load the streams and targets accordingly, if not then initialize the correlation data
+        if (correlation_data and
+                (self._tab_data_model.main.currentFeature.value.status.value in correlation_data)):
+            self.correlation_target = correlation_data[
                 self._tab_data_model.main.currentFeature.value.status.value]
             # Maintain the order of loading. First check the streams and then load the targets. If no streams are
             # present or the saved streams are not available, load all the relevant streams, and reset the fib and fm
@@ -158,11 +165,9 @@ class CorrelationPointsController(object):
             if self.correlation_target.fib_surface_fiducial:
                 self._tab_data_model.fib_surface_point.value = self.correlation_target.fib_surface_fiducial
         else:
-            # initialize the correlation target
-            self._tab_data_model.main.currentFeature.value.correlation_data = {}
-            self._tab_data_model.main.currentFeature.value.correlation_data[
+            correlation_data[
                 self._tab_data_model.main.currentFeature.value.status.value] = FIBFMCorrelationData()
-            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data[
+            self.correlation_target = correlation_data[
                 self._tab_data_model.main.currentFeature.value.status.value]
             self.group_streams()
             self._add_stream_group()
@@ -176,7 +181,7 @@ class CorrelationPointsController(object):
         group of the selected stream panel will be visible and the other groups will be invisible
         as well as collapsed.
         """
-        if not self.stream_groups or len(stream_projections) <= 0:
+        if not self.stream_groups or (not stream_projections):
             return
 
         stream_obj = stream_projections[-1].stream  # Get the stream name
@@ -186,55 +191,63 @@ class CorrelationPointsController(object):
             (i for i, stream in enumerate(self.streams_list)
              if stream == stream_obj), None)
 
-        # If the stream exists in the list
-        if stream_index is not None:
-            # Get the group this stream belongs to
-            group_key = next(
-                (key for key, indices in self.stream_groups.items() if stream_index in indices), None)
-            # Update visibility for the group
-            if self.previous_group == group_key:
-                return
-            self.previous_group = group_key
-            if group_key:
-                self.correlation_target.fm_streams = []
-                for key, indices in self.stream_groups.items():
-                    for index in indices:
-                        stream = self.streams_list[index]
-                        # find stream controller for the stream
-                        ssc = next(
-                            (sc for sc in  self._panel.streambar_controller.stream_controllers
-                             if sc.stream == stream), None)
-                        if not ssc:
-                            logging.error(f"Stream controller not found for stream {stream.name.value}")
-                            return
-                        if isinstance(stream, StaticFluoStream) and not group_key:
-                            group_key = key
-                        if key == group_key:
-                            ssc.stream_panel.set_visible(True)
-                            ssc.stream_panel.collapse(False)
-                        else:
-                            if hasattr(self._tab_data_model.views.value[0], "removeStream"):
-                                self._tab_data_model.views.value[0].removeStream(stream)
-                            ssc.stream_panel.set_visible(False)
-                            ssc.stream_panel.collapse(True)
+        if stream_index is None:
+            return
 
+        # Get the group this stream belongs to
+        group_key = next(
+            (key for key, indices in self.stream_groups.items() if stream_index in indices), None)
+        if not group_key:
+            return
+
+        # Update visibility for the group
+        if self.previous_group == group_key:
+            return
+        self.previous_group = group_key
+
+        self.correlation_target.fm_streams = []
+        for key, indices in self.stream_groups.items():
+            for index in indices:
+                stream = self.streams_list[index]
+                # find stream controller for the stream
+                ssc = next(
+                    (sc for sc in  self._panel.streambar_controller.stream_controllers
+                     if sc.stream == stream), None)
+                if not ssc:
+                    logging.error(f"Stream controller not found for stream {stream.name.value}")
+                    return
+                if isinstance(stream, StaticFluoStream) and not group_key:
+                    group_key = key
+                if key == group_key:
+                    ssc.stream_panel.set_visible(True)
+                    ssc.stream_panel.collapse(False)
+                else:
+                    if hasattr(self._tab_data_model.views.value[0], "removeStream"):
+                        self._tab_data_model.views.value[0].removeStream(stream)
+                    ssc.stream_panel.set_visible(False)
+                    ssc.stream_panel.collapse(True)
 
     def _add_stream_group(self) -> None:
         """
         Based on the stream groups, add the streams to the stream bar such that the stream panels of one
-        group are visible and open together while the other groups are set to invisible and collapsed.
+        group are visible and uncollapsed/opened together while the other groups are set to invisible and collapsed.
         """
+        # Load the FIB acquired stream
         acquired_fibsem_streams = data_to_static_streams(
             [self._tab_data_model.main.currentFeature.value.reference_image])
         for s in acquired_fibsem_streams:
-            if isinstance(s, StaticFIBStream) or isinstance(s, StaticSEMStream):
+            if isinstance(s, (StaticFIBStream, StaticSEMStream)):
                 self._panel.streambar_controller.addStream(s, play=False, add_to_view=True)
                 self.correlation_target.fib_stream = s
                 current_shape = s.raw[0].shape
                 centre_pos = s.raw[0].metadata[model.MD_POS]
                 centre_pos = tuple([round(pos, 6) for pos in centre_pos])  # to handle floating point precision
                 self.correlation_target.fib_stream_key = (current_shape, centre_pos)
-        # # Load the FM streams
+
+        # Load the FM acquired streams
+        # If the FM stream key is not None, it means the FM streams are already selected to perform correlation
+        # by adding the targets. Load only the selected FM streams if key is present otherwise load all the
+        # relevant FM streams.
         if self.correlation_target.fm_stream_key:
             # Convert the list of lists to a tuple of tuples
             fm_stream_key_tuple = tuple(tuple(inner_list) for inner_list in self.correlation_target.fm_stream_key)
@@ -259,28 +272,29 @@ class CorrelationPointsController(object):
                         das_interpolated = interpolate_z_stack(da=stream.raw[0], method="linear")
                         stream_interpolated = StaticFluoStream(stream.name.value, das_interpolated)
                         self.streams_list[index] = stream_interpolated
-                        ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)#, add_to_view=True)
-                        # ssc.stream_panel.show_remove_btn(True)
+                        self._panel.streambar_controller.addStream(stream_interpolated, play=False)
             # Update the group visibility based on the latest changes
             self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_visiblity, init=True)
 
     def group_streams(self) -> None:
         """
-        Add the FIB and FM streams to the stream bar. The FM streams first need to be grouped based on the shape and
-        position. The FIB streams are added directly.\
+        Group the FM streams based on the shape and position.
         """
+        # Create a dictionary to hold the groups of streams based on their shape and centre position
+        # The keys will be tuples of (shape, position)
+        # The values will be sets of stream indices
         stream_groups = {}
 
         # Group the FM streams related to the current feature based on the shape and current position. THe FM streams
         # which have z stack are considered for grouping, the other FM streams without z stack are ignored.
         for stream_index, stream in enumerate(self.streams_list):
-            current_shape = stream.raw[0].shape
-            centre_pos = stream.raw[0].metadata[model.MD_POS]
-            centre_pos = tuple([round(pos,6) for pos in centre_pos])  # to handle floating point precision
             if isinstance(stream, StaticFluoStream):
+                raw_shape = stream.raw[0].shape
+                centre_pos = stream.raw[0].metadata[model.MD_POS]
+                centre_pos = tuple([round(pos, 6) for pos in centre_pos])  # to handle floating point precision
                 stream_name = stream.name.value
                 # Create the key based on current shape, centre position, and zIndex
-                key = (current_shape, centre_pos)
+                key = (raw_shape, centre_pos)
                 # Check if a set for this key already exists
                 if key not in stream_groups:
                     # Create a new set if the combination of shape, centre position, and zIndex is different
@@ -309,8 +323,11 @@ class CorrelationPointsController(object):
             # For other keys, allow the default behavior
             event.Skip()
 
-    def _update_feature_correlation_target(self, surface_fiducial=False):
-        """Populate the correlation target based on the latest changes to save it."""
+    def _update_feature_correlation_target(self, surface_fiducial=False) -> None:
+        """
+        Populate the correlation target based on the latest changes to save it.
+        :param surface_fiducial: (bool) True if the fib surface fiducial is present, False otherwise
+        """
         if not self.correlation_target:
             return
 
@@ -347,10 +364,10 @@ class CorrelationPointsController(object):
         :return: (bool) True if the conditions are met, False otherwise
         """
         if self.correlation_target:
-            if ((len(self.correlation_target.fib_fiducials) >= 4 and len(
-                    self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) >=1  and len(
-                self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
-                    (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
+            if ((len(self.correlation_target.fib_fiducials) >= 4 and
+                len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) >=1  and
+                len(self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
+                (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
                 return True
             else:
                 self.correlation_target.clear()
@@ -365,36 +382,54 @@ class CorrelationPointsController(object):
         else:
             return False
 
-    @wxlimit_invocation(0.05)
-    def _queue_latest_change(self):
-        """Queue the latest change to process the correlation result."""
-        while not self.change_queue.empty():
-            try:
-                self.change_queue.get_nowait()  # Remove older, outdated requests
-            except queue.Empty:
-                break
-        self.change_queue.put(True)  # Only enqueue the latest change request
+    def _need_reprocessing(self):
+        """Indicate the correlation should be recomputed, due to a change in the data"""
+        self.change_queue.put(True)
 
     def _process_queue(self):
         """Worker thread that continuously processes requests from the queue."""
-        while True:
-            task = self.change_queue.get()
-            if task is None:  # Special exit signal
-                break
-            self._process_latest_change()
+        try:
+            while True:
+                block = True
+                # Drop new requests, if so extra ones are queued
+                while True:
+                    try:
+                        task = self.change_queue.get(block=block)
+                        if task is None:  # Special exit signal
+                            return
+                    except queue.Empty:
+                        break  # No more messages => ready to run the update!
+                    # After the first message, read the other ones if they are already present
+                    block = False
+
+                self._process_latest_change()
+                time.sleep(0.1)  # rate limit the update
+
+        except Exception:
+            logging.exception("Failure in the correlation update")
 
     def _process_latest_change(self):
         """Process the latest change in the queue."""
         self.is_processing = True
         self._do_correlation()
         rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
-        self.correlation_txt.SetLabel(f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
+        wx.CallAfter(self.correlation_txt.SetLabel,
+                     f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
+        # Display the output in the relevant views
+        self._viewports[1].canvas.Refresh()
         self.is_processing = False  # Mark that processing is complete
 
     def stop(self):
         """Gracefully stop the worker thread."""
         self.change_queue.put(None)
-        self.worker_thread.join()
+        # unsubscribe when the correlation controller is closed
+        if self._tab_data_model.main.currentTarget.value:
+            self._tab_data_model.main.currentTarget.value.coordinates.unsubscribe(self._on_current_coordinates_changes)
+            self._tab_data_model.main.currentTarget.unsubscribe(self._on_current_target_changes)
+        self._tab_data_model.main.targets.unsubscribe(self._on_target_changes)
+        self._tab_data_model.fib_surface_point.unsubscribe(self._on_current_fib_surface)
+        self._tab_data_model.views.value[0].stream_tree.flat.unsubscribe(self._on_fm_streams_visiblity)
+        self.worker_thread.join(5)
 
     def _do_correlation(self):
         """Run the correlation between the FIB and FM images."""
@@ -429,21 +464,20 @@ class CorrelationPointsController(object):
         points = self.correlation_target.correlation_result['output']['error']['reprojected_3d']
         for n, i in enumerate(points[0]):
             p_pos = self.correlation_target.fib_stream.getPhysicalCoordinates((points[0][n], points[1][n]))
-            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(n + 1), type="ProjectedPoints", index=n + 1,
+            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(n + 1), type=TargetType.ProjectedFiducial.value, index=n + 1,
                             fm_focus_position=0)
             self._tab_data_model.projected_points.append(target)
             self.correlation_target.fib_projected_fiducials.append(target)
 
         # Convert from pixel to physical coordinates
-        projected_poi = (self.correlation_target.fib_stream.getPhysicalCoordinates
-                         (self.correlation_target.correlation_result["output"]["poi"][0]["image_px"]))
-        projected_poi_target = Target(x=projected_poi[0], y=projected_poi[1], z=0, name="PPOI", type="ProjectedPOI",
+        projected_poi_px = self.correlation_target.correlation_result["output"]["poi"][0]["image_px"]
+        projected_poi = self.correlation_target.fib_stream.getPhysicalCoordinates(projected_poi_px)
+        projected_poi_target = Target(x=projected_poi[0], y=projected_poi[1], z=0, name="PPOI",
+                                      type=TargetType.ProjectedPOI.value,
                                       index=1,
                                       fm_focus_position=0)
         self._tab_data_model.projected_points.append(projected_poi_target)
         self.correlation_target.fib_projected_pois = [projected_poi_target]
-        # Display the output in the relevant views
-        self._viewports[1].canvas.update_drawing()
 
     def _on_delete_row(self, event) -> None:
         """
@@ -468,9 +502,10 @@ class CorrelationPointsController(object):
                         # unselect grid row
                         self.grid.SelectRow(-1)
                         break
+
         self._update_feature_correlation_target()
         if self.check_correlation_conditions():
-            self._queue_latest_change()
+            self._need_reprocessing()
 
     def _on_cell_selected(self, event) -> None:
         """Highlight the selected row in the grid and update the current target."""
@@ -487,11 +522,12 @@ class CorrelationPointsController(object):
         self.grid.SelectRow(event.GetRow())
         event.Skip()
 
-    def _selected_target_in_grid(self, target, row) -> bool:
+    def _selected_target_in_grid(self, target: Target, row: int) -> bool:
         """
         Checks if the given target is present in the selected row of the grid.
         :param target: (Target) the target to check
         :param row: (int) the row to check
+        :return: (bool) True if the target is present in the selected row, False otherwise
         """
         # check if target and row values exist
         grid_selection = False
@@ -593,7 +629,7 @@ class CorrelationPointsController(object):
             self._reorder_grid()
 
     @call_in_wx_main
-    def _on_current_target_changes(self, target) -> None:
+    def _on_current_target_changes(self, target: Target) -> None:
         """
         Highlight the selected row in the grid when the current target changes and subscribe to the coordinate
         changes of the current target.
@@ -621,12 +657,13 @@ class CorrelationPointsController(object):
             vp.canvas.update_drawing()
 
         if self._tab_data_model.main.currentTarget.value and not self.current_target_coordinate_subscription:
+            self._tab_data_model.main.currentTarget.value.coordinates.unsubscribe(self._on_current_coordinates_changes)
             self._tab_data_model.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
                                                                                 init=True)
             # subscribe only once
             self.current_target_coordinate_subscription = True
 
-    def _on_current_fib_surface(self, fib_surface_fiducial) -> None:
+    def _on_current_fib_surface(self, fib_surface_fiducial: Target) -> None:
         """
         Subscribe to the coordinate changes of the fib surface fiducial if fib surface fiducial is present.
         :param fib_surface_fiducial: (Target) the fib surface fiducial
@@ -635,18 +672,24 @@ class CorrelationPointsController(object):
             self._tab_data_model.fib_surface_point.value.coordinates.subscribe(self._on_current_coordinates_fib_surface,
                                                                                init=True)
 
-    def _on_current_coordinates_fib_surface(self, coordinates) -> None:
-        """Update the coordinates of the fib surface fiducial and update the correlation result."""
+    def _on_current_coordinates_fib_surface(self, coordinates: ListVA) -> None:
+        """
+        Update the coordinates of the fib surface fiducial and update the correlation result.
+        :param coordinates: the coordinates of the fib surface fiducial
+        """
         self._update_feature_correlation_target(surface_fiducial=True)
 
         # TODO add the logic to update the correlation result based on the fib surface fiducial
         # if self.check_correlation_conditions():
         #     self.latest_change = True
-        #     self._queue_latest_change()
+        #     self._need_reprocessing()
 
     @call_in_wx_main
-    def _on_current_coordinates_changes(self, coordinates) -> None:
-        """Upaate the coordinates of the current target in the grid and update the correlation result."""
+    def _on_current_coordinates_changes(self, coordinates: ListVA) -> None:
+        """
+        Upaate the coordinates of the current target in the grid and update the correlation result.
+        :param coordinates: the coordinates of the current target
+        """
         target = self._tab_data_model.main.currentTarget.value
         self.current_target_coordinate_subscription = False
         temp_check = False
@@ -672,10 +715,14 @@ class CorrelationPointsController(object):
                 self._update_feature_correlation_target()
 
             if self.check_correlation_conditions() and temp_check:
-                self._queue_latest_change()
+                self._need_reprocessing()
 
     @call_in_wx_main
-    def _on_target_changes(self, targets) -> None:
+    def _on_target_changes(self, targets: List) -> None:
+        """
+        Update the grid with the new targets and update the correlation target based on the latest changes.
+        :param targets: the list of targets
+        """
         if not self.correlation_target.fm_streams and self.previous_group:
             for key, indices in self.stream_groups.items():
                 if key == self.previous_group:
@@ -725,7 +772,7 @@ class CorrelationPointsController(object):
             vp.canvas.update_drawing()
 
         if self.check_correlation_conditions():
-            self._queue_latest_change()
+            self._need_reprocessing()
 
     def _on_z_targeting(self, event) -> None:
         """
