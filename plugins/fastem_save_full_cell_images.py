@@ -40,14 +40,14 @@ class SaveFullCellImgPlugin(Plugin):
         # It only makes sense if the FASTEM acquisition tab is present
         try:
             fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
-            self._acquisition_tab = fastem_main_tab.acquisition_tab
+            self._multi_beam_tab = fastem_main_tab.acquisition_tab.multi_beam_tab
         except LookupError:
             logging.debug(
-                "Not loading Save full cell images tool since acquisition tab is not present."
+                "Not loading Save full cell images tool since multi-beam acquisition tab is not present."
             )
             return
 
-        self._acquisition_controller = self._acquisition_tab._acquisition_controller
+        self._mb_acq_cont = self._multi_beam_tab._acquisition_controller
 
         self.addMenu("Help/Development/Save full cell images",
                      self._save_full_cell_images,
@@ -58,8 +58,8 @@ class SaveFullCellImgPlugin(Plugin):
         """Menu callback for: Help/Development/Save full cell images"""
         checked = menu_item.IsChecked()
         if checked:
-            self._acquisition_controller.save_full_cells.value = True
+            self._mb_acq_cont.save_full_cells.value = True
             logging.debug("Save full cells checked, will acquire full cell images")
         else:
-            self._acquisition_controller.save_full_cells.value = False
+            self._mb_acq_cont.save_full_cells.value = False
             logging.debug("Save full cells unchecked, will acquire cropped cell images")
