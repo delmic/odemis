@@ -72,6 +72,9 @@ FIB_NAME_MAP: Dict[str, str] = {
     "GetBeamCurrent": "FibReadFCCurr",  # pA
     "PresetEnum": "FibEnumPresets",
     "PresetSetEx": "FibSetPresetEx",  # Id: str, name/value of the preset
+    "ScEnumSpeeds": "FibScEnumSpeeds",
+    "ScGetSpeed": "FibScGetSpeed",
+    "ScSetSpeed": "FibScSetSpeed",
     # Auto blanking for FIB
     "ScGetBlanker": None,
     "ScSetBlanker": None,
@@ -724,7 +727,13 @@ class Scanner(model.Emitter):
         self.rotation = model.FloatContinuous(0, (0, 2 * math.pi), unit="rad",
                                               readonly=True)
 
-        self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
+        self.dwell_time_lookup = self.get_dwell_time_lookup()
+        dwell_time_index = self.parent._device_handler.ScGetSpeed(self._device_type)
+        dwell_time = self.dwell_time_lookup[dwell_time_index]
+        min_dwell_time = min(self.dwell_time_lookup.values())
+        max_dwell_time = max(self.dwell_time_lookup.values())
+        self.dwellTime = model.FloatContinuous(dwell_time, (min_dwell_time, max_dwell_time), unit="s",
+                                               setter=self._setDwellTime)
 
         volt = self.parent._device_handler.HVGetVoltage(self._device_type)
         pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
@@ -745,7 +754,6 @@ class Scanner(model.Emitter):
             # Add an empty preset as the first element to serve as the default, since the current preset cannot be
             # obtained directly via the API. This follows the UX of Essence.
             beam_presets.insert(0, DEFAULT_ION_PRESET)
-            beam_presets = {preset: preset for preset in beam_presets}
             self.beamPreset = model.StringEnumerated(DEFAULT_ION_PRESET, beam_presets, setter=self._setIonPreset)
             # For clarity, still maintain read-only VA's. The values from the preset titles do not match exactly with
             # the actual device values.
@@ -760,20 +768,14 @@ class Scanner(model.Emitter):
         # Or is turning it on this way a safety risk?
         self.power = model.IntEnumerated(power, {0, 1}, unit="",
                                          setter=self._setPower)
-        if self.parent._detectors:
-            # None implies that there is a blanker but it is set automatically.
-            # Mostly used in order to know if the module supports beam blanking
-            # when accessing it from outside.
-            # TODO: also support True/False choices with detectors
-            self.blanker = model.VAEnumerated(None, choices={None})
-        elif self._device_type == "electron":
+
+        if self._device_type == "electron":
             bmode = self.parent._device_handler.ScGetBlanker(self._device_type, 1)
             blanked = (bmode != 0)
             self.blanker = model.BooleanVA(blanked, setter=self._setBlanker)
-        elif self._device_type == "ion":
+        if self._device_type == "ion":
             # NOTE: workaround for check in SecomStateController (which is a generic controller, contrary to it's name)
             self.blanker = model.VAEnumerated(None, choices={None})
-        # NOTE: for now, the FIB seemingly does not have blanking available through the API.
 
         # To select "external" scan, which is used to control the scan via the
         # analog interface. So mostly useful when this driver is used only for
@@ -785,9 +787,25 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._pollVAs, "VAs polling")
         self._va_poll.start()
 
+    def get_dwell_time_lookup(self) -> Dict[int, float]:
+        """
+        TODO
+        """
+        dwell_times = self.parent._device_handler.ScEnumSpeeds(self._device_type)
+        dwell_times = re.findall(r"speed.([0-9]+).dwell=([0-9]+[.]?[0-9]?)", dwell_times)
+        dwell_times_dict = {}
+        for dwell_times in dwell_times:
+            index, speed = dwell_times
+            # Speed seems in µs, so convert to seconds
+            dwell_times_dict[int(index)] = float(speed) * 1e-6
+        return dwell_times_dict
+
     def get_ion_beam_presets(self) -> List[str]:
         """
         Get the available ion beam presets from the Tescan device and sort them based on voltage and current.
+
+        NOTE: could be generalized to support the electron beam as well, but it is a lot less important for that
+        # use-case and Tescan did not even configure presets.
         """
         beam_presets = self.parent._device_handler.PresetEnum("ion").split("\n")  # List of strings
         beam_presets = [p for p in beam_presets if p]  # Filter out any empty presets
@@ -880,6 +898,14 @@ class Scanner(model.Emitter):
     def _setIonPreset(self, preset):
         self.parent._device_handler.PresetSetEx("ion", preset)
         return preset
+
+    def _setDwellTime(self, dwell_time):
+        # The Tescan API only supports int's for indices while their interface supports floats (which results in an
+        # interpolated speed value). We are a thus a bit limited in what we receive and send. It's only a UI issue
+        # though (the actual scan speed is not affected).
+        idx = min(self.dwell_time_lookup, key=lambda k: abs(self.dwell_time_lookup[k] - dwell_time))
+        self.parent._device_handler.ScSetSpeed(self._device_type, idx)
+        return dwell_time
 
     def GetVoltagesRange(self):
         """
@@ -1024,16 +1050,24 @@ class Scanner(model.Emitter):
                 with self.parent._acq_progress_lock:
                     prev_volt = self.accelVoltage._value
                     new_volt = self.parent._device_handler.HVGetVoltage(self._device_type)
-                    prev_pc = self.probeCurrent._value
-                    new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
                     if prev_volt != new_volt:
                         # Skip the setter
                         self.accelVoltage._value = new_volt
                         self.accelVoltage.notify(new_volt)
 
+                    prev_pc = self.probeCurrent._value
+                    new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
                     if prev_pc != new_pc:
                         self.probeCurrent._value = new_pc
                         self.probeCurrent.notify(new_pc)
+
+                    prev_dt = self.dwellTime._value
+                    prev_idx = min(self.dwell_time_lookup, key=lambda k: abs(self.dwell_time_lookup[k] - prev_dt))
+                    new_dt_idx = self.parent._device_handler.ScGetSpeed(self._device_type)
+                    if prev_idx != new_dt_idx:
+                        new_dt = self.dwell_time_lookup[new_dt_idx]
+                        self.dwellTime._value = new_dt
+                        self.dwellTime.notify(new_dt)
 
                     if self._device_type == "electron":
                         # if blanker is in auto, don't change its value

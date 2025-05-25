@@ -161,6 +161,10 @@ HW_SETTINGS_CONFIG = {
         },
     "e-beam":
         OrderedDict((
+            ("beamPreset", {
+                "label": "Beam Preset",
+                "tooltip": "Beam Preset",
+            }),
             ("accelVoltage", {
                 "label": "Accel. voltage",
                 "tooltip": "Accelerating voltage",

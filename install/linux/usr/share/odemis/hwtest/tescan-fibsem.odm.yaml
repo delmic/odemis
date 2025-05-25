@@ -7,7 +7,7 @@ SEM: {
 "Tescan SEM": {
     class: tescan.SEM,
     role: null,
-    init: {host: "192.168.1.181"},
+    init: {host: "192.168.2.35"},
     # more detectors can be added, if necessary
     children: {
         stage: "Sample Stage",
@@ -19,7 +19,7 @@ SEM: {
         fib-scanner: "Ion Scanner",
         fib-detector: "Ion Detector",
         # Chamber
-        camera: "Chamber Cam", # comment out if using the simulator
+        # camera: "Chamber Cam", # comment out if using the simulator
         light: "Chamber Light",
     }
 }
@@ -27,7 +27,7 @@ SEM: {
 "Sample Stage": {
     role: stage,
     init: {},
-    affects: ["EBeam Scanner"]
+    affects: ["EBeam Scanner", "Ion Scanner"]
 }
 
 "EBeam Scanner": {
@@ -69,17 +69,13 @@ SEM: {
     },
 }
 
-"Ion Focus": {
-    role: ion-focus,
-    affects: ["Ion Beam"]
-}
 
-Chamber components
+# Chamber components
 
-"Chamber Cam": {
-    role: chamber-ccd,
-    init: {}
-}
+# "Chamber Cam": {
+#     role: chamber-ccd,
+#     init: {}
+# }
 
 # (IR) light for the SEM chamber
 "Chamber Light": {

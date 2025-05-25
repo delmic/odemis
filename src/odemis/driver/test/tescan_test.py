@@ -67,7 +67,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
               # change host ip address according to network settings
-              "host": "192.168.1.181"
+              "host": "192.168.2.35"
               }
 
 CONFIG_FIB = {"name": "fib", "role": "sem",
@@ -75,7 +75,7 @@ CONFIG_FIB = {"name": "fib", "role": "sem",
                            "fib-scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STG},
               # change host ip address according to network settings
-              "host": "192.168.1.181"
+              "host": "192.168.2.35"
               }
 
 # This one works with the Mira Simulator
@@ -895,21 +895,69 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
-    def test_presets(self):
+    def test_load_presets(self):
         # We should have some presets available by default
         self.assertGreater(len(self.scanner.beamPreset.choices), 0)
         # Check if default is set
         self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+
+    def test_set_presets(self):
         # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
         # the future, make sure to update these here.
         initial_preset = "2 keV; 20 pA"
-        # target_preset = "20 keV; 40 pA"
+        target_preset = "20 keV; 40 pA"
         self.scanner.beamPreset.value = initial_preset
         logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
         logging.info(f"Current probe current: {self.scanner.probeCurrent.value:.2e}")
-        time.sleep(10)
-        self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, places=2)
-        self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, places=12)
+        start_time = time.time()
+        timeout = 30  # seconds
+
+        while (time.time() - start_time) < timeout:
+            try:
+                self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, delta=10)
+                self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, delta=3e-12)
+                # If both assertions pass, exit early
+                break
+            except AssertionError:
+                # The VA polls with 5 seconds, so no need for very frequent checks here.
+                time.sleep(5)
+
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, delta=10)
+        self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, delta=3e-12)
+
+        logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
+        logging.info(f"Current probe current: {self.scanner.probeCurrent.value:.2e}")
+
+        self.scanner.beamPreset.value = target_preset
+        start_time = time.time()
+
+        while (time.time() - start_time) < timeout:
+            try:
+                self.assertAlmostEqual(self.scanner.accelVoltage.value, 20e3, delta=10)
+                self.assertAlmostEqual(self.scanner.probeCurrent.value, 40e-12, delta=3e-12)
+                break
+            except AssertionError:
+                time.sleep(5)
+
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, 20e3, delta=10)
+        self.assertAlmostEqual(self.scanner.probeCurrent.value, 40e-12, delta=3e-12)
+
+    def test_dwell_time(self):
+        orig_dt = self.scanner.dwell_time_lookup[3]
+        self.scanner.dwellTime.value = orig_dt
+        time.sleep(1)
+        speed_idx = self.sem._device_handler.ScGetSpeed("ion")
+        self.assertEqual(speed_idx, 3)
+
+        dt = self.scanner.dwell_time_lookup[5]
+        self.scanner.dwellTime.value = dt
+        time.sleep(1)
+        speed_idx = self.sem._device_handler.ScGetSpeed("ion")
+        self.assertEqual(speed_idx, 5)
+
+        self.sem._device_handler.ScSetSpeed("ion", 3)
+        time.sleep(5)  # await polling
+        self.assertEqual(self.scanner.dwellTime.value, orig_dt)
 
     def receive_image(self, dataflow, image):
         """
