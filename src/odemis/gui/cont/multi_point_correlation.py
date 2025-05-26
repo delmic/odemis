@@ -55,8 +55,13 @@ class GridColumns(Enum):
     Z = 3  # Column for "z"
     Index = 4  # Column for "index"
 
+COLUMN_UNIT = "px" # Unit for the target position to display to the users in the grid -> "px" for pixel
 
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
+
+# Regex search pattern to distinguish between FIB and FM target. These targets can
+# have the same type of Fiducials but there is a prefix in the name to distinguish them.
+FIDUCIAL_PATTERN = r"^[^-]+-"
 
 
 class CorrelationPointsController:
@@ -96,9 +101,9 @@ class CorrelationPointsController:
         self.grid.CreateGrid(0, 5)
         self.grid.SetRowLabelSize(0)
         self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
-        self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
-        self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
-        self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name)
+        self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name + COLUMN_UNIT) # Add units
+        self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name + COLUMN_UNIT)
+        self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name + COLUMN_UNIT)
         self.grid.SetColLabelValue(GridColumns.Index.value, GridColumns.Index.name)
         self.grid.Bind(wx.EVT_KEY_DOWN, self._on_key_down_grid)
         self.grid.EnableEditing(True)
@@ -113,7 +118,8 @@ class CorrelationPointsController:
         # Create a dictionary to hold the groups of streams based on their shape and centre position
         # The keys will be tuples of (shape, position)
         # The values will be sets of stream indices
-        self.stream_groups: Optional[dict[tuple[tuple[int], tuple[float]], list[int]]] = None  # Dictionary to hold the stream groups
+        self.stream_groups: Optional[
+            dict[tuple[tuple[int], tuple[float]], list[int]]] = None  # Dictionary to hold the stream groups
         # Key of the selected group chosen previously
         self.previous_group: Optional[tuple[tuple[int], tuple[float]]] = None
 
@@ -211,7 +217,7 @@ class CorrelationPointsController:
                 stream = self.streams_list[index]
                 # find stream controller for the stream
                 ssc = next(
-                    (sc for sc in  self._panel.streambar_controller.stream_controllers
+                    (sc for sc in self._panel.streambar_controller.stream_controllers
                      if sc.stream == stream), None)
                 if not ssc:
                     logging.error(f"Stream controller not found for stream {stream.name.value}")
@@ -365,9 +371,9 @@ class CorrelationPointsController:
         """
         if self.correlation_target:
             if ((len(self.correlation_target.fib_fiducials) >= 4 and
-                len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) >=1  and
-                len(self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
-                (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
+                 len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) >= 1 and
+                 len(self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
+                    (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
                 return True
             else:
                 self.correlation_target.clear()
@@ -442,15 +448,18 @@ class CorrelationPointsController:
         poi_coords = []
         path = self._tab_data_model.main.project_path.value
         for fib_coord in self.correlation_target.fib_fiducials:
-            fib_coord = self.correlation_target.fib_stream.getPixelCoordinates(fib_coord.coordinates.value[0:2], check_bbox=False)
+            fib_coord = self.correlation_target.fib_stream.getPixelCoordinates(fib_coord.coordinates.value[0:2],
+                                                                               check_bbox=False)
             fib_coords.append(fib_coord)
         fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
         for fm_coord in self.correlation_target.fm_fiducials:
-            fm_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(fm_coord.coordinates.value[0:2], check_bbox=False)
+            fm_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(fm_coord.coordinates.value[0:2],
+                                                                                    check_bbox=False)
             fm_coords.append([fm_coord_2d[0], fm_coord_2d[1], fm_coord.coordinates.value[2]])
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
         poi_coord = self.correlation_target.fm_pois[0]
-        poi_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(poi_coord.coordinates.value[0:2], check_bbox=False)
+        poi_coord_2d = self.correlation_target.fm_streams[0].getPixelCoordinates(poi_coord.coordinates.value[0:2],
+                                                                                 check_bbox=False)
         poi_coords.append([poi_coord_2d[0], poi_coord_2d[1], poi_coord.coordinates.value[2]])
         poi_coords = numpy.array(poi_coords, dtype=numpy.float32)
         # Run the correlation
@@ -464,7 +473,8 @@ class CorrelationPointsController:
         points = self.correlation_target.correlation_result['output']['error']['reprojected_3d']
         for n, i in enumerate(points[0]):
             p_pos = self.correlation_target.fib_stream.getPhysicalCoordinates((points[0][n], points[1][n]))
-            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(n + 1), type=TargetType.ProjectedFiducial.value, index=n + 1,
+            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(n + 1),
+                            type=TargetType.ProjectedFiducial.value, index=n + 1,
                             fm_focus_position=0)
             self._tab_data_model.projected_points.append(target)
             self.correlation_target.fib_projected_fiducials.append(target)
@@ -545,7 +555,7 @@ class CorrelationPointsController:
         col = event.GetCol()
         new_value = event.GetString()
         col_name = self.grid.GetColLabelValue(col)
-        current_row_count = event.GetRow()
+        count_row_index = event.GetRow()
 
         if col_name == GridColumns.Type.name:
             wx.MessageBox("Type cannot be changed", "Invalid Input", wx.OK | wx.ICON_ERROR)
@@ -558,10 +568,10 @@ class CorrelationPointsController:
                 # index value for the target should be less than the maximum number of indices for that type
                 indices = []
                 target_swap = None
-                pattern = r"^[^-]+-"  # search the type of fiducial based on name
-                current_name_type = re.search(pattern, current_name).group()
+
+                current_name_type = re.search(FIDUCIAL_PATTERN, current_name).group()
                 for target in self._tab_data_model.main.targets.value:
-                    target_name_type = re.search(pattern, target.name.value).group()
+                    target_name_type = re.search(FIDUCIAL_PATTERN, target.name.value).group()
                     if target_name_type == current_name_type:
                         indices.append(target.index.value)
                         if target.index.value == int(new_value):
@@ -576,7 +586,7 @@ class CorrelationPointsController:
                     self._on_target_changes(self._tab_data_model.main.targets.value)
                 self._tab_data_model.main.currentTarget.value.index.value = int(new_value)
                 self._tab_data_model.main.currentTarget.value.name.value = current_name_type + str(new_value)
-                self.grid.SetCellValue(current_row_count, GridColumns.Type.value,
+                self.grid.SetCellValue(count_row_index, GridColumns.Type.value,
                                        self._tab_data_model.main.currentTarget.value.name.value)
                 self._tab_data_model.main.currentTarget.value = None
 
@@ -587,8 +597,8 @@ class CorrelationPointsController:
                 return
 
         elif col_name in [GridColumns.X.name, GridColumns.Y.name, GridColumns.Z.name]:
-            x = float(self.grid.GetCellValue(current_row_count, GridColumns.X.value))
-            y = float(self.grid.GetCellValue(current_row_count, GridColumns.Y.value))
+            x = float(self.grid.GetCellValue(count_row_index, GridColumns.X.value))
+            y = float(self.grid.GetCellValue(count_row_index, GridColumns.Y.value))
             try:
                 if col_name == GridColumns.X.name:
                     if self._tab_data_model.main.currentTarget.value.name.value.startswith("FIB"):
@@ -687,7 +697,7 @@ class CorrelationPointsController:
     @call_in_wx_main
     def _on_current_coordinates_changes(self, coordinates: ListVA) -> None:
         """
-        Upaate the coordinates of the current target in the grid and update the correlation result.
+        Update the coordinates of the current target in the grid and update the correlation result.
         :param coordinates: the coordinates of the current target
         """
         target = self._tab_data_model.main.currentTarget.value
@@ -735,7 +745,7 @@ class CorrelationPointsController:
                         stream = self.streams_list[index]
                         # FIB static stream should not be removed
                         if isinstance(stream, StaticFluoStream):
-                             self._panel.streambar_controller.removeStreamPanel(stream)
+                            self._panel.streambar_controller.removeStreamPanel(stream)
 
         # Clear the grid before populating it with new data
         self.grid.ClearGrid()
@@ -782,7 +792,8 @@ class CorrelationPointsController:
         if self._tab_data_model.main.currentTarget.value:
             das = [stream.raw[0] for stream in self.correlation_target.fm_streams]
             coords = self._tab_data_model.main.currentTarget.value.coordinates.value
-            pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates((coords[0], coords[1]), check_bbox=False)
+            pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates((coords[0], coords[1]),
+                                                                                     check_bbox=False)
             self._tab_data_model.main.currentTarget.value.coordinates.value[2] = float(get_optimized_z_gauss(das, int(
                 pixel_coords[0]), int(pixel_coords[1]), coords[2]))
 

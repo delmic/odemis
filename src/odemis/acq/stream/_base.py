@@ -1297,6 +1297,7 @@ class Stream(object):
         Translate pixel coordinates into physical coordinates in meters.
         :param pixel_pos: the position in pixel coordinates (x, y)
         :returns: the position in physical coordinates (x, y) in meters
+        :raises LookupError: if the stream has no data
         """
         if not self.raw:
             raise LookupError("Stream has no data")
@@ -1315,7 +1316,7 @@ class Stream(object):
         # Convert pixel coordinates to physical coordinates
         pixel_pos_c = (pixel_pos[0] - size[0] / 2, -(pixel_pos[1] - size[1] / 2))
         p_pos = tform.apply(pixel_pos_c)
-        return p_pos
+        return (p_pos[0], p_pos[1])
 
     def getRawValue(self, pixel_pos):
         """

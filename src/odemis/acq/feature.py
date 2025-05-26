@@ -812,7 +812,7 @@ def acquire_at_features(
 
 
 class Target:
-    def __init__(self, x:float, y:float, z:float, name:str, type:str, index: int, fm_focus_position: float):
+    def __init__(self, x: float, y: float, z: float, name: str, type: str, index: int, fm_focus_position: float):
         """
         Target class to store the target information for multipoint correlation. The target can be a fiducial, point of
         interest, surface fiducial, projected fiducial or projected point of interest. The target information is used to
