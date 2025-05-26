@@ -910,25 +910,22 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
         target_preset = "20 keV; 40 pA"
         self.scanner.beamPreset.value = initial_preset
         logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
-        logging.info(f"Current probe current: {self.scanner.probeCurrent.value:.2e}")
         start_time = time.time()
         timeout = 30  # seconds
 
         while (time.time() - start_time) < timeout:
             try:
                 self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, delta=10)
-                self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, delta=3e-12)
-                # If both assertions pass, exit early
+                # If assertion passes, exit early
                 break
             except AssertionError:
                 # The VA polls with 5 seconds, so no need for very frequent checks here.
-                time.sleep(5)
+                time.sleep(1)
 
+        # NOTE: we are not checking current, since it is blocking the Essence interface
         self.assertAlmostEqual(self.scanner.accelVoltage.value, 2e3, delta=10)
-        self.assertAlmostEqual(self.scanner.probeCurrent.value, 20e-12, delta=3e-12)
 
         logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
-        logging.info(f"Current probe current: {self.scanner.probeCurrent.value:.2e}")
 
         self.scanner.beamPreset.value = target_preset
         start_time = time.time()
@@ -936,13 +933,17 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
         while (time.time() - start_time) < timeout:
             try:
                 self.assertAlmostEqual(self.scanner.accelVoltage.value, 20e3, delta=10)
-                self.assertAlmostEqual(self.scanner.probeCurrent.value, 40e-12, delta=3e-12)
                 break
             except AssertionError:
-                time.sleep(5)
+                time.sleep(1)
 
         self.assertAlmostEqual(self.scanner.accelVoltage.value, 20e3, delta=10)
-        self.assertAlmostEqual(self.scanner.probeCurrent.value, 40e-12, delta=3e-12)
+
+        empty_preset = ""
+        self.scanner.beamPreset.value = empty_preset
+        time.sleep(3)
+        # Setting an empty preset should not alter the state
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, 20e3, delta=10)
 
     def test_dwell_time(self):
         orig_dt = self.scanner.dwell_time_lookup[3]

@@ -111,6 +111,10 @@ class DeviceHandler:
 
         name: The name of the method to invoke. Using the SEM method name as canonical.
         """
+        def call_and_log_func(func, args, kwargs):
+            logging.debug(f"Calling {func.__name__} with args: {args} and kwargs: {kwargs}")
+            return func(*args, **kwargs)
+
         def method(device_type: Literal["electron", "ion"], *args, **kwargs):
             """
             Resolves and invokes the appropriate method for the specified device type (electron for SEM or ion for FIB).
@@ -140,7 +144,7 @@ class DeviceHandler:
 
             else:
                 raise ValueError(f"Unknown device_type: {device_type}")
-            return func(*args, **kwargs)
+            return call_and_log_func(func, args, kwargs)
         return method
 
 
@@ -902,7 +906,8 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_EBEAM_CURRENT] = current
 
     def _setIonPreset(self, preset):
-        self.parent._device_handler.PresetSetEx("ion", preset)
+        if preset:
+            self.parent._device_handler.PresetSetEx("ion", preset)
         return preset
 
     def _setDwellTime(self, dwell_time):
