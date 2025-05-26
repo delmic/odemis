@@ -210,14 +210,14 @@ class CryoAcquiController(object):
         Called when the current feature changes
         """
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-            self._check_correlation_controls()
+            self._check_correlation_controls(feature)
 
-    def _check_correlation_controls(self):
+    def _check_correlation_controls(self, current_feature: CryoFeature):
         """
         Enable or disable the correlation controls
+        :param current_feature: the current feature
         """
         # Enable the correlation controls if the current feature has a reference FIB image and altleast one FM Z stack
-        current_feature = self._tab_data.main.currentFeature.value
         tdct_available = (
             current_feature is not None
             and current_feature.reference_image is not None

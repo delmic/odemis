@@ -73,6 +73,9 @@ from odemis.model import (
 )
 from odemis.util.filename import create_filename, make_unique_name
 
+# Regex pattern to extract the index from the target name
+TARGET_INDEX = r"-(\d+)"
+
 
 class AcquiMode(Enum): # TODO: move to better place
     FLM = 1
@@ -521,12 +524,11 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
 
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
-        pattern = r"-(\d+)"
 
         if self.views.value[0] is self.focussedView.value: # FM view
             if type == TargetType.Fiducial.value:
                 t_name = make_unique_name("FM-1", existing_names)
-                index = int(re.search(pattern, t_name).group(1))
+                index = int(re.search(TARGET_INDEX, t_name).group(1))
                 target = Target(x, y, z=0, name=t_name, type=type,
                                         index=index, fm_focus_position=fm_focus_position)
 
@@ -541,7 +543,7 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
                 self.fib_surface_point.value = target
                 return target
             t_name = make_unique_name("FIB-1", existing_names)
-            index = int(re.search(pattern, t_name).group(1))
+            index = int(re.search(TARGET_INDEX, t_name).group(1))
             target = Target(x, y, z=0, name=t_name, type=type, index=index,
                             fm_focus_position=fm_focus_position)
 
