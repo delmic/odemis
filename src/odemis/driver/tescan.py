@@ -29,7 +29,7 @@ import socket
 import threading
 import time
 import weakref
-from typing import List, Literal, Callable, Any, Dict, Tuple
+from typing import List, Literal, Callable, Any, Dict, Tuple, Union
 
 import numpy
 from tescan import sem, CancelledError
@@ -66,6 +66,7 @@ FIB_NAME_MAP: Dict[str, str] = {
     "GetViewField": "FibGetViewField",
     "SetViewField": "FibSetViewField",
     "FetchImage": "FibFetchImage",
+    "FetchImageEx": "FibFetchImageEx",
     "ScScanLine": "FibScScanLine",
     "ScScanXY": "FibScScanXY",
     "ScGetExternal": "FibScGetExtern",
@@ -75,6 +76,7 @@ FIB_NAME_MAP: Dict[str, str] = {
     "ScEnumSpeeds": "FibScEnumSpeeds",
     "ScGetSpeed": "FibScGetSpeed",
     "ScSetSpeed": "FibScSetSpeed",
+    "DtEnumDetectors": "FibDtEnumDetec",
     # Auto blanking for FIB
     "ScGetBlanker": None,
     "ScSetBlanker": None,
@@ -758,7 +760,11 @@ class Scanner(model.Emitter):
             # For clarity, still maintain read-only VA's. The values from the preset titles do not match exactly with
             # the actual device values.
             self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
-            self.probeCurrent = model.FloatVA(pc, unit="A", readonly=True)
+            # Polling the current for the ion beam is blocking the Tescan UI for a second or so.
+            # This is not ideal.
+            # TODO: As an alternative we could do a single get call only after changing the preset, but
+            # the timing is not trivial and it will not sync-back the Essence value after change.
+            # self.probeCurrent = model.FloatVA(pc, unit="A", readonly=True)
 
         # TODO: Use BooleanVA instead
         # 0 turns off the e-beam, 1 turns it on
@@ -1055,12 +1061,6 @@ class Scanner(model.Emitter):
                         self.accelVoltage._value = new_volt
                         self.accelVoltage.notify(new_volt)
 
-                    prev_pc = self.probeCurrent._value
-                    new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
-                    if prev_pc != new_pc:
-                        self.probeCurrent._value = new_pc
-                        self.probeCurrent.notify(new_pc)
-
                     prev_dt = self.dwellTime._value
                     prev_idx = min(self.dwell_time_lookup, key=lambda k: abs(self.dwell_time_lookup[k] - prev_dt))
                     new_dt_idx = self.parent._device_handler.ScGetSpeed(self._device_type)
@@ -1078,6 +1078,14 @@ class Scanner(model.Emitter):
                             if blanked != self.blanker._value:
                                 self.blanker._value = blanked
                                 self.blanker.notify(blanked)
+
+                        prev_pc = self.probeCurrent._value
+                        # For FIB, the beam current getter briefly disables the Essence interface.
+                        # Therefore, we don't poll current for FIB.
+                        new_pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
+                        if prev_pc != new_pc:
+                            self.probeCurrent._value = new_pc
+                            self.probeCurrent.notify(new_pc)
 
                     new_ext = bool(self.parent._device_handler.ScGetExternal(self._device_type))
                     if new_ext != self.external._value:
@@ -1109,7 +1117,7 @@ class Detector(model.Detector):
         self._device_type = _device_type if _device_type is not None else "electron"
 
         self._channel = channel
-        self._detector = detector
+        self._detector = self.get_detector_idx(detector)
         self.parent._device_handler.DtSelect(self._device_type, self._channel, self._detector)
         self.parent._device_handler.DtEnable(self._device_type, self._channel, 1, 16)  # 16 bits
         # adjust brightness and contrast
@@ -1125,6 +1133,31 @@ class Detector(model.Detector):
         # TODO: provide a method applyAutoContrast(), as in Phenom, to run the
         # auto signal function. + a way to do so even if the detector is not
         # used (because it's used via a CompositedScanner)?
+
+    def get_detector_idx(self, detector: Union[int, str]) -> int:
+        """Get the index of the detector by int (do nothing) or by name (match with Tescan's available detecors).
+
+        :param detector: the detector index or the name of the detector
+        :returns: the detector's index on the Tescan hardware
+        """
+        detector_idx = None
+        if isinstance(detector, int):
+            detector_idx = detector
+        elif isinstance(detector, str):
+            available_detectors = self.parent._device_handler.DtEnumDetectors(self._device_type)
+            # First find the enumeration index for the desired detector (by name)
+            enum_idx_for_name = re.findall(rf"det.([0-9])+.name={detector.lower()}", available_detectors.lower())
+            if enum_idx_for_name:
+                enum_idx_for_name = enum_idx_for_name[0]
+                # Now find the corresponding detector idx (which is not the same as the enumeration index!).
+                det_idx_for_name = re.findall(rf"det.{enum_idx_for_name}+.detector=([0-9]+)", available_detectors)
+                if det_idx_for_name:
+                    detector_idx = int(det_idx_for_name[0])
+
+        if detector_idx:
+            return detector_idx
+        else:
+            raise ValueError("The 'detector' parameter from the config does not match an available detector")
 
     @roattribute
     def channel(self):
