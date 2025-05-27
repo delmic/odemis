@@ -30,7 +30,9 @@ from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, \
     VirtualTestSynchronized
 
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s",
+                    level=logging.DEBUG,
+                    force=True)
 
 CLASS = andorcam3.AndorCam3
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
@@ -63,6 +65,17 @@ class TestAndorCam3(VirtualTestCam, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
+
+    def test_gain(self):
+        """
+        Check that changing the gain works. On some cameras, the readout rate is updated by the gain,
+        and it used to fail.
+        """
+        for g in self.camera.gain.choices:
+            self.camera.gain.value = g
+            logging.debug("gain = %s, readout rate = %s", g, self.camera.readoutRate.value)
+            self.camera.data.get()
+
 
 #@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):

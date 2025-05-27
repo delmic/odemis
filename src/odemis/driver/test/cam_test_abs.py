@@ -322,6 +322,43 @@ class VirtualTestCam(metaclass=ABCMeta):
 
         self.assertEqual(self.left, 0)
 
+    def test_acquire_flow_fps_limited(self):
+        """
+        Test fast acquisition while limiting the frame rate
+        """
+        if not model.hasVA(self.camera, "frameRate"):
+            self.skipTest("Camera doesn't support frameRate")
+
+        # Use maximum resolution
+        self.camera.resolution.value = self.camera.resolution.range[1]
+        self.size = self.camera.resolution.value
+        logging.debug("Resolution set to %s", self.size)
+
+        # Very short exposure time => So could go very fast
+        exposure = self.camera.exposureTime.range[0]
+        self.camera.exposureTime.value = exposure
+
+        # Limit the frame rate to just 20 images per second
+        self.camera.frameRate.value = 20  # Hz
+        fr = self.camera.frameRate.value
+
+        number = 100
+        self.left = number
+        exp_dur = number / fr
+
+        self.camera.data.subscribe(self.receive_image)
+        start_t = time.time()
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(0.01 + 1 / fr)  # Should be about the frame rate
+        stop_t = time.time()
+
+        dur = stop_t - start_t
+        self.assertGreaterEqual(dur, exp_dur)  # Fail if acquisition went too fast
+        self.assertEqual(self.left, 0)  # Fail if acquisition went too slow
+
 #    @unittest.skip("simple")
     def test_data_flow_with_va(self):
         exposure = 1.0 # long enough to be sure we can change VAs before the end

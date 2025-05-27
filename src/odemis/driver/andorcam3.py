@@ -4,7 +4,7 @@ Created on 6 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2016 Éric Piel, Delmic
+Copyright © 2012-2025 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -25,20 +25,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # * limit the memory to about 3G. For example add highmem=3500M to the kernel
 #   command line (in /etc/default/grub)
 
-from builtins import str
-import collections
 from ctypes import *
+import collections
 import gc
 import glob
 import logging
-import numpy
-from odemis import model, util
-from odemis.model import HwError, oneway
 import os
 import re
 import threading
 import time
 import weakref
+from typing import Dict, Set, List, Optional
+
+import numpy
+
+from odemis import model, util
+from odemis.model import HwError, oneway
 
 
 # Neo encodings (selectable depending on gain selection):
@@ -261,6 +263,10 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
+        # Can be used to detect specific camera type like "Sona", or "Zyla".
+        cam_name = self.getCameraName()
+        logging.debug("Camera name is %s", cam_name)
+
         self._sensor_res = self.getSensorResolution()
         sensor_res_user = self._transposeSizeToUser(self._sensor_res)
         if max_res is None:
@@ -291,7 +297,6 @@ class AndorCam3(model.DigitalCamera):
 
         # cache some info
         self._bin_to_resrng = self._getResolutionRangesPerBinning(max_res_hw)
-        self._gain_to_idx = {} # cached for _applyGain() float -> int
 
         # put the detector pixelSize
         try:
@@ -315,15 +320,17 @@ class AndorCam3(model.DigitalCamera):
         except NotImplementedError:
             pass
 
-        if (self.isImplemented("FanSpeed") and
-            len(self.GetEnumStringImplemented("FanSpeed")) > 1):
-            # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
-                                                  setter=self.setFanSpeed) # ratio to max speed
-            self.setFanSpeed(1.0)
+        if self.isImplemented("FanSpeed"):
+            supported_fan_speeds = self.GetEnumStringImplemented("FanSpeed")
+            if len(supported_fan_speeds) > 1:
+                logging.info("Supported fan speeds: %s", supported_fan_speeds)
+                # Start at max speed
+                self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
+                                                      setter=self.setFanSpeed) # ratio to max speed
+                self.setFanSpeed(1.0)
 
-        # binning, res, trans, exp time, readout rate, gain, synchronised
-        self._prev_settings = [None, None, None, None, None, None, None]
+        # binning, res, trans, exp time, readout rate, frame rate, gain, synchronised
+        self._prev_settings = [None] * 8
         self._translation = (0, 0)
         self._binning = (1, 1) # used by resolutionFitter()
         self._resolution = max_res_hw
@@ -363,21 +370,35 @@ class AndorCam3(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp,
                                           unit="s", setter=self.setExposureTime)
 
-        ror_choices = set(self.getReadoutRates())
-        readout_rate = min(ror_choices) # default to slow acquisition (as it's usually fast enough)
-        self.readoutRate = model.FloatEnumerated(readout_rate, ror_choices,
-                                                 unit="Hz")
-
+        self._gain_to_idx = {} # cached for _applyGain() float -> int
         gain_choices = self._getGains() # dict gain -> desc
         # 1.1 is the 16-bit large setting which fits almost every case
         if 1.1 in gain_choices:
             gain = 1.1
         else:
             gain = min(gain_choices) # default to low gain = less noise
-        self.gain = model.FloatEnumerated(gain, gain_choices, unit="")
+        self.gain = model.FloatEnumerated(gain, gain_choices, unit="", setter=self.setGain)
 
-        # TODO: add a frameRate VA to allow reduce the speed between acquisitions?
-        # cf FrameRate
+        ror_choices = set(r for r in self.getReadoutRates() if r is not None)
+        readout_rate = min(ror_choices) # default to low noise/slow acquisition (as it's usually fast enough)
+        # Note: some devices, such as the Sona, have a dedicated readout rate per gain. In such case,
+        # we don't allow changing it, only report the readout rate for information, and automatically
+        # adjust it when the gain changes.
+        self._ror_per_gain = self._getReadoutRatesPerGain()
+        logging.debug("Readout rate per gain: %s", self._ror_per_gain)
+        if any(len(r) == 0 for r in self._ror_per_gain.values()):
+            logging.warning("Some gains have no readout rate supported: %s", self._ror_per_gain)
+        # If all gains have a single readout rate -> readonly
+        ror_readonly = all(len(r) <= 1 for r in self._ror_per_gain.values())
+        self.readoutRate = model.FloatEnumerated(readout_rate, ror_choices,
+                                                 unit="Hz", readonly=ror_readonly)
+        self.gain.value = self.gain.value  # Force the setter, to check readoutRate compatibility
+
+        # This defines the maximum frame rate that should be set. It will be automatically limited
+        # by the other settings. Typically, it's best to use the maximum one available, but some hardware
+        # such as the Sona cannot sustain transmission at the maximum frame rate, so
+        # it can be handy to limit it if acquiring many frames at very short exposure time.
+        self.frameRate = model.FloatContinuous(1e6, range=(1e-6, 1e6), unit="Hz")
 
         current_temp = self.GetFloat("SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="°C", readonly=True)
@@ -453,7 +474,7 @@ class AndorCam3(model.DigitalCamera):
         Note: for the VAs which are not directly affecting the hardware, they
         will be updated only on next acquisition.
         """
-        self._prev_settings = [None, None, None, None, None, None, None]
+        self._prev_settings = [None] * 8
 
         # The VAs which directly update the hardware
         for vaname in ("targetTemperature", "fanSpeed"):
@@ -565,7 +586,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             # Note: currently, with SDK 3.11.30050, it always says it's present.
             # Also, "DeviceCount" stays the same all the time
-#             if self.handle and self.GetBool(u"CameraPresent"):
+#             if self.handle and self.GetBool("CameraPresent"):
 #                 logging.warning("Reconnection attempt while SDK says it's present")
 #             else:
             logging.info("Will attempt to reconnect to camera")
@@ -952,7 +973,7 @@ class AndorCam3(model.DigitalCamera):
 
         # Let's assume it's linearly distributed in speed... at least it's true
         # for the Neo and the SimCam. Looks like this for Neo:
-        # [u"Off", u"Low", u"On"]
+        # ["Off", "Low", "On"]
         values = self.GetEnumStringImplemented("FanSpeed")
         if len(values) <= 1:
             return 0
@@ -960,39 +981,70 @@ class AndorCam3(model.DigitalCamera):
         self.SetEnumString("FanSpeed", values[speed_index])
         return speed_index / (len(values) - 1)
 
-    def getReadoutRates(self):
+    def getReadoutRates(self, all_gains: bool = True) -> List[Optional[float]]:
         """
-        Returns (list of 0<floats): possible readout rates in Hz
+        :param all_gains: if True, return any readout rate which is possible by the device.
+        Otherwise, only return the ones which are available on the current settings (ie, the current gain)
+        :returns: (list of 0<floats) readout rates in Hz, replaced by None if not implemented/available
         """
+        # returns strings like "550 MHz" (and None if not implemented)
         rates_str = self.GetEnumStringImplemented("PixelReadoutRate")
-        rates = [int(r.rstrip(" MHz")) * 1e6 for r in rates_str if r is not None]
+        if not all_gains:
+            for i in range(len(rates_str)):
+                if not self.isEnumIndexAvailable("PixelReadoutRate", i):
+                    rates_str[i] = None
+        rates = [r if r is None else int(r.rstrip(" MHz")) * 1e6 for r in rates_str]
         return rates
 
-    def _applyReadoutRate(self, frequency):
+    def _applyReadoutRate(self, frequency: float) -> float:
         """
-        Set the pixel readout rate.
-        frequency (0 <= float): the pixel readout rate in Hz
-        return (int): actual readout rate in Hz
+        Set the pixel readout rate, the closest to the requested rate which is available.
+        :param frequency: (0 < float) the requested pixel readout rate in Hz
+        :return: actual readout rate in Hz
         """
         assert(0 <= frequency)
-        # returns strings like u"550 MHz" (and None if not implemented)
-        rates_str = self.GetEnumStringImplemented("PixelReadoutRate")
-        for i in range(len(rates_str)):
-            if not self.isEnumIndexAvailable("PixelReadoutRate", i):
-                logging.debug("ReadoutRate %s not available", rates_str[i])
-                rates_str[i] = None
-        rates = [int(r.rstrip(" MHz")) if r else 1e100 for r in rates_str]
-        idx_rate = util.index_closest(frequency / 1e6, rates)
-        self.SetEnumIndex("PixelReadoutRate", idx_rate)
-        return rates[idx_rate] * 1e6
 
-    def getModelName(self):
-        model_name = "Andor " + self.GetString("CameraModel")
+        rates = self.getReadoutRates(all_gains=False)
+        logging.debug("Found rates : %s", rates)
+        # replace unavailable rates by a huge value, to be compatible with index_closest() and keep the right index
+        rates = [1e100 if r is None else r for r in rates]
+        idx_rate = util.index_closest(frequency, rates)
+        self.SetEnumIndex("PixelReadoutRate", idx_rate)
+        return rates[idx_rate]
+
+    def _getReadoutRatesPerGain(self) -> Dict[float, Set[float]]:
+        """
+        For each available gain, find out which readout rate is available.
+        Useful for devices where the gain & readout rate are dependent, such as the Sona.
+        It does change the gain of the camera, so this function should not be called while acquiring.
+        Note: _gain_to_idx must be filled up properly.
+        :return: gain (as defined in .gain) -> set of available readout rate (Hz)
+        """
+        # for each gain, check which readout rate is available, and add it to the dict
+        result = {}
+        if not self.isImplemented("SimplePreAmpGainControl"):
+            # In such case, there should be just one gain (= 1x)
+            result[1] = self.getReadoutRates(all_gains=True)
+
+        for gain, gain_idx in self._gain_to_idx.items():
+            self.SetEnumIndex("SimplePreAmpGainControl", gain_idx)
+            ror = self.getReadoutRates(all_gains=False)
+            result[gain] = set(r for r in ror if r is not None)
+        return result
+
+    def getCameraName(self) -> str:
+        """
+        Returns the camera name. This is just the generic camera type (eg, Zyla, Sona).
+        To be differentiated from the "model" name, which is much more specific (eg "SONA-4BV6U).
+        :return: camera name (eg, Zyla, Sona) or "Unknown" if the camera doesn't support this attribute.
+        """
         try:
-            # TODO: any use?
-            logging.debug("Camera name is %s", self.GetString("CameraName"))
+            return self.GetString("CameraName")
         except ATError:
-            pass # not supported on the SimCam :-(
+            return "Unknown"
+
+    def getModelName(self) -> str:
+        model_name = "Andor " + self.GetString("CameraModel")
 
         try:
             serial = self.GetString("SerialNumber")
@@ -1001,7 +1053,7 @@ class AndorCam3(model.DigitalCamera):
             serial_str = ""
 
         try:
-            # seems to be a pretty useless int indentifyin the framegrabber in the PC
+            # seems to be a pretty useless int identifying the framegrabber in the PC
             cont = self.GetString("ControllerID")
             cont_str = " (controller: %s)" % cont
         except ATError:
@@ -1103,19 +1155,19 @@ class AndorCam3(model.DigitalCamera):
             wmin, wmax = self.GetIntRanges("AOIWidth")
             for b in range(1, self.GetIntMax("AOIHBin") + 1):
                 rrng_width[b] = (wmin, wmax // b)
-#                 self.SetInt(u"AOIHBin", b)
-#                 if rrng_width[b] != self.GetIntRanges(u"AOIWidth"):
+#                 self.SetInt("AOIHBin", b)
+#                 if rrng_width[b] != self.GetIntRanges("AOIWidth"):
 #                     logging.debug("width allowed == %s instead of %s",
-#                                   self.GetIntRanges(u"AOIWidth"), rrng_width[b])
+#                                   self.GetIntRanges("AOIWidth"), rrng_width[b])
             # Height: min and max are dependent on binning
             self.SetInt("AOIVBin", 1)
             hmin, hmax = self.GetIntRanges("AOIHeight")
             for b in range(1, self.GetIntMax("AOIVBin") + 1):
                 rrng_height[b] = (max(1, hmin // b), hmax // b)
-#                 self.SetInt(u"AOIVBin", b)
-#                 if rrng_height[b] != self.GetIntRanges(u"AOIHeight"):
+#                 self.SetInt("AOIVBin", b)
+#                 if rrng_height[b] != self.GetIntRanges("AOIHeight"):
 #                     logging.debug("Heigh allowed == %s instead of %s",
-#                                   self.GetIntRanges(u"AOIHeight"), rrng_height[b])
+#                                   self.GetIntRanges("AOIHeight"), rrng_height[b])
         if self._binmtd == FIXED_BINNING:
             # Try each of the binnings, so we know for sure what the driver likes
             binnings = self.GetEnumStringImplemented("AOIBinning")
@@ -1156,7 +1208,7 @@ class AndorCam3(model.DigitalCamera):
         max_size = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))
 
-        # Note: u"AOIWidth" is defined as "not writtable" if the acquisition is
+        # Note: "AOIWidth" is defined as "not writtable" if the acquisition is
         # active, so no check can be done here. But normally, the VA only
         # allows to reach here if it was writtable at init.
 
@@ -1310,6 +1362,21 @@ class AndorCam3(model.DigitalCamera):
         self._exp_time = value
         return value
 
+    def setGain(self, gain: float) -> float:
+        """
+        Gain setter, called when .gain is changed.
+        :param gain: requested gain
+        :return: accepted gain
+        """
+        # Update the readout rate, in case the current one is not compatible.
+        # This will be re-done after the settings are set on the device, but this should be a good approximation.
+        if self.readoutRate.value not in self._ror_per_gain[gain]:
+            # Find the closest gain available
+            new_ror = util.find_closest(self.readoutRate.value, self._ror_per_gain[gain])
+            self.readoutRate._set_value(new_ror, force_write=True)  # works even if read-only
+
+        return gain
+
     # The 16-bit gain is a special hardware feature which use the best value of
     # two gains. So it looks like x1, and just introduces a bit more noise. To
     # distinguish it from the normal x1, we put x1.1.
@@ -1325,6 +1392,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return (set of 0<floats or dict of 0<floats -> str): Available gain as
          multiplier and friendly user description.
+        :side effect: fills up ._gain_to_idx
         """
         # Gain API is terrible. There are three values.
         # PreAmpGainControl allows to control all of them in a simple way.
@@ -1422,9 +1490,10 @@ class AndorCam3(model.DigitalCamera):
         """
         synchronised = (self.data._sync_event is not None)
         readout_rate = self.readoutRate.value
+        frame_rate = self.frameRate.value
         gain = self.gain.value
         new_settings = [self._binning, self._resolution, self._translation,
-                        self._exp_time, readout_rate, gain, synchronised]
+                        self._exp_time, readout_rate, frame_rate, gain, synchronised]
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -1437,7 +1506,7 @@ class AndorCam3(model.DigitalCamera):
             synchronised (bool): whether the acquisition has a software trigger
         """
         [prev_binning, prev_resolution, prev_trans, prev_exp,
-         prev_rorate, prev_gain, prev_sync] = self._prev_settings
+         prev_rorate, prev_fr, prev_gain, prev_sync] = self._prev_settings
 
         synchronised = (self.data._sync_event is not None)
         if synchronised != prev_sync:
@@ -1464,7 +1533,7 @@ class AndorCam3(model.DigitalCamera):
             if not util.almost_equal(readout_rate, req_readout_rate):
                 logging.warning("Failed to select readout rate %s, falling back to %s",
                                 req_readout_rate, readout_rate)
-            self.readoutRate.value = readout_rate  # in case it's updated
+            self.readoutRate._set_value(readout_rate, force_write=True)  # in case it's updated
             self._metadata[model.MD_READOUT_TIME] = 1 / readout_rate  # s
             logging.debug("Updating readout rate to %g MHz", readout_rate / 1e6)
 
@@ -1491,9 +1560,11 @@ class AndorCam3(model.DigitalCamera):
         # The best bit depth depends on the gain and binning
         itemsize = self._findBestBitDepth()
 
-        # Update to framerate to maximum possible, to get the best from the HW
+        # Use the maximum framerate possible, to get the best from the HW, limited by the .frameRate VA
         fr_rng = self.GetFloatRanges("FrameRate")
-        self.SetFloat("FrameRate", fr_rng[1])
+        user_fr = self.frameRate.value
+        fr = min(max(fr_rng[0], user_fr), fr_rng[1])
+        self.SetFloat("FrameRate", fr)
         logging.debug("Framerate set to %g fps", self.GetFloat("FrameRate"))
 
         # Baseline depends on the other settings
@@ -1505,7 +1576,7 @@ class AndorCam3(model.DigitalCamera):
             self._metadata[model.MD_BASELINE] = self.GetInt("Baseline")
 
         self._prev_settings = [self._binning, self._resolution, self._translation,
-                               self._exp_time, readout_rate, gain, synchronised]
+                               self._exp_time, readout_rate, user_fr, gain, synchronised]
 
         return (self._resolution[0], self._resolution[1], itemsize), synchronised
 
@@ -1654,13 +1725,7 @@ class AndorCam3(model.DigitalCamera):
 
                     size, synchronised = self._update_settings()
                     phyt = self._getPhysTrans()
-                    if synchronised:
-                        # Synchronized typically is a sign that the user cares
-                        # about all the data (and so don't want to discard it).
-                        # TODO: new API on the dataflow to explicitly indicate that?
-                        max_discard = 0
-                    else:
-                        max_discard = 8
+                    max_discard = self.data.max_discard  # how many frames in a row can be dropped if coming too fast
                     exposure_time = self._exp_time
                     if self.isImplemented("ReadoutTime"):
                         readout_time = self.GetFloat("ReadoutTime")
@@ -1688,7 +1753,6 @@ class AndorCam3(model.DigitalCamera):
                     logging.debug("Waiting for acquisition trigger")
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
-                tend = time.time() + exposure_time + readout_time * 1.2 + 3  # s
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
                 # merge BASELINE and BASELINE_COR immediately
@@ -1696,12 +1760,17 @@ class AndorCam3(model.DigitalCamera):
                     metadata[model.MD_BASELINE] += metadata[model.MD_BASELINE_COR]
                     del metadata[model.MD_BASELINE_COR]
 
+                # Timeout adds 20% on top of expected frame duration, but limited to 2s to avoid too large values
+                # on very long exposure times.
+                exp_dur = exposure_time + readout_time
+                tend = time.time() + exp_dur + min(exp_dur * 0.2, 2) + 1  # s
                 try:
                     cbuffer = self._get_new_frame(tend, size, buffers, max_discard)
                 except ATError as exp:
                     # Sometimes there is timeout, don't completely give up
-                    # Note: Timeouts can happen when the hardware buffer is full
-                    # because the framerate is faster than what we can process.
+                    # Note: Timeouts can happen when the hardware buffer is full because the
+                    # framerate is faster than what we can process, or that the camera can transmit.
+                    # In such case, a buffer flush is required to recover.
                     if exp.errno in (11, 13, 100):  # ERR_NODATA, ERR_TIMEDOUT, ERR_HARDWARE_OVERFLOW
                         num_errors += 1
                         if num_errors > 10:
@@ -1710,6 +1779,7 @@ class AndorCam3(model.DigitalCamera):
                         elif num_errors > 5:
                             logging.error("%d errors in a row, trying to reconnect to camera", num_errors)
                             self._reconnect()
+
                         logging.warning("Trying again to acquire image after error %s", exp)
                         need_reinit = True
                         continue
@@ -1806,12 +1876,13 @@ class AndorCam3(model.DigitalCamera):
         cbuffer = buffers.pop(0)
         assert(addressof(pbuffer.contents) == addressof(cbuffer))
 
-        # Check if there is already a newer image
+        # Check if there is already a newer image.
+        # Note: this only works if the buffer queue is filling up. If the queue in the camera is
+        # filling up (because the transmission is too slow), then reading immediately doesn't help,
+        # and eventually a timeout will happen.
         discarded = 0
         for discarded in range(max_discard):
             try:
-                # BUG: it sometimes return a timeout even if the queue is building up
-                # (depends on the framerate and data size)
                 pbuffer, _ = self.WaitBuffer(0)  # only if it's already there
             except ATError as exp:
                 if exp.errno == 13:  # AT_ERR_TIMEDOUT
@@ -1821,7 +1892,7 @@ class AndorCam3(model.DigitalCamera):
                 raise
 
             # Queue immediately a new buffer to compensate
-            logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
+            logging.debug("New image ready, will now queue a new buffer (queue len = %d)", len(buffers))
             cbuffer = self._allocate_buffer(size)
             self.QueueBuffer(cbuffer)
             buffers.append(cbuffer)
