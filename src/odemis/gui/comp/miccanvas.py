@@ -1820,7 +1820,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         # List of overlays which handles creation, editing and removal of a shape class which
         # is a subclass of EditableShape class
         self.shapes_overlay = []
-        self.bg_overlay = None
+        self.bg_view_overlay = None
+        self.bg_world_overlay = None
         self.is_ctrl_down = False
         self.is_shape_tool_active = False
 
@@ -1828,8 +1829,11 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         """
         :param scintillator: The scintillator for which the background overlay need to be drawn.
         """
-        self.bg_overlay = FastEMScintillatorOverlay(cnvs=self, scintillator=scintillator)
-        self.add_world_overlay(self.bg_overlay)
+        self.bg_view_overlay = TextViewOverlay(cnvs=self)
+        self.bg_view_overlay.add_label(str(scintillator.number), font_size=40)
+        self.add_view_overlay(self.bg_view_overlay)
+        self.bg_world_overlay = FastEMScintillatorOverlay(cnvs=self, scintillator=scintillator)
+        self.add_world_overlay(self.bg_world_overlay)
 
     def remove_shape(self, shape):
         """
@@ -1863,8 +1867,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
         :raises: ValueError in case it's called too early during GUI startup.
         """
-        if self.bg_overlay:
-            self.fit_to_bbox((self.bg_overlay.get_scintillator_bbox()))
+        if self.bg_world_overlay:
+            self.fit_to_bbox((self.bg_world_overlay.get_scintillator_bbox()))
         else:
             raise ValueError("Background overlay is not initialized yet.")
 
