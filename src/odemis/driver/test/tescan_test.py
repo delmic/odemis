@@ -68,7 +68,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
               # change host ip address according to network settings
-              "host": "192.168.2.16"
+              "host": "192.168.2.35"
               }
 
 CONFIG_FIB = {"name": "fib", "role": "sem",
@@ -76,7 +76,7 @@ CONFIG_FIB = {"name": "fib", "role": "sem",
                            "fib-scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STG},
               # change host ip address according to network settings
-              "host": "192.168.2.16"
+              "host": "192.168.2.35"
               }
 
 # This one works with the Mira Simulator
@@ -601,7 +601,7 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         pass
 
     def test_acquire(self):
-        """NOTE: make sure to turn on beam on hardware"""
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
         self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
 
@@ -613,6 +613,11 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_acquire_nonzero_signal(self):
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
+        im = self.sed.data.get()
+        self.assertGreater(im.max(), 0)
 
     def test_cancel_acquisition(self):
         self.scanner.dwellTime.value = 100e-6  # a little bit more than 10s per frame
@@ -863,6 +868,11 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_acquire_nonzero_signal(self):
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
+        im = self.sed.data.get()
+        self.assertGreater(im.max(), 0)
 
     def test_cancel_acquisition(self):
         self.scanner.dwellTime.value = 100e-6  # a little bit more than 10s per frame

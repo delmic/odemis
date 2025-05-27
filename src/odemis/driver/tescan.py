@@ -57,7 +57,7 @@ FIB_NAME_MAP: Dict[str, str] = {
     "GUISetScanning": "FibGUISetScan",
     "DtSelect": "FibDtSelect",
     "DtEnable": "FibDtEnable",
-    "DtAutoSignal": "FibDtAutoSig",
+    "DtAutoSignal": "FibDtAutoSig",  # Channel (int), Dwell (float): dwell time with unit ns
     "HVGetVoltage": "FibHVGetVoltage",  # V
     "HVGetBeam": "FibHVGetBeam",
     "HVBeamOn": "FibHVBeamOn",
@@ -72,7 +72,7 @@ FIB_NAME_MAP: Dict[str, str] = {
     "ScGetExternal": "FibScGetExtern",
     "GetBeamCurrent": "FibReadFCCurr",  # pA
     "PresetEnum": "FibEnumPresets",
-    "PresetSetEx": "FibSetPresetEx",  # Id: str, name/value of the preset
+    "PresetSetEx": "FibSetPresetEx",  # Id (str): name/value of the preset
     "ScEnumSpeeds": "FibScEnumSpeeds",
     "ScGetSpeed": "FibScGetSpeed",
     "ScSetSpeed": "FibScSetSpeed",
@@ -112,7 +112,7 @@ class DeviceHandler:
         name: The name of the method to invoke. Using the SEM method name as canonical.
         """
         def call_and_log_func(func, args, kwargs):
-            logging.debug(f"Calling {func.__name__} with args: {args} and kwargs: {kwargs}")
+            logging.debug(f"SharkSEM: Calling {func.__name__} with args: {args} and kwargs: {kwargs}")
             return func(*args, **kwargs)
 
         def method(device_type: Literal["electron", "ion"], *args, **kwargs):
@@ -742,7 +742,6 @@ class Scanner(model.Emitter):
                                                setter=self._setDwellTime)
 
         volt = self.parent._device_handler.HVGetVoltage(self._device_type)
-        pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
 
         if self._device_type == "electron":
             # Range is according to min and max voltages accepted by Tescan API
@@ -751,6 +750,7 @@ class Scanner(model.Emitter):
                                                     setter=self._setVoltage)
             self.accelVoltage.subscribe(self._onVoltage)
 
+            pc = self.parent._device_handler.GetBeamCurrent(self._device_type) * 1e-12  # Convert from pA to A
             # For limits of current, values from the Tescan UI are used, since the API did not specify any.
             self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
                                                         setter=self._setPC)
@@ -770,13 +770,11 @@ class Scanner(model.Emitter):
             # the timing is not trivial and it will not sync-back the Essence value after change.
             # self.probeCurrent = model.FloatVA(pc, unit="A", readonly=True)
 
-        # TODO: Use BooleanVA instead
-        # 0 turns off the e-beam, 1 turns it on
+        # The filament and beam status codes are: -1 for filament blown (G3) or unable to determine beam status (G4),
+        # 0 for beam off, 1 for beam on, and 1000 for on/off procedure in progress.
         power = self.parent._device_handler.HVGetBeam(self._device_type)  # Don't change state
-        # TODO: Find out the following: Currently this value is instantiated but never altered.
-        # Should we turn the power on when starting acquisition, since now you will detect a black square/
-        # Or is turning it on this way a safety risk?
-        self.power = model.IntEnumerated(power, {0, 1}, unit="",
+        # Currently this value is instantiated but never altered for safety reasons.
+        self.power = model.IntEnumerated(power, {-1, 0, 1, 1000}, unit="",
                                          setter=self._setPower)
 
         if self._device_type == "electron":
@@ -1125,8 +1123,6 @@ class Detector(model.Detector):
         self._detector = self.get_detector_idx(detector)
         self.parent._device_handler.DtSelect(self._device_type, self._channel, self._detector)
         self.parent._device_handler.DtEnable(self._device_type, self._channel, 1, 16)  # 16 bits
-        # adjust brightness and contrast
-        self.parent._device_handler.DtAutoSignal(self._device_type, self._channel)
 
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
