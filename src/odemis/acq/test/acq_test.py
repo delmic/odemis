@@ -102,7 +102,7 @@ class FIBStreamacquisitionTest(unittest.TestCase):
             raise unittest.SkipTest("No hardware available.")
 
         if TEST_NOHW == "sim":
-            CONFIG_FIB_SEM["address"] = "PYRO:Microscope@localhost:4242"
+            CONFIG_FIB_SEM["address"] = "PYRO:Microscope@localhost:4243"
 
         cls.microscope = xt_client.SEM(**CONFIG_FIB_SEM)
 
