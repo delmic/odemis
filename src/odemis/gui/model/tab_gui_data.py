@@ -23,14 +23,16 @@ This file is part of Odemis.
 import copy
 import logging
 import math
+import re
 from abc import ABCMeta
 from enum import Enum
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature, get_feature_position_at_posture
+from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Target, TargetType
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
+from odemis.acq.stream import StaticFluoStream
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -42,6 +44,9 @@ from odemis.gui.model._constants import (
     STATE_ON,
     TOOL_DICHO,
     TOOL_FEATURE,
+    TOOL_REGION_OF_INTEREST,
+    TOOL_FIDUCIAL,
+    TOOL_SURFACE_FIDUCIAL,
     TOOL_LABEL,
     TOOL_LINE,
     TOOL_NONE,
@@ -67,6 +72,9 @@ from odemis.model import (
     VigilantAttribute,
 )
 from odemis.util.filename import create_filename, make_unique_name
+
+# Regex pattern to extract the index from the target name
+TARGET_INDEX = r"-(\d+)"
 
 
 class AcquiMode(Enum): # TODO: move to better place
@@ -476,7 +484,76 @@ class CryoCorrelationGUIData(CryoGUIData):
         self.selected_stream = model.VigilantAttribute(None)
 
         # for export tool
-        self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+
+
+class CryoTdctCorrelationGUIData(CryoGUIData):
+    """ Represent an interface used to correlate using 3DCT.
+
+    Used for METEOR systems.
+
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+
+        # the streams to correlate among all streams in .streams
+        self.selected_stream = model.VigilantAttribute(None)
+        # point on FIB stream to locate sample surface
+        self.fib_surface_point = model.VigilantAttribute(None)
+        # Output of 3DCT
+        self.projected_points: List[Target] = []
+
+        # for export tool
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+
+    def add_new_target(self, x: float, y: float, type: TargetType, z: Optional[float]=None) -> Optional[Target]:
+        """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
+        :param x: x position of the target
+        :param y: y position of the target
+        :param type: TargetType of the given target like Fiducial, PointOfInterest or SurfaceFiducial
+        :param z: Optional[float] optional z position for the given target. For target in FM, z is compulsory and for the target
+         in FIB, z is None.
+        :return: Target if parameters are valid otherwise logs error.
+        """
+
+        fm_focus_position = self.main.focus.position.value['z']
+        existing_names = [str(f.name.value) for f in self.main.targets.value]
+
+        if self.views.value[0] is self.focussedView.value: # FM view
+            if type == TargetType.Fiducial.value:
+                t_name = make_unique_name("FM-1", existing_names)
+                index = int(re.search(TARGET_INDEX, t_name).group(1))
+                target = Target(x, y, z=0, name=t_name, type=type,
+                                        index=index, fm_focus_position=fm_focus_position)
+
+            elif type == TargetType.PointOfInterest.value:
+                target = Target(x, y, z=0, name="POI-1", type=type,
+                                        index=1, fm_focus_position=fm_focus_position)
+
+        elif self.views.value[1] is self.focussedView.value: # FIB view
+            if type == TargetType.SurfaceFiducial.value:
+                target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
+                                fm_focus_position=fm_focus_position)
+                self.fib_surface_point.value = target
+                return target
+            t_name = make_unique_name("FIB-1", existing_names)
+            index = int(re.search(TARGET_INDEX, t_name).group(1))
+            target = Target(x, y, z=0, name=t_name, type=type, index=index,
+                            fm_focus_position=fm_focus_position)
+
+        else:
+            logging.debug("No view is selected. Please select a view to add target.")
+            return
+
+        self.main.targets.value.append(target)
+        self.main.currentTarget.value = target
+        return target
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):

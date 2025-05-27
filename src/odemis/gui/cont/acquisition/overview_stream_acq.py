@@ -33,7 +33,7 @@ import wx
 
 from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
-from odemis.gui.win.acquisition import OverviewAcquisitionDialog
+from odemis.gui.win.acquisition import OverviewAcquisitionDialog, CorrelationDialog
 from odemis.gui import model as guimod
 
 class OverviewStreamAcquiController(object):
@@ -103,3 +103,59 @@ class OverviewStreamAcquiController(object):
             return acq_dialog.data
         else:
             return None
+
+
+class CorrelationDialogController:
+    """Controller to handle the multipoint correlation (3DCT) iniMtialization"""
+
+    def __init__(self, tab_data, tab):
+        """
+        tab_data (MicroscopyGUIData): the representation of the microscope GUI
+        tab: (Tab): the tab which should show the data
+        """
+        self._tab_data_model = tab_data
+        self._tab = tab
+        self.cor_dialog = None
+
+    def open_correlation_dialog(self):
+        """
+        Opens the multipoint correlation dialog
+        """
+        # save the original settings
+        settingsbar_controller = self._tab.settingsbar_controller
+        orig_entries = get_global_settings_entries(settingsbar_controller)
+        for sc in self._tab.streambar_controller.stream_controllers:
+            orig_entries += get_local_settings_entries(sc)
+        orig_settings = preset_as_is(orig_entries)
+        settingsbar_controller.pause()
+        settingsbar_controller.enable(False)
+
+        # pause all the live acquisitions
+        streambar_controller = self._tab.streambar_controller
+        streambar_controller.pauseStreams()
+        streambar_controller.pause()
+        streambar_controller.enable(False)
+
+        # create the dialog
+        try:
+            self.cor_dialog = CorrelationDialog(
+                self._tab.main_frame, self._tab_data_model)
+            parent_size = [int(v * 0.9) for v in self._tab.main_frame.GetSize()]
+
+            self.cor_dialog.SetSize(parent_size)
+            self.cor_dialog.Center()
+            self.cor_dialog.ShowModal()
+
+        except Exception:
+            logging.exception("Failed to create correlation dialog")
+            raise
+        finally:
+            apply_preset(orig_settings)
+
+            settingsbar_controller.enable(True)
+            settingsbar_controller.resume()
+
+            streambar_controller.enable(True)
+            streambar_controller.resume()
+
+            self.cor_dialog.Destroy()
