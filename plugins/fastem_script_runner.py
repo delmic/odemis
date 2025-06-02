@@ -4,7 +4,7 @@ Created on 23 May 2025
 
 @author: Nandish Patel
 
-Gives ability to use to run Service and installation scripts under Help > Development.
+Gives the ability to run service and installation scripts under Help > Development.
 
 Copyright © 2025 Nandish Patel, Delmic
 
@@ -21,71 +21,98 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 """
 
-import ctypes
-import io
 import logging
 import os
-import queue
-import runpy
+import subprocess
 import sys
 import threading
-import traceback
-from typing import List, Optional, Tuple
+from typing import IO, Any, Callable, List, Optional, Tuple, Union
 
 import wx
 
 from odemis.gui.plugin import Plugin
 
-DEV_SCRIPT_BASE_PATH = os.path.expanduser("~/development/fastem-calibrations/")
-RELEASE_SCRIPT_BASE_PATH = "/usr/share/fastem-calibrations"
-VERSION_CHOICES = ["Official Release", "Development"]
+# VERSION_BASE_PATH
+# Dictionary mapping user-selectable version to their actual base paths
+# and potentially other version-specific configurations.
+VERSION_BASE_PATH = {
+    "Official Release": "/usr/lib/python3/dist-packages/fastem_calibrations",
+    "Development": os.path.expanduser("~/development/fastem-calibrations/src")
+}
+# AVAILABLE_SCRIPTS
+# A list of tuples defining the scripts available to the user through the plugin.
+# Each tuple should be in the format: (display_name, script_name)
+#
+# - display_name (str): The user-friendly name that will appear in the selection UI.
+# - script_name (str):
+#   This is the name of the Python script file (e.g., "my_script.py").
+#   The `find_script_path` function will recursively search for this filename
+#   within the selected version's base path. The first match found during the
+#   recursive search will be used. Ensure script filenames are unique enough
+#   within their respective base paths if multiple scripts with the same name
+#   exist in different subdirectories, as the search order is not guaranteed
+#   beyond finding the first one.
 AVAILABLE_SCRIPTS = [
-    ("Move galvo", "src/fastem_calibrations/tooling/move_galvo.py"),
-    ("Raster galvo", "src/fastem_calibrations/tooling/raster_galvo.py"),
-    ("Set correction collar", "src/fastem_calibrations/tooling/z_stack_acquisition.py"),
-    (
-        "Acquire image with decreased amplitude and offset",
-        "src/fastem_calibrations/tooling/adjusted_offset_amp_acquisition.py",
-    ),
-    ("Periodic maintenance", "src/fastem_calibrations/tooling/periodic_maintenance.py"),
-    (
-        "Scan amplitude pre-align calibration",
-        "src/fastem_calibrations/scan_amplitude_pre_align.py",
-    ),
-    ("Stage to multiprobe", "src/fastem_calibrations/stage_to_multiprobe.py"),
-    ("Pattern calibration", "src/fastem_calibrations/pattern_calibration.py"),
-    ("Pitch calibration", "src/fastem_calibrations/pitch_calibration.py"),
+    ("Acquire image with decreased amplitude and offset", "adjusted_offset_amp_acquisition.py"),
+    ("Move galvo", "move_galvo.py"),
+    ("Pattern calibration", "pattern_calibration.py"),
+    ("Periodic maintenance", "periodic_maintenance.py"),
+    ("Pitch calibration", "pitch_calibration.py"),
+    ("Raster galvo", "raster_galvo.py"),
+    ("Scan amplitude pre-align calibration", "scan_amplitude_pre_align.py"),
+    ("Set correction collar", "z_stack_acquisition.py"),
+    ("Stage to multiprobe", "stage_to_multiprobe.py"),
 ]
 
 
-def raise_exception_in_thread(thread_id: Optional[int], exctype: Exception) -> bool:
+def find_script_path(version: str, script_name: str, version_base_path: dict) -> Tuple[str, str]:
     """
-    Raises an exception in the context of the given thread ID.
-    :param thread_id: The ID of the thread in which to raise the exception.
-    :param exctype: The exception type to raise.
-    :return: True if the exception was successfully raised, False otherwise.
+    Finds the complete path to a script by searching within the base path
+    (and its subdirectories) for the given version.
+
+    :param version: The key for the version (e.g., "Official Release", "Development").
+    :param script_name: filename (e.g., "move_galvo.py").
+    :param version_base_path: A dictionary mapping version names to their base paths.
+
+    :returns: A tuple containing the base path and the absolute path to the script file.
+
+    :raises:
+        ValueError: If the version or script_name is not valid.
+        FileNotFoundError: If the base_path for the version doesn't exist,
+                           or if the script file cannot be found within the base path.
     """
-    if thread_id is None:
-        return False
-    try:
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            ctypes.c_long(thread_id), ctypes.py_object(exctype)
+    if version not in version_base_path:
+        raise ValueError(
+            f"Version '{version}' not found. "
+            f"Available versions: {list(version_base_path.keys())}"
         )
-        if res == 0:
-            return False
-        elif res > 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(thread_id), None)
-            # Consider raising an error or logging more severely here
-            return False  # Treat as failure for safety
-        return True
-    except Exception:
-        return False
+
+    base_path = version_base_path[version]
+
+    # Check if the base path itself exists and is a directory
+    if not os.path.isdir(base_path):
+        raise FileNotFoundError(
+            f"Base path for version '{version}' does not exist or is not a directory: {base_path}"
+        )
+
+    # Walk through the directory tree starting from base_path
+    for dirpath, _, filenames_in_dir in os.walk(base_path):
+        if script_name in filenames_in_dir:
+            # File found, construct the full path
+            found_path = os.path.join(dirpath, script_name)
+            return base_path, os.path.abspath(found_path) # Return absolute path
+
+    # If the loop completes, the file was not found in base_path or its subdirectories
+    raise FileNotFoundError(
+        f"Script file '{script_name}'"
+        f"not found within '{base_path}' (and its subdirectories) for version '{version}'."
+    )
 
 
 class WxTextCtrlOutput:
     """Custom output stream to redirect text output to a wx.TextCtrl."""
 
-    def __init__(self, text_ctrl, style=None):
+    def __init__(self, text_ctrl: wx.TextCtrl, style: Optional[wx.TextAttr] = None):
         """
         :param text_ctrl: The wx.TextCtrl to which output will be directed.
         :param style: Optional wx.TextAttr style for the text.
@@ -94,7 +121,7 @@ class WxTextCtrlOutput:
         self.style = style
         self.default_style = text_ctrl.GetDefaultStyle()
 
-    def write(self, text):
+    def write(self, text: str):
         """
         Write text to the wx.TextCtrl, ensuring it is done on the main thread.
         :param text: The text to write to the TextCtrl.
@@ -104,7 +131,7 @@ class WxTextCtrlOutput:
             return
         self._do_write(text)
 
-    def _do_write(self, text):
+    def _do_write(self, text: str):
         """
         Internal method to write text to the TextCtrl.
         :param text: The text to write to the TextCtrl.
@@ -116,11 +143,10 @@ class WxTextCtrlOutput:
         else:
             self.text_ctrl.AppendText(text)
 
-        self.text_ctrl.ShowPosition(
-            self.text_ctrl.GetLastPosition()
-        )  # Auto-scroll to end
+        # Auto-scroll to end
+        self.text_ctrl.ShowPosition(self.text_ctrl.GetLastPosition())
 
-    def _append_text_styled(self, text, style):
+    def _append_text_styled(self, text: str, style: wx.TextAttr):
         """
         Append text to the TextCtrl with a specific style.
         :param text: The text to append.
@@ -128,18 +154,14 @@ class WxTextCtrlOutput:
         """
         if not self.text_ctrl:
             return
-        current_style = self.text_ctrl.GetDefaultStyle()
-        self.text_ctrl.SetDefaultStyle(style)
+        start_pos = self.text_ctrl.GetLastPosition()
         self.text_ctrl.AppendText(text)
-        self.text_ctrl.SetDefaultStyle(current_style)  # Reset to what it was or default
-
-        self.text_ctrl.ShowPosition(
-            self.text_ctrl.GetLastPosition()
-        )  # Auto-scroll to end
+        end_pos = self.text_ctrl.GetLastPosition()
+        self.text_ctrl.SetStyle(start_pos, end_pos, style)
 
     def flush(self):
         """
-        Flush the output stream. This is a no-op for wx.TextCtrl as it updates immediately.
+        Flush the output stream, has no effect for wx.TextCtrl as it updates instantly.
         """
         pass  # wx.TextCtrl updates immediately
 
@@ -163,9 +185,8 @@ class WxLogHandler(logging.Handler):
             msg = self.format(record) + "\n"  # Add a newline like a typical console log
             self.wx_stream.write(msg)
         except Exception:
-            self.handleError(
-                record
-            )  # Default error handling (prints to original stderr)
+            # Default error handling (prints to original stderr)
+            self.handleError(record)
 
     def close(self):
         # In this case, the underlying stream (WxTextCtrlOutput) is managed
@@ -175,438 +196,236 @@ class WxLogHandler(logging.Handler):
         super().close()
 
 
-class WxTextCtrlInput:
-    """Custom input stream to redirect input() calls to a wx.TextCtrl."""
-
-    def __init__(
-        self,
-        input_ctrl: wx.TextCtrl,
-        output_ctrl: wx.TextCtrl,
-        input_prompt_label: wx.StaticText,
-    ):
-        """
-        :param input_ctrl: The wx.TextCtrl to which input will be directed.
-        :param output_ctrl: The wx.TextCtrl to echo the input prompt.
-        :param input_prompt_label: The wx.StaticText label to show the input prompt.
-        """
-        self.input_ctrl = input_ctrl
-        self.output_ctrl = output_ctrl
-        self.input_prompt_label = input_prompt_label
-        self.input_queue = queue.Queue(maxsize=1)
-        self.is_closed = False
-        self._prompt_active = False  # To manage prompt display
-
-    def _activate_prompt(self, prompt_text: str = ""):
-        """
-        Activate the input prompt and enable the input control.
-        :param prompt_text: Optional text to display as the prompt.
-        """
-        if not self.input_ctrl:
-            return
-        self.input_ctrl.Enable(True)
-        self.input_ctrl.SetFocus()
-        self.input_prompt_label.SetLabel(prompt_text if prompt_text else "Input: ")
-        self.input_prompt_label.Parent.Layout()
-        self._prompt_active = True
-
-    def _deactivate_prompt(self):
-        """Deactivate the input prompt and disable the input control."""
-        if not self.input_ctrl:
-            return
-        self.input_ctrl.Enable(False)
-        self.input_prompt_label.SetLabel("")
-        self._prompt_active = False
-
-    def readline(self):
-        """Read a line from the input stream, blocking until input is available."""
-        if self.is_closed:
-            raise EOFError("Console input stream closed.")
-
-        # Get the prompt string from input() if any.
-        # input() prints its prompt to stdout. We don't capture it here directly
-        # but our WxTextCtrlOutput will display it.
-        # We just need to enable the input field.
-        wx.CallAfter(self._activate_prompt)
-
-        try:
-            line = self.input_queue.get(block=True, timeout=None)  # Wait indefinitely
-            if line is None:  # Sentinel for closing
-                self.is_closed = True  # Ensure it's marked closed
-                raise EOFError(
-                    "Console input stream explicitly closed during readline."
-                )
-            # Echo the input. The newline is already part of 'line' from on_input_enter
-            if self.output_ctrl:  # Echo input to output
-                wx.CallAfter(self.output_ctrl.AppendText, line)
-            return line
-        except (
-            queue.Empty
-        ):  # Should not happen with timeout=None unless queue is closed
-            self.is_closed = True
-            raise EOFError("Console input stream timed out or closed.")
-        finally:
-            if self._prompt_active:  # Only deactivate if we activated it
-                wx.CallAfter(self._deactivate_prompt)
-
-    def read(self, size=-1):
-        """
-        Read a specified number of characters from the input stream.
-        :param size: Number of characters to read. If -1, read until EOF.
-        :return: The read characters as a string.
-        """
-        return self.readline()
-
-    def fileno(self):
-        """
-        Return the file descriptor for the input stream.
-        This is not applicable for wx.TextCtrl, so we raise an error.
-        :raises io.UnsupportedOperation: Always raised since wx.TextCtrl does not have a fileno.
-        """
-        raise io.UnsupportedOperation("fileno")
-
-    def isatty(self):
-        """Check if the input stream is a TTY (terminal)."""
-        return True
-
-    def close(self):
-        """
-        Close the input stream, signaling that no more input will be provided.
-        This will cause readline() to raise EOFError on the next call.
-        """
-        if not self.is_closed:
-            self.is_closed = True
-            self.input_queue.put(None)  # Signal readline to unblock and raise EOFError
-
-    def provide_input(self, text: str):
-        """
-        Provide input to the console. This method is called when the user types in the input field.
-        :param text: The text to provide as input.
-        """
-        if not self.is_closed:
-            try:
-                self.input_queue.put_nowait(text)
-            except queue.Full:
-                # This can happen if provide_input is called rapidly before readline consumes.
-                # Or if readline is already unblocked by a close() signal.
-                if self.output_ctrl:
-                    wx.CallAfter(
-                        self.output_ctrl.AppendText,
-                        "\n[Input ignored: console closing or busy]\n",
-                    )
-
-
 class ScriptConsoleFrame(wx.Frame):
-    """A wx.Frame that serves as a console for running Python scripts with input/output redirection."""
+    TIMER_ID_FORCE_KILL = wx.NewIdRef()  # For escalating to SIGKILL
 
     def __init__(
         self,
         parent: wx.Window,
         title: str,
         script_path: str,
-        script_globals: Optional[dict] = None,
+        script_args: Optional[list] = None,
+        script_env: Optional[dict] = None
     ):
         """
         :param parent: The parent wx.Window for this frame.
         :param title: The title of the console window.
         :param script_path: The path to the Python script to run.
-        :param script_globals: Optional dictionary of global variables to pass to the script.
+        :param script_args: Optional list of arguments to pass to the script.
+        :param script_env: Optional dictionary of environment variables to set for the script.
         """
         super().__init__(parent, title=title, size=(800, 600))
-        self.script_path = script_path
-        self.script_globals = script_globals if script_globals else {}
-        self.script_thread = None
-        self.is_script_running = False
-        self._stop_event = threading.Event()  # For signaling the script thread to stop
-        self.force_stop_timer = None  # Timer for escalating to force stop
 
+        self.script_path = script_path
+        self.script_args = script_args if script_args else []
+        self.script_env = script_env  # If None, inherits environment
+
+        self.process = None  # subprocess.Popen instance
+        self.is_script_running = False
+        self.io_threads = []  # To store stdout/stderr reading threads
+
+        self.force_kill_timer = None
+
+        # Create the main panel
         self.panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
-
-        self.output_ctrl = wx.TextCtrl(
-            self.panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2
-        )
-        font = wx.Font(
-            10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL
-        )
+        # Output TextCtrl
+        self.output_ctrl = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
+        font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.output_ctrl.SetFont(font)
         vbox.Add(self.output_ctrl, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
 
-        # Input Area and Stop Button hbox
+        # Input TextCtrl
         controls_hbox = wx.BoxSizer(wx.HORIZONTAL)
-
-        # Input Prompt and TextCtrl
-        input_sub_hbox = wx.BoxSizer(wx.HORIZONTAL)
-        self.input_prompt_label = wx.StaticText(self.panel, label="")
-        self.input_prompt_label.SetFont(font)
-        input_sub_hbox.Add(
-            self.input_prompt_label,
-            flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT,
-            border=5,
-        )
-
         self.input_ctrl = wx.TextCtrl(self.panel, style=wx.TE_PROCESS_ENTER)
         self.input_ctrl.SetFont(font)
-        self.input_ctrl.Enable(False)
         self.input_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_input_enter)
-        input_sub_hbox.Add(self.input_ctrl, proportion=1, flag=wx.EXPAND)
-
-        controls_hbox.Add(
-            input_sub_hbox, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10
-        )
+        controls_hbox.Add(self.input_ctrl, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
 
         # Stop Button
-        self.stop_button = wx.Button(self.panel, label="Stop Script (Ctrl+C)")
+        self.stop_button = wx.Button(self.panel, label="Stop Script")
         self.stop_button.Bind(wx.EVT_BUTTON, self.on_stop_button_clicked)
-        self.stop_button.Enable(False)  # Enabled when script is running
-        controls_hbox.Add(
-            self.stop_button,
-            flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT,
-            border=5,
-        )
-
-        vbox.Add(
-            controls_hbox, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=5
-        )
-        # --- End Input Area and Stop Button HBox ---
+        controls_hbox.Add(self.stop_button, flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, border=5)
+        vbox.Add(controls_hbox, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=5)
 
         self.panel.SetSizer(vbox)
         self.Layout()
         self.Bind(wx.EVT_CLOSE, self.on_close_window)
+        self.Bind(wx.EVT_TIMER, self.on_force_kill_timeout, id=self.TIMER_ID_FORCE_KILL)
 
-        self.original_stdin = sys.stdin
-        self.original_stdout = sys.stdout
-        self.original_stderr = sys.stderr
+        # Redirector for GUI output (fed by pipe-reading threads)
+        self.gui_stdout_writer = WxTextCtrlOutput(self.output_ctrl)
+        self.gui_stderr_writer = WxTextCtrlOutput(self.output_ctrl, style=wx.TextAttr(wx.RED))
 
-        self.stdin_redirect = WxTextCtrlInput(
-            self.input_ctrl, self.output_ctrl, self.input_prompt_label
-        )
-        self.stdout_redirect = WxTextCtrlOutput(self.output_ctrl)
-        self.stderr_redirect = WxTextCtrlOutput(
-            self.output_ctrl, style=wx.TextAttr(wx.RED)
-        )
+        self.script_logger = logging.getLogger()
         self.log_handler = None
 
         self.start_script_execution()
         self.Show()
 
-    def on_input_enter(self, event):
-        """Handle the Enter key press in the input control."""
-        if self.is_script_running and not self.stdin_redirect.is_closed:
-            command = self.input_ctrl.GetValue() + "\n"
-            self.input_ctrl.Clear()
-            self.stdin_redirect.provide_input(command)
-        event.Skip()
-
-    def start_script_execution(self):
-        """Start the script execution in a separate thread."""
-        if self.is_script_running:
-            return
-        self.is_script_running = True
-        self.stop_button.Enable(True)  # Enable stop button
-        self._stop_event.clear()
-        self.output_ctrl.AppendText(f"--- Running script: {self.script_path} ---\n")
-        self.script_thread = threading.Thread(target=self._execute_script_target)
-        self.script_thread.daemon = True
-        self.script_thread.start()
-
-    def _execute_script_target(self):
-        """The target function for the script execution thread."""
-        _old_stdin, _old_stdout, _old_stderr = sys.stdin, sys.stdout, sys.stderr
-        _old_argv = list(sys.argv)
-        sys.stdin = self.stdin_redirect
-        sys.stdout = self.stdout_redirect
-        sys.stderr = self.stderr_redirect
-        sys.argv = [self.script_path]
-
-        script_logger = logging.getLogger()
-        if not script_logger.hasHandlers() or not any(
-            isinstance(h, WxLogHandler) for h in script_logger.handlers
-        ):
-            script_logger.setLevel(logging.DEBUG)
-
-        self.log_handler = WxLogHandler(self.stdout_redirect)
-        self.log_handler.setLevel(logging.DEBUG)
-        script_logger.addHandler(self.log_handler)
-
-        merged_globals = {
-            "__name__": "__main__",
-            "console_should_stop": self._stop_event.is_set,
-        }
-        if self.script_globals:
-            merged_globals.update(self.script_globals)
-
+    def _pipe_reader_target(self, pipe: Union[int, IO[Any]], writer_func: Callable, stream_name: str = ""):
         try:
-            # The core idea for Ctrl+C is to raise KeyboardInterrupt in the script's thread.
-            # However, directly injecting exceptions into other threads is tricky and
-            # platform-dependent (e.g., using ctypes and PyThreadState_SetAsyncExc).
-            # The `_stop_event` and `stdin_redirect.close()` are more cooperative.
-            # If a script is truly stuck in a C extension without releasing the GIL,
-            # those cooperative methods might not work immediately.
-
-            # For now, we rely on the cooperative stop via _stop_event and EOFError on input.
-            runpy.run_path(
-                self.script_path, init_globals=merged_globals, run_name="__main__"
-            )
-
-            if not self._stop_event.is_set():
-                wx.CallAfter(
-                    self._append_output_safe, "\n--- Script execution finished ---\n"
-                )
-        except KeyboardInterrupt:  # This would be the ideal if we could inject it
-            wx.CallAfter(
-                self._append_output_safe,
-                "\n--- Script interrupted (KeyboardInterrupt) ---\n",
-            )
-        except EOFError:
-            wx.CallAfter(
-                self._append_output_safe,
-                "\n--- Script execution interrupted (input closed or EOF) ---\n",
-            )
-        except SystemExit as e:
-            wx.CallAfter(
-                self._append_output_safe,
-                f"\n--- Script exited with code: {e.code} ---\n",
-            )
-        except Exception:
-            tb_str = traceback.format_exc()
-            wx.CallAfter(
-                self._append_output_safe, f"\n--- Script Error ---\n{tb_str}\n"
-            )
+            for line_count, line in enumerate(iter(pipe.readline, '')):
+                if not self.is_script_running:
+                    break
+                wx.CallAfter(writer_func, line)
+        except ValueError:
+            # This can happen if the pipe is closed (e.g., by the process exiting)
+            # while readline() is active or if the TextCtrl is gone.
+            pass  # Normal on process termination
+        except Exception as e:
+            if self.is_script_running:
+                wx.CallAfter(writer_func, f"\n--- Error in pipe reader for {stream_name}: {e} ---\n")
         finally:
-            if self.log_handler:
-                script_logger.removeHandler(self.log_handler)
-                self.log_handler.close()
-                self.log_handler = None
+            if hasattr(pipe, 'close') and not pipe.closed:
+                try:
+                    pipe.close()
+                except Exception as e_close:
+                    logging.debug(f"Pipe reader {stream_name}: Error closing pipe: {e_close}")
+            logging.debug(f"Pipe reader {stream_name}: Exiting thread.")
 
-            sys.stdin = _old_stdin
-            sys.stdout = _old_stdout
-            sys.stderr = _old_stderr
-            sys.argv = _old_argv
-            wx.CallAfter(self._script_execution_completed)
-
-    def _append_output_safe(self, text):
+    def _append_output_safe(self, text: str):
         """Safely append text to output_ctrl, checking if it still exists."""
-        if self.output_ctrl:  # Check if the widget still exists
+        if self.output_ctrl:
             self.output_ctrl.AppendText(text)
 
-    def _script_execution_completed(self):
-        """Called when the script execution is completed or interrupted."""
-        self.is_script_running = False
-        if self.stop_button:
-            self.stop_button.Enable(False)
-        if self.input_ctrl:
-            self.input_ctrl.Enable(False)
-        if self.input_prompt_label:
-            self.input_prompt_label.SetLabel("")
-
-    def _attempt_graceful_stop(self):
-        """Initiates the stop sequence for the script."""
-        if (
-            self.is_script_running
-            and self.script_thread
-            and self.script_thread.is_alive()
-        ):
-            self._stop_event.set()  # Signal the script to stop (if it checks)
-            if self.stdin_redirect:
-                self.stdin_redirect.close()  # This will cause input() to raise EOFError
-            return True
-        return False
-
-    def on_stop_button_clicked(self, event):
-        """Handle the stop button click event."""
-        if not self.is_script_running:
+    def start_script_execution(self):
+        if self.is_script_running:
             return
 
-        # Disable button immediately to prevent multiple clicks during stop attempt
-        if self.stop_button:
-            self.stop_button.Enable(False)
-
-        wx.CallAfter(
-            self._append_output_safe,
-            "\n--- Stop requested. Attempting graceful stop... Please wait for 5 seconds. ---\n",
-        )
-
-        if self._attempt_graceful_stop():
-            # If graceful stop was initiated, start a timer.
-            # If the script doesn't stop cooperatively within N seconds, then try forceful.
-            if self.force_stop_timer is not None and self.force_stop_timer.IsRunning():
-                self.force_stop_timer.Stop()  # Should not happen if logic is correct
-
-            timer_id = wx.NewIdRef()
-            self.force_stop_timer = wx.Timer(self, timer_id)
-            self.Bind(wx.EVT_TIMER, self.on_force_stop_timeout, id=timer_id)
-            self.force_stop_timer.StartOnce(5000)  # 5 seconds timeout
-        else:
-            # Script wasn't running or thread not alive, _attempt_graceful_stop returned False.
-            if (
-                self.stop_button and not self.is_script_running
-            ):  # Check self.is_script_running again
-                self.stop_button.Enable(
-                    False
-                )  # Keep it disabled if script truly stopped
-            elif self.stop_button and self.is_script_running:
-                self.stop_button.Enable(True)  # Re-enable if script is still running
-
-    def on_force_stop_timeout(self, event):
-        """Called if graceful stop doesn't work within the timeout."""
-        if (
-            self.is_script_running
-            and self.script_thread
-            and self.script_thread.is_alive()
+        if not self.script_logger.hasHandlers() or not any(
+            isinstance(h, WxLogHandler) for h in self.script_logger.handlers
         ):
-            wx.CallAfter(
-                self._append_output_safe,
-                "\n--- Graceful stop timed out. Attempting forceful interruption (KeyboardInterrupt)... ---\n",
-            )
-            try:
-                thread_id = (
-                    self.script_thread.ident
-                )  # Get the integer thread identifier
-                if thread_id is not None:
-                    if raise_exception_in_thread(thread_id, KeyboardInterrupt):
-                        wx.CallAfter(
-                            self._append_output_safe,
-                            "--- KeyboardInterrupt signal sent to script thread. ---\n",
-                        )
-                    else:
-                        wx.CallAfter(
-                            self._append_output_safe,
-                            "--- Failed to send KeyboardInterrupt (thread might have exited). ---\n",
-                        )
-                else:
-                    wx.CallAfter(
-                        self._append_output_safe,
-                        "--- Could not get script thread ID for forceful stop. ---\n",
-                    )
-            except Exception as e:
-                wx.CallAfter(
-                    self._append_output_safe,
-                    f"\n--- Error during forceful interruption: {e} ---\n",
-                )
+            self.script_logger.setLevel(logging.DEBUG)
 
-    def on_close_window(self, event):
-        """Handle the window close event."""
-        if self._attempt_graceful_stop():
-            wx.CallAfter(
-                self._append_output_safe,
-                "\n--- Console closing. Graceful stop initiated. ---\n",
-            )
+        self.log_handler = WxLogHandler(self.gui_stdout_writer)
+        self.log_handler.setLevel(logging.DEBUG)
+        self.script_logger.addHandler(self.log_handler)
+        command = [sys.executable, '-u', self.script_path] + self.script_args
+        self.output_ctrl.AppendText(f"--- Running script: {' '.join(command)} ---\n")
 
+        try:
+            script_full_env = os.environ.copy()
+            if self.script_env:
+                script_full_env.update(self.script_env)
+            script_full_env["PYTHONUNBUFFERED"] = "1"  # Force unbuffered output from Python script
+
+            self.process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=0,
+                env=script_full_env,
+            )
+            self.is_script_running = True
+
+            # Start threads to read stdout and stderr
+            self.io_threads = []
+            t_stdout = threading.Thread(target=self._pipe_reader_target,
+                                       args=(self.process.stdout, self.gui_stdout_writer.write, "stdout"),
+                                       daemon=True)
+            t_stderr = threading.Thread(target=self._pipe_reader_target,
+                                       args=(self.process.stderr, self.gui_stderr_writer.write, "stderr"),
+                                       daemon=True)
+            self.io_threads.extend([t_stdout, t_stderr])
+            t_stdout.start()
+            t_stderr.start()
+
+            # A thread to monitor if the process has exited
+            t_monitor = threading.Thread(target=self._monitor_process, daemon=True)
+            self.io_threads.append(t_monitor)
+            t_monitor.start()
+        except Exception as e:
+            self.output_ctrl.AppendText(f"\n--- Error starting script process: {e} ---\n")
+            self._script_execution_completed(returncode=-1) # Indicate error
+
+    def _monitor_process(self):
+        if self.process:
+            return_code = self.process.wait()  # Blocks until process terminates
+            wx.CallAfter(self._script_execution_completed, return_code)
+
+    def _script_execution_completed(self, returncode: Optional[int] = None):
+        if self.force_kill_timer and self.force_kill_timer.IsRunning():
+            self.force_kill_timer.Stop()
+
+        # Wait briefly for I/O threads to finish reading any remaining output
+        for t in self.io_threads:
+            if t.is_alive():
+                t.join(timeout=0.1)
+
+        self.stop_button.Enable(False)
+        self.input_ctrl.Enable(False)
         if self.log_handler:
-            root_logger = logging.getLogger()
-            if self.log_handler in root_logger.handlers:
-                root_logger.removeHandler(self.log_handler)
+            self.script_logger.removeHandler(self.log_handler)
             self.log_handler.close()
             self.log_handler = None
+        self.io_threads = []
+        self.process = None
+        self.force_kill_timer = None
+        self.is_script_running = False
 
-        if self.stdin_redirect:
-            self.stdin_redirect.close()
-            self.stdin_redirect.input_ctrl = None
-            self.stdin_redirect.output_ctrl = None
-        if self.stdout_redirect:
-            self.stdout_redirect.text_ctrl = None
-        if self.stderr_redirect:
-            self.stderr_redirect.text_ctrl = None
+        if returncode is not None:
+            wx.CallAfter(self._append_output_safe, f"\n--- Script process exited with code: {returncode} ---\n")
+
+    def on_input_enter(self, event):
+        if self.process and self.is_script_running and self.process.stdin and not self.process.stdin.closed:
+            command_to_send = self.input_ctrl.GetValue() + os.linesep # Ensure correct OS line ending
+            self.input_ctrl.Clear()
+            try:
+                self.gui_stdout_writer.write(f"[You typed]: {command_to_send}") # Echo to GUI
+                self.process.stdin.write(command_to_send)
+                self.process.stdin.flush()
+            except (OSError, ValueError, BrokenPipeError) as e:
+                self._append_output_safe(f"\n--- Error writing to script input (pipe likely closed): {e} ---\n")
+        event.Skip()
+
+    def on_stop_button_clicked(self, event):
+        if not self.is_script_running or not self.process:
+            return
+
+        self.stop_button.Enable(False)  # Disable to prevent multiple clicks
+
+        wx.CallAfter(self._append_output_safe, "\n--- Stop requested. Sending SIGTERM to script... ---\n")
+
+        try:
+            self.process.terminate()
+        except Exception as e:
+            wx.CallAfter(self._append_output_safe, f"\n--- Error sending SIGTERM: {e} ---\n")
+            self.stop_button.Enable(True)  # Re-enable if terminate failed
+            return  # Don't start timer if terminate itself failed
+
+        # Start a timer. If SIGTERM doesn't stop it, escalate to SIGKILL.
+        if self.force_kill_timer and self.force_kill_timer.IsRunning():
+            self.force_kill_timer.Stop()
+        self.force_kill_timer = wx.Timer(self, self.TIMER_ID_FORCE_KILL)
+        self.Bind(wx.EVT_TIMER, self.on_force_kill_timeout, id=self.TIMER_ID_FORCE_KILL)
+        self.force_kill_timer.StartOnce(5000) # 5 seconds timeout for SIGKILL
+
+    def on_force_kill_timeout(self, event):
+        self.force_kill_timer = None
+
+        if self.is_script_running and self.process and self.process.poll() is None:
+            wx.CallAfter(self._append_output_safe, "\n--- SIGTERM timed out. Sending SIGKILL to script... ---\n")
+            try:
+                self.process.kill() # Sends SIGKILL on POSIX, TerminateProcess on Windows
+            except Exception as e:
+                wx.CallAfter(self._append_output_safe, f"\n--- Error sending SIGKILL: {e} ---\n")
+
+    def on_close_window(self, event):
+        if self.force_kill_timer and self.force_kill_timer.IsRunning():
+            self.force_kill_timer.Stop()
+            self.force_kill_timer = None
+
+        if self.is_script_running and self.process:
+            logging.debug("Window closed. Attempting to terminate script process.")
+            try:
+                self.process.terminate()
+            except ProcessLookupError:  # Process already gone
+                pass
+            except Exception:
+                logging.exception("Error terminating script on close.")
 
         self.Destroy()
         event.Skip()
@@ -620,18 +439,24 @@ class ScriptSelectorDialog(wx.Dialog):
         parent: wx.Window,
         title: str,
         available_scripts: List[Tuple[str, str]],
-        dev_base: str,
-        release_base: str,
+        version_base_path: dict,
     ):
         super().__init__(
             parent, title=title, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
 
         self.available_scripts = available_scripts
-        self.dev_base = dev_base
-        self.release_base = release_base
+        self.version_base_path = {}
+        for version, base_path in version_base_path.items():
+            if os.path.isdir(base_path):
+                self.version_base_path[version] = base_path
+            else:
+                logging.debug(
+                    f"Version base path '{base_path}' for '{version}' does not exist or is not a directory."
+                )
 
-        self.selected_script_path = None  # To store the selected script path
+        self.selected_script_path = None
+        self.script_env = {}
 
         panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -651,7 +476,7 @@ class ScriptSelectorDialog(wx.Dialog):
         version_box_sizer = wx.StaticBoxSizer(version_box, wx.VERTICAL)
         self.version_radio_box = wx.RadioBox(
             panel,
-            choices=VERSION_CHOICES,
+            choices=list(self.version_base_path.keys()),
             majorDimension=1,  # 1 column
             style=wx.RA_SPECIFY_COLS,
         )
@@ -688,32 +513,54 @@ class ScriptSelectorDialog(wx.Dialog):
             )
             return
 
-        _, relative_path = self.available_scripts[script_idx]
-        version_idx = self.version_radio_box.GetSelection()  # 0 for Release, 1 for Dev
+        _, script_name = self.available_scripts[script_idx]
+        version_idx = self.version_radio_box.GetSelection()
+        version_str = self.version_radio_box.GetString(version_idx)
 
-        base_path = self.release_base if version_idx == 0 else self.dev_base
-        chosen_path = os.path.join(base_path, relative_path)
-
-        if not os.path.exists(chosen_path) or not os.path.isfile(chosen_path):
-            version_str = VERSION_CHOICES[version_idx]
+        try:
+            base_path, chosen_path = find_script_path(version_str, script_name, self.version_base_path)
+        except (ValueError, FileNotFoundError) as e:
             wx.MessageBox(
-                f"The selected script was not found at the expected location for the '{version_str}' version:\n\n{chosen_path}",
-                "File Not Found",
+                str(e),
+                "Error Finding Script",
                 wx.OK | wx.ICON_ERROR,
                 self,
             )
-            self.selected_script_path = None
+            return
+
+        try:
+            if version_str == "Development":
+                # Normalize the base_path to avoid issues with trailing slashes, etc.
+                normalized_base_path = os.path.abspath(os.path.normpath(base_path))
+
+                # Get the current PYTHONPATH from the environment Odemis is running in
+                current_pythonpath = os.environ.get("PYTHONPATH", "")
+                # Prepend the new base_path
+                self.script_env["PYTHONPATH"] = normalized_base_path + os.pathsep + current_pythonpath
+                logging.debug(
+                    f"For Development version, prepended '{normalized_base_path}'. New PYTHONPATH: {self.script_env['PYTHONPATH']}"
+                )
+        except Exception as e:
+            wx.MessageBox(
+                f"Error setting up PYTHONPATH: {e}",
+                "Environment Setup Error",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
             return
 
         self.selected_script_path = chosen_path
         self.EndModal(wx.ID_OK)
 
-    def get_selected_script_path(self):
+    def get_script_path(self):
         return self.selected_script_path
 
+    def get_script_env(self):
+        return self.script_env
 
-class ScriptRunnerPlugin(Plugin):  # Your plugin class
-    name = "Script Runner with Console"
+
+class ScriptRunnerPlugin(Plugin):
+    name = "FAST-EM maintenance script runner with console"
     __version__ = "1.0"
     __author__ = "Nandish Patel"
     __license__ = "GPLv2"
@@ -721,7 +568,8 @@ class ScriptRunnerPlugin(Plugin):  # Your plugin class
     def __init__(self, microscope, main_app):
         super().__init__(microscope, main_app)
         self._main_app = main_app
-        self._microscope = microscope
+        if microscope is None:
+            return
 
         self.addMenu(
             "Help/Development/Service and installation scripts",
@@ -730,33 +578,27 @@ class ScriptRunnerPlugin(Plugin):  # Your plugin class
 
     def _on_run_script_menu(self):
         """Menu callback for running a service or installation script."""
-        parent_frame = (
-            self._main_app.GetTopWindow()
-            if hasattr(self._main_app, "GetTopWindow")
-            else None
-        )
-
         # Create and show the custom script selector dialog
-        AVAILABLE_SCRIPTS.sort(key=lambda x: x[0])
         dialog = ScriptSelectorDialog(
-            parent_frame,
+            self._main_app.main_frame,
             "Select Script to Run",
             AVAILABLE_SCRIPTS,
-            DEV_SCRIPT_BASE_PATH,
-            RELEASE_SCRIPT_BASE_PATH,
+            VERSION_BASE_PATH,
         )
 
         if dialog.ShowModal() == wx.ID_OK:
-            script_path = dialog.get_selected_script_path()
+            script_path = dialog.get_script_path()
+            script_env = dialog.get_script_env()
             if script_path:
                 script_name = os.path.basename(script_path)
                 logging.info(f"User selected script to run: {script_path}")
 
                 console_frame_title = f"Console: {script_name}"
                 ScriptConsoleFrame(
-                    parent_frame,
+                    self._main_app.main_frame,
                     console_frame_title,
                     script_path,
+                    script_env=script_env
                 )
             else:
                 logging.warning(
