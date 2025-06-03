@@ -584,7 +584,7 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
 
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
-        self.scanner.resolution.value = (512, 256)
+        self.scanner.resolution._value = (512, 256)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
@@ -619,14 +619,21 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         im = self.sed.data.get()
         self.assertGreater(im.max(), 0)
 
+    def test_acquire_nonzero_signal(self):
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
+        im = self.sed.data.get()
+        self.assertGreater(im.max(), 0)
+
     def test_cancel_acquisition(self):
         self.scanner.dwellTime.value = 100e-6  # a little bit more than 10s per frame
         self.left = 1
         logging.info("Starting initial (long) acquisition")
         self.sed.data.subscribe(self.receive_image)
-        time.sleep(1)
+        # time.sleep(3)
         logging.info("Stopping initial (long) acquisition")
         self.sed.data.unsubscribe(self.receive_image)
+        logging.info("Stopped initial (long) acquisition")
+
         start = time.time()
         self.scanner.dwellTime.value = 1e-6  # shorter dwell time
         logging.info("Starting short acquisition")
