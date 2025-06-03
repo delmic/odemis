@@ -1263,12 +1263,12 @@ class Sparc2SpecSwitchTestCase(unittest.TestCase):
         """
         Default movement of the spec-switch mirror is tested.
         Basically the mirror moves either to engage position or to retract position.
-        The moves however are executed through a progressive future. This future type is
-        represented in odemis.util.driver as a generic class.
+        The moves however are executed through a progressive future.
         """
         spec_sw_md = self.spec_switch.getMetadata()
 
         # set the spec-switch mirror to the default retracted position (FAV_POS_DEACTIVE)
+        # That is the position when the light can be seen on the standard ("internal") camera.
         f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
         f.result()
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
@@ -1285,16 +1285,17 @@ class Sparc2SpecSwitchTestCase(unittest.TestCase):
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
 
         # test if the spec-switch mirror can be moved to the engage position (FAV_POS_ACTIVE)
+        # That is used to get the signal on the "external" detector (not controlled by Odemis)
         f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_ACTIVE])
         f.result()
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
 
-        # call light-in-align mode again and check if the spec-switch mirror is not moved afterward
+        # call light-in-align mode again and confirm the spec-switch mirror goes back to the default position
         self.opt_mngr.setPath("light-in-align").result()
-        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
+        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
 
         # test if the movement of the spec-switch can be cancelled
-        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_ACTIVE])
         time.sleep(3)
         f.cancel()
 
