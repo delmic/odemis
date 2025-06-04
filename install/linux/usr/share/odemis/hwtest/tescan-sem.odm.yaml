@@ -9,14 +9,15 @@ SEM: {
 "Tescan SEM": {
     class: tescan.SEM,
     role: null,
-    init: {host: "192.168.2.35"},
+    init: {host: "192.168.50.6"},
     # more detectors can be added, if necessary
-    children: {scanner: "EBeam Scanner",
-               detector0: "EBeam Detector",
-               stage: "Sample Stage",
-               focus: "EBeam Focus",
-            #    camera: "Chamber Cam", # comment out if using the simulator
-               light: "Chamber Light"
+    children: {
+            scanner: "EBeam Scanner",
+            detector0: "EBeam Detector",
+            stage: "Sample Stage",
+            focus: "EBeam Focus",
+        #    camera: "Chamber Cam", # comment out if using the simulator
+            light: "Chamber Light"
     }
 }
 
@@ -32,7 +33,7 @@ SEM: {
     role: se-detector,
     init: {
         channel: 0,
-        detector: 0,
+        detector: "e-t",
     },
 }
 
