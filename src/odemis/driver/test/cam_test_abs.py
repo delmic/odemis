@@ -590,6 +590,7 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
         # just in case it failed
         self.ccd.data.unsubscribe(self.receive_ccd_image)
         self.sed.data.unsubscribe(self.receive_sem_data)
+        time.sleep(0.1)  # give time to the dataflow to finish
 
     def test_no_data(self):
         """
