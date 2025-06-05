@@ -593,7 +593,7 @@ class IndependentDetector(model.Detector):
         # Accepts any resolution, as it's just a "slave" of the real scanner
         self.resolution = model.ResolutionVA((1, 1), [(1, 1), self.fake_img.shape[::-1]])
         # The dwell time is supposed to be set to a value (slightly) lower than the scanner's dwell time
-        self.dwellTime = model.FloatContinuous(1e-6, (0.1e-6, 1000), unit="s",
+        self.dwellTime = model.FloatContinuous(2e-6, (2e-6, 0.1), unit="s",
                                                setter=self._set_dwell_time)
 
         # Special event to request software unblocking on the scan
