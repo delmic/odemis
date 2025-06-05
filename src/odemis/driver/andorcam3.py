@@ -657,6 +657,12 @@ class AndorCam3(model.DigitalCamera):
         return pbuffer, buffersize.value
 
     def Flush(self):
+        """
+        Discard any remaining buffers that have been queued using the QueueBuffer but not used yet.
+        Warning: as of v3.15.30126, on the Sona, calling this function when the queue is empty
+        sometimes leads to a freeze of the process.
+        """
+        logging.debug("Flush queued buffers")
         self.atcore.AT_Flush(self.handle)
 
     def GetString(self, prop):
@@ -1619,6 +1625,7 @@ class AndorCam3(model.DigitalCamera):
                     try:
                         if self.GetBool(u"CameraAcquiring"):
                             self.Command(u"AcquisitionStop")
+                            self.Flush()
                     except (ATError, HwError) as exp:
                         if isinstance(exp, HwError) or exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
                             # This handle the camera being disconnected:
@@ -1651,9 +1658,12 @@ class AndorCam3(model.DigitalCamera):
                     else: # for SimCam
                         readout_time = size[0] * size[1] / self.readoutRate.value # s
 
+                    # WARNING: Flush() should not be needed here, as we always do that after an
+                    # acquisition stop. On the Sona, as of v3.15.30126, calling it multiple times in
+                    # row can cause freeze.
+
                     # Allocates a pipeline of buffers, so that when we are processing
                     # one buffer, the driver can already acquire the next image.
-                    self.Flush()
                     buffers = []
                     for i in range(nbuffers):
                         cbuffer = self._allocate_buffer(size)
