@@ -27,6 +27,7 @@ of microscope images.
 
 """
 
+import configparser
 import logging
 import math
 import os
@@ -52,14 +53,15 @@ from odemis.acq.stream import (
     FluoStream,
     SEMStream,
     StaticStream,
-    Stream,
+    StaticFluoStream,
+    Stream, StaticFIBStream,
 )
 from odemis.gui import conf
 from odemis.gui import model as guimod
-from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG
+from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG, LICENCE_CORRELATION_ENABLED
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
-    OverviewStreamAcquiController,
+    OverviewStreamAcquiController, CorrelationDialogController,
 )
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import (
@@ -92,6 +94,7 @@ class CryoAcquiController(object):
         self.overview_acqui_controller = OverviewStreamAcquiController(
             self._tab_data, self._tab, mode=self.acqui_mode
         )
+        self.correlation_dialog_controller = CorrelationDialogController(self._tab_data, self._tab)
         self._config = conf.get_acqui_conf()
         # contains the acquisition progressive future for the given streams
         self._acq_future = None
@@ -176,9 +179,16 @@ class CryoAcquiController(object):
 
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
+        self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
 
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self.txt_tdct = self._panel.txt_tdct
+            self.txt_tdct.Show(LICENCE_CORRELATION_ENABLED)
+            self._panel.btn_tdct.Show(LICENCE_CORRELATION_ENABLED)
+            self._panel.btn_tdct.Enable(False)
+            self._panel.txt_tdct.Enable(False)
+            self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
             self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
             self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
             self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
@@ -194,6 +204,27 @@ class CryoAcquiController(object):
 
         # refresh the GUI
         self._panel.Layout()
+
+    def _on_current_feature(self, feature: CryoFeature):
+        """
+        Called when the current feature changes
+        """
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._check_correlation_controls(feature)
+
+    def _check_correlation_controls(self, current_feature: CryoFeature):
+        """
+        Enable or disable the correlation controls
+        :param current_feature: the current feature
+        """
+        # Enable the correlation controls if the current feature has a reference FIB image and altleast one FM Z stack
+        tdct_available = (
+            current_feature is not None
+            and current_feature.reference_image is not None
+            and any(isinstance(s, StaticFluoStream) and hasattr(s, "zIndex") for s in current_feature.streams.value)
+        )
+        self._panel.btn_tdct.Enable(tdct_available)
+        self._panel.txt_tdct.Enable(tdct_available)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -746,6 +777,33 @@ class CryoAcquiController(object):
         das = self.overview_acqui_controller.open_acquisition_dialog()
         if das:
             self._tab.load_overview_data(das)
+
+    def _on_tdct(self, _):
+        """
+        called when the button "TDCT" is pressed
+        """
+        for stream in self._tab_data.main.currentFeature.value.streams.value:
+            if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
+                z_stack = True
+                self.txt_tdct.SetLabel("Interpolation of Z stacks .... \nMay take a while")
+                wx.CallAfter(self._on_close_dialog, z_stack)
+                return  # Prevent continuing execution here
+
+    def _on_close_dialog(self, z_stack):
+        if z_stack:
+            self.correlation_dialog_controller.open_correlation_dialog()
+            self.txt_tdct.SetLabel("")
+
+            # redraw milling position
+            fibsem_tab = self._tab_data.main.getTabByName("meteor-fibsem")
+            if self._tab_data.main.currentFeature.value:
+                correlation_dict = self._tab_data.main.currentFeature.value.correlation_data
+                if self._tab_data.main.currentFeature.value.status.value in correlation_dict:
+                    correlation_data = correlation_dict[self._tab_data.main.currentFeature.value.status.value]
+                    if correlation_data.fib_projected_pois:
+                        target = correlation_data.fib_projected_pois[0]
+                        fibsem_tab.milling_task_controller.draw_milling_tasks(pos=(target.coordinates.value[0],
+                                                                                   target.coordinates.value[1]))
 
     @call_in_wx_main
     def _on_filename(self, name):
