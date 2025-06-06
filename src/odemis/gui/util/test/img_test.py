@@ -958,7 +958,6 @@ class TestSpatialExport(test.GuiTestCase):
 
     def setUp(self):
         data = numpy.zeros((2160, 2560), dtype=numpy.uint16)
-        dataRGB = numpy.zeros((2160, 2560, 4))
         metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
                     'Exposure time': 0.3, 'Pixel size': (1.59604600574173e-07, 1.59604600574173e-07),
                     'Acquisition date': 1441361559.258568, 'Hardware version': "firmware: '14.9.16.0' (driver 3.10.30003.5)",
@@ -969,10 +968,8 @@ class TestSpatialExport(test.GuiTestCase):
                     'Output wavelength range': (6.990000000000001e-07, 7.01e-07)}
         image = model.DataArray(data, metadata)
         fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
-        #fluo_stream.image.value = model.DataArray(dataRGB, metadata)
 
         data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
-        dataRGB = numpy.zeros((1024, 1024, 4))
         metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
                     'Exposure time': 3e-06, 'Pixel size': (5.9910982493639e-08, 6.0604642506361e-08),
                     'Acquisition date': 1441361562.0, 'Hardware version': 'Unknown (driver 2.1-160-g17a59fb (driver ni_pcimio v0.7.76))',
@@ -980,12 +977,27 @@ class TestSpatialExport(test.GuiTestCase):
                     'Shear': 0.003274715695854}
         image = model.DataArray(data, metadata)
         sem_stream = stream.StaticSEMStream(metadata['Description'], image)
-        #sem_stream.image.value = model.DataArray(dataRGB, metadata)
         # create DataProjections for the streams
         fluo_stream_pj = stream.RGBSpatialProjection(fluo_stream)
         sem_stream_pj = stream.RGBSpatialProjection(sem_stream)
         self.streams = [fluo_stream_pj, sem_stream_pj]
         self.min_res = (623, 432)
+
+        # Fluorescence z-stack
+        data = numpy.zeros((4, 1560, 2060), dtype=numpy.uint16)
+        metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
+                    'Exposure time': 0.3, 'Pixel size': (1.59604600574173e-07, 1.59604600574173e-07, 10e-6),
+                    'Acquisition date': 1441361559.258568, 'Hardware version': "firmware: '14.9.16.0' (driver 3.10.30003.5)",
+                    'Centre position': (-0.001203511795256, -0.000295338300158, 0.0001), 'Lens magnification': 40.0,
+                    'Input wavelength range': (6.15e-07, 6.350000000000001e-07), 'Shear':-4.358492733391727e-16,
+                    'Description': 'Z stack green', 'Bits per pixel': 16, 'Binning': (1, 1), 'Pixel readout time': 1e-08,
+                    'Gain': 1.1, 'Rotation': 6.279302551026012, 'Light power': 0.0, 'Display tint': (0, 255, 0),
+                    'Output wavelength range': (6.990000000000001e-07, 7.01e-07)}
+        image = model.DataArray(data, metadata)
+        self.zfluo_stream = stream.StaticFluoStream(metadata['Description'], image)
+        self.zfluo_stream.zIndex.value = 2  # slice to use
+        self.zfluo_stream.max_projection.value = False
+        self.zfluo_stream_pj = stream.RGBSpatialProjection(self.zfluo_stream)
 
         # Spectrum stream
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
@@ -1086,6 +1098,37 @@ class TestSpatialExport(test.GuiTestCase):
         self.assertEqual(exp_data[0].shape, (3379, 4199))  # greyscale
         for s, md in zip(streams, orig_md):
             self.assertEqual(md, s.raw[0].metadata)
+
+    def test_fluo_ztack(self):
+        """
+        Export of a fluorescence z-stack -> the image at the given z-index should be exported
+        """
+        view_hfw = (0.00025158414075691866, 0.00017445320835792754)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        # Test export of a single slice to RGB
+        exp_data = img.images_to_export_data([self.zfluo_stream_pj], view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(exp_data[0].shape, (1226, 1576, 4))  # RGB
+        self.assertEqual(len(exp_data), 1)
+
+        # Test export of a single slice to raw
+        exp_data = img.images_to_export_data([self.zfluo_stream_pj], view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (1226, 1576))  # greyscale
+        self.assertEqual(len(exp_data), 1)
+
+        # Test export MIP to RGB
+        self.zfluo_stream.max_projection.value = True
+        time.sleep(0.5)  # wait a bit until image is actually generated before exporting
+        exp_data = img.images_to_export_data([self.zfluo_stream_pj], view_hfw, view_pos,
+                                             draw_merge_ratio, False)
+        self.assertEqual(exp_data[0].shape, (1226, 1576, 4))  # RGB
+        self.assertEqual(len(exp_data), 1)
+
+        # Test export MIP to raw
+        exp_data = img.images_to_export_data([self.zfluo_stream_pj], view_hfw, view_pos,
+                                             draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (1226, 1576))  # greyscale
+        self.assertEqual(len(exp_data), 1)
 
     def test_no_crop_need(self):
         """
