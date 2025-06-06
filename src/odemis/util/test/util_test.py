@@ -36,7 +36,7 @@ from odemis.util import (
     limit_invocation,
     perpendicular_distance,
     timeout,
-    to_str_escape,
+    to_str_escape, BackgroundWorker,
 )
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -122,6 +122,62 @@ class TestTimeout(unittest.TestCase):
     def toolong(self):
         # will always timeout
         time.sleep(1)
+
+
+class TestBackgroundWorker(unittest.TestCase):
+
+    def setUp(self):
+        self.results = []
+
+    def task(self, x, sleep: float = None):
+        logging.debug("Running task with x=%s, sleep=%s", x, sleep)
+        if sleep is not None:
+            time.sleep(sleep)
+
+        self.results.append(x)
+
+    def test_schedule_work_executes(self):
+        worker = BackgroundWorker()
+        worker.schedule_work(self.task, 42)
+
+        time.sleep(0.5)  # Allow background thread to run
+        self.assertEqual([42], self.results)
+        worker.terminate()
+
+    def test_discard_old(self):
+        """
+        Test scheduling 5 tasks in a row. The first one should be immediately executed,
+        and by the time it's finished, all the other ones have be scheduled, so they are
+        all discarded but the last one.
+        """
+        worker = BackgroundWorker(discard_old=True)
+
+        for i in range(5):
+            worker.schedule_work(self.task, i, 0.1)
+            time.sleep(0.001)
+
+        time.sleep(0.5)
+        # Only the first and last scheduled tasks should be executed
+        self.assertEqual([0, 4], self.results)
+        worker.terminate()
+
+    def test_keep_old(self):
+        worker = BackgroundWorker(discard_old=False)
+
+        for i in range(5):
+            worker.schedule_work(self.task, i, 0.1)
+            time.sleep(0.001)
+
+        time.sleep(1.0)
+        # All scheduled tasks should be executed
+        self.assertEqual([0, 1, 2, 3, 4], self.results)
+        worker.terminate()
+
+    def test_terminate(self):
+        worker = BackgroundWorker(discard_old=False)
+        worker.schedule_work(self.task, "done", sleep=0.1)
+        worker.terminate()
+        self.assertIn("done", self.results)
 
 
 class TestExectuteTask(unittest.TestCase):

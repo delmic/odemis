@@ -24,7 +24,7 @@ import itertools
 import logging
 from typing import Optional, Tuple, Dict, Union, Iterable, List
 
-from odemis import model
+from odemis import model, util
 
 
 class MetadataUpdater(model.Component):
@@ -443,22 +443,35 @@ class MetadataUpdater(model.Component):
             # * ccd.resolution
             # * ccd.binning
             # * spectrograph.position (wavelength or grating)
+            #
+            # We update the wavelength list in background because the call to getPixelToWavelength()
+            # can be slow, which would cause two issues if running in the main thread:
+            # * other observers that depend on the same VAs (eg, MD_PIXEL_SIZE computed based on the
+            #   binning) would be blocked until the wavelength list is computed
+            # * change of multiple VAs at once (very typical) would end-up calling the function
+            #   multiple times, uselessly.
+            background_wl_updater = util.BackgroundWorker(discard_old=True)
+            self._onTerminate.append((background_wl_updater.terminate, ()))
 
             # Use default arguments to store the content of spectrograph and
             # comp_affected as they are *right now*.
-            def updateWavelengthList(_, sp=spectrograph, det=comp_affected):
+            def updateWavelengthList(sp=spectrograph, det=comp_affected):
                 npixels = det.resolution.value[0]
                 pxs = det.pixelSize.value[0] * det.binning.value[0]
                 wll = sp.getPixelToWavelength(npixels, pxs)
                 md = {model.MD_WL_LIST: wll}
                 det.updateMetadata(md)
 
-            comp_affected.resolution.subscribe(updateWavelengthList)
-            self._onTerminate.append((comp_affected.resolution.unsubscribe, (updateWavelengthList,)))
-            comp_affected.binning.subscribe(updateWavelengthList)
-            self._onTerminate.append((comp_affected.binning.unsubscribe, (updateWavelengthList,)))
-            spectrograph.position.subscribe(updateWavelengthList, init=True)
-            self._onTerminate.append((spectrograph.position.unsubscribe, (updateWavelengthList,)))
+            # Schedule metadata update whenever a VA changes
+            def on_va_change(_):
+                background_wl_updater.schedule_work(updateWavelengthList)
+
+            comp_affected.resolution.subscribe(on_va_change)
+            self._onTerminate.append((comp_affected.resolution.unsubscribe, (on_va_change,)))
+            comp_affected.binning.subscribe(on_va_change)
+            self._onTerminate.append((comp_affected.binning.unsubscribe, (on_va_change,)))
+            spectrograph.position.subscribe(on_va_change, init=True)
+            self._onTerminate.append((spectrograph.position.unsubscribe, (on_va_change,)))
         else:
             return False
 

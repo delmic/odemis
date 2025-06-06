@@ -38,7 +38,7 @@ import weakref
 from collections.abc import Mapping
 from concurrent.futures import CancelledError
 from functools import wraps
-from typing import Iterable, Tuple, TypeVar
+from typing import Iterable, Tuple, TypeVar, Callable
 
 import numpy
 from decorator import decorator
@@ -730,6 +730,77 @@ class RepeatingTimer(threading.Thread):
 
     def cancel(self):
         self._must_stop.set()
+
+
+class BackgroundWorker:
+    """
+    A simple background worker that runs a function in a separate thread.
+    It can be used to run a function asynchronously without blocking the main thread.
+    """
+    def __init__(self, discard_old: bool = True):
+        """
+        :param discard_old: If True, the worker will discard any old work that is still in the queue
+        """
+        self.discard_old = discard_old
+        self._work_queue = queue.Queue()  # Tuple[callable, *args, **kwargs] or None
+        self._thread = None  # Thread that runs the background worker
+
+    def schedule_work(self, fn: Callable, *args, **kwargs):
+        """
+        :param fn: function to run in the background
+        :param args: positional arguments to pass to the function
+        :param kwargs: keyword arguments to pass to the function
+        """
+        if self._thread is None or not self._thread.is_alive():
+            self._thread = threading.Thread(target=self._runner)
+            self._thread.daemon = True
+            self._thread.start()
+
+        self._work_queue.put((fn, args, kwargs))
+
+    def terminate(self):
+        """
+        Stops the background worker thread, and wait until it is done.
+        If self.discard_old is True, then queued work will be discarded. Otherwise, it will wait
+        until all queued work is done (within 5s).
+        """
+        if self._thread is not None:
+            self._work_queue.put(None)
+            self._thread.join(5)
+            if self._thread.is_alive():
+                logging.warning("BackgroundWorker thread did not finish in time")
+            else:
+                self._thread = None
+
+    def _runner(self):
+        """
+        The main loop of the background worker. It runs in a separate thread.
+        It processes the work queue and executes the functions in the background.
+        """
+        fn = None
+        try:
+            while True:
+                work = self._work_queue.get()  # Wait until there is work to do
+                if work is None:  # Stop signal
+                    return
+                fn, args, kwargs = work
+
+                if self.discard_old:
+                    # Pick any new work that is already in the queue
+                    try:
+                        while True:
+                            work = self._work_queue.get(block=False)
+                            if work is None:  # Stop signal
+                                return
+                            fn, args, kwargs = work
+                    except queue.Empty:
+                        pass  # No more work in the queue => everything is fine
+
+                fn(*args, **kwargs)
+        except Exception:
+            logging.exception("Error in BackgroundWorker with function %s", fn)
+        finally:
+            logging.debug("BackgroundWorker thread finished")
 
 
 def executeAsyncTask(future, fn, args=(), kwargs=None):
