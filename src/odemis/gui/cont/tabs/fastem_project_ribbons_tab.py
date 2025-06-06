@@ -121,8 +121,8 @@ class RibbonRow(Row):
         sizex, sizey = self.roa.shape.get_size()
         sizex = units.readable_str(sizex, unit="m", sig=3)
         sizey = units.readable_str(sizey, unit="m", sig=3)
-        self.data[RibbonColumnNames.POSX.value] = posx
-        self.data[RibbonColumnNames.POSY.value] = posy
+        self.data[RibbonColumnNames.POSX.value] = round(posx, 9)
+        self.data[RibbonColumnNames.POSY.value] = round(posy, 9)
         self.data[RibbonColumnNames.SIZEX.value] = sizex
         self.data[RibbonColumnNames.SIZEY.value] = sizey
         self.data[RibbonColumnNames.ROT.value] = round(

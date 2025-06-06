@@ -117,15 +117,19 @@ class FastEMSetupTab(Tab):
         self.tab_data.semStream = sem_stream
 
         # Buttons of the calibration panel
+        self.btn_reference_stage = self.sem_stream_cont.btn_reference_stage
         self.btn_optical_autofocus = self.sem_stream_cont.btn_optical_autofocus
         self.btn_sem_autofocus = self.sem_stream_cont.btn_sem_autofocus
         self.btn_autobc = self.sem_stream_cont.btn_auto_brightness_contrast
         self.btn_autostigmation = self.sem_stream_cont.btn_autostigmation
 
+        self.btn_reference_stage.Bind(wx.EVT_BUTTON, self._on_btn_reference_stage)
         self.btn_optical_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_optical_autofocus)
         self.btn_sem_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_sem_autofocus)
         self.btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
         self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
+
+        self.btn_reference_stage.SetToolTip("Reference the stage in 'x' and 'y'.")
 
         # At the start of an autofunction, the stream updates are paused.
         # Use the `stream_should_update` flag to store the current value of `semStream.should_update` VA
@@ -133,6 +137,7 @@ class FastEMSetupTab(Tab):
         # `semStream.should_update` VA back to `True` if it was previously playing.
         self.stream_should_update = False
         self.autobc_future: Optional[ProgressiveFuture] = None
+        self.reference_stage_future: Optional[ProgressiveFuture] = None
 
         # For Optical Autofocus calibration
         self.tab_data.main.is_acquiring.subscribe(
@@ -195,6 +200,60 @@ class FastEMSetupTab(Tab):
             )
         if views:
             self.active_scintillator_ctrl.SetValue(current_value)
+
+    def _on_btn_reference_stage(self, _):
+        """Reference the stage in 'x' and 'y'. """
+        if self.reference_stage_future is not None and self.tab_data.is_calibrating.value:
+            self.reference_stage_future.cancel()
+            return
+
+        # Disable other calibration buttons
+        self.btn_optical_autofocus.Enable(False)
+        self.btn_sem_autofocus.Enable(False)
+        self.btn_autostigmation.Enable(False)
+        self.btn_autobc.Enable(False)
+        self.calibration_controller.calibration_panel.Enable(False)
+        self.sem_stream_cont.enable(False)
+        self.sem_stream_cont.stream_panel.enable(False)
+        self.stream_should_update = self.tab_data.semStream.should_update.value
+        self.sem_stream_cont.pauseStream()
+        self.sem_stream_cont.pause()
+
+        # calibrate
+        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        # Don't catch this event (is_calibrating = True) - this would disable the button,
+        # but it should be still enabled in order to be able to cancel the calibration
+        # make sure the acquire/tab buttons are disabled
+        self.tab_data.is_calibrating.value = True
+        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.reference_stage_future = self.tab_data.main.stage.reference({"x", "y"})
+        self.reference_stage_future.add_done_callback(self._on_reference_stage_done)
+        self._update_button_controls(self.btn_reference_stage)
+
+    @call_in_wx_main
+    def _on_reference_stage_done(self, f):
+        # Enable all calibration buttons
+        self.reference_stage_future = None
+        self.tab_data.is_calibrating.value = False
+        self.btn_optical_autofocus.Enable(True)
+        self.btn_sem_autofocus.Enable(True)
+        self.btn_autobc.Enable(True)
+        self.btn_autostigmation.Enable(True)
+        self.calibration_controller.calibration_panel.Enable(True)
+        self.sem_stream_cont.enable(True)
+        self.sem_stream_cont.stream_panel.enable(True)
+
+        try:
+            f.result(timeout=180)
+            logging.debug("Referencing stage in 'x' and 'y' successful")
+        except CancelledError:
+            logging.debug("Referencing stage in 'x' and 'y' cancelled")
+        finally:
+            self._update_button_controls(self.btn_reference_stage)
+            # Resume SettingEntry related control updates of the stream
+            self.sem_stream_cont.resume()
+            if self.stream_should_update:
+                self.tab_data.semStream.should_update.value = True
 
     def _on_btn_optical_autofocus(self, _):
         """

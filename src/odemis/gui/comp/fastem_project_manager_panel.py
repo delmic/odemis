@@ -309,13 +309,13 @@ class ProjectManagerImportExport:
             project_settings = project_data.get("settings", None)
             if project_settings is None:
                 raise ValueError(f"{project_name} does not contain settings key")
-            self.project_manager.tab_data.project_settings_data.value[project_name] = (
-                project_settings
-            )
             # Create project node for single beam and multi beam
             if project_name in active_projects:
                 project_name = make_unique_name(project_name, active_projects)
             active_projects.append(project_name)
+            self.project_manager.tab_data.project_settings_data.value[project_name] = (
+                project_settings
+            )
             project_node_sb = FastEMTreeNode(project_name, NodeType.PROJECT)
             project_node_mb = FastEMTreeNode(project_name, NodeType.PROJECT)
             self.project_manager.tab_data.project_tree_sb.add_child(
@@ -367,6 +367,7 @@ class ProjectManagerImportExport:
                         grid=rois_grid,
                     )
                 )
+                roi_row.roa.shape.dashed = True
                 new_shapes.append(roi_row.roa.shape)
                 project_colour.add(roi["roa"]["shape"]["colour"])
 
@@ -942,11 +943,17 @@ class FastEMProjectManagerPanel:
                 roa.slice_index.value = roi_slice_index
                 roa.name.value = roi_name
                 shape.name.value = f"{roi_name}_{roi_slice_index}"
+                shape.dashed = True
+                current_sample = self.main_data.current_sample.value
+                scintillator = current_sample.find_closest_scintillator(shape.get_position())
+                scintillator_num = 0
+                if scintillator is not None:
+                    scintillator_num = scintillator.number
                 row_data = {
                     ROIColumnNames.NAME.value: roi_name,
                     ROIColumnNames.SLICE_IDX.value: roi_slice_index,
-                    ROIColumnNames.POSX.value: posx,
-                    ROIColumnNames.POSY.value: posy,
+                    ROIColumnNames.POSX.value: round(posx, 9),
+                    ROIColumnNames.POSY.value: round(posy, 9),
                     ROIColumnNames.SIZEX.value: sizex,
                     ROIColumnNames.SIZEY.value: sizey,
                     ROIColumnNames.ROT.value: int(math.degrees(shape.rotation)),
@@ -956,6 +963,7 @@ class FastEMProjectManagerPanel:
                         self.project_settings_tab.dwell_time_sb_ctrl.GetValue() * 1e6, 4
                     ),  # [µs]
                     ROIColumnNames.FIELDS.value: "",
+                    ROIColumnNames.SCINTILLATOR_NUM.value: scintillator_num,
                 }
                 row = ROIRow(row_data, roa)
                 self.project_rois_tab.grid.add_row(row)
@@ -980,8 +988,8 @@ class FastEMProjectManagerPanel:
                 row_data = {
                     RibbonColumnNames.NAME.value: ribbon_name,
                     RibbonColumnNames.SLICE_IDX.value: ribbon_slice_index,
-                    RibbonColumnNames.POSX.value: posx,
-                    RibbonColumnNames.POSY.value: posy,
+                    RibbonColumnNames.POSX.value: round(posx, 9),
+                    RibbonColumnNames.POSY.value: round(posy, 9),
                     RibbonColumnNames.SIZEX.value: sizex,
                     RibbonColumnNames.SIZEY.value: sizey,
                     RibbonColumnNames.ROT.value: int(math.degrees(shape.rotation)),
@@ -1011,8 +1019,8 @@ class FastEMProjectManagerPanel:
                 row_data = {
                     SectionColumnNames.NAME.value: section_name,
                     SectionColumnNames.SLICE_IDX.value: section_slice_index,
-                    SectionColumnNames.POSX.value: posx,
-                    SectionColumnNames.POSY.value: posy,
+                    SectionColumnNames.POSX.value: round(posx, 9),
+                    SectionColumnNames.POSY.value: round(posy, 9),
                     SectionColumnNames.SIZEX.value: sizex,
                     SectionColumnNames.SIZEY.value: sizey,
                     SectionColumnNames.ROT.value: int(math.degrees(shape.rotation)),
@@ -1039,16 +1047,22 @@ class FastEMProjectManagerPanel:
                 roa.slice_index.value = roa_slice_index
                 roa.name.value = roa_name
                 shape.name.value = f"{roa_name}_{roa_slice_index}"
+                current_sample = self.main_data.current_sample.value
+                scintillator = current_sample.find_closest_scintillator(shape.get_position())
+                scintillator_num = 0
+                if scintillator is not None:
+                    scintillator_num = scintillator.number
                 row_data = {
                     ROAColumnNames.NAME.value: roa_name,
                     ROAColumnNames.SLICE_IDX.value: roa_slice_index,
-                    ROAColumnNames.POSX.value: posx,
-                    ROAColumnNames.POSY.value: posy,
+                    ROAColumnNames.POSX.value: round(posx, 9),
+                    ROAColumnNames.POSY.value: round(posy, 9),
                     ROAColumnNames.SIZEX.value: sizex,
                     ROAColumnNames.SIZEY.value: sizey,
                     ROAColumnNames.ROT.value: int(math.degrees(shape.rotation)),
                     ROAColumnNames.PARENT.value: DEFAULT_PARENT,
                     ROAColumnNames.FIELDS.value: "",
+                    ROAColumnNames.SCINTILLATOR_NUM.value: scintillator_num,
                 }
                 row = ROARow(row_data, roa)
                 self.project_roas_tab.grid.add_row(row)
@@ -1105,18 +1119,23 @@ class FastEMProjectManagerPanel:
 
     def update_project_shape_colour(self, project_name):
         """
-        Updates or assigns a color to the shapes associated with a given project.
+        Assigns a color to the given project. Uses a predefined FASTEM_PROJECT_COLOURS if available;
+        otherwise generates a unique one.
 
         :param project_name: (str) The name of the project whose shapes' colors are to be updated.
         """
-        if len(self.project_shape_colour) < len(FASTEM_PROJECT_COLOURS):
-            self.project_shape_colour[project_name] = FASTEM_PROJECT_COLOURS[
-                len(self.project_shape_colour)
-            ]
+        used_colours = list(self.project_shape_colour.values())
+        available_colour = None
+
+        for c in FASTEM_PROJECT_COLOURS:
+            if c not in used_colours:
+                available_colour = c
+                break
+
+        if available_colour is not None:
+            self.project_shape_colour[project_name] = available_colour
         else:
-            self.project_shape_colour[project_name] = generate_unique_color(
-                list(self.project_shape_colour.values())
-            )
+            self.project_shape_colour[project_name] = generate_unique_color(used_colours)
 
     @call_in_wx_main
     def setup_grid_for_project(self, project_name):
