@@ -111,6 +111,7 @@ class FastEMUserSettingsPanel(object):
         self.sample_carrier_ctrl = None
         self.user_profile_add_button_ctrl = None
         self.user_profile_delete_button_ctrl = None
+        self.default_profile_data = None
 
         # Pump and ebeam state controller
         self._state_controller = FastEMStateController(self.main_data, panel)
@@ -148,23 +149,25 @@ class FastEMUserSettingsPanel(object):
         )
         self.user_profile_data = read_json(self.user_profile_config_path)
         self._update_user_profile_control_config()
-        default_profile_data = self._get_default_profile_data()
+        self.default_profile_data = self._get_default_profile_data()
 
         if self.user_profile_data is None:
             # Create the json file and write the data for the default user
             # user_profile_data is Dict[str, Dict[str, Any]]
             # Example {"fastem-user": {"Current": "1 nA", "Voltage": "5 kV"}}
             self.user_profile_data = {}
-            self.user_profile_data[DEFAULT_USER] = default_profile_data
-            self.write_user_profile_data()
+            self.user_profile_data[DEFAULT_USER] = self.default_profile_data
         else:
-            if DEFAULT_USER not in self.user_profile_data:
-                self.user_profile_data[DEFAULT_USER] = default_profile_data
-                self.write_user_profile_data()
             for user, data in self.user_profile_data.items():
-                default_data = default_profile_data.copy()
+                default_data = self.default_profile_data.copy()
                 default_data.update(data)
                 self.user_profile_data[user] = default_data
+            if DEFAULT_USER not in self.user_profile_data:
+                self.user_profile_data[DEFAULT_USER] = self.default_profile_data
+        CONTROL_CONFIG[USER_PROFILE].update(
+            {"choices": list(self.user_profile_data.keys())}
+        )
+        self.write_user_profile_data()
 
     def _update_user_profile_control_config(self):
         dwell_time_overview = get_hw_config(
@@ -205,10 +208,6 @@ class FastEMUserSettingsPanel(object):
         CONTROL_CONFIG[SAMPLE_CARRIER].update(
             {"choices": list(self.main_data.samples.value.keys())}
         )
-        if self.user_profile_data:
-            CONTROL_CONFIG[USER_PROFILE].update(
-                {"choices": list(self.user_profile_data.keys())}
-            )
 
     def _update_selected_scintillators_layout(self):
         current_sample = self.main_data.current_sample.value
@@ -235,7 +234,7 @@ class FastEMUserSettingsPanel(object):
         """Get the current entries control values."""
         return {
             entry: self.user_settings_panel.FindWindowByName(entry).GetValue()
-            for entry in self.user_profile_data[DEFAULT_USER].keys()
+            for entry in self.default_profile_data
         }
 
     def _set_voltage_ctrl_value(self, ctrl, value: str) -> bool:
@@ -313,26 +312,24 @@ class FastEMUserSettingsPanel(object):
         if not ctrl:
             return
 
-        value = ctrl.GetValue().strip().lower()
+        value = ctrl.GetValue().strip()
         value = make_compliant_string(value)
         if value and self.original_user:
             if (
                 self.original_user != DEFAULT_USER
                 and self.original_user in ctrl.GetStrings()
             ):
+                self.main_data.current_user.value = value
                 if value not in ctrl.GetStrings():
                     idx = ctrl.FindString(self.original_user)
                     ctrl.SetString(idx, value)
-                    self.main_data.current_user.value = value
                     del self.user_profile_data[self.original_user]
                     self.user_profile_data[value] = self.get_ctrl_values()
-                    self.original_user = value
                     self.write_user_profile_data()
                 else:
-                    ctrl.SetValue(value)
-                    self.main_data.current_user.value = value
                     self.set_ctrl_values()
-                    self.original_user = value
+                ctrl.SetValue(value)
+                self.original_user = value
             else:
                 ctrl.SetValue(DEFAULT_USER)
         else:
@@ -345,7 +342,7 @@ class FastEMUserSettingsPanel(object):
         if not ctrl:
             return
 
-        self.original_user = ctrl.GetValue().strip().lower()
+        self.original_user = ctrl.GetValue().strip()
 
     def on_evt_combobox_user_profile_ctrl(self, evt):
         ctrl = evt.GetEventObject()
@@ -457,7 +454,7 @@ class FastEMUserSettingsPanel(object):
         value = wx.GetTextFromUser(
             "Enter new user:", parent=self.user_profile_add_button_ctrl
         )
-        value = value.strip().lower()
+        value = value.strip()
         value = make_compliant_string(value)
         ctrl = self.user_profile_ctrl
         if value:

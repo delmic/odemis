@@ -160,11 +160,17 @@ class ROIRow(Row):
         sizex, sizey = self.roa.shape.get_size()
         sizex = units.readable_str(sizex, unit="m", sig=3)
         sizey = units.readable_str(sizey, unit="m", sig=3)
-        self.data[ROIColumnNames.POSX.value] = posx
-        self.data[ROIColumnNames.POSY.value] = posy
+        current_sample = self.roa.main_data.current_sample.value
+        scintillator = current_sample.find_closest_scintillator((posx, posy))
+        scintillator_num = 0
+        if scintillator is not None:
+            scintillator_num = scintillator.number
+        self.data[ROIColumnNames.POSX.value] = round(posx, 9)
+        self.data[ROIColumnNames.POSY.value] = round(posy, 9)
         self.data[ROIColumnNames.SIZEX.value] = sizex
         self.data[ROIColumnNames.SIZEY.value] = sizey
         self.data[ROIColumnNames.ROT.value] = round(math.degrees(self.roa.shape.rotation))
+        self.data[ROIColumnNames.SCINTILLATOR_NUM.value] = scintillator_num
         if self.data[ROIColumnNames.FIELDS.value] == "1":
             self.update_shape_grid_rects()
 
@@ -271,50 +277,21 @@ class FastEMProjectROIsTab(Tab):
                 editor_cls=GridCellNumberEditor,
                 editor_args={"min": 0, "max": 1000000},
             ),
-            Column(
-                2,
-                ROIColumnNames.POSX.value,
-                editor_cls=GridCellFloatEditor,
-                editor_args={"precision": 9},
-            ),
+            Column(2, ROIColumnNames.FIELDS.value, editor_cls=GridCellBoolEditor),
             Column(
                 3,
-                ROIColumnNames.POSY.value,
-                editor_cls=GridCellFloatEditor,
-                editor_args={"precision": 9},
-            ),
-            Column(
-                4,
-                ROIColumnNames.SIZEX.value,
-                editor_cls=GridCellFloatEditor,
-                is_read_only=True,
-            ),
-            Column(
-                5,
-                ROIColumnNames.SIZEY.value,
-                editor_cls=GridCellFloatEditor,
-                is_read_only=True,
-            ),
-            Column(
-                6,
-                ROIColumnNames.ROT.value,
-                editor_cls=GridCellNumberEditor,
-                editor_args={"min": 0, "max": 360},
-            ),
-            Column(
-                7,
                 ROIColumnNames.CONTRAST.value,
                 editor_cls=GridCellFloatRangeEditor,
                 editor_args={"min": 0., "max": 1., "precision": 4},
             ),
             Column(
-                8,
+                4,
                 ROIColumnNames.BRIGHTNESS.value,
                 editor_cls=GridCellFloatRangeEditor,
                 editor_args={"min": 0., "max": 1., "precision": 4},
             ),
             Column(
-                9,
+                5,
                 ROIColumnNames.DWELL_TIME.value,
                 editor_cls=GridCellFloatRangeEditor,
                 editor_args={
@@ -323,7 +300,42 @@ class FastEMProjectROIsTab(Tab):
                     "precision": 4
                 },
             ),
-            Column(10, ROIColumnNames.FIELDS.value, editor_cls=GridCellBoolEditor),
+            Column(
+                6,
+                ROIColumnNames.SCINTILLATOR_NUM.value,
+                editor_cls=GridCellNumberEditor,
+                is_read_only=True,
+            ),
+            Column(
+                7,
+                ROIColumnNames.POSX.value,
+                editor_cls=GridCellFloatEditor,
+                editor_args={"precision": 9},
+            ),
+            Column(
+                8,
+                ROIColumnNames.POSY.value,
+                editor_cls=GridCellFloatEditor,
+                editor_args={"precision": 9},
+            ),
+            Column(
+                9,
+                ROIColumnNames.SIZEX.value,
+                editor_cls=GridCellFloatEditor,
+                is_read_only=True,
+            ),
+            Column(
+                10,
+                ROIColumnNames.SIZEY.value,
+                editor_cls=GridCellFloatEditor,
+                is_read_only=True,
+            ),
+            Column(
+                11,
+                ROIColumnNames.ROT.value,
+                editor_cls=GridCellNumberEditor,
+                editor_args={"min": 0, "max": 360},
+            ),
         ]
         self.grid.set_columns(self.columns)
 

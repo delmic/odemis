@@ -34,6 +34,7 @@ class ROIColumnNames(Enum):
     BRIGHTNESS = "Brightness"
     DWELL_TIME = "Dwell Time [µs]"
     FIELDS = "Show Fields"
+    SCINTILLATOR_NUM = "Scintillator"
 
 
 class RibbonColumnNames(Enum):
@@ -67,3 +68,4 @@ class ROAColumnNames(Enum):
     ROT = "Rotation [°]"
     PARENT = "Parent"
     FIELDS = "Show Fields"
+    SCINTILLATOR_NUM = "Scintillator"

@@ -36,8 +36,10 @@ from odemis import model, util
 from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import (CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_DIS,
                         FG_COLOUR_ERROR, FG_COLOUR_WARNING)
+from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.foldpanelbar import FoldPanelBar
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
+from odemis.gui.comp.toggle import GraphicalToggleButtonControl
 from odemis.gui.comp.stream_panel import (OPT_BTN_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW,
                                           OPT_BTN_TINT, OPT_BTN_UPDATE, OPT_FIT_RGB,
                                           OPT_NAME_EDIT, OPT_NO_COLORMAPS,
@@ -1389,7 +1391,7 @@ class FastEMStreamController(StreamController):
 
     def _create_immersion_mode_cbox(self):
         # HACK manually create the checkbox using custom gb_sizer's pos and span
-        # The hack is needed because self.stream_paneladd_checkbox_control cannot be overridden,
+        # The hack is needed because self.stream_panel.add_checkbox_control cannot be overridden,
         # which has pos=(self.num_rows, 1) and span=(1, 2)
         _ = self.stream_panel._add_side_label("Immersion mode")
         cbox_immersion_mode = wx.CheckBox(self.stream_panel._panel, wx.ID_ANY,
@@ -1412,11 +1414,65 @@ class FastEMStreamController(StreamController):
         self.stream_panel.num_rows += 1
         return cbox_immersion_mode
 
+    def _create_reference_stage_btn(self):
+        # HACK manually create the button using custom gb_sizer's pos and span
+        # The hack is needed to create a custom GraphicalToggleButtonControl with ImageTextButton button
+        # Create horizontal sizer to hold label and toggle buttons
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        lbl_ctrl = wx.StaticText(self.stream_panel._panel, -1, "Reference stage")
+
+        # Add label
+        h_sizer.Add(lbl_ctrl, flag=wx.ALIGN_CENTER_VERTICAL)
+
+        # Add spacer
+        h_sizer.AddSpacer(10)  # 10 pixels of space
+
+        # Add toggle button
+        conf = {
+            'size': (-1, 16),
+            'choices': [1, 2, 3],
+            'labels': ['x', 'y', 'z'],
+            'height': 16,
+        }
+        toggle_ctrl = GraphicalToggleButtonControl(self.stream_panel._panel, -1, style=wx.NO_BORDER,
+                                                 **conf)
+        toggle_ctrl.SetValue([1, 2, 3])
+        h_sizer.Add(toggle_ctrl, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT)
+
+        # Add combined sizer to grid sizer
+        self.stream_panel.gb_sizer.Add(h_sizer, (self.stream_panel.num_rows, 0),
+                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        btn_reference_stage = ImageTextButton(self.stream_panel._panel, label="Run", height=16, style=wx.ALIGN_CENTER)
+        btn_reference_stage.toggle_btn = toggle_ctrl
+
+        self.stream_panel.gb_sizer.Add(btn_reference_stage, (self.stream_panel.num_rows, 2), span=(1, 1),
+                                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM,
+                                       border=5)
+
+        if not self.stream_panel.gb_sizer.IsColGrowable(1):
+            self.stream_panel.gb_sizer.AddGrowableCol(1)
+
+        # Re-layout the FoldPanelBar parent
+        win = self.stream_panel
+        while not isinstance(win, FoldPanelBar):
+            win = win.Parent
+        win.Layout()
+        # Advance the row count for the next control
+        self.stream_panel.num_rows += 1
+        return btn_reference_stage
+
     def _add_fastem_ctrls(self):
         self.stream_panel.add_divider()
         # Create the immersion mode button
         cbox_immersion_mode = self._create_immersion_mode_cbox()
         # Create the buttons
+        _, self.btn_reference_stage = self.stream_panel.add_run_btn(
+            label_text="Reference stage", button_label="Run"
+        )
+        # TODO: use the custom button instead of the default one, when
+        # the user needs to reference the stage as per choices of axes
+        # self.btn_reference_stage = self._create_reference_stage_btn()
         _, self.btn_optical_autofocus = self.stream_panel.add_run_btn(
             label_text="Optical autofocus", button_label="Run"
         )

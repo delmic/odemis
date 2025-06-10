@@ -90,6 +90,8 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         # If users need to use PolygonOverlay independently of ShapesOverlay, they can
         # explicitly initialize WorldOverlay to manage its own mouse events.
 
+        self.dashed = False
+
         self._label = Label(
             text="",
             pos=(0, 0),
@@ -186,6 +188,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         shape = PolygonOverlay(self.cnvs)
         shape.colour = self.colour
         shape.name.value = self.name.value
+        shape.dashed = self.dashed
         shape.restore_state(self.get_state())
         shape.is_created.value = True
         return shape
@@ -338,7 +341,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         self._name_label.background = (0, 0, 0)  # black
         self._name_label.draw(ctx)
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
+    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
         """Draw the selection as a polygon"""
         if self._points:
             offset = self.cnvs.get_half_buffer_size()
@@ -347,7 +350,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
             line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
             ctx.set_line_width(line_width)
-            if dash:
+            if self.dashed:
                 ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)

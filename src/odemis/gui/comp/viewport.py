@@ -44,7 +44,7 @@ from odemis.acq.stream import (
     StaticStream,
     Stream,
 )
-from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
+from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND, SELECTION_COLOUR
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import AxisLegend, InfoLegend, RadioLegend
@@ -95,6 +95,7 @@ from odemis.model import (
     MD_POL_UP,
 )
 from odemis.util import peak, spectrum, units
+from odemis.util.conversion import hex_to_frgba
 from odemis.util.raster import rasterize_line
 
 
@@ -928,6 +929,21 @@ class FastEMMainViewport(MicroscopeViewport):
 
         # Listen to the stage position and update the label in the callback
         view.stage_pos.subscribe(self._on_stage_pos_change, init=True)
+
+    def SetFocus(self, focus=True):
+        super().SetFocus(focus)
+
+        # Show the crosshair if the viewport is focused
+        if focus:
+            self.cpol.active.value = True
+            colour = hex_to_frgba(SELECTION_COLOUR)
+        else:
+            self.cpol.active.value = False
+            colour = (1.0, 1.0, 1.0)  # white
+
+        # Update the TextViewOverlay label colour
+        if self.canvas.bg_view_overlay:
+            self.canvas.bg_view_overlay.labels[0].colour = colour
 
 
 class ARLiveViewport(LiveViewport):

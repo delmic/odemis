@@ -20,6 +20,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging
+
 import wx
 
 import odemis.gui.model as guimod
@@ -38,9 +40,10 @@ from odemis.gui.comp.fastem_user_settings_panel import (
 )
 from odemis.gui.comp.foldpanelbar import CaptionBar
 from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.conf.util import format_choices, hfw_choices
+from odemis.gui.conf.data import HW_SETTINGS_CONFIG
+from odemis.gui.conf.util import format_choices, hfw_choices, str_to_value, value_to_str
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.util import units
+from odemis.util import almost_equal, units
 
 
 class FastEMProjectSettingsTab(Tab):
@@ -229,6 +232,7 @@ class FastEMProjectSettingsTab(Tab):
         )
         hfw_unit = self.tab_data.main.ebeam.horizontalFoV.unit
         hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
+        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c > STAGE_PRECISION]
         self._immersion_mode_hfw_choices[init_immersion] = (
             hfw_choices_formatted,
             choices_si_prefix,
@@ -239,6 +243,7 @@ class FastEMProjectSettingsTab(Tab):
             None, self.tab_data.main.ebeam.horizontalFoV, None
         )
         hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
+        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c > STAGE_PRECISION]
         self._immersion_mode_hfw_choices[not init_immersion] = (
             hfw_choices_formatted,
             choices_si_prefix,
@@ -246,28 +251,79 @@ class FastEMProjectSettingsTab(Tab):
         )
         self.tab_data.main.ebeam.immersion.value = init_immersion
 
-    def on_evt_hfw_sb_ctrl(self, evt):
+    def on_evt_combobox_hfw_sb_ctrl(self, evt):
         """
-        Handles the event when the single beam HFW control is changed.
-        Updates the pixel size control and the project settings data.
+        Handles the combobox event for the single beam HFW control.
         """
         ctrl = evt.GetEventObject()
         if not ctrl:
             return
 
         value = ctrl.GetClientData(ctrl.GetSelection())
-        if value != self.main_data.user_hfw_sb.value:
-            self.main_data.user_hfw_sb.value = value
+        self._on_hfw_ctrl(ctrl.GetValue(), value)
+
+    def on_evt_txt_enter_hfw_sb_ctrl(self, evt):
+        """
+        Handles the text enter event for the single beam HFW control.
+        """
+        ctrl = evt.GetEventObject()
+        if not ctrl:
+            return
+
+        ctrl_value = ctrl.GetValue()
+        try:
+            value = str_to_value(ctrl_value, self.tab_data.main.ebeam.horizontalFoV)
+        except (ValueError, TypeError):
+            value = self.main_data.user_hfw_sb.value
+        # Check if the entered value is in the list of choices
+        for i in range(ctrl.GetCount()):
+            d = ctrl.GetClientData(i)
+            if (d == value or
+                (all(isinstance(v, float) for v in (value, d)) and
+                 almost_equal(d, value))
+               ):
+                logging.debug("Setting combobox value to %s", ctrl.Items[i])
+                ctrl.SetSelection(i)
+                break
+        # A custom value was entered
+        else:
+            logging.debug("No existing label found for value %s in combobox ctrl %d",
+                          value, id(ctrl))
+            hfw_choices_formatted, _, hfw_unit = (
+                self._immersion_mode_hfw_choices[self.immersion_mode_ctrl.GetValue()]
+            )
+            min_hfw = min(hfw_choices_formatted, key=lambda x: x[0])[0]
+            max_hfw = max(hfw_choices_formatted, key=lambda x: x[0])[0]
+            # Check if the value is within the range of HFW choices
+            if value < min_hfw:
+                value = min_hfw
+            elif value > max_hfw:
+                value = max_hfw
+            acc = HW_SETTINGS_CONFIG["e-beam"]["horizontalFoV"]["accuracy"]
+            txt = value_to_str(value, hfw_unit, acc)
+            ctrl.SetValue(txt)
+        self._on_hfw_ctrl(ctrl_value, value)
+
+    def _on_hfw_ctrl(self, label: str, choice: float):
+        """
+        Handle updates when the HFW control changes.
+        Updates the pixel size control and the project settings data.
+
+        :param label: The label of the HFW.
+        :param choice: The new HFW value.
+        """
+        if choice != self.main_data.user_hfw_sb.value:
+            self.main_data.user_hfw_sb.value = choice
             resolution = self.resolution_ctrl.GetClientData(
                 self.resolution_ctrl.GetSelection()
             )
             # Update the pixel size control
             self.pixel_size_ctrl.SetValue(
-                units.readable_str(value / resolution[0], unit="m", sig=4)
+                units.readable_str(choice / resolution[0], unit="m", sig=4)
             )
             settings_data = self.main_tab_data.project_settings_data.value
             current_project = self.main_tab_data.current_project.value
-            settings_data[current_project][HFW] = ctrl.GetValue()
+            settings_data[current_project][HFW] = label
             settings_data[current_project][PIXEL_SIZE] = self.pixel_size_ctrl.GetValue()
             self.main_tab_data.project_settings_data._set_value(
                 settings_data, must_notify=True
@@ -284,18 +340,17 @@ class FastEMProjectSettingsTab(Tab):
         # Set choices
         if choices_si_prefix:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    ctrl.Append(
-                        "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
-                    )
+                ctrl.Append(
+                    "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
+                )
         else:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
+                ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
         ctrl.SetSelection(0)
         self.main_data.user_hfw_sb.value = ctrl.GetClientData(ctrl.GetSelection())
         ctrl.SetName(HFW)
-        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_hfw_sb_ctrl)
+        ctrl.Bind(wx.EVT_COMBOBOX, self.on_evt_combobox_hfw_sb_ctrl)
+        ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_evt_txt_enter_hfw_sb_ctrl)
 
     def on_evt_resolution_sb_ctrl(self, evt):
         """
@@ -388,30 +443,29 @@ class FastEMProjectSettingsTab(Tab):
         ctrl.SetName(DWELL_TIME_SINGLE_BEAM)
         # The wx.EVT_SLIDER is binded to on_dwell_time_sb_entry in fastem_project_manager_panel.py
 
-    def _reset_hfw_ctrl(self, hfw: float, immersion_mode: bool):
+    def _reset_hfw_ctrl(self, hfw: str, immersion_mode: bool):
         """
         Resets the HFW control based on the immersion mode.
 
-        :param hfw: The HFW value.
+        :param hfw: The HFW label. Used to set the current selection.
         :param immersion_mode: The immersion mode.
         """
         self.hfw_ctrl.Clear()
         hfw_choices_formatted, choices_si_prefix, hfw_unit = (
             self._immersion_mode_hfw_choices[immersion_mode]
         )
-        # Set choices bsed on the immersion mode
+        # Set labels, choices based on the immersion mode
         if choices_si_prefix:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    self.hfw_ctrl.Append(
-                        "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
-                    )
+                self.hfw_ctrl.Append(
+                    "%s %s" % (formatted, choices_si_prefix + hfw_unit), choice
+                )
         else:
             for choice, formatted in hfw_choices_formatted:
-                if choice > STAGE_PRECISION:
-                    self.hfw_ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
-        # Based on the immersion mode the choices of HFW are different
-        # If the current HFW is not in the list of choices, set the first choice
+                self.hfw_ctrl.Append("%s%s" % (formatted, hfw_unit), choice)
+        # Based on the immersion mode the labels, choices of HFW are different
+        # If the current HFW label is not in the updated control set the first
+        # label as the current
         if self.hfw_ctrl.FindString(hfw, caseSensitive=True) == wx.NOT_FOUND:
             self.hfw_ctrl.SetSelection(0)
             self.main_data.user_hfw_sb.value = self.hfw_ctrl.GetClientData(

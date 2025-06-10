@@ -101,6 +101,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         self.p_point2 = None
         self.p_point3 = None
         self.p_point4 = None
+        self.dashed = False
 
         # Labels for the bottom and right side length of the rectangle
         # Call draw_side_labels to use them
@@ -213,6 +214,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         shape = RectangleOverlay(self.cnvs)
         shape.colour = self.colour
         shape.name.value = self.name.value
+        shape.dashed = self.dashed
         shape.restore_state(self.get_state())
         shape.is_created.value = True
         return shape
@@ -508,7 +510,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         self._name_label.background = (0, 0, 0)  # black
         self._name_label.draw(ctx)
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
+    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
         """ Draw the selection as a rectangle """
         line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
@@ -524,7 +526,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
             # draws the dotted line
             ctx.set_line_width(line_width)
-            if dash:
+            if self.dashed:
                 ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
