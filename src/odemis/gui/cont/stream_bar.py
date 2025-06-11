@@ -2196,15 +2196,28 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
     acquired view when the feature is selected.
     """
 
-    def __init__(self, tab_data, feature_view, *args, **kwargs):
+    def __init__(self, tab_data, feature_view, ov_view, *args, **kwargs):
         """
         feature_view (StreamView): the view to show the feature streams
+        ov_view (StreamView): the view to show the overview streams
         """
         super().__init__(tab_data, *args, **kwargs)
         self._feature_view = feature_view
+        self._ov_view = ov_view
         self.stream: Optional[StaticStream] = None  # The stream currently displayed, related the selected Feature
 
         tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+
+    def showOverviewStream(self, stream) -> StreamController:
+        """
+        Shows an Overview stream (in the Overview view)
+        Must be run in the main GUI thread.
+        """
+        self._ov_view.addStream(stream)
+        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+                                   view=self._ov_view)
+        sc.stream_panel.show_remove_btn(True)
+        return sc
 
     def showFeatureStream(self, stream) -> StreamController:
         """
@@ -2248,7 +2261,9 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
             if not isinstance(sc.stream, StaticSEMStream):
                 logging.warning("Unexpected non static stream: %s", sc.stream)
                 continue
-
+            # Leave the overview streams
+            if sc.stream in self._tab_data_model.overviewStreams.value:
+                continue
             self._stream_bar.remove_stream_panel(sc.stream_panel)
             if hasattr(v, "removeStream"):
                 v.removeStream(sc.stream)
