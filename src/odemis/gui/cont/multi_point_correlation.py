@@ -55,8 +55,6 @@ class GridColumns(Enum):
     Z = 3  # Column for "z"
     Index = 4  # Column for "index"
 
-COLUMN_UNIT = "px" # Unit for the target position to display to the users in the grid -> "px" for pixel
-
 GRID_PRECISION = 2  # Number of decimal places to display in the grid
 
 # Regex search pattern to distinguish between FIB and FM target. These targets can
@@ -101,9 +99,9 @@ class CorrelationPointsController:
         self.grid.CreateGrid(0, 5)
         self.grid.SetRowLabelSize(0)
         self.grid.SetColLabelValue(GridColumns.Type.value, GridColumns.Type.name)
-        self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name + COLUMN_UNIT) # Add units
-        self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name + COLUMN_UNIT)
-        self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name + COLUMN_UNIT)
+        self.grid.SetColLabelValue(GridColumns.X.value, GridColumns.X.name)
+        self.grid.SetColLabelValue(GridColumns.Y.value, GridColumns.Y.name)
+        self.grid.SetColLabelValue(GridColumns.Z.value, GridColumns.Z.name)
         self.grid.SetColLabelValue(GridColumns.Index.value, GridColumns.Index.name)
         self.grid.Bind(wx.EVT_KEY_DOWN, self._on_key_down_grid)
         self.grid.EnableEditing(True)
