@@ -4,7 +4,7 @@ Created on 11 April 2025
 
 @author: Nandish Patel
 
-Gives ability to use Import TOAs tool under Help > Development.
+Gives ability to use Import region tool under Help > Development.
 
 Copyright © 2025 Nandish Patel, Delmic
 
@@ -23,6 +23,7 @@ see http://www.gnu.org/licenses/.
 
 import logging
 from ast import literal_eval
+from enum import Enum
 from typing import Tuple
 
 import numpy
@@ -45,8 +46,10 @@ from odemis.gui.comp.fastem_user_settings_panel import (
 )
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
 from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.cont.acquisition.fastem_acq import OVERVIEW_IMAGES_DIR
-from odemis.gui.cont.fastem_project_grid import TOAColumnNames
+from odemis.gui.cont.fastem_project_grid import ROAColumnNames, TOAColumnNames
+from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT
 from odemis.gui.model.main_gui_data import Scintillator
 from odemis.gui.plugin import Plugin
 from odemis.util.filename import make_unique_name
@@ -73,6 +76,50 @@ def show_error(message: str):
     :param message: The error message to display.
     """
     wx.MessageBox(message, "Error", wx.ICON_ERROR | wx.OK)
+
+
+class RegionType(Enum):
+    """Enum for region types."""
+    TOA = "TOA"
+    ROA = "ROA"
+
+
+class RegionPage(WizardPageSimple):
+    """Page to select the region, either TOA or ROA."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        panel = wx.Panel(self)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Region type selection
+        region_box = wx.StaticBox(panel, label="Select region type:")
+        region_box_sizer = wx.StaticBoxSizer(region_box, wx.VERTICAL)
+        self.region_radio_box = wx.RadioBox(
+            panel,
+            choices=[RegionType.TOA.value, RegionType.ROA.value],
+            majorDimension=1,  # 1 column
+            style=wx.RA_SPECIFY_COLS,
+        )
+        self.region_radio_box.SetSelection(0)  # Default to TOA
+        region_box_sizer.Add(self.region_radio_box, 0, wx.EXPAND | wx.ALL, 5)
+        main_sizer.Add(region_box_sizer, 0, wx.EXPAND | wx.ALL, 10)
+
+        panel.SetSizer(main_sizer)
+        main_sizer.Fit(panel)
+
+    def validate(self) -> bool:
+        """
+        Validate the region type input.
+        """
+        region = self.region_radio_box.GetSelection()
+        if region == wx.NOT_FOUND:
+            show_validation_error("Please select a region type.")
+            return False
+        return True
+
+    def get_region_type(self) -> str:
+        return self.region_radio_box.GetStringSelection()
 
 
 class MetadataPage(WizardPageSimple):
@@ -265,8 +312,8 @@ class NpyPage(WizardPageSimple):
         return self.labels
 
 
-class ImportTOAPlugin(Plugin):
-    name = "Import TOAs"
+class ImportRegionPlugin(Plugin):
+    name = "Import Region"
     __version__ = "1.0"
     __author__ = "Nandish Patel"
     __license__ = "GPLv2"
@@ -278,17 +325,18 @@ class ImportTOAPlugin(Plugin):
         try:
             main_tab = main_app.main_data.getTabByName("fastem_main")
             self._pm = main_tab.project_manager_panel
+            self._acqui_config = AcquisitionConfig()
         except LookupError:
-            logging.debug("Not loading Import TOAs tool since main tab is not present.")
+            logging.debug("Not loading Import Region tool since main tab is not present.")
             return
 
         self._parent = self.main_app.GetTopWindow()
 
-        self.addMenu("Help/Development/Import TOAs", self._import_toas)
+        self.addMenu("Help/Development/Import region", self._import_region)
 
     def _create_project(self) -> Tuple[str, str]:
         """
-        Create a new project name and color for the imported TOAs.
+        Create a new project name and color for the imported regions.
         """
         active_projects = list(self._pm.active_project_ctrl.GetStrings())
         base_name = "Project-1"
@@ -299,8 +347,9 @@ class ImportTOAPlugin(Plugin):
 
         return base_name, colour
 
-    def _create_toa_data(
+    def _create_region_data(
         self,
+        region_type: str,
         idx: int,
         contour: numpy.ndarray,
         image_data: dict,
@@ -308,14 +357,16 @@ class ImportTOAPlugin(Plugin):
         scintillator: Scintillator,
     ) -> dict:
         """
-        Creates a single TOA dictionary from a contour.
+        Creates a single region dictionary from a contour.
 
-        :param idx: Index of the TOA.
+        :param region_type: Type of the region (TOA or ROA).
+        :param idx: Index of the region.
         :param contour: Contour points.
         :param image_data: Image metadata.
-        :param colour: Color for the TOA.
-        :param scintillator: Scintillator object where the TOA needs to be imported.
-        :return: Dictionary containing TOA data.
+        :param colour: Color for the region.
+        :param scintillator: Scintillator object where the region needs to be imported.
+        :raises ValueError: If the region type is unknown.
+        :return: Dictionary containing region data.
         """
         polygon = Polygon(contour)
         # Higher tolerance for less polygon points
@@ -326,6 +377,33 @@ class ImportTOAPlugin(Plugin):
             image_data[model.MD_PIXEL_SIZE],
         )
 
+        if region_type == RegionType.TOA.value:
+            return self._create_toa_data(
+                idx, physical_contour, colour, scintillator
+            )
+        elif region_type == RegionType.ROA.value:
+            return self._create_roa_data(
+                idx, physical_contour, colour, scintillator
+            )
+        else:
+            raise ValueError(f"Unknown region type: {region_type}")
+
+    def _create_toa_data(
+        self,
+        idx: int,
+        physical_contour: numpy.ndarray,
+        colour: str,
+        scintillator: Scintillator,
+    ) -> dict:
+        """
+        Creates a single TOA dictionary from a contour.
+
+        :param idx: Index of the TOA.
+        :param physical_contour: Contour points in physical space.
+        :param colour: Color for the TOA.
+        :param scintillator: Scintillator object where the TOA needs to be imported.
+        :return: Dictionary containing TOA data.
+        """
         return {
             "index": idx,
             "data": {
@@ -365,15 +443,63 @@ class ImportTOAPlugin(Plugin):
             },
         }
 
-    def _create_project_data(
-        self, sample_type: str, project_name: str, toas: list
+    def _create_roa_data(
+        self,
+        idx: int,
+        physical_contour: numpy.ndarray,
+        colour: str,
+        scintillator: Scintillator,
     ) -> dict:
         """
-        Creates project data from the sample type, project name, and TOAs.
+        Creates a single ROA dictionary from a contour.
+
+        :param idx: Index of the ROA.
+        :param physical_contour: Contour points in physical space.
+        :param colour: Color for the ROA.
+        :param scintillator: Scintillator object where the ROA needs to be imported.
+        :return: Dictionary containing ROA data.
+        """
+        return {
+            "index": idx,
+            "data": {
+                ROAColumnNames.NAME.value: "ROA",
+                ROAColumnNames.SLICE_IDX.value: idx,
+                ROAColumnNames.POSX.value: 0,
+                ROAColumnNames.POSY.value: 0,
+                ROAColumnNames.SIZEX.value: "",
+                ROAColumnNames.SIZEY.value: "",
+                ROAColumnNames.ROT.value: 0,
+                ROAColumnNames.PARENT.value: DEFAULT_PARENT,
+                ROAColumnNames.FIELDS.value: "",
+            },
+            "roa": {
+                "name": "ROA",
+                "slice_index": idx,
+                "overlap": self._acqui_config.overlap,
+                "shape": {
+                    "name": f"ROA_{idx}",
+                    "colour": colour,
+                    "selected": False,
+                    "cnvs_view_name": str(scintillator.number),
+                    "type": PolygonOverlay.__name__,
+                    "state": {
+                        "p_points": physical_contour.tolist(),
+                    },
+                },
+            },
+            "parent_name": DEFAULT_PARENT,
+        }
+
+    def _create_project_data(
+        self, sample_type: str, project_name: str, region_type: str, regions: list
+    ) -> dict:
+        """
+        Creates project data from the sample type, project name, and regions.
 
         :param sample_type: Type of the sample.
         :param project_name: Name of the project.
-        :param toas: List of TOAs data.
+        :param region_type: Type of the region (TOA or ROA).
+        :param regions: List of regions data.
         :return: Dictionary containing project data.
         """
         return {
@@ -390,23 +516,26 @@ class ImportTOAPlugin(Plugin):
                         },
                         "ribbons": [],
                         "sections": [],
-                        "roas": [],
-                        "toas": toas,
+                        "roas": regions if region_type == RegionType.ROA.value else [],
+                        "toas": regions if region_type == RegionType.TOA.value else [],
                     }
                 }
             }
         }
 
-    def _create_toas(self, image_data: dict, labels: numpy.ndarray) -> None:
+    def _create_regions(self, region_type: str, image_data: dict, labels: numpy.ndarray) -> None:
         """
-        Create project's TOAs using contours from the label mask.
+        Create project's regions using contours from the label mask.
 
         Extracts contours, simplifies them, converts to physical space, and adds them as TOAs.
+        :param region_type: Type of the region (TOA or ROA).
         :param image_data: Dictionary containing image metadata.
         :param labels: Numpy array containing the label mask.
+        :raises ValueError: If the region type is unknown.
         """
         self._pm.is_import_btn_pressed = True
         try:
+            regions = []
             contours = find_contours(labels, level=0.5)
             project_name, colour = self._create_project()
             current_sample = self._pm.main_data.current_sample.value
@@ -414,20 +543,20 @@ class ImportTOAPlugin(Plugin):
                 image_data[model.MD_POS]
             )
 
-            toas = [
-                self._create_toa_data(idx, contour, image_data, colour, scintillator)
-                for idx, contour in enumerate(contours)
-            ]
+            for idx, contour in enumerate(contours):
+                regions.append(
+                    self._create_region_data(region_type, idx, contour, image_data, colour, scintillator)
+                )
 
             project_data = self._create_project_data(
-                current_sample.type, project_name, toas
+                current_sample.type, project_name, region_type, regions
             )
             self._pm.import_export_manager._apply_project_data(project_data)
 
             popup.show_message(
                 wx.GetApp().main_frame,
                 title="Import",
-                message=f"TOAs successfully imported for sample type {current_sample.type}!",
+                message=f"{region_type}s successfully imported for sample type {current_sample.type}!",
                 timeout=10.0,
                 level=logging.INFO,
             )
@@ -449,27 +578,31 @@ class ImportTOAPlugin(Plugin):
                 # If validation fails, prevent page change
                 evt.Veto()
 
-    def _import_toas(self):
-        """Help/Development/Import TOAs menu callback."""
+    def _import_region(self):
+        """Help/Development/Import region menu callback."""
         if self._pm.main_data.current_sample.value is None:
             show_error("Please select a sample carrier first.")
             return
 
-        wizard = Wizard(self._parent, title="Import TOAs")
+        wizard = Wizard(self._parent, title="Import region")
+        region_page = RegionPage(wizard)
         image_page = MetadataPage(wizard)
         npy_page = NpyPage(wizard)
+        wizard.FitToPage(region_page)
         wizard.FitToPage(image_page)
         wizard.FitToPage(npy_page)
 
+        WizardPageSimple.Chain(region_page, image_page)
         WizardPageSimple.Chain(image_page, npy_page)
         wizard.Bind(EVT_WIZARD_BEFORE_PAGE_CHANGED, self.validate_wizard_page)
 
         try:
-            if wizard.RunWizard(image_page):
+            if wizard.RunWizard(region_page):
+                region_type = region_page.get_region_type()
                 image_data = image_page.get_data()
                 labels = npy_page.get_labels()
-                self._create_toas(image_data, labels)
+                self._create_regions(region_type, image_data, labels)
             else:
-                logging.debug("Import TOAs wizard was cancelled.")
+                logging.debug(f"Import {region_type}s wizard was cancelled.")
         finally:
             wizard.Destroy()
