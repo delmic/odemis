@@ -563,6 +563,12 @@ class CryoMainGUIData(MainGUIData):
                 raise ValueError(f"Failed to parse MD_SAMPLE_CENTERS, expected format "
                                  f"{{\"grid 1\": {{\"x\": 0.1, \"y\": -0.2}}}}: {exp}")
 
+        # Sample centres can not be directly used for meteor. The grid centres
+        # are in stage-bare coordinates which need to be converted into
+        # sample stage coordinates.
+        if self.role == "meteor":
+            self.sample_centers = None
+
         # Radius of a sample, for display
         self.sample_radius = self.SAMPLE_RADIUS_TEM_GRID
         # Bounding-box of the "useful area" relative to the center of a grid
