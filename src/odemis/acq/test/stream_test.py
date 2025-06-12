@@ -25,6 +25,7 @@ import logging
 import math
 import os
 import re
+import sys
 import threading
 import time
 import unittest
@@ -3365,6 +3366,9 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertEqual(cl_two_md[model.MD_USER_TINT], (0, 255, 0))  # from .tint
 
 
+# Skip if ubuntu is 20.04 or lower, as nidaqmx does not work there
+# Check using the python version, because that's easier than checking the OS version
+@unittest.skipIf(sys.version_info < (3, 9), "nidaqmx does not work for Ubuntu 20.04 or lower")
 class SPARC2HwSyncTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARCv2 using a hardware trigger between the
