@@ -148,7 +148,7 @@ class SEM(model.HwComponent):
 
         # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
-        # check_and_transfer_latest_package(self)  # TODO: enable this once the package is available
+        check_and_transfer_latest_package(self)  # TODO: enable this once the package is available
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated

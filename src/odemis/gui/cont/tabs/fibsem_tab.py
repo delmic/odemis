@@ -43,6 +43,7 @@ from odemis.gui import conf
 from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF
 from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
+from odemis.gui.cont.correlation import update_image_in_views
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.stream_bar import (
     CryoFIBAcquiredStreamsController,
@@ -65,7 +66,6 @@ class FibsemTab(Tab):
         :type main_frame: odemis.gui.main_xrc.xrcfr_main
         :type main_data: odemis.gui.model.MainGUIData
         """
-
         tab_data = guimod.CryoFIBSEMGUIData(main_data)
         super(FibsemTab, self).__init__(
             name, button, panel, main_frame, tab_data)
@@ -192,10 +192,15 @@ class FibsemTab(Tab):
         self._acquired_stream_controller = CryoFIBAcquiredStreamsController(
             tab_data=tab_data,
             feature_view=tab_data.views.value[3],
+            ov_view = tab_data.views.value[2],
             stream_bar=panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
         )
+        # self.chamber_tab = None
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        # Link which overview streams is shown with the ones shown in the Chamber
+        self.tab_data_model.views.value[2].stream_tree.flat.subscribe(self._on_overview_visible)
 
         # milling pattern controls
         self.milling_task_controller = milling.MillingTaskController(tab_data, panel, self)
@@ -298,12 +303,13 @@ class FibsemTab(Tab):
             # distinguish between it and other acquired streams
             self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
+            self._acquired_stream_controller.showOverviewStream(s)
 
-            ov_view = self.panel.vp_secom_bl.view
-            ov_view.addStream(s)
-            ov_sc = self.streambar_controller._add_stream_cont(s, show_panel=True, static=True,
-                                   view=ov_view)
-            ov_sc.stream_panel.show_remove_btn(True)
+            # ov_view = self.panel.vp_secom_bl.view
+            # ov_view.addStream(s)
+            # ov_sc = self.streambar_controller._add_stream_cont(s, show_panel=True, static=True,
+            #                        view=ov_view)
+            # ov_sc.stream_panel.show_remove_btn(True)
 
             # Compute the total bounding box
             try:
@@ -324,6 +330,79 @@ class FibsemTab(Tab):
         if len(streams) > 0 and self.main_data.role == "meteor":
             correlation_tab = self.main_data.getTabByName("meteor-correlation")
             correlation_tab.correlation_controller.add_streams(streams)
+
+    def clear_acquired_streams(self):
+        """
+        Remove overview map streams and feature streams, both from view and panel.
+        """
+        self._acquired_stream_controller.clear()
+
+    @call_in_wx_main
+    def _on_acquired_streams(self, streams):
+        """
+        Filter out deleted acquired streams (features and overview) from their respective origin
+        :param streams: list(Stream) updated list of tab streams
+        """
+        from odemis.gui.cont.tabs import LocalizationTab, CryoChamberTab
+
+        # Get all acquired streams from features list and overview streams
+        acquired_streams = set()
+        # for feature in self.tab_data_model.main.features.value:
+        #     acquired_streams.update(feature.streams.value)
+        acquired_streams.update(self.tab_data_model.overviewStreams.value)
+
+        unused_streams = acquired_streams.difference(set(streams))
+        # localization_tab: LocalizationTab = self.main_data.getTabByName("cryosecom-localization")
+
+
+        for st in unused_streams:
+            if st in self.tab_data_model.overviewStreams.value:
+                # remove from fibsem tab model
+                self.tab_data_model.overviewStreams.value.remove(st)
+                # remove from chamber tab
+                chamber_tab: CryoChamberTab = self.main_data.getTabByName("cryosecom_chamber")
+                chamber_tab.remove_overview_streams([st])
+                logging.debug(f"Stream removed from chamber tab: {st.name.value}")
+                # remove from localization tab
+                # if st in localization_tab.tab_data_model.overviewStreams.value:
+                #     logging.debug(f"Removing stream from other tabs: {st.name.value}")
+                #     localization_tab.tab_data_model.overviewStreams.value.remove(st)
+                #     localization_tab.tab_data_model.streams.value.remove(st)
+                #
+                #     # remove from overview view
+                #     localization_tab._acquired_stream_controller._ov_view.removeStream(st)
+                #     update_image_in_views(st, localization_tab.tab_data_model.views.value)
+                #     logging.debug(f"Stream removed from localization tab: {st.name.value}")
+
+        # Update and save the used stream settings on acquisition
+        if acquired_streams:
+            self._streambar_controller.update_stream_settings()
+
+    def _stop_streams_subscriber(self):
+        self.tab_data_model.streams.unsubscribe(self._on_acquired_streams)
+
+    def _start_streams_subscriber(self):
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+
+    def _on_overview_visible(self, val):
+        """
+        Apply the visibility status of overview streams in the FIBSEM tab to
+        the overview streams in the Chamber tab.
+        """
+        # prevent circular import
+        from odemis.gui.cont.tabs.cryo_chamber_tab import CryoChamberTab
+
+        # All the overview streams
+        ov_streams = set(self.tab_data_model.overviewStreams.value)
+        # Visible overview streams
+        visible_ov_streams = set(self.tab_data_model.views.value[2].getStreams())
+        # Invisible overview streams
+        invisible_ov_streams = ov_streams.difference(visible_ov_streams)
+        # Hide the invisible overview streams
+        chamber_tab: CryoChamberTab = self.main_data.getTabByName("cryosecom_chamber")
+        chamber_tab.remove_overview_streams(invisible_ov_streams)
+        # Show the visible overview streams
+        chamber_tab.load_overview_streams(visible_ov_streams)
 
     def on_dbl_click(self, evt):
 

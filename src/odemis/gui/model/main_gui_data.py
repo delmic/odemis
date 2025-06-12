@@ -381,6 +381,9 @@ class MainGUIData(object):
                 self.features = model.ListVA()
                 # VA for the currently selected feature
                 self.currentFeature = model.VigilantAttribute(None)
+                # VAs for currently selected targets
+                self.targets = model.ListVA()
+                self.currentTarget = model.VigilantAttribute(None)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
             self.settings_obs = acqmng.SettingsObserver(microscope, comps_with_role)
@@ -559,6 +562,12 @@ class CryoMainGUIData(MainGUIData):
             except Exception as exp:
                 raise ValueError(f"Failed to parse MD_SAMPLE_CENTERS, expected format "
                                  f"{{\"grid 1\": {{\"x\": 0.1, \"y\": -0.2}}}}: {exp}")
+
+        # Sample centres can not be directly used for meteor. The grid centres
+        # are in stage-bare coordinates which need to be converted into
+        # sample stage coordinates.
+        if self.role == "meteor":
+            self.sample_centers = None
 
         # Radius of a sample, for display
         self.sample_radius = self.SAMPLE_RADIUS_TEM_GRID

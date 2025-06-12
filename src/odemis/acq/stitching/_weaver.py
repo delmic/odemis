@@ -71,13 +71,15 @@ class Weaver(metaclass=ABCMeta):
         Assembles the tiles into a large image.
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box of the tiles.
         """
-        # NOTE on rotation:
-        # Total image rotation is the sum of the "standard" rotation, relative to the sample coordinates, and the scan rotation.
+        # WARNING on rotation:
+        # The total image rotation is the sum of the "standard" rotation,
+        # relative to the sample coordinates, and the scan rotation.
         # The scan rotation is not used when displaying the images, because it causes images to be displayed 'upside down' from
         # how the user regularly sees the images.
         # However, when stitching SEM images, typically that is applied without changing the sample coordinates,
-        # so usually the stitched image needs to take that rotation into account to be correct.
-        rotation = self.tiles[0].metadata.get(model.MD_ROTATION, 0) + self.tiles[0].metadata.get(model.MD_BEAM_SCAN_ROTATION, 0)
+        # so usually the stitched image needs to take that rotation into account to be correct but it interferes with SEM live overview acquisition.
+        # To properly handle this, create a plugin which rotates the images by the scan rotation for importing SEM images
+        rotation = self.tiles[0].metadata.get(model.MD_ROTATION, 0)  # + self.tiles[0].metadata.get(model.MD_BEAM_SCAN_ROTATION, 0)
         center_of_rot = self.tiles[0].metadata[model.MD_POS]
 
         tiles = []

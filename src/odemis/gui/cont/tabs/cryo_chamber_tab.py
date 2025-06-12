@@ -59,6 +59,7 @@ from odemis.gui.comp.buttons import (
     BTN_TOGGLE_PROGRESS,
 )
 from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
+from odemis.gui.cont.tabs.fibsem_tab import FibsemTab
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -425,6 +426,9 @@ class CryoChamberTab(Tab):
             localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
             localization_tab.clear_acquired_streams()
             localization_tab.reset_live_streams()
+            fibsem_tab: FibsemTab = self.tab_data_model.main.getTabByName("meteor-fibsem")
+            if fibsem_tab:
+                fibsem_tab.clear_acquired_streams()
             self.tab_data_model.main.features.value = []
             self.tab_data_model.main.currentFeature.value = None
 
@@ -494,8 +498,11 @@ class CryoChamberTab(Tab):
         # stop the stream subscribers to prevent circular updates and timing issues
         localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
         correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName("meteor-correlation")
-        correlation_tab.correlation_controller._stop_streams_subscriber()
+        fibesem_tab: FibsemTab = self.tab_data_model.main.getTabByName("meteor-fibsem")
+        # correlation_tab.correlation_controller._stop_streams_subscriber()
         localization_tab._stop_streams_subscriber()
+        if fibesem_tab:
+            fibesem_tab._stop_streams_subscriber()
 
         # follow the order of the data loading in the localization tab
         # load overview streams
@@ -526,7 +533,9 @@ class CryoChamberTab(Tab):
         # re-subscribe to stream updates
         # NOTE: this must be called with wx.CallAfter force the call to happen after existing stream addition events
         wx.CallAfter(localization_tab._start_streams_subscriber)
-        wx.CallAfter(correlation_tab.correlation_controller._start_streams_subscriber)
+        # wx.CallAfter(correlation_tab.correlation_controller._start_streams_subscriber)
+        if fibsem_tab:
+            wx.CallAfter(fibsem_tab._start_streams_subscriber)
 
         return True
 

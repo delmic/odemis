@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource class="wxFrame" version="2.5.3.0"
+  xmlns="http://www.wxwidgets.org/wxxrc">
+  <object class="wxDialog" name="fr_correlation">
+    <object class="wxFlexGridSizer">
+      <cols>3</cols>
+      <rows>1</rows>
+      <growablecols>1</growablecols>
+      <growablerows>0</growablerows>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="ToolBar" name="correlation_toolbar">
+                    <style>wxVERTICAL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+              </object>
+            </object>
+          </object>
+<!--          <size>-1,-1</size>-->
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_correlation_grid">
+          <object class="MicroscopeViewport" name="vp_correlation_tl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_tr">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_correlation_panel">
+                        <object class="wxPanel" name="pnl_correlation">
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <!-- Add Delete Button -->
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_row">
+                                    <icon>../../img/icon/ico_trash.png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxALL|wxEXPAND</flag>
+                                  <border>10</border>
+                                </object>
+                                <!-- Z-targeting button -->
+                                <object class="sizeritem">
+                                  <object class="wxButton" name="btn_z_targeting">
+                                    <label>Refine Z</label>
+                                  </object>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGrid" name="table_grid">
+                                <style>wxWANTS_CHARS</style>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="txt_correlation_rms">
+                                <label>Correlation RMS Deviation :</label>
+                                <fg>#E5E5E5</fg>
+                                <hidden>1</hidden>
+                              </object>
+                              <flag>wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                          </object>
+                        </object>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_correlation_streams">
+                        <object class="StreamBar" name="pnl_correlation_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_close">
+                <height>48</height>
+                <face_colour>def</face_colour>
+                <label>Close</label>
+                <font>
+                  <size>14</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
+          <bg>#444444</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxVERTICAL</orient>
+    </object>
+    <size>400,-1</size>
+    <bg>#333333</bg>
+    <style>wxBORDER_NONE</style>
+  </object>
+  <flag>wxEXPAND</flag>
+</object>
+</object>
+    <title>Multipoint Correlation</title>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+    </font>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
+  </object>
+</resource>

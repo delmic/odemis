@@ -224,7 +224,13 @@ def check_and_transfer_latest_package(client: 'SEM') -> None:
         adapter = "xtadapter"
         if "xttoolkit" in client._swVersion:
             adapter = "fastem-xtadapter"
-        current_version = re.search(r"xtadapter:\s*([\d.]+)", client._swVersion)
+            current_version = re.search(r"xtadapter:\s*([\d.]+)", client._swVersion)
+        elif "autoscript" in client._swVersion:
+            adapter = "autoscript-xtadapter"
+            current_version = re.search(r"adapter:\s*autoscript-([\d.]+)", client._swVersion)
+        else:
+            current_version = re.search(r"xtadapter:\s*([\d.]+)", client._swVersion)
+        logging.debug(f"current version {current_version.group(1)} {client._swVersion}")
         current_version = current_version.group(1) if current_version is not None else None
         if current_version is not None and bitness is not None:
             package = check_latest_package(
