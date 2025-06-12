@@ -553,7 +553,9 @@ class AcquisitionSettings:
                  margin: int,
                  positions_n: int,
                  has_do: bool,
-                 continuous: bool = True):
+                 continuous: bool = True,
+                 is_vector_scan: bool = False,
+        ):
         """
         :param analog_detectors: list of analog detectors to acquire the data
         :param counting_detectors: list of counting detectors to acquire the data
@@ -566,6 +568,8 @@ class AcquisitionSettings:
         :param has_do: True if a digital output task will run
         :param continuous: If False, only acquire a single frame. Otherwise, acquires until a
         UPDATE_SETTINGS (or a STOP) message is received on the message queue.
+        :param is_vector_scan: True if the scan is a vector scan, returning a 1D array. Otherwise it
+        is standard raster scan, returning a 2D array.
         """
 
         self.analog_detectors = analog_detectors
@@ -577,6 +581,7 @@ class AcquisitionSettings:
         self.margin = margin  # px
         self.positions_n = positions_n
         self.continuous = continuous
+        self.is_vector_scan = is_vector_scan
 
         # Derive some useful info
         self.frame_duration = positions_n * dwell_time  # s
@@ -866,7 +871,10 @@ class Acquirer:
         base_md[model.MD_DWELL_TIME] = acq_settings.dwell_time
         # add scanner translation to the center
         center = base_md.get(model.MD_POS, (0, 0))
-        trans = self._scanner.pixelToPhy(self._scanner.translation.value)
+        if acq_settings.is_vector_scan:
+            trans = [0, 0]  # Pass the data as-is for vector scan
+        else:
+            trans = self._scanner.pixelToPhy(self._scanner.translation.value)
         base_md[model.MD_POS] = (center[0] + trans[0],
                                  center[1] + trans[1])
 
@@ -1181,12 +1189,14 @@ class Acquirer:
             analog_dets.append(adet)
 
         # Get the waveforms
-        (scan_array, ttl_array,
-         dt, ao_osr, ai_osr, res, margin) = self._scanner._get_scan_waveforms(len(analog_dets))
+        (scan_array, ttl_array, dt, ao_osr, ai_osr, res,
+         margin, is_vector_scan) = self._scanner._get_scan_waveforms(len(analog_dets))
         acq_settings = AcquisitionSettings(analog_dets, counting_dets,
                                            dt, ao_osr, ai_osr, res, margin,
                                            scan_array.shape[1] // ao_osr,
-                                           has_do=(ttl_array is not None), continuous=continuous)
+                                           has_do=(ttl_array is not None),
+                                           continuous=continuous,
+                                           is_vector_scan=is_vector_scan)
         logging.debug(f"Will scan {acq_settings.positions_n} positions @ {acq_settings.dwell_time * 1e6:.3g} µs "
                       f"{'continuously' if continuous else 'once'} "
                       f"with {len(analog_dets)} AI and {len(counting_dets)} CI, for a total of "
@@ -1499,10 +1509,16 @@ class Acquirer:
 
             for i, d in enumerate(acq_settings.analog_detectors):
                 im = model.DataArray(ai_data[i], analog_mds[i])
+                if acq_settings.is_vector_scan:
+                    # Flatten the image to a 1D array, to make it clear it's the result of a vector scan
+                    im.shape = (im.shape[0] * im.shape[1],)
                 d.data.notify(im)
 
             for i, d in enumerate(acq_settings.counting_detectors):
                 im = model.DataArray(ci_data[i], counting_mds[i])
+                if acq_settings.is_vector_scan:
+                    # Flatten the image to a 1D array, to make it clear it's the result of a vector scan
+                    im.shape = (im.shape[0] * im.shape[1],)
                 d.data.notify(im)
 
             if should_stop:
@@ -2266,11 +2282,13 @@ class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
 
-    Note that the .resolution, .translation, .scale and .rotation VAs are
+    Note that the .resolution, .translation, .scale and VAs are
       linked, so that the region of interest stays approximately the same (in
       terms of physical space). So to change them to specific values, it is
-      recommended to set them in the following order: Rotation > Scale >
-      Resolution > Translation.
+      recommended to set them in the following order:
+      (Rotation) > Scale > Resolution > Translation.
+    It is possible to request an arbitrary scan path, by using the .scanPath VA.
+    In this case, .resolution, .translation, and .scale are not used.
     """
 
     def __init__(self, name: str, role: str, parent: AnalogSEM,
@@ -2440,10 +2458,12 @@ class Scanner(model.Emitter):
         self._pixel_ttl = []
         self._line_ttl = []
         self._frame_ttl = []
+        self._scan_ttl_setters = []  # Only used to keep a reference to the setters
 
-        for ttl_type, ports_name, ev_name in (("pixel", "_pixel_ttl", "newPixel"),
-                                              ("line", "_line_ttl", "newLine"),
-                                              ("frame", "_frame_ttl", "newFrame")):
+        for ttl_type, ports_name, ev_name, scan_ttl_name in (
+                ("pixel", "_pixel_ttl", "newPixel", "scanPixelTTL"),
+                ("line", "_line_ttl", "newLine", "scanLineTTL"),
+                ("frame", "_frame_ttl", "newFrame", "scanFrameTTL")):
             if ttl_type in image_ttl:
                 ttl_info = image_ttl[ttl_type]
                 setattr(self, ports_name, ttl_info["ports"])
@@ -2451,6 +2471,12 @@ class Scanner(model.Emitter):
                 affects = ttl_info.get("affects", [])
                 event.affects.value.extend(affects)
                 setattr(self, ev_name, event)
+
+                # Add a scanXXXTTL VA
+                scan_ttl_setter = functools.partial(self._set_scan_ttl, scan_ttl_name)
+                scan_va = model.VigilantAttribute(None, setter=scan_ttl_setter)
+                self._scan_ttl_setters.append(scan_ttl_setter)
+                setattr(self, scan_ttl_name, scan_va)
 
         # TODO: have a better way to indicate the channel number as it's limited to port0
         # while there is also port 1 & 2. Explicitly ask the full NI name? as "port1/line3"? Or as written on hardware "P1.3"?
@@ -2493,7 +2519,15 @@ class Scanner(model.Emitter):
         pxs = (self._hfw_nomag / (self._shape[0] * mag),) * 2
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
-        # (.resolution), .translation, .rotation, and .scaling are used to
+        # Special VigilantAttribute which allows arbitrary (aka vector) scan.
+        # If it is None, the scanner behaves "normally", by following the settings of .scale,
+        # .resolution, .translation. If it's a (N, 2) numpy array, it will scan these points.
+        # The DataArray is of 1D (N), and its metadata (MD_POS, MD_PIXEL_SIZE) contains the
+        # values from the scanner metadata as-is.
+        self.scanPath = model.VigilantAttribute(None, unit="px", setter=self._set_scan_path)
+        self.scanPath.subscribe(self._on_scan_path)  # to update metadata
+
+        # (.resolution), .translation, .rotation, and .scale are used to
         # define the conversion from coordinates to a region of interest.
 
         # (float, float) in px => moves center of acquisition by this amount
@@ -2644,7 +2678,7 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
-    def _on_setting_changed(self, _):
+    def _on_setting_changed(self, _=None):
         """
         Called when a VA affecting the image scanning changes
         """
@@ -2666,8 +2700,12 @@ class Scanner(model.Emitter):
     def _updatePixelSizeMD(self):
         # If scaled up, the pixels are bigger => update metadata
         pxs = self.pixelSize.value
-        scale = self.scale.value
-        pxs_scaled = (pxs[0] * scale[0], pxs[1] * scale[1])
+        if self.scanPath.value is None:
+            scale = self.scale.value
+            pxs_scaled = (pxs[0] * scale[0], pxs[1] * scale[1])
+        else:
+            # arbritary scan path, so no scaling
+            pxs_scaled = pxs
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, value: float) -> float:
@@ -2745,6 +2783,69 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
 
+    def _set_scan_path(self, scan_path: Optional[numpy.ndarray]) -> Optional[numpy.ndarray]:
+        """
+        Check the scan path is correct, and mark it as updated.
+        :param scan_path: the scan path to set, as a 2D numpy array of shape (N, 2).
+        The first dimension defines the number of points in the scan path, and the second
+        dimension defines the X and Y coordinates of each point in pixels (as .translation).
+        If None, then the standard scanning behaviour is used, based on .scale, .resolution and .translation.
+        :return: the scan path as-is, if valid
+        :raises ValueError: if the scan path is not valid
+        """
+        if scan_path is None:  # It's fine, just means no scan path
+            if self.scanPath.value is not None:  # Previous value
+                self._on_setting_changed()
+            return scan_path
+
+        if (not isinstance(scan_path, numpy.ndarray)
+            or scan_path.ndim != 2
+            or scan_path.shape[1] != 2
+            or scan_path.shape[0] == 0
+        ):
+            raise ValueError(f"scanPath should be of shape (N, 2), but got {scan_path.shape}")
+
+        # Check the scan path is within the limits of translation
+        min_x, min_y = numpy.min(scan_path, axis=0)
+        max_x, max_y = numpy.max(scan_path, axis=0)
+        limits = self.translation.range
+        if not (limits[0][0] <= min_x <= max_x <= limits[1][0] and
+                limits[0][1] <= min_y <= max_y <= limits[1][1]):
+            raise ValueError(f"scanPath has bounds in X {min_x}->{max_x} and in Y {min_y}->{max_y}, "
+                             f"which is out of the limits {limits} px")
+
+        self._on_setting_changed()
+        return scan_path
+
+    def _on_scan_path(self, scan_path: Optional[numpy.ndarray]):
+        """
+        Called when the scanPath changes
+        """
+        self._updatePixelSizeMD()
+
+    def _set_scan_ttl(self, va_name: str, ttl: Optional[numpy.ndarray]) -> Optional[numpy.ndarray]:
+        """
+        Check the scan TTL data is correct, and mark it as updated.
+        Generic function for scanPixelTTL, scanLineTTL, and scanFrameTTL.
+        :param va_name: the name of the VigilantAttribute
+        :param ttl: A 1D numpy array of shape (2*N,) of dtype bool. The TTL data to set, for each
+        pixel of scanPath (value at the beginning of each pixel, and at the middle of each pixel).
+        If None, and scanPath is defined, the TTL output is set low during the entire scanning.
+        :return: the TTL data as-is, if valid
+        :raises ValueError: if the TTL data is not valid
+        """
+        if ttl is None:  # It's fine, just means no vector scanning or no scan TTL
+            va = getattr(self, va_name)
+            if va.value is not None:  # Previous value
+                self._on_setting_changed()
+            return ttl
+
+        if ttl.ndim != 1 or ttl.shape[0] == 0 or ttl.dtype != numpy.bool_:
+            raise ValueError(f"{va_name} should be boolean of shape (N,), but got {ttl.shape}")
+
+        self._on_setting_changed()
+        return ttl
+
     def _on_active_state_change(self, active):
         """
         Called when the active state of the e-beam changes
@@ -2821,7 +2922,7 @@ class Scanner(model.Emitter):
 
     def _get_scan_waveforms(self, nrchans: int) -> Tuple[
             numpy.ndarray, Optional[numpy.ndarray],
-            float, int, int, Tuple[int, int], int
+            float, int, int, Tuple[int, int], int, bool
             ]:
         """
         For the given scan settings, return the analog and digital waveforms
@@ -2844,6 +2945,8 @@ class Scanner(model.Emitter):
             ai_osr: over-sampling rate, how many input samples should be acquired by pixel
             resolution: resolution used for the waveform
             margin: number of extra pixels added in the X dimension for flyback
+            is_vector_scan: True if the scan is a vector scan, returning a 1D array.
+             Otherwise it is standard raster scan, returning a 2D array.
         """
         # with self._dt_lock: # TODO: Read/write everything in a (recursive) lock
         if nrchans != self._nrchans:
@@ -2863,19 +2966,33 @@ class Scanner(model.Emitter):
         resolution = self.resolution.value
         scale = self.scale.value
         translation = self.translation.value
+        scan_path = self.scanPath.value
+        is_vector_scan = scan_path is not None
 
-        # settle_time is proportional to the size of the ROI (and =0 if only 1 px)
-        st = self._settle_time * scale[0] * (resolution[0] - 1) / (self._shape[0] - 1)
-        # Round-up if settle time represents more than 1% of the dwell time.
-        # Below 1% the improvement would be marginal, and that allows to have
-        # tiny areas (eg, 4x4) scanned without the first pixel of each line
-        # being exposed twice more than the others.
-        margin = int(math.ceil(st / dwell_time - 0.01))
+        if is_vector_scan:
+            margin = 0  # Nothing to clip, the raw data will be sent to the Dataflow
+            resolution = scan_path.shape[0], 1  # Only one line, so resolution is just the number of points
+            new_settings = [scan_path, ao_osr]
+            # Cannot compare numpy arrays directly, so just assume that if it's not the same array, it has changed.
+            if (len(self._prev_settings) != len(new_settings)
+                or self._prev_settings[0] is not scan_path
+                or self._prev_settings[1] != ao_osr
+            ):
+                self._update_raw_scan_array_from_path(scan_path, ao_osr)
+                self._prev_settings = new_settings
+        else:
+            # settle_time is proportional to the size of the ROI (and =0 if only 1 px)
+            st = self._settle_time * scale[0] * (resolution[0] - 1) / (self._shape[0] - 1)
+            # Round-up if settle time represents more than 1% of the dwell time.
+            # Below 1% the improvement would be marginal, and that allows to have
+            # tiny areas (eg, 4x4) scanned without the first pixel of each line
+            # being exposed twice more than the others.
+            margin = int(math.ceil(st / dwell_time - 0.01))
 
-        new_settings = [resolution, scale, translation, margin, ao_osr]
-        if self._prev_settings != new_settings:
-            self._update_raw_scan_array(resolution, scale, translation, margin, ao_osr)
-            self._prev_settings = new_settings
+            new_settings = [resolution, scale, translation, margin, ao_osr]
+            if len(self._prev_settings) != len(new_settings) or self._prev_settings != new_settings:
+                self._update_raw_scan_array(resolution, scale, translation, margin, ao_osr)
+                self._prev_settings = new_settings
 
         return (self._scan_array,
                 self._ttl_signal,
@@ -2883,9 +3000,152 @@ class Scanner(model.Emitter):
                 ao_osr,
                 ai_osr,
                 resolution,
-                margin)
+                margin,
+                is_vector_scan)
 
-    def _update_raw_scan_array(self, shape, scale, translation, margin, dup):
+    def _update_raw_scan_array_from_path(self, scan_path: numpy.ndarray, dup: int) -> None:
+        """
+        Converts the scan path from pixel coordinates to raw values (as used by the DAQ), and duplicates
+        the values according to the duplication factor. The converted array is stored in _scan_array.
+        :param scan_path: the scan path to set, as a 2D numpy array of shape (N, 2) in pixel coordinates.
+        :param dup: (1<=int): how many times each pixel should be duplicated
+        returns nothing, but updates ._scan_array.
+        """
+        # The limits correspond to -shape/2 to +shape/2, in pixel coordinates.
+        limits_px = numpy.array(self.translation.range, dtype=float).T  # transpose to have the X/Y as first dimension
+
+        # DAQ raw values: convert the limits in volt (defined by the user) to raw values
+        limits_raw = numpy.empty((2, 2), dtype=float)  # min/max for X/Y in raw value (int16)
+        for i, lim in enumerate(self._limits):
+            ao_channel = self._prepare_ao_task.ao_channels[i]
+            limits_raw[i] = (self.volt_to_raw(ao_channel, lim[0]),
+                             self.volt_to_raw(ao_channel, lim[1]))
+
+        scan_array = self._generate_scan_array_from_path(scan_path, limits_px, limits_raw, dup)
+        self._scan_array = scan_array.reshape(2, -1)  # flatten the YX+dup dimensions
+
+        ttl_signal = self._generate_signal_ttl_from_path(dup)
+        if ttl_signal is not None:
+            ttl_signal = ttl_signal.ravel()  # flatten the N+dup dimensions
+        self._ttl_signal = ttl_signal
+
+    def _generate_scan_array_from_path(self,
+                                       scan_path: numpy.ndarray,
+                                       limits_px: numpy.ndarray,
+                                       limits_raw: numpy.ndarray,
+                                       dup: int
+                                       ) -> numpy.ndarray:
+        """
+        Convert the scan path from pixel coordinates to raw values.
+        Linearly maps coordinates between limits_px[0] and limits_px[1] to coordinates between
+        limits_raw[0] and limits_raw[1], and duplicates each pixel according to the dup factor.
+
+        :param scan_path: the scan path to set, as a 2D numpy array of shape (N, 2) in pixel coordinates.
+        :param limits_px: numpy array of shape (2, 2) with the limits in pixel coordinates.
+        First dimension is X/Y, second dimension is min/max.
+        :param limits_raw: numpy array of shape (2, 2) with the limits in raw values.
+        First dimension is X/Y, second dimension is min/max.
+        :param dup: (1<=int): how many times each pixel should be duplicated
+        :return: the scan array, as a numpy array of shape (2, N, dup).
+        """
+        # The standard scan array computation, in _update_raw_scan_array() compensates for the coordinates to fit into the center
+        # of each pixel, but here it is not required as the scan path would have already this compensation.
+        # if needed.
+        scan_array = numpy.empty((2, len(scan_path), dup), dtype=numpy.int16, order='C')
+
+        # For memory efficiency, we use the final array to store the intermediate values
+        temp_array = scan_array[:, :, 0].T  # only use the first duplication, and put the pixel dimension as first, to match scan_path
+        scale = (limits_raw[:, 1] - limits_raw[:, 0]) / (limits_px[:, 1] - limits_px[:, 0])
+        offset = limits_raw[:, 0] - limits_px[:, 0] * scale
+        numpy.add(scan_path * scale, offset, out=temp_array, casting="unsafe")
+
+        if dup > 1:
+            # Move dup from the end of the array to the beginning, for numpy
+            # broadcasting to work (ie, the values are duplicated on the first dimensions)
+            scan_dup = numpy.moveaxis(scan_array, 2, 0)
+            scan_dup[1:, :, :] = scan_dup[0, :, :]
+
+        return scan_array
+
+    def _generate_signal_ttl_from_path(self, dup: int) -> Optional[numpy.ndarray]:
+        """
+        :param dup: (1<=int): how many times each pixel should be duplicated
+        :return:
+            ttl_signal: numpy array of shape N*2, dup, dtype uint32: the digital signal indicating
+            when the pixel, line, frame start, as bits.
+            The bits are set to match the *_ttl options.
+            If not TTLs are to be changed, None is returned
+        """
+        if not self._fast_do_names:
+            # It's OK, the task is just going to do nothing... should just not write to it.
+            return None
+
+        # If the task has a single line, then nidaqmx expects a single boolean per sample!
+        # Note that in memory, a boolean is an uint8, but only containing either 0 or 1.
+        if len(self._pixel_ttl) + len(self._line_ttl) + len(self._frame_ttl) == 1:
+            dtype = numpy.bool_  # Need to use numpy bool for correct bitwise operations (instead of "bool")
+        else:
+            dtype = numpy.uint32
+
+        # If the scanTTL va is not the right size, assume it's empty
+        scan_length = self.scanPath.value.shape[0]
+
+        # same length as the path, but every pixel is doubled, to have the rate twice higher
+        # than the dwell time. This allows to send pixel signal during which half of the dwell time
+        # the signal is high and the half of dwell time it is low. That's the slowest rate
+        # that allows to distinguish each pixel.
+        full_shape = (scan_length * 2, dup)
+        ttl_signal = numpy.empty(full_shape, dtype=dtype, order='C')
+        inactive_bitmap = dtype(sum(1 << port for port, inv in self._ttl_inverted.items() if inv))
+        ttl_signal[...] = inactive_bitmap
+        # Special array view, with length as last dim, to tell numpy everything needs to be copied
+        ttl_signal_dup = numpy.moveaxis(ttl_signal, 0, 1)  # shape (dup, 2N)
+
+        pixel_signal = None
+        if hasattr(self, "scanPixelTTL") and self.scanPixelTTL.value is not None:
+            pixel_signal = self.scanPixelTTL.value
+            if pixel_signal.shape[0] != full_shape[0]:
+                logging.warning(f"Not using scanPixelTTL of shape {pixel_signal.shape} while path is of length {full_shape[0]}.")
+                pixel_signal = None
+
+        if pixel_signal is not None and self._pixel_ttl:
+            # Copy: signal is initialised with everything set to inactive. Then:
+            # 1. for each output port which is controlled by the pixel signal,
+            pixel_mask = dtype(sum(1 << c for c in self._pixel_ttl))
+            # 2. all the samples where the signal is high is converted to the bitmask (using boolean AND bitmask)
+            pixel_bits = pixel_signal & pixel_mask
+            # 3. Invert all high samples => they are switched from inactive to active (using XOR)
+            ttl_signal_dup[...] ^= pixel_bits
+
+        # Line: copy as-is
+        line_signal = None
+        if hasattr(self, "scanLineTTL") and self.scanLineTTL.value is not None:
+            line_signal = self.scanLineTTL.value
+            if line_signal.shape[0] != full_shape[0]:
+                logging.warning(f"Not using scanLineTTL of shape {line_signal.shape} while path is of length {full_shape[0]}.")
+                line_signal = None
+
+        if line_signal is not None and self._line_ttl:
+            line_mask = dtype(sum(1 << c for c in self._line_ttl))
+            line_bits = line_signal & line_mask
+            ttl_signal_dup[...] ^= line_bits
+
+        # Frame: copy as-is
+        frame_signal = None
+        if hasattr(self, "scanFrameTTL") and self.scanFrameTTL.value is not None:
+            frame_signal = self.scanFrameTTL.value
+            if frame_signal.shape[0] != full_shape[0]:
+                logging.warning(f"Not using scanFrameTTL of shape {frame_signal.shape} while path is of length {full_shape[0]}.")
+                frame_signal = None
+
+        if frame_signal is not None and self._frame_ttl:
+            frame_mask = dtype(sum(1 << c for c in self._frame_ttl))
+            frame_bits = frame_signal & frame_mask
+            ttl_signal_dup[...] ^= frame_bits
+
+        return ttl_signal
+
+    def _update_raw_scan_array(self, shape, scale, translation, margin, dup) -> None:
         """
         Update the raw array of values to send to scan the 2D area.
         :param shape: (list of 2 int): X/Y of the scanning area (slow, fast axis)
@@ -2894,7 +3154,7 @@ class Scanner(model.Emitter):
         :param margin: (0<=int): number of additional pixels to add at the beginning of
             each scanned line
         :param dup: (1<=int): how many times each pixel should be duplicated
-        returns nothing, but update ._scan_array.
+        returns nothing, but update ._scan_array and _ttl_signal
         """
         full_res = self._shape[:2]
         # adapt limits according to the scale and translation so that if scale

@@ -179,6 +179,7 @@ class TestAnalogSEM(unittest.TestCase):
         cls.line_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["line"]["ports"])
         cls.frame_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["frame"]["ports"])
 
+
     @classmethod
     def tearDownClass(cls) -> None:
         cls.sem.terminate()
@@ -188,6 +189,13 @@ class TestAnalogSEM(unittest.TestCase):
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]  # s
         self.scanner.scale.value = (8, 8)  # => res is 8x8 smaller than max res
         self.scanner.resolution.value = self.scanner.resolution.range[1]  # max res, limited to the scale (so, max / 8)
+        self.scanner.scanPath.value = None
+        self.scanner.scanPixelTTL.value = None
+        self.scanner.scanLineTTL.value = None
+        self.scanner.scanFrameTTL.value = None
+
+        # Reset the metadata
+        self.scanner.updateMetadata({model.MD_POS: (0, 0)})
 
         # for receive_image()
         self.expected_shape = tuple(self.scanner.resolution.value[::-1])
@@ -248,7 +256,7 @@ class TestAnalogSEM(unittest.TestCase):
         res = scanner.resolution.value
         print(res)
 
-        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin = self.scanner._get_scan_waveforms(1)
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
 
         plt.plot(scan_array[0], label="X")  # X voltage
         plt.plot(scan_array[1], label="Y")  # Y voltage
@@ -286,7 +294,7 @@ class TestAnalogSEM(unittest.TestCase):
         scanner.resolution.value = scanner.resolution.range[1]  # Force it to be the largest
         res = scanner.resolution.value
 
-        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin = self.scanner._get_scan_waveforms(1)
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
 
         exp_margin = int(CONFIG_SCANNER["settle_time"] / dt)  # True if the whole FoV is scanned
         self.assertEqual(exp_margin, margin)
@@ -349,7 +357,7 @@ class TestAnalogSEM(unittest.TestCase):
         scanner.resolution.value = res
         self.assertEqual(scanner.resolution.value, res)
 
-        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin = self.scanner._get_scan_waveforms(1)
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
 
         self.assertEqual(margin, 0)  # No need for margin when scanning a spot
         self.assertEqual(res, act_res)
@@ -358,9 +366,9 @@ class TestAnalogSEM(unittest.TestCase):
 
         exp_length = (res[0] + margin) * res[1]  # 1
 
-        # Check the analog voltages (XY position)
+        # Check the analog voltages (XY position) are the expected shape
+        self.assertEqual(scan_array.shape, (2, exp_length))
         self.assertEqual(scan_array[0].size, exp_length)
-        self.assertEqual(scan_array[1].size, exp_length)
 
         # Check the TTL signals
         self.assertEqual(ttl_array.shape, (exp_length * 2,))
@@ -380,6 +388,88 @@ class TestAnalogSEM(unittest.TestCase):
         # frame TTL should contain only one transition (from low to high), corresponding to the beginning of the frame
         nb_transitions = numpy.sum(numpy.diff((ttl_array & self.frame_bit).astype(bool)))
         self.assertEqual(nb_transitions, 1)
+
+    def test_waveform_scan_path(self):
+        dt = 1e-6  # s
+        # Basic scan path, which scan the 4 corners of the FoV, and the center
+        limits_px = self.scanner.translation.range
+        scan_path = numpy.array([
+            [limits_px[0][0], limits_px[0][1]],  # Left/top corner
+            [limits_px[1][0], limits_px[0][1]],  # Right/top corner
+            [limits_px[0][0], limits_px[1][1]],  # Left/bottom corner
+            [limits_px[1][0], limits_px[1][1]],  # Right/bottom corner
+            [0, 0]     # Center
+        ], dtype=float)
+        self.scanner.scanPath.value = scan_path
+        self.scanner.dwellTime.value = dt
+
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
+
+        self.assertEqual(margin, 0)  # No need for margin when scanning a spot
+        self.assertEqual(act_res, (5, 1))  # number of points
+        self.assertEqual(dt, act_dt)
+        self.assertEqual(ao_osr, 1)  # less than 42s should always be ao_osr == 1
+
+        self.assertEqual(scan_array.shape, (2, 5))
+        # Compare to the expected limits  (X: -3 -> 6V, Y: 2 -> 1.2 V)
+        # => smallest X should be negative, largest X positive,
+        # => smallest Y positive, largest Y positive, but smaller
+        self.assertLessEqual(scan_array[0, 0], -1000)  # X min
+        self.assertGreaterEqual(scan_array[0, 1], 1000)  # X max
+
+        self.assertGreater(scan_array[1, 2], 0)  # Y max > 0
+        self.assertGreater(scan_array[1, 0], scan_array[1, 2])  # Y min > Y max
+
+        # Test with a single point
+        scan_path = numpy.array([
+            [limits_px[0][0], limits_px[0][1]],  # Top left corner
+        ], dtype=float)
+        self.scanner.scanPath.value = scan_path
+        self.scanner.dwellTime.value = dt
+
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
+
+        self.assertEqual(margin, 0)  # No need for margin when scanning a spot
+        self.assertEqual(act_res, (1, 1))  # number of points
+        self.assertEqual(dt, act_dt)
+        self.assertEqual(ao_osr, 1)  # less than 42s should always be ao_osr == 1
+
+        self.assertEqual(scan_array.shape, (2, 1))
+
+        # Test with 1 million points
+        n = 1_000_000
+        scan_path = numpy.empty((n, 2), dtype=float)
+        scan_path[:, 0] = numpy.linspace(limits_px[0][0], limits_px[1][0], n)  # X
+        scan_path[:, 1] = numpy.linspace(limits_px[0][1], limits_px[1][1], n)  # Y
+
+        self.scanner.scanPath.value = scan_path
+        self.scanner.dwellTime.value = dt
+
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
+
+        self.assertEqual(margin, 0)  # No need for margin when scanning a spot
+        self.assertEqual(act_res, (n, 1))  # number of points
+        self.assertEqual(dt, act_dt)
+        self.assertEqual(ao_osr, 1)  # less than 42s should always be ao_osr == 1
+
+        self.assertEqual(scan_array.shape, (2, n))
+
+        # Test with a single point for a very long dwell time (duplicated AO samples)
+        dt = 50  # s, > 42s => dup == 2
+        scan_path = numpy.array([
+            [limits_px[0][0], limits_px[0][1]],  # Top left corner
+        ], dtype=float)
+        self.scanner.scanPath.value = scan_path
+        self.scanner.dwellTime.value = dt
+
+        scan_array, ttl_array, act_dt, ao_osr, ai_osr, act_res, margin, is_vector_scan = self.scanner._get_scan_waveforms(1)
+
+        self.assertEqual(margin, 0)  # No need for margin when scanning a spot
+        self.assertEqual(act_res, (1, 1))  # number of points
+        self.assertEqual(dt, act_dt)
+        self.assertEqual(ao_osr, 2)  # > 42 s
+
+        self.assertEqual(scan_array.shape, (2, 2))  # 2 samples for the single point, as ao_osr == 2
 
     def test_find_best_dwell_time(self):
 
@@ -705,7 +795,6 @@ class TestAnalogSEM(unittest.TestCase):
             self.assertEqual(da.shape, exp_shape)
             self.assertIn(model.MD_DWELL_TIME, da.metadata)
             self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
-
 
     def test_acquisition_counter(self):
         self.scanner.dwellTime.value = 10e-06  # s
@@ -1051,7 +1140,6 @@ class TestAnalogSEM(unittest.TestCase):
             self.sed.data.unsubscribe(self.receive_image)
             self.assertEqual(len(self.acq_dates), 1)
 
-
     def test_acquire_two_flows(self):
         """
         Simple acquisition with two dataflows acquiring (more or less)
@@ -1229,6 +1317,79 @@ class TestAnalogSEM(unittest.TestCase):
         # remove synchronisation, should do nothing as they are stopped
         self.sed.data.synchronizedOn(None)
         self.counter.data.synchronizedOn(None)
+
+    def test_acquisition_scan_path(self):
+        limits_px = self.scanner.translation.range
+        # Basic scan path, which scan the 4 corners of the FoV, and the center
+        scan_path = numpy.array([
+            [limits_px[0][0], limits_px[0][1]],  # Top left corner
+            [limits_px[1][0], limits_px[0][1]],  # Top right corner
+            [limits_px[0][0], limits_px[1][1]],  # Bottom right corner
+            [limits_px[1][0], limits_px[1][1]],  # Bottom left corner
+            [0, 0]     # Center
+        ], dtype=float)
+        # TTL signal: everything is a pixel, a line and a frame
+        all_high = numpy.ones(scan_path.shape[0] * 2, dtype=numpy.bool_)
+
+        self.scanner.scanPath.value = scan_path
+        self.scanner.scanPixelTTL.value = all_high
+        self.scanner.scanLineTTL.value = all_high
+        self.scanner.scanFrameTTL.value = all_high
+        self.scanner.dwellTime.value = 1.e-6  # s
+
+        exp_pxs = self.scanner.pixelSize.value
+
+        da = self.sed.data.get()
+        self.assertEqual(da.shape, (5,))
+        self.assertAlmostEqual(da.metadata[model.MD_DWELL_TIME], 1.e-6)
+        # MD_PIXEL_SIZE should be the same as the pixel size (ie, assume scale == 1)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        # MD_POS should be passed as-is
+        self.assertAlmostEqual(da.metadata[model.MD_POS], (0, 0))
+
+    def test_acquire_two_flows_scan_path(self):
+        """
+        Vector scan acquisition with two dataflows acquiring simultaneously
+        """
+        # Test with 1 million points (as a line going from the top-left to bottom-right corner)
+        n = 1_000_000
+        limits_px = self.scanner.translation.range
+        scan_path = numpy.empty((n, 2), dtype=float)
+        scan_path[:, 0] = numpy.linspace(limits_px[0][0], limits_px[1][0], n)  # X
+        scan_path[:, 1] = numpy.linspace(limits_px[0][1], limits_px[1][1], n)  # Y
+
+        dt = 2e-6 # s, small dwell time, but large enough to be accepted with 2 detectors
+        self.scanner.scanPath.value = scan_path
+        self.scanner.dwellTime.value = dt
+
+        exp_duration = n * dt
+        number, number2 = 4, 5
+
+        logging.debug("Starting acquisition")
+
+        self.left = number
+        self.expected_shape = (n,)
+        self.sed.data.subscribe(self.receive_image)
+
+        time.sleep(exp_duration + 0.1)  # make sure we'll start asynchronously
+        self.left2 = number2
+        self.cld.data.subscribe(self.receive_image2)
+
+        time.sleep(exp_duration)  # make sure at least the next frame has started
+
+        for i in range(number + number2):
+            # end early if it's already finished
+            if self.left == 0 and self.left2 == 0:
+                break
+            time.sleep(2 + exp_duration * 1.1)  # 2s per image should be more than enough in any case
+
+        # check that at least some images were acquired simultaneously
+        common_dates = set(self.acq_dates) & set(self.acq_dates2)
+        self.assertGreater(len(common_dates), 0, "No common dates between %r and %r" %
+                           (self.acq_dates, self.acq_dates2))
+
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.left2, 0)
 
     def receive_image(self, dataflow, image):
         """
