@@ -815,10 +815,25 @@ class Scanner(model.Emitter):
         NOTE: could be generalized to support the electron beam as well, but it is a lot less important for that
         # use-case and Tescan did not even configure presets.
         """
-        beam_presets = self.parent._device_handler.PresetEnum("ion").split("\n")  # List of strings
-        beam_presets = [p for p in beam_presets if p]  # Filter out any empty presets
-        # Sort based on voltage and current
-        return sorted(beam_presets, key=self.get_preset_weight)
+        beam_presets = self.parent._device_handler.PresetEnum("ion").split("\n")
+        beam_presets = [p for p in beam_presets if p]
+
+        weighted_presets = [
+            (preset, self.get_preset_weight(preset))
+            for preset in beam_presets
+        ]
+
+        # Filter out presets with invalid weights
+        weighted_presets = [
+            (preset, weight) for preset, weight in weighted_presets
+            if weight != (-math.inf, -math.inf)
+        ]
+
+        # Sort by weight
+        sorted_presets = sorted(weighted_presets, key=lambda x: x[1])
+
+        # Return only the preset strings
+        return [preset for preset, _ in sorted_presets]
 
     def get_preset_weight(self, preset: str) -> Tuple[float, float]:
         """
@@ -829,14 +844,20 @@ class Scanner(model.Emitter):
         :returns: a weight tuple used for sorting
         """
         unit_weights = {
+            'eV': 1,
+            'keV': 1e-3,
             'nA': 1,
             'pA': 1e-3,
         }
-        voltage, current = re.findall(r"(\d+(?:\.\d+)?)\s*(keV|pA|nA)", preset)
-        voltage_value, _ = voltage
-        current_value, current_unit = current
-        return (float(voltage_value),
-                float(current_value) * unit_weights[current_unit])
+        try:
+            voltage, current = re.findall(r"(\d+(?:\.\d+)?)\s*(keV|eV|pA|nA)", preset)
+            voltage_value, voltage_unit = voltage
+            current_value, current_unit = current
+            return (float(voltage_value) * unit_weights[voltage_unit],
+                    float(current_value) * unit_weights[current_unit])
+        except ValueError:
+            logging.warning(f"The following preset can not be parsed: {preset}")
+            return (-math.inf, -math.inf)
 
     # we share metadata with our parent
     def updateMetadata(self, md):
@@ -877,10 +898,6 @@ class Scanner(model.Emitter):
     def _setVoltage(self, volt):
         with self.parent._acq_progress_lock:
             self.parent._device_handler.HVSetVoltage(self._device_type, volt)
-        # Adjust brightness and contrast
-        # TODO: should be part of the detector (and up to the client)
-        # with self.parent._acq_progress_lock:
-        #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
         return volt
 
     def _onVoltage(self, volt):
@@ -1122,7 +1139,11 @@ class Detector(model.Detector):
         self._channel = channel
         self._detector = self.get_detector_idx(detector)
         self.parent._device_handler.DtSelect(self._device_type, self._channel, self._detector)
-        self.parent._device_handler.DtEnable(self._device_type, self._channel, 1, 16)  # 16 bits
+
+        # 16 or 8 bits image
+        self.bpp = model.IntEnumerated(16, {8, 16}, unit="bit")
+
+        self.parent._device_handler.DtEnable(self._device_type, self._channel, 1, self.bpp.value)
 
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
@@ -1130,10 +1151,6 @@ class Detector(model.Detector):
 
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
-
-        # TODO: provide a method applyAutoContrast(), as in Phenom, to run the
-        # auto signal function. + a way to do so even if the detector is not
-        # used (because it's used via a CompositedScanner)?
 
     def get_detector_idx(self, detector: Union[int, str]) -> int:
         """Get the index of the detector by int (do nothing) or by name (match with Tescan's available detecors).
@@ -1169,7 +1186,7 @@ class Detector(model.Detector):
         return self._detector
 
     def terminate(self):
-        self.parent._device_handler.DtEnable(self._device_type, self._channel, 0, 16)
+        self.parent._device_handler.DtEnable(self._device_type, self._channel, 0, self.bpp.value)
 
 
 class SEMDataFlow(model.DataFlow):
