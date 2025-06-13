@@ -132,6 +132,11 @@ class OdemisGUIApp(wx.App):
                     gui.logo = img.getBitmap("logo_delphi.png")
                     gui.legend_logo = "legend_logo_delphi.png"
 
+        # Warn the user the version is a development version.
+        # Stable versions are of the form "vX.Y.Z", while development versions are "vX.Y.0-QQQ..."
+        if "-" in odemis.__version__:
+            gui.name += " (development)"
+
         # TODO: if microscope.ghost is not empty => wait and/or display a special
         # "hardware status" tab.
 
