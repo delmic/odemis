@@ -97,6 +97,7 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-live-view',
                'install/linux/usr/bin/odemis-mic-selector',
                'install/linux/usr/bin/odemis-select-mic-start',
+               'install/linux/usr/bin/odemis-select-channel',
                'util/piconfig',
                'util/pituner',
                'util/piterminal',
