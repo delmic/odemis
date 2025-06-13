@@ -6,14 +6,12 @@ Keywords=Delmic;
 Exec=odemis-start
 #Terminal=true
 Type=Application
-#Icon=/usr/share/icons/hicolor/128x128/apps/odemis.png
 Icon=odemis
 Categories=Science;
-#StartupWMClass=main.py
 StartupWMClass=Odemis
 StartupNotify=true
 
-Actions=Stop;HwStatus;Bug;
+Actions=Stop;HwStatus;Bug;Channel
 
 [Desktop Action Stop]
 Name=Full stop
@@ -26,3 +24,7 @@ Exec=odemis-hw-status
 [Desktop Action Bug]
 Name=Report a problem
 Exec=odemis-bug-report
+
+[Desktop Action Channel]
+Name=Select Odemis update channel
+Exec=odemis-select-channel

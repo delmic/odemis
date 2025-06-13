@@ -1,0 +1,202 @@
+#!/bin/bash
+set -euo pipefail
+# This script allows the user to select the update "channel" for Odemis.
+# Without argument, it will show a window to select the channel, otherwise, call it with:
+# sudo odemis-select-channel --select <channel>
+# where <channel> can be "stable", "proposed", or "dev".
+
+# TODO: extend this script to also update the current Odemis version (especially useful for the "dev" channel).
+
+
+# Determines the home directory of the user running the script, even if run with sudo or pkexec.
+get_home_dir() {
+    if [[ -n "${SUDO_USER:-}" ]]; then
+        getent passwd "$SUDO_USER" | cut -d: -f6
+    elif [[ -n "${PKEXEC_UID:-}" ]]; then
+        getent passwd "$PKEXEC_UID" | cut -d: -f6
+    else
+        echo "$HOME"
+    fi
+}
+
+USER_HOME=$(get_home_dir)
+ODEMIS_DEV_PATH="$USER_HOME/development/odemis"
+
+# Detect the current channel of Odemis.
+# Returns "stable", "proposed", or "dev".
+detect_channel() {
+    # If there is a ~/development/odemis/ folder AND there is a line in /etc/odemis.conf which starts with PYTHONPATH= , then it's "dev"
+    if [[ -d "$ODEMIS_DEV_PATH" ]] && grep -q '^PYTHONPATH=' /etc/odemis.conf 2>/dev/null; then
+        echo "dev"
+        return
+    fi
+
+    # If the "odemis-proposed" PPA is active, it's "proposed", otherwise "stable".
+    if grep -q -r -E '^deb.*delmic-soft/odemis-proposed' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; then
+        echo "proposed"
+    else
+        echo "stable"
+    fi
+}
+
+# Activate the "dev" channel.
+enable_dev_mode() {
+    echo "Enabling development mode..."
+
+    # Clone the repo if not present
+    if [[ ! -d "$ODEMIS_DEV_PATH" ]]; then
+        echo "Cloning Odemis development repository..."
+        # In case the user is running this script with sudo, we need to leave the ownership of the folders to the user.
+        owner=$(stat -c '%U' "$USER_HOME")
+        if [[ ! -d "$ODEMIS_DEV_PATH" ]]; then
+            mkdir -p "$USER_HOME/development"
+            chown "$owner":"$owner" "$USER_HOME/development"
+        fi
+        git clone https://github.com/delmic/odemis.git "$ODEMIS_DEV_PATH"
+        chown -R "$owner":"$owner" "$ODEMIS_DEV_PATH"
+    fi
+
+    # Uncomment PYTHONPATH line in /etc/odemis.conf if commented out
+    if grep -q '^#\s*PYTHONPATH=' /etc/odemis.conf 2>/dev/null; then
+        sudo sed -i 's/^#\s*\(PYTHONPATH=.*\)/\1/' /etc/odemis.conf
+    fi
+
+    # Checked it worked (that there is now a PYTHONPATH= line with the right path)
+    if ! grep -q '^PYTHONPATH=.*odemis/src/' /etc/odemis.conf 2>/dev/null; then
+        echo "ERROR: Failed to enable PYTHONPATH in odemis.conf for development mode."
+        exit 1
+    fi
+}
+
+disable_dev_mode() {
+    echo "Disabling development mode..."
+
+    # Comment out the PYTHONPATH line if it is not already commented
+    if grep -q '^PYTHONPATH=' /etc/odemis.conf 2>/dev/null; then
+        sudo sed -i 's/^\(PYTHONPATH=.*\)/#\1/' /etc/odemis.conf
+    fi
+}
+
+enable_proposed_mode() {
+    echo "Enabling proposed mode..."
+
+    # Add the proposed PPA
+    # (it also refreshes the package lists)
+    sudo add-apt-repository -y ppa:delmic-soft/odemis-proposed
+
+    # Upgrade/install the odemis package
+    sudo apt-get install odemis
+}
+
+disable_proposed_mode() {
+    echo "Disabling proposed mode..."
+
+    # Comment out odemis-proposed lines in apt sources
+    sudo sed -i '/^deb.*delmic-soft\/odemis-proposed/s/^/# /' /etc/apt/sources.list /etc/apt/sources.list.d/*.list
+
+    # Update package lists
+    sudo apt-get update
+
+    # Get the version of odemis from the stable channel
+    stable_ver=$(apt-cache policy odemis | sed 's/\*\*\*/   /'| awk '/delmic-soft\/odemis\// {print ver; exit} {ver=$1}')
+
+    # Force downgrade odemis to the candidate from the stable channel
+    sudo apt-get install odemis=$stable_ver --allow-downgrades --yes
+}
+
+# Adjust the system to use the given channel, which can be "stable", "proposed", or "dev".
+select_channel() {
+    local channel="$1"
+    echo "Selecting Odemis channel: $channel"
+
+    if [[ "$channel" == "dev" ]]; then
+        enable_dev_mode
+        return
+    else
+        disable_dev_mode
+    fi
+
+    if [[ "$channel" == "proposed" ]]; then
+        enable_proposed_mode
+    elif [[ "$channel" == "stable" ]]; then
+        disable_proposed_mode
+    else
+        echo "ERROR: Unknown channel '$channel'. Valid options are: stable, proposed, dev."
+        exit 1
+    fi
+}
+
+show_usage() {
+    echo "Usage:"
+    echo "  odemis-select-channel --select <channel>"
+    echo "    <channel>: stable | proposed | dev"
+    echo "  odemis-select-channel"
+    echo "    (shows a window to select the channel)"
+}
+
+# Argument parsing
+case "${1:-}" in
+    --select)
+        if [[ -n "${2:-}" ]]; then
+            select_channel "$2"
+            exit 0
+        else
+            echo "ERROR: --select requires a channel argument."
+            show_usage
+            exit 1
+        fi
+        ;;
+    --help)
+        show_usage
+        exit 0
+        ;;
+    "")
+        # No arguments, continue to GUI
+        ;;
+    *)
+        echo "ERROR: Unknown argument(s): $*"
+        show_usage
+        exit 1
+        ;;
+esac
+
+# Display a window to let the user select the channel.
+current_channel=$(detect_channel)
+echo "Current Odemis channel: $current_channel"
+
+# Compute explicitly which channel is selected.
+stable_selected=FALSE; proposed_selected=FALSE; dev_selected=FALSE
+if [[ $current_channel == "stable" ]]; then
+    stable_selected=TRUE
+elif [[ $current_channel == "proposed" ]]; then
+    proposed_selected=TRUE
+elif [[ $current_channel == "dev" ]]; then
+    dev_selected=TRUE
+else
+    echo "ERROR: Unknown Odemis channel: $current_channel"
+    exit 1
+fi
+
+# Display a dialog to select the channel
+choice=$(zenity --list --radiolist \
+  --title="Select Odemis update channel" \
+  --text="Choose a channel:" \
+  --column="Select" --column="Internal" --column="Channel" \
+  --hide-column=2 --print-column=2 \
+  $stable_selected "stable" "Stable channel" \
+  $proposed_selected "proposed" "Release candidate channel" \
+  $dev_selected "dev" "Development channel" \
+  --width=400 --height=250
+)
+
+echo "Selected Odemis channel: $choice"
+
+if [[ -z "$choice" || "$choice" == "$current_channel" ]]; then
+    echo "No change made"
+    exit 0
+fi
+
+# TRICK: changing the channel requires root privileges, so we need to run the command with sudo.
+# It's not possible to run the select_channel() function directly with sudo. So instead we call
+# this script again with the selected channel as an argument.
+pkexec "$0" --select "$choice"

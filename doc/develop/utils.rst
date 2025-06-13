@@ -21,6 +21,7 @@ Managing Odemis execution
 * ``odemis-cycle``: calls odemis-stop and then odemis-start.
 * ``odemis-mic-selector``: outputs a specified text based on the presence of USB devices and/or SPARC modules. Used by odemis-start to detect the right microscope file configuration. (mostly for SPARCs).
 * ``odemis-select-mic-start``: shows a window to let the user select a microscope file to start.
+* ``odemis-select-channel``: shows a window to let the user select an update channel for Odemis (stable, release candidate, development).
 * ``odemis-hw-status``: list the status of every component and show it in a window. Odemis icon "Show hardware status".
 * ``odemis-live-view``: shows a selection window for detectors and then shows the live view of the detector.
 
