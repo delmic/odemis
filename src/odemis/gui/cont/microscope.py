@@ -436,7 +436,7 @@ class SecomStateController(object):
             ):
                 self._tab_data.emState.value = STATE_OFF
                 self._sem_btn_ctrl.Enable(False)
-                self._tab_panel.btn_sem.SetToolTip(u"Please insert a sample first")
+                self._tab_panel.btn_sem.SetToolTip("Please insert a sample first")
 
             if (
                 hasattr(self._tab_data, "opticalState") and
@@ -444,7 +444,7 @@ class SecomStateController(object):
             ):
                 self._tab_data.opticalState.value = STATE_OFF
                 self._opt_btn_ctrl.Enable(False)
-                self._tab_panel.btn_opt.SetToolTip(u"Please insert a sample first")
+                self._tab_panel.btn_opt.SetToolTip("Please insert a sample first")
 
             self._stream_controller.enableStreams(False, self.cls_streams_involved)
 
@@ -814,12 +814,12 @@ class DelphiStateController(SecomStateController):
             # show any status
             if len(visible_streams) > 1 and misaligned:
                 lvl = logging.WARNING
-                msg = u"Displayed streams might be misaligned"
-                action = u"Update any stream acquired in old position"
+                msg = "Displayed streams might be misaligned"
+                action = "Update any stream acquired in old position"
 
         if action is None:
             action = ""
-        if u"…" in msg:
+        if "…" in msg:
             self._ellipsis_animator = EllipsisAnimator(msg, self._tab_panel.lbl_stream_status)
             self._ellipsis_animator.start()
         else:
@@ -890,7 +890,7 @@ class DelphiStateController(SecomStateController):
                 # of "closed" -> "closed".
                 logging.info("Door closed (again?) while the chamber was not vented")
         else:
-            self._tab_panel.btn_press.SetToolTip(u"Please insert a sample first")
+            self._tab_panel.btn_press.SetToolTip("Please insert a sample first")
             # In case we asked to eject/calibrate the sample, stop asking
             if self._first_calib_dlg:
                 self._first_calib_dlg.Close()

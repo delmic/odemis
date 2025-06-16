@@ -573,19 +573,19 @@ class StreamController(object):
                                    self._dye_ewl, self.stream.emission.value)
 
     def _on_metadata_btn(self, evt):
-        text = u""
+        text = ""
         raw = [r for r in self.stream.raw if r is not None]
-        text += u"======================================\nGeneral\n"
-        text += u"======================================\n"
+        text += "======================================\nGeneral\n"
+        text += "======================================\n"
         for i, r in enumerate(raw):
             if len(raw) > 1:
-                text += u"========= Array %d =========\n" % (i + 1,)
+                text += "========= Array %d =========\n" % (i + 1,)
             shape = r.shape
             dtype = r.dtype
             md = r.metadata
 
-            text += u"Shape: %s\n" % (u" x ".join(str(s) for s in shape),)
-            text += u"Data type: %s\n" % (dtype,)
+            text += "Shape: %s\n" % (" x ".join(str(s) for s in shape),)
+            text += "Data type: %s\n" % (dtype,)
             for key in sorted(md):
                 if key == model.MD_EXTRA_SETTINGS:
                     # show extra settings last
@@ -596,7 +596,7 @@ class StreamController(object):
                     # In Python 2, we still need to convert it to unicode
                     if isinstance(nice_str, bytes):
                         nice_str = nice_str.decode(locale.getpreferredencoding())
-                    text += u"%s: %s\n" % (key, nice_str)
+                    text += "%s: %s\n" % (key, nice_str)
                 else:
                     if isinstance(v, numpy.ndarray):
                         # Avoid ellipses (eg, [1, ..., 100 ])as we want _all_
@@ -604,40 +604,40 @@ class StreamController(object):
                         # TODO: from numpy v1.14, the "threshold" argument can
                         # be directly used in array2string().
                         numpy.set_printoptions(threshold=2500)
-                        v = numpy.array2string(v, max_line_width=100, separator=u", ")
+                        v = numpy.array2string(v, max_line_width=100, separator=", ")
                         numpy.set_printoptions(threshold=1000)
                     elif isinstance(v, list) and len(v) > 2500:
-                        v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
-                    text += u"%s: %s\n" % (key, v)
+                        v = "[%s … %s]" % (", ".join(str(a) for a in v[:20]), ", ".join(str(a) for a in v[-20:]))
+                    text += "%s: %s\n" % (key, v)
 
         # only display extra settings once
         if model.MD_EXTRA_SETTINGS in raw[0].metadata:
-            text += u"\n======================================\nHardware Settings\n"
-            text += u"======================================\n"
+            text += "\n======================================\nHardware Settings\n"
+            text += "======================================\n"
             for comp, vas in md[model.MD_EXTRA_SETTINGS].items():
                 try:
                     if vas:
-                        text += u"Component %s:\n" % comp
+                        text += "Component %s:\n" % comp
                     for name, (value, unit) in vas.items():
                         unit = unit or ""  # don't display 'None'
                         unit = unit if value is not None else ""  # don't display unit if data is None (None Hz doesn't make sense)
                         if isinstance(value, dict):
                             if value:
-                                text += u"\t%s:\n" % name
+                                text += "\t%s:\n" % name
                                 for key, val in value.items():
-                                    text += u"\t\t%s: %s %s\n" % (key, val, unit)
+                                    text += "\t\t%s: %s %s\n" % (key, val, unit)
                             else:
                                 # still display the VA, might be interesting (e.g. that no axis was referenced)
-                                text += u"\t%s: {}\n" % name
+                                text += "\t%s: {}\n" % name
                         else:
-                            text += u"\t%s: %s %s\n" % (name, value, unit)
+                            text += "\t%s: %s %s\n" % (name, value, unit)
                 except Exception as ex:
                     logging.warning("Couldn't display metadata for component %s: %s" % (comp, ex))
                     continue
 
         # Note: we show empty window even if no data present, to let the user know
         # that there is no data, but the button worked fine.
-        md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
+        md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
         md_frame.Destroy()
 
@@ -1180,7 +1180,7 @@ class StreamController(object):
                 "control_type": CONTROL_FLT,
             }),
             ("fuzzing", {
-                "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
+                "tooltip": "Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
             }),
         ))
 
@@ -1226,13 +1226,13 @@ class StreamController(object):
 
         if wl is None:
             # No dye known => no peak information
-            lbl_ctrl.LabelText = u""
+            lbl_ctrl.LabelText = ""
             lbl_ctrl.SetToolTip(None)
-            col_ctrl.SetToolTip(u"Centre wavelength colour")
+            col_ctrl.SetToolTip("Centre wavelength colour")
         else:
             wl_nm = int(round(wl * 1e9))
-            lbl_ctrl.LabelText = u"Peak at %d nm" % wl_nm
-            col_ctrl.SetToolTip(u"Peak wavelength colour")
+            lbl_ctrl.LabelText = "Peak at %d nm" % wl_nm
+            col_ctrl.SetToolTip("Peak wavelength colour")
 
             fit = fluo.estimate_fit_to_dye(wl, band)
             # Update colour
@@ -1243,9 +1243,9 @@ class StreamController(object):
 
             # Update tooltip string
             tooltip = {
-                fluo.FIT_GOOD: u"The peak is inside the band %d→%d nm",
-                fluo.FIT_BAD: u"Some light might pass through the band %d→%d nm",
-                fluo.FIT_IMPOSSIBLE: u"The peak is too far from the band %d→%d nm"
+                fluo.FIT_GOOD: "The peak is inside the band %d→%d nm",
+                fluo.FIT_BAD: "Some light might pass through the band %d→%d nm",
+                fluo.FIT_IMPOSSIBLE: "The peak is too far from the band %d→%d nm"
             }[fit]
 
             if isinstance(band[0], Iterable):  # multi-band
@@ -1372,7 +1372,7 @@ class StreamController(object):
         # replace the old list with this new version
         self._rep_ctrl.Clear()
         for choice in choices:
-            self._rep_ctrl.Append(u"%s x %s px" % choice, choice)
+            self._rep_ctrl.Append("%s x %s px" % choice, choice)
 
         # Make sure the current value is selected
         self._rep_ctrl.SetSelection(choices.index(rep))

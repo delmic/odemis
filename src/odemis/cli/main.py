@@ -136,25 +136,25 @@ def print_component(comp, pretty=True, level=0):
     """
     if pretty:
         if level == 0:
-            indent = u""
+            indent = ""
         else:
-            indent = u"  " * level + u"↳ "
+            indent = "  " * level + "↳ "
         role = comp.role
         if role is None:
             str_role = "(no role)"
         else:
             str_role = "role:%s" % (role,)
 
-        print(u"%s%s\t%s" % (indent, comp.name, str_role))
+        print("%s%s\t%s" % (indent, comp.name, str_role))
     else:
-        pstr = u""
+        pstr = ""
         try:
             pname = comp.parent.name
             if isinstance(pname, str):  # Due to Pyro, it could be a (non-existent) RemoteMethod
-                pstr = u"\tparent:" + pname
+                pstr = "\tparent:" + pname
         except AttributeError:
             pass
-        print(u"%s\trole:%s%s" % (comp.name, comp.role, pstr))
+        print("%s\trole:%s%s" % (comp.name, comp.role, pstr))
     # TODO would be nice to display which class is the component
     # TODO:
     # * if emitter, display .shape
@@ -231,22 +231,22 @@ def list_components(pretty=True):
 
 def print_axes(name, value, pretty):
     if pretty:
-        print(u"\t%s (RO Attribute)" % (name,))
+        print("\t%s (RO Attribute)" % (name,))
         # show in alphabetical order
         for an in sorted(value.keys()):
-            print(u"\t\t%s:\t%s" % (an, value[an]))
+            print("\t\t%s:\t%s" % (an, value[an]))
     else:
-        print(u"%s\ttype:roattr\tvalue:%s" %
-              (name, u", ".join(k for k in value.keys())))
+        print("%s\ttype:roattr\tvalue:%s" %
+              (name, ", ".join(k for k in value.keys())))
 
 def print_roattribute(name, value, pretty):
     if name == "axes":
         return print_axes(name, value, pretty)
 
     if pretty:
-        print(u"\t%s (RO Attribute)\tvalue: %s" % (name, value))
+        print("\t%s (RO Attribute)\tvalue: %s" % (name, value))
     else:
-        print(u"%s\ttype:roattr\tvalue:%s" % (name, value))
+        print("%s\ttype:roattr\tvalue:%s" % (name, value))
 
 non_roattributes_names = ("name", "role", "parent", "affects")
 def print_roattributes(component, pretty):
@@ -258,9 +258,9 @@ def print_roattributes(component, pretty):
 
 def print_data_flow(name, df, pretty):
     if pretty:
-        print(u"\t" + name + u" (Data-flow)")
+        print("\t" + name + " (Data-flow)")
     else:
-        print(u"%s\ttype:data-flow" % (name,))
+        print("%s\ttype:data-flow" % (name,))
 
 def print_data_flows(component, pretty):
     # find all dataflows
@@ -269,9 +269,9 @@ def print_data_flows(component, pretty):
 
 def print_event(name, evt, pretty):
     if pretty:
-        print(u"\t" + name + u" (Event)")
+        print("\t" + name + " (Event)")
     else:
-        print(u"%s\ttype:event" % (name,))
+        print("%s\ttype:event" % (name,))
 
 def print_events(component, pretty):
     # find all Events
@@ -289,40 +289,40 @@ def print_vattribute(component, name, va, pretty):
     """
     if va.unit:
         if pretty:
-            unit = u" (unit: %s)" % va.unit
+            unit = " (unit: %s)" % va.unit
         else:
-            unit = u"\tunit:%s" % va.unit
+            unit = "\tunit:%s" % va.unit
     else:
-        unit = u""
+        unit = ""
 
     if va.readonly:
         if pretty:
-            readonly = u"RO "
+            readonly = "RO "
         else:
-            readonly = u"ro"
+            readonly = "ro"
     else:
-        readonly = u""
+        readonly = ""
 
     # we cannot discover if it continuous or enumerated, just try and see if it fails
     try:
         varange = va.range
         if pretty:
-            str_range = u" (range: %s → %s)" % (varange[0], varange[1])
+            str_range = " (range: %s → %s)" % (varange[0], varange[1])
         else:
-            str_range = u"\trange:%s" % str(varange)
+            str_range = "\trange:%s" % str(varange)
     except AttributeError:
-        str_range = u""
+        str_range = ""
 
     try:
         vachoices = va.choices # set or dict
         if pretty:
             if isinstance(va.choices, dict):
-                str_choices = u" (choices: %s)" % u", ".join(
-                                u"%s: '%s'" % i for i in vachoices.items())
+                str_choices = " (choices: %s)" % ", ".join(
+                                "%s: '%s'" % i for i in vachoices.items())
             else:
-                str_choices = u" (choices: %s)" % u", ".join([str(c) for c in vachoices])
+                str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
         else:
-            str_choices = u"\tchoices:%s" % str(vachoices)
+            str_choices = "\tchoices:%s" % str(vachoices)
     except AttributeError:
         str_choices = ""
 
@@ -338,12 +338,12 @@ def print_vattribute(component, name, va, pretty):
         # Convert to nicer unit for user
         if va.unit and va.unit == "rad" and isinstance(val, numbers.Real):
             try:
-                val_converted = u" = %s°" % (math.degrees(val),)
+                val_converted = " = %s°" % (math.degrees(val),)
             except Exception:
                 logging.warning("Failed to convert %s to degrees", name)
-                val_converted = u""
+                val_converted = ""
         else:
-            val_converted = u""
+            val_converted = ""
 
         # For position, it's trickier, as the unit is on .axes
         if (name == "position" and isinstance(va.value, dict) and
@@ -360,20 +360,20 @@ def print_vattribute(component, name, va, pretty):
                     pos_deg[an] = math.degrees(pos)
 
             if pos_deg:
-                val_converted = u"\t{%s}" % (u", ".join(u"%r: %r°" % (k, pos_deg[k]) for k in sorted(pos_deg.keys())),)
+                val_converted = "\t{%s}" % (", ".join("%r: %r°" % (k, pos_deg[k]) for k in sorted(pos_deg.keys())),)
 
         # Display set/dict sorted, so that they always look the same.
         # Especially handy for VAs such as .position, which show axis names.
         if isinstance(val, dict):
-            sval = u"{%s}" % (u", ".join(u"%r: %r" % (k, val[k]) for k in sorted(val.keys())),)
+            sval = "{%s}" % (", ".join("%r: %r" % (k, val[k]) for k in sorted(val.keys())),)
         elif isinstance(val, set):
-            sval = u"{%s}" % (u", ".join(u"%r" % v for v in sorted(val)),)
+            sval = "{%s}" % (", ".join("%r" % v for v in sorted(val)),)
         else:
             sval = str(val)
-        print(u"\t" + name + u" (%sVigilant Attribute)\t value: %s%s%s%s%s" %
+        print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s%s" %
               (readonly, sval, unit, str_range, str_choices, val_converted))
     else:
-        print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
+        print("%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
 
@@ -408,23 +408,23 @@ def print_metadata(component, pretty):
         for key, value in md.items():
             name = md2name.get(key, "'%s'" % (key,))
             if isinstance(value, str):
-                print(u"\t\t%s: '%s'" % (name, value))
+                print("\t\t%s: '%s'" % (name, value))
             else:
-                print(u"\t\t%s: %s" % (name, value))
+                print("\t\t%s: %s" % (name, value))
     else:
         for key, value in md.items():
             name = md2name.get(key, "'%s'" % (key,))
-            print(u"%s\ttype:metadata\tvalue:%s" % (name, value))
+            print("%s\ttype:metadata\tvalue:%s" % (name, value))
 
 def print_attributes(component, pretty):
     if pretty:
-        print(u"Component '%s':" % component.name)
-        print(u"\trole: %s" % component.role)
-        print(u"\taffects: " + ", ".join(u"'%s'" % n for n in sorted(component.affects.value)))
+        print("Component '%s':" % component.name)
+        print("\trole: %s" % component.role)
+        print("\taffects: " + ", ".join("'%s'" % n for n in sorted(component.affects.value)))
     else:
-        print(u"name\tvalue:%s" % component.name)
-        print(u"role\tvalue:%s" % component.role)
-        print(u"affects\tvalue:" + u"\t".join(component.affects.value))
+        print("name\tvalue:%s" % component.name)
+        print("role\tvalue:%s" % component.role)
+        print("affects\tvalue:" + "\t".join(component.affects.value))
     print_roattributes(component, pretty)
     print_vattributes(component, pretty)
     print_data_flows(component, pretty)
@@ -615,7 +615,7 @@ def move(comp_name, moves, check_distance=True, to_radians=False):
                 raise ValueError("Axis %s is in %s, doesn't support value in degrees" % (axis_name, ad.unit))
 
         act_mv[axis_name] = distance
-        logging.info(u"Will move %s.%s by %s", comp_name, axis_name,
+        logging.info("Will move %s.%s by %s", comp_name, axis_name,
                      units.readable_str(distance, ad.unit, sig=3))
 
     try:
@@ -700,7 +700,7 @@ def move_abs(comp_name, moves, check_distance=True, to_radians=False):
             pos_pretty = units.readable_str(position, ad.unit, sig=3)
         else:
             pos_pretty = "%s" % (position,)
-        logging.info(u"Will move %s.%s to %s", comp_name, axis_name, pos_pretty)
+        logging.info("Will move %s.%s to %s", comp_name, axis_name, pos_pretty)
 
     try:
         m = component.moveAbs(act_mv)
@@ -843,7 +843,7 @@ def acquire(comp_name, dataflow_names, filename):
     try:
         exporter.export(filename, images)
     except IOError as exc:
-        raise IOError(u"Failed to save to '%s': %s" % (filename, exc))
+        raise IOError("Failed to save to '%s': %s" % (filename, exc))
 
 def live_display(comp_name, df_name):
     """
@@ -963,14 +963,14 @@ def main(args):
                          "(Lists are delimited by commas)")
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
-                         help=u"move the axis by the given amount (µm for distances).")
+                         help="move the axis by the given amount (µm for distances).")
     dm_grpe.add_argument("--position", "-p", dest="position", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<position>"),
-                         help=u"move the axis to the given position.")
+                         help="move the axis to the given position.")
     dm_grp.add_argument("--big-distance", dest="bigdist", action="store_true", default=False,
-                        help=u"flag needed to allow any move bigger than 10 mm.")
+                        help="flag needed to allow any move bigger than 10 mm.")
     dm_grp.add_argument("--degrees", dest="degrees", action="store_true", default=False,
-                        help=u"indicate the position is in degrees, it will be converted to radians.")
+                        help="indicate the position is in degrees, it will be converted to radians.")
     dm_grpe.add_argument("--reference", dest="reference", nargs=2, action="append",
                          metavar=("<component>", "<axis>"),
                          help="runs the referencing procedure for the given axis.")

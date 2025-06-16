@@ -33,7 +33,7 @@ from odemis.dataio import ij_tiff, tiff
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = u"test" + ij_tiff.EXTENSIONS[0]
+FILENAME = "test" + ij_tiff.EXTENSIONS[0]
 class TestImageJTiffIO(unittest.TestCase):
 
     def tearDown(self):

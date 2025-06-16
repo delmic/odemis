@@ -77,7 +77,7 @@ class AutoCenterController(object):
         et = self._main_data_model.ccd.exposureTime.value
         t = align.spot.estimateAlignmentTime(et)
         t = math.ceil(t)  # round a bit pessimistic
-        txt = u"~ %s" % units.readable_time(t, full=False)
+        txt = "~ %s" % units.readable_time(t, full=False)
         self._tab_panel.lbl_auto_center.Label = txt
 
     def _pause(self):

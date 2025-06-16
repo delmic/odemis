@@ -1953,7 +1953,7 @@ class Shamrock(model.Actuator):
         steps = self.GetFocusMirror() + shift_st  # absolute pos
         if not 0 < steps <= self.GetFocusMirrorMaxSteps():
             rng = self.axes["focus"].range
-            raise ValueError(u"Position %f of axis 'focus' not within range %f→%f" %
+            raise ValueError("Position %f of axis 'focus' not within range %f→%f" %
                              (steps * self._focus_step_size, rng[0], rng[1]))
 
         self.SetFocusMirror(shift_st)  # needs relative value
@@ -1987,7 +1987,7 @@ class Shamrock(model.Actuator):
         n = self._slit_names[sid]
         rng = self.axes[n].range
         if not rng[0] <= width <= rng[1]:
-            raise ValueError(u"Position %f of axis '%s' not within range %f→%f" %
+            raise ValueError("Position %f of axis '%s' not within range %f→%f" %
                              (width, n, rng[0], rng[1]))
 
         self._doSetSlitAbs(sid, width)

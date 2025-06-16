@@ -40,7 +40,7 @@ class ConfigTest(object):
     def setUp(self):
         # save the real user file to be able to do whatever we like
         filename = os.path.join(conffile.CONF_PATH, self.conf_class.file_name)
-        backname = filename + u".testbak"
+        backname = filename + ".testbak"
         if os.path.exists(filename):
             logging.info("Saving file %s", filename)
             shutil.copy2(filename, backname)
@@ -88,7 +88,7 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
     def test_save(self):
         conf = gui.conf.get_general_conf()
-        conf.set("calibration", "ar_file", u"booo")
+        conf.set("calibration", "ar_file", "booo")
 
         # reset
         del conf
@@ -96,11 +96,11 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
         conf = gui.conf.get_general_conf()
         path = conf.get("calibration", "ar_file")
-        self.assertEqual(path, u"booo")
+        self.assertEqual(path, "booo")
 
     def test_save_unicode(self):
         conf = gui.conf.get_general_conf()
-        conf.set("calibration", "ar_file", u"booµ")
+        conf.set("calibration", "ar_file", "booµ")
 
         # reset
         del conf
@@ -108,7 +108,7 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
         conf = gui.conf.get_general_conf()
         path = conf.get("calibration", "ar_file")
-        self.assertEqual(path, u"booµ")
+        self.assertEqual(path, "booµ")
 
     def test_default(self):
         try:
@@ -118,13 +118,13 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
         conf = gui.conf.get_general_conf()
         path = conf.get("calibration", "ar_file")
-        self.assertEqual(path, u"")
+        self.assertEqual(path, "")
 
         path = conf.get("calibration", "spec_file")
-        self.assertEqual(path, u"")
+        self.assertEqual(path, "")
 
         path = conf.get_manual()
-        self.assertTrue(path.endswith(u".pdf"))
+        self.assertTrue(path.endswith(".pdf"))
 
 
 class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
@@ -140,17 +140,17 @@ class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
     def test_save(self):
         # Will fail if setting the properties goes wrong
         conf = gui.conf.get_acqui_conf()
-        conf.last_path = u"/home/booo/"
+        conf.last_path = "/home/booo/"
         conf.last_format = "HDF5"
         conf.last_extension = ".h5"
-        conf.fn_ptn = u"{timelng}-test {cnt}"
+        conf.fn_ptn = "{timelng}-test {cnt}"
 
     def test_save_unicode(self):
         conf = gui.conf.get_acqui_conf()
-        conf.last_path = u"/home/boooµ/"
+        conf.last_path = "/home/boooµ/"
         conf.last_format = "HDF5"
         conf.last_extension = ".h5"
-        conf.fn_ptn = u"{timelng}-test {cnt} µm value"
+        conf.fn_ptn = "{timelng}-test {cnt} µm value"
 
 
 class CalibrationConfigTest(ConfigTest, unittest.TestCase):

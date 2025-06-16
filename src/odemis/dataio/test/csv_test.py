@@ -33,7 +33,7 @@ import csv as pycsv
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = u"test" + csv.EXTENSIONS[0]
+FILENAME = "test" + csv.EXTENSIONS[0]
 
 
 class TestCSVIO(unittest.TestCase):

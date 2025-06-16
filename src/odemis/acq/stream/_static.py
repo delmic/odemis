@@ -214,7 +214,7 @@ class Static2DStreamBase(StaticStream):
                 pos = metadata[model.MD_POS]
                 if len(pxs) < 3:
                     assert len(pxs) == 2
-                    logging.warning(u"Metadata for 3D data invalid. Using default pixel size 10µm")
+                    logging.warning("Metadata for 3D data invalid. Using default pixel size 10µm")
                     pxs = (pxs[0], pxs[1], 10e-6)
                     metadata[model.MD_PIXEL_SIZE] = pxs
 
@@ -222,7 +222,7 @@ class Static2DStreamBase(StaticStream):
                     assert len(pos) == 2
                     pos = (pos[0], pos[1], 0)
                     metadata[model.MD_POS] = pos
-                    logging.warning(u"Metadata for 3D data invalid. Using default centre position 0")
+                    logging.warning("Metadata for 3D data invalid. Using default centre position 0")
 
             except KeyError:
                 raise ValueError("Pixel size or position are missing from metadata")

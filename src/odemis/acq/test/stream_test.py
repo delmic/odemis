@@ -4857,7 +4857,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         self._image = im
 
 
-FILENAME = u"test" + tiff.EXTENSIONS[0]
+FILENAME = "test" + tiff.EXTENSIONS[0]
 
 
 # @skip("faster")

@@ -66,7 +66,7 @@ from odemis.util.conversion import (
 # User-friendly name
 FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [u".ome.tiff", u".ome.tif", u".tiff", u".tif"]
+EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 
 STIFF_SPLIT = ".0."  # pattern to replace with the "stiff" multiple file
 
@@ -128,7 +128,7 @@ def _convertToTiffTag(metadata):
     # unidecode (but they are lossy).
 
     tiffmd = {T.TIFFTAG_RESOLUTIONUNIT: T.RESUNIT_CENTIMETER,
-              T.TIFFTAG_SOFTWARE: (u"%s %s" % (odemis.__shortname__, odemis.__version__)).encode("utf-8", "ignore")}
+              T.TIFFTAG_SOFTWARE: ("%s %s" % (odemis.__shortname__, odemis.__version__)).encode("utf-8", "ignore")}
     # we've got choice between inches and cm... so it's easy
     for key, val in metadata.items():
         if key == model.MD_HW_NAME:
@@ -136,7 +136,7 @@ def _convertToTiffTag(metadata):
         elif key == model.MD_HW_VERSION:
             v = val
             if model.MD_SW_VERSION in metadata:
-                v += u" (driver %s)" % (metadata[model.MD_SW_VERSION],)
+                v += " (driver %s)" % (metadata[model.MD_SW_VERSION],)
             tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8", "ignore")
         elif key == model.MD_ACQ_DATE:
             tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val)).encode("utf-8", "ignore")
@@ -336,10 +336,10 @@ def _indent(elem, level=0):
     From http://effbot.org/zone/element-lib.htm#prettyprint
     elem (ElementTree)
     """
-    i = u"\n" + level * u"    "
+    i = "\n" + level * "    "
     if len(elem):
         if not elem.text or not elem.text.strip():
-            elem.text = i + u"    "
+            elem.text = i + "    "
         if not elem.tail or not elem.tail.strip():
             elem.tail = i
         for elem in elem:

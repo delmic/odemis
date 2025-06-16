@@ -455,7 +455,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.show_crosshair.value = False
         self.canvas.fit_view_to_next_image = False
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         w = 201
         h = 201
         md = {
@@ -568,7 +568,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         init_pos = (200.5 * mpp, 199.5 * mpp)
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         # 1 row of 2 tiles
         w = 512
         h = 250
@@ -708,7 +708,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         init_pos = (1.0, 2.0)
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         # 1 row of 2 tiles
         w = 600
         h = 300

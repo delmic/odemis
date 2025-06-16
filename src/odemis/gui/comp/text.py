@@ -736,7 +736,7 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     def _display_pretty(self):
         if self._number_value is None:
-            str_val = u""
+            str_val = ""
         else:
             str_val = units.readable_str(self._number_value, sig=self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
@@ -884,7 +884,7 @@ class _NumberTextCtrl(wx.TextCtrl):
             evt.Skip()
             return
 
-        val = u"%r" % num  # GetNumber needs a string
+        val = "%r" % num  # GetNumber needs a string
         self._number_value = self.GetValidator().get_validated_number(val)
 
         if prev_num != self._number_value:
@@ -920,7 +920,7 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     def on_focus(self, evt):
         """ Select the number part (minus any unit indication) of the data in the text field """
-        number_length = len(self.get_value_str().rstrip(string.ascii_letters + u" µ"))
+        number_length = len(self.get_value_str().rstrip(string.ascii_letters + " µ"))
         wx.CallAfter(self.SetSelection, 0, number_length)
         evt.Skip()
 
@@ -956,7 +956,7 @@ class UnitNumberCtrl(_NumberTextCtrl):
 
     def _display_pretty(self):
         if self._number_value is None:
-            str_val = u""
+            str_val = ""
         elif self._number_value == 0 and self.unit not in units.IGNORE_UNITS:
             # Special case with 0: readable_str return just "0 unit", without
             # prefix. This is technically correct, but quite inconvenient and

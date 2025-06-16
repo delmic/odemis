@@ -42,7 +42,7 @@ class TestUnits(unittest.TestCase):
         for (i, eo) in values:
             o = units.round_significant(*i)
             self.assertEqual(o, eo,
-                              u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
+                              "%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_round_down_significant(self):
         #         (input) (expected output)
@@ -57,7 +57,7 @@ class TestUnits(unittest.TestCase):
         for (i, eo) in values:
             o = units.round_down_significant(*i)
             self.assertEqual(o, eo,
-                              u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
+                              "%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
 
     def test_to_string_si_prefix(self):
         #         (input) (expected output)
@@ -66,14 +66,14 @@ class TestUnits(unittest.TestCase):
                   ((-1234,), "-1.234 k"),
                   ((1600,), "1.6 k"),
                   ((-1600,), "-1.6 k"),
-                  ((0.0001236,), u"123.6 µ"),
+                  ((0.0001236,), "123.6 µ"),
                   ((0.0012,), "1.2 m"),
                   ((0,), "0 "),
                   ]
         for (i, eo) in values:
             o = units.to_string_si_prefix(*i)
             self.assertEqual(o, eo,
-                              u"%f is '%s' while expected '%s'" % (i[0], o, eo))
+                              "%f is '%s' while expected '%s'" % (i[0], o, eo))
 
     def test_readable_str(self):
         #         (input) (expected output)
@@ -95,20 +95,20 @@ class TestUnits(unittest.TestCase):
                   ((999.5, "V"), "999.5 V"),
                   ((999.5, "V", 3), "1 kV"),
                   ((999.4, "V", 3), "999 V"),
-                  ((200e-6, "m"), u"200 µm"),
+                  ((200e-6, "m"), "200 µm"),
                   ((0.0, "m"), "0 m"),
                   ((0, "rad"), "0 rad"),
                   ((0, "rad", 3), "0 rad"),
                   (([1500, 1200, 150], None), "1500 x 1200 x 150"),
-                  (([0.0001236, 0.00014], "m"), u"123.6 x 140 µm"),
+                  (([0.0001236, 0.00014], "m"), "123.6 x 140 µm"),
                   (([0.0001236, 12.0], "m"), "0.0001236 x 12 m"),
                   (([1200, 1000], "px"), "1200 x 1000 px"), # special non-prefix unit
-                  (([-float("inf"), float("NaN")], "m"), u"-∞ x unknown m"),
+                  (([-float("inf"), float("NaN")], "m"), "-∞ x unknown m"),
                   ]
         for (i, eo) in values:
             o = units.readable_str(*i)
             self.assertEqual(o, eo,
-                              u"%s is '%s' while expected '%s'" % (i, o, eo))
+                              "%s is '%s' while expected '%s'" % (i, o, eo))
 
     def test_readable_time(self):
         #         (input) (expected output)
@@ -127,7 +127,7 @@ class TestUnits(unittest.TestCase):
         for (i, eo) in values:
             o = units.readable_time(*i)
             self.assertEqual(o, eo,
-                              u"%s is '%s' while expected '%s'" % (i, o, eo))
+                              "%s is '%s' while expected '%s'" % (i, o, eo))
 
     def test_to_string_pretty(self):
 
@@ -156,8 +156,8 @@ class TestUnits(unittest.TestCase):
 
         values = [
             ("-12 nm", ("-12", "n", "m")),
-            ("12 um", ("12", u"µ", "m")),
-            ("12 um  ", ("12", u"µ", "m")),
+            ("12 um", ("12", "µ", "m")),
+            ("12 um  ", ("12", "µ", "m")),
             ("12 um  Hallo!", ("12 um  Hallo!", None, None)),
             ("3.2 Grap", ("3.2", "G", "rap")),
             ("-13.223    mm", ("-13.223", "m", "m")),
@@ -181,7 +181,7 @@ class TestUnits(unittest.TestCase):
         values = [
             (("-12 nm", "m"), ("-12", "n", "m")),
             (("-12 nm", "s"), ("-12 nm", None, None)),
-            (("12 u", "s"), ("12", u"µ", None)),
+            (("12 u", "s"), ("12", "µ", None)),
             (("12 m", "s"), ("12", "m", None)),
             (("0.12 rad", "s"), ("0.12 rad", None, None)),
             (("0.12 rad", "rad"), ("0.12", None, "rad")),

@@ -31,27 +31,27 @@ import re
 
 
 SI_PREFIXES = {
-    9: u"G",
-    6: u"M",
-    3: u"k",
-    0: u"",
-    -3: u"m",
-    -6: u"µ",
-    -9: u"n",
-    -12: u"p",
+    9: "G",
+    6: "M",
+    3: "k",
+    0: "",
+    -3: "m",
+    -6: "µ",
+    -9: "n",
+    -12: "p",
 
-    u"G": 9,
-    u"M": 6,
-    u"k": 3,
-    u"": 0,
-    u"m": -3,
-    u"µ": -6,
-    u"n": -9,
-    u"p": -12,
+    "G": 9,
+    "M": 6,
+    "k": 3,
+    "": 0,
+    "m": -3,
+    "µ": -6,
+    "n": -9,
+    "p": -12,
 }
 
 # The following units should ignore SI formatting
-IGNORE_UNITS = (None, "", "px", "C", u"°C", u"°", "%", "od")
+IGNORE_UNITS = (None, "", "px", "C", "°C", "°", "%", "od")
 
 
 def round_significant(x, n):
@@ -88,7 +88,7 @@ def get_si_scale(x):
     Returns a (float, string) tuple: (divisor , SI prefix)
     """
     if x == 0 or math.isnan(x) or math.isinf(x):
-        return 1, u""
+        return 1, ""
 
     most_significant = math.floor(math.log10(abs(x)))
     prefix_order = (most_significant // 3) * 3  # rounding to multiple of 3
@@ -128,9 +128,9 @@ def si_scale_list(values, prefix=None):
         elif prefix in SI_PREFIXES:
             divisor = 10 ** SI_PREFIXES[prefix]
         else:
-            raise ValueError(u"Prefix %s is unknown" % prefix)
+            raise ValueError("Prefix %s is unknown" % prefix)
         return [v / divisor for v in values], prefix
-    return None, u""
+    return None, ""
 
 
 def to_string_si_prefix(x, sig=None):
@@ -153,7 +153,7 @@ def to_string_si_prefix(x, sig=None):
         x = round_significant(x, sig)
 
     value, prefix = to_si_scale(x)
-    return u"%s %s" % (to_string_pretty(value, sig), prefix)
+    return "%s %s" % (to_string_pretty(value, sig), prefix)
 
 
 def decompose_si_prefix(str_val, unit=None):
@@ -173,10 +173,10 @@ def decompose_si_prefix(str_val, unit=None):
     """
 
     if unit:
-        match = re.match(u"([+-]?[\\d.]+(?:[eE][+-]?[\\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
+        match = re.match("([+-]?[\\d.]+(?:[eE][+-]?[\\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
                          str_val.strip())
     else:  # Look for any unit
-        match = re.match(u"([+-]?[\\d.]+(?:[eE][+-]?[\\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
+        match = re.match("([+-]?[\\d.]+(?:[eE][+-]?[\\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
                          str_val.strip())
 
     if match:
@@ -185,8 +185,8 @@ def decompose_si_prefix(str_val, unit=None):
         if (rprefix is not None and runit is None and
             (not unit or rprefix == unit)):
             rprefix, runit = runit, rprefix
-        if rprefix == u"u":
-            rprefix = u"µ"
+        if rprefix == "u":
+            rprefix = "µ"
         return val, rprefix, runit
     else:
         return str_val, None, None
@@ -210,15 +210,15 @@ def to_string_pretty(x, sig=None, unit=None):
 
     if x == 0:
         # don't consider this a float
-        return u"0"
+        return "0"
 
     elif math.isnan(x):
         return "unknown"
     elif math.isinf(x):
         if x < 0:
-            return u"-∞"
+            return "-∞"
         else:
-            return u"∞"
+            return "∞"
 
     if sig is not None:
         x = round_significant(x, sig)
@@ -254,11 +254,11 @@ def to_string_pretty(x, sig=None, unit=None):
                     fn = fn.ljust(new_dot_pos, '0')
 
                 fn = ".".join([fn[:new_dot_pos], fn[new_dot_pos:]])
-                return u"%se%d" % (fn.strip('0').strip('.'), scale)
+                return "%se%d" % (fn.strip('0').strip('.'), scale)
             else:
                 return str_val
 
-    return u"%s" % x
+    return "%s" % x
 
 
 def readable_str(value, unit=None, sig=None):
@@ -283,22 +283,22 @@ def readable_str(value, unit=None, sig=None):
     if unit in IGNORE_UNITS:
         # don't put SI scaling prefix
         if unit in (None, ""):
-            sunit = u""
+            sunit = ""
         else:
-            sunit = u" %s" % unit
+            sunit = " %s" % unit
         if isinstance(value, Iterable):
             # Could use "×" , but less readable than "x"
-            return u"%s%s" % (u" x ".join([to_string_pretty(v, sig) for v in value]), sunit)
+            return "%s%s" % (" x ".join([to_string_pretty(v, sig) for v in value]), sunit)
         else:
-            return u"%s%s" % (to_string_pretty(value, sig), sunit)
+            return "%s%s" % (to_string_pretty(value, sig), sunit)
 
     # TODO: special case for s: only if < 10
 
     if isinstance(value, Iterable):
         values, prefix = si_scale_list(value)
-        return u"%s %s%s" % (u" x ".join([to_string_pretty(v, sig) for v in values]), prefix, unit)
+        return "%s %s%s" % (" x ".join([to_string_pretty(v, sig) for v in values]), prefix, unit)
     else:
-        return u"%s%s" % (to_string_si_prefix(value, sig), unit)
+        return "%s%s" % (to_string_si_prefix(value, sig), unit)
 
 
 def readable_time(seconds, full=True):
@@ -336,9 +336,9 @@ def readable_time(seconds, full=True):
     if second == 0 and msec == 0 and usec == 0:
         # exactly 0 => special case
         if full:
-            return u"0 second"
+            return "0 second"
         else:
-            return u"0 s"
+            return "0 s"
 
     minute, second = divmod(second, 60)
     hour, minute = divmod(minute, 60)
@@ -346,49 +346,49 @@ def readable_time(seconds, full=True):
 
     if day:
         if full:
-            result.append(u"%d day%s" % (day, u"" if day == 1 else u"s"))
+            result.append("%d day%s" % (day, "" if day == 1 else "s"))
         else:
-            result.append(u"%d d" % (day,))
+            result.append("%d d" % (day,))
 
     if hour:
         if full:
-            result.append(u"%d hour%s" % (hour, u"" if hour == 1 else u"s"))
+            result.append("%d hour%s" % (hour, "" if hour == 1 else "s"))
         else:
-            result.append(u"%d h" % (hour,))
+            result.append("%d h" % (hour,))
 
     if minute:
         if full:
-            result.append(u"%d minute%s" % (minute, u"" if minute == 1 else u"s"))
+            result.append("%d minute%s" % (minute, "" if minute == 1 else "s"))
         else:
-            result.append(u"%d min" % (minute,))
+            result.append("%d min" % (minute,))
 
     if second:
         if full:
-            result.append(u"%d second%s" % (second, u"" if second == 1 else u"s"))
+            result.append("%d second%s" % (second, "" if second == 1 else "s"))
         else:
-            result.append(u"%d s" % (second,))
+            result.append("%d s" % (second,))
 
     if msec:
         if full:
-            result.append(u"%d millisecond%s" % (msec, u"" if msec == 1 else u"s"))
+            result.append("%d millisecond%s" % (msec, "" if msec == 1 else "s"))
         else:
-            result.append(u"%d ms" % msec)
+            result.append("%d ms" % msec)
 
     if usec:
         if full:
-            result.append(u"%d microsecond%s" % (usec, u"" if usec == 1 else u"s"))
+            result.append("%d microsecond%s" % (usec, "" if usec == 1 else "s"))
         else:
-            result.append(u"%d µs" % usec)
+            result.append("%d µs" % usec)
 
     if len(result) == 1:
         # simple case
         ret = result[0]
     else:
         # make them "x, x, x and x"
-        ret = u"{} and {}".format(u", ".join(result[:-1]), result[-1])
+        ret = "{} and {}".format(", ".join(result[:-1]), result[-1])
 
     if sign == -1:
-        ret = u"minus " + ret
+        ret = "minus " + ret
 
     return ret
 
@@ -416,7 +416,7 @@ def value_to_str(value, unit=None, accuracy=None, pretty_time=False):
              ):
             return readable_str(value, unit, sig=accuracy)
         else:
-            return u"%s" % value
+            return "%s" % value
     except Exception:
         logging.warning("Failed to convert value to string", exc_info=True)
-        return u"%s" % value
+        return "%s" % value

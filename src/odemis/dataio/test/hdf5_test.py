@@ -36,7 +36,7 @@ import json
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = u"test" + hdf5.EXTENSIONS[0]
+FILENAME = "test" + hdf5.EXTENSIONS[0]
 
 
 class TestHDF5IO(unittest.TestCase):
@@ -83,7 +83,7 @@ class TestHDF5IO(unittest.TestCase):
         # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
         data[white[::-1]] = 124
 
-        fn = u"𝔸𝔹ℂ" + FILENAME
+        fn = "𝔸𝔹ℂ" + FILENAME
         # export
         hdf5.export(fn, data)
 
@@ -202,8 +202,8 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: u"tÉst",
+                    model.MD_HW_NAME: "", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -372,13 +372,13 @@ class TestHDF5IO(unittest.TestCase):
         size = (512, 256, 1)
         dtype = numpy.dtype("uint16")
         # list instead of tuple for binning because json only uses lists
-        extra_md = {"Camera" : {'binning' : ((0, 0), "px")}, u"¤³ß": {'</Image>': '</Image>'},
+        extra_md = {"Camera" : {'binning' : ((0, 0), "px")}, "¤³ß": {'</Image>': '</Image>'},
                     "Fake component": ("parameter", None)}
         exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
 
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake hw",
-                    model.MD_DESCRIPTION: u"tÉst",  # non ascii character
+                    model.MD_DESCRIPTION: "tÉst",  # non ascii character
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px

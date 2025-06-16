@@ -25,7 +25,7 @@ from PIL import Image
 
 FORMAT = "PNG"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [u".png"]
+EXTENSIONS = [".png"]
 
 # TODO: support 16-bits? But then it looses the point to have a "simple" format?
 LOSSY = True # because it doesn't support 16 bits

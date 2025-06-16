@@ -677,12 +677,12 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_ar_file_select(self, evt):
         """ Pass the selected AR background file on to the VA """
         logging.debug("AR background selected by user")
-        fn = evt.selected_file or u""  # selected_file is None if no file
+        fn = evt.selected_file or ""  # selected_file is None if no file
         if self.setter_ar_file:
             try:
                 fn = self.setter_ar_file(fn)
             except ValueError:
-                logging.debug(u"Setter refused the file '%s'", fn)
+                logging.debug("Setter refused the file '%s'", fn)
                 # Put back old file name
                 self._ar_bckfile_entry.value_ctrl.SetValue(self.tab_data.ar_cal.value)
                 return
@@ -695,12 +695,12 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_spec_bck_file_select(self, evt):
         """ Pass the selected spec background file on to the VA """
         logging.debug("Spectrum background file selected by user")
-        fn = evt.selected_file or u""
+        fn = evt.selected_file or ""
         if self.setter_spec_bck_file:
             try:
                 fn = self.setter_spec_bck_file(fn)
             except ValueError:
-                logging.debug(u"Setter refused the file '%s'", fn)
+                logging.debug("Setter refused the file '%s'", fn)
                 # Put back old file name
                 self._spec_bckfile_entry.value_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
                 return
@@ -713,12 +713,12 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_temporalspec_bck_file_select(self, evt):
         """ Pass the selected spec background file on to the VA """
         logging.debug("Temporal spectrum background file selected by user")
-        fn = evt.selected_file or u""
+        fn = evt.selected_file or ""
         if self.setter_temporalspec_bck_file:
             try:
                 fn = self.setter_temporalspec_bck_file(fn)
             except ValueError:
-                logging.debug(u"Setter refused the file '%s'", fn)
+                logging.debug("Setter refused the file '%s'", fn)
                 # Put back old file name
                 self._temporalspec_bckfile_entry.value_ctrl.SetValue(self.tab_data.temporalspec_bck_cal.value)
                 return
@@ -731,7 +731,7 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_angularspec_bck_file_select(self, evt):
         """ Pass the selected spec background file on to the VA """
         logging.debug("Angular spectrum background file selected by user")
-        fn = evt.selected_file or u""
+        fn = evt.selected_file or ""
         if self.setter_angularspec_bck_file:
             try:
                 fn = self.setter_angularspec_bck_file(fn)
@@ -750,12 +750,12 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_spec_file_select(self, evt):
         """ Pass the selected efficiency compensation file on to the VA """
         logging.debug("Efficiency compensation file selected by user")
-        fn = evt.selected_file or u""
+        fn = evt.selected_file or ""
         if self.setter_spec_file:
             try:
                 fn = self.setter_spec_file(fn)
             except ValueError:
-                logging.debug(u"Setter refused the file '%s'", fn)
+                logging.debug("Setter refused the file '%s'", fn)
                 # Put back old file name
                 self._specfile_entry.value_ctrl.SetValue(self.tab_data.spec_cal.value)
                 return

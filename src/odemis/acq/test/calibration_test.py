@@ -156,7 +156,7 @@ class TestAR(unittest.TestCase):
             if exporter.FORMAT == "ImageJ Compatible TIFF":
                 continue # ignore this format
             logging.info("Trying to export/import with %s", fmt)
-            fn = u"test_ar" + exporter.EXTENSIONS[0]
+            fn = "test_ar" + exporter.EXTENSIONS[0]
             exporter.export(fn, full_data, thumb)
 
             if fmt in dataio.get_available_formats(os.O_RDONLY):
@@ -319,9 +319,9 @@ class TestSpectrum(unittest.TestCase):
             if exporter.FORMAT == "ImageJ Compatible TIFF":
                 continue # ignore this format
             logging.info("Trying to export/import with %s", fmt)
-            fn_coef = u"test_spec" + exporter.EXTENSIONS[0]
+            fn_coef = "test_spec" + exporter.EXTENSIONS[0]
             exporter.export(fn_coef, full_coef, thumb)
-            fn_bckg = u"test_bckg" + exporter.EXTENSIONS[0]
+            fn_bckg = "test_bckg" + exporter.EXTENSIONS[0]
             exporter.export(fn_bckg, full_bckg, thumb)
 
             if fmt in dataio.get_available_formats(os.O_RDONLY):

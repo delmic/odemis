@@ -39,7 +39,7 @@ from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = u"test" + stiff.EXTENSIONS[0]
+FILENAME = "test" + stiff.EXTENSIONS[0]
 class TestTiffIO(unittest.TestCase):
 
     @classmethod
@@ -278,8 +278,8 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: u"tÉst", # tiff doesn't support É (but XML does)
+                    model.MD_HW_NAME: "", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst", # tiff doesn't support É (but XML does)
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -353,8 +353,8 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_EXP_TIME: 1.2, #s
                     },
                     {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: u"tÉst", # tiff doesn't support É (but XML does)
+                    model.MD_HW_NAME: "", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst", # tiff doesn't support É (but XML does)
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px

@@ -49,7 +49,7 @@ class TestConversion(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = conversion.wavelength2rgb(i)
-            self.assertEqual(o, eo, u"%f nm -> %s should be %s" % (i * 1e9, o, eo))
+            self.assertEqual(o, eo, "%f nm -> %s should be %s" % (i * 1e9, o, eo))
 
     def test_convertToObject_good(self):
         """
@@ -129,8 +129,8 @@ class TestConversion(unittest.TestCase):
                  "Testing with %s / '%s' -> %s" % (ex_val, str_val, out))
 
     def test_ensure_tuple(self):
-        obj = [1, [2, 3], (["5", u"678"],), 9]
-        exp_out = (1, (2, 3), (("5", u"678"),), 9)
+        obj = [1, [2, 3], (["5", "678"],), 9]
+        exp_out = (1, (2, 3), (("5", "678"),), 9)
         out = ensure_tuple(obj)
         self.assertEqual(out, exp_out)
 

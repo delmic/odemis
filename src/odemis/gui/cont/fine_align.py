@@ -110,9 +110,9 @@ class FineAlignController(object):
             dt = self._main_data_model.fineAlignDwellTime.value
             t = align.find_overlay.estimateOverlayTime(dt, self.OVRL_REPETITION)
             t = math.ceil(t)  # round a bit pessimistic
-            txt = u"~ %s" % units.readable_time(t, full=False)
+            txt = "~ %s" % units.readable_time(t, full=False)
         else:
-            txt = u""
+            txt = ""
         self._tab_panel.lbl_fine_align.Label = txt
 
     def _on_aligner_pos(self, pos):
@@ -247,8 +247,8 @@ class FineAlignController(object):
                                     measured_mag, lens_mag)
                 else:  # Generic warning
                     logging.warning(
-                        u"The fine alignment values are very large, try on a different place on the sample. "
-                        u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f/%f",
+                        "The fine alignment values are very large, try on a different place on the sample. "
+                        "mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f/%f",
                         opt_scale, rot_deg, shear, scaling_xy[0], scaling_xy[1])
 
                 title = "Fine alignment probably incorrect"
@@ -267,15 +267,15 @@ class FineAlignController(object):
             popup.show_message(
                 self._tab_panel,
                 title,
-                u"Rotation: %s\nShear: %s\nX/Y Scaling: %s"
-                % (units.readable_str(rot_deg, unit=u"°", sig=3),
+                "Rotation: %s\nShear: %s\nX/Y Scaling: %s"
+                % (units.readable_str(rot_deg, unit="°", sig=3),
                    units.readable_str(shear, sig=3),
                    units.readable_str(scaling_xy, sig=3)),
                 timeout=timeout,
                 level=lvl
             )
-            logging.info(u"Fine alignment computed mag correction of %f, rotation of %f°, "
-                         u"shear needed of %s, and X/Y scaling needed of %f/%f.",
+            logging.info("Fine alignment computed mag correction of %f, rotation of %f°, "
+                         "shear needed of %s, and X/Y scaling needed of %f/%f.",
                          opt_scale, rot, shear, scaling_xy[0], scaling_xy[1])
 
         # As the CCD image might have different pixel size, force to fit

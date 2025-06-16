@@ -704,7 +704,7 @@ class Acquirer(object):
         """
         Saves the data into a file
         data (model.DataArray or list of model.DataArray): the data to save
-        fn (unicode): filename of the file to save
+        fn (str): filename of the file to save
         """
         exporter = dataio.find_fittest_converter(fn)
 
@@ -714,7 +714,7 @@ class Acquirer(object):
         else:
             logging.info("Saving file '%s'", fn)
 
-        exporter.export(unicode(fn), data)
+        exporter.export(fn, data)
 
     def acquire(self, fn):
         self.save_hw_settings()

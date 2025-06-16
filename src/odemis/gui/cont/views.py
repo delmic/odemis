@@ -573,7 +573,7 @@ class OverviewController(object):
             elif self.main_data.ccd:
                 p_size = comp.compute_camera_fov(self.main_data.ccd)
             else:
-                logging.debug(u"Unknown FoV, will guess 100 µm")
+                logging.debug("Unknown FoV, will guess 100 µm")
                 p_size = (100e-6, 100e-6)  # m
 
         return p_size

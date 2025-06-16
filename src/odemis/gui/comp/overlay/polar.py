@@ -146,7 +146,7 @@ class PolarOverlay(base.ViewOverlay):
             x = self.center_x + radius * cos_phi_line
             y = self.center_y + radius * sin_phi_line
 
-            self.phi_label.text = u"φ %0.1f°" % math.degrees(self.phi)
+            self.phi_label.text = "φ %0.1f°" % math.degrees(self.phi)
             self.phi_label.deg = math.degrees(self.phi_line_rad)
 
             # Now we calculate a perpendicular offset to the Phi line where
@@ -194,7 +194,7 @@ class PolarOverlay(base.ViewOverlay):
         x = self.center_x
         y = self.center_y + self.theta_radius + 3
 
-        theta_str = u"θ %0.1f°" % math.degrees(self.theta)
+        theta_str = "θ %0.1f°" % math.degrees(self.theta)
 
         self.theta_label.text = theta_str
         self.theta_label.pos = (x, y)
@@ -289,7 +289,7 @@ class PolarOverlay(base.ViewOverlay):
             lx = self.center_x + (self.radius + 5) * cos
             ly = self.center_y + (self.radius + 5) * sin
 
-            label = self.add_label(u"%d°" % (deg + 90),
+            label = self.add_label("%d°" % (deg + 90),
                                    (lx, ly),
                                    colour=(0.8, 0.8, 0.8),
                                    deg=deg - 90,

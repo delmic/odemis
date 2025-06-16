@@ -515,7 +515,7 @@ class CryoAcquiController(object):
                 # export fm channels as single image
                 filename = self._create_cryo_filename(base_filename)
                 exporter.export(filename, data, thumb_nail)
-                logging.info(u"Acquisition saved as file '%s'.", filename)
+                logging.info("Acquisition saved as file '%s'.", filename)
 
             # TODO: make saving fibsem data optional
             # TODO: investigate using Cntrl + S to save?
@@ -610,7 +610,7 @@ class CryoAcquiController(object):
         acq_time = self._get_acq_time()
 
         # display the time on the GUI
-        txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
+        txt = "Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:

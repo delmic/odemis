@@ -43,7 +43,7 @@ from odemis.util.conversion import get_tile_md_pos
 FORMAT = "Catmaid"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = []
-PREFIXES = [u"catmaid://", u"catmaids://"]
+PREFIXES = ["catmaid://", "catmaids://"]
 
 LOSSY = True
 

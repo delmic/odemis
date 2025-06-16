@@ -303,7 +303,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, margin=0):
         ly = center_y + (radius + 5) * sin + margin
 
         label = Label(
-            text=u"%d°" % (deg + 90),
+            text="%d°" % (deg + 90),
             pos=(lx, ly),
             font_size=font_size,
             flip=True,
@@ -1193,7 +1193,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
             midv = absv[(len(absv) - 1) // 2]
             divisor, prefix = units.get_si_scale(midv)
             tick_list = [(p, v / divisor) for p, v in tick_list]
-        scale_label += u" (%s%s)" % (prefix, unit)
+        scale_label += " (%s%s)" % (prefix, unit)
         _, _, lbl_width, _, _, _ = ctx.text_extents(scale_label)
         # TODO: probably not correctly placed in case of mirror (but no one cares)
         if orientation == wx.HORIZONTAL:
@@ -2022,7 +2022,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
     legend_x_pos += cell_x_step
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     hfw = units.round_significant(hfw, 4)
-    label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
+    label = "HFW: %s" % units.readable_str(hfw, "m", sig=3)
     legend_ctx.show_text(label)
 
     # Draw scale bar
@@ -2163,11 +2163,11 @@ def _get_stream_legend_text(md):
 
     try:
         if model.MD_EXP_TIME in md:
-            captions.append(u"Exposure time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
+            captions.append("Exposure time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
         if model.MD_DWELL_TIME in md:
-            captions.append(u"Dwell time: %s" % units.readable_str(md[model.MD_DWELL_TIME], "s", sig=3))
+            captions.append("Dwell time: %s" % units.readable_str(md[model.MD_DWELL_TIME], "s", sig=3))
         if model.MD_LENS_MAG in md:
-            captions.append(u"Magnification: %s x" % units.readable_str(md[model.MD_LENS_MAG], sig=2))
+            captions.append("Magnification: %s x" % units.readable_str(md[model.MD_LENS_MAG], sig=2))
         if model.MD_FILTER_NAME in md:
             captions.append(md[model.MD_FILTER_NAME])
         if model.MD_LIGHT_POWER in md:
@@ -2177,20 +2177,20 @@ def _get_stream_legend_text(md):
         if model.MD_EBEAM_CURRENT in md:
             captions.append("Current: %s" % units.readable_str(md[model.MD_EBEAM_CURRENT], "A", sig=3))
         if model.MD_IN_WL in md:
-            captions.append(u"Excitation: %s" % units.readable_str(numpy.average(md[model.MD_IN_WL]), "m", sig=3))
+            captions.append("Excitation: %s" % units.readable_str(numpy.average(md[model.MD_IN_WL]), "m", sig=3))
         if model.MD_POS in md:
             pos = md[model.MD_POS]
             if len(pos) == 3:   # 3D Z stack data
-                captions.append(u"Z Position: %s" % units.readable_str(pos[2], "m", sig=3))
+                captions.append("Z Position: %s" % units.readable_str(pos[2], "m", sig=3))
         if model.MD_OUT_WL in md:
             out_wl = md[model.MD_OUT_WL]
             if isinstance(out_wl, str):
-                captions.append(u"Emission: %s" % (out_wl,))
+                captions.append("Emission: %s" % (out_wl,))
             else:
-                captions.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
+                captions.append("Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
         if model.MD_WL_LIST in md:
             wll = md[model.MD_WL_LIST]
-            captions.append(u"Wavelength: %s" % fluo.to_readable_band((wll[0], wll[-1])))
+            captions.append("Wavelength: %s" % fluo.to_readable_band((wll[0], wll[-1])))
     except Exception:
         logging.exception("Failed to export metadata fully")
 

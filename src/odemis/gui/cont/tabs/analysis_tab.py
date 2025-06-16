@@ -544,41 +544,41 @@ class AnalysisTab(Tab):
             try:
                 self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
             except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
+                logging.warning("Calibration file not accepted any more '%s'",
                                 self.tab_data_model.spec_bck_cal.value)
-                self.tab_data_model.spec_bck_cal.value = u""  # remove the calibration
+                self.tab_data_model.spec_bck_cal.value = ""  # remove the calibration
 
         if temporalspectrum:
             try:
                 self.set_temporalspec_background(self.tab_data_model.temporalspec_bck_cal.value)
             except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
+                logging.warning("Calibration file not accepted any more '%s'",
                                 self.tab_data_model.temporalspec_bck_cal.value)
-                self.tab_data_model.temporalspec_bck_cal.value = u""  # remove the calibration
+                self.tab_data_model.temporalspec_bck_cal.value = ""  # remove the calibration
 
         if angularspectrum:
             try:
                 self.set_temporalspec_background(self.tab_data_model.angularspec_bck_cal.value)
             except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
+                logging.warning("Calibration file not accepted any more '%s'",
                                 self.tab_data_model.angularspec_bck_cal.value)
-                self.tab_data_model.angularspec_bck_cal.value = u""  # remove the calibration
+                self.tab_data_model.angularspec_bck_cal.value = ""  # remove the calibration
 
         if spectrum or temporalspectrum or angularspectrum:
             try:
                 self.set_spec_comp(self.tab_data_model.spec_cal.value)
             except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
+                logging.warning("Calibration file not accepted any more '%s'",
                                 self.tab_data_model.spec_cal.value)
-                self.tab_data_model.spec_cal.value = u""  # remove the calibration
+                self.tab_data_model.spec_cal.value = ""  # remove the calibration
 
         if ar_streams:
             try:
                 self.set_ar_background(self.tab_data_model.ar_cal.value)
             except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
+                logging.warning("Calibration file not accepted any more '%s'",
                                 self.tab_data_model.ar_cal.value)
-                self.tab_data_model.ar_cal.value = u""  # remove the calibration
+                self.tab_data_model.ar_cal.value = ""  # remove the calibration
 
         # if all the views are either empty or contain the same streams,
         # display in full screen by default (with the first view which has streams)
@@ -647,7 +647,7 @@ class AnalysisTab(Tab):
         raise ValueError if the file is not correct or calibration cannot be applied
         """
         try:
-            if fn == u"":
+            if fn == "":
                 logging.debug("Clearing AR background")
                 cdata = None
             else:
@@ -687,7 +687,7 @@ class AnalysisTab(Tab):
         :raise ValueError: If the file is not correct or calibration cannot be applied.
         """
         try:
-            if fn == u"":
+            if fn == "":
                 logging.debug("Clearing spectrum background")
                 cdata = None
             else:
@@ -726,7 +726,7 @@ class AnalysisTab(Tab):
         :raise: ValueError, if the file is not correct or calibration cannot be applied.
         """
         try:
-            if fn == u"":
+            if fn == "":
                 logging.debug("Clearing temporal spectrum background")
                 cdata = None
             else:
@@ -768,7 +768,7 @@ class AnalysisTab(Tab):
         raise ValueError if the file is not correct or calibration cannot be applied
         """
         try:
-            if fn == u"":
+            if fn == "":
                 logging.debug("Clearing spectrum efficiency compensation")
                 cdata = None
             else:

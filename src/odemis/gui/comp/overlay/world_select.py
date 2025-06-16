@@ -174,7 +174,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
                 w = units.readable_str(w, 'm', sig=2)
                 h = units.readable_str(h, 'm', sig=2)
-                size_lbl = u"{} x {}".format(w, h)
+                size_lbl = "{} x {}".format(w, h)
 
                 pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)
 

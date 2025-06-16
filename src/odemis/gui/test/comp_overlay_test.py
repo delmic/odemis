@@ -215,7 +215,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Text should exactly overlap
 
-        rl = ol.add_label(u"█ you should only see red",
+        rl = ol.add_label("█ you should only see red",
                           pos=(0, 0),
                           font_size=20,
                           deg=0,
@@ -223,7 +223,7 @@ class OverlayTestCase(test.GuiTestCase):
                           colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(0.05)
 
-        sl = ol.add_label(u"█ you should only see red",
+        sl = ol.add_label("█ you should only see red",
                           pos=(0, 0),
                           font_size=20,
                           colour=(1, 0, 0),
@@ -233,20 +233,20 @@ class OverlayTestCase(test.GuiTestCase):
 
         ol.clear_labels()
 
-        ol.add_label(u"█ no rotate",
+        ol.add_label("█ no rotate",
                      pos=(200, 0),
                      font_size=20,
                      colour=(1, 0, 0),
                      align=wx.ALIGN_LEFT)
 
-        tl = ol.add_label(u"█ rotate left",
+        tl = ol.add_label("█ rotate left",
                           pos=(200, 25),
                           font_size=20,
                           deg=0,
                           flip=False,
                           colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
 
-        tr = ol.add_label(u"rotate right █",
+        tr = ol.add_label("rotate right █",
                           pos=(200, 50),
                           font_size=20,
                           align=wx.ALIGN_RIGHT,
@@ -254,7 +254,7 @@ class OverlayTestCase(test.GuiTestCase):
                           flip=False,
                           colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
 
-        tc = ol.add_label(u"rotate center █",
+        tc = ol.add_label("rotate center █",
                           pos=(200, 75),
                           font_size=20,
                           align=wx.ALIGN_CENTRE_HORIZONTAL,

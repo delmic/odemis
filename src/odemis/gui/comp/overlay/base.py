@@ -85,7 +85,7 @@ class Label(object):
 
     @text.setter
     def text(self, val):
-        self._text = u"%s" % val
+        self._text = "%s" % val
         self._clear_cache()
 
     @property
@@ -134,7 +134,7 @@ class Label(object):
         self._clear_cache()
 
     def __repr__(self):
-        return u"%s @ %s" % (self.text, self.render_pos)
+        return "%s @ %s" % (self.text, self.render_pos)
 
     def _clear_cache(self):
         self.render_pos = None

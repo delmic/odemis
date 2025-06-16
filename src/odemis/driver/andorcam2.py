@@ -653,7 +653,7 @@ class AndorCam2(model.DigitalCamera):
                 self._hw_temp_range = trange
                 # Always support 25°C, to disable the cooling
                 trange = (trange[0], max(trange[1], 25))
-                self.targetTemperature = model.FloatContinuous(trange[0], trange, unit=u"°C",
+                self.targetTemperature = model.FloatContinuous(trange[0], trange, unit="°C",
                                                                setter=self._setTargetTemperature)
                 self._setTargetTemperature(trange[0], force=True)
 
@@ -849,7 +849,7 @@ class AndorCam2(model.DigitalCamera):
                 self._shutter_period = None
 
             current_temp, _ = self.GetTemperature()
-            self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
+            self.temperature = model.FloatVA(current_temp, unit="°C", readonly=True)
             self._metadata[model.MD_SENSOR_TEMP] = current_temp
             self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                                   "AndorCam2 temperature update")
@@ -1493,7 +1493,7 @@ class AndorCam2(model.DigitalCamera):
             speed_idx, vsspeed = c_int(), c_float()  # idx, µs
             self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
             self.atcore.SetVSSpeed(speed_idx)
-            logging.debug(u"Set vertical readout rate to %g Hz", 1e6 / vsspeed.value)
+            logging.debug("Set vertical readout rate to %g Hz", 1e6 / vsspeed.value)
         else:
             # Find the corresponding index
             vsspeed_req = 1e6 / vrr
@@ -2069,7 +2069,7 @@ class AndorCam2(model.DigitalCamera):
                     speed_idx, vsspeed = c_int(), c_float()  # idx, µs
                     self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
                     self.atcore.SetVSSpeed(speed_idx)
-                    logging.debug(u"Set vertical readout rate to %g Hz", 1e6 / vsspeed.value)
+                    logging.debug("Set vertical readout rate to %g Hz", 1e6 / vsspeed.value)
                 except AndorV2Error as ex:
                     # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
                     if ex.errno == 20991:  # DRV_NOT_SUPPORTED

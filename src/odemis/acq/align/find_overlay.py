@@ -413,20 +413,20 @@ def _MakeReport(msg, data, optical_image=None, subimages=None):
     optical_image (2d array or None): Image from CCD
     subimages (list of 2d array or None): List of Image from CCD
     """
-    path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report",
-                        time.strftime(u"%Y%m%d-%H%M%S"))
+    path = os.path.join(os.path.expanduser("~"), "odemis-overlay-report",
+                        time.strftime("%Y%m%d-%H%M%S"))
     os.makedirs(path)
 
-    report = open(os.path.join(path, u"report.txt"), 'w')
+    report = open(os.path.join(path, "report.txt"), 'w')
     report.write("****Overlay Failure Report****\n")
     report.write("%s\n" % (msg,))
 
     if optical_image is not None:
-        tiff.export(os.path.join(path, u"OpticalGrid.tiff"), optical_image)
+        tiff.export(os.path.join(path, "OpticalGrid.tiff"), optical_image)
         report.write("The optical image of the grid can be seen in OpticalGrid.tiff\n")
 
     if subimages is not None:
-        tiff.export(os.path.join(path, u"OpticalPartitions.tiff"), subimages)
+        tiff.export(os.path.join(path, "OpticalPartitions.tiff"), subimages)
         report.write("The partitioned optical images can be seen in OpticalPartitions.tiff\n")
 
     report.write("\n")

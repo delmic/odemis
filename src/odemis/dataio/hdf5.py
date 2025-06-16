@@ -38,7 +38,7 @@ from odemis.util.conversion import JsonExtraEncoder
 # User-friendly name
 FORMAT = "HDF5"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [u".h5", u".hdf5"]
+EXTENSIONS = [".h5", ".hdf5"]
 LOSSY = False
 CAN_SAVE_PYRAMID = False
 

@@ -39,7 +39,7 @@ from odemis.util.dataio import (
     write_json,
 )
 
-FILENAMES = [u"test_%d" % i + tiff.EXTENSIONS[0] for i in range(4)]
+FILENAMES = ["test_%d" % i + tiff.EXTENSIONS[0] for i in range(4)]
 
 class TestDataIO(unittest.TestCase):
 
@@ -64,7 +64,7 @@ class TestDataIO(unittest.TestCase):
         """
         Check data_to_static_streams
         """
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
 
         # Create fake data of flurorescence acquisition
         metadata = [{model.MD_SW_VERSION: "1.0-test",
@@ -172,7 +172,7 @@ class TestDataIO(unittest.TestCase):
         """
         Check data_to_static_streams with pyramidal images using DataArrayShadows
         """
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
 
         # Create fake data of flurorescence acquisition
         metadata = [{model.MD_SW_VERSION: "1.0-test",

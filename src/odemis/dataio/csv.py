@@ -24,7 +24,7 @@ from odemis.util import spectrum
 
 FORMAT = "CSV"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [u".csv"]
+EXTENSIONS = [".csv"]
 
 LOSSY = True  # because it only supports AR in phi/theta and spectrum in wavelength/intensity format export
 CAN_SAVE_PYRAMID = False

@@ -1091,7 +1091,7 @@ class OpticalPathManager:
             if atemp < ttemp + TEMP_EPSILON:
                 return
             else:
-                logging.debug(u"Waiting for temperature to reach %g °C (currently at %g °C)",
+                logging.debug("Waiting for temperature to reach %g °C (currently at %g °C)",
                               ttemp, atemp)
                 time.sleep(1)
 

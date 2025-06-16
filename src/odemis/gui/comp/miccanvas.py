@@ -946,9 +946,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             try:
                 dur = now - self._last_frame_update
                 fps = 1 / dur
-                self._fps_ol.labels[0].text = u"%s fps" % units.readable_str(fps, sig=3)
+                self._fps_ol.labels[0].text = "%s fps" % units.readable_str(fps, sig=3)
             except ZeroDivisionError:
-                self._fps_ol.labels[0].text = u"∞ fps"
+                self._fps_ol.labels[0].text = "∞ fps"
             self._last_frame_update = now
         else:
             super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)

@@ -588,7 +588,7 @@ class AlignedSEMStream(SEMStream):
     def _DoPrepare(self):
         # Need to calibrate ?
         if not self.calibrated.value:
-            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress…")
+            self._setStatus(logging.INFO, "Automatic SEM alignment in progress…")
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
@@ -626,10 +626,10 @@ class AlignedSEMStream(SEMStream):
                 else:
                     raise NotImplementedError("Unknown shiftbeam method %s" % (self._shiftebeam,))
             except LookupError:
-                self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
+                self._setStatus(logging.WARNING, ("Automatic SEM alignment unsuccessful", "Need to focus all streams"))
                 logging.info("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
-                self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
+                self._setStatus(logging.WARNING, ("Automatic SEM alignment unsuccessful", "Need to focus all streams"))
                 logging.exception("Failure while looking for the ebeam center")
             else:
                 self._setStatus(None)

@@ -702,7 +702,7 @@ class GraphicToggleButton(ImageTextToggleButton):
     def __init__(self, *args, **kwargs):
         self.value = kwargs.pop('value', None)
         if 'label' not in kwargs and self.value:
-            kwargs['label'] = u"%g" % self.value
+            kwargs['label'] = "%g" % self.value
         super(GraphicToggleButton, self).__init__(*args, **kwargs)
 
 

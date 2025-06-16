@@ -585,7 +585,7 @@ def format_axis_choices(name, axis_def):
         if choices_formatted is None:
             choices_formatted = [(c, readable_str(c, unit=unit, sig=3)) for c in choices]
     else:
-        choices_formatted = [(c, u"%s %s" % (choice_to_str(c), unit)) for c in choices]
+        choices_formatted = [(c, "%s %s" % (choice_to_str(c), unit)) for c in choices]
 
     if not isinstance(choices, OrderedDict):
         # sort 2-tuples = according to first value in tuple
@@ -598,7 +598,7 @@ def choice_to_str(choice):
     """ Return a list of choices, where iterable choices are joined by an `x` """
     if isinstance(choice, str) or not isinstance(choice, Iterable):
         return str(choice)
-    return u" x ".join(str(c) for c in choice)
+    return " x ".join(str(c) for c in choice)
 
 
 def label_to_human(camel_label):
@@ -891,10 +891,10 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         # Set choices
         if choices_si_prefix:
             for choice, formatted in choices_formatted:
-                value_ctrl.Append(u"%s %s" % (formatted, choices_si_prefix + unit), choice)
+                value_ctrl.Append("%s %s" % (formatted, choices_si_prefix + unit), choice)
         else:
             for choice, formatted in choices_formatted:
-                value_ctrl.Append(u"%s%s" % (formatted, unit), choice)
+                value_ctrl.Append("%s%s" % (formatted, unit), choice)
 
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)

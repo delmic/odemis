@@ -31,7 +31,7 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = u"test" + png.EXTENSIONS[0]
+FILENAME = "test" + png.EXTENSIONS[0]
 
 
 class TestPNGIO(unittest.TestCase):

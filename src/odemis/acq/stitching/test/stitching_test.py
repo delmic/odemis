@@ -191,7 +191,7 @@ class TestWeave(unittest.TestCase):
         md = {
             model.MD_SW_VERSION: "1.0-test",
             # tiff doesn't support É (but XML does)
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
             model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
@@ -213,7 +213,7 @@ class TestWeave(unittest.TestCase):
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            model.MD_DESCRIPTION: u"test sem",
+            model.MD_DESCRIPTION: "test sem",
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
             model.MD_POS: (10e-3, 30e-3),  # m
             model.MD_DWELL_TIME: 1.2e-6,  # s

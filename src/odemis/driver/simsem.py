@@ -59,7 +59,7 @@ class SimSEM(model.HwComponent):
         '''
         # fake image setup
         if image is None:
-            image = u"simsem-fake-output.h5"
+            image = "simsem-fake-output.h5"
         image = str(image)
         # ensure relative path is from this file
         if not os.path.isabs(image):

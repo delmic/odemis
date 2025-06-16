@@ -374,13 +374,13 @@ class ProgressiveFutureConnector(object):
         left = math.ceil(left)  # pessimistic
 
         if left > 2:
-            lbl_txt = u"%s" % units.readable_time(left, full=self._full_text)
+            lbl_txt = "%s" % units.readable_time(left, full=self._full_text)
         else:
             # don't be too precise
-            lbl_txt = u"a few seconds"
+            lbl_txt = "a few seconds"
 
         if self._full_text:
-            lbl_txt += u" left"
+            lbl_txt += " left"
 
         if self._label is None:
             self._bar.SetToolTip(lbl_txt)
@@ -421,7 +421,7 @@ class EllipsisAnimator(RepeatingTimer):
 
             # Compute how many dots to display (0->3)
             n = int((time.time() / self.period) % 4)
-            msg = self._status_msg.replace(u"…", u"." * n)
+            msg = self._status_msg.replace("…", "." * n)
             self._label.SetLabel(msg)
         except Exception:
             logging.exception("Unexpected failure during status message animation")

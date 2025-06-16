@@ -447,7 +447,7 @@ class MenuController(object):
             info.Description += " (+ plugins)"
             info.Developers += ["", "Plugins:"]
             for p in app.plugins:
-                info.Developers += [u"%s by %s under %s license" %
+                info.Developers += ["%s by %s under %s license" %
                                     (p, p.__author__, p.__license__)]
 
         try:
