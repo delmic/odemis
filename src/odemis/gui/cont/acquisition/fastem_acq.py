@@ -767,7 +767,8 @@ class FastEMSingleBeamAcquiController(object):
                     self._tab_data_model.semStream,
                     self._main_data_model.stage,
                     data[TOAColumnNames.DWELL_TIME.value] * 1e-6,  # [s]
-                    scanner_conf
+                    scanner_conf,
+                    reference_stage=True if idx == 0 else False,  # Only reference the stage before the first TOA acquisition
                 )
 
                 # Add a callback to set the next TOA settings
