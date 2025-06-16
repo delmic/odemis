@@ -75,6 +75,9 @@ FOCUS_FIDELITY = 0.3
 FOCUS_RANGE_MARGIN = 100e-6  # m
 # Indicate the number of tiles to skip during focus adjustment
 SKIP_TILES = 3
+# Starting index for the tile acquisition
+# Start with a non-existing tile index so that the first tile is always moved to and acquired
+START_INDEX = (-1, -1)
 
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
 # Default range for the optical focus adjustment
@@ -440,11 +443,17 @@ class TiledAcquisitionTask(object):
         logging.debug("Moving to tile %s at %s m", idx, m)
         self._future.running_subf = self._stage.moveAbs(m)
         try:
-            # Don't wait forever for the stage to move: guess the time it should
-            # take and then give a large margin
-            t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
-                           abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
-            t = 5 * t + 3  # s
+            if prev_idx == START_INDEX:
+                # If this is the first tile, wait for a long time to allow the stage to move
+                # This is needed because the current stage position may be far from the first tile
+                # and it may take a long time to move there
+                t = 600  # s
+            else:
+                # For any tile after the first, don't wait forever for the stage to move,
+                # guess the time it should take and then give a large margin
+                t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
+                               abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
+                t = 5 * t + 3  # s
             self._future.running_subf.result(t)
         except TimeoutError:
             logging.warning("Failed to move to tile %s within %s s", idx, t)
@@ -735,7 +744,7 @@ class TiledAcquisitionTask(object):
         :return: (list of list of DataArrays): list of acquired data for each stream on each tile
         """
         da_list = []  # for each position, a list of DataArrays
-        prev_idx = (-1, -1)  # start with a non-existing tile index so that the first tile is always moved to and acquired
+        prev_idx = START_INDEX
         i = 0
 
         self._save_time = {"acq": [], "stitch": [], "move": [], "save": []}
@@ -751,8 +760,6 @@ class TiledAcquisitionTask(object):
         zigzag_indices = self._sort_tile_indices_zigzag(self._tile_indices)
 
         for ix, iy in zigzag_indices:
-            logging.debug("Acquiring tile %dx%d", ix, iy)
-
             if i > 0:
                 self.average_acquisition_time = (time.time() - start_time) / i
 
