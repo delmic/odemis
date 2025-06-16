@@ -209,7 +209,7 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
 class SpecExtraPlugin(Plugin):
     name = "Large area spectrum stream"
     __version__ = "1.2"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):
@@ -267,7 +267,7 @@ class SpecExtraPlugin(Plugin):
                 ("grating", {}),
                 ("slit-in", {
                     "label": "Input slit",
-                    "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+                    "tooltip": "Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
                 }),
                 ("filter", {  # filter.band
                     "choices": confutil.format_band_choices,

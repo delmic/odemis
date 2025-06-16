@@ -57,7 +57,7 @@ CONF_FILE = os.path.join(get_home_folder(), ".config", "odemis", "cli_rgb.ini")
 class RGBCLIntensity(Plugin):
     name = "RGB CL-intensity"
     __version__ = "1.2"
-    __author__ = u"Toon Coenen & Éric Piel"
+    __author__ = "Toon Coenen & Éric Piel"
     __license__ = "GNU General Public License 2"
 
     vaconf = OrderedDict((
@@ -213,7 +213,7 @@ class RGBCLIntensity(Plugin):
         # coloured images.
         return os.path.join(
             conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), ".tiff")
+            "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), ".tiff")
         )
 
     def _get_sem_survey(self):

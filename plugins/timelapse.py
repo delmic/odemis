@@ -53,7 +53,7 @@ import wx
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
     __version__ = "2.2"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed
@@ -111,7 +111,7 @@ class TimelapsePlugin(Plugin):
         conf = get_acqui_conf()
         return os.path.join(
             conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
+            "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
 
     def _update_exp_dur(self, _=None):

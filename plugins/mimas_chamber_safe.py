@@ -42,7 +42,7 @@ VAL_UNSAFE = "0.0"
 class MimasChamberSignalPlugin(Plugin):
     name = "Mimas Chamber Signal"
     __version__ = "1.0"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope: model.HwComponent, main_app: wx.App):

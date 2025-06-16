@@ -165,7 +165,7 @@ LIVE_STREAM_CONFIG = OrderedDict((
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+                "tooltip": "Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
             ("filter", {  # from filter
                 "choices": util.format_band_choices,
@@ -182,7 +182,7 @@ LIVE_STREAM_CONFIG = OrderedDict((
 class BlExtraPlugin(Plugin):
     name = "Force blanker on during spectrum acquisition"
     __version__ = "1.0"
-    __author__ = u"Éric Piel, Victoria Mavrikopoulou"
+    __author__ = "Éric Piel, Victoria Mavrikopoulou"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):

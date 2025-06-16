@@ -380,7 +380,7 @@ class ExternalAcquisition:
 class ExtSpectrumMapPlugin(Plugin):
     name = "External Spectrum Map"
     __version__ = "1.0"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed (order matters)

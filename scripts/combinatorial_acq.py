@@ -28,7 +28,7 @@ def acquire_settings(scanner, det, res, zoom, dt):
     scanner.resolution.value = res
     scanner.dwellTime.value = dt
     if not dt * 0.8 < scanner.dwellTime.value < dt * 1.01:
-        logging.info(u"Skipping acquisition @ res %s because dwell time %g µs isn't supported",
+        logging.info("Skipping acquisition @ res %s because dwell time %g µs isn't supported",
                      res[0], dt * 1e6)
         return None
 

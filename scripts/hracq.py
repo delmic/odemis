@@ -156,7 +156,7 @@ class HRAcquirer(object):
             # Note: compressed seems to written faster
             self.exporter.export(filename, data, compressed=True)
         except IOError as exc:
-            raise IOError(u"Failed to save to '%s': %s" % (filename, exc))
+            raise IOError("Failed to save to '%s': %s" % (filename, exc))
 
 
 def main(args):

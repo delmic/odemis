@@ -66,7 +66,7 @@ BINNING = (1, 1)  # px, px
 # file format
 FMT = "TIFF"
 # Filename format
-FN_FMT = u"%(prefix)s_grid=%(xres)dx%(yres)d_stepsize=%(xstepsize)dx%(ystepsize)dnm_n=%(xpos)dx%(ypos)d_%(type)s.tiff"
+FN_FMT = "%(prefix)s_grid=%(xres)dx%(yres)d_stepsize=%(xstepsize)dx%(ystepsize)dnm_n=%(xpos)dx%(ypos)d_%(type)s.tiff"
 
 
 def get_ccd_md(ccd):
@@ -686,7 +686,7 @@ class CLAcqPlugin(Plugin):
     """
     name = "CL acquisition for SECOM"
     __version__ = "2.1"
-    __author__ = u"Éric Piel, Lennard Voortman, Sabrina Rossberger"
+    __author__ = "Éric Piel, Lennard Voortman, Sabrina Rossberger"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed
@@ -715,7 +715,7 @@ class CLAcqPlugin(Plugin):
         }),
         ("period", {
             "label": "Drift corr. period",
-            "tooltip": u"Maximum time after running a drift correction (anchor region acquisition)",
+            "tooltip": "Maximum time after running a drift correction (anchor region acquisition)",
             "control_type": gui.CONTROL_SLIDER,
             "scale": "log",
             "range": (1, 300),  # s, the VA allows a wider range, not typically needed
@@ -724,7 +724,7 @@ class CLAcqPlugin(Plugin):
         ("tool", {
             "label": "Selection tools",
             "control_type": gui.CONTROL_RADIO,
-            "choices": {TOOL_NONE: u"drag", TOOL_ROA: u"ROA", TOOL_RO_ANCHOR: u"drift"},
+            "choices": {TOOL_NONE: "drag", TOOL_ROA: "ROA", TOOL_RO_ANCHOR: "drift"},
         }),
         ("expectedDuration", {
         }),

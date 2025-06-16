@@ -253,7 +253,7 @@ class OdemisBugreporter(object):
         Searches for a valid osTicket key on the system. First, the customer key
         is checked, then the fallback.
         """
-        customer_key_path = os.path.join(os.path.expanduser(u"~"), '.local', 'share',
+        customer_key_path = os.path.join(os.path.expanduser("~"), '.local', 'share',
                                          'odemis', 'osticket.key')
         fallback_key_path = '/usr/share/odemis/osticket.key'
         if os.path.isfile(customer_key_path):
@@ -287,7 +287,7 @@ class OdemisBugreporter(object):
         :modifies self.zip_fn: filename of the zip archive
         """
         hostname = socket.gethostname()
-        home_dir = os.path.expanduser(u"~")
+        home_dir = os.path.expanduser("~")
         t = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.zip_fn = os.path.join(home_dir, 'Desktop', '%s-odemis-log-%s.zip' % (hostname, t))
 
@@ -456,10 +456,10 @@ class OdemisBugreporter(object):
                               'installation': installation,
         }
 
-        description = (u'Name: %s\n' % name +
-                       u'Email: %s\n' % email +
-                       u'Summary: %s\n\n' % subject +
-                       u'Description:\n%s' % message
+        description = ('Name: %s\n' % name +
+                       'Email: %s\n' % email +
+                       'Summary: %s\n\n' % subject +
+                       'Description:\n%s' % message
                        )
 
         with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
@@ -584,7 +584,7 @@ class BugreporterFrame(wx.Frame):
         # flag is set to False when the backspace is pressed
         self.make_suggestion = True
 
-        conf_dir = os.path.join(os.path.expanduser(u"~"), '.config', 'odemis')
+        conf_dir = os.path.join(os.path.expanduser("~"), '.config', 'odemis')
         if not os.path.exists(conf_dir):
             # create the directory so that we can store the config files later
             os.makedirs(conf_dir)

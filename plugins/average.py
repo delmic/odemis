@@ -48,7 +48,7 @@ import time
 class AveragePlugin(Plugin):
     name = "Frame Average"
     __version__ = "1.1"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed
@@ -115,7 +115,7 @@ class AveragePlugin(Plugin):
         conf = get_acqui_conf()
         return os.path.join(
             conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
+            "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
 
     def start(self):

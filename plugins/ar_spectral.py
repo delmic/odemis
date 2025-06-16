@@ -980,7 +980,7 @@ class ARspectral(Plugin):
         conf = get_acqui_conf()
         return os.path.join(
             conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), ".h5")
+            "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), ".h5")
         )
 
     def _get_sem_survey(self):

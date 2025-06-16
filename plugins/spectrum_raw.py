@@ -100,7 +100,7 @@ class SpectrumRawSettingsStream(PolarizedCCDSettingsStream):
 
         # Force the optical path to spectrum, as typically the detector is used
         # to guess, but "ccd" would lead it to pretty much a random mode.
-        logging.debug(u"Setting optical path for %s", self.name.value)
+        logging.debug("Setting optical path for %s", self.name.value)
         f = self._opm.setPath("spectral", self.detector)
         return f
 
@@ -263,11 +263,11 @@ SPECTRUM_RAW_CONFIG = OrderedDict((
         "scale": "log",
         "type": "float",
         "accuracy": 2,
-        "tooltip": u"Readout camera exposure time.",
+        "tooltip": "Readout camera exposure time.",
     }),
     ("integrationCounts", {
-        "tooltip": u"Number of images that are integrated, if requested exposure"
-                   u"time exceeds the camera exposure time limit.",
+        "tooltip": "Number of images that are integrated, if requested exposure"
+                   "time exceeds the camera exposure time limit.",
     }),
     ("wavelength", {
         "tooltip": "Center wavelength of the spectrograph",
@@ -278,7 +278,7 @@ SPECTRUM_RAW_CONFIG = OrderedDict((
     ("grating", {}),
     ("slit-in", {
         "label": "Input slit",
-        "tooltip": u"Opening size of the spectrograph input slit."
+        "tooltip": "Opening size of the spectrograph input slit."
     }),
     ("filter", {  # from filter
         "choices": confutil.format_band_choices,
@@ -297,7 +297,7 @@ SPECTRUM_RAW_CONFIG = OrderedDict((
     ("acquireAllPol", {
         "control_type": odemis.gui.CONTROL_CHECK,
         "label": "All polarizations",
-        "tooltip": u"Record all possible polarization positions sequentially in one acquisition."
+        "tooltip": "Record all possible polarization positions sequentially in one acquisition."
     }),
 ))
 
@@ -305,7 +305,7 @@ SPECTRUM_RAW_CONFIG = OrderedDict((
 class SpectrumRawPlugin(Plugin):
     name = "Spectrum Raw acquisition"
     __version__ = "1.1"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):

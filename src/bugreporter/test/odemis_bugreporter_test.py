@@ -51,7 +51,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         """
         # If test computer has key saved in .local/share/odemis or /usr/share/odemis,
         # check this key, otherwise expect LookupError
-        customer_key_path = os.path.join(os.path.expanduser(u"~"), '.local', 'share',
+        customer_key_path = os.path.join(os.path.expanduser("~"), '.local', 'share',
                                          'odemis', 'osticket.key')
         fallback_key_path = os.path.join('/usr', 'share', 'odemis', 'osticket.key')
         if not os.path.isfile(customer_key_path) and not os.path.isfile(fallback_key_path):
@@ -85,10 +85,10 @@ class TestOdemisBugreporter(unittest.TestCase):
             api_key = key_file.read().strip('\n')
 
         description = {
-            'name': u'TÉstingteam member',
-            'email': u'winkler@delmic.com',
-            'subject': u'Bugreporter test',
-            'message': u"This is a test, including some non-ascii characters like µ or 你好",
+            'name': 'TÉstingteam member',
+            'email': 'winkler@delmic.com',
+            'subject': 'Bugreporter test',
+            'message': "This is a test, including some non-ascii characters like µ or 你好",
             'topicId': REPORTER_TEST_ID,
             'installation': socket.gethostname(),
             }
@@ -102,10 +102,10 @@ class TestOdemisBugreporter(unittest.TestCase):
     def test_wrong_api_key(self):
         """Create a ticket with an incorrect API key"""
         description = {
-            'name': u'Testingteam member',
-            'email': u'winkler@delmic.com',
-            'subject': u'Bugreporter test',
-            'message': u"This is a test",
+            'name': 'Testingteam member',
+            'email': 'winkler@delmic.com',
+            'subject': 'Bugreporter test',
+            'message': "This is a test",
             'topicId': REPORTER_TEST_ID,
             'installation': "test",
             }
@@ -118,9 +118,9 @@ class TestOdemisBugreporter(unittest.TestCase):
         Tests whether large files are compressed and uploaded properly.
         """
         # Add large file to list of files that will be compressed
-        if not os.path.isdir(os.path.expanduser(u"~") + '/odemis-overlay-report'):
-            os.mkdir(os.path.expanduser(u"~") + '/odemis-overlay-report')
-        fn = os.path.expanduser(u"~") + '/odemis-overlay-report/bugreporter_test'
+        if not os.path.isdir(os.path.expanduser("~") + '/odemis-overlay-report'):
+            os.mkdir(os.path.expanduser("~") + '/odemis-overlay-report')
+        fn = os.path.expanduser("~") + '/odemis-overlay-report/bugreporter_test'
         with open(fn, 'w+') as f:
             f.write('x' * int(5e8))  # 500 MB file
 
@@ -177,7 +177,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         bugreporter.compress_files() # wait for system files to be compressed
 
         # create user attachment
-        path = os.path.expanduser(u"~") + '/odemis-overlay-report/attachments'
+        path = os.path.expanduser("~") + '/odemis-overlay-report/attachments'
         if not os.path.isdir(path):
             os.mkdir(path)
         valid_1_fn = os.path.join(path, "user_attachment_valid_1")
@@ -224,7 +224,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         """Test the size validation of user attachments"""
 
         # add user attachment
-        path = os.path.expanduser(u"~") + '/odemis-overlay-report'
+        path = os.path.expanduser("~") + '/odemis-overlay-report'
         if not os.path.isdir(path):
             os.mkdir(path)
         valid_fn = os.path.join(path, "user_attachment_valid")
@@ -276,7 +276,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         gui.name_ctrl.SetFocus()
         # TODO: how to simulate typing non ascii-characters? .Char() + modifiers?
         # sim.Text(b"Tstingteam member")
-        gui.name_ctrl.SetValue(u"TÉstingteam member")
+        gui.name_ctrl.SetValue("TÉstingteam member")
         self.gui_loop(0.1)
 
         gui.email_ctrl.SetFocus()

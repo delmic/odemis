@@ -805,7 +805,7 @@ class Correlator2D(Plugin):
         conf = get_acqui_conf()
         return os.path.join(
             conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), ".h5") #conf.last_extension)
+            "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), ".h5") #conf.last_extension)
         )
 
     def _get_sem_survey(self):
