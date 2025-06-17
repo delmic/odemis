@@ -138,7 +138,7 @@ SPARC2_MODES = {
             'streak-align': ("streak-ccd",  # alignment tab
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
+                 'slit-in-big': {'x': 'off'},  # slit small at init, but user can change later
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
