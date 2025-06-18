@@ -399,11 +399,12 @@ class ShapesOverlay(WorldOverlay):
                     self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
                     self.remove_shape(shape_state.shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:
-                # If the shape has not been created, reset it to start the creation again
-                # useful during polygon creation where a user might want to abort or reset
-                # the polygon creation
+                # If the shape has not been created, reset it and remove it
+                # Esc key is used to cancel the shape creation
                 if not self._selected_shape.is_created.value:
                     self._selected_shape.reset()
+                    self.remove_shape(self._selected_shape)
+                    self._selected_shape = None
                 else:
                     # Unselect the selected shape
                     self._selected_shape.selected.value = False
