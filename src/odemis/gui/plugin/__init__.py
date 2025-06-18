@@ -56,20 +56,20 @@ def find_plugins():
         # Typically, on Windows, the odemis package is a single file located into
         # a dedicated OdemisViewer folder which contains also all the dependencies
         # => search inside this folder
-        paths = (os.path.join(odemis.__path__[0], u"..", u"plugins"),
+        paths = (os.path.join(odemis.__path__[0], "..", "plugins"),
                  # There is no official place for putting per-user system
                  # overriding file, so just put with the config file.
-                 os.path.join(hf, u".config", u"odemis", u"plugins")
+                 os.path.join(hf, ".config", "odemis", "plugins")
                  )
     else:  # hopefully this is Linux
-        paths = (u"/usr/lib/odemis/plugins",
-                 u"/usr/local/lib/odemis/plugins",
-                 os.path.join(hf, u".local/share/odemis/plugins"),
+        paths = ("/usr/lib/odemis/plugins",
+                 "/usr/local/lib/odemis/plugins",
+                 os.path.join(hf, ".local/share/odemis/plugins"),
                  )
 
     plugins = {}  # script name -> full path
     for p in paths:
-        for fn in glob.glob(os.path.join(p, u"*.py")):
+        for fn in glob.glob(os.path.join(p, "*.py")):
             if os.path.isfile(fn):
                 # Discard previous plugin with same name
                 sn = os.path.basename(fn)

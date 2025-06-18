@@ -44,7 +44,7 @@ import wx
 class ZStackPlugin(Plugin):
     name = "Z Stack"
     __version__ = "1.4"
-    __author__ = u"Anders Muskens, Éric Piel"
+    __author__ = "Anders Muskens, Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed
@@ -124,7 +124,7 @@ class ZStackPlugin(Plugin):
         conf = get_acqui_conf()
         return os.path.join(
             conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
+            "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
 
     def _estimate_step_duration(self):

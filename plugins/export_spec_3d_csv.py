@@ -41,7 +41,7 @@ import wx
 class SpecCSVPlugin(Plugin):
     name = "Export Spectrum to 3D CSV"
     __version__ = "1.0"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "Public domain"
 
     def __init__(self, microscope, main_app):
@@ -66,7 +66,7 @@ class SpecCSVPlugin(Plugin):
 
         # Select a file name
         path = get_acqui_conf().last_export_path
-        wildcards, uformats = formats_to_wildcards({"CSV": [u"csv"]})
+        wildcards, uformats = formats_to_wildcards({"CSV": ["csv"]})
         dialog = wx.FileDialog(self.main_app.main_frame,
                            message="Choose a filename and destination",
                            defaultDir=path,

@@ -42,7 +42,7 @@ TINT_BLUE = (0, 0, 255)
 class MergeChannelsPlugin(Plugin):
     name = "Add RGB channels"
     __version__ = "1.0"
-    __author__ = u"Victoria Mavrikopoulou"
+    __author__ = "Victoria Mavrikopoulou"
     __license__ = "GPLv2"
 
     # The values are displayed with the following order

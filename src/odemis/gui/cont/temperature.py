@@ -84,7 +84,7 @@ class TemperatureController(object):
         """
         # add the new temperature to the history with a timestamp
         self.temperature_history.append((time.time(), temperature))
-        wx.CallAfter(self.temperature_label.SetLabel, u"Sample: {temp:.1f}°C".format(temp=temperature))
+        wx.CallAfter(self.temperature_label.SetLabel, "Sample: {temp:.1f}°C".format(temp=temperature))
 
         # clear out values of the history that are too old i.e. older than the max_duration
         while len(self.temperature_history) > 0:
@@ -116,7 +116,7 @@ class TemperatureController(object):
             # temperature is out of range
             # change colour to red
             set_label_colour(self.temperature_label, gui.FG_COLOUR_ERROR, weight=wx.BOLD)
-            text = u"Temperature {temp:.2f}°C is outside of the target range of {lo:.2f}°C to {hi:.2f}°C!".format(
+            text = "Temperature {temp:.2f}°C is outside of the target range of {lo:.2f}°C to {hi:.2f}°C!".format(
                     temp=temperature,
                     lo=target_temperature + safe_range[0],
                     hi=target_temperature + safe_range[1])
@@ -130,7 +130,7 @@ class TemperatureController(object):
             # temperature is changing at an unsafe speed
             # change colour to yellow
             set_label_colour(self.temperature_label, gui.FG_COLOUR_ERROR, weight=wx.BOLD)
-            text = u"Temperature {temp:.2f}°C is changing at an unsafe rate of {speed:.2f}°C/s!".format(temp=temperature, speed=speed)
+            text = "Temperature {temp:.2f}°C is changing at an unsafe rate of {speed:.2f}°C/s!".format(temp=temperature, speed=speed)
             logging.warning(text)
             # display messagebox warning, but only once per minute
             if time.time() - self._time_last_speed_warning > MIN_PERIOD_WARNING:

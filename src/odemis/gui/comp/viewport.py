@@ -414,7 +414,7 @@ class MicroscopeViewport(ViewPort):
             return
         hfw = self._view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
-        label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
+        label = "HFW: %s" % units.readable_str(hfw, "m", sig=3)
         self.bottom_legend.set_hfw_label(label)
 
     def UpdateZposLabel(self):
@@ -423,14 +423,14 @@ class MicroscopeViewport(ViewPort):
             if self._tab_data_model.zPos.range == (0, 0):
                 label = None
             else:
-                label = u"Z Pos.: %s" % units.readable_str(self._tab_data_model.zPos.value, unit=self._tab_data_model.zPos.unit, sig=3)
+                label = "Z Pos.: %s" % units.readable_str(self._tab_data_model.zPos.value, unit=self._tab_data_model.zPos.unit, sig=3)
 
             self.bottom_legend.set_zPos_label(label)
 
     def UpdateMagnification(self):
         # Total magnification
         mag = self._mpp_screen / self._view.mpp.value
-        label = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
+        label = "Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
 
         # Gather all different image mpp values
         mpps = set()
@@ -450,7 +450,7 @@ class MicroscopeViewport(ViewPort):
             mpp_im = mpps.pop()
             # mag_im = self._mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
             mag_dig = mpp_im / self._view.mpp.value
-            label += u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
+            label += " (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
 
         if self.bottom_legend:
             self.bottom_legend.set_mag_label(label)
@@ -459,7 +459,7 @@ class MicroscopeViewport(ViewPort):
         if self.bottom_legend:
             x = units.round_significant(pos["x"], 3)
             y = units.round_significant(pos["y"], 3)
-            label = u"Stage Position x: %s y: %s" % (units.readable_str(x), units.readable_str(y))
+            label = "Stage Position x: %s y: %s" % (units.readable_str(x), units.readable_str(y))
             self.bottom_legend.set_stage_pos_label(label)
 
     ################################################

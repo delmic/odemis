@@ -272,11 +272,11 @@ class AlmostEqualTestCase(unittest.TestCase):
 class StrEscapeTestCase(unittest.TestCase):
 # TODO:unit tests with line = b"\00a\xffb\nc\x82d'e"
 # line = b"\x00a\xffb\nc\xc2\x82d'e\xe6\x88\x91\xea\x8d\x88"
-# ul = u"\x00aÿb\nc\x82d'e我\ua348"
+# ul = "\x00aÿb\nc\x82d'e我\ua348"
 # ul = line.decode("latin1")
     BYTES = b"\x00a\xffb\nc\xc2\x82d'e\xe6\x88\x91\xea\x8d\x88"
     BYTES_ESC = r"\x00a\xffb\nc\xc2\x82d'e\xe6\x88\x91\xea\x8d\x88"
-    UNICODE = u"\x00aÿb\nc\x82d'e我\ua348"
+    UNICODE = "\x00aÿb\nc\x82d'e我\ua348"
     UNICODE_ESC = r"\x00a\xffb\nc\x82d'e\u6211\ua348"
 
     def test_fixed(self):
@@ -290,7 +290,7 @@ class StrEscapeTestCase(unittest.TestCase):
         s_esc = to_str_escape(b"")
         self.assertEqual(s_esc, "")
 
-        s_esc = to_str_escape(u"")
+        s_esc = to_str_escape("")
         self.assertEqual(s_esc, "")
 
     def test_long(self):

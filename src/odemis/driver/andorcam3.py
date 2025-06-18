@@ -279,11 +279,11 @@ class AndorCam3(model.DigitalCamera):
 
         # TODO: set different methods implementations based on the binning support
         # Find out which type of binning control to use
-        if (self.isImplemented(u"AOIHBin") and self.isWritable(u"AOIHBin") and
-            self.isImplemented(u"AOIVBin") and self.isWritable(u"AOIVBin")):
+        if (self.isImplemented("AOIHBin") and self.isWritable("AOIHBin") and
+            self.isImplemented("AOIVBin") and self.isWritable("AOIVBin")):
             logging.debug("Using full binning control")
             self._binmtd = FULL_BINNING
-        elif self.isImplemented(u"AOIBinning"):
+        elif self.isImplemented("AOIBinning"):
             logging.debug("Using fixed binning control")
             self._binmtd = FIXED_BINNING
         else:
@@ -295,12 +295,12 @@ class AndorCam3(model.DigitalCamera):
 
         # put the detector pixelSize
         try:
-            psize = (self.GetFloat(u"PixelWidth") * 1e-6,
-                     self.GetFloat(u"PixelHeight") * 1e-6)
+            psize = (self.GetFloat("PixelWidth") * 1e-6,
+                     self.GetFloat("PixelHeight") * 1e-6)
         except ATError:
             # SDK 3.5 only support this info for the SimCam ?!
             psize = (6.5e-6, 6.5e-6) # Neo and Zyla both have this size
-            logging.warning(u"Unknown pixel size, assuming %g µm", psize[0] * 1e6)
+            logging.warning("Unknown pixel size, assuming %g µm", psize[0] * 1e6)
 
         self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser(psize),
                                                  unit="m", readonly=True)
@@ -310,13 +310,13 @@ class AndorCam3(model.DigitalCamera):
         try:
             tmp_rng = self._getTargetTemperatureRange()
             self.targetTemperature = model.FloatContinuous(tmp_rng[0], tmp_rng,
-                                   unit=u"°C", setter=self.setTargetTemperature)
+                                   unit="°C", setter=self.setTargetTemperature)
             self.setTargetTemperature(self.targetTemperature.value)
         except NotImplementedError:
             pass
 
-        if (self.isImplemented(u"FanSpeed") and
-            len(self.GetEnumStringImplemented(u"FanSpeed")) > 1):
+        if (self.isImplemented("FanSpeed") and
+            len(self.GetEnumStringImplemented("FanSpeed")) > 1):
             # max speed
             self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
                                                   setter=self.setFanSpeed) # ratio to max speed
@@ -327,7 +327,7 @@ class AndorCam3(model.DigitalCamera):
         self._translation = (0, 0)
         self._binning = (1, 1) # used by resolutionFitter()
         self._resolution = max_res_hw
-        if self.isImplemented(u"AOIWidth") and self.isWritable(u"AOIWidth"):
+        if self.isImplemented("AOIWidth") and self.isWritable("AOIWidth"):
             min_res = (1, 1)
         else:
             if max_res != sensor_res_user:
@@ -345,7 +345,7 @@ class AndorCam3(model.DigitalCamera):
                                           setter=self._setBinning)
 
         # translation is automatically adjusted to fit whenever res/bin change
-        if self.isImplemented(u"FullAOIControl") and self.GetBool(u"FullAOIControl"):
+        if self.isImplemented("FullAOIControl") and self.GetBool("FullAOIControl"):
             # Support ROI anywhere => provide translation
             hlf_shape = (self._sensor_res[0] // 2 - 1, self._sensor_res[1] // 2 - 1)
             uh_shape = self._transposeSizeToUser(hlf_shape)
@@ -357,7 +357,7 @@ class AndorCam3(model.DigitalCamera):
             # to keep it simple, provide a translation VA but fixed to 0,0
             self.translation = model.VigilantAttribute((0, 0), unit="px",
                                                        readonly=True)
-        range_exp = list(self.GetFloatRanges(u"ExposureTime"))
+        range_exp = list(self.GetFloatRanges("ExposureTime"))
         range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0
         self._exp_time = max(range_exp[0], min(0.1, range_exp[1]))
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp,
@@ -379,8 +379,8 @@ class AndorCam3(model.DigitalCamera):
         # TODO: add a frameRate VA to allow reduce the speed between acquisitions?
         # cf FrameRate
 
-        current_temp = self.GetFloat(u"SensorTemperature")
-        self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
+        current_temp = self.GetFloat("SensorTemperature")
+        self.temperature = model.FloatVA(current_temp, unit="°C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(5, self.updateTemperatureVA,
                                               "AndorCam3 temperature update")
@@ -395,7 +395,7 @@ class AndorCam3(model.DigitalCamera):
         self._ready_for_acq_start = False
         self._acq_sync_lock = threading.Lock()
 
-        if self.isImplemented(u"SoftwareTrigger"):
+        if self.isImplemented("SoftwareTrigger"):
             # Convenience event for the user to connect and fire
             # Also a way to indicate to the DataFlow it's synchronisable
             self.softwareTrigger = model.Event()
@@ -416,26 +416,26 @@ class AndorCam3(model.DigitalCamera):
         # Another advantage of global shutter allows to simplify if we need to
         # connect exposure to light.
 
-        if self.isImplemented(u"SpuriousNoiseFilter"):
-            self.SetBool(u"SpuriousNoiseFilter", True)
+        if self.isImplemented("SpuriousNoiseFilter"):
+            self.SetBool("SpuriousNoiseFilter", True)
             self._metadata['Filter'] = "Spurious noise filter" # FIXME tag?
 
-        if self.isImplemented(u"Overlap"):
+        if self.isImplemented("Overlap"):
             # No overlap, as it can introduce additional noise, and we don't need
             # the speed.
-            self.SetBool(u"Overlap", False)
+            self.SetBool("Overlap", False)
 
         try:
-            self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
+            self.SetEnumString("ElectronicShutteringMode", "Rolling")
         except ATError:
             logging.info("Failed to set shutter mode to rolling")
 
-        if self.isImplemented(u"MetadataEnable"):
+        if self.isImplemented("MetadataEnable"):
             # Ask for timestamp, to track precisely the acquisition time
-            self.SetBool(u"MetadataEnable", True)
-            self.SetBool(u"MetadataTimestamp", True)
-            self._clock_factor = 1 / self.GetInt(u"TimestampClockFrequency")
-            self.Command(u"TimestampClockReset")
+            self.SetBool("MetadataEnable", True)
+            self.SetBool("MetadataTimestamp", True)
+            self._clock_factor = 1 / self.GetInt("TimestampClockFrequency")
+            self.Command("TimestampClockReset")
             self._clock_shift = time.time()
 
     def _reset_va_values(self):
@@ -501,10 +501,10 @@ class AndorCam3(model.DigitalCamera):
         Raise an HwError if the device is not connected over the right interface
         Typically, this happens if a USB3 camera is connected over USB2.
         """
-        if not self.isImplemented(u"InterfaceType"):
+        if not self.isImplemented("InterfaceType"):
             return
 
-        itf = self.GetString(u"InterfaceType")
+        itf = self.GetString("InterfaceType")
         if itf == "USB3":
             # The Zyla must be connected over USB3, but the driver will report that
             # everything is fine even if it's connected over USB2... until
@@ -517,7 +517,7 @@ class AndorCam3(model.DigitalCamera):
             # However, for the Zyla, we cannot use UsbProductId or UsbDeviceId, so
             # we just use the serial number (which is also in ./serial)
             try:
-                sn = self.GetString(u"SerialNumber")
+                sn = self.GetString("SerialNumber")
                 sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
                 for p in sn_paths:
                     try:
@@ -608,7 +608,7 @@ class AndorCam3(model.DigitalCamera):
                     self.handle = None
 
             # Normally, the camera should be back now
-            if not self.GetBool(u"CameraPresent"):
+            if not self.GetBool("CameraPresent"):
                 logging.warning("Camera just got opened, but it's not reported present")
 
             # Reinitialise
@@ -829,7 +829,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return (2-tuple int): size of the sensor (width, height) in pixel
         """
-        return self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight")
+        return self.GetInt("SensorWidth"), self.GetInt("SensorHeight")
 
     def _getTargetTemperatureRange(self):
         """
@@ -842,16 +842,16 @@ class AndorCam3(model.DigitalCamera):
         # On water-cooled Zylas, typically, there is only one or two temperatures supported,
         # but we also map disabling the cooling to 25°C, so that's a third value.
         try:
-            if self.isImplemented(u"TemperatureControl"):
-                tmps_str = self.GetEnumStringImplemented(u"TemperatureControl")
+            if self.isImplemented("TemperatureControl"):
+                tmps_str = self.GetEnumStringImplemented("TemperatureControl")
                 tmps = [float(t) for t in tmps_str if tmps_str is not None]
                 if max(tmps) >= TEMP_NO_COOLING:
                     logging.warning("Largest temperature (%f°C) is hotter than cooling disable (%f°C)",
                                     max(tmps), TEMP_NO_COOLING)
                 # TODO: just return the set of temperatures?
                 return min(tmps), TEMP_NO_COOLING
-            elif self.isWritable(u"TargetSensorTemperature"):
-                return self.GetFloatRanges(u"TargetSensorTemperature")
+            elif self.isWritable("TargetSensorTemperature"):
+                return self.GetFloatRanges("TargetSensorTemperature")
             else:
                 raise NotImplementedError("Changing temperature not supported")
         except (ValueError, ATError):
@@ -869,35 +869,35 @@ class AndorCam3(model.DigitalCamera):
         assert -300 <= temp <= 100
         # TODO: it seems to not always work if the camera is acquiring,
         # => either fail is a better way or block until the camera is not acquiring
-        if self.isImplemented(u"TemperatureControl"):
-            tmps_str = self.GetEnumStringImplemented(u"TemperatureControl")
+        if self.isImplemented("TemperatureControl"):
+            tmps_str = self.GetEnumStringImplemented("TemperatureControl")
             tmps = [float(t) if t is not None else 1e100 for t in tmps_str]
-            if self.isWritable(u"TemperatureControl"):
+            if self.isWritable("TemperatureControl"):
                 logging.debug("Matching %f°C among: %s + %f", temp, tmps_str, TEMP_NO_COOLING)
                 tmp_idx = util.index_closest(temp, tmps + [TEMP_NO_COOLING])
                 if tmp_idx == len(tmps):
                     temp = TEMP_NO_COOLING
                 else:
-                    self.SetEnumIndex(u"TemperatureControl", tmp_idx)
+                    self.SetEnumIndex("TemperatureControl", tmp_idx)
                     temp = tmps[tmp_idx]
             else:
                 if not util.almost_equal(temp, TEMP_NO_COOLING):
                     # Just read-back the current (fixed) temperature
-                    temp = float(self.GetEnumStringByIndex(u"TemperatureControl", self.GetEnumIndex(u"TemperatureControl")))
+                    temp = float(self.GetEnumStringByIndex("TemperatureControl", self.GetEnumIndex("TemperatureControl")))
 
                 logging.warning("Temperature cannot be controlled, using %g °C", temp)
         else:  # Fallback to old (deprecated) property
-            if self.isWritable(u"TargetSensorTemperature"):
-                self.SetFloat(u"TargetSensorTemperature", temp)
+            if self.isWritable("TargetSensorTemperature"):
+                self.SetFloat("TargetSensorTemperature", temp)
             else:
                 if not util.almost_equal(temp, TEMP_NO_COOLING):
-                    temp = self.GetFloat(u"TargetSensorTemperature")
+                    temp = self.GetFloat("TargetSensorTemperature")
                 logging.warning("Temperature cannot be controlled, using %g °C", temp)
 
         if util.almost_equal(temp, TEMP_NO_COOLING):
-            self.SetBool(u"SensorCooling", False)
+            self.SetBool("SensorCooling", False)
         else:
-            self.SetBool(u"SensorCooling", True)
+            self.SetBool("SensorCooling", True)
 
         return temp
 
@@ -911,16 +911,16 @@ class AndorCam3(model.DigitalCamera):
             return
 
         try:
-            temp = self.GetFloat(u"SensorTemperature")
+            temp = self.GetFloat("SensorTemperature")
             self._metadata[model.MD_SENSOR_TEMP] = temp
             self.temperature._set_value(temp, force_write=True)
 
-            if self.isImplemented(u"TemperatureStatus"):
-                status = self.GetEnumStringByIndex(u"TemperatureStatus", self.GetEnumIndex(u"TemperatureStatus"))
+            if self.isImplemented("TemperatureStatus"):
+                status = self.GetEnumStringByIndex("TemperatureStatus", self.GetEnumIndex("TemperatureStatus"))
                 status_str = " (%s)" % (status,)
             else:
                 status_str = ""
-            logging.debug(u"Temperature of %s is %.2f°C%s", self.name, temp, status_str)
+            logging.debug("Temperature of %s is %.2f°C%s", self.name, temp, status_str)
         except ATError as exp:
             # This is a known error if the camera is turned off or disconnected.
             # We don't do anything, but at least we can hint the user something
@@ -938,25 +938,25 @@ class AndorCam3(model.DigitalCamera):
         """
         assert 0 <= speed <= 1
 
-        if not self.isImplemented(u"FanSpeed"):
+        if not self.isImplemented("FanSpeed"):
             return 0
 
         # Let's assume it's linearly distributed in speed... at least it's true
         # for the Neo and the SimCam. Looks like this for Neo:
         # [u"Off", u"Low", u"On"]
-        values = self.GetEnumStringImplemented(u"FanSpeed")
+        values = self.GetEnumStringImplemented("FanSpeed")
         if len(values) <= 1:
             return 0
         speed_index = int(round(speed * (len(values) - 1)))
-        self.SetEnumString(u"FanSpeed", values[speed_index])
+        self.SetEnumString("FanSpeed", values[speed_index])
         return speed_index / (len(values) - 1)
 
     def getReadoutRates(self):
         """
         Returns (list of 0<floats): possible readout rates in Hz
         """
-        rates_str = self.GetEnumStringImplemented(u"PixelReadoutRate")
-        rates = [int(r.rstrip(u" MHz")) * 1e6 for r in rates_str if r is not None]
+        rates_str = self.GetEnumStringImplemented("PixelReadoutRate")
+        rates = [int(r.rstrip(" MHz")) * 1e6 for r in rates_str if r is not None]
         return rates
 
     def _applyReadoutRate(self, frequency):
@@ -967,33 +967,33 @@ class AndorCam3(model.DigitalCamera):
         """
         assert(0 <= frequency)
         # returns strings like u"550 MHz" (and None if not implemented)
-        rates_str = self.GetEnumStringImplemented(u"PixelReadoutRate")
+        rates_str = self.GetEnumStringImplemented("PixelReadoutRate")
         for i in range(len(rates_str)):
-            if not self.isEnumIndexAvailable(u"PixelReadoutRate", i):
+            if not self.isEnumIndexAvailable("PixelReadoutRate", i):
                 logging.debug("ReadoutRate %s not available", rates_str[i])
                 rates_str[i] = None
-        rates = [int(r.rstrip(u" MHz")) if r else 1e100 for r in rates_str]
+        rates = [int(r.rstrip(" MHz")) if r else 1e100 for r in rates_str]
         idx_rate = util.index_closest(frequency / 1e6, rates)
-        self.SetEnumIndex(u"PixelReadoutRate", idx_rate)
+        self.SetEnumIndex("PixelReadoutRate", idx_rate)
         return rates[idx_rate] * 1e6
 
     def getModelName(self):
-        model_name = "Andor " + self.GetString(u"CameraModel")
+        model_name = "Andor " + self.GetString("CameraModel")
         try:
             # TODO: any use?
-            logging.debug("Camera name is %s", self.GetString(u"CameraName"))
+            logging.debug("Camera name is %s", self.GetString("CameraName"))
         except ATError:
             pass # not supported on the SimCam :-(
 
         try:
-            serial = self.GetString(u"SerialNumber")
+            serial = self.GetString("SerialNumber")
             serial_str = " (s/n: %s)" % serial
         except ATError:
             serial_str = ""
 
         try:
             # seems to be a pretty useless int indentifyin the framegrabber in the PC
-            cont = self.GetString(u"ControllerID")
+            cont = self.GetString("ControllerID")
             cont_str = " (controller: %s)" % cont
         except ATError:
             cont_str = ""
@@ -1004,7 +1004,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             # Doesn't work on the normal camera, need to access the "System"
             system = AndorCam3("System", "bus")
-            return system.GetString(u"SoftwareVersion")
+            return system.GetString("SoftwareVersion")
         except ATError:
             return "unknown"
 
@@ -1013,7 +1013,7 @@ class AndorCam3(model.DigitalCamera):
         returns a simplified hardware version information
         """
         try:
-            firmware = self.GetString(u"FirmwareVersion")
+            firmware = self.GetString("FirmwareVersion")
             return "firmware: %s" % firmware
         except ATError:
             # Simcam has no firmware
@@ -1024,11 +1024,11 @@ class AndorCam3(model.DigitalCamera):
         returns (2-tuple int): maximum binning value (horizontal and vertical)
         """
         if self._binmtd == FULL_BINNING:
-            return self.GetIntMax(u"AOIHBin"), self.GetIntMax(u"AOIVBin")
+            return self.GetIntMax("AOIHBin"), self.GetIntMax("AOIVBin")
         elif self._binmtd == FIXED_BINNING:
             # Typically, the Neo only support this fixed set of binning
             binning = [1, 1]
-            binnings = self.GetEnumStringImplemented(u"AOIBinning")
+            binnings = self.GetEnumStringImplemented("AOIBinning")
             for b in binnings:
                 if b is None:
                     continue
@@ -1090,18 +1090,18 @@ class AndorCam3(model.DigitalCamera):
             # hoping the future driver/hardware versions will not be too
             # different from the test Zyla with SDK 3.11
             # Width: min is fixed, max is dependent on binning
-            self.SetInt(u"AOIHBin", 1)
-            wmin, wmax = self.GetIntRanges(u"AOIWidth")
-            for b in range(1, self.GetIntMax(u"AOIHBin") + 1):
+            self.SetInt("AOIHBin", 1)
+            wmin, wmax = self.GetIntRanges("AOIWidth")
+            for b in range(1, self.GetIntMax("AOIHBin") + 1):
                 rrng_width[b] = (wmin, wmax // b)
 #                 self.SetInt(u"AOIHBin", b)
 #                 if rrng_width[b] != self.GetIntRanges(u"AOIWidth"):
 #                     logging.debug("width allowed == %s instead of %s",
 #                                   self.GetIntRanges(u"AOIWidth"), rrng_width[b])
             # Height: min and max are dependent on binning
-            self.SetInt(u"AOIVBin", 1)
-            hmin, hmax = self.GetIntRanges(u"AOIHeight")
-            for b in range(1, self.GetIntMax(u"AOIVBin") + 1):
+            self.SetInt("AOIVBin", 1)
+            hmin, hmax = self.GetIntRanges("AOIHeight")
+            for b in range(1, self.GetIntMax("AOIVBin") + 1):
                 rrng_height[b] = (max(1, hmin // b), hmax // b)
 #                 self.SetInt(u"AOIVBin", b)
 #                 if rrng_height[b] != self.GetIntRanges(u"AOIHeight"):
@@ -1109,20 +1109,20 @@ class AndorCam3(model.DigitalCamera):
 #                                   self.GetIntRanges(u"AOIHeight"), rrng_height[b])
         if self._binmtd == FIXED_BINNING:
             # Try each of the binnings, so we know for sure what the driver likes
-            binnings = self.GetEnumStringImplemented(u"AOIBinning")
+            binnings = self.GetEnumStringImplemented("AOIBinning")
             for bs in binnings:
                 if bs is None:
                     continue
                 m = re.match("([0-9]+)x([0-9]+)", bs)
                 b = int(m.group(1)), int(m.group(2))
-                self.SetEnumString(u"AOIBinning", bs)
+                self.SetEnumString("AOIBinning", bs)
                 # Note: Before SDKv3.5, 32 bits had a problem with AOI < 4096 (kernel oops)
-                rrng_width[b[0]] = self.GetIntRanges(u"AOIWidth")
-                rrng_height[b[1]] = self.GetIntRanges(u"AOIHeight")
+                rrng_width[b[0]] = self.GetIntRanges("AOIWidth")
+                rrng_height[b[1]] = self.GetIntRanges("AOIHeight")
         else:
             # no binning -> 1x1
-            rrng_width[1] = self.GetIntRanges(u"AOIWidth")
-            rrng_height[1] = self.GetIntRanges(u"AOIHeight")
+            rrng_width[1] = self.GetIntRanges("AOIWidth")
+            rrng_height[1] = self.GetIntRanges("AOIHeight")
 
         # Clip based on max_res
         for b, (mn, mx) in rrng_width.items():
@@ -1219,20 +1219,20 @@ class AndorCam3(model.DigitalCamera):
         """
         # Nicely the API is different depending on cameras...
         if self._binmtd == FULL_BINNING:
-            self.SetInt(u"AOIHBin", binning[0])
-            self.SetInt(u"AOIVBin", binning[1])
+            self.SetInt("AOIHBin", binning[0])
+            self.SetInt("AOIVBin", binning[1])
             ob = tuple(binning)
-            binning = self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin")
+            binning = self.GetInt("AOIHBin"), self.GetInt("AOIVBin")
             if ob != binning:
                 logging.warning("Camera picked binning %s instead of requested %s",
                                 binning, ob)
         elif self._binmtd == FIXED_BINNING:
             # we assume it's correct
-            binning_str = u"%dx%d" % binning
-            self.SetEnumString(u"AOIBinning", binning_str)
+            binning_str = "%dx%d" % binning
+            self.SetEnumString("AOIBinning", binning_str)
 
-            bin_idx = self.GetEnumIndex(u"AOIBinning")
-            logging.debug("Set binning to %s", self.GetEnumStringByIndex(u"AOIBinning", bin_idx))
+            bin_idx = self.GetEnumIndex("AOIBinning")
+            logging.debug("Set binning to %s", self.GetEnumStringByIndex("AOIBinning", bin_idx))
         else:
             if tuple(binning) != (1, 1):
                 raise NotImplementedError("Camera doesn't support binning")
@@ -1252,8 +1252,8 @@ class AndorCam3(model.DigitalCamera):
 
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
-        if (not self.isImplemented(u"AOIWidth") or
-            not self.isWritable(u"AOIWidth")):
+        if (not self.isImplemented("AOIWidth") or
+            not self.isWritable("AOIWidth")):
             max_size = (int(sensor_res[0] // self._binning[0]),
                         int(sensor_res[1] // self._binning[1]))
             if size != max_size:
@@ -1275,10 +1275,10 @@ class AndorCam3(model.DigitalCamera):
               (sensor_res[1] - size[1] * self._binning[1]) // 2 + 1 + trans[1])
 
         # order matters
-        self.SetInt(u"AOIWidth", size[0])
-        self.SetInt(u"AOILeft", lt[0])
-        self.SetInt(u"AOIHeight", size[1])
-        self.SetInt(u"AOITop", lt[1])
+        self.SetInt("AOIWidth", size[0])
+        self.SetInt("AOILeft", lt[0])
+        self.SetInt("AOIHeight", size[1])
+        self.SetInt("AOITop", lt[1])
 
     def _applyExposureTime(self, exp):
         """
@@ -1286,13 +1286,13 @@ class AndorCam3(model.DigitalCamera):
         exp (0<float): exposure time in seconds
         """
         assert(0.0 < exp)
-        range_exp = list(self.GetFloatRanges(u"ExposureTime"))
+        range_exp = list(self.GetFloatRanges("ExposureTime"))
         if not range_exp[0] <= exp <= range_exp[1]:
             logging.warning("Exposure time not within ranges %s", range_exp)
             exp = max(range_exp[0], min(exp, range_exp[1]))
 
-        self.SetFloat(u"ExposureTime", exp)
-        act_exp = self.GetFloat(u"ExposureTime")
+        self.SetFloat("ExposureTime", exp)
+        act_exp = self.GetFloat("ExposureTime")
         if act_exp != exp:
             logging.debug("adapted exposure time from %f to %f", exp, act_exp)
         return act_exp
@@ -1331,7 +1331,7 @@ class AndorCam3(model.DigitalCamera):
             # "11-bit (high speed)" -> 20x
             # "12-bit (low noise)" -> 1x
             # "16-bit (high dynamic range)" -> 1.1x
-            av_gains = self.GetEnumStringImplemented(u"SimplePreAmpGainControl")
+            av_gains = self.GetEnumStringImplemented("SimplePreAmpGainControl")
             logging.debug("Available gains: %s", av_gains)
             for idx, gs in enumerate(av_gains):
                 if gs is None:
@@ -1355,9 +1355,9 @@ class AndorCam3(model.DigitalCamera):
         Note: _getGains() should have been called at least once, to ensure the
          _gain_to_idx dict is set.
         """
-        if self.isImplemented(u"SimplePreAmpGainControl"):
+        if self.isImplemented("SimplePreAmpGainControl"):
             idx = self._gain_to_idx[gain]
-            self.SetEnumIndex(u"SimplePreAmpGainControl", idx)
+            self.SetEnumIndex("SimplePreAmpGainControl", idx)
 
         self._metadata[model.MD_GAIN] = gain
 
@@ -1376,32 +1376,32 @@ class AndorCam3(model.DigitalCamera):
             # always a large vertical binning. Detect by binning > 8.
             if self._binning[0] > 8 or self._binning[1] > 8:
                 try:
-                    self.SetEnumString(u"PixelEncoding", u"Mono32")
+                    self.SetEnumString("PixelEncoding", "Mono32")
                     self._metadata[model.MD_BPP] = 32
                     # Note: BitDepth is incorrect in this case (with SDK 3.11)
                     # TODO: or needs to be multiplied by log(binning, 2)?
                     logging.debug("Using 32 bits data")
                     return 4
                 except ATError:
-                    self.SetEnumString(u"PixelEncoding", u"Mono16")
+                    self.SetEnumString("PixelEncoding", "Mono16")
                     self._metadata[model.MD_BPP] = 16
             else:
-                self.SetEnumString(u"PixelEncoding", u"Mono16")
+                self.SetEnumString("PixelEncoding", "Mono16")
                 self._metadata[model.MD_BPP] = 16
         except ATError:
             # Fallback to 12 bits (represented on 16 bits)
             try:
-                self.SetEnumString(u"PixelEncoding", u"Mono12")
+                self.SetEnumString("PixelEncoding", "Mono12")
                 self._metadata[model.MD_BPP] = 12
             except ATError:
                 # TODO: actually we don't support reading this back, itemsize = 1.5
-                self.SetEnumString(u"PixelEncoding", u"Mono12Coded")
+                self.SetEnumString("PixelEncoding", "Mono12Coded")
                 self._metadata[model.MD_BPP] = 12
 
         # If the camera can be more precise on BPP, use it (eg: 11 bits)
-        if self.isImplemented(u"BitDepth"):
-            i = self.GetEnumIndex(u"BitDepth")
-            bpp_str = self.GetEnumStringByIndex(u"BitDepth", i)
+        if self.isImplemented("BitDepth"):
+            i = self.GetEnumIndex("BitDepth")
+            bpp_str = self.GetEnumStringByIndex("BitDepth", i)
             m = re.match("([0-9]+)", bpp_str) # looks like "16 bit"
             self._metadata[model.MD_BPP] = int(m.group(1))
 
@@ -1435,10 +1435,10 @@ class AndorCam3(model.DigitalCamera):
             # Software is much slower than Internal (0.05 instead of 0.015 s)
             # so only use when synchronised on an Event
             if synchronised:
-                self.SetEnumString(u"TriggerMode", u"Software")
+                self.SetEnumString("TriggerMode", "Software")
                 self._ready_for_acq_start = False
             else:
-                self.SetEnumString(u"TriggerMode", u"Internal")
+                self.SetEnumString("TriggerMode", "Internal")
 
         gain = self.gain.value
         if prev_gain != gain:
@@ -1483,17 +1483,17 @@ class AndorCam3(model.DigitalCamera):
         itemsize = self._findBestBitDepth()
 
         # Update to framerate to maximum possible, to get the best from the HW
-        fr_rng = self.GetFloatRanges(u"FrameRate")
-        self.SetFloat(u"FrameRate", fr_rng[1])
-        logging.debug("Framerate set to %g fps", self.GetFloat(u"FrameRate"))
+        fr_rng = self.GetFloatRanges("FrameRate")
+        self.SetFloat("FrameRate", fr_rng[1])
+        logging.debug("Framerate set to %g fps", self.GetFloat("FrameRate"))
 
         # Baseline depends on the other settings
         # Note: it seems that the noise is not really symmetrical, and with high
         # binning, the "black" tend to be quite below the baseline.
-        if self.isImplemented(u"BaselineLevel"):
-            self._metadata[model.MD_BASELINE] = self.GetInt(u"BaselineLevel")
-        elif self.isImplemented(u"Baseline"): # Renamed in SDK 3.8
-            self._metadata[model.MD_BASELINE] = self.GetInt(u"Baseline")
+        if self.isImplemented("BaselineLevel"):
+            self._metadata[model.MD_BASELINE] = self.GetInt("BaselineLevel")
+        elif self.isImplemented("Baseline"): # Renamed in SDK 3.8
+            self._metadata[model.MD_BASELINE] = self.GetInt("Baseline")
 
         self._prev_settings = [self._binning, self._resolution, self._translation,
                                self._exp_time, readout_rate, gain, synchronised]
@@ -1505,7 +1505,7 @@ class AndorCam3(model.DigitalCamera):
         size (3 ints)
         returns a cbuffer of the right size for an image
         """
-        image_size = self.GetInt(u"ImageSizeBytes")
+        image_size = self.GetInt("ImageSizeBytes")
         # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
         if image_size < (size[0] * size[1] * size[2]):
             raise IOError("Expected image of %s (= %d bytes), but SDK expects only %d bytes" %
@@ -1534,10 +1534,10 @@ class AndorCam3(model.DigitalCamera):
 
         # actual size of a line in pixels
         try:
-            stride = self.GetInt(u"AOIStride") // itemsize
+            stride = self.GetInt("AOIStride") // itemsize
         except ATError:
             # SimCam doesn't support stride
-            stride = self.GetInt(u"AOIWidth")
+            stride = self.GetInt("AOIWidth")
 
         p = cast(cbuffer, POINTER(ityp))
         ndbuffer = numpy.ctypeslib.as_array(p, (size[1], stride))  # numpy shape is H, W
@@ -1551,7 +1551,7 @@ class AndorCam3(model.DigitalCamera):
         return (float or None): time in s contained in the metadata or None if
             not available
         """
-        if not self.isImplemented(u"MetadataEnable"):
+        if not self.isImplemented("MetadataEnable"):
             return None
         data_size = size[0] * size[1] * size[2]
 
@@ -1592,7 +1592,7 @@ class AndorCam3(model.DigitalCamera):
         self.acquisition_lock.acquire()
         try:
             logging.debug("Checking if camera is acquiring")
-            assert not self.GetBool(u"CameraAcquiring")
+            assert not self.GetBool("CameraAcquiring")
         except (ATError, HwError) as exp:
             if isinstance(exp, HwError) or exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
                 logging.warning("Camera seems not responding, will let acquisition thread try to reconnect")
@@ -1623,8 +1623,8 @@ class AndorCam3(model.DigitalCamera):
                 # need to stop acquisition to update settings
                 if need_reinit or self._need_update_settings():
                     try:
-                        if self.GetBool(u"CameraAcquiring"):
-                            self.Command(u"AcquisitionStop")
+                        if self.GetBool("CameraAcquiring"):
+                            self.Command("AcquisitionStop")
                             self.Flush()
                     except (ATError, HwError) as exp:
                         if isinstance(exp, HwError) or exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
@@ -1639,9 +1639,9 @@ class AndorCam3(model.DigitalCamera):
 
                     # We don't use the framecount feature as it's not always present, and
                     # easy to do in software.
-                    assert (self.isImplemented(u"CycleMode") and
-                            self.isWritable(u"CycleMode"))
-                    self.SetEnumString(u"CycleMode", u"Continuous")
+                    assert (self.isImplemented("CycleMode") and
+                            self.isWritable("CycleMode"))
+                    self.SetEnumString("CycleMode", "Continuous")
 
                     size, synchronised = self._update_settings()
                     phyt = self._getPhysTrans()
@@ -1653,8 +1653,8 @@ class AndorCam3(model.DigitalCamera):
                     else:
                         max_discard = 8
                     exposure_time = self._exp_time
-                    if self.isImplemented(u"ReadoutTime"):
-                        readout_time = self.GetFloat(u"ReadoutTime")
+                    if self.isImplemented("ReadoutTime"):
+                        readout_time = self.GetFloat("ReadoutTime")
                     else: # for SimCam
                         readout_time = size[0] * size[1] / self.readoutRate.value # s
 
@@ -1671,7 +1671,7 @@ class AndorCam3(model.DigitalCamera):
                         buffers.append(cbuffer)
 
                     # Acquire the images
-                    self.Command(u"AcquisitionStart")
+                    self.Command("AcquisitionStart")
                     need_reinit = False
 
                 # Acquire an image
@@ -1743,7 +1743,7 @@ class AndorCam3(model.DigitalCamera):
         finally:
             if self.handle: # In case it was terminated or failed to reconnect
                 try:
-                    self.Command(u"AcquisitionStop")
+                    self.Command("AcquisitionStop")
                 except ATError:
                     pass  # probably just complaining it was already stopped
                 try:
@@ -1846,7 +1846,7 @@ class AndorCam3(model.DigitalCamera):
             if self._late_events:
                 event_time = self._late_events.popleft()
                 logging.warning("starting acquisition late by %g s", time.time() - event_time)
-                self.Command(u"SoftwareTrigger")
+                self.Command("SoftwareTrigger")
                 return
             else:
                 self._ready_for_acq_start = True
@@ -1857,7 +1857,7 @@ class AndorCam3(model.DigitalCamera):
             while not self.acquire_must_stop.is_set():
                 if not self.data._sync_event: # not synchronized (anymore)?
                     logging.debug("starting acquisition")
-                    self.Command(u"SoftwareTrigger")
+                    self.Command("SoftwareTrigger")
                     return
                 # doesn't need to be very frequent, just not too long to delay
                 # cancelling the acquisition, and to check for the event frequently
@@ -1884,7 +1884,7 @@ class AndorCam3(model.DigitalCamera):
                 return
 
         logging.debug("starting sync acquisition")
-        self.Command(u"SoftwareTrigger")
+        self.Command("SoftwareTrigger")
         self._ready_for_acq_start = False
         self._got_event.set() # let the acquisition thread know it's starting
 
@@ -1934,7 +1934,7 @@ class AndorCam3(model.DigitalCamera):
                 # water-cooled cameras in case the user also stops the water-
                 # cooling after stopping Odemis. In such case, cooling down the
                 # sensor could result in over-heating of the camera.
-                self.SetBool(u"SensorCooling", False)
+                self.SetBool("SensorCooling", False)
             except ATError:
                 logging.info("Failed to disable the cooling", exc_info=True)
 
@@ -1954,7 +1954,7 @@ class AndorCam3(model.DigitalCamera):
         return (boolean): False if it detects any problem
         """
         try:
-            model = self.GetString(u"CameraModel")
+            model = self.GetString("CameraModel")
         except Exception as err:
             logging.warning("Failed to read camera model: %s", str(err))
             return False
@@ -1991,7 +1991,7 @@ class AndorCam3(model.DigitalCamera):
         return (set of 2-tuple): name (str), dict for initialisation (device number)
         """
         camera = AndorCam3("System", "bus")
-        dc = camera.GetInt(u"DeviceCount")
+        dc = camera.GetInt("DeviceCount")
         logging.debug("Found %d devices.", dc)
 
         # Trick: we reuse the same object to avoid init/del all the time

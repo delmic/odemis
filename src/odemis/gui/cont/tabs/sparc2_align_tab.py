@@ -2104,7 +2104,7 @@ class Sparc2AlignTab(Tab):
         txt_moi = units.readable_str(moi, sig=3)
         self._txt_moi.SetValue(txt_moi)
         # Convert spot intensity from ratio to %
-        self._txt_ss.SetValue(u"%.4f %%" % (ss * 100,))
+        self._txt_ss.SetValue("%.4f %%" % (ss * 100,))
 
     @call_in_wx_main
     def _onMirrorDimensions(self, _):

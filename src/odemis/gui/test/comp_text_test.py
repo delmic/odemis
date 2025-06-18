@@ -35,7 +35,7 @@ from odemis.gui.comp.text import (FloatTextCtrl, IntegerTextCtrl,
 test.goto_manual()
 test.set_log_level()
 
-TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
+TEST_LST = ["Aap", "nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
             "aaaaa", "aaaaaa", "aaaaaaa"]
 
@@ -66,7 +66,7 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
     def test_unit_float(self):
         test.goto_manual()
-        self.app.test_frame.unit_float.unit = u"☠"
+        self.app.test_frame.unit_float.unit = "☠"
 
         for acc in (None, 1, 2, 4, 8):
             self.app.test_frame.unit_float.accuracy = acc
@@ -139,7 +139,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.add_control(ctrl, label=ctrl.__class__.__name__, flags=wx.EXPAND | wx.ALL)
 
         self.assertEqual(ctrl.GetValue(), 123456789)
-        self.assertEqual(ctrl.get_value_str(), u"123.456789 Mm")
+        self.assertEqual(ctrl.get_value_str(), "123.456789 Mm")
 
         test.gui_loop(0.1)
 
@@ -158,7 +158,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 1000000)
-        self.assertEqual(ctrl.get_value_str(), u"1 Mm")
+        self.assertEqual(ctrl.get_value_str(), "1 Mm")
 
         ctrl.SetSelection(0, 20)
 
@@ -168,7 +168,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 44)
-        self.assertEqual(ctrl.get_value_str(), u"44 m")
+        self.assertEqual(ctrl.get_value_str(), "44 m")
 
     def test_px_int_txt_ctrl(self):
 
@@ -177,7 +177,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.add_control(ctrl, label="UnitIntegerCtrl px", flags=wx.EXPAND | wx.ALL)
 
         self.assertEqual(ctrl.GetValue(), 123456789)
-        self.assertEqual(ctrl.get_value_str(), u"123456789 px")
+        self.assertEqual(ctrl.get_value_str(), "123456789 px")
 
         test.gui_loop(0.1)
 
@@ -196,7 +196,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 1)
-        self.assertEqual(ctrl.get_value_str(), u"1 px")
+        self.assertEqual(ctrl.get_value_str(), "1 px")
 
         ctrl.SetSelection(0, 20)
 
@@ -206,7 +206,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 44)
-        self.assertEqual(ctrl.get_value_str(), u"44 px")
+        self.assertEqual(ctrl.get_value_str(), "44 px")
 
     def test_unit_float_txt_ctrl(self):
 
@@ -217,7 +217,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Test the initial value
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 123456789)
-        self.assertEqual(mctrl.get_value_str(), u"123.456789 Mm")
+        self.assertEqual(mctrl.get_value_str(), "123.456789 Mm")
 
         # Create simulator and focus the field
         sim = wx.UIActionSimulator()
@@ -234,7 +234,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
-        self.assertEqual(mctrl.get_value_str(), u"1 km")
+        self.assertEqual(mctrl.get_value_str(), "1 km")
 
         # Move the caret to the start of the field
         mctrl.SetSelection(0, 0)
@@ -245,7 +245,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
-        self.assertEqual(mctrl.get_value_str(), u"1 km")
+        self.assertEqual(mctrl.get_value_str(), "1 km")
 
         # Move the caret to the start of the field
         mctrl.SetSelection(0, 0)
@@ -257,7 +257,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
-        self.assertEqual(mctrl.get_value_str(), u"1 km")
+        self.assertEqual(mctrl.get_value_str(), "1 km")
 
         # Add 2nd control
 
@@ -274,7 +274,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
         self.assertEqual(wctrl.GetValue(), 44e-9)
-        self.assertEqual(wctrl.get_value_str(), u"44 nW")
+        self.assertEqual(wctrl.get_value_str(), "44 nW")
 
         test.gui_loop(0.1)
 

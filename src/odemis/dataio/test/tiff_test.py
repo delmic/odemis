@@ -46,7 +46,7 @@ from PIL import Image
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = u"test" + tiff.EXTENSIONS[0]
+FILENAME = "test" + tiff.EXTENSIONS[0]
 class TestTiffIO(unittest.TestCase):
 
     def tearDown(self):
@@ -88,7 +88,7 @@ class TestTiffIO(unittest.TestCase):
         # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
         data[white[::-1]] = 124
 
-        fn = u"𝔸𝔹ℂ" + FILENAME
+        fn = "𝔸𝔹ℂ" + FILENAME
         # export
         tiff.export(fn, data)
 
@@ -212,8 +212,8 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: u"tÉst", # tiff doesn't support É (but XML does)
+                    model.MD_HW_NAME: "", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst", # tiff doesn't support É (but XML does)
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -363,8 +363,8 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_EXP_TIME: 1.2, #s
                     },
                     {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: u"tÉst", # tiff doesn't support É (but XML does)
+                    model.MD_HW_NAME: "", # check empty unicode strings
+                    model.MD_DESCRIPTION: "tÉst", # tiff doesn't support É (but XML does)
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -415,7 +415,7 @@ class TestTiffIO(unittest.TestCase):
         size = (512, 256, 1)
         dtype = numpy.dtype("uint64")
         # use list instead of tuple for binning because json converts tuples to lists anyway
-        extra_md = {"Camera" : {'binning' : (0, 0)}, u"¤³ß": {'</Image>': '</Image>'},
+        extra_md = {"Camera" : {'binning' : (0, 0)}, "¤³ß": {'</Image>': '</Image>'},
                     "Fake component": ("parameter", None)}
         exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
 
@@ -568,7 +568,7 @@ class TestTiffIO(unittest.TestCase):
             cot.append((cot[0][0] + i, i * 1e-12))
 
         # use list instead of tuple for binning because json converts tuples to lists anyway
-        extra_md = {"Camera" : {'binning' : [0, 0]}, u"¤³ß": {'</Image>': '</Image>'},
+        extra_md = {"Camera" : {'binning' : [0, 0]}, "¤³ß": {'</Image>': '</Image>'},
                     "Fake component": ("parameter", None)}
         exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
 

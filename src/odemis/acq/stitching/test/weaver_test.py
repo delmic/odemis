@@ -66,7 +66,7 @@ class WeaverBaseTest:
         img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
         md = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -96,7 +96,7 @@ class WeaverBaseTest:
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            model.MD_DESCRIPTION: u"test sem",
+            model.MD_DESCRIPTION: "test sem",
             model.MD_ACQ_DATE: time.time(),
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
             model.MD_POS: (10e-3, 30e-3),  # m
@@ -163,7 +163,7 @@ class WeaverBaseTest:
 
         md0 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -176,7 +176,7 @@ class WeaverBaseTest:
 
         md1 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -340,7 +340,7 @@ class TestCollageWeaver(WeaverBaseTest, unittest.TestCase):
 
         md0 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -353,7 +353,7 @@ class TestCollageWeaver(WeaverBaseTest, unittest.TestCase):
 
         md1 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -388,7 +388,7 @@ class TestMeanWeaver(WeaverBaseTest, unittest.TestCase):
 
         md0 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -401,7 +401,7 @@ class TestMeanWeaver(WeaverBaseTest, unittest.TestCase):
 
         md1 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -462,7 +462,7 @@ class TestCollageWeaverReverse(WeaverBaseTest, unittest.TestCase):
 
         md0 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -475,7 +475,7 @@ class TestCollageWeaverReverse(WeaverBaseTest, unittest.TestCase):
 
         md1 = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
+            model.MD_DESCRIPTION: "test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px

@@ -354,7 +354,7 @@ class AcquisitionDialog(xrcfr_acq):
         except KeyError:
             # should not happen with the current preset_no_change
             logging.exception("Couldn't match any preset")
-            preset_name = u"Custom"
+            preset_name = "Custom"
 
         wx.CallAfter(self.cmb_presets.SetValue, preset_name)
 

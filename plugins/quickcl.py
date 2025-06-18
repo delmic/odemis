@@ -152,7 +152,7 @@ CLStream.register(LiveCLStream)
 class QuickCLPlugin(Plugin):
     name = "Quick CL"
     __version__ = "1.1"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed

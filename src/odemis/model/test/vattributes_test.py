@@ -77,12 +77,12 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertIn("IntVA", pretty_str)
         self.assertIn(str(prop.value), pretty_str)
 
-        prop = model.ListVA([2, 3], unit=u"µm")
+        prop = model.ListVA([2, 3], unit="µm")
         pretty_str = str(prop)
         self.assertIn("ListVA", pretty_str)
         self.assertIn(str(prop.value), pretty_str)
 
-        prop = model.FloatContinuous(2.3, unit=u"µm", range=(1.0, 9))
+        prop = model.FloatContinuous(2.3, unit="µm", range=(1.0, 9))
         pretty_str = str(prop)
         self.assertIn("FloatContinuous", pretty_str)
         self.assertIn(str(prop.value), pretty_str)

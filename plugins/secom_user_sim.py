@@ -31,7 +31,7 @@ import wx
 class SecomUserPlugin(Plugin):
     name = "SECOM user simulator"
     __version__ = "1.0"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):

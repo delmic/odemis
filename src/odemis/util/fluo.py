@@ -254,12 +254,12 @@ def to_readable_band(band):
         width = b[-1] - b[0]
         if width > 5e-9:
             width_nm = int(round(width * 1e9))
-            return u"%d/%d nm" % (center_nm, width_nm)
+            return "%d/%d nm" % (center_nm, width_nm)
         else:
-            return u"%d nm" % center_nm
+            return "%d nm" % center_nm
     else:  # multi-band
         centers = []
         for c in get_center(band):
             center_nm = int(round(c * 1e9))
-            centers.append(u"%d" % center_nm)
-        return u", ".join(centers) + " nm"
+            centers.append("%d" % center_nm)
+        return ", ".join(centers) + " nm"

@@ -503,8 +503,8 @@ class TMCLController(model.Actuator):
             # One sensor is at the top, one at the bottom of the sample holder.
             # The most interesting is the temperature difference, so just
             # report both.
-            self.temperature = model.FloatVA(0, unit=u"°C", readonly=True)
-            self.temperature1 = model.FloatVA(0, unit=u"°C", readonly=True)
+            self.temperature = model.FloatVA(0, unit="°C", readonly=True)
+            self.temperature1 = model.FloatVA(0, unit="°C", readonly=True)
             self._temp_timer = util.RepeatingTimer(1, self._updateTemperatureVA,
                                                    "TMCM temperature update")
             self._updateTemperatureVA() # make sure the temperature is correct
@@ -1728,7 +1728,7 @@ class TMCLController(model.Actuator):
             logging.exception("Failed to read the temperature")
             return
 
-        logging.info(u"Temperature 0 = %g °C, temperature 1 = %g °C", t0, t1)
+        logging.info("Temperature 0 = %g °C, temperature 1 = %g °C", t0, t1)
 
         self.temperature._value = t0
         self.temperature.notify(t0)

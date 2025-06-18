@@ -104,7 +104,7 @@ class PixelValueOverlay(ViewOverlay):
             sig = None if isinstance(raw_value, (int, numpy.integer)) else 6
             raw = units.readable_str(raw_value, sig=sig)
             # The unicode for the arrow is not available in the current Cairo version
-            return u"%s (%d, %d) -> %s" % (name, pixel_pos[0], pixel_pos[1], raw)
+            return "%s (%d, %d) -> %s" % (name, pixel_pos[0], pixel_pos[1], raw)
         else:
             return None
 

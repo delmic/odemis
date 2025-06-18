@@ -47,9 +47,9 @@ else:
     HOUGH_GRADIENT = cv2.HOUGH_GRADIENT
 
 logger = logging.getLogger(__name__)
-CALIB_DIRECTORY = u"delphi-calibration-report"  # delphi calibration report directory
-CALIB_LOG = u"calibration.log"
-CALIB_CONFIG = u"calibration.config"
+CALIB_DIRECTORY = "delphi-calibration-report"  # delphi calibration report directory
+CALIB_LOG = "calibration.log"
+CALIB_CONFIG = "calibration.config"
 
 EXPECTED_HOLES = ({"x":0, "y":12e-03}, {"x":0, "y":-12e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius (m)
@@ -187,8 +187,8 @@ def _DoDelphiCalibration(future, main_data):
 
     # handler storing the messages related to delphi calibration
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    logpath = os.path.join(os.path.expanduser(u"~"), CALIB_DIRECTORY,
-                           time.strftime(u"%Y%m%d-%H%M%S"))
+    logpath = os.path.join(os.path.expanduser("~"), CALIB_DIRECTORY,
+                           time.strftime("%Y%m%d-%H%M%S"))
     os.makedirs(logpath, exist_ok=True)
     hdlr_calib = logging.FileHandler(os.path.join(logpath, CALIB_LOG))
     hdlr_calib.setFormatter(formatter)

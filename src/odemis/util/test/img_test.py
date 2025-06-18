@@ -1092,7 +1092,7 @@ class TestMergeTiles(unittest.TestCase):
                 tiles.append(tiles_column)
             return tiles
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (250, 200)
         md = {
@@ -1129,7 +1129,7 @@ class TestMergeTiles(unittest.TestCase):
                 tiles.append(tiles_column)
             return tiles
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (2000, 1000)
         md = {
@@ -1171,7 +1171,7 @@ class TestMergeTiles(unittest.TestCase):
                 tiles.append(tiles_column)
             return tiles
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (3, 2000, 1000)
         md = {

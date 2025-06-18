@@ -24,7 +24,7 @@ from odemis.dataio import tiff
 # User-friendly name
 FORMAT = "Serialized TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [u".0.ome.tiff"]
+EXTENSIONS = [".0.ome.tiff"]
 CAN_SAVE_PYRAMID = True
 LOSSY = False
 

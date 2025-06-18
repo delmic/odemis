@@ -238,26 +238,26 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False, suff
     formats = []
     wildcards = []
     for fmt, extensions in formats2ext.items():
-        ext_wildcards = u";".join([u"*" + e for e in extensions])
-        wildcard = u"%s%s (%s)|%s" % (fmt, suffix, ext_wildcards, ext_wildcards)
+        ext_wildcards = ";".join(["*" + e for e in extensions])
+        wildcard = "%s%s (%s)|%s" % (fmt, suffix, ext_wildcards, ext_wildcards)
         formats.append(fmt)
         wildcards.append(wildcard)
 
     if include_all:
         fmt_wildcards = []
         for extensions in formats2ext.values():
-            fmt_wildcards.append(u";".join([u"*" + e for e in extensions]))
-        ext_wildcards = u";".join(fmt_wildcards)
-        wildcard = u"All supported files (%s)|%s" % (ext_wildcards, ext_wildcards)
+            fmt_wildcards.append(";".join(["*" + e for e in extensions]))
+        ext_wildcards = ";".join(fmt_wildcards)
+        wildcard = "All supported files (%s)|%s" % (ext_wildcards, ext_wildcards)
         wildcards.insert(0, wildcard)
         formats.insert(0, None)
 
     if include_any:
-        wildcards.append(u"Any file (*.*)|*.*")
+        wildcards.append("Any file (*.*)|*.*")
         formats.append(None)
 
     # the whole importance is that they are in the same order
-    return u"|".join(wildcards), formats
+    return "|".join(wildcards), formats
 
 
 # Data container

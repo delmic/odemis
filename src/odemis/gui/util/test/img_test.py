@@ -1340,7 +1340,7 @@ class TestSpatialExportPyramidal(unittest.TestCase):
         image = model.DataArray(data, metadata)
 
         # export
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        FILENAME = "test" + tiff.EXTENSIONS[0]
         tiff.export(FILENAME, image, pyramid=True)
         # read back
         acd = tiff.open_data(FILENAME)

@@ -122,7 +122,7 @@ class PluginTestCase(test.GuiTestCase):
         if not paths:
             # A typical reason for this to fail is that no plugin are installed
             hf = get_home_folder()
-            upath = os.path.join(hf, u".local/share/odemis/plugins")
+            upath = os.path.join(hf, ".local/share/odemis/plugins")
             if not os.path.isdir(upath) or not os.listdir(upath):
                 self.fail("Please install at least one plugin in ~/.local/share/odemis/plugins")
 

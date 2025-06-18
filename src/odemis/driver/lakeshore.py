@@ -132,7 +132,7 @@ class Lakeshore(model.HwComponent):
                                  f"Sensor input must be one of the following: {supported_sensor_inputs}")
 
             # Vigilant attributes of the temperature.
-            va = FloatVA(unit=u"°C", value=self.GetSensorTemperature(sensor_name), readonly=True)
+            va = FloatVA(unit="°C", value=self.GetSensorTemperature(sensor_name), readonly=True)
             if va_name == "":  # in case of a single string as sensor input
                 full_va_name = "temperature"
             else:
@@ -170,7 +170,7 @@ class Lakeshore(model.HwComponent):
             # Minimum limit for the target temperature is set precisely to -273.15 C because when the output is not set,
             # the target temperature is automatically set to 0 K(-273.15 C) by lakeshore
             va_target_temp = FloatContinuous(value=self.GetSetpoint(output_channel_nr),
-                                             unit=u"°C",
+                                             unit="°C",
                                              range=[-273.15, 50],
                                              setter=va_target_temp_setter)
 

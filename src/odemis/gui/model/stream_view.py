@@ -48,9 +48,6 @@ class View(object):
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
 
-    def __unicode__(self):
-        return u"{}".format(self.name.value)
-
     def __str__(self):
         return "{}".format(self.name.value)
 
@@ -282,7 +279,7 @@ class StreamView(View):
                 except queue.Empty:
                     pass
 
-                logging.debug(u"Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
+                logging.debug("Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
 
                 # clip to the range
                 if rng:
@@ -291,7 +288,7 @@ class StreamView(View):
                     req_shift = shift
                     shift = new_pos - pos
                     if abs(shift - req_shift) > 1e-9:
-                        logging.info(u"Restricting focus move to %f µm as it reached the end",
+                        logging.info("Restricting focus move to %f µm as it reached the end",
                                      shift * 1e6)
 
                 time_last_move = time.time()

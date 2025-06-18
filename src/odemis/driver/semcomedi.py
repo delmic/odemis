@@ -1014,7 +1014,7 @@ class SEMComedi(model.HwComponent):
         pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
-            logging.error(u"Going to try to read very large buffer of %g MB, "
+            logging.error("Going to try to read very large buffer of %g MB, "
                           "with osr = %d and dpr = %d.",
                           pixelsz / 2 ** 20, osr, dpr)
 
@@ -1027,7 +1027,7 @@ class SEMComedi(model.HwComponent):
         Implementation of write_read_2d_data_raw by reading the input data n
           lines at a time.
         """
-        logging.debug(u"Reading %d lines at a time: %d samples/read every %g µs",
+        logging.debug("Reading %d lines at a time: %d samples/read every %g µs",
                       maxlines, maxlines * data.shape[1] * osr * len(rchannels),
                       period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
@@ -1102,7 +1102,7 @@ class SEMComedi(model.HwComponent):
 
         # TODO: as we do point per point, we could do the margin (=settle time)
         # shorter than a standard point
-        logging.debug(u"Reading one pixel at a time: %d samples/read every %g µs",
+        logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
                       dpr * osr * len(rchannels), period * 1e6)
         wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
         # read one pixel at a time
@@ -1142,7 +1142,7 @@ class SEMComedi(model.HwComponent):
         # Note: we could optimize slightly more by grouping dpr up to max_dpr
         # but would make the code more complex and anyway it's already huge
         # acquisitions.
-        logging.debug(u"Reading one sub-pixel at a time: %d samples/read every %g µs",
+        logging.debug("Reading one sub-pixel at a time: %d samples/read every %g µs",
                       osr * nrchans, (period / dpr) * 1e6)
         px_rbuf = numpy.empty((dpr, nrchans), dtype=adtype) # intermediary sum for mean
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
@@ -1212,8 +1212,8 @@ class SEMComedi(model.HwComponent):
             # methods will have enough effect to stop the acquisition
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
-            logging.debug(u"Not generating new write command for %d scans on "
-                          u"channels %r with period = %d ns",
+            logging.debug("Not generating new write command for %d scans on "
+                          "channels %r with period = %d ns",
                           nwscans, wchannels, period_ns)
             logging.debug("Generating a new read command for %d scans", nrscans)
 
@@ -1395,7 +1395,7 @@ class SEMComedi(model.HwComponent):
           lines at a time.
         """
         maxlines = min(wdata.shape[0], maxlines)
-        logging.debug(u"Reading %d lines at a time: %d samples/counter every %g µs",
+        logging.debug("Reading %d lines at a time: %d samples/counter every %g µs",
                       maxlines, maxlines * wdata.shape[1] * dpr,
                       period * 1e6)
         rshape = (wdata.shape[0], wdata.shape[1] - margin)
@@ -1792,9 +1792,9 @@ class SEMComedi(model.HwComponent):
         if self._scanner.dwellTime.value < 100e-6:
             # Actually only >= 1ms really works reliably
             self._scanner.dwellTime.value = 100e-6
-            logging.warning(u"Counter acquisition not working with dwell time < "
-                            u"100 µs. Automatically increasing the dwell time to "
-                            u"%g s", self._scanner.dwellTime.value)
+            logging.warning("Counter acquisition not working with dwell time < "
+                            "100 µs. Automatically increasing the dwell time to "
+                            "%g s", self._scanner.dwellTime.value)
 
         md = tuple(self._metadata.copy() for d in detectors)
 

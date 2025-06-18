@@ -29,7 +29,7 @@ from odemis.acq.align import delphi
 from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
 
-CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
+CONF_PATH = os.path.join(get_home_folder(), ".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 
@@ -70,7 +70,7 @@ class Config(metaclass=ABCMeta):
         if os.path.exists(self.file_path):
             self.config.read(self.file_path)
         else:
-            logging.info(u"Using default %s configuration",
+            logging.info("Using default %s configuration",
                          self.__class__.__name__)
             self.config = self.default
 
@@ -87,10 +87,10 @@ class Config(metaclass=ABCMeta):
         """
         # Create directory structure if it doesn't exist.
         if not os.path.exists(CONF_PATH):
-            logging.debug(u"Creating path '%s'", CONF_PATH)
+            logging.debug("Creating path '%s'", CONF_PATH)
             os.makedirs(CONF_PATH)
 
-        logging.debug(u"Writing configuration file '%s'", self.file_path)
+        logging.debug("Writing configuration file '%s'", self.file_path)
         f = open(self.file_path, "w")
         self.config.write(f)
         f.close()
@@ -161,18 +161,18 @@ class GeneralConfig(Config):
         # Define the default settings
         self.default.add_section("help")
 
-        self.default.set("help", "manual_base_name", u"user-guide.pdf")
+        self.default.set("help", "manual_base_name", "user-guide.pdf")
 
         # TODO: handle windows OS
-        self.default.set("help", "manual_path", u"/usr/share/doc/odemis/")
+        self.default.set("help", "manual_path", "/usr/share/doc/odemis/")
 
         # For the calibration files (used in analysis tab)
         self.default.add_section("calibration")
-        self.default.set("calibration", "ar_file", u"")
-        self.default.set("calibration", "spec_file", u"")
-        self.default.set("calibration", "spec_bck_file", u"")
-        self.default.set("calibration", "temporalspec_bck_file", u"")
-        self.default.set("calibration", "angularspec_bck_file", "u")
+        self.default.set("calibration", "ar_file", "")
+        self.default.set("calibration", "spec_file", "")
+        self.default.set("calibration", "spec_bck_file", "")
+        self.default.set("calibration", "temporalspec_bck_file", "")
+        self.default.set("calibration", "angularspec_bck_file", "")
 
         # Section for Odemis/Delphi viewer config
         self.default.add_section("viewer")
@@ -193,7 +193,7 @@ class GeneralConfig(Config):
         if role:
             full_path = os.path.join(
                 manual_path,
-                u"%s-%s" % (role, manual_base_name)
+                "%s-%s" % (role, manual_base_name)
             )
             if os.path.exists(full_path):
                 return full_path
@@ -214,7 +214,7 @@ class GeneralConfig(Config):
         """
 
         manual_path = self.get("help", "manual_path")
-        full_path = os.path.join(manual_path, u"odemis-develop.pdf")
+        full_path = os.path.join(manual_path, "odemis-develop.pdf")
         if os.path.exists(full_path):
             return full_path
         return None
@@ -241,7 +241,7 @@ class AcquisitionConfig(Config):
         # 'test-{datelng}-{cnt}' will be generated and fn_count will be set to '05'. This
         # pattern is used to suggest a new filename after the acquisition
         # is completed.
-        self.default.set("acquisition", "fn_ptn", u"{datelng}-{timelng}")
+        self.default.set("acquisition", "fn_ptn", "{datelng}-{timelng}")
         self.default.set("acquisition", "fn_count", "0")
         self.default.set("acquisition", "overlap", "0.06")
         self.default.set("acquisition", "autostig_period", "0")  # unit: number of ROA acquisitions
@@ -258,7 +258,7 @@ class AcquisitionConfig(Config):
         # Define the default settings for the project parameters
         self.default.add_section("project")
         self.default.set("project", "pj_last_path", ACQUI_PATH + "/")
-        self.default.set("project", "pj_ptn", u"{datelng}-{timelng}")
+        self.default.set("project", "pj_ptn", "{datelng}-{timelng}")
         self.default.set("project", "pj_count", "0")
 
     @property

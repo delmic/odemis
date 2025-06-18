@@ -36,7 +36,7 @@ from odemis.gui.util import call_in_wx_main
 class SparcMirrorInterlockPlugin(Plugin):
     name = "SPARC Mirror Actuator Interlock"
     __version__ = "1.0"
-    __author__ = u"Éric Piel"
+    __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):

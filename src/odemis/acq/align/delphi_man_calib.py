@@ -134,14 +134,14 @@ class ArrowFocus(object):
             else:
                 mov = self._moves_ebeam.popleft()
                 f = self.ebeam_focus.moveRel({'z': mov})
-                logging.info(u"Moving ebeam focus by %g µm", mov * 1e6)
+                logging.info("Moving ebeam focus by %g µm", mov * 1e6)
                 f.result()
             if not self._moves_opt:
                 pass
             else:
                 mov = self._moves_opt.popleft()
                 f = self.opt_focus.moveRel({'z': mov})
-                logging.info(u"Moving optical focus by %g µm", mov * 1e6)
+                logging.info("Moving optical focus by %g µm", mov * 1e6)
                 f.result()
 
     def focusByArrow(self, rollback_pos=None):
@@ -710,8 +710,8 @@ def main(args):
 
     # ...and also store them in the special file
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    logpath = os.path.join(os.path.expanduser(u"~"), aligndelphi.CALIB_DIRECTORY,
-                           time.strftime(u"%Y%m%d-%H%M%S"))
+    logpath = os.path.join(os.path.expanduser("~"), aligndelphi.CALIB_DIRECTORY,
+                           time.strftime("%Y%m%d-%H%M%S"))
     os.makedirs(logpath, exist_ok=True)
     hdlr_calib = logging.FileHandler(os.path.join(logpath, aligndelphi.CALIB_LOG))
     hdlr_calib.setFormatter(formatter)

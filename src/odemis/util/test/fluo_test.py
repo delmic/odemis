@@ -245,7 +245,7 @@ class FluoTestCase(unittest.TestCase):
         # inputs, expected
         in_exp = [((490e-9, 510e-9), "500/20 nm"),  # 2-float band
                   (((490e-9, 510e-9), (590e-9, 610e-9)), "500, 600 nm"), # multi-band
-                  (BAND_PASS_THROUGH, u"pass-through"),  # just a string
+                  (BAND_PASS_THROUGH, "pass-through"),  # just a string
                   ]
         for arg, exp in in_exp:
             out = fluo.to_readable_band(arg)

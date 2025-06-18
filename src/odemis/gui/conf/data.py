@@ -92,8 +92,8 @@ HW_SETTINGS_CONFIG = {
                 "scale": "cubic",
                 "range": (0, 500.0),
                 "accuracy": 2,
-                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
-                            u"Lower exposure times will force the shutter to stay open."),
+                "tooltip": ("Minimum exposure time at which the shutter will be used.\n"
+                            "Lower exposure times will force the shutter to stay open."),
             }),
             ("temperature", {}),
             # what we don't want to display:
@@ -378,8 +378,8 @@ HW_SETTINGS_CONFIG = {
                 "scale": "cubic",
                 "range": (0, 500.0),
                 "accuracy": 2,
-                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
-                            u"Lower exposure times will force the shutter to stay open."),
+                "tooltip": ("Minimum exposure time at which the shutter will be used.\n"
+                            "Lower exposure times will force the shutter to stay open."),
             }),
             ("temperature", {}),
             # what we don't want to display:
@@ -427,7 +427,7 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "type": "float",
-                "tooltip": u"Readout camera exposure time.",
+                "tooltip": "Readout camera exposure time.",
             }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
@@ -438,20 +438,20 @@ HW_SETTINGS_CONFIG = {
                 # Read-only it shouldn't be changed by the user
                 "control_type": odemis.gui.CONTROL_READONLY,
                 "accuracy": None,  # never simplify the numbers
-                "tooltip": u"Readout camera resolution: number of pixels.",
+                "tooltip": "Readout camera resolution: number of pixels.",
             }),
             # These ones are from the streak-unit (but also set as "det_vas" of the streams)
             ("streakMode", {
                 "control_type": odemis.gui.CONTROL_CHECK,
                 "label": "Streak mode",
-                "tooltip": u"If checked streak camera is in operate mode and streaking.\n"
-                           u"If not checked steak camera is in focus mode.",
+                "tooltip": "If checked streak camera is in operate mode and streaking.\n"
+                           "If not checked steak camera is in focus mode.",
             }),
             ("timeRange", {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "label": "Time range",
-                "tooltip": u"Time needed by the streak unit for one sweep from\n"
-                           u"top to bottom of the readout camera chip.",
+                "tooltip": "Time needed by the streak unit for one sweep from\n"
+                           "top to bottom of the readout camera chip.",
             }),
             ("MCPGain", {
                 "control_type": odemis.gui.CONTROL_INT,
@@ -492,8 +492,8 @@ HW_SETTINGS_CONFIG = {
                 "scale": "cubic",
                 "range": (0, 500.0),
                 "accuracy": 2,
-                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
-                            u"Lower exposure times will force the shutter to stay open."),
+                "tooltip": ("Minimum exposure time at which the shutter will be used.\n"
+                            "Lower exposure times will force the shutter to stay open."),
             }),
             ("temperature", {}),
             # what we don't want to display:
@@ -619,8 +619,8 @@ HW_SETTINGS_CONFIG = {
             }),
             ("syncDiv", {
                 "label": "Sync divider",
-                "tooltip": u"Internally reduce sync signal rate to handle higher frequencies.\n"
-                           u"Use only if the frequency is very high (see hardware documentation).",
+                "tooltip": "Internally reduce sync signal rate to handle higher frequencies.\n"
+                           "Use only if the frequency is very high (see hardware documentation).",
             }),
         )),
     "se-detector":
@@ -881,7 +881,7 @@ STREAM_SETTINGS_CONFIG = {
             # where they make more sense, and they would be too lonely alone.
             ("dcPeriod", {
                 "label": "Drift corr. period",
-                "tooltip": u"Maximum time between anchor region acquisitions",
+                "tooltip": "Maximum time between anchor region acquisitions",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "range": (1, 300),  # s, the VA allows a wider range, not typically needed
@@ -889,25 +889,25 @@ STREAM_SETTINGS_CONFIG = {
             }),
             ("pcdActive", {
                 "label": "Probe current acq.",
-                "tooltip": u"Activate probe current readings",
+                "tooltip": "Activate probe current readings",
             }),
             ("pcdPeriod", {
                 "label": "Acquisition period",
-                "tooltip": u"Time between probe current readings",
+                "tooltip": "Time between probe current readings",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "range": (1, 3600),  # s, the VA allows a wider range, not typically needed
                 "accuracy": 2,
             }),
             ("useScanStage", {
-                "tooltip": u"Scans the area using the scan stage, "
-                           u"instead of the e-beam. "
-                           u"It increases the area that can be properly acquired. "
-                           u"Note that survey acquisition is not affected.",
+                "tooltip": "Scans the area using the scan stage, "
+                           "instead of the e-beam. "
+                           "It increases the area that can be properly acquired. "
+                           "Note that survey acquisition is not affected.",
             }),
             ("ccdTemperature", {  # Trick for the sparc-simplex
                 "label": "CCD temperature",
-                "tooltip": u"Current temperature of the spectrometer CCD",
+                "tooltip": "Current temperature of the spectrometer CCD",
             }),
         )),
     stream.FastEMSEMStream:
@@ -928,7 +928,7 @@ STREAM_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+                "tooltip": "Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
             ("iris-in", {
                 "label": "Input iris",
@@ -946,11 +946,11 @@ STREAM_SETTINGS_CONFIG = {
                 "scale": "log",
                 "type": "float",
                 "accuracy": 2,
-                "tooltip": u"Readout camera exposure time.",
+                "tooltip": "Readout camera exposure time.",
             }),
             ("integrationCounts", {
-                "tooltip": u"Number of images that are integrated, if requested exposure"
-                           u"time exceeds the camera exposure time limit.",
+                "tooltip": "Number of images that are integrated, if requested exposure"
+                           "time exceeds the camera exposure time limit.",
             }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
@@ -961,7 +961,7 @@ STREAM_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit."
+                "tooltip": "Opening size of the spectrograph input slit."
             }),
             ("filter", {  # from filter
                 "choices": util.format_band_choices,
@@ -982,7 +982,7 @@ STREAM_SETTINGS_CONFIG = {
             ("acquireAllPol", {
                 "control_type": odemis.gui.CONTROL_CHECK,
                 "label": "All polarizations",
-                "tooltip": u"Record all possible polarization positions sequentially in one acquisition."
+                "tooltip": "Record all possible polarization positions sequentially in one acquisition."
             }),
         )),
     stream.AngularSpectrumAlignmentStream:
@@ -992,11 +992,11 @@ STREAM_SETTINGS_CONFIG = {
                 "scale": "log",
                 "type": "float",
                 "accuracy": 2,
-                "tooltip": u"Readout camera exposure time.",
+                "tooltip": "Readout camera exposure time.",
             }),
             ("integrationCounts", {
-                "tooltip": u"Number of images that are integrated, if requested exposure"
-                           u"time exceeds the camera exposure time limit.",
+                "tooltip": "Number of images that are integrated, if requested exposure"
+                           "time exceeds the camera exposure time limit.",
             }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
@@ -1007,7 +1007,7 @@ STREAM_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit."
+                "tooltip": "Opening size of the spectrograph input slit."
             }),
             ("filter", {  # from filter
                 "choices": util.format_band_choices,
@@ -1048,11 +1048,11 @@ STREAM_SETTINGS_CONFIG = {
                 "scale": "log",
                 "type": "float",
                 "accuracy": 3,
-                "tooltip": u"Readout camera exposure time.",
+                "tooltip": "Readout camera exposure time.",
             }),
             ("integrationCounts", {
-                "tooltip": u"Number of images that are integrated, if requested exposure"
-                           u"time exceeds the camera exposure time limit.",
+                "tooltip": "Number of images that are integrated, if requested exposure"
+                           "time exceeds the camera exposure time limit.",
             }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
@@ -1063,8 +1063,8 @@ STREAM_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\n"
-                           u"A wide opening means more light and a worse resolution.",
+                "tooltip": "Opening size of the spectrograph input slit.\n"
+                           "A wide opening means more light and a worse resolution.",
             }),
             ("iris-in", {
                 "label": "Input iris",
@@ -1078,7 +1078,7 @@ STREAM_SETTINGS_CONFIG = {
     stream.ScannedTemporalSettingsStream:
         OrderedDict((
             ("density", {  # from tc-od-filter
-                "tooltip": u"Optical density",
+                "tooltip": "Optical density",
             }),
             ("filter", {  # from tc-filter
                 "choices": util.format_band_choices,
@@ -1095,11 +1095,11 @@ STREAM_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
+                "tooltip": "Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
             }),
             ("slit-monochromator", {
                 "label": "Det. slit",
-                "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
+                "tooltip": "Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
             }),
             ("filter", {  # filter.band axis
                 "choices": util.format_band_choices,
@@ -1112,11 +1112,11 @@ STREAM_SETTINGS_CONFIG = {
                 "scale": "log",
                 "type": "float",
                 "accuracy": 3,
-                "tooltip": u"Optical detector (CCD) exposure time.",
+                "tooltip": "Optical detector (CCD) exposure time.",
             }),
             ("integrationCounts", {
-                "tooltip": u"Number of images that are integrated, if requested exposure"
-                           u" time exceeds the detector limit.",
+                "tooltip": "Number of images that are integrated, if requested exposure"
+                           " time exceeds the detector limit.",
             }),
             ("polarization", {
                 "control_type": odemis.gui.CONTROL_COMBO,
@@ -1124,7 +1124,7 @@ STREAM_SETTINGS_CONFIG = {
             ("acquireAllPol", {
                 "control_type": odemis.gui.CONTROL_CHECK,
                 "label": "All polarizations",
-                "tooltip": u"Record all possible polarization positions sequentially in one acquisition."
+                "tooltip": "Record all possible polarization positions sequentially in one acquisition."
             }),
             ("filter", {  # from filter
                 "choices": util.format_band_choices,
@@ -1133,7 +1133,7 @@ STREAM_SETTINGS_CONFIG = {
     stream.CLSettingsStream:
         OrderedDict((
             ("density", {  # from tc-od-filter
-                "tooltip": u"Optical density",
+                "tooltip": "Optical density",
             }),
             ("filter", {  # from filter, cl-filter, or tc-filter
                 "choices": util.format_band_choices,

@@ -561,9 +561,9 @@ class BackendStarter(object):
         # Most of the states can be directly displayed for the user, but
         # "unloaded" is weird for a hardware component
         if state == ST_UNLOADED:
-            txt_state = u"uninitialized"
+            txt_state = "uninitialized"
         else:
-            txt_state = u"%s" % state
+            txt_state = "%s" % state
 
         self._list.SetItem(index, 1, txt_state)
 

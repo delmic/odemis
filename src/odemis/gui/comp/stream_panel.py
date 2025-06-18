@@ -76,7 +76,7 @@ OPT_BTN_PEAK = 32  # show/hide the peak fitting data
 OPT_FIT_RGB = 64  # allow a Fit RGB colormap (for spectrum stremas)
 OPT_NO_COLORMAPS = 128  # do not allow additional colormaps. Typical for an RGB image
 
-TINT_CUSTOM_TEXT = u"Custom tint…"
+TINT_CUSTOM_TEXT = "Custom tint…"
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16

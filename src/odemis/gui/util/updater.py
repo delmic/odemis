@@ -112,8 +112,8 @@ class WindowsUpdater:
         rv = pkg_resources.parse_version(web_version)
         if rv <= lv:
             wx.MessageBox(
-                u"You are already using the most recent version of Odemis.",
-                u"Odemis Updater",
+                "You are already using the most recent version of Odemis.",
+                "Odemis Updater",
                 style=wx.OK | wx.CENTER | wx.ICON_ASTERISK
             )
             return

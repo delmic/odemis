@@ -258,7 +258,7 @@ def preset_no_change(entries):
 
 # Name -> callable (list of SettingEntries -> dict (SettingEntries -> value))
 presets = OrderedDict((
-    (u"High quality", preset_hq),
-    (u"Fast", preset_as_is),
-    (u"Custom", preset_no_change)
+    ("High quality", preset_hq),
+    ("Fast", preset_as_is),
+    ("Custom", preset_no_change)
 ))
