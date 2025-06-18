@@ -299,7 +299,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         self.cnvs.update_drawing()
 
     def on_motion(self, evt):
-        if self.selected.value:
+        if self.selected.value or not self.is_created.value:
             LineEditingMixin._on_motion(self, evt)
             if not self.dragging:
                 if self.hover == gui.HOVER_SELECTION:

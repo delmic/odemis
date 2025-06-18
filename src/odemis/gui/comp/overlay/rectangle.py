@@ -397,7 +397,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
-        if self.selected.value:
+        if self.selected.value or not self.is_created.value:
             self._on_motion(evt)  # Call the RectangleEditingMixin motion handler
 
             if not self.dragging:
