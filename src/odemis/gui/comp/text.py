@@ -597,6 +597,23 @@ class _NumberValidator(wx.Validator):
 
         raise NotImplementedError
 
+    def TransferToWindow(self) -> bool:
+        """
+        Transfer data from window to validator.
+
+        The default implementation returns False, indicating that an error
+        occurred. We simply return True, as we don't do any data transfer.
+        """
+        return True  # Prevent wxDialog from complaining.
+
+    def TransferFromWindow(self) -> bool:
+        """
+        Transfer data from window to validator.
+
+        The default implementation returns False, indicating that an error
+        occurred. We simply return True, as we don't do any data transfer.
+        """
+        return True  # Prevent wxDialog from complaining.
 
 def _step_from_range(min_val, max_val):
     """ Dynamically create step size based on range """
@@ -665,6 +682,24 @@ class PatternValidator(wx.Validator):
     def Clone(self):
         """ Required method """
         return PatternValidator(self._pattern)
+
+    def TransferToWindow(self) -> bool:
+        """
+        Transfer data from window to validator.
+
+        The default implementation returns False, indicating that an error
+        occurred. We simply return True, as we don't do any data transfer.
+        """
+        return True  # Prevent wxDialog from complaining.
+
+    def TransferFromWindow(self) -> bool:
+        """
+        Transfer data from window to validator.
+
+        The default implementation returns False, indicating that an error
+        occurred. We simply return True, as we don't do any data transfer.
+        """
+        return True  # Prevent wxDialog from complaining.
 
 
 class _NumberTextCtrl(wx.TextCtrl):
