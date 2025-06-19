@@ -106,7 +106,7 @@ class SEM(model.HwComponent):
     Microscope server is done via Pyro5. The component is a parent to the scanner, stage, focus, and detector components, and supports both SEM and FIB.
     """
 
-    def __init__(self, name, role, children, address, port: str = '4242', daemon=None,
+    def __init__(self, name, role, children, address, port: str = '4243', daemon=None,
                  **kwargs):
         """
         :param name: str, Name of the microscope.
@@ -121,7 +121,7 @@ class SEM(model.HwComponent):
             "stage": dict, Stage child configuration (optional).
             Note: At least one of the required scanners types must be included as a child.
         :param address: str, server ip address for the microscope server (sim address is localhost)
-        :param port: str, server port of the Microscope server, default is '4242'
+        :param port: str, server port of the Microscope server, default is '4243'
         :param daemon: Pyro4.Daemon (or None), as defined in HwComponent.
         :param kwargs: dict, Additional keyword arguments.
         """
