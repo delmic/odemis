@@ -266,7 +266,7 @@ class CorrelationPointsController:
                     ssc = self._panel.streambar_controller.addStream(stream_interpolated, play=False)
                     ssc.stream_panel.set_visible(True)
                     ssc.stream_panel.collapse(False)
-                    self.correlation_target.fm_streams.append(stream)
+                    self.correlation_target.fm_streams.append(stream_interpolated)
         else:
             for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
                 for index in indices:
@@ -444,8 +444,10 @@ class CorrelationPointsController:
         fib_coords = []
         fm_coords = []
         poi_coords = []
+        index_order = []  # append the same index order to the projected points as the input fiducials
         path = self._tab_data_model.main.project_path.value
         for fib_coord in self.correlation_target.fib_fiducials:
+            index_order.append(fib_coord.index.value)
             fib_coord = self.correlation_target.fib_stream.getPixelCoordinates(fib_coord.coordinates.value[0:2],
                                                                                check_bbox=False)
             fib_coords.append(fib_coord)
@@ -471,8 +473,8 @@ class CorrelationPointsController:
         points = self.correlation_target.correlation_result['output']['error']['reprojected_3d']
         for n, i in enumerate(points[0]):
             p_pos = self.correlation_target.fib_stream.getPhysicalCoordinates((points[0][n], points[1][n]))
-            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(n + 1),
-                            type=TargetType.ProjectedFiducial.value, index=n + 1,
+            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(index_order[n]),
+                            type=TargetType.ProjectedFiducial.value, index=index_order[n],
                             fm_focus_position=0)
             self._tab_data_model.projected_points.append(target)
             self.correlation_target.fib_projected_fiducials.append(target)
