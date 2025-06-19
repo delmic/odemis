@@ -1082,7 +1082,7 @@ class FastEMMainTabGUIData(MicroscopyGUIData):
         self.viewLayout._value = VIEW_LAYOUT_DYNAMIC
         # Toggle between FastEMSetupTab and FastEMAcquisitionTab
         self.active_tab = model.VAEnumerated(None, choices={None: ""})
-        # Toggle between FastEMProjectSettingsTab, FastEMProjectROIsTab, FastEMProjectRibbonsTab,
+        # Toggle between FastEMProjectSettingsTab, FastEMProjectTOAsTab, FastEMProjectRibbonsTab,
         # FastEMProjectSectionsTab, FastEMProjectROAsTab
         self.active_project_tab = model.VAEnumerated(None, choices={None: ""})
         # Toggle between FastEMSingleBeamTab and FastEMMultiBeamTab

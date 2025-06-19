@@ -37,15 +37,15 @@ from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.model import CALIBRATION_2, CALIBRATION_3
 from odemis.util.raster import get_polygon_grid_cells
 
-# The threshold is used to check if the ROA/ROI bounding box is larger in size
+# The threshold is used to check if the ROA/TOA bounding box is larger in size
 ACQ_SIZE_THRESHOLD = 0.002  # 2 mm
-# The limit is used to check if the ROI grid rects will be more
+# The limit is used to check if the TOA grid rects will be more
 HFW_LIMIT = 0.0005  # 500 μm
 
 
 class FastEMROABase(metaclass=ABCMeta):
     """
-    Base class for FastEM ROA (region of acquisition) and FastEM ROI (region of interest).
+    Base class for FastEM ROA (region of acquisition) and FastEM TOA (tiled overview acquisition).
     """
 
     def __init__(self, shape, main_data, overlap=0.06, name="", slice_index=0):
@@ -318,20 +318,20 @@ class FastEMROA(FastEMROABase):
         self.field_rects = rects
 
 
-class FastEMROI(FastEMROABase):
+class FastEMTOA(FastEMROABase):
     """
-    Representation of a FastEM ROI (region of interest).
-    The region of interest is an overview image, which consists of a sequence of single-beam field images.
+    Representation of a FastEM TOA (tiled overview acquisition).
+    The tiled overview acquisition is an overview image, which consists of a sequence of single-beam field images.
     """
 
     def __init__(self, shape, main_data, hfw, res, name="", slice_index=0):
         """
         :param shape: (EditableShape or None) The shape representing the region of acquisition in the canvas.
         :param main_data: (MainGUIData) The data corresponding to the entire GUI.
-        :param hfw: (float) The horizontal field width of the region of interest (ROI) in m.
-        :param res: (tuple) The resolution of the ROI in pixels.
-        :param name: (str) Name of the ROI.
-        :param slice_index: (int) The slice index of the region of interest.
+        :param hfw: (float) The horizontal field width of the tiled overview acquisition (TOA) in m.
+        :param res: (tuple) The resolution of the TOA in pixels.
+        :param name: (str) Name of the TOA.
+        :param slice_index: (int) The slice index of the tiled overview acquisition.
         """
         overlap = STAGE_PRECISION / hfw
         super().__init__(shape, main_data, overlap, name, slice_index)
@@ -366,20 +366,20 @@ class FastEMROI(FastEMROABase):
         }
 
     @staticmethod
-    def from_dict(roi: dict, tab_data):
+    def from_dict(toa: dict, tab_data):
         """
         Use the dict keys and values to reconstruct the class from a json file.
 
         :param roa: The dict containing the class attributes and its values as key value pairs.
                     to_dict() method must have been used previously to create this dict.
         :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
-        :returns: (FastEMROI) reconstructed FastEMROI class.
+        :returns: (FastEMTOA) reconstructed FastEMTOA class.
         """
-        name = roi["name"]
-        slice_index  = int(roi["slice_index"])
-        hfw = roi["hfw"]
-        res = roi["resolution"]
-        shape_data = roi["shape"]
+        name = toa["name"]
+        slice_index  = int(toa["slice_index"])
+        hfw = toa["hfw"]
+        res = toa["resolution"]
+        shape_data = toa["shape"]
         shape_type = shape_data["type"]
         if shape_type == RectangleOverlay.__name__:
             shape = RectangleOverlay.from_dict(shape_data, tab_data)
@@ -389,11 +389,11 @@ class FastEMROI(FastEMROABase):
             shape = PolygonOverlay.from_dict(shape_data, tab_data)
         else:
             raise ValueError("Unknown shape type.")
-        roi = FastEMROI(shape, tab_data.main, hfw=hfw, res=res, name=name, slice_index=slice_index)
-        return roi
+        toa = FastEMTOA(shape, tab_data.main, hfw=hfw, res=res, name=name, slice_index=slice_index)
+        return toa
 
     def on_points(self, points):
-        """Recalculate the field indices and rectangles when the points of the ROI have changed
+        """Recalculate the field indices and rectangles when the points of the TOA have changed
         (e.g. resize, moving).
         :param points: (List[Tuple[float, float]]) list of points (x, y) representing the shape in physical coordinates.
         """
@@ -402,7 +402,7 @@ class FastEMROI(FastEMROABase):
             self.polygon_shape = Polygon(points)
             xmin, ymin, xmax, ymax = self.polygon_shape.bounds
             self._area_size = (xmax - xmin, ymax - ymin)
-            # If the ROI bounding box is larger in size and the HFW is smaller than the limit,
+            # If the TOA bounding box is larger in size and the HFW is smaller than the limit,
             # use threading so that the drawing operations are not affected
             if (
                 (abs(self._area_size[0]) >= ACQ_SIZE_THRESHOLD or abs(self._area_size[1]) >= ACQ_SIZE_THRESHOLD)
@@ -428,10 +428,10 @@ class FastEMROI(FastEMROABase):
 
     def estimate_acquisition_time(self, acq_dwell_time: float) -> float:
         """
-        Computes the approximate time it will take to run the ROI acquisition.
+        Computes the approximate time it will take to run the TOA acquisition.
 
         :param acq_dwell_time: (float) The acquisition dwell time.
-        :return (0 <= float): The estimated time for the ROI acquisition in s.
+        :return (0 <= float): The estimated time for the TOA acquisition in s.
         """
         def count_stage_moves(field_indices):
             """Counts horizontal and vertical moves based on tile order."""

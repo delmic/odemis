@@ -130,9 +130,9 @@
                   <border>10</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="TabButton" name="btn_tab_rois">
+                  <object class="TabButton" name="btn_tab_toas">
                     <icon>../../img/icon/ico_single_beam.png</icon>
-                    <label>ROIS</label>
+                    <label>TOAS</label>
                     <size>160,30</size>
                     <face_colour>def</face_colour>
                     <fg>#E5E5E5</fg>

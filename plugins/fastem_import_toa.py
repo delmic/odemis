@@ -4,7 +4,7 @@ Created on 11 April 2025
 
 @author: Nandish Patel
 
-Gives ability to use Import ROIs tool under Help > Development.
+Gives ability to use Import TOAs tool under Help > Development.
 
 Copyright © 2025 Nandish Patel, Delmic
 
@@ -46,7 +46,7 @@ from odemis.gui.comp.fastem_user_settings_panel import (
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.acquisition.fastem_acq import OVERVIEW_IMAGES_DIR
-from odemis.gui.cont.fastem_project_grid import ROIColumnNames
+from odemis.gui.cont.fastem_project_grid import TOAColumnNames
 from odemis.gui.model.main_gui_data import Scintillator
 from odemis.gui.plugin import Plugin
 from odemis.util.filename import make_unique_name
@@ -265,8 +265,8 @@ class NpyPage(WizardPageSimple):
         return self.labels
 
 
-class ImportROIPlugin(Plugin):
-    name = "Import ROIs"
+class ImportTOAPlugin(Plugin):
+    name = "Import TOAs"
     __version__ = "1.0"
     __author__ = "Nandish Patel"
     __license__ = "GPLv2"
@@ -279,16 +279,16 @@ class ImportROIPlugin(Plugin):
             main_tab = main_app.main_data.getTabByName("fastem_main")
             self._pm = main_tab.project_manager_panel
         except LookupError:
-            logging.debug("Not loading Import ROIs tool since main tab is not present.")
+            logging.debug("Not loading Import TOAs tool since main tab is not present.")
             return
 
         self._parent = self.main_app.GetTopWindow()
 
-        self.addMenu("Help/Development/Import ROIs", self._import_rois)
+        self.addMenu("Help/Development/Import TOAs", self._import_toas)
 
     def _create_project(self) -> Tuple[str, str]:
         """
-        Create a new project name and color for the imported ROIs.
+        Create a new project name and color for the imported TOAs.
         """
         active_projects = list(self._pm.active_project_ctrl.GetStrings())
         base_name = "Project-1"
@@ -299,7 +299,7 @@ class ImportROIPlugin(Plugin):
 
         return base_name, colour
 
-    def _create_roi_data(
+    def _create_toa_data(
         self,
         idx: int,
         contour: numpy.ndarray,
@@ -308,14 +308,14 @@ class ImportROIPlugin(Plugin):
         scintillator: Scintillator,
     ) -> dict:
         """
-        Creates a single ROI dictionary from a contour.
+        Creates a single TOA dictionary from a contour.
 
-        :param idx: Index of the ROI.
+        :param idx: Index of the TOA.
         :param contour: Contour points.
         :param image_data: Image metadata.
-        :param colour: Color for the ROI.
-        :param scintillator: Scintillator object where the ROI needs to be imported.
-        :return: Dictionary containing ROI data.
+        :param colour: Color for the TOA.
+        :param scintillator: Scintillator object where the TOA needs to be imported.
+        :return: Dictionary containing TOA data.
         """
         polygon = Polygon(contour)
         # Higher tolerance for less polygon points
@@ -329,31 +329,31 @@ class ImportROIPlugin(Plugin):
         return {
             "index": idx,
             "data": {
-                ROIColumnNames.NAME.value: "ROI",
-                ROIColumnNames.SLICE_IDX.value: idx,
-                ROIColumnNames.POSX.value: 0,
-                ROIColumnNames.POSY.value: 0,
-                ROIColumnNames.SIZEX.value: "",
-                ROIColumnNames.SIZEY.value: "",
-                ROIColumnNames.ROT.value: 0,
-                ROIColumnNames.CONTRAST.value: round(
+                TOAColumnNames.NAME.value: "TOA",
+                TOAColumnNames.SLICE_IDX.value: idx,
+                TOAColumnNames.POSX.value: 0,
+                TOAColumnNames.POSY.value: 0,
+                TOAColumnNames.SIZEX.value: "",
+                TOAColumnNames.SIZEY.value: "",
+                TOAColumnNames.ROT.value: 0,
+                TOAColumnNames.CONTRAST.value: round(
                     self._pm.main_data.sed.contrast.value, 4
                 ),
-                ROIColumnNames.BRIGHTNESS.value: round(
+                TOAColumnNames.BRIGHTNESS.value: round(
                     self._pm.main_data.sed.brightness.value, 4
                 ),
-                ROIColumnNames.DWELL_TIME.value: round(
+                TOAColumnNames.DWELL_TIME.value: round(
                     self._pm.project_settings_tab.dwell_time_sb_ctrl.GetValue() * 1e6, 4
                 ),
-                ROIColumnNames.FIELDS.value: "",
+                TOAColumnNames.FIELDS.value: "",
             },
             "roa": {
-                "name": "ROI",
+                "name": "TOA",
                 "slice_index": idx,
                 "hfw": self._pm.main_data.user_hfw_sb.value,
                 "resolution": self._pm.main_data.user_resolution_sb.value,
                 "shape": {
-                    "name": f"ROI_{idx}",
+                    "name": f"TOA_{idx}",
                     "colour": colour,
                     "selected": False,
                     "cnvs_view_name": str(scintillator.number),
@@ -366,14 +366,14 @@ class ImportROIPlugin(Plugin):
         }
 
     def _create_project_data(
-        self, sample_type: str, project_name: str, rois: list
+        self, sample_type: str, project_name: str, toas: list
     ) -> dict:
         """
-        Creates project data from the sample type, project name, and ROIs.
+        Creates project data from the sample type, project name, and TOAs.
 
         :param sample_type: Type of the sample.
         :param project_name: Name of the project.
-        :param rois: List of ROIs data.
+        :param toas: List of TOAs data.
         :return: Dictionary containing project data.
         """
         return {
@@ -391,17 +391,17 @@ class ImportROIPlugin(Plugin):
                         "ribbons": [],
                         "sections": [],
                         "roas": [],
-                        "rois": rois,
+                        "toas": toas,
                     }
                 }
             }
         }
 
-    def _create_rois(self, image_data: dict, labels: numpy.ndarray) -> None:
+    def _create_toas(self, image_data: dict, labels: numpy.ndarray) -> None:
         """
-        Create project's ROIs using contours from the label mask.
+        Create project's TOAs using contours from the label mask.
 
-        Extracts contours, simplifies them, converts to physical space, and adds them as ROIs.
+        Extracts contours, simplifies them, converts to physical space, and adds them as TOAs.
         :param image_data: Dictionary containing image metadata.
         :param labels: Numpy array containing the label mask.
         """
@@ -414,30 +414,30 @@ class ImportROIPlugin(Plugin):
                 image_data[model.MD_POS]
             )
 
-            rois = [
-                self._create_roi_data(idx, contour, image_data, colour, scintillator)
+            toas = [
+                self._create_toa_data(idx, contour, image_data, colour, scintillator)
                 for idx, contour in enumerate(contours)
             ]
 
             project_data = self._create_project_data(
-                current_sample.type, project_name, rois
+                current_sample.type, project_name, toas
             )
             self._pm.import_export_manager._apply_project_data(project_data)
 
             popup.show_message(
                 wx.GetApp().main_frame,
                 title="Import",
-                message=f"ROIs successfully imported for sample type {current_sample.type}!",
+                message=f"TOAs successfully imported for sample type {current_sample.type}!",
                 timeout=10.0,
                 level=logging.INFO,
             )
 
         except Exception as ex:
             logging.exception(
-                "Failure importing ROIs for %s",
+                "Failure importing TOAs for %s",
                 self._pm.main_data.current_sample.value.type,
             )
-            show_error(f"Importing ROIs failed, raised exception {ex}.")
+            show_error(f"Importing TOAs failed, raised exception {ex}.")
         finally:
             self._pm.is_import_btn_pressed = False
 
@@ -449,13 +449,13 @@ class ImportROIPlugin(Plugin):
                 # If validation fails, prevent page change
                 evt.Veto()
 
-    def _import_rois(self):
-        """Help/Development/Import ROIs menu callback."""
+    def _import_toas(self):
+        """Help/Development/Import TOAs menu callback."""
         if self._pm.main_data.current_sample.value is None:
             show_error("Please select a sample carrier first.")
             return
 
-        wizard = Wizard(self._parent, title="Import ROIs")
+        wizard = Wizard(self._parent, title="Import TOAs")
         image_page = MetadataPage(wizard)
         npy_page = NpyPage(wizard)
         wizard.FitToPage(image_page)
@@ -468,8 +468,8 @@ class ImportROIPlugin(Plugin):
             if wizard.RunWizard(image_page):
                 image_data = image_page.get_data()
                 labels = npy_page.get_labels()
-                self._create_rois(image_data, labels)
+                self._create_toas(image_data, labels)
             else:
-                logging.debug("Import ROIs wizard was cancelled.")
+                logging.debug("Import TOAs wizard was cancelled.")
         finally:
             wizard.Destroy()

@@ -794,11 +794,11 @@ class AcquisitionTask(object):
 STAGE_PRECISION = 29e-6  # m, acceptable precision of the stage position, is used to determine the overview overlap
 
 
-def acquireNonRectangularTiledArea(roi, stream, stage, acq_dwell_time, scanner_conf, live_stream=None):
+def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, live_stream=None):
     """
     Start an overview acquisition task for a given region.
 
-    :param roi: (FastEMROI) The region of interest to be acquired.
+    :param toa: (FastEMTOA) The tiled overview acquisition to be acquired.
     :param stream: (SEMStream) The stream used for the acquisition.
         It must have the detector and emitter connected to the TFS XT client detector and scanner.
         It should be in focus.
@@ -840,13 +840,13 @@ def acquireNonRectangularTiledArea(roi, stream, stage, acq_dwell_time, scanner_c
     # overwrites the scanner configuration from overview mode to liveview mode.
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
-    est_dur = roi.estimate_acquisition_time(acq_dwell_time)
+    est_dur = toa.estimate_acquisition_time(acq_dwell_time)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, roi.shape.points.value, live_stream, scanner_conf)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf)
 
     return f
 

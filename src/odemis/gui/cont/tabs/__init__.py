@@ -38,7 +38,7 @@ from .fastem_setup_tab import FastEMSetupTab
 from .fibsem_tab import FibsemTab
 from .fastem_single_beam_tab import FastEMSingleBeamTab
 from .fastem_multi_beam_tab import FastEMMultiBeamTab
-from .fastem_project_rois_tab import FastEMProjectROIsTab
+from .fastem_project_toas_tab import FastEMProjectTOAsTab
 from .localization_tab import LocalizationTab
 from .mimas_align_tab import MimasAlignTab
 from .secom_align_tab import SecomAlignTab
