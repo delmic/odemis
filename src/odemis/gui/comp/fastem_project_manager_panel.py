@@ -350,7 +350,7 @@ class ProjectManagerImportExport:
             # Add ROIs
             for roi in rois:
                 roi_row = ROIRow.from_dict(roi, self.project_manager.tab_data)
-                # Importing ROIs using the fastem_import_roi plugin has default row data values
+                # Importing ROIs using the fastem_import_region plugin has default row data values
                 # related to the shape's attributes.
                 # Update the row data to reflect them in the grid.
                 roi_row.update_data()
@@ -374,6 +374,10 @@ class ProjectManagerImportExport:
             # Add ROAs
             for roa in roas:
                 roa_row = ROARow.from_dict(roa, self.project_manager.tab_data)
+                # Importing ROAs using the fastem_import_region plugin has default row data values
+                # related to the shape's attributes.
+                # Update the row data to reflect them in the grid.
+                roa_row.update_data()
                 roa_node = FastEMTreeNode(
                     f"{roa_row.roa.name.value}_{roa_row.roa.slice_index.value}",
                     NodeType.ROA,
