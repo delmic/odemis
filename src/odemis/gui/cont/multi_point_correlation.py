@@ -790,7 +790,12 @@ class CorrelationPointsController:
         """
         # TODO change the color based on success in the grid
         if self._tab_data_model.main.currentTarget.value:
-            das = [stream.raw[0] for stream in self.correlation_target.fm_streams]
+            # Select the streams which are visible in the view for Z-targeting
+            streams_projections = self._tab_data_model.views.value[0].stream_tree.flat.value
+            if not streams_projections:
+                wx.MessageBox("FM streams are not available for refining Z", "Error", wx.OK | wx.ICON_ERROR)
+                return
+            das = [stream_projection.stream.raw[0] for stream_projection in streams_projections]
             coords = self._tab_data_model.main.currentTarget.value.coordinates.value
             pixel_coords = self.correlation_target.fm_streams[0].getPixelCoordinates((coords[0], coords[1]),
                                                                                      check_bbox=False)
