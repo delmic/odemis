@@ -295,7 +295,7 @@ class xrcpnl_fastem_project_manager(wx.Panel):
         self.btn_import = xrc.XRCCTRL(self, "btn_import")
         self.pnl_project_tabbuttons = xrc.XRCCTRL(self, "pnl_project_tabbuttons")
         self.btn_tab_settings = xrc.XRCCTRL(self, "btn_tab_settings")
-        self.btn_tab_rois = xrc.XRCCTRL(self, "btn_tab_rois")
+        self.btn_tab_toas = xrc.XRCCTRL(self, "btn_tab_toas")
         self.btn_tab_ribbons = xrc.XRCCTRL(self, "btn_tab_ribbons")
         self.btn_tab_sections = xrc.XRCCTRL(self, "btn_tab_sections")
         self.btn_tab_roas = xrc.XRCCTRL(self, "btn_tab_roas")
@@ -3355,9 +3355,9 @@ IEND\xaeB`\x82'''
                   <border>10</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="TabButton" name="btn_tab_rois">
+                  <object class="TabButton" name="btn_tab_toas">
                     <icon>______img_icon_ico_single_beam_png</icon>
-                    <label>ROIS</label>
+                    <label>TOAS</label>
                     <size>160,30</size>
                     <face_colour>def</face_colour>
                     <fg>#E5E5E5</fg>
