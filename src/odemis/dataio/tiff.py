@@ -2180,6 +2180,10 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
     pyramid (boolean): whether the file should be saved in the pyramid format or not.
       In this format, each image is saved along with different zoom levels
     """
+    # Check dtype and convert if not supported by pylibtiff
+    # TODO: ideally, fork pylibtiff and fix it on a lower level
+    if arr.dtype == ">u2":
+        arr = arr.astype("=u2")
     # if not pyramid, just save the image in the TIFF file, and return
     if not pyramid:
         f.write_image(arr, compression=compression, write_rgb=write_rgb)
