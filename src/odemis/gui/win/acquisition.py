@@ -19,12 +19,13 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+import collections
 import copy
 import gc
 import logging
 import math
 import os.path
+import time
 from builtins import str
 from concurrent.futures._base import CancelledError
 from typing import List, Tuple, Optional
@@ -40,6 +41,9 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
                                OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
+from odemis.gui import conf
+from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
+
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
                                presets)
@@ -49,14 +53,18 @@ from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.settings import (LocalizationSettingsController,
                                       SecomSettingsController)
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
-from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView
+from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
+import odemis.gui.model as guimod
+from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
+import odemis.gui.util as guiutil
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
 from odemis.gui.util.conversion import sample_positions_to_layout
+import odemis.gui.cont.views as viewcont
 from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.util import units
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 
@@ -1312,6 +1320,103 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.terminate_listeners()
         self.EndModal(wx.ID_OPEN)
+
+
+class CorrelationDialog(xrcfr_correlation):
+    """
+    Initialize the controllers for CorrelationDialog box.
+    """
+    def __init__(self,  parent, orig_tab_data):
+        xrcfr_correlation.__init__(self, parent)
+        main_data = orig_tab_data.main
+        tab_data = guimod.CryoTdctCorrelationGUIData(main_data)
+        self.tab_data = tab_data
+
+        vpv = self._create_views(self.pnl_correlation_grid.viewports)
+        self.view_controller = viewcont.ViewPortController(tab_data, None, vpv)
+
+        self.vp_correlation_tl.canvas.cryotarget_fm_overlay.active.value = True
+        self.vp_correlation_tl.canvas.add_world_overlay(
+            self.vp_correlation_tl.canvas.cryotarget_fm_overlay)
+        self.vp_correlation_tr.canvas.cryotarget_fib_overlay.active.value = True
+        self.vp_correlation_tr.canvas.add_world_overlay(
+            self.vp_correlation_tr.canvas.cryotarget_fib_overlay)
+
+        # stream bar controller
+        self.streambar_controller = StreamBarController(
+            tab_data,
+            self.pnl_correlation_streams,
+            static=True,
+        )
+
+        # correlation points controller
+        self._correlation_points_controller = CorrelationPointsController(self)
+
+        # Toolbar
+        self.tb = self.correlation_toolbar
+        for t in guimod.TOOL_ORDER:
+            if t in tab_data.tool.choices:
+                self.tb.add_tool(t, tab_data.tool)
+        # Add fit view to content to toolbar
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+        self.btn_close.Bind(wx.EVT_BUTTON, self.on_close)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+
+    @property
+    def correlation_points_controller(self):
+        return self._correlation_points_controller
+
+    def _create_views(self, viewports):
+        """
+        Create views depending on the actual hardware present
+        return OrderedDict: as needed for the ViewPortController
+        """
+        vpv = collections.OrderedDict([
+            (viewports[0], # focused view
+             {"name": "FLM view",
+              "stream_classes": OpticalStream,
+              }),
+            (viewports[1],
+             {"name": "FIB view",
+              "stream_classes": EMStream,
+              }),])
+        return vpv
+
+    def remove_all_streams(self):
+        """
+        Remove the streams we added to the view on creation
+        Must be called in the main GUI thread
+        """
+        # Ensure we don't update the view after the window is destroyed
+        self.streambar_controller.clear()
+        gc.collect()  # To help reclaiming some memory
+
+    def terminate_listeners(self):
+        """
+        Disconnect all the connections to the streams.
+        Must be called in the main GUI thread.
+        """
+        # stop listening to events
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self.remove_all_streams()
+        # Set the streambar controller to None so it wouldn't be a listener to stream.remove
+        self.streambar_controller = None
+
+    def on_close(self, evt):
+        """Handle multipoint correlation when close button is clicked"""
+        logging.info("Close button clicked, exiting multipoint correlation window")
+        while self._correlation_points_controller.is_processing:
+            time.sleep(0.1)
+            continue
+        self.remove_all_streams()
+        assert self._correlation_points_controller.is_processing == False
+        self.EndModal(wx.ID_CANCEL)
+
+    def Destroy(self):
+        """Stop the correlation points controller and destroy the dialog"""
+        if self._correlation_points_controller:
+            self._correlation_points_controller.stop()
+        super().Destroy()
 
 
 def ShowAcquisitionFileDialog(parent, filename):

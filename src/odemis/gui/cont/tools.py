@@ -163,11 +163,31 @@ TOOLS = {
         ),
     model.TOOL_FEATURE:
         ModeTool(
-            # TODO: pick a new icon
             "btn_feature_toolbox_icon",
             model.TOOL_FEATURE,
             model.TOOL_NONE,
             "Create/Move feature"
+        ),
+    model.TOOL_REGION_OF_INTEREST:
+        ModeTool(
+            "btn_poi_icon",
+            model.TOOL_REGION_OF_INTEREST,
+            model.TOOL_NONE,
+            "Create/Move region of interest Shift+Click"
+        ),
+    model.TOOL_FIDUCIAL:
+        ModeTool(
+            "btn_fiducial_icon",
+            model.TOOL_FIDUCIAL,
+            model.TOOL_NONE,
+            "Create/Move fiducial Ctrl+Click"
+        ),
+    model.TOOL_SURFACE_FIDUCIAL:
+        ModeTool(
+            "btn_surface_fiducial_icon",
+            model.TOOL_SURFACE_FIDUCIAL,
+            model.TOOL_NONE,
+            "Create/Move surface fiducial"
         ),
     model.TOOL_RECTANGLE:
         ModeTool(
