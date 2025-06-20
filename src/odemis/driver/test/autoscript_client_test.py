@@ -335,6 +335,15 @@ class TestMicroscope(unittest.TestCase):
 
             info = self.microscope.beam_current_info(channel=ch)
             self.assertTrue(isinstance(info, dict))
+            if ch == "ion":
+                # ion beam consists of discrete currents as choice instead of a range
+                if "choices" in info:
+                    self.assertTrue(isinstance(info["choices"], list))
+                    self.assertTrue(len(info["choices"]) > 0)
+                    for choice in info["choices"]:
+                        self.assertTrue(isinstance(choice, (int, float)))
+                continue
+
             _range = info["range"]
             self.assertTrue(isinstance(_range[0], (int, float)))
             self.assertTrue(isinstance(_range[1], (int, float)))
