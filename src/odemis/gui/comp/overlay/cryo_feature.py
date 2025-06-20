@@ -612,7 +612,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                 if target is self.tab_data.main.currentTarget.value:
                     # Correct label positions such that label is outside the icon display
                     set_icon(self._feature_icons_selected[target.type.value], target.type.value)
-                    self._label.text = target.name.value
+                    self._label.text = target.index.value
                     self._label.pos = (bpos[0] + 10, bpos[1] + 10)
                     self._label.draw(ctx)
                 elif self.tab_data.main.currentTarget.value and (
@@ -751,7 +751,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                 # Show proper feature icon based on selected target + status
                 if target is self.tab_data.main.currentTarget.value:
                     set_icon(self._feature_icons_selected[target.type.value], target.type.value)
-                    self._label.text = target.name.value
+                    self._label.text = target.index.value
                     self._label.pos = (bpos[0] + 10, bpos[1] + 10)
                     self._label.draw(ctx)
                 elif self.tab_data.main.currentTarget.value and (
@@ -763,7 +763,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                     # Label the target if the correlation result is there for easy comparison
                     # with the corresponding projected fiducials
                     if self.tab_data.projected_points:
-                        self._label.text = (target.index.value)
+                        self._label.text = target.index.value
                         self._label.pos = (bpos[0] + 15, bpos[1] + 15)
                         self._label.draw(ctx)
 
@@ -792,7 +792,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             set_icon(self._feature_icons[target.type.value])
             # Label the projected fiducial for easy comparison with corresponding fiducials
             if target.type.value is TargetType.ProjectedFiducial.value:
-                self._label.text = str(target.index.value)
+                self._label.text = target.index.value
                 self._label.pos = (bpos[0] + 15, bpos[1] + 15)
                 self._label.draw(ctx)
             ctx.paint()
