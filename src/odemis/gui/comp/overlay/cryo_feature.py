@@ -732,7 +732,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             return
 
         def set_icon(feature_icon, feature_type=TargetType.Fiducial.value):
-            if feature_type == TargetType.ProjectedPOI.value or feature_type == TargetType.SurfaceFiducial.value:
+            if feature_type in (TargetType.ProjectedPOI.value, TargetType.SurfaceFiducial.value):
                 ctx.set_source_surface(feature_icon, bpos[0] - POI_DIAMETER, bpos[1] - POI_DIAMETER)
             else:
                 ctx.set_source_surface(feature_icon, bpos[0] - FIDUCIAL_DIAMETER, bpos[1] - FIDUCIAL_DIAMETER)
@@ -791,7 +791,7 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
             set_icon(self._feature_icons[target.type.value])
             # Label the projected fiducial for easy comparison with corresponding fiducials
-            if target.type.value == TargetType.ProjectedFiducial.value:
+            if target.type.value is TargetType.ProjectedFiducial.value:
                 self._label.text = str(target.index.value)
                 self._label.pos = (bpos[0] + 15, bpos[1] + 15)
                 self._label.draw(ctx)
