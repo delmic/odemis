@@ -203,18 +203,6 @@ def check_latest_package(
                 return latest_package
     return None
 
-def transfer_latest_package(client: 'SEM', data: bytes) -> None:
-    """
-    Transfer the latest xtadapter package.
-    Note:
-        Pyro has a 1 gigabyte message size limitation.
-        https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
-    :param data: The package's zip file data in bytes.
-    """
-    with client._proxy_access:
-        client.server._pyroClaimOwnership()
-        return client.server.transfer_latest_package(data)
-
 def check_and_transfer_latest_package(client: 'SEM') -> None:
     """Check if a latest xtadapter package is available and then transfer it."""
     try:
@@ -366,6 +354,18 @@ class SEM(model.HwComponent):
             else:
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
+
+    def transfer_latest_package(self, data: bytes) -> None:
+        """
+        Transfer a (new) xtadapter package.
+        Note:
+            Pyro has a 1 gigabyte message size limitation.
+            https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
+        :param data: The package's zip file data in bytes.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.transfer_latest_package(data)
 
     def move_stage(self, position: Dict[str, float], rel: bool = False) -> None:
         """
