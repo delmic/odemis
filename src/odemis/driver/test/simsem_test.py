@@ -580,13 +580,13 @@ class TestIndependentDetector(unittest.TestCase):
         self.det.dwellTime.value = 10e-6
         self.assertAlmostEqual(self.det.dwellTime.value, 10e-6)
 
-        self.det.dwellTime.value = 1.16e-6
-        self.assertAlmostEqual(self.det.dwellTime.value, 1.1e-6, delta=0.1e-9)
+        self.det.dwellTime.value = 2.16e-6
+        self.assertAlmostEqual(self.det.dwellTime.value, 2.1e-6, delta=0.1e-9)
 
     def test_acquisition(self):
         for res, dt in [((200, 100), 10e-6),
                         ((1, 1), 0.1),
-                        (self.det.resolution.range[1], 0.1e-6),
+                        (self.det.resolution.range[1], 2e-6),
                         ]:
             self.det.resolution.value = res
             self.det.dwellTime.value = dt
@@ -607,7 +607,7 @@ class TestIndependentDetector(unittest.TestCase):
         Check that "continuous" acquisition only sends 1 image, as continuous mode is disabled
         """
         self.det.resolution.value = (200, 100)
-        self.det.dwellTime.value = 1e-6
+        self.det.dwellTime.value = 2e-6
         expected_duration = self.compute_expected_duration()
         self.size = self.det.resolution.value
 
