@@ -900,14 +900,9 @@ class Detector(model.Detector):
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._channel = channel
-        self._detector = detector
-        self.parent._device.DtSelect(self._channel, self._detector)
-        self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
-        # adjust brightness and contrast
-        self.parent._device.DtAutoSignal(self._channel)
+        self._detector = self.get_detector_idx(detector)
+        self.parent._device_handler.DtSelect(self._device_type, self._channel, self._detector)
 
-        # The shape is just one point, the depth
-        self._shape = (2 ** 16,)  # only one point
         self.data = SEMDataFlow(self, parent)
 
         # Special event to request software unblocking on the scan
@@ -916,6 +911,30 @@ class Detector(model.Detector):
         # TODO: provide a method applyAutoContrast(), as in Phenom, to run the
         # auto signal function. + a way to do so even if the detector is not
         # used (because it's used via a CompositedScanner)?
+    def get_detector_idx(self, detector: Union[int, str]) -> int:
+        """Get the index of the detector by int (do nothing) or by name (match with Tescan's available detecors).
+
+        :param detector: the detector index or the name of the detector
+        :returns: the detector's index on the Tescan hardware
+        """
+        detector_idx = None
+        if isinstance(detector, int):
+            detector_idx = detector
+        elif isinstance(detector, str):
+            available_detectors = self.parent._device_handler.DtEnumDetectors(self._device_type)
+            # First find the enumeration index for the desired detector (by name)
+            enum_idx_for_name = re.findall(rf"det.([0-9])+.name={detector.lower()}", available_detectors.lower())
+            if enum_idx_for_name:
+                enum_idx_for_name = enum_idx_for_name[0]
+                # Now find the corresponding detector idx (which is not the same as the enumeration index!).
+                det_idx_for_name = re.findall(rf"det.{enum_idx_for_name}+.detector=([0-9]+)", available_detectors)
+                if det_idx_for_name:
+                    detector_idx = int(det_idx_for_name[0])
+
+        if detector_idx:
+            return detector_idx
+        else:
+            raise ValueError("The 'detector' parameter from the config does not match an available detector")
 
     @roattribute
     def channel(self):

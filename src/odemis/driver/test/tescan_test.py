@@ -48,7 +48,8 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 # However, not everything behaves exactly as on the real hardware, so beware
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": 0}
+CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": "e-t"}
+CONFIG_FIB = {"name": "sed", "role": "sed", "channel": 0, "detector": "se"}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_STG = {"name": "stg", "role": "stage"}
 CONFIG_CM = {"name": "camera", "role": "chamber-ccd"}
@@ -67,7 +68,15 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
               # change host ip address according to network settings
-              "host": "192.168.56.11"
+              "host": "192.168.2.35"
+              }
+
+CONFIG_FIB = {"name": "fib", "role": "sem",
+              "children": {"fib-detector": CONFIG_FIB,
+                           "fib-scanner": CONFIG_SCANNER,
+                           "stage": CONFIG_STG},
+              # change host ip address according to network settings
+              "host": "192.168.2.35"
               }
 
 # This one works with the Mira Simulator
