@@ -301,8 +301,12 @@ class SettingsController(metaclass=ABCMeta):
             btn_autoadjust.SetToggle(False)
             btn_autoadjust.SetLabel("Auto adjust")
             btn_autoadjust.Enable()
-            brightness_entry.value_ctrl.Enable()
-            contrast_entry.value_ctrl.Enable()
+            try:
+                # These do not necessarily exist
+                brightness_entry.value_ctrl.Enable()
+                contrast_entry.value_ctrl.Enable()
+            except NameError:
+                pass
 
         def auto_adjust(_):
             """ Call the auto contrast method on the detector if it's not already running """
@@ -310,8 +314,11 @@ class SettingsController(metaclass=ABCMeta):
                 f = detector.applyAutoContrastBrightness()
                 btn_autoadjust.SetLabel("Adjusting...")
                 btn_autoadjust.Disable()
-                brightness_entry.value_ctrl.Disable()
-                contrast_entry.value_ctrl.Disable()
+                try:
+                    brightness_entry.value_ctrl.Disable()
+                    contrast_entry.value_ctrl.Disable()
+                except NameError:
+                    pass
                 f.add_done_callback(adjust_done)
 
         btn_autoadjust.Bind(wx.EVT_BUTTON, auto_adjust)
@@ -514,6 +521,8 @@ class SecomSettingsController(SettingsBarController):
             # of detecting indirectly via the presence of .bpp.
             det = main_data.sed or main_data.bsd
             if det and model.hasVA(det, "bpp"):
+                conf = get_hw_config(det, self._hw_settings_config)
+                self._sem_panel.add_setting_entry("bpp", det.bpp, det, conf['bpp'])
                 self._sem_panel.add_bc_control(det)
 
 

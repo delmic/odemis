@@ -525,6 +525,9 @@ class SEM(model.HwComponent):
                                          l, t, r, b, 1, dt)
                 # we must stop the scanning even after single scan
                 # fetch the image (blocking operation), ndarray is returned
+                img = self._device_handler.FetchImageEx(detector._device_type, [channel], res[0] * res[1])[0]
+                dtype = "u1" if detector.bpp.value == 8 else "<u2"
+                img = numpy.frombuffer(img, dtype=dtype)
                 logging.debug(f"Received {DEVICE_LABELS[detector._device_type]} image of length {len(img)}")
             except OSError:
                 raise CancelledError("Acquisition halted during scanning")
@@ -532,9 +535,9 @@ class SEM(model.HwComponent):
             self._device_handler.ScStopScan(detector._device_type)
             self.pre_res = res
             try:
-                sem_img.shape = res[::-1]
-            except Exception:
-                logging.exception("Failed to update the image shape")
+                img.shape = res[::-1]
+            except Exception as e:
+                logging.exception(f"Failed to update the image shape {e}")
 
             return model.DataArray(img, metadata)
 
@@ -677,6 +680,20 @@ class Scanner(model.Emitter):
             self.probeCurrent = model.FloatContinuous(pc, current_range, unit="A",
                                                         setter=self._setPC)
             self.probeCurrent.subscribe(self._onPC)
+        elif self._device_type == DeviceType.ION:
+            beam_presets = self.get_ion_beam_presets()
+            # Add an empty preset as the first element to serve as the default, since the current preset cannot be
+            # obtained directly via the API. This follows the UX of Essence.
+            beam_presets.insert(0, DEFAULT_ION_PRESET)
+            self.beamPreset = model.StringEnumerated(DEFAULT_ION_PRESET, beam_presets, setter=self._setIonPreset)
+            # For clarity, still maintain read-only VA's. The values from the preset titles do not match exactly with
+            # the actual device values.
+            self.accelVoltage = model.FloatVA(volt, unit="V", readonly=True)
+            # Polling the current for the ion beam is blocking the Tescan UI for a second or so.
+            # This is not ideal.
+            # TODO: As an alternative we could do a single get call only after changing the preset, but
+            # the timing is not trivial and it will not sync-back the Essence value after change.
+            # self.probeCurrent = model.FloatVA(pc, unit="A", readonly=True)
 
         # The filament and beam status codes are: -1 for filament blown (G3) or unable to determine beam status (G4),
         # 0 for beam off, 1 for beam on, and 1000 for on/off procedure in progress.
@@ -861,6 +878,12 @@ class Scanner(model.Emitter):
 
     def _onPC(self, current):
         self.parent._metadata[model.MD_EBEAM_CURRENT] = current
+
+    def _setIonPreset(self, preset):
+        with self.parent._acq_progress_lock:
+            if preset:
+                self.parent._device_handler.PresetSetEx(DeviceType.ION, preset)
+        return preset
 
     def _setDwellTime(self, dwell_time):
         # The Tescan API only supports int's for indices while their interface supports floats (which results in an
@@ -1079,14 +1102,20 @@ class Detector(model.Detector):
         self._detector = self.get_detector_idx(detector)
         self.parent._device_handler.DtSelect(self._device_type, self._channel, self._detector)
 
+        # 8 or 16 bits image
+        self.bpp = model.IntEnumerated(DEFAULT_BITDEPTH, {8, 16}, unit="bit", setter=self._setBpp)
+        self._shape = (2 ** DEFAULT_BITDEPTH,)  # only one point
+
+        self.bpp.subscribe(self._onBpp, init=True)
+
+        # will take care of executing autocontrast asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         self.data = SEMDataFlow(self, parent)
 
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
 
-        # TODO: provide a method applyAutoContrast(), as in Phenom, to run the
-        # auto signal function. + a way to do so even if the detector is not
-        # used (because it's used via a CompositedScanner)?
     def get_detector_idx(self, detector: Union[int, str]) -> int:
         """Get the index of the detector by int (do nothing) or by name (match with Tescan's available detecors).
 
@@ -1120,8 +1149,34 @@ class Detector(model.Detector):
     def detector(self):
         return self._detector
 
+    def _setBpp(self, bpp):
+        with self.parent._acq_progress_lock:
+            # Only apply bpp after acquisition, and not during
+            pass
+        return bpp
+
+    def _onBpp(self, bpp):
+        with self.parent._acq_progress_lock:
+            self.parent._device_handler.DtEnable(self._device_type, self._channel, 1, bpp)
+            self._shape = (2 ** bpp,)  # only one point
+
+    @isasync
+    def applyAutoContrastBrightness(self):
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + 5)  # rough time estimation
+        f._move_lock = threading.Lock()
+
+        return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
+
+    def _applyAutoContrastBrightness(self, future):
+        with self.parent._acquisition_init_lock:
+            with self.parent._acq_progress_lock:
+                self.parent._device_handler.DtAutoSignal(self._device_type, self._channel)
+
     def terminate(self):
-        self.parent._device.DtEnable(self._channel, 0, 16)
+        self.parent._device_handler.DtEnable(self._device_type, self._channel, 0, self.bpp.value)
 
 
 class SEMDataFlow(model.DataFlow):

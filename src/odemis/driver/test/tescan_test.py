@@ -920,6 +920,53 @@ class TestFIB(BaseFIBTest, unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+    def test_load_presets(self):
+        # We should have some presets available by default
+        self.assertGreater(len(self.scanner.beamPreset.choices), 0)
+        # Check if default is set
+        self.assertEqual(self.scanner.beamPreset.value, tescan.DEFAULT_ION_PRESET)
+
+    def test_set_presets(self):
+        # Change presets (we use hardcoded presets here). If the hardcoded presets are not available on the hardware in
+        # the future, make sure to update these here.
+        initial_preset = "2 keV; 20 pA"
+        target_preset = "30 keV; HR imaging"  # Might not be preset, add manually
+        self.scanner.beamPreset.value = initial_preset
+        logging.info(f"Current acc. voltage: {self.scanner.accelVoltage.value:.2e}")
+        start_time = time.time()
+        timeout = 30  # seconds
+
+        while (time.time() - start_time) < timeout:
+            try:
+                voltage_read = self.sem._device_handler.HVGetVoltage("ion")
+                logging.debug(f"Voltage read: {voltage_read:0.2f}")
+                # NOTE: we are not checking current, since it is blocking the Essence interface
+                self.assertAlmostEqual(voltage_read, 2e3, delta=10)
+                # If assertion passes, exit early
+                break
+            except self.failureException:
+                # The VA polls with 5 seconds, so no need for very frequent checks here.
+                time.sleep(1)
+
+        self.assertAlmostEqual(voltage_read, 2e3, delta=10)
+        self.scanner.beamPreset.value = target_preset
+        start_time = time.time()
+
+        while (time.time() - start_time) < timeout:
+            try:
+                voltage_read = self.sem._device_handler.HVGetVoltage("ion")
+                logging.debug(f"Voltage read: {voltage_read:0.2f}")
+                self.assertAlmostEqual(voltage_read, 30e3, delta=10)
+                break
+            except self.failureException:
+                time.sleep(1)
+
+        self.assertAlmostEqual(voltage_read, 30e3, delta=10)
+        empty_preset = ""
+        self.scanner.beamPreset.value = empty_preset
+        time.sleep(3)
+        # Setting an empty preset should not alter the state
+        self.assertAlmostEqual(voltage_read, 30e3, delta=10)
 
     def test_dwell_time(self):
         orig_dt = self.scanner.dwell_time_lookup[3]

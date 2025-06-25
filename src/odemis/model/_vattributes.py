@@ -971,7 +971,7 @@ class Continuous(object):
 class Enumerated(object):
     """
     Mixin which adds the ability to a VA to specify a set of authorised values.
-    It has an attribute choices which is of type set
+    It has an attribute choices which is of type set, dict or list
     It checks that any value set is among choices
     """
 
@@ -1000,8 +1000,10 @@ class Enumerated(object):
             new_choices = frozenset(new_choices_raw)
         elif isinstance(new_choices_raw, dict):
             new_choices = dict(new_choices_raw)
+        elif isinstance(new_choices_raw, list):
+            new_choices = new_choices_raw
         else:
-            raise TypeError("Choices %s is not a set." % str(new_choices_raw))
+            raise TypeError("Choices %s is not a set, dict or list." % str(new_choices_raw))
         if hasattr(self, "value"):
             if self.value not in new_choices:
                 raise IndexError("Current value %s is not part of possible choices: %s." %
