@@ -45,7 +45,7 @@ class NodeChangeType(IntEnum):
 class NodeType(IntEnum):
     ALL_PROJECTS = 0
     PROJECT = 1
-    ROI = 2
+    TOA = 2
     RIBBON = 3
     SECTION = 4
     ROA = 5
@@ -54,7 +54,7 @@ class NodeType(IntEnum):
 TreeNodeChangeEvent, EVT_TREE_NODE_CHANGE = wx.lib.newevent.NewEvent()
 # Define a mapping to determine the sorting precedence of different node types.
 # Lower numerical values indicate higher priority in the sort order:
-TYPE_PRIORITY = {NodeType.ROI: 1, NodeType.RIBBON: 2, NodeType.SECTION: 3, NodeType.ROA: 4}
+TYPE_PRIORITY = {NodeType.TOA: 1, NodeType.RIBBON: 2, NodeType.SECTION: 3, NodeType.ROA: 4}
 
 
 class FastEMTreeNode:
@@ -230,7 +230,7 @@ class FastEMTreeNode:
         if self.type == NodeType.ALL_PROJECTS:
             return child_type == NodeType.PROJECT
         elif self.type == NodeType.PROJECT:
-            return child_type in (NodeType.ROI, NodeType.RIBBON, NodeType.SECTION, NodeType.ROA)
+            return child_type in (NodeType.TOA, NodeType.RIBBON, NodeType.SECTION, NodeType.ROA)
         elif self.type == NodeType.RIBBON:
             return child_type == NodeType.SECTION
         elif self.type == NodeType.SECTION:

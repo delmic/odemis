@@ -33,13 +33,13 @@ import wx
 
 from odemis.gui import SELECTION_COLOUR, img
 from odemis.gui.comp import popup
-from odemis.gui.comp.fastem_roa import FastEMROA, FastEMROI
+from odemis.gui.comp.fastem_roa import FastEMROA, FastEMTOA
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.cont.fastem_project_grid import (
     RibbonColumnNames,
     ROAColumnNames,
-    ROIColumnNames,
+    TOAColumnNames,
     SectionColumnNames,
 )
 from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT, GridBase, Row
@@ -49,7 +49,7 @@ from odemis.gui.cont.tabs.fastem_project_ribbons_tab import (
     RibbonRow,
 )
 from odemis.gui.cont.tabs.fastem_project_roas_tab import FastEMProjectROAsTab, ROARow
-from odemis.gui.cont.tabs.fastem_project_rois_tab import FastEMProjectROIsTab, ROIRow
+from odemis.gui.cont.tabs.fastem_project_toas_tab import FastEMProjectTOAsTab, TOARow
 from odemis.gui.cont.tabs.fastem_project_sections_tab import (
     FastEMProjectSectionsTab,
     SectionRow,
@@ -273,9 +273,9 @@ class ProjectManagerImportExport:
             projects[project.name] = project_data
         for project in sb_projects:
             project_data = projects[project.name]
-            project_data["rois"] = []
-            for roi in project.find_nodes_by_type(NodeType.ROI):
-                project_data["rois"].append(roi.row.to_dict())
+            project_data["toas"] = []
+            for toa in project.find_nodes_by_type(NodeType.TOA):
+                project_data["toas"].append(toa.row.to_dict())
         return {
             self.project_manager.main_data.current_sample.value.type: {
                 "projects": projects,
@@ -325,51 +325,51 @@ class ProjectManagerImportExport:
                 project_node_mb, sort=False
             )
 
-            rois = project_data.get("rois", [])
+            toas = project_data.get("toas", [])
             ribbons = project_data.get("ribbons", [])
             sections = project_data.get("sections", [])
             roas = project_data.get("roas", [])
             project_colour = set()
 
             # Initialize grids
-            rois_grid = self.project_manager.project_rois_tab.create_grid()
+            toas_grid = self.project_manager.project_toas_tab.create_grid()
             ribbons_grid = self.project_manager.project_ribbons_tab.create_grid()
             sections_grid = self.project_manager.project_sections_tab.create_grid()
             roas_grid = self.project_manager.project_roas_tab.create_grid()
             self.project_manager.project_grids_data[project_name] = (
-                rois_grid,
+                toas_grid,
                 ribbons_grid,
                 sections_grid,
                 roas_grid,
             )
-            rois_grid.rows = [0] * len(rois)
+            toas_grid.rows = [0] * len(toas)
             ribbons_grid.rows = [0] * len(ribbons)
             sections_grid.rows = [0] * len(sections)
             roas_grid.rows = [0] * len(roas)
 
-            # Add ROIs
-            for roi in rois:
-                roi_row = ROIRow.from_dict(roi, self.project_manager.tab_data)
-                # Importing ROIs using the fastem_import_roi plugin has default row data values
+            # Add TOAs
+            for toa in toas:
+                toa_row = TOARow.from_dict(toa, self.project_manager.tab_data)
+                # Importing TOAs using the fastem_import_toa plugin has default row data values
                 # related to the shape's attributes.
                 # Update the row data to reflect them in the grid.
-                roi_row.update_data()
-                roi_node = FastEMTreeNode(
-                    f"{roi_row.roa.name.value}_{roi_row.roa.slice_index.value}",
-                    NodeType.ROI,
-                    roi_row,
+                toa_row.update_data()
+                toa_node = FastEMTreeNode(
+                    f"{toa_row.roa.name.value}_{toa_row.roa.slice_index.value}",
+                    NodeType.TOA,
+                    toa_row,
                 )
                 import_data.append(
                     ImportRowData(
-                        row=roi_row,
-                        node=roi_node,
+                        row=toa_row,
+                        node=toa_node,
                         project_node=project_node_sb,
-                        grid=rois_grid,
+                        grid=toas_grid,
                     )
                 )
-                roi_row.roa.shape.dashed = True
-                new_shapes.append(roi_row.roa.shape)
-                project_colour.add(roi["roa"]["shape"]["colour"])
+                toa_row.roa.shape.dashed = True
+                new_shapes.append(toa_row.roa.shape)
+                project_colour.add(toa["roa"]["shape"]["colour"])
 
             # Add ROAs
             for roa in roas:
@@ -470,7 +470,7 @@ class ProjectManagerImportExport:
             self.project_manager.tab_data.project_tree_sb.sort_children_recursively()
             self.project_manager.tab_data.project_tree_mb.sort_children_recursively()
             # Resize the grid columns once at the end to save time
-            rois_grid.AutoSizeColumns()
+            toas_grid.AutoSizeColumns()
             ribbons_grid.AutoSizeColumns()
             sections_grid.AutoSizeColumns()
             roas_grid.AutoSizeColumns()
@@ -565,7 +565,7 @@ class FastEMProjectManagerPanel:
             FastEMTreeNode(tab_data.current_project.value, NodeType.PROJECT)
         )
         # A dict where key is the project name and value is the project grid's data,
-        # the project's grid data is a tuple of rois, ribbons, sections, roas grid
+        # the project's grid data is a tuple of toas, ribbons, sections, roas grid
         self.project_grids_data: Dict[str, Tuple[GridBase, GridBase, GridBase, GridBase]] = {}
 
         self.projects_panel = SettingsPanel(
@@ -606,15 +606,15 @@ class FastEMProjectManagerPanel:
             tab_data,
         )
 
-        project_rois_panel = wx.Panel(
+        project_toas_panel = wx.Panel(
             panel.pnl_project_tabs,
             size=panel.pnl_project_tabs.Size,
-            name="project_rois_panel",
+            name="project_toas_panel",
         )
-        self.project_rois_tab = FastEMProjectROIsTab(
-            "fastem_project_rois",
-            panel.btn_tab_rois,
-            project_rois_panel,
+        self.project_toas_tab = FastEMProjectTOAsTab(
+            "fastem_project_toas",
+            panel.btn_tab_toas,
+            project_toas_panel,
             main_frame,
             self.main_data,
         )
@@ -669,7 +669,7 @@ class FastEMProjectManagerPanel:
         self.project_tab_controller = TabController(
             [
                 self.project_settings_tab,
-                self.project_rois_tab,
+                self.project_toas_tab,
                 self.project_ribbons_tab,
                 self.project_sections_tab,
                 self.project_roas_tab,
@@ -681,7 +681,7 @@ class FastEMProjectManagerPanel:
         )
 
         self.project_grids_data[tab_data.current_project.value] = (
-            self.project_rois_tab.grid,
+            self.project_toas_tab.grid,
             self.project_ribbons_tab.grid,
             self.project_sections_tab.grid,
             self.project_roas_tab.grid,
@@ -784,13 +784,13 @@ class FastEMProjectManagerPanel:
     def _on_move_up(self, evt):
         """Moves selected row/s up in the grid."""
         active_project_tab = self.tab_data.active_project_tab.value
-        if active_project_tab == self.project_rois_tab:
+        if active_project_tab == self.project_toas_tab:
             project_tree = self.tab_data.project_tree_sb
         else:
             project_tree = self.tab_data.project_tree_mb
-        if active_project_tab == self.project_rois_tab:
-            rows = self.project_rois_tab.grid.GetSelectedRows()
-            self.project_rois_tab.grid.move_rows_up(rows)
+        if active_project_tab == self.project_toas_tab:
+            rows = self.project_toas_tab.grid.GetSelectedRows()
+            self.project_toas_tab.grid.move_rows_up(rows)
         elif active_project_tab == self.project_ribbons_tab:
             rows = self.project_ribbons_tab.grid.GetSelectedRows()
             self.project_ribbons_tab.grid.move_rows_up(rows)
@@ -808,13 +808,13 @@ class FastEMProjectManagerPanel:
     def _on_move_down(self, evt):
         """Moves selected row/s down in the grid."""
         active_project_tab = self.tab_data.active_project_tab.value
-        if active_project_tab == self.project_rois_tab:
+        if active_project_tab == self.project_toas_tab:
             project_tree = self.tab_data.project_tree_sb
         else:
             project_tree = self.tab_data.project_tree_mb
-        if active_project_tab == self.project_rois_tab:
-            rows = self.project_rois_tab.grid.GetSelectedRows()
-            self.project_rois_tab.grid.move_rows_down(rows)
+        if active_project_tab == self.project_toas_tab:
+            rows = self.project_toas_tab.grid.GetSelectedRows()
+            self.project_toas_tab.grid.move_rows_down(rows)
         elif active_project_tab == self.project_ribbons_tab:
             rows = self.project_ribbons_tab.grid.GetSelectedRows()
             self.project_ribbons_tab.grid.move_rows_down(rows)
@@ -832,19 +832,19 @@ class FastEMProjectManagerPanel:
     def _on_delete(self, evt):
         """Deletes the selected row/s from the grid and the project tree."""
         active_project_tab = self.tab_data.active_project_tab.value
-        if active_project_tab == self.project_rois_tab:
+        if active_project_tab == self.project_toas_tab:
             project_tree = self.tab_data.project_tree_sb
         else:
             project_tree = self.tab_data.project_tree_mb
         project_node = project_tree.find_node(
             self.tab_data.current_project.value
         )
-        if active_project_tab == self.project_rois_tab:
-            rows = self.project_rois_tab.grid.GetSelectedRows()
+        if active_project_tab == self.project_toas_tab:
+            rows = self.project_toas_tab.grid.GetSelectedRows()
             for row in rows:
-                row_obj = self.project_rois_tab.grid.rows[row]
+                row_obj = self.project_toas_tab.grid.rows[row]
                 project_node.delete_node_by_shape(row_obj.roa.shape)
-            self.project_rois_tab.grid.delete_rows(rows)
+            self.project_toas_tab.grid.delete_rows(rows)
         elif active_project_tab == self.project_ribbons_tab:
             rows = self.project_ribbons_tab.grid.GetSelectedRows()
             for row in rows:
@@ -917,9 +917,9 @@ class FastEMProjectManagerPanel:
             sizex = units.readable_str(sizex, unit="m", sig=3)
             sizey = units.readable_str(sizey, unit="m", sig=3)
             acqui_conf = AcquisitionConfig()
-            if self.tab_data.active_project_tab.value == self.project_rois_tab:
+            if self.tab_data.active_project_tab.value == self.project_toas_tab:
                 project_tree = self.tab_data.project_tree_sb
-                roa = FastEMROI(shape, self.main_data,
+                roa = FastEMTOA(shape, self.main_data,
                                 hfw=self.main_data.user_hfw_sb.value,
                                 res=self.main_data.user_resolution_sb.value)
             else:
@@ -928,21 +928,21 @@ class FastEMProjectManagerPanel:
             project_node = project_tree.find_node(
                 self.tab_data.current_project.value
             )
-            if self.tab_data.active_project_tab.value == self.project_rois_tab:
+            if self.tab_data.active_project_tab.value == self.project_toas_tab:
                 if shape_name:
-                    roi_name = shape_name.rsplit("_", 1)[0]
+                    toa_name = shape_name.rsplit("_", 1)[0]
                 else:
-                    roi_name = "ROI"
-                roi_slice_index = 0
-                if not ROIRow.is_unique_name_slice_idx(
-                    roi_name, roi_slice_index, self.project_rois_tab.grid.rows
+                    toa_name = "TOA"
+                toa_slice_index = 0
+                if not TOARow.is_unique_name_slice_idx(
+                    toa_name, toa_slice_index, self.project_toas_tab.grid.rows
                 ):
-                    roi_slice_index = ROIRow.find_next_slice_index(
-                        roi_name, self.project_rois_tab.grid.rows
+                    toa_slice_index = TOARow.find_next_slice_index(
+                        toa_name, self.project_toas_tab.grid.rows
                     )
-                roa.slice_index.value = roi_slice_index
-                roa.name.value = roi_name
-                shape.name.value = f"{roi_name}_{roi_slice_index}"
+                roa.slice_index.value = toa_slice_index
+                roa.name.value = toa_name
+                shape.name.value = f"{toa_name}_{toa_slice_index}"
                 shape.dashed = True
                 current_sample = self.main_data.current_sample.value
                 scintillator = current_sample.find_closest_scintillator(shape.get_position())
@@ -950,25 +950,25 @@ class FastEMProjectManagerPanel:
                 if scintillator is not None:
                     scintillator_num = scintillator.number
                 row_data = {
-                    ROIColumnNames.NAME.value: roi_name,
-                    ROIColumnNames.SLICE_IDX.value: roi_slice_index,
-                    ROIColumnNames.POSX.value: round(posx, 9),
-                    ROIColumnNames.POSY.value: round(posy, 9),
-                    ROIColumnNames.SIZEX.value: sizex,
-                    ROIColumnNames.SIZEY.value: sizey,
-                    ROIColumnNames.ROT.value: int(math.degrees(shape.rotation)),
-                    ROIColumnNames.CONTRAST.value: round(self.main_data.sed.contrast.value, 4),
-                    ROIColumnNames.BRIGHTNESS.value: round(self.main_data.sed.brightness.value, 4),
-                    ROIColumnNames.DWELL_TIME.value: round(
+                    TOAColumnNames.NAME.value: toa_name,
+                    TOAColumnNames.SLICE_IDX.value: toa_slice_index,
+                    TOAColumnNames.POSX.value: round(posx, 9),
+                    TOAColumnNames.POSY.value: round(posy, 9),
+                    TOAColumnNames.SIZEX.value: sizex,
+                    TOAColumnNames.SIZEY.value: sizey,
+                    TOAColumnNames.ROT.value: int(math.degrees(shape.rotation)),
+                    TOAColumnNames.CONTRAST.value: round(self.main_data.sed.contrast.value, 4),
+                    TOAColumnNames.BRIGHTNESS.value: round(self.main_data.sed.brightness.value, 4),
+                    TOAColumnNames.DWELL_TIME.value: round(
                         self.project_settings_tab.dwell_time_sb_ctrl.GetValue() * 1e6, 4
                     ),  # [µs]
-                    ROIColumnNames.FIELDS.value: "",
-                    ROIColumnNames.SCINTILLATOR_NUM.value: scintillator_num,
+                    TOAColumnNames.FIELDS.value: "",
+                    TOAColumnNames.SCINTILLATOR_NUM.value: scintillator_num,
                 }
-                row = ROIRow(row_data, roa)
-                self.project_rois_tab.grid.add_row(row)
+                row = TOARow(row_data, roa)
+                self.project_toas_tab.grid.add_row(row)
                 project_node.add_child(
-                    FastEMTreeNode(shape.name.value, NodeType.ROI, row)
+                    FastEMTreeNode(shape.name.value, NodeType.TOA, row)
                 )
             elif self.tab_data.active_project_tab.value == self.project_ribbons_tab:
                 if shape_name:
@@ -1102,9 +1102,9 @@ class FastEMProjectManagerPanel:
                 logging.debug("Shape deletion in progress.")
                 self.tab_data.project_tree_sb.delete_node_by_shape(shape)
                 self.tab_data.project_tree_mb.delete_node_by_shape(shape)
-                row = self.project_rois_tab.grid.get_row_by_shape(shape)
+                row = self.project_toas_tab.grid.get_row_by_shape(shape)
                 if row:
-                    self.project_rois_tab.grid.delete_row(row.index)
+                    self.project_toas_tab.grid.delete_row(row.index)
                 row = self.project_ribbons_tab.grid.get_row_by_shape(shape)
                 if row:
                     self.project_ribbons_tab.grid.delete_row(row.index)
@@ -1144,35 +1144,35 @@ class FastEMProjectManagerPanel:
 
         :param project_name: (str) The name of the project to update the grid for.
         """
-        self.project_rois_tab.grid.Hide()
+        self.project_toas_tab.grid.Hide()
         self.project_ribbons_tab.grid.Hide()
         self.project_sections_tab.grid.Hide()
         self.project_roas_tab.grid.Hide()
         if project_name:
             if project_name in self.project_grids_data:
-                rois_grid, ribbons_grid, sections_grid, roas_grid = self.project_grids_data[project_name]
+                toas_grid, ribbons_grid, sections_grid, roas_grid = self.project_grids_data[project_name]
             else:
-                rois_grid = self.project_rois_tab.create_grid()
+                toas_grid = self.project_toas_tab.create_grid()
                 ribbons_grid = self.project_ribbons_tab.create_grid()
                 sections_grid = self.project_sections_tab.create_grid()
                 roas_grid = self.project_roas_tab.create_grid()
                 self.project_grids_data[project_name] = (
-                    rois_grid,
+                    toas_grid,
                     ribbons_grid,
                     sections_grid,
                     roas_grid,
                 )
-            self.project_rois_tab.grid = rois_grid
+            self.project_toas_tab.grid = toas_grid
             self.project_ribbons_tab.grid = ribbons_grid
             self.project_sections_tab.grid = sections_grid
             self.project_roas_tab.grid = roas_grid
             self.project_sections_tab.update_ribbons_grid(ribbons_grid)
             self.project_roas_tab.update_sections_grid(sections_grid)
-            self.project_rois_tab.grid.Show()
+            self.project_toas_tab.grid.Show()
             self.project_ribbons_tab.grid.Show()
             self.project_sections_tab.grid.Show()
             self.project_roas_tab.grid.Show()
-            self.project_rois_tab.grid.Refresh()
+            self.project_toas_tab.grid.Refresh()
             self.project_ribbons_tab.grid.Refresh()
             self.project_sections_tab.grid.Refresh()
             self.project_roas_tab.grid.Refresh()
@@ -1212,24 +1212,24 @@ class FastEMProjectManagerPanel:
             self.setup_grid_for_project(value)
             self.tab_data.current_project.value = value
 
-    def _update_project_rois_dwell_time(self, project_node, dwell_time):
+    def _update_project_toas_dwell_time(self, project_node, dwell_time):
         """
-        Updates the dwell time for all ROIs in the project.
-        :param project_node: (FastEMTreeNode) The project node containing the ROIs.
-        :param dwell_time: (float) The new dwell time to be set for the ROIs in seconds.
+        Updates the dwell time for all TOAs in the project.
+        :param project_node: (FastEMTreeNode) The project node containing the TOAs.
+        :param dwell_time: (float) The new dwell time to be set for the TOAs in seconds.
         """
-        rois = project_node.find_nodes_by_type(NodeType.ROI)
-        for roi in rois:
-            if roi.row.data[ROIColumnNames.DWELL_TIME.value] != dwell_time * 1e6:
-                roi.row.data[ROIColumnNames.DWELL_TIME.value] = round(dwell_time * 1e6, 4)  # [µs]
-                rois_grid, _, _, _ = self.project_grids_data[project_node.name]
-                rois_grid.update_row(roi.row, autosize=False)
-        self.project_rois_tab.grid.AutoSizeColumns()
+        toas = project_node.find_nodes_by_type(NodeType.TOA)
+        for toa in toas:
+            if toa.row.data[TOAColumnNames.DWELL_TIME.value] != dwell_time * 1e6:
+                toa.row.data[TOAColumnNames.DWELL_TIME.value] = round(dwell_time * 1e6, 4)  # [µs]
+                toas_grid, _, _, _ = self.project_grids_data[project_node.name]
+                toas_grid.update_row(toa.row, autosize=False)
+        self.project_toas_tab.grid.AutoSizeColumns()
 
     def _on_dwell_time_sb_entry(self, evt):
         """
         Handles the event when the single beam dwell time control is changed.
-        Updates the dwell time for all the ROIs in the current project.
+        Updates the dwell time for all the TOAs in the current project.
         """
         ctrl = evt.GetEventObject()
         if not ctrl:
@@ -1237,42 +1237,42 @@ class FastEMProjectManagerPanel:
 
         dwell_time = ctrl.GetValue()
         project_node_sb = self.tab_data.project_tree_sb.find_node(self.tab_data.current_project.value)
-        self._update_project_rois_dwell_time(project_node_sb, dwell_time)
+        self._update_project_toas_dwell_time(project_node_sb, dwell_time)
 
     def _on_user_dwell_time_sb(self, dwell_time):
         """
         Handles changes to the user dwell time for single beam.
-        Updates the dwell time for all the ROIs.
+        Updates the dwell time for all the TOAs.
         """
         project_nodes_sb = self.tab_data.project_tree_sb.find_nodes_by_type(NodeType.PROJECT)
         for project_node_sb in project_nodes_sb:
-            self._update_project_rois_dwell_time(project_node_sb, dwell_time)
+            self._update_project_toas_dwell_time(project_node_sb, dwell_time)
 
     def _on_user_hfw_sb(self, hfw):
         """Callback for user HFW change, updating the HFW in the project settings tab."""
         project_node_sb = self.tab_data.project_tree_sb.find_node(self.tab_data.current_project.value)
-        rois = project_node_sb.find_nodes_by_type(NodeType.ROI)
-        for roi in rois:
-            if roi.row.roa.hfw.value != hfw:
-                roi.row.roa.hfw.value = hfw
-                if roi.row.data[ROIColumnNames.FIELDS.value] == "1":
+        toas = project_node_sb.find_nodes_by_type(NodeType.TOA)
+        for toa in toas:
+            if toa.row.roa.hfw.value != hfw:
+                toa.row.roa.hfw.value = hfw
+                if toa.row.data[TOAColumnNames.FIELDS.value] == "1":
                     # update_shape_grid_rects also calls calculate_field_indices
-                    roi.row.update_shape_grid_rects()
+                    toa.row.update_shape_grid_rects()
                     return
-                roi.row.roa.calculate_field_indices()
+                toa.row.roa.calculate_field_indices()
 
     def _on_user_resolution_sb(self, res):
         """Callback for user resolution change, updating the resolution in the project settings tab."""
         project_node_sb = self.tab_data.project_tree_sb.find_node(self.tab_data.current_project.value)
-        rois = project_node_sb.find_nodes_by_type(NodeType.ROI)
-        for roi in rois:
-            if roi.row.roa.res.value != res:
-                roi.row.roa.res.value = res
-                if roi.row.data[ROIColumnNames.FIELDS.value] == "1":
+        toas = project_node_sb.find_nodes_by_type(NodeType.TOA)
+        for toa in toas:
+            if toa.row.roa.res.value != res:
+                toa.row.roa.res.value = res
+                if toa.row.data[TOAColumnNames.FIELDS.value] == "1":
                     # update_shape_grid_rects also calls calculate_field_indices
-                    roi.row.update_shape_grid_rects()
+                    toa.row.update_shape_grid_rects()
                     return
-                roi.row.roa.calculate_field_indices()
+                toa.row.roa.calculate_field_indices()
 
     def _on_active_project_delete_button_ctrl(self, evt):
         """Handles the event when the 'Bin' button is pressed, removing a project."""
@@ -1283,17 +1283,17 @@ class FastEMProjectManagerPanel:
             ctrl.Delete(ctrl.GetStrings().index(value))
             project_node_sb = self.tab_data.project_tree_sb.find_node(value)
             project_node_mb = self.tab_data.project_tree_mb.find_node(value)
-            rois = project_node_sb.find_nodes_by_type(NodeType.ROI)
+            toas = project_node_sb.find_nodes_by_type(NodeType.TOA)
             ribbons = project_node_mb.find_nodes_by_type(NodeType.RIBBON)
             sections = project_node_mb.find_nodes_by_type(NodeType.SECTION)
             roas = project_node_mb.find_nodes_by_type(NodeType.ROA)
-            for roi in rois:
+            for toa in toas:
                 ovv_ss = self.main_data.overview_streams.value.copy()
-                if roi.row.roa.shape in ovv_ss:
-                    del ovv_ss[roi.row.roa.shape]
+                if toa.row.roa.shape in ovv_ss:
+                    del ovv_ss[toa.row.roa.shape]
                     self.main_data.overview_streams.value = ovv_ss
-                roi.row.roa.shape.cnvs.remove_shape(roi.row.roa.shape)
-                roi.row.roa.shape = None
+                toa.row.roa.shape.cnvs.remove_shape(toa.row.roa.shape)
+                toa.row.roa.shape = None
             for ribbon in ribbons:
                 ribbon.row.roa.shape.cnvs.remove_shape(ribbon.row.roa.shape)
                 ribbon.row.roa.shape = None
@@ -1378,9 +1378,9 @@ class FastEMProjectManagerPanel:
 
         :param active_tab: (Tab) The currently active tab in the project manager.
         """
-        if active_tab == self.project_rois_tab:
-            self.project_rois_tab.grid.Layout()
-            self.project_rois_tab.grid.Refresh()
+        if active_tab == self.project_toas_tab:
+            self.project_toas_tab.grid.Layout()
+            self.project_toas_tab.grid.Refresh()
         elif active_tab == self.project_ribbons_tab:
             self.project_ribbons_tab.grid.Layout()
             self.project_ribbons_tab.grid.Refresh()
@@ -1414,14 +1414,14 @@ class FastEMProjectManagerPanel:
     def on_pnl_project_tabs_size(self, evt):
         """Adjusts the size of the project tabs when the panel is resized."""
         self.project_settings_tab.panel.SetSize(self.panel.pnl_project_tabs.Size)
-        self.project_rois_tab.panel.SetSize(self.panel.pnl_project_tabs.Size)
+        self.project_toas_tab.panel.SetSize(self.panel.pnl_project_tabs.Size)
         self.project_ribbons_tab.panel.SetSize(self.panel.pnl_project_tabs.Size)
         self.project_sections_tab.panel.SetSize(self.panel.pnl_project_tabs.Size)
         self.project_roas_tab.panel.SetSize(self.panel.pnl_project_tabs.Size)
         self.project_settings_tab.panel.Layout()
         self.project_settings_tab.panel.Refresh()
-        self.project_rois_tab.panel.Layout()
-        self.project_rois_tab.panel.Refresh()
+        self.project_toas_tab.panel.Layout()
+        self.project_toas_tab.panel.Refresh()
         self.project_ribbons_tab.panel.Layout()
         self.project_ribbons_tab.panel.Refresh()
         self.project_sections_tab.panel.Layout()

@@ -57,7 +57,7 @@ from odemis.gui import (
     img,
 )
 from odemis.gui.comp import buttons
-from odemis.gui.comp.fastem_roa import FastEMROA, FastEMROI
+from odemis.gui.comp.fastem_roa import FastEMROA, FastEMTOA
 from odemis.gui.comp.fastem_user_settings_panel import (
     DWELL_TIME_MULTI_BEAM,
     DWELL_TIME_SINGLE_BEAM,
@@ -67,7 +67,7 @@ from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_config
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.conf.util import process_setting_metadata
-from odemis.gui.cont.fastem_project_grid import ROIColumnNames
+from odemis.gui.cont.fastem_project_grid import TOAColumnNames
 from odemis.gui.cont.fastem_project_tree import (
     EVT_TREE_NODE_CHANGE,
     NodeType,
@@ -554,8 +554,8 @@ class FastEMSingleBeamAcquiController(object):
             "Automatically turned off the e-beam after acquisition is complete."
         )
 
-        # ROI count
-        self.roi_count = 0
+        # TOA count
+        self.toa_count = 0
         self.overview_streams = None
 
         # For acquisition
@@ -563,8 +563,8 @@ class FastEMSingleBeamAcquiController(object):
         self.btn_cancel = self._tab_panel.btn_cancel
         self.gauge_acq = self._tab_panel.gauge_acq
         self.lbl_acqestimate = self._tab_panel.lbl_acq_estimate
-        self.txt_num_rois = self._tab_panel.txt_num_roas
-        self.txt_num_rois.SetValue("0")
+        self.txt_num_toas = self._tab_panel.txt_num_roas
+        self.txt_num_toas.SetValue("0")
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self.acq_future = None  # ProgressiveBatchFuture
@@ -583,11 +583,11 @@ class FastEMSingleBeamAcquiController(object):
             self._on_va_change, init=True
         )
         self.main_tab_data.project_settings_data.subscribe(self._on_update_acquisition_time)
-        self._roi_future_connector = []
-        self._on_roi_acquisition_done_sub_callback = {}
-        self._set_next_roi_settings_callback = {}
+        self._toa_future_connector = []
+        self._on_toa_acquisition_done_sub_callback = {}
+        self._set_next_toa_settings_callback = {}
 
-        self.project_rois: Dict[str, Tuple[FastEMROI, Dict, NodeWindow]] = {}
+        self.project_toas: Dict[str, Tuple[FastEMTOA, Dict, NodeWindow]] = {}
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
@@ -607,30 +607,30 @@ class FastEMSingleBeamAcquiController(object):
         """
         Handle changes in the project tree node.
 
-        This function clears the current list of ROIs, counts them, and processes
+        This function clears the current list of TOAs, counts them, and processes
         selected nodes in the project tree control. It subscribes to various events
-        for selected ROIs, updates the total count, and refreshes acquisition-related
+        for selected TOAs, updates the total count, and refreshes acquisition-related
         UI elements.
         """
-        self.project_rois.clear()
-        self.roi_count = 0
+        self.project_toas.clear()
+        self.toa_count = 0
         items = self.project_tree_ctrl.get_all_items()
         for item in items:
             node = self.project_tree_ctrl.GetPyData(item)
             window = self.project_tree_ctrl.GetItemWindow(item)
             if window.checkbox.IsChecked():
-                if node.type == NodeType.PROJECT and node.name not in self.project_rois:
-                    self.project_rois[node.name] = []
-                elif node.type == NodeType.ROI:
+                if node.type == NodeType.PROJECT and node.name not in self.project_toas:
+                    self.project_toas[node.name] = []
+                elif node.type == NodeType.TOA:
                     project_node = node.project_node()
                     roa = node.row.roa
                     data = node.row.data
-                    if project_node.name not in self.project_rois:
-                        self.project_rois[project_node.name] = []
-                    self.project_rois[project_node.name].append((roa, data, window))
+                    if project_node.name not in self.project_toas:
+                        self.project_toas[project_node.name] = []
+                    self.project_toas[project_node.name].append((roa, data, window))
                     roa.shape.points.subscribe(self._on_update_acquisition_time)
-                    self.roi_count += 1
-        self.txt_num_rois.SetValue("%s" % self.roi_count)
+                    self.toa_count += 1
+        self.txt_num_toas.SetValue("%s" % self.toa_count)
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
@@ -650,7 +650,7 @@ class FastEMSingleBeamAcquiController(object):
         self.btn_acquire.Enable(
             True
             if self._main_data_model.is_optical_autofocus_done.value
-            and self.roi_count
+            and self.toa_count
             and not self._main_data_model.is_acquiring.value
             else False
         )
@@ -658,18 +658,18 @@ class FastEMSingleBeamAcquiController(object):
     @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
     def update_acquisition_time(self):
         lvl = None  # icon status shown
-        if self.roi_count == 0:
+        if self.toa_count == 0:
             lvl = logging.WARN
-            txt = "No region of interest selected"
+            txt = "No tiled overview acquisition selected"
         elif not self._main_data_model.is_optical_autofocus_done.value:
             lvl = logging.WARN
             txt = "System is not calibrated, please run Optical Autofocus."
         else:
             acq_time = 0
-            for _, rois in self.project_rois.items():
-                for roi, data, _ in rois:
-                    acq_time += roi.estimate_acquisition_time(
-                        acq_dwell_time=data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
+            for _, toas in self.project_toas.items():
+                for toa, data, _ in toas:
+                    acq_time += toa.estimate_acquisition_time(
+                        acq_dwell_time=data[TOAColumnNames.DWELL_TIME.value] * 1e-6  # [s]
                     )
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = "Estimated time is {}."
@@ -702,9 +702,9 @@ class FastEMSingleBeamAcquiController(object):
         self._tab_panel.Layout()
         self.acq_future = None
         self._fs_connector = None
-        self._roi_future_connector.clear()
-        self._on_roi_acquisition_done_sub_callback.clear()
-        self._set_next_roi_settings_callback.clear()
+        self._toa_future_connector.clear()
+        self._on_toa_acquisition_done_sub_callback.clear()
+        self._set_next_toa_settings_callback.clear()
         self._main_data_model.is_acquiring.value = False
 
         if text is not None:
@@ -727,28 +727,28 @@ class FastEMSingleBeamAcquiController(object):
         self._tab_panel.Layout()
 
         self.overview_streams = self._main_data_model.overview_streams.value.copy()
-        self.gauge_acq.Range = self.roi_count
+        self.gauge_acq.Range = self.toa_count
         self.gauge_acq.Value = 0
 
         total_t = 0
         acq_futures = {}
         is_set_first_roa_settings = False
-        project_names = list(self.project_rois.keys())
+        project_names = list(self.project_toas.keys())
 
-        flattened_rois = []  # List of tuples: (immersion, roi, data, window)
+        flattened_toas = []  # List of tuples: (immersion, toa, data, window)
         for project_name in project_names:
             immersion = self.main_tab_data.project_settings_data.value[project_name][IMMERSION]
-            rois = self.project_rois[project_name]
-            for roi_tuple in rois:
-                flattened_rois.append((immersion, *roi_tuple))
+            toas = self.project_toas[project_name]
+            for toa_tuple in toas:
+                flattened_toas.append((immersion, *toa_tuple))
 
-        # Create a list of futures for each ROI
-        for idx, (immersion, roi, data, window) in enumerate(flattened_rois):
+        # Create a list of futures for each TOA
+        for idx, (immersion, toa, data, window) in enumerate(flattened_toas):
             try:
                 if not is_set_first_roa_settings:
-                    self._main_data_model.ebeam.dwellTime.value = data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
-                    self._main_data_model.sed.brightness.value = data[ROIColumnNames.BRIGHTNESS.value]
-                    self._main_data_model.sed.contrast.value = data[ROIColumnNames.CONTRAST.value]
+                    self._main_data_model.ebeam.dwellTime.value = data[TOAColumnNames.DWELL_TIME.value] * 1e-6  # [s]
+                    self._main_data_model.sed.brightness.value = data[TOAColumnNames.BRIGHTNESS.value]
+                    self._main_data_model.sed.contrast.value = data[TOAColumnNames.CONTRAST.value]
                     is_set_first_roa_settings = True
 
                 scanner_conf = {
@@ -759,38 +759,38 @@ class FastEMSingleBeamAcquiController(object):
                     # the beam here.
                     "blanker": False,
                     "immersion": immersion,  # Immersion mode enabled/disabled, user selected
-                    "horizontalFoV": roi.hfw.value,   # Horizontal field of view (HFW) for the ROI, user selected
-                    "resolution": roi.res.value,  # Resolution in pixels (width, height), user selected
+                    "horizontalFoV": toa.hfw.value,   # Horizontal field of view (HFW) for the TOA, user selected
+                    "resolution": toa.res.value,  # Resolution in pixels (width, height), user selected
                 }
                 f = fastem.acquireNonRectangularTiledArea(
-                    roi,
+                    toa,
                     self._tab_data_model.semStream,
                     self._main_data_model.stage,
-                    data[ROIColumnNames.DWELL_TIME.value] * 1e-6,  # [s]
+                    data[TOAColumnNames.DWELL_TIME.value] * 1e-6,  # [s]
                     scanner_conf
                 )
 
-                # Add a callback to set the next ROI settings
-                if idx < len(flattened_rois) - 1:
-                    next_roi_data = flattened_rois[idx + 1][2]  # Get the next ROI 'data'
-                    set_next_roa_settings_callback = partial(self.set_next_roi_settings, next_roi_data=next_roi_data)
-                    self._set_next_roi_settings_callback[roi] = set_next_roa_settings_callback
+                # Add a callback to set the next TOA settings
+                if idx < len(flattened_toas) - 1:
+                    next_toa_data = flattened_toas[idx + 1][2]  # Get the next TOA 'data'
+                    set_next_roa_settings_callback = partial(self.set_next_toa_settings, next_toa_data=next_toa_data)
+                    self._set_next_toa_settings_callback[toa] = set_next_roa_settings_callback
                     f.add_done_callback(set_next_roa_settings_callback)
 
-                roi_sub_callback = partial(
-                    self.on_roi_acquisition_done, roi=roi, window=window
+                toa_sub_callback = partial(
+                    self.on_toa_acquisition_done, toa=toa, window=window
                 )
-                self._on_roi_acquisition_done_sub_callback[roi] = roi_sub_callback
-                f.add_done_callback(roi_sub_callback)
+                self._on_toa_acquisition_done_sub_callback[toa] = toa_sub_callback
+                f.add_done_callback(toa_sub_callback)
                 t = f.end_time - f.start_time
                 total_t += t
                 f.set_progress(start=time.time(), end=time.time() + total_t)
-                self._roi_future_connector.append(
+                self._toa_future_connector.append(
                     ProgressiveFutureConnector(f, window.gauge)
                 )
                 acq_futures[f] = t
             except Exception:
-                logging.exception("Failed to start ROI acquisition")
+                logging.exception("Failed to start TOA acquisition")
                 self._reset_acquisition_gui(
                     "Acquisition failed (see log panel).", level=logging.WARNING
                 )
@@ -804,27 +804,27 @@ class FastEMSingleBeamAcquiController(object):
             self.acq_future, self.gauge_acq, self.lbl_acqestimate
         )
 
-    def set_next_roi_settings(self, _, next_roi_data):
+    def set_next_toa_settings(self, _, next_toa_data):
         """
-        Callback called when a ROI acquisition is finished (either successfully,
+        Callback called when a TOA acquisition is finished (either successfully,
         cancelled or failed)
-        :param next_roi_data: (dict) the data of the next ROI.
+        :param next_toa_data: (dict) the data of the next TOA.
         """
         try:
-            self._main_data_model.ebeam.dwellTime.value = next_roi_data[ROIColumnNames.DWELL_TIME.value] * 1e-6  # [s]
-            self._main_data_model.sed.brightness.value = next_roi_data[ROIColumnNames.BRIGHTNESS.value]
-            self._main_data_model.sed.contrast.value = next_roi_data[ROIColumnNames.CONTRAST.value]
+            self._main_data_model.ebeam.dwellTime.value = next_toa_data[TOAColumnNames.DWELL_TIME.value] * 1e-6  # [s]
+            self._main_data_model.sed.brightness.value = next_toa_data[TOAColumnNames.BRIGHTNESS.value]
+            self._main_data_model.sed.contrast.value = next_toa_data[TOAColumnNames.CONTRAST.value]
         except Exception:
-            logging.exception("Failed to set next ROI settings")
+            logging.exception("Failed to set next TOA settings")
 
     @call_in_wx_main
-    def on_roi_acquisition_done(self, future, roi, window):
+    def on_toa_acquisition_done(self, future, toa, window):
         """
-        Callback called when a ROI acquisition is finished (either successfully,
+        Callback called when a TOA acquisition is finished (either successfully,
         cancelled or failed)
         :future: (ProgressiveFuture) the future of the acquisition.
-        :param roi: (FastEMROI) the ROI object.
-        :param window: (NodeWindow) the window of the ROI.
+        :param toa: (FastEMTOA) the TOA object.
+        :param window: (NodeWindow) the window of the TOA.
         """
         def update_status(text: str, color: str):
             window.status_text.SetForegroundColour(color)
@@ -854,12 +854,12 @@ class FastEMSingleBeamAcquiController(object):
         if current_sample:
             user_dir = os.path.join(OVERVIEW_IMAGES_DIR, current_user)
             os.makedirs(user_dir, exist_ok=True)
-            fn = os.path.join(user_dir, f"fastem_{id(roi.shape)}.ome.tiff")
+            fn = os.path.join(user_dir, f"fastem_{id(toa.shape)}.ome.tiff")
             dataio.tiff.export(fn, da, pyramid=True)
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
             s = FastEMOverviewStream(s.name.value, s.raw[0])
-            self.overview_streams[roi.shape] = s
+            self.overview_streams[toa.shape] = s
             os.remove(fn)
 
     def on_cancel(self, evt):

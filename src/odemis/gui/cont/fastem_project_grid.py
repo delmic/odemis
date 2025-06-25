@@ -22,9 +22,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from enum import Enum
 
 
-class ROIColumnNames(Enum):
+class TOAColumnNames(Enum):
     NAME = "Name"
-    SLICE_IDX = "ROI Index"
+    SLICE_IDX = "TOA Index"
     POSX = "Position.X [m]"
     POSY = "Position.Y [m]"
     SIZEX = "Size.X"
