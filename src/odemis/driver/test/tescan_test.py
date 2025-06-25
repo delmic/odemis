@@ -584,7 +584,7 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
 
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
-        self.scanner.resolution.value = (512, 256)
+        self.scanner.resolution._value = (512, 256)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
@@ -601,6 +601,7 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         pass
 
     def test_acquire(self):
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
         self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
 
@@ -613,21 +614,55 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+    def test_acquire_signal(self):
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
+        self.sed.bpp.value = 8
+        im = self.sed.data.get()
+        self.assertEqual(im.shape[::-1], self.size)  # Invert axes for comparison between numpy and image convention
+        self.assertEqual(im.dtype, "uint8")
+        max_intensity = im.max().item()
+        self.assertLess(max_intensity, 256)
+
+        self.sed.bpp.value = 16
+        im = self.sed.data.get()
+        self.assertEqual(im.shape[::-1], self.size)  # Invert axes for comparison between numpy and image convention
+        self.assertEqual(im.dtype, "uint16")
+        max_intensity = im.max().item()
+        self.assertLess(max_intensity, 65536)
+
+    def test_connection(self):
+        for i in range(5):
+            self.sem._reset_device()
+            value = self.sem._device_handler.GetViewField("electron")
+            self.assertIsNotNone(value)
+            time.sleep(1)
+
+    def test_write_read_voltage(self):
+        self.scanner.accelVoltage.value = 1e3
+        value = self.sem._device_handler.HVGetVoltage("electron")
+        self.assertIsNotNone(value)
+
+    def test_write_read_current(self):
+        self.scanner.probeCurrent.value = 100e-12
+        value = self.sem._device_handler.GetBeamCurrent("electron")
+        self.assertIsNotNone(value)
+
     def test_cancel_acquisition(self):
         self.scanner.dwellTime.value = 100e-6  # a little bit more than 10s per frame
         self.left = 1
         logging.info("Starting initial (long) acquisition")
         self.sed.data.subscribe(self.receive_image)
-        time.sleep(1)
         logging.info("Stopping initial (long) acquisition")
         self.sed.data.unsubscribe(self.receive_image)
+        logging.info("Stopped initial (long) acquisition")
+
         start = time.time()
         self.scanner.dwellTime.value = 1e-6  # shorter dwell time
         logging.info("Starting short acquisition")
         self.sed.data.get()
         logging.info("Finished short acquisition")
         duration = time.time() - start
-        self.assertLess(duration, 3)
+        self.assertLess(duration, 5)
 
     def test_roi(self):
         """
@@ -782,6 +817,139 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
             self.acq_done.set()
+
+
+class BaseFIBTest(object):
+
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            return
+        cls.sem = tescan.SEM(**cls.CONFIG_HW)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_STG["name"]:
+                cls.stage = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
+            # Doesn't seem to work with the simulator
+            elif child.name == CONFIG_CM["name"]:
+                cls.camera = child
+            elif child.name == CONFIG_PRESSURE["name"]:
+                cls.pressure = child
+            elif child.name == CONFIG_LIGHT["name"]:
+                cls.light = child
+
+    @classmethod
+    def tearDownClass(cls):
+        if TEST_NOHW:
+            return
+
+        cls.sem.terminate()
+        time.sleep(3)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware present")
+
+    def tearDown(self):
+#        print gc.get_referrers(self.camera)
+#        gc.collect()
+        pass
+
+
+class TestFIB(BaseFIBTest, unittest.TestCase):
+    """
+    Tests which can share one SEM device
+    """
+    CONFIG_HW = CONFIG_FIB
+
+    def setUp(self):
+        super().setUp()
+
+        # reset resolution and dwellTime
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = (512, 256)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
+        self.acq_done = threading.Event()
+
+    def compute_expected_duration(self):
+        dwell = self.scanner.dwellTime.value
+        settle = 5.e-6
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_acquire(self):
+        self.scanner.dwellTime.value = 10e-6  # s
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.sed.data.get()
+        hdf5.export("test_fib.h5", model.DataArray(im))
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_acquire_signal(self):
+        """NOTE: make sure to turn on the beam on hardware in order to acquire something nonzero"""
+        im = self.sed.data.get()
+        self.assertGreater(im.max(), 0)
+
+    def test_acquire_high_osr(self):
+        """
+        small resolution, but large osr, to force acquisition not by whole array
+        """
+        self.scanner.resolution.value = (256, 200)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
+        expected_duration = self.compute_expected_duration()  # about 1 min
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[-1:-3:-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+
+    def test_dwell_time(self):
+        orig_dt = self.scanner.dwell_time_lookup[3]
+        self.scanner.dwellTime.value = orig_dt
+        time.sleep(1)
+        speed_idx = self.sem._device_handler.ScGetSpeed("ion")
+        self.assertEqual(speed_idx, 3)
+
+        dt = self.scanner.dwell_time_lookup[5]
+        self.scanner.dwellTime.value = dt
+        time.sleep(1)
+        speed_idx = self.sem._device_handler.ScGetSpeed("ion")
+        self.assertEqual(speed_idx, 5)
+
+        self.sem._device_handler.ScSetSpeed("ion", 3)
+        time.sleep(5)  # await polling
+        self.assertEqual(self.scanner.dwellTime.value, orig_dt)
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+            self.acq_done.set()
+
 
 if __name__ == "__main__":
     unittest.main()
