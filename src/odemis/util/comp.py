@@ -119,7 +119,7 @@ MAX_ZLEVELS = 500
 def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: float) -> List[float]:
     """
     Calculates the zlevels for a zstack acquisition such that zstep is the distance between two successive zlevels and
-    the zlevels are within the valid z range. The zlevels are relative to the current position of the focuser.
+    the zlevels are within the valid z range. The zlevels are based on the current focus position.
     :param focuser: Actuator component with a "z" axis, to control the focus.
     :param zrange: contains the zmin and zmax, respectively. It's relative to the
     current position of the focuser. If the range would go out of the actuator
