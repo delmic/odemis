@@ -197,6 +197,18 @@ class SEM(model.HwComponent):
             self._fib_detector = Detector(parent=self, daemon=daemon, channel="ion", **ckwargs)
             self.children.value.add(self._fib_detector)
 
+    def transfer_latest_package(self, data: bytes) -> None:
+        """
+        Transfer a (new) xtadapter package.
+        Note:
+            Pyro has a 1 gigabyte message size limitation.
+            https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
+        :param data: The package's zip file data in bytes.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.transfer_latest_package(data)
+
     def get_software_version(self) -> str:
         """Returns: (str) the software version of the microscope."""
         with self._proxy_access:
