@@ -347,7 +347,7 @@ class FibsemTab(Tab):
                 dy *= -1
                 logging.debug("Scan rotation detected, inverting dy")
             logging.info(f"Moving stage vertically by: {dx}, {dy}")
-            f = self.pm.sample_stage.moveRelChamberReferential({"x": dx, "z": dy})
+            f = self.pm.sample_stage.moveRelChamberCoordinates({"x": dx, "z": dy})
             f.result()
             return
 
