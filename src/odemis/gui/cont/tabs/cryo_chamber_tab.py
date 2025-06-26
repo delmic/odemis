@@ -123,11 +123,6 @@ class CryoChamberTab(Tab):
 
         self._move_cancelled = False
 
-        # enable import from 3dct for correlation
-        main_frame.Bind(wx.EVT_MENU, self._import_features_from_3dct, id=main_frame.menu_item_import_from_3dct.GetId())
-        if self._role == 'meteor':
-            main_frame.menu_item_import_from_3dct.Enable(True)
-
         # enable meteor calibration
         main_frame.Bind(wx.EVT_MENU, self._edit_meteor_calibration, id=main_frame.menu_item_edit_meteor_calibration.GetId())
         if self._role == 'meteor':
@@ -529,28 +524,6 @@ class CryoChamberTab(Tab):
         wx.CallAfter(correlation_tab.correlation_controller._start_streams_subscriber)
 
         return True
-
-    def _import_features_from_3dct(self, _):
-
-        # load 3dct position
-        path = SelectFileDialog(parent=self.panel,
-                                message="Select 3DCT Position File to load",
-                                default_path=self.conf.pj_last_path)
-
-        if path is None: # Cancelled
-            logging.warning("No 3DCT position file selected, exiting.")
-            return
-
-        # load yaml file
-        try:
-            pt = parse_3dct_yaml_file(path)
-        except Exception as e:
-            logging.error(f"Failed to load 3DCT position file: {e}")
-            return
-
-        # redraw milling position
-        fibsem_tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
-        fibsem_tab.milling_task_controller.draw_milling_tasks(pos=pt, convert_pos=False)
 
     def _edit_meteor_calibration(self, evt):
         """Open a dialog for editing meteor stage calibration metadata"""
