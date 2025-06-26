@@ -350,7 +350,7 @@ class ProjectManagerImportExport:
             # Add TOAs
             for toa in toas:
                 toa_row = TOARow.from_dict(toa, self.project_manager.tab_data)
-                # Importing TOAs using the fastem_import_toa plugin has default row data values
+                # Importing TOAs using the fastem_import_region plugin has default row data values
                 # related to the shape's attributes.
                 # Update the row data to reflect them in the grid.
                 toa_row.update_data()
@@ -374,6 +374,10 @@ class ProjectManagerImportExport:
             # Add ROAs
             for roa in roas:
                 roa_row = ROARow.from_dict(roa, self.project_manager.tab_data)
+                # Importing ROAs using the fastem_import_region plugin has default row data values
+                # related to the shape's attributes.
+                # Update the row data to reflect them in the grid.
+                roa_row.update_data()
                 roa_node = FastEMTreeNode(
                     f"{roa_row.roa.name.value}_{roa_row.roa.slice_index.value}",
                     NodeType.ROA,
