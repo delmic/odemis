@@ -794,7 +794,7 @@ class AcquisitionTask(object):
 STAGE_PRECISION = 29e-6  # m, acceptable precision of the stage position, is used to determine the overview overlap
 
 
-def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, live_stream=None):
+def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True, live_stream=None):
     """
     Start an overview acquisition task for a given region.
 
@@ -808,6 +808,7 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
         The x and y axes are aligned with the x and y axes of the ebeam scanner. Axes should already be referenced.
     :param acq_dwell_time: (float) The acquisition dwell time in seconds.
     :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
+    :param reference_stage: (bool) If True, the stage will be referenced before the acquisition.
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
 
@@ -846,7 +847,7 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf, reference_stage)
 
     return f
 
@@ -996,7 +997,7 @@ class OverviewAcquisition(object):
         self._sub_future.cancel()
         return True
 
-    def run(self, stream, stage, area, live_stream, scanner_conf=None):
+    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
@@ -1006,12 +1007,15 @@ class OverviewAcquisition(object):
         :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region.
         :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
                to build up live the whole acquisition. NOT SUPPORTED YET.
+        :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
+        :param reference_stage: (bool) If True, reference the stage axes x and y before starting the acquisition.
 
         :returns: (DataArray) The complete overview image.
         """
-        logging.debug("Referencing stage axes x and y.")
-        f = stage.reference({"x", "y"})
-        f.result(timeout=180)
+        if reference_stage:
+            logging.debug("Referencing stage axes x and y.")
+            f = stage.reference({"x", "y"})
+            f.result(timeout=180)
 
         # Get the current immersion mode value before configuring the scanner.
         # This value is set back after acquireTiledArea future's result.
