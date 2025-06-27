@@ -188,21 +188,40 @@ class TestGenerateZlevels(unittest.TestCase):
         zMin = -10e-6
         zrange = [zMin, zMax]
         zStep = 6e-6
-        expected = numpy.asarray([-10e-6, -3.33e-6, 3.33e-6, 10e-6]
-                           ) + self.focus.position.value["z"]
+        # the focus value should be one of the z levels and the difference in the levels should be z step
         actual = generate_zlevels(self.focus, zrange, zStep)
-        numpy.testing.assert_array_almost_equal(expected, actual)
+        # Use assertAlmostEqual or numpy's isclose for float comparison
+        self.assertTrue(
+            any(numpy.isclose(self.focus.position.value["z"], level) for level in actual),
+            "The focus value should be approximately one of the z levels"
+        )
 
+        # Check if all differences are approximately equal to zStep
+        diffs = numpy.diff(actual)
+        self.assertTrue(
+            numpy.allclose(diffs, zStep),
+            f"The difference in the z levels should be approximately equal to zStep={zStep}, but got diffs={diffs}"
+        )
     def test_normal_zlevels_output_with_rounding_up(self):
         self.focus.moveAbsSync({"z": 1000e-6})
         zMax = 24e-6
         zMin = -24e-6
         zrange = [zMin, zMax]
         zStep = 17e-6
-        expected = numpy.asarray([-24e-6, -8e-6, 8e-6, 24e-6]) + \
-            self.focus.position.value["z"]
+        # the focus value should be one of the z levels and the difference in the levels should be z step
         actual = generate_zlevels(self.focus, zrange, zStep)
-        numpy.testing.assert_array_almost_equal(expected, actual)
+        # Use assertAlmostEqual or numpy's isclose for float comparison
+        self.assertTrue(
+            any(numpy.isclose(self.focus.position.value["z"], level) for level in actual),
+            "The focus value should be approximately one of the z levels"
+        )
+
+        # Check if all differences are approximately equal to zStep
+        diffs = numpy.diff(actual)
+        self.assertTrue(
+            numpy.allclose(diffs, zStep),
+            f"The difference in the z levels should be approximately equal to zStep={zStep}, but got diffs={diffs}"
+        )
 
     def test_large_number_of_levels(self):
         self.focus.moveAbsSync({"z": 1000e-6})
