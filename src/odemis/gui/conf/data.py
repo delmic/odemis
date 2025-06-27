@@ -121,6 +121,9 @@ HW_SETTINGS_CONFIG = {
             ("frameDuration", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("frameRate", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             # Advanced settings for andorcam2
             ("verticalReadoutRate", {
                 "control_type": odemis.gui.CONTROL_NONE,
