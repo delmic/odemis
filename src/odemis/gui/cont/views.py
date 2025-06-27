@@ -109,6 +109,9 @@ class ViewPortController(object):
             vp.setView(view, self._data_model)
 
         self._data_model.views.value = views
+        if len(visible_views) > 4:
+            logging.warning("Visible viewports at init > 4, will limit them: %s", visible_views)
+            visible_views = visible_views[:4]
         self._data_model.visible_views.value = visible_views
 
         if self._data_model.visible_views.value:

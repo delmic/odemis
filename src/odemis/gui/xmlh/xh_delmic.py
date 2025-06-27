@@ -456,6 +456,7 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, self.klass.__name__)
 
+    @apply_hidden
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
