@@ -287,8 +287,8 @@ HW_SETTINGS_CONFIG = {
                 "event": wx.EVT_SCROLL_CHANGED,
             }),
             ("power", {
-                "label": "Blanking",
-                "tooltip": "Checked means the e-beam blanker is active (the e-beam is pulsed). \n"
+                "label": "Pulsing",
+                "tooltip": "Checked means the ultra-fast e-beam blanker is active (the e-beam is pulsed). \n"
                            "Unchecked means the e-beam is constantly active.",
             }),
             ("dutyCycle", {
