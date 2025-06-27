@@ -21,7 +21,7 @@ If not, see http://www.gnu.org/licenses/.
 
 import logging
 import math
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib
 matplotlib.use("Agg")  # use non-GUI backend
@@ -755,17 +755,23 @@ def _get_theta_list_wl(wl: float, line_bottom: Tuple[float], line_top: Tuple[flo
     return theta, first_px, last_px
 
 
-def project_angular_spectrum_to_grid(data: model.DataArray) -> model.DataArray:
+def project_angular_spectrum_to_grid(
+    data: model.DataArray,
+    angle_range: Optional[Tuple[float, float]] = None
+) -> model.DataArray:
     """
     Takes an angular spectrum image, containing chromatic aberration information
     and project it so that the angular axis is linear, going only from the bottom
     (minimum observed angle) to the top (maximum observed angle)
+
     :param data: The data array containing the image that was projected on the
-    detector after being reflected in the parabolic mirror and passing the grating.
-    Shape is (A, C), ie angle vs wavelength.
+                 detector after being reflected in the parabolic mirror and passing the grating.
+                 Shape is (A, C), ie angle vs wavelength.
+    :param  angle_range: The range of angle to use for the output data.
+                         If None, the range is determined from the data itself.
     :return: data array of shape (As, C). Where As is also the angle but of different
-    length than A. Typically, the values are limited to the range of observed
-    angle, and linearly distributed (eg, every 1 mrad)
+             length than A. Typically, the values are limited to the range of observed
+             angle, and linearly distributed (eg, every 1 mrad)
     """
     # The goal is to have the data match the "ideal" angle list
     # (theta_list_linear), which is independent of the wavelength, starts from the
@@ -798,7 +804,7 @@ def project_angular_spectrum_to_grid(data: model.DataArray) -> model.DataArray:
     xfocus = a * y_pos ** 2 - parabola_f
     theta_mn_mx = numpy.arccos(y_pos / numpy.sqrt(xfocus ** 2 + y_pos ** 2))
     # The first part is negative angle => get the negative value
-    theta_mn_mx = -theta_mn_mx[0], theta_mn_mx[1]
+    theta_mn_mx = (-theta_mn_mx[0], theta_mn_mx[1]) if angle_range is None else angle_range
 
     # Define the ideal theta list. Use the min/max angle and linearly spread 1 mrad.
     theta_list_linear_len = int(round((theta_mn_mx[1] - theta_mn_mx[0]) / 1e-3))
@@ -824,7 +830,9 @@ def project_angular_spectrum_to_grid(data: model.DataArray) -> model.DataArray:
         # "wrap back" on the lower end of the mirror.
         theta_list_short = theta_list_raw[first_px: last_px + 1]
         d = data[first_px: last_px + 1, wli]
-        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d)
+        # Pad with 0.0 for points outside (left and right) the source data's angular range.
+        # This prevents creating artificial signal at the edges from clamping.
+        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d, left=0.0, right=0.0)
 
     # Prepare metadata: as the data is now processed, most of the original
     # metadata doesn't fit. So only keep the very strict minimum.

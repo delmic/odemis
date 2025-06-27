@@ -19,8 +19,10 @@ You should have received a copy of the GNU General Public License along with Ode
 
 import csv
 import logging
+import math
 
 import numpy
+
 from odemis import model
 from odemis.util import almost_equal, angleres, find_closest, img, spectrum
 
@@ -391,7 +393,7 @@ def project_angular_spectrum_to_grid_5d(data: model.DataArray) -> model.DataArra
         # Compute the projection for 1 value in XYZ, wtih the two axes left in
         # the order AC, as expected by project_angular_spectrum_to_grid().
         # data_ac = numpy.swapaxes(data[(...,) + i], 0, 1)
-        proj_ac = angleres.project_angular_spectrum_to_grid(data_low_ac[i])
+        proj_ac = angleres.project_angular_spectrum_to_grid(data_low_ac[i], angle_range=(-math.pi/2, math.pi/2))
 
         if data_proj is None:
             # First element, need to create array based on proj shape and dtype

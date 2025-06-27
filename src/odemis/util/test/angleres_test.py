@@ -477,13 +477,14 @@ class TestExtractThetaList(unittest.TestCase):
 
 class TestAngularSpetrumLinear(unittest.TestCase):
 
-    def test_simple(self):
+    def setUp(self):
         """
-        Test ExtractThetaList when all metadata is good
+        Create common setup for both tests to avoid code duplication.
+        This runs before each test method.
         """
-        shape = (1080, 512)  # Angle, Wavelength
-        wl_orig = (400e-9 + numpy.arange(shape[1]) * 10e-9).tolist()
-        metadata = {
+        self.shape = (1080, 512)  # Angle, Wavelength
+        wl_orig = (400e-9 + numpy.arange(self.shape[1]) * 10e-9).tolist()
+        self.metadata = {
             model.MD_DIMS: "AC",
             model.MD_HW_NAME: "fake AR spec",
             model.MD_DESCRIPTION: "test",
@@ -495,11 +496,16 @@ class TestAngularSpetrumLinear(unittest.TestCase):
             model.MD_AR_MIRROR_BOTTOM: [330, -20000000],
             model.MD_POS: (1e-3, -30e-3),  # m
         }
-        da = model.DataArray(numpy.zeros(shape, numpy.uint16), metadata)
+
+    def test_simple(self):
+        """
+        Test ExtractThetaList when all metadata is good
+        """
+        da = model.DataArray(numpy.zeros(self.shape, numpy.uint16), self.metadata)
 
         da_lin = angleres.project_angular_spectrum_to_grid(da)
         lin_shape = da_lin.shape
-        self.assertEqual(lin_shape[1], shape[1])  # C should be the same
+        self.assertEqual(lin_shape[1], self.shape[1])  # C should be the same
         self.assertGreater(lin_shape[0], 100)  # A, typically, should be ~1000 px
 
         thetal = da_lin.metadata[model.MD_THETA_LIST]
@@ -515,6 +521,42 @@ class TestAngularSpetrumLinear(unittest.TestCase):
         # If all the data was 0, the interpolated data should still be 0
         numpy.testing.assert_array_almost_equal(da_lin, 0)
 
+    def test_with_angle_range(self):
+        """
+        Test that the angle range correctly pads the data with zeros outside the physical range.
+        """
+        # Create a data array with a constant non-zero value
+        test_value = 100
+        da = model.DataArray(numpy.full(self.shape, test_value, dtype=numpy.uint16), self.metadata)
+
+        # --- Get the projected data ---
+        # 1. The version on the expanded, forced grid
+        da_forced = angleres.project_angular_spectrum_to_grid(da, angle_range=(-math.pi/2, math.pi/2))
+        theta_list_forced = numpy.asarray(da_forced.metadata[model.MD_THETA_LIST])
+
+        # 2. The version on the default, physical grid (to define the data boundaries)
+        da_physical_range = angleres.project_angular_spectrum_to_grid(da)
+        theta_list_physical = numpy.asarray(da_physical_range.metadata[model.MD_THETA_LIST])
+
+        # --- Check for Zero-Padding ---
+        # 1. Define the physical boundaries of the real data
+        min_phys_angle = theta_list_physical[0]
+        max_phys_angle = theta_list_physical[-1]
+
+        # 2. Create boolean masks to identify the padded regions in the forced data
+        start_padding_mask = theta_list_forced < min_phys_angle
+        end_padding_mask = theta_list_forced > max_phys_angle
+
+        # 3. Assert that these masks actually select something (i.e., padding exists)
+        self.assertTrue(numpy.any(start_padding_mask), "Should have a padded region at the start")
+        self.assertTrue(numpy.any(end_padding_mask), "Should have a padded region at the end")
+
+        # 4. Use the masks to select the padded data and assert it is all zero.
+        padded_region_start = da_forced[start_padding_mask]
+        padded_region_end = da_forced[end_padding_mask]
+
+        numpy.testing.assert_array_equal(padded_region_start, 0, "Start of array should be zero-padded")
+        numpy.testing.assert_array_equal(padded_region_end, 0, "End of array should be zero-padded")
 
 if __name__ == "__main__":
     # for debug:

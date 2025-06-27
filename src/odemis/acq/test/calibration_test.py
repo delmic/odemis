@@ -438,7 +438,13 @@ class TestSpectrum(unittest.TestCase):
         angles_cal = calibrated.metadata[model.MD_THETA_LIST]
         self.assertFalse(any(math.isnan(x) for x in angles_cal))
         self.assertEqual(calibrated.shape, (512, len(angles_cal) , 1, 2, 3))
-        numpy.testing.assert_array_equal(calibrated, 1)
+        non_zero_elements = calibrated[calibrated > 0]
+        # Assert that there is actually some non-zero data
+        self.assertTrue(non_zero_elements.size > 0, "Calibrated data should not be all zeros")
+
+        # Assert that all of these non-zero elements are close to 1
+        numpy.testing.assert_allclose(non_zero_elements, 1,
+                                      err_msg="All non-padded elements should be interpolated to 1")
 
         # The original data shouldn't have been changed
         numpy.testing.assert_array_equal(arspec, orig_arspec)
