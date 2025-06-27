@@ -897,6 +897,7 @@ class FastEMMainViewport(MicroscopeViewport):
         self.canvas.abilities.discard(CAN_MOVE_STAGE)
         self.scintillator = scintillator
         self.cpol = None
+        self.slol = None
         # By default don't show the viewport on creation
         self.Show(False)
 
@@ -923,9 +924,9 @@ class FastEMMainViewport(MicroscopeViewport):
         self.canvas.add_world_overlay(self.cpol)
 
         # Double-click to move the stage
-        slol = StagePointSelectOverlay(self.canvas)
-        slol.active.value = True
-        self.canvas.add_world_overlay(slol)
+        self.slol = StagePointSelectOverlay(self.canvas)
+        self.slol.active.value = True
+        self.canvas.add_world_overlay(self.slol)
 
         # Listen to the stage position and update the label in the callback
         view.stage_pos.subscribe(self._on_stage_pos_change, init=True)
