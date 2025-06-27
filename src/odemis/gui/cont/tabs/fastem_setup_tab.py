@@ -163,6 +163,7 @@ class FastEMSetupTab(Tab):
 
         self.main_tab_data.visible_views.subscribe(self._on_visible_views)
         self.main_tab_data.focussedView.subscribe(self._on_focussed_view)
+        self.tab_data_model.is_calibrating.subscribe(self._on_is_calibrating)
 
     def _on_focussed_view(self, focussed_view):
         if focussed_view:
@@ -547,6 +548,15 @@ class FastEMSetupTab(Tab):
             self.sem_stream_cont.pause()
         else:
             self.sem_stream_cont.resume()
+
+    def _on_is_calibrating(self, mode):
+        """
+        Enable or disable StagePointSelectOverlay depending on whether a calibration
+        is already ongoing or not.
+        :param mode: (bool) whether the system is currently calibrating.
+        """
+        for vp in self.main_tab_data.viewports.value:
+            vp.slol.active.value = not mode
 
     @classmethod
     def get_display_priority(cls, main_data):
