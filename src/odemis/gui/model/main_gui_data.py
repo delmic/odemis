@@ -381,6 +381,9 @@ class MainGUIData(object):
                 self.features = model.ListVA()
                 # VA for the currently selected feature
                 self.currentFeature = model.VigilantAttribute(None)
+                # VAs for currently selected targets
+                self.targets = model.ListVA()
+                self.currentTarget = model.VigilantAttribute(None)
             # Initialize settings observer to keep track of all relevant settings that should be
             # stored as metadata
             self.settings_obs = acqmng.SettingsObserver(microscope, comps_with_role)
