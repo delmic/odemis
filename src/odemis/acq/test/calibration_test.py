@@ -427,6 +427,8 @@ class TestSpectrum(unittest.TestCase):
             model.MD_BINNING: (1, 1),  # px, px
             model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
             model.MD_POS: (1e-3, -30e-3),  # m
+            model.MD_SENSOR_PIXEL_SIZE: (2.6e-5, 2.6e-5),  # m
+            model.MD_INPUT_SLIT_WIDTH: 10e-5,  # m
         }
         arspec = model.DataArray(data, md)
         orig_arspec = data.copy()
@@ -442,9 +444,9 @@ class TestSpectrum(unittest.TestCase):
         # Assert that there is actually some non-zero data
         self.assertTrue(non_zero_elements.size > 0, "Calibrated data should not be all zeros")
 
-        # Assert that all of these non-zero elements are close to 1
-        numpy.testing.assert_allclose(non_zero_elements, 1,
-                                      err_msg="All non-padded elements should be interpolated to 1")
+        # Assert that all elements are now > 1 due to solid angle correction
+        self.assertTrue(numpy.all(non_zero_elements > 1),
+                        "All corrected elements should be > 1 due to solid angle correction.")
 
         # The original data shouldn't have been changed
         numpy.testing.assert_array_equal(arspec, orig_arspec)
