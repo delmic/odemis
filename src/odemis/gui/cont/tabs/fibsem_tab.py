@@ -192,6 +192,7 @@ class FibsemTab(Tab):
         self._acquired_stream_controller = CryoFIBAcquiredStreamsController(
             tab_data=tab_data,
             feature_view=tab_data.views.value[3],
+            ov_view = tab_data.views.value[2],
             stream_bar=panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
@@ -216,6 +217,7 @@ class FibsemTab(Tab):
         self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
         self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
     def _on_view(self, view):
         """Hide/Disable milling controls when fib view is not selected"""
@@ -289,21 +291,12 @@ class FibsemTab(Tab):
         streams = data_to_static_streams(data)
         bbox = (None, None, None, None)  # ltrb in m
         for s in streams:
-
-            if not isinstance(s, StaticSEMStream):
-                logging.debug("Only StaticSEMStream supported for overview data in this tab")
-                continue
             s.name.value = "Overview " + s.name.value
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
             self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
-
-            ov_view = self.panel.vp_secom_bl.view
-            ov_view.addStream(s)
-            ov_sc = self.streambar_controller._add_stream_cont(s, show_panel=True, static=True,
-                                   view=ov_view)
-            ov_sc.stream_panel.show_remove_btn(True)
+            self._acquired_stream_controller.showOverviewStream(s)
 
             # Compute the total bounding box
             try:
@@ -324,6 +317,37 @@ class FibsemTab(Tab):
         if len(streams) > 0 and self.main_data.role == "meteor":
             correlation_tab = self.main_data.getTabByName("meteor-correlation")
             correlation_tab.correlation_controller.add_streams(streams)
+
+    @call_in_wx_main
+    def _on_acquired_streams(self, streams):
+        """
+        Filter out deleted acquired streams (features and overview) from their respective origin
+        :param streams: list(Stream) updated list of tab streams
+        """
+        # Get all acquired streams from features list and overview streams
+        acquired_streams = set()
+        for feature in self.tab_data_model.main.features.value:
+            acquired_streams.update(feature.streams.value)
+        acquired_streams.update(self.tab_data_model.overviewStreams.value)
+
+        unused_streams = acquired_streams.difference(set(streams))
+
+        for st in unused_streams:
+            if st in self.tab_data_model.overviewStreams.value:
+                self.tab_data_model.overviewStreams.value.remove(st)
+                # Remove from chamber tab too
+                chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+                chamber_tab.remove_overview_streams([st])
+
+        # Update and save the used stream settings on acquisition
+        if acquired_streams:
+            self._streambar_controller.update_stream_settings()
+
+    def _stop_streams_subscriber(self):
+        self.tab_data_model.streams.unsubscribe(self._on_acquired_streams)
+
+    def _start_streams_subscriber(self):
+        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
     def on_dbl_click(self, evt):
 
