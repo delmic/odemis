@@ -877,7 +877,8 @@ class FastEMSingleBeamAcquiController(object):
                 window.visibility_btn.Bind(wx.EVT_BUTTON, on_visibility_btn)  # only bind once
             setattr(window.visibility_btn, "stream", s)
             self.overview_streams[toa.shape] = s
-            os.remove(fn)
+            # TODO uncomment when disk space becomes a bigger problem for the users
+            # os.remove(fn)
 
     def on_cancel(self, evt):
         """
