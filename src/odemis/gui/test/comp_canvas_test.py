@@ -760,6 +760,50 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # background of the images, half green, half red
         self.assertEqual(px2, (math.floor(255 / 2), math.ceil(255 / 2), 0))
 
+    def test_merge_ratio_metadata_override(self):
+        """
+        Test that setting 'merge_ratio' in image metadata overrides the view's merge_ratio.
+        """
+        mpp = 0.00001
+        self.view.mpp.value = mpp
+        self.view.show_crosshair.value = False
+        self.canvas.fit_view_to_next_image = False
+
+        # Create two images, one with a metadata 'merge_ratio' override
+        im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
+        px1_cent = (5, 5)
+        im1[px1_cent] = [255, 0, 0]  # Red pixel at center, (5,5)
+        im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
+        im1.metadata[model.MD_POS] = (0, 0)
+        im1.metadata[model.MD_DIMS] = "YXC"
+        # Set merge_ratio in metadata to 0.8 (should override view.merge_ratio)
+        im1.metadata['merge_ratio'] = 0.8
+        stream1 = RGBStream("s1", im1)
+
+        im2 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
+        px2_cent = (5, 5)
+        im2[px2_cent] = [0, 0, 255]  # Blue pixel at center, (5,5)
+        im2.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
+        im2.metadata[model.MD_POS] = (0, 0)
+        im2.metadata[model.MD_DIMS] = "YXC"
+        stream2 = RGBStream("s2", im2)
+
+        self.view.addStream(stream1)
+        self.view.addStream(stream2)
+
+        # Set the global merge_ratio to something different (should be ignored for im1)
+        self.view.merge_ratio.value = 0.2
+
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        # The center pixel should be mostly red due to the override (0.8*255 ≈ 204)
+        px1 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
+        # The center pixel should be mostly red due to the override (0.8*255 ≈ 204, 0.2*255 ≈ 51)
+        self.assertAlmostEqual(px1[0], 204, delta=2, msg=f"Red channel should be close to 204, got {px1[0]}")
+        self.assertEqual(px1[1], 0, "Green channel should be 0")
+        self.assertAlmostEqual(px1[2], 51, delta=2, msg=f"Blue channel should be close to 51, got {px1[2]}")
+
 
 if __name__ == "__main__":
     unittest.main()
