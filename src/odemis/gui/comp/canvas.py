@@ -873,7 +873,8 @@ class BitmapCanvas(BufferedCanvas):
                 md['dc_shear'] = shear
                 md['dc_flip'] = flip
                 md['dc_keepalpha'] = keepalpha
-                md['blend_mode'] = blend_mode
+                if 'blend_mode' not in md:
+                    md['blend_mode'] = blend_mode
                 md['name'] = name
 
                 images.append(im)
@@ -983,7 +984,9 @@ class BitmapCanvas(BufferedCanvas):
                     #     1         0      1
                     # TODO: for now, this only works correctly if the background
                     # is black (otherwise, the background is also mixed in)
-                    if bm_last == BLEND_SCREEN:
+                    if 'merge_ratio' in md:
+                        merge_ratio = md['merge_ratio']
+                    elif bm_last == BLEND_SCREEN:
                         if ((self.merge_ratio < 0.5 and i < n - 1) or
                             (self.merge_ratio >= 0.5 and i == n - 1)):
                             merge_ratio = 1

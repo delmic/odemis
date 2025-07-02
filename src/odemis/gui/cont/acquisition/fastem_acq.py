@@ -47,6 +47,7 @@ from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, ROASkipped, estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
 from odemis.gui import (
+    BLEND_DEFAULT,
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
     FG_COLOUR_BLIND_PINK,
@@ -314,6 +315,12 @@ class FastEMOverviewAcquiController(object):
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
             s = FastEMOverviewStream(s.name.value, s.raw[0])
+            data = s.raw[0]
+            # Set 'blend_mode' and 'merge_ratio' metadata to be used by BitmapCanvas draw
+            # By setting the metadata override the default value set by BitmapCanvas.set_images
+            # and BitmapCanvas._draw_merged_images logic
+            data.metadata["blend_mode"] = BLEND_DEFAULT
+            data.metadata["merge_ratio"] = 1
             # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
             ovv_ss = self._main_data_model.overview_streams.value.copy()
             ovv_ss[num] = s
@@ -499,6 +506,12 @@ class FastEMOverviewAcquiController(object):
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
             s = FastEMOverviewStream(s.name.value, s.raw[0])
+            data = s.raw[0]
+            # Set 'blend_mode' and 'merge_ratio' metadata to be used by BitmapCanvas draw
+            # By setting the metadata override the default value set by BitmapCanvas.set_images
+            # and BitmapCanvas._draw_merged_images logic
+            data.metadata["blend_mode"] = BLEND_DEFAULT
+            data.metadata["merge_ratio"] = 1
             # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
             ovv_ss = self._main_data_model.overview_streams.value.copy()
             ovv_ss[num] = s
@@ -860,6 +873,12 @@ class FastEMSingleBeamAcquiController(object):
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
             s = FastEMOverviewStream(s.name.value, s.raw[0])
+            data = s.raw[0]
+            # Set 'blend_mode' and 'merge_ratio' metadata to be used by BitmapCanvas draw
+            # By setting the metadata override the default value set by BitmapCanvas.set_images
+            # and BitmapCanvas._draw_merged_images logic
+            data.metadata["blend_mode"] = BLEND_DEFAULT
+            data.metadata["merge_ratio"] = 1
             self.overview_streams[toa.shape] = s
             os.remove(fn)
 
