@@ -827,21 +827,32 @@ class FastEMSingleBeamAcquiController(object):
         :param toa: (FastEMTOA) the TOA object.
         :param window: (NodeWindow) the window of the TOA.
         """
-        def update_status(text: str, color: str):
-            window.status_text.SetForegroundColour(color)
-            window.status_text.SetLabelText(text)
+        def on_visibility_btn(evt):
+            btn = evt.GetEventObject()
+            is_visible = btn.GetToggle()
+            overview_streams = self._main_data_model.overview_streams.value.copy()
+            if is_visible:
+                overview_streams[btn.shape] = btn.stream
+            else:
+                del overview_streams[btn.shape]
+            self._main_data_model.overview_streams.value = overview_streams
+
+        def update_window(status_text: str, status_text_color: str, success: bool):
+            window.status_text.SetForegroundColour(status_text_color)
+            window.status_text.SetLabelText(status_text)
+            flag = success or toa.shape in self.overview_streams
+            window.visibility_btn.Show(flag)
+            window.visibility_btn.SetValue(flag)
 
         success = False
         try:
             da = future.result()
-            update_status("Finished", FG_COLOUR_EDIT)
             success = True
+            update_window("Finished", FG_COLOUR_EDIT, success)
         except CancelledError:
-            update_status("Cancelled", FG_COLOUR_WARNING)
-            success = False
+            update_window("Cancelled", FG_COLOUR_WARNING, success)
         except Exception:
-            update_status("Failed", FG_COLOUR_ERROR)
-            success = False
+            update_window("Failed", FG_COLOUR_ERROR, success)
         finally:
             window.Layout()
             window.Refresh()
@@ -860,6 +871,11 @@ class FastEMSingleBeamAcquiController(object):
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
             s = FastEMOverviewStream(s.name.value, s.raw[0])
+            # Set the necessary visibility_btn attributes, to be used inside on_visibility_btn callback
+            if not hasattr(window.visibility_btn, "shape"):
+                setattr(window.visibility_btn, "shape", toa.shape)
+                window.visibility_btn.Bind(wx.EVT_BUTTON, on_visibility_btn)  # only bind once
+            setattr(window.visibility_btn, "stream", s)
             self.overview_streams[toa.shape] = s
             os.remove(fn)
 

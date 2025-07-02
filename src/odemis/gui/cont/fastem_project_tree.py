@@ -28,7 +28,8 @@ import wx
 import wx.lib.newevent
 from wx.lib.agw.customtreectrl import CustomTreeCtrl, GenericTreeItem
 
-from odemis.gui import BG_COLOUR_MAIN, FG_COLOUR_DIS, FG_COLOUR_MAIN
+from odemis.gui import BG_COLOUR_MAIN, FG_COLOUR_DIS, FG_COLOUR_MAIN, img
+from odemis.gui.comp import buttons
 from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT
 
 
@@ -416,6 +417,12 @@ class NodeWindow(wx.Window):
 
         # Create widgets
         self.checkbox = wx.CheckBox(self, label="")
+        self.visibility_btn = buttons.ImageToggleButton(self,
+                                                        bitmap=img.getBitmap("icon/ico_eye_closed.png"))
+        self.visibility_btn.bmpHover = img.getBitmap("icon/ico_eye_closed_h.png")
+        self.visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
+        self.visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
+        self.visibility_btn.SetToolTip("Toggle acquisition visibility")
         self.item_label = wx.StaticText(self, label=node.name)
         self.gauge = wx.Gauge(self, range=100, size=(100, 16))
         self.status_text = wx.StaticText(self, label="Open")
@@ -427,6 +434,8 @@ class NodeWindow(wx.Window):
         if node.type in [NodeType.ALL_PROJECTS, NodeType.PROJECT, NodeType.RIBBON]:
             self.gauge.Hide()
             self.status_text.Hide()
+        # By default hide visibility_btn for all node types, later shown and used for NodeType.TOA
+        self.visibility_btn.Hide()
         # Layout widgets
         self._layout_widgets()
 
@@ -435,6 +444,7 @@ class NodeWindow(wx.Window):
         Layouts the widgets within the window using sizers.
         """
         self.left_sizer.Add(self.checkbox, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.left_sizer.Add(self.visibility_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
         self.left_sizer.Add(self.item_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
 
         self.main_sizer.Add(self.left_sizer, 0, wx.ALIGN_LEFT)
