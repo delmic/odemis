@@ -2557,6 +2557,10 @@ def images_to_export_data(streams, view_hfw, view_pos,
             # For raw, each image is a "single image"
             merge_ratio = 1.0
         else:
+            # If 'merge_ratio' present in the image metadata, it takes precedence over the general draw_merge_ratio
+            # for an image. Note: This is a hack for rare cases where a specific image needs a custom merge ratio.
+            if 'merge_ratio' in im.metadata:
+                merge_ratio = im.metadata['merge_ratio']
             # If there are all "screen" (= last one is screen):
             # merge ratio   im0   im1
             #     0         1      0
@@ -2564,7 +2568,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
             #    0.5        1      1
             #    0.75       0.5    1
             #     1         0      1
-            if bm_last == BLEND_SCREEN:
+            elif bm_last == BLEND_SCREEN:
                 if ((draw_merge_ratio < 0.5 and i < n - 1) or
                     (draw_merge_ratio >= 0.5 and i == n - 1)):
                     merge_ratio = 1

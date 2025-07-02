@@ -974,6 +974,11 @@ class BitmapCanvas(BufferedCanvas):
                 if n == 1: # For single image, don't use merge ratio
                     merge_ratio = 1.0
                 else:
+                    # If 'merge_ratio' present in the image metadata, it takes precedence over the general
+                    # self.merge_ratio for an image. Note: No code in miccanvas or dblmiccanvas sets 'merge_ratio';
+                    # this is a hack for rare cases where a specific image needs a custom merge ratio.
+                    if 'merge_ratio' in md:
+                        merge_ratio = md['merge_ratio']
                     # If there are all "screen" (= last one is screen):
                     # merge ratio   im0   im1
                     #     0         1      0
@@ -983,7 +988,7 @@ class BitmapCanvas(BufferedCanvas):
                     #     1         0      1
                     # TODO: for now, this only works correctly if the background
                     # is black (otherwise, the background is also mixed in)
-                    if bm_last == BLEND_SCREEN:
+                    elif bm_last == BLEND_SCREEN:
                         if ((self.merge_ratio < 0.5 and i < n - 1) or
                             (self.merge_ratio >= 0.5 and i == n - 1)):
                             merge_ratio = 1

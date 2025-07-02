@@ -31,7 +31,7 @@ import threading
 import time
 import weakref
 from collections.abc import Iterable
-from typing import List, Union
+from typing import List, Optional, Union
 
 import numpy
 try:
@@ -323,10 +323,21 @@ class StaticSEMStream(Static2DStream):
     Same as a StaticStream, but considered a SEM stream
     """
 
-    def __init__(self, name, raw, *args, **kwargs):
+    def __init__(self, name, raw, forcemd: Optional[dict] = None, *args, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_EM
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
+
+        self._forcemd = forcemd
+
+    def _find_metadata(self, md):
+        simpl_md = super()._find_metadata(md)
+
+        if self._forcemd:
+            simpl_md.update(self._forcemd)
+            img.mergeMetadata(simpl_md)
+
+        return simpl_md
 
 
 class StaticFIBStream(Static2DStream):
@@ -1050,9 +1061,3 @@ class RGBUpdatableStream(StaticStream):
 
         self.raw = self._clean_raw(raw)
         self._shouldUpdateImage()
-
-
-class FastEMOverviewStream(StaticSEMStream):
-    # For now just a StaticStream with a different name, so the canvas can automatically select the right
-    # blending option ("blend screen" on non-overlapping positions = simple pasting without blending)
-    pass
