@@ -221,7 +221,7 @@ class ChromaticCorrectionPlugin(Plugin):
                 corresponding_pairs = find_corresponding_points(pos_ref, pos, max_dist_pxl * TOLERANCE)
 
                 if len(corresponding_pairs) < 4:
-                    channels_nu.append(da.metadata[model.MD_OUT_WL].join)
+                    channels_nu.append(da.metadata[model.MD_OUT_WL])
                     continue
 
                 points1 = pos_ref[corresponding_pairs[:, 0]]
@@ -250,13 +250,11 @@ class ChromaticCorrectionPlugin(Plugin):
             self.display_static_stream(file_location, da)
 
         if len(channels_nu) > 0:
-            all_channels_nu = ",".join(channels_nu)
-            txt = ('The chromatic correction did not happen for channel with emission %s. Skipping this channel.\n\n'
+            txt = (f'The chromatic correction did not happen for channel with emission {channels_nu}. Skipping this channel.\n\n'
                    'Alternatively, navigate to location with more beads or '
-                   'change the bead diameter in the script'
-                   % all_channels_nu)
+                   'change the bead diameter in the script')
             logging.warning(
-                f"Chromatic correction unsuccessful for channel with {all_channels_nu}")
+                f"Chromatic correction unsuccessful for channel with {channels_nu}")
         else:
             txt = 'Chromatic correction is completed'
 
