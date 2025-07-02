@@ -221,7 +221,7 @@ class ChromaticCorrectionPlugin(Plugin):
                 corresponding_pairs = find_corresponding_points(pos_ref, pos, max_dist_pxl * TOLERANCE)
 
                 if len(corresponding_pairs) < 4:
-                    channels_nu.append(da.metadata[model.MD_OUT_WL].join)
+                    channels_nu.append(str(da.metadata[model.MD_OUT_WL]).join)
                     continue
 
                 points1 = pos_ref[corresponding_pairs[:, 0]]
