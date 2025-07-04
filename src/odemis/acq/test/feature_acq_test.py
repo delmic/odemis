@@ -13,7 +13,6 @@ from odemis.acq.feature import (
     acquire_at_features,
     get_feature_position_at_posture,
 )
-from odemis.acq.move import FM_IMAGING, MicroscopePostureManager
 from odemis.acq.stream import FluoStream
 from odemis.util import testing
 from odemis.util.comp import generate_zlevels
