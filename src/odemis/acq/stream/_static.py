@@ -1053,6 +1053,11 @@ class RGBUpdatableStream(StaticStream):
 
 
 class FastEMOverviewStream(StaticSEMStream):
-    # For now just a StaticStream with a different name, so the canvas can automatically select the right
-    # blending option ("blend screen" on non-overlapping positions = simple pasting without blending)
-    pass
+
+    def _find_metadata(self, md):
+        useful_md = super()._find_metadata(md)
+        if 'merge_ratio' in md:
+            useful_md['merge_ratio'] = md['merge_ratio']
+        if 'blend_mode' in md:
+            useful_md['blend_mode'] = md['blend_mode']
+        return useful_md
