@@ -20,24 +20,21 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from itertools import compress
 import logging
 import math
-from numpy import histogram
-from numpy import unravel_index
-import numpy
-from odemis import model
 import operator
 from builtins import range
+from itertools import compress
 
-from scipy.spatial import cKDTree
-
+import numpy
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
+from numpy import histogram
+from scipy.spatial import cKDTree
 
+from odemis import model
 from odemis.util.spot import bandpass_filter
 from ..align import transform
-
 
 MAX_STEPS_NUMBER = 100  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
