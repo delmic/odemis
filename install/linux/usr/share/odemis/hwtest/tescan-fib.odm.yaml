@@ -1,0 +1,54 @@
+SEM: {
+    class: Microscope,
+    role: sem,
+}
+
+# Connects to Tescan SEM via SharkSEM
+"Tescan SEM": {
+    class: tescan.SEM,
+    role: null,
+    init: {host: "192.168.2.35"},
+    # more detectors can be added, if necessary
+    children: {
+        stage: "Sample Stage",
+        # FIB
+        fib-scanner: "Ion Scanner",
+        fib-detector: "Ion Detector",
+
+        light: "Chamber Light",
+    }
+}
+
+"Sample Stage": {
+    role: stage,
+    init: {},
+    affects: ["Ion Scanner"]
+}
+
+
+# FIB specific components
+
+"Ion Scanner": {
+    role: e-beam,  # Trick to make it work in the standalone tab
+
+    init: {
+        fov_range: [196.e-9, 25586.e-6]
+    },
+}
+
+"Ion Detector": {
+    role: se-detector,  # Trick to make it work in the standalone tab
+
+    init: {
+        channel: 0,
+        detector: "se",
+    },
+}
+
+
+# (IR) light for the SEM chamber
+"Chamber Light": {
+    role: chamber-light,
+    init: {},
+    affects: ["Chamber Cam"],
+}
