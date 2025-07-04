@@ -21,17 +21,15 @@ This file is part of Odemis.
 """
 
 # Test module for Odemis' gui.comp.legend module
-import collections
 import logging
-import numbers
-import sys
 import threading
 import time
 import unittest
 
+import wx
+
 import odemis.gui.comp.legend as legend
 import odemis.gui.test as test
-import wx
 
 # test.goto_manual()
 RANGES = [(-5, 5), (0, 37)]

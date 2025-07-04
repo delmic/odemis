@@ -30,9 +30,12 @@ from builtins import str
 from concurrent.futures._base import CancelledError
 from typing import List, Tuple, Optional
 
-import odemis.gui.model as guimodel
 import wx
-from odemis import dataio, gui, model
+
+import odemis.gui.cont.views as viewcont
+import odemis.gui.model as guimod
+import odemis.gui.model as guimodel
+from odemis import dataio, model
 from odemis.acq import acqmng, path, stitching, stream
 from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview,
@@ -41,30 +44,22 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
                                OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
-from odemis.gui import conf
-from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
-
-from odemis.gui.preset import (apply_preset, get_global_settings_entries,
-                               get_local_settings_entries, preset_as_is,
-                               presets)
 from odemis.gui.comp import buttons
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
-from odemis.gui.cont.settings import (LocalizationSettingsController,
-                                      SecomSettingsController)
+from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
+from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
-import odemis.gui.model as guimod
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
-import odemis.gui.util as guiutil
+from odemis.gui.preset import (apply_preset, get_global_settings_entries,
+                               get_local_settings_entries, preset_as_is,
+                               presets)
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
 from odemis.gui.util.conversion import sample_positions_to_layout
-import odemis.gui.cont.views as viewcont
-from odemis.gui.util.widgets import (ProgressiveFutureConnector,
-                                     VigilantAttributeConnector)
+from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
 from odemis.util import units
-from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 

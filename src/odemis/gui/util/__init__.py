@@ -20,24 +20,21 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-import queue
-from decorator import decorator
-from functools import wraps
-import inspect
 import logging
-from odemis import util, model
 import os.path
 import subprocess
 import sys
-import threading
-import time
-import weakref
+from functools import wraps
+
 import wx
+from decorator import decorator
+
+from odemis import util
+
 
 # Decorators & Wrappers
 # They are almost the same but the decorators assume that they are decorating
 # a method of a wx.Object (ie, it has a "self" argument)
-from odemis.acq.move import MicroscopePostureManager
 
 @decorator
 def call_in_wx_main(f, self, *args, **kwargs):
