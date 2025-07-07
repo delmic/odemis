@@ -445,10 +445,10 @@ class FastEMOverviewAcquiController(object):
         focussed_view = self._main_tab_data.focussedView.value
         num = int(focussed_view.name.value)
         current_sample = self._tab_data_model.main.current_sample.value
-        bbox = current_sample.scintillators[num].shape.get_bbox()
+        region = current_sample.scintillators[num].shape.get_region()
         try:
             f = fastem.acquireTiledArea(
-                self._tab_data_model.semStream, self._main_data_model.stage, bbox
+                self._tab_data_model.semStream, self._main_data_model.stage, region
             )
             f.add_done_callback(partial(self.on_acquisition_done, num=num))
             acq_futures[f] = f.start_time - f.end_time
