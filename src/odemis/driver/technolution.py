@@ -183,6 +183,8 @@ class AcquisitionServer(model.HwComponent):
             raise ValueError("Required child MirrorDescanner not provided")
         self._mirror_descanner = MirrorDescanner(parent=self, daemon=kwargs.get("daemon"), **ckwargs)
         self.children.value.add(self._mirror_descanner)
+        # update the shift when the dwell time changes
+        self._ebeam_scanner.dwellTime.subscribe(self._mirror_descanner._updateShift, init=False)
 
         try:
             ckwargs = children["MPPC"]
@@ -866,6 +868,7 @@ class MirrorDescanner(model.Emitter):
         # heights of the sawtooth descanner signal (it does not include the offset!)
         self.scanAmplitude = model.TupleContinuous((0.008, 0.008), range=((-1, -1), (1, 1)), cls=(int, float))
         # FIXME add a check that offset + amplitude >! 2**15 - 1 and offset + amplitude <! -2**15
+        self.shift = model.FloatContinuous(0, range=(0.0, 1.0))
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)  # [1/sec]
         # period (=1/frequency) of the descanner in seconds; update frequency for setpoints upload
@@ -873,6 +876,28 @@ class MirrorDescanner(model.Emitter):
 
         # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
         self.physicalFlybackTime = model.FloatContinuous(150e-6, range=(0, 1e-3), unit='s')
+
+    def _updateShift(self, dwell_time: float):
+        """
+        Sets the shift of the descanner in seconds. The shift is the time the descanner needs to move from one pixel
+        position to the next pixel position. The shift is calculated based on the dwell time of the scanner and the
+        descanner clock period.
+
+        :param dwell_time (float): The requested dwell time in seconds.
+        :return (float): The set shift in seconds.
+        """
+        phase_shift_md = self._metadata[model.MD_CALIB]["phase_shift"]
+        # find closest key to dwell time in the calibration metadata
+        phase_shift = min(phase_shift_md.keys(), key=lambda k: abs(k - dwell_time))
+        logging.debug(f"Setting mirror descanner phase shift to {phase_shift}, for dwell time {dwell_time}")
+        self.shift.value = phase_shift_md[phase_shift]
+
+    def updateMetadata(self, md):
+        model.HwComponent.updateMetadata(self, md)
+        # Update the shift of the descanner based on the dwell time of the scanner, when the
+        # descanner metadata has changed.
+        if model.MD_CALIB in md and "phase_shift" in md[model.MD_CALIB]:
+            self._updateShift(self.parent._ebeam_scanner.dwellTime.value)
 
     def getXAcqSetpoints(self):
         """
@@ -951,9 +976,11 @@ class MirrorDescanner(model.Emitter):
         setpoints = numpy.floor(setpoints).astype(int)  # [bits]
 
         # Mapping from a.u. to bits is symmetrically around 0, whereas the range in bits that is accepted by the ASM is
-        # not symetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
+        # not symmetrically around 0 ([-32768, 32767]). Clip 2**15 = 32768 by one bit to 32767 bit.
         setpoints = numpy.minimum(setpoints, I16_SYM_RANGE[1] - 1)
 
+        # Shift the setpoints to the right by a percentage of the total number of setpoints.
+        setpoints = numpy.roll(setpoints, round(len(setpoints) * self.shift.value))
         return setpoints.tolist()
 
     def getYAcqSetpoints(self):
