@@ -30,9 +30,11 @@ from builtins import str
 from concurrent.futures._base import CancelledError
 from typing import List, Tuple, Optional
 
-import odemis.gui.model as guimodel
 import wx
-from odemis import dataio, gui, model
+
+import odemis.gui.cont.views as viewcont
+import odemis.gui.model as guimod
+from odemis import dataio, model
 from odemis.acq import acqmng, path, stitching, stream
 from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview,
@@ -41,30 +43,22 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
                                OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
-from odemis.gui import conf
-from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
-
-from odemis.gui.preset import (apply_preset, get_global_settings_entries,
-                               get_local_settings_entries, preset_as_is,
-                               presets)
 from odemis.gui.comp import buttons
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
-from odemis.gui.cont.settings import (LocalizationSettingsController,
-                                      SecomSettingsController)
+from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
+from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
-import odemis.gui.model as guimod
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
-import odemis.gui.util as guiutil
+from odemis.gui.preset import (apply_preset, get_global_settings_entries,
+                               get_local_settings_entries, preset_as_is,
+                               presets)
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
 from odemis.gui.util.conversion import sample_positions_to_layout
-import odemis.gui.cont.views as viewcont
-from odemis.gui.util.widgets import (ProgressiveFutureConnector,
-                                     VigilantAttributeConnector)
+from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
 from odemis.util import units
-from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 
@@ -219,14 +213,14 @@ class AcquisitionDialog(xrcfr_acq):
         new.streams = model.ListVA(orig.streams.value)  # duplicate
 
         # create view (which cannot move or focus)
-        view = guimodel.MicroscopeView("All")
+        view = guimod.MicroscopeView("All")
 
         # differentiate it (only one view)
         new.views = model.ListVA()
         new.views.value.append(view)
         new.focussedView = model.VigilantAttribute(view)
-        new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
-                                             choices={guimodel.VIEW_LAYOUT_ONE})
+        new.viewLayout = model.IntEnumerated(guimod.VIEW_LAYOUT_ONE,
+                                             choices={guimod.VIEW_LAYOUT_ONE})
         new.tool = model.IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
         return new
 
@@ -640,7 +634,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
       .filename and it is opened (as pyramidal data) in .data .
     """
     def __init__(self, parent, orig_tab_data,
-                 mode: guimodel.AcquiMode = guimodel.AcquiMode.FLM):
+                 mode: guimod.AcquiMode = guimod.AcquiMode.FLM):
         xrcfr_overview_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
@@ -663,14 +657,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # The pattern to use for storing each tile file individually
         # None disables storing them
         save_dir = self.conf.last_path
-        if isinstance(orig_tab_data, guimodel.CryoGUIData):
+        if isinstance(orig_tab_data, guimod.CryoGUIData):
             save_dir = self.conf.pj_last_path
 
         # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
         self.acqui_mode = mode
 
         # hide optical settings when in fibsem mode
-        self.fp_settings_secom_optical.Show(self.acqui_mode is guimodel.AcquiMode.FLM)
+        self.fp_settings_secom_optical.Show(self.acqui_mode is guimod.AcquiMode.FLM)
 
         self.filename = create_filename(save_dir, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
@@ -809,7 +803,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.stage = self._main_data_model.stage
         self.settings_obs = self._main_data_model.settings_obs
         try:
-            if self.acqui_mode is guimodel.AcquiMode.FIBSEM:
+            if self.acqui_mode is guimod.AcquiMode.FIBSEM:
                 self.focuser = self._main_data_model.ebeam_focus
                 self.detector = self._main_data_model.sed
                 imaging_range = model.MD_SEM_IMAGING_RANGE
@@ -880,7 +874,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         data_model.streams.value.extend(orig.streams.value)
 
         # create view (which cannot move or focus)
-        view = guimodel.MicroscopeView("All")
+        view = guimod.MicroscopeView("All")
         data_model.views.value = [view]
         data_model.focussedView.value = view
         return data_model
@@ -894,7 +888,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
             if not isinstance(s, LiveStream):
                 continue
-            if self.acqui_mode is guimodel.AcquiMode.FIBSEM and not isinstance(s, SEMStream):
+            if self.acqui_mode is guimod.AcquiMode.FIBSEM and not isinstance(s, SEMStream):
                 continue # only support sem streams atm (TODO: add once fib posture is supported)
 
             sc = self.streambar_controller.addStream(s, add_to_view=self._view)

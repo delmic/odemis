@@ -14,18 +14,16 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import threading
 # Contains special streams which are not proper, but can be used as a way to
 # store or retrieve information.
 
-
-from abc import abstractmethod
-from functools import wraps
 import logging
 import math
-import time
-
 import numbers
+import threading
+import time
+from abc import abstractmethod
+from functools import wraps
 from typing import Tuple, Any, Dict, List, Optional, Callable
 
 import numpy
@@ -33,8 +31,7 @@ import numpy
 from odemis import model
 from odemis.acq import align
 from odemis.model import VigilantAttributeBase, MD_POL_NONE
-from odemis.util import img, almost_equal, get_best_dtype_for_acc, angleres
-
+from odemis.util import img, almost_equal, angleres
 from ._base import Stream, UNDEFINED_ROI, POL_POSITIONS
 from ._live import LiveStream
 
