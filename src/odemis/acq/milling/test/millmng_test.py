@@ -218,7 +218,10 @@ class TestAutomatedMillingManager(unittest.TestCase):
             task_list=self.task_list,
         )
 
-        time.sleep(5)
         f.cancel()
+        time.sleep(5)
 
         self.assertTrue(f.cancelled())
+
+if __name__ == "__main__":
+    unittest.main()
