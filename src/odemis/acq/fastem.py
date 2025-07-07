@@ -1012,6 +1012,11 @@ class OverviewAcquisition(object):
 
         :returns: (DataArray) The complete overview image.
         """
+        # No need to run the acquisition if the _future and in turn the _sub_future was already cancelled
+        # this is a necessary check when a number of OverviewAcquisition tasks are scheduled in ProgressiveBatchFuture
+        if self._sub_future.cancelled():
+            return
+
         if reference_stage:
             logging.debug("Referencing stage axes x and y.")
             f = stage.reference({"x", "y"})
