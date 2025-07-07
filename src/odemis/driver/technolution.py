@@ -930,15 +930,19 @@ class MirrorDescanner(model.Emitter):
         if not almost_equal(remainder_scanning_time, 0, rtol=0, atol=1e-10):
             # add one setpoint with value same as end of scanning ramp
             scanning_points = numpy.hstack((scanning_points, scan_end))  # [bits]
-
-        # Calculation of the flyback points:
-        # Check if the physical flyback time (time the mirror needs to move back to the start position
-        # of the line scan) is a whole multiple of the descan period. If not, round up.
+        # Calculate the number of flyback points based on the physical flyback time and descanner period
         number_flyback_points = math.ceil(self.physicalFlybackTime.value / descan_period)  # [sec/sec = no unit]
-        # convert flyback setpoints into bits; should be at the same level as the start of the ramp (=offset)
-        flyback_points = scan_start + numpy.zeros(number_flyback_points)  # [bits]
 
-        setpoints = numpy.concatenate((scanning_points, flyback_points))  # [bits]
+        # For the first 90% of the flyback period the descanner moves back to the start of the scanning ramp.
+        flyback_points = numpy.linspace(scan_amplitude + scan_start - 1,
+                                        scan_start,
+                                        math.ceil(number_flyback_points * 0.9))  # [bits]
+        # Create a flat line for the remaining part of the flyback period
+        flat_line_len = number_flyback_points - flyback_points.shape[0]
+        flat_line = scan_start + numpy.zeros(flat_line_len)  # [bits]
+
+        # Combine the scanning points with the flyback points to form the final setpoints list.
+        setpoints = numpy.concatenate((scanning_points, flyback_points, flat_line))  # [bits]
 
         # Setpoints need to be integers when send to the ASM. First round down found setpoints to next integer
         # then convert to int type.
