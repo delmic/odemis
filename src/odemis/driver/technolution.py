@@ -868,7 +868,10 @@ class MirrorDescanner(model.Emitter):
         # heights of the sawtooth descanner signal (it does not include the offset!)
         self.scanAmplitude = model.TupleContinuous((0.008, 0.008), range=((-1, -1), (1, 1)), cls=(int, float))
         # FIXME add a check that offset + amplitude >! 2**15 - 1 and offset + amplitude <! -2**15
-        self.shift = model.FloatContinuous(0, range=(0.0, 1.0))
+
+        # The shift is the ratio to shift the descanner setpoints by,
+        # it is auto computed whenever the phase_shift and dwell time are updated
+        self.shift = model.FloatContinuous(0, range=(0.0, 1.0), unit="")
 
         clockFrequencyData = self.parent.asmApiGetCall("/scan/descan_control_frequency", 200)  # [1/sec]
         # period (=1/frequency) of the descanner in seconds; update frequency for setpoints upload
@@ -886,7 +889,13 @@ class MirrorDescanner(model.Emitter):
         :param dwell_time (float): The requested dwell time in seconds.
         :return (float): The set shift in seconds.
         """
-        phase_shift_md = self._metadata[model.MD_CALIB]["phase_shift"]
+        try:
+            phase_shift_md = self._metadata[model.MD_CALIB]["phase_shift"]
+        except KeyError:
+            logging.debug("MD_CALIB does not contain phase shift information. Cannot set descanner "
+                          "phase shift.")
+            return
+        # phase_shift is a dict with dwell time as keys and shift as values
         # find closest key to dwell time in the calibration metadata
         phase_shift = min(phase_shift_md.keys(), key=lambda k: abs(k - dwell_time))
         logging.debug(f"Setting mirror descanner phase shift to {phase_shift}, for dwell time {dwell_time}")
@@ -958,13 +967,13 @@ class MirrorDescanner(model.Emitter):
         # Calculate the number of flyback points based on the physical flyback time and descanner period
         number_flyback_points = math.ceil(self.physicalFlybackTime.value / descan_period)  # [sec/sec = no unit]
 
-        # For the initial part of the flyback period the descanner moves back to the start of the scanning ramp.
+        # For the first 90% of the flyback period the descanner moves back to the start of the scanning ramp.
         flyback_points = numpy.linspace(scan_amplitude + scan_start - 1,
                                         scan_start,
                                         math.ceil(number_flyback_points * 0.9))  # [bits]
-
         # Create a flat line for the remaining part of the flyback period
-        flat_line = scan_start + numpy.zeros(math.floor(number_flyback_points * 0.1))  # [bits]
+        flat_line_len = number_flyback_points - flyback_points.shape[0]
+        flat_line = scan_start + numpy.zeros(flat_line_len)  # [bits]
 
         # Combine the scanning points with the flyback points to form the final setpoints list.
         setpoints = numpy.concatenate((scanning_points, flyback_points, flat_line))  # [bits]
