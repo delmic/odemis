@@ -852,9 +852,9 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     return f
 
 
-def acquireTiledArea(stream, stage, area, live_stream=None):
+def acquireTiledArea(stream, stage, region, live_stream=None):
     """
-    Start an overview acquisition task for a given area.
+    Start an overview acquisition task for a given region.
 
     :param stream: (SEMStream) The stream used for the acquisition.
         It must have the detector and emitter connected to the TFS XT client detector and scanner.
@@ -863,8 +863,8 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
         (because the VAs of the hardware will be changed directly, and so they should not be changed by the stream).
     :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
         The x and y axes are aligned with the x and y axes of the ebeam scanner. Axes should already be referenced.
-    :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region
-        in the sample carrier coordinate system.
+    :param region: Tuple[float, float, float, float] or List[Tuple[float, float]] coordinates or a list of points
+        of the overview region in the sample carrier coordinate system.
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
 
@@ -872,8 +872,10 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
              It returns the complete DataArray.
     """
     # Check the parameters
-    if len(area) != 4:
-        raise ValueError("area should be 4 float, but got %r" % (area,))
+    if isinstance(region, tuple) and len(region) != 4:
+        raise ValueError("region should be 4 float, but got %r" % (region,))
+    elif isinstance(region, list) and not all(isinstance(point, tuple) and len(point) == 2 for point in region):
+        raise ValueError("region should contain points (x, y)")
 
     for vaname in ("horizontalFoV", "resolution", "scale"):
         if vaname in stream.emt_vas:
@@ -901,18 +903,18 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
     # overwrites the scanner configuration from overview mode to liveview mode.
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
-    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, area)
+    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, region)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, area, live_stream)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream)
 
     return f
 
 
-def estimateTiledAcquisitionTime(stream, stage, area, dwell_time=None):
+def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
     """
     Estimate the time needed to acquire a full overview image. Calculate the
     number of tiles needed for the requested area based on set dwell time and
@@ -926,8 +928,8 @@ def estimateTiledAcquisitionTime(stream, stage, area, dwell_time=None):
     :param stream: (SEMstream) The stream used for the acquisition.
     :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
         The x and y axes are aligned with the x and y axes of the ebeam scanner.
-    :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region
-        in the sample carrier coordinate system.
+    :param region: Tuple[float, float, float, float] or List[Tuple[float, float]] coordinates or a list of points
+        of the overview region in the sample carrier coordinate system.
     :param dwell_time: (float) A user input dwell time to be used instead of the stream emitter's dwell time
         for acquisition time calculation.
 
@@ -939,7 +941,12 @@ def estimateTiledAcquisitionTime(stream, stage, area, dwell_time=None):
 
     # calculate area size
     fov = (fov_value, fov_value * res[1] / res[0])
-    acquisition_area = util.normalize_rect(area)  # make sure order is l, b, r, t
+    acquisition_area = (0, 0, 0, 0)
+    if isinstance(region, tuple):
+        acquisition_area = util.normalize_rect(region)  # make sure order is l, b, r, t
+    elif isinstance(region, list):
+        acquisition_area = util.get_polygon_bbox(region)
+
     area_size = (acquisition_area[2] - acquisition_area[0],
                  acquisition_area[3] - acquisition_area[1])
     # number of tiles

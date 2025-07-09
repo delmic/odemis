@@ -25,7 +25,7 @@ import math
 import threading
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from odemis import model
 from odemis.acq import acqmng, path
@@ -52,6 +52,11 @@ from odemis.gui.model._constants import (
     STATE_ON,
 )
 from odemis.model import FloatContinuous, StringVA, hasVA
+
+# The circumference of a CircleScintillator is divided into 72 arcs.
+# This will result in an angle increment of 5 degrees.
+NUM_ARCS = 72
+ANGLE_INCREMENT = 2 * math.pi / NUM_ARCS
 
 
 class MainGUIData(object):
@@ -588,6 +593,10 @@ class ScintillatorShape(metaclass=ABCMeta):
     def get_bbox(self):
         pass
 
+    @abstractmethod
+    def get_region(self):
+        pass
+
 
 class RectangleScintillator(ScintillatorShape):
     """Class representing a rectangle."""
@@ -596,16 +605,19 @@ class RectangleScintillator(ScintillatorShape):
         self.width = width
         self.height = height
 
-    def get_size(self):
+    def get_size(self) -> Tuple[float, float]:
         return self.width, self.height
 
-    def get_bbox(self):
+    def get_bbox(self) -> Tuple[float, float, float, float]:
         return (
             self.position[0] - self.width / 2,
             self.position[1] - self.height / 2,
             self.position[0] + self.width / 2,
             self.position[1] + self.height / 2,
         )  # (minx, miny, maxx, maxy) [m]
+
+    def get_region(self) -> Tuple[float, float, float, float]:
+        return self.get_bbox()
 
 
 class CircleScintillator(ScintillatorShape):
@@ -614,16 +626,27 @@ class CircleScintillator(ScintillatorShape):
         super().__init__(position)
         self.radius = radius
 
-    def get_size(self):
+    def get_size(self) -> Tuple[float, float]:
         return 2 * self.radius, 2 * self.radius
 
-    def get_bbox(self):
+    def get_bbox(self) -> Tuple[float, float, float, float]:
         return (
             self.position[0] - self.radius,
             self.position[1] - self.radius,
             self.position[0] + self.radius,
             self.position[1] + self.radius,
         )  # (minx, miny, maxx, maxy) [m]
+
+    def get_region(self) -> List[Tuple[float, float]]:
+        center_x, center_y = self.position
+        points = [
+            (
+                center_x + self.radius * math.cos(i * ANGLE_INCREMENT),
+                center_y + self.radius * math.sin(i * ANGLE_INCREMENT),
+            )
+            for i in range(NUM_ARCS)
+        ]
+        return points
 
 
 class Scintillator:
