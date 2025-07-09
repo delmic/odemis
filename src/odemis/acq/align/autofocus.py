@@ -20,24 +20,23 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+import logging
+import threading
+import time
 from collections.abc import Iterable
 from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-import logging
-from typing import Tuple, Optional, List
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy
-from odemis.util.driver import estimateMoveDuration, guessActuatorMoveDuration
 
 from odemis import model
 from odemis.acq.align import light
 from odemis.model import InstantaneousFuture
 from odemis.util import executeAsyncTask, almost_equal
+from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.focus import MeasureSEMFocus, Measure1d, MeasureSpotsFocus, AssessFocus
 from odemis.util.img import Subtract
-import threading
-import time
-
 
 MTD_BINARY = 0
 MTD_EXHAUSTIVE = 1
@@ -46,12 +45,12 @@ MAX_STEPS_NUMBER = 100  # Max steps to perform autofocus
 MAX_BS_NUMBER = 1  # Maximum number of applying binary search with a smaller max_step
 
 
-def getNextImage(det, timeout=None):
+def getNextImage(det: model.Detector, timeout: Optional[float] = None) -> model.DataArray:
     """
     Acquire one image from the given detector
-    det (model.Detector): detector from which to acquire an image
-    timeout (None or 0<float): maximum time to wait
-    returns (model.DataArray):
+    det: detector from which to acquire an image
+    timeout: maximum time to wait (>0)
+    returns:
         Image (with subtracted background if requested)
     raise:
         IOError: if it timed out
@@ -74,17 +73,21 @@ def getNextImage(det, timeout=None):
     return data_shared[0]
 
 
-def AcquireNoBackground(det, dfbkg=None, timeout=None):
+def AcquireNoBackground(
+        det: model.Detector,
+        dfbkg: Optional[model.DataFlow] = None,
+        timeout: Optional[float] = None
+) -> model.DataArray:
     """
     Performs optical acquisition with background subtraction if possible.
     Particularly used in order to eliminate the e-beam source background in the
     Delphi.
-    det (model.Detector): detector from which to acquire an image
-    dfbkg (model.DataFlow or None): dataflow of se- or bs- detector to
+    det: detector from which to acquire an image
+    dfbkg: dataflow of se- or bs- detector to
     start/stop the source. If None, a standard acquisition is performed (without
     background subtraction)
-    timeout (None or 0<float): maximum time to wait
-    returns (model.DataArray):
+    timeout: maximum time to wait (>0)
+    returns:
         Image (with subtracted background if requested)
     raise:
         IOError: if it timed out
@@ -105,25 +108,33 @@ def AcquireNoBackground(det, dfbkg=None, timeout=None):
         return getNextImage(det, timeout)
 
 
-def _discard_data(df, data):
+def _discard_data(df: Any, data: Any) -> None:
     """
     Does nothing, just discard the SEM data received (for spot mode)
     """
     pass
 
 
-def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
+def _DoBinaryFocus(
+        future: model.ProgressiveFuture,
+        detector: model.Detector,
+        emt: Optional[model.Emitter],
+        focus: model.Actuator,
+        dfbkg: Optional[model.DataFlow],
+        good_focus: Optional[float],
+        rng_focus: Optional[Tuple[float, float]]
+) -> Tuple[float, float, float]:
     """
     Iteratively acquires an optical image, measures its focus level and adjusts
     the optical focus with respect to the focus level.
-    future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    detector: model.DigitalCamera or model.Detector
-    emt (None or model.Emitter): In case of a SED this is the scanner used
-    focus (model.Actuator): The focus actuator (with a "z" axis)
-    dfbkg (model.DataFlow): dataflow of se- or bs- detector
-    good_focus (float): if provided, an already known good focus position to be
+    future: Progressive future provided by the wrapper
+    detector: Detector on which to improve the focus quality
+    emt: In case of a SED this is the scanner used
+    focus: The focus actuator (with a "z" axis)
+    dfbkg: dataflow of se- or bs- detector
+    good_focus: if provided, an already known good focus position to be
       taken into consideration while autofocusing
-    rng_focus (tuple of floats): if provided, the search of the best focus position is limited
+    rng_focus: if provided, the search of the best focus position is limited
       within this range
     returns:
         (float): Focus position (m)
@@ -368,24 +379,33 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             future._autofocus_state = FINISHED
 
 
-def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
+def _DoExhaustiveFocus(
+        future: model.ProgressiveFuture,
+        detector: model.Detector,
+        emt: Optional[model.Emitter],
+        focus: model.Actuator,
+        dfbkg: Optional[model.DataFlow],
+        good_focus: Optional[float],
+        rng_focus: Optional[Tuple[float, float]]
+) -> Tuple[float, float, float]:
     """
     Moves the optical focus through the whole given range, measures the focus
     level on each position and ends up where the best focus level was found. In
     case a significant deviation was found while going through the range, it
     stops and limits the search within a smaller range around this position.
-    future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    detector: model.DigitalCamera or model.Detector
-    emt (None or model.Emitter): In case of a SED this is the scanner used
-    focus (model.Actuator): The optical focus
-    dfbkg (model.DataFlow): dataflow of se- or bs- detector
-    good_focus (float): if provided, an already known good focus position to be
+    future: Progressive future provided by the wrapper
+    detector: Detector on which to improve the focus quality
+    emt: In case of a SED this is the scanner used
+    focus: The optical focus
+    dfbkg: dataflow of se- or bs- detector
+    good_focus: if provided, an already known good focus position to be
       taken into consideration while autofocusing
-    rng_focus (tuple): if provided, the search of the best focus position is limited
+    rng_focus: if provided, the search of the best focus position is limited
       within this range
     returns:
         (float): Focus position (m)
         (float): Focus level
+        (float): Focus confidence (0<=f<=1, 0 is not in focus and 1 is the best possible focus)
     raises:
             CancelledError if cancelled
             IOError if procedure failed
@@ -472,7 +492,8 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             if len(focus_levels) >= 10 and AssessFocus(focus_levels):
                 # trigger binary search on if significant deviation was
                 # found in current position
-                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
+                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos,
+                                      (best_pos - 2 * step, best_pos + 2 * step))
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
@@ -491,12 +512,14 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             if len(focus_levels) >= 10 and AssessFocus(focus_levels):
                 # trigger binary search on if significant deviation was
                 # found in current position
-                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
+                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos,
+                                      (best_pos - 2 * step, best_pos + 2 * step))
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
 
-        logging.debug("No significant focus level was found so far, thus we just move to the best position found %.7g", best_pos)
+        logging.debug("No significant focus level was found so far, thus we just move to the best position found %.7g",
+                      best_pos)
         focus.moveAbsSync({"z": best_pos})
         return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
 
@@ -511,7 +534,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             future._autofocus_state = FINISHED
 
 
-def _CancelAutoFocus(future):
+def _CancelAutoFocus(future: model.ProgressiveFuture) -> bool:
     """
     Canceller of AutoFocus task.
     """
@@ -526,12 +549,14 @@ def _CancelAutoFocus(future):
     return True
 
 
-def estimateAcquisitionTime(detector, scanner=None):
+def estimateAcquisitionTime(
+        detector: model.Detector,
+        scanner: Optional[model.Emitter] = None
+) -> float:
     """
     Estimate how long one acquisition will take
-    detector (model.DigitalCamera or model.Detector): Detector on which to
-      improve the focus quality
-    scanner (None or model.Emitter): In case of a SED this is the scanner used
+    detector: Detector on which to improve the focus quality
+    scanner: In case of a SED this is the scanner used
     return (0<float): time in s
     """
     # Check if there is a scanner (focusing = SEM)
@@ -548,7 +573,15 @@ def estimateAcquisitionTime(detector, scanner=None):
     return et
 
 
-def estimateAutoFocusTime(detector, emt, focus: model.Actuator, dfbkg=None, good_focus=None, rng_focus=None, method=MTD_BINARY) -> float:
+def estimateAutoFocusTime(
+        detector: model.Detector,
+        emt: Optional[model.Emitter],
+        focus: model.Actuator,
+        dfbkg: Optional[model.DataFlow] = None,
+        good_focus: Optional[float] = None,
+        rng_focus: Optional[Tuple[float, float]] = None,
+        method: int = MTD_BINARY
+) -> float:
     """
     Estimates autofocus procedure duration.
     For the input parameters, see AutoFocus function docstring
@@ -561,14 +594,19 @@ def estimateAutoFocusTime(detector, emt, focus: model.Actuator, dfbkg=None, good
     distance = rng[1] - rng[0]
     # Optimally, the focus starts from middle to minimum, then maximum. Then it goes back to the middle.
     # optimistic guess
-    move_time = guessActuatorMoveDuration(focus, "z", distance) + 2 * guessActuatorMoveDuration(focus, "z", distance/2)
+    move_time = guessActuatorMoveDuration(focus, "z", distance) + 2 * guessActuatorMoveDuration(focus, "z",
+                                                                                                distance / 2)
     # pessimistic guess
     acquisition_time = MAX_STEPS_NUMBER * estimateAcquisitionTime(detector, emt)
     return move_time + acquisition_time
 
 
-def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
-
+def Sparc2AutoFocus(
+        align_mode: str,
+        opm: 'OpticalPathManager',
+        streams: Optional[List['Stream']] = None,
+        start_autofocus: bool = True
+) -> model.ProgressiveFuture:
     """
     It provides the ability to check the progress of the complete Sparc2 autofocus
     procedure in a Future or even cancel it.
@@ -578,13 +616,14 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         Run AutoFocusSpectrometer
         Acquire one last image
         Turn off the light
-    align_mode (str): The optical path mode for which the spectrograph focus should be optimized.
+    align_mode: The optical path mode for which the spectrograph focus should be optimized.
     This automatically defines the spectrograph to use and the detectors.
     Possible values are: "spec-focus", "spec-focus-ext", "streak-focus", "streak-focus-ext", and
     "spec-fiber-focus".
-    opm (OpticalPathManager): the optical path manager to move the actuators to the correct positions.
+    opm: the optical path manager to move the actuators to the correct positions.
     streams: list of streams. The first stream is used for displaying the last
        image with the slit closed.
+    start_autofocus: if True, the autofocus procedure will be executed
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
           which will eventually return a map of grating/detector -> focus position, the same as AutoFocusSpectrometer
     raises:
@@ -624,8 +663,8 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     # * 0.1 s to turn off the light
     if start_autofocus:
         # calculate the time needed for the AutoFocusSpectrometer procedure to be completed
-        af_time = _totalAutoFocusTime(spgr, focuser,  dets, selector, streams)
-        autofocus_loading_times = (5, 5, af_time, 0.2, 5) # a list with the time that each action needs
+        af_time = _totalAutoFocusTime(spgr, focuser, dets, selector, streams)
+        autofocus_loading_times = (5, 5, af_time, 0.2, 5)  # a list with the time that each action needs
     else:
         autofocus_loading_times = (5, 5)
 
@@ -638,11 +677,12 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     f._running_subf = model.InstantaneousFuture()
 
     # Run in separate thread
-    executeAsyncTask(f, _DoSparc2AutoFocus, args=(f, streams, align_mode, opm, dets, spgr, selector, bl, focuser, start_autofocus))
+    executeAsyncTask(f, _DoSparc2AutoFocus,
+                     args=(f, streams, align_mode, opm, dets, spgr, selector, bl, focuser, start_autofocus))
     return f
 
 
-def _cancelSparc2ManualFocus(future):
+def _cancelSparc2ManualFocus(future: model.ProgressiveFuture) -> bool:
     """
     Canceller of _DoSparc2ManualFocus task.
     """
@@ -653,13 +693,17 @@ def _cancelSparc2ManualFocus(future):
     return True
 
 
-def Sparc2ManualFocus(opm, align_mode, toggled=True):
+def Sparc2ManualFocus(
+        opm: 'OpticalPathManager',
+        align_mode: str,
+        toggled: bool = True
+) -> model.ProgressiveFuture:
     """
     Provides the ability to check the progress of the Sparc2 manual focus
     procedure in a Future or even cancel it.
     :param opm: OpticalPathManager object
-    :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
-    :param mf_toggled (bool): Toggle the manual focus button on/off
+    :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
+    :param mf_toggled: Toggle the manual focus button on/off
     :return (ProgressiveFuture -> for the _DoSparc2ManualFocus function)
     """
     focuser = _findSparc2Focuser(align_mode)
@@ -668,7 +712,8 @@ def Sparc2ManualFocus(opm, align_mode, toggled=True):
     try:
         spgr, _, _, bl = _getSpectrometerFocusingComponents(focuser)
     except LookupError as ex:
-        logging.warning("Failed to find all the components for focusing mode %s, will just use the brightlight: %s", align_mode, ex)
+        logging.warning("Failed to find all the components for focusing mode %s, will just use the brightlight: %s",
+                        align_mode, ex)
         # It's correct most of the time
         bl = model.getComponent(role="brightlight")
 
@@ -682,7 +727,13 @@ def Sparc2ManualFocus(opm, align_mode, toggled=True):
     return f
 
 
-def _DoSparc2ManualFocus(opm, spgr: model.Actuator, bl: model.Emitter, align_mode: str, toggled: bool = True):
+def _DoSparc2ManualFocus(
+        opm: 'OpticalPathManager',
+        spgr: model.Actuator,
+        bl: model.Emitter,
+        align_mode: str,
+        toggled: bool = True
+) -> None:
     """
     The actual implementation of the manual focus procedure, run asynchronously
     When the manual focus button is toggled:
@@ -704,11 +755,13 @@ def _DoSparc2ManualFocus(opm, spgr: model.Actuator, bl: model.Emitter, align_mod
         bl.power.value = bl.power.range[0]
 
 
-def GetSpectrometerFocusingDetectors(focuser: model.Actuator) -> List[model.Detector]:
+def GetSpectrometerFocusingDetectors(
+        focuser: model.Actuator
+) -> List[model.Detector]:
     """
     Public wrapper around _getSpectrometerFocusingComponents to return detectors only
-    :param focuser: (Actuator) the focuser that will be used to change focus
-    :return: detectors (list of Detectors): the detectors attached on the
+    :param focuser: the focuser that will be used to change focus
+    :return: detectors: the detectors attached on the
           spectrograph, which can be used for focusing
     """
     dets = []
@@ -753,19 +806,19 @@ def _findSparc2Focuser(align_mode: str) -> model.Actuator:
 
 
 def _getSpectrometerFocusingComponents(focuser: model.Actuator) -> Tuple[
-        model.Actuator, List[model.Detector], Optional[model.Actuator],
-        model.Emitter
-    ]:
+    model.Actuator, List[model.Detector], Optional[model.Actuator],
+    model.Emitter
+]:
     """
     Finds the different components needed to run auto-focusing with the
     given focuser.
     :param focuser: the focuser that will be used to change focus
     return:
-        * spectrograph (Actuator): component to move the grating and wavelength
-        * detectors (list of Detectors): the detectors attached on the
+        * spectrograph: component to move the grating and wavelength
+        * detectors: the detectors attached on the
           spectrograph, which can be used for focusing
-        * selector (Actuator or None): the component to switch detectors
-        * brightlight (Emitter): the light source to be turned on during focusing
+        * selector: the component to switch detectors
+        * brightlight: the light source to be turned on during focusing
     raise LookupError: if not all the components could be found
     """
     dets = GetSpectrometerFocusingDetectors(focuser)
@@ -816,11 +869,23 @@ def _findSameAffects(roles: List[str], affected: List[str]) -> model.Component:
         raise LookupError(f"Failed to find a component within {roles} that affects all {affected}")
 
 
-def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, bl, focuser, start_autofocus=True):
+def _DoSparc2AutoFocus(
+        future: model.ProgressiveFuture,
+        streams: List['Stream'],
+        align_mode: str,
+        opm: 'OpticalPathManager',
+        dets: List[model.Detector],
+        spgr: model.Actuator,
+        selector: Optional[model.Actuator],
+        bl: model.Emitter,
+        focuser: model.Actuator,
+        start_autofocus: bool = True
+) -> Optional[Dict[Any, Any]]:
     """
         cf Sparc2AutoFocus
         return dict((grating, detector) -> focus pos)
     """
+
     def updateProgress(subf, start, end):
         """
         Updates the time progress when the current subfuture updates its progress
@@ -873,7 +938,8 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, b
         # Configure each detector with good settings
         for d in dets:
             # The stream takes care of configuring its detector, so no need
-            # In case there is no streams for the detector, take the binning and exposureTime values as far as they exist
+            # In case there is no streams for the detector, take the binning and exposureTime values as far as they
+            # exist
             if not any(s.detector.role == d.role for s in streams):
                 binning = 1, 1
                 if model.hasVA(d, "binning"):
@@ -944,7 +1010,7 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, b
             future._autofocus_state = FINISHED
 
 
-def _CancelSparc2AutoFocus(future):
+def _CancelSparc2AutoFocus(future: model.ProgressiveFuture) -> bool:
     """
     Canceller of _DoSparc2AutoFocus task.
     """
@@ -960,32 +1026,41 @@ def _CancelSparc2AutoFocus(future):
     return True
 
 
-def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None, method=MTD_BINARY):
+def AutoFocus(
+        detector: model.Detector,
+        emt: Optional[model.Emitter],
+        focus: model.Actuator,
+        dfbkg: Optional[model.DataFlow] = None,
+        good_focus: Optional[float] = None,
+        rng_focus: Optional[Tuple[float, float]] = None,
+        method: int = MTD_BINARY
+) -> model.ProgressiveFuture:
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus
     procedure or even cancel it.
-    detector (model.DigitalCamera or model.Detector): Detector on which to
+    detector: Detector on which to
       improve the focus quality
-    emt (None or model.Emitter): In case of a SED this is the scanner used
-    focus (model.Actuator): The focus actuator
-    dfbkg (model.DataFlow or None): If provided, will be used to start/stop
+    emt: In case of a SED this is the scanner used
+    focus: The focus actuator
+    dfbkg: If provided, will be used to start/stop
      the e-beam emission (it must be the dataflow of se- or bs-detector) in
      order to do background subtraction. If None, no background subtraction is
      performed.
-    good_focus (float): if provided, an already known good focus position to be
+    good_focus: if provided, an already known good focus position to be
       taken into consideration while autofocusing
-    rng_focus (tuple): if provided, the search of the best focus position is limited
+    rng_focus: if provided, the search of the best focus position is limited
       within this range
     method (MTD_*): focusing method, if BINARY we follow a dichotomic method while in
       case of EXHAUSTIVE we iterate through the whole provided range
-    returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
+    returns:  Progress of DoAutoFocus, whose result() will return:
             Focus position (m)
             Focus level
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateAutoFocusTime(detector, emt, focus, dfbkg, good_focus, rng_focus))
+                                end=est_start + estimateAutoFocusTime(detector, emt, focus, dfbkg, good_focus,
+                                                                      rng_focus))
     f._autofocus_state = RUNNING
     f._autofocus_lock = threading.Lock()
     f.task_canceller = _CancelAutoFocus
@@ -1003,7 +1078,13 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
     return f
 
 
-def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, streams=None):
+def AutoFocusSpectrometer(
+        spectrograph: model.Actuator,
+        focuser: model.Actuator,
+        detectors: Union[model.Detector, List[model.Detector]],
+        selector: Optional[model.Actuator] = None,
+        streams: Optional[List['Stream']] = None
+) -> model.ProgressiveFuture:
     """
     Run autofocus for a spectrograph. It will actually run autofocus on each
     gratings, and for each detectors. The input slit should already be in a
@@ -1011,11 +1092,11 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, strea
     active.
     Note: it's currently tailored to the Andor Shamrock SR-193i. It's recommended
     to put the detector on the "direct" output as first detector.
-    spectrograph (Actuator): should have grating and wavelength.
-    focuser (Actuator): should have a z axis
-    detectors (Detector or list of Detectors): all the detectors available on
+    spectrograph: should have grating and wavelength.
+    focuser: should have a z axis
+    detectors: all the detectors available on
       the spectrometer.
-    selector (Actuator or None): must have a rx axis with each position corresponding
+    selector: must have a rx axis with each position corresponding
      to one of the detectors. If there is only one detector, selector can be None.
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
       which will eventually return a map of grating/detector -> focus position.
@@ -1028,11 +1109,11 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, strea
         raise ValueError("No selector provided, but multiple detectors")
 
     if streams is None:
-        streams=[]
+        streams = []
 
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    #calculate the time for the AutoFocusSpectrometer procedure to be completed
+    # calculate the time for the AutoFocusSpectrometer procedure to be completed
     a_time = _totalAutoFocusTime(spectrograph, focuser, detectors, selector, streams)
     f = model.ProgressiveFuture(start=est_start, end=est_start + a_time)
     f.task_canceller = _CancelAutoFocusSpectrometer
@@ -1050,7 +1131,13 @@ MOVE_TIME_GRATING = 20  # s
 MOVE_TIME_DETECTOR = 5  # , for the detector selector
 
 
-def _totalAutoFocusTime(spectrograph, focuser, detectors, selector, streams):
+def _totalAutoFocusTime(
+        spectrograph: model.Actuator,
+        focuser: model.Actuator,
+        detectors: List[model.Detector],
+        selector: Optional[model.Actuator],
+        streams: List['Stream']
+) -> float:
     ngs = len(spectrograph.axes["grating"].choices)
     nds = len(detectors)
     et = estimateAutoFocusTime(detectors[0], None, focuser)
@@ -1062,31 +1149,42 @@ def _totalAutoFocusTime(spectrograph, focuser, detectors, selector, streams):
     return (ngs * nds) * et + move_et
 
 
-def _updateAFSProgress(future, af_dur, grating_moves, detector_moves):
+def _updateAFSProgress(
+        future: model.ProgressiveFuture,
+        af_dur: float,
+        grating_moves: int,
+        detector_moves: int
+) -> None:
     """
     Update the progress of the future based on duration of the previous autofocus
-    future (ProgressiveFuture)
-    af_dur (0< float): total duration of the next autofocusing actions
-    grating_moves (0<= int): number of grating moves left to do
-    detector_moves (0<= int): number of detector moves left to do
+    future
+    af_dur: total duration of the next autofocusing actions (> 0)
+    grating_moves: number of grating moves left to do (>= 0)
+    detector_moves: number of detector moves left to do (>= 0)
     """
     tleft = af_dur + grating_moves * MOVE_TIME_GRATING + detector_moves * MOVE_TIME_DETECTOR
     future.set_progress(end=time.time() + tleft)
 
 
-def CLSpotsAutoFocus(detector, focus, good_focus=None, rng_focus=None, method=MTD_EXHAUSTIVE):
+def CLSpotsAutoFocus(
+        detector: model.Detector,
+        focus: model.Actuator,
+        good_focus: Optional[float] = None,
+        rng_focus: Optional[Tuple[float, float]] = None,
+        method: int = MTD_EXHAUSTIVE
+) -> model.ProgressiveFuture:
     """
     Wrapper for do auto focus for CL spots. It provides the ability to check the progress of the CL spots auto focus
     procedure in a Future or even cancel it.
 
-    detector (model.DigitalCamera or model.Detector): Detector on which to improve the focus quality. Should have the
+    detector: Detector on which to improve the focus quality. Should have the
             role diagnostic-ccd.
-    focus (model.Actuator): The focus actuator.
-    good_focus (float): if provided, an already known good focus position to be
+    focus: The focus actuator.
+    good_focus: if provided, an already known good focus position to be
             taken into consideration while autofocusing.
-    rng_focus (tuple): if provided, the search of the best focus position is limited within this range.
+    rng_focus: if provided, the search of the best focus position is limited within this range.
     method: if provided, the search of the best focus position is limited within this range.
-    returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
+    returns: Progress of DoAutoFocus, whose result() will return:
         Focus position (m)
         Focus level
     """
@@ -1094,12 +1192,15 @@ def CLSpotsAutoFocus(detector, focus, good_focus=None, rng_focus=None, method=MT
     return AutoFocus(detector, None, focus, good_focus=good_focus, rng_focus=rng_focus, method=method)
 
 
-def _mapDetectorToSelector(selector, detectors):
+def _mapDetectorToSelector(
+        selector: model.Actuator,
+        detectors: List[model.Detector]
+) -> Tuple[str, Dict[str, Any]]:
     """
     Maps detector to selector positions
     returns:
-       axis (str): the selector axis to use
-       position_map (dict (str -> value)): detector name -> selector position
+       axis: the selector axis to use
+       position_map: detector name -> selector position
     """
     # We pick the right axis by assuming that it's the only one which has
     # choices, and the choices are a dict pos -> detector name.
@@ -1122,16 +1223,19 @@ def _mapDetectorToSelector(selector, detectors):
 
     if len(det_2_sel) < len(detectors):
         raise ValueError("Failed to find all detectors (%s) in positions of selector axes %s" %
-                  (", ".join(d.name for d in detectors), list(selector.axes.keys())))
+                         (", ".join(d.name for d in detectors), list(selector.axes.keys())))
 
     return sel_axis, det_2_sel
 
 
-def _playStream(detector, streams):
+def _playStream(
+        detector: model.Detector,
+        streams: List['Stream']
+) -> None:
     """
     It first pauses the streams and then plays only the stream related to the corresponding detector
-    detector : (model.DigitalCamera or model.Detector): detector from which the image is acquired
-    streams : list of streams
+    detector: detector from which the image is acquired
+    streams: list of streams
     """
     # First pause all the streams
     for s in streams:
@@ -1147,7 +1251,14 @@ def _playStream(detector, streams):
             break
 
 
-def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector, streams):
+def _DoAutoFocusSpectrometer(
+        future: model.ProgressiveFuture,
+        spectrograph: model.Actuator,
+        focuser: model.Actuator,
+        detectors: List[model.Detector],
+        selector: Optional[model.Actuator],
+        streams: List['Stream']
+) -> Optional[Dict[Any, Any]]:
     """
     cf AutoFocusSpectrometer
     return dict((grating, detector) -> focus pos)
@@ -1155,12 +1266,11 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
     ret = {}
     # Record the wavelength and grating position
     pos_orig = {k: v for k, v in spectrograph.position.value.items()
-                              if k in ("wavelength", "grating")}
+                if k in ("wavelength", "grating")}
     gratings = list(spectrograph.axes["grating"].choices.keys())
     if selector:
         sel_orig = selector.position.value
         sel_axis, det_2_sel = _mapDetectorToSelector(selector, detectors)
-
 
     def is_current_det(d):
         """
@@ -1252,7 +1362,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
             future._autofocus_state = FINISHED
 
 
-def _CancelAutoFocusSpectrometer(future):
+def _CancelAutoFocusSpectrometer(future: model.ProgressiveFuture) -> bool:
     """
     Canceller of _DoAutoFocus task.
     """
