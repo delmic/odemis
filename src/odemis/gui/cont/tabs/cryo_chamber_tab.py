@@ -72,6 +72,7 @@ from odemis.gui.win.acquisition import (
 )
 from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
+from odemis.util.dataio import data_to_static_streams
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
 try:
@@ -492,17 +493,30 @@ class CryoChamberTab(Tab):
         correlation_tab.correlation_controller._stop_streams_subscriber()
         localization_tab._stop_streams_subscriber()
 
-        # follow the order of the data loading in the localization tab
-        # load overview streams
-        localization_tab.load_overview_data(data=proj_data["overviews"])
-
         # load sem overview streams
+        fibsem_tab = None
         try:
             fibsem_tab: Tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
-            fibsem_tab.load_overview_data(data=proj_data["overviews"]) # filters to only semstatic streams
+            fibsem_tab._stop_streams_subscriber()  # stop the streams subscriber to prevent circular updates
         except Exception:
-            logging.warning("Unable to find FIBSEM tab. Likely disabled by licence.")
+            logging.info("Fibsem tab does not exists.")
 
+        # Load overview streams in the Localization and Fibsem tabs
+        streams = data_to_static_streams(proj_data["overviews"])
+        for s in streams:
+            s.name.value = "Overview " + s.name.value
+            # Add the static stream to the streams list of the model and also to the overviewStreams to easily
+            # distinguish between it and other acquired streams
+            if fibsem_tab:
+                fibsem_tab.tab_data_model.overviewStreams.value.append(s)
+                fibsem_tab.tab_data_model.streams.value.insert(0, s)
+                fibsem_tab._acquired_stream_controller.showOverviewStream(s)
+            localization_tab.tab_data_model.overviewStreams.value.append(s)
+            localization_tab.tab_data_model.streams.value.insert(0, s)
+            localization_tab._acquired_stream_controller.showOverviewStream(s)
+
+        if len(streams) > 0:
+            correlation_tab.correlation_controller.add_streams(streams)
         # load features
         self.tab_data_model.main.features.value = proj_data["features"]
 
@@ -522,6 +536,8 @@ class CryoChamberTab(Tab):
         # NOTE: this must be called with wx.CallAfter force the call to happen after existing stream addition events
         wx.CallAfter(localization_tab._start_streams_subscriber)
         wx.CallAfter(correlation_tab.correlation_controller._start_streams_subscriber)
+        if fibsem_tab:
+            wx.CallAfter(fibsem_tab._start_streams_subscriber)
 
         return True
 

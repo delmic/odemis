@@ -103,7 +103,7 @@ class CorrelationController(object):
         self._tab_data_model.streams.subscribe(self._update_correlation_cmb, init=True)
         if not self._main_data_model.is_viewer:
             # localisation tab doesn't exist in viewer
-            self._tab_data_model.streams.subscribe(self.update_localization_tab_streams, init=False)
+            self._tab_data_model.streams.subscribe(self._update_localization_fibsem_tab_streams, init=False)
 
         # connect the correlation streams to the tab data
         self._panel.cmb_correlation_stream.Bind(wx.EVT_COMBOBOX, self._on_selected_stream_change)
@@ -136,6 +136,7 @@ class CorrelationController(object):
 
         # localization tab
         self.localization_tab: LocalizationTab = None
+        self.fibsem_tab = None
 
         # auto correlation SEM<>FM, based on the  stage-bare position found in the image metadata
         self.pm = self._main_data_model.posture_manager
@@ -155,6 +156,8 @@ class CorrelationController(object):
             if isinstance(s, self.ref_stream):
                 continue # cant move fluo streams
             self._panel.cmb_correlation_stream.Append(s.name.value, s)
+            self._tab_data_model.selected_stream.value = self._panel.cmb_correlation_stream.GetClientData(0)
+            logging.debug(f"Selected Stream Changed to : {self._tab_data_model.selected_stream.value.name.value}")
 
         # select the first stream, if available and nothing is selected
         if (self._panel.cmb_correlation_stream.GetCount() > 0
@@ -212,7 +215,7 @@ class CorrelationController(object):
             s.raw[0].metadata[model.MD_ROTATION_COR] = 0
             s.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (1, 1)
 
-            self.update_localization_tab_streams_metadata(s)
+            self._update_localization_fibsem_tab_streams_metadata(s)
 
     def add_streams(self, streams: list) -> None:
         """add streams to the correlation tab
@@ -246,24 +249,33 @@ class CorrelationController(object):
             sc.stream_panel.show_remove_btn(True)
 
     def _stop_streams_subscriber(self):
-        self._tab_data_model.streams.unsubscribe(self.update_localization_tab_streams)
+        self._tab_data_model.streams.unsubscribe(self._update_localization_fibsem_tab_streams)
 
     def _start_streams_subscriber(self):
-        self._tab_data_model.streams.subscribe(self.update_localization_tab_streams, init=False)
+        self._tab_data_model.streams.subscribe(self._update_localization_fibsem_tab_streams, init=False)
 
     @call_in_wx_main
-    def update_localization_tab_streams(self, streams: list) -> None:
-        """add streams to the localization tab
-        :param streams: (list[StaticStream]) the streams to add"""
+    def _update_localization_fibsem_tab_streams(self, streams: list) -> None:
+        """
+        Add or remove the streams in the localization tab and also in the fibsem tab if fibsem tab exists.
+        :param streams: (list[StaticStream]) the streams to add
+        """
         if self.localization_tab is None:
             try:
                 self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
             except LookupError:
                 return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 
+        if self.fibsem_tab is None:
+            try:
+                self.fibsem_tab = self._main_data_model.getTabByName("meteor-fibsem")
+            except LookupError:
+                pass
+
         # TODO: extend this to support non-overviews
         # remove streams from localization tab when they are deleted from correlation tab
         current_streams = len(streams)
+        # Localization overview streams also contain the overview streams in the fibsem tab and vice-versa
         localization_streams = len(self.localization_tab.tab_data_model.overviewStreams.value)
         if current_streams < localization_streams:
             # remove streams from localization tab
@@ -285,6 +297,17 @@ class CorrelationController(object):
                     chamber_tab.remove_overview_streams([s])
                     logging.debug(f"Stream removed from chamber tab: {s.name.value}")
 
+                    # remove from fibsem tab
+                    if self.fibsem_tab and s in self.fibsem_tab.tab_data_model.overviewStreams.value:
+                        logging.debug(f"Removing stream from fibsem tab: {s.name.value}")
+                        self.fibsem_tab.tab_data_model.overviewStreams.value.remove(s)
+                        self.fibsem_tab.tab_data_model.streams.value.remove(s)
+
+                        # remove from overview view
+                        self.fibsem_tab._acquired_stream_controller._ov_view.removeStream(s)
+                        update_image_in_views(s, self.fibsem_tab.tab_data_model.views.value)
+                        logging.debug(f"Stream removed from fibsem tab: {s.name.value}")
+
                     return
 
         logging.debug(f"Adding {len(streams)} streams to localization tab {streams}")
@@ -294,6 +317,16 @@ class CorrelationController(object):
                 self.localization_tab.tab_data_model.overviewStreams.value.append(s)
                 self.localization_tab.tab_data_model.streams.value.insert(0, s)
                 self.localization_tab._acquired_stream_controller.showOverviewStream(s)
+
+        # Add streams in the fibsem tab
+        if self.fibsem_tab:
+            logging.debug(f"Adding {len(streams)} streams to fibsem tab {streams}")
+            for s in streams:
+                # add stream to fibsem tab
+                if s not in self.fibsem_tab.tab_data_model.streams.value:
+                    self.fibsem_tab.tab_data_model.overviewStreams.value.append(s)
+                    self.fibsem_tab.tab_data_model.streams.value.insert(0, s)
+                    self.fibsem_tab._acquired_stream_controller.showOverviewStream(s)
 
 
     def clear_streams(self) -> None:
@@ -415,7 +448,7 @@ class CorrelationController(object):
 
         # update the localization tab
         if not self._main_data_model.is_viewer:
-            self.update_localization_tab_streams_metadata(s)
+            self._update_localization_fibsem_tab_streams_metadata(s)
 
     def fit_correlation_views_to_content(self, force: bool = False) -> None:
         # TODO: be more selective about which viewports to fit
@@ -429,14 +462,20 @@ class CorrelationController(object):
             self._panel.vp_correlation_bl.canvas.fit_view_to_content()
             self._panel.vp_correlation_br.canvas.fit_view_to_content()
 
-    def update_localization_tab_streams_metadata(self, s: StaticStream) -> None:
-        """update the metadata of the stream in the localization tab"""
+    def _update_localization_fibsem_tab_streams_metadata(self, s: StaticStream) -> None:
+        """Update the metadata of the stream in the localization tab and fibsem tab (if it exists)."""
 
         if self.localization_tab is None:
             try:
                 self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
             except LookupError:
                 return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
+
+        if self.fibsem_tab is None:
+            try:
+                self.fibsem_tab = self._main_data_model.getTabByName("meteor-fibsem")
+            except LookupError:
+                pass
 
         # also update the localization tab
         if s in self.localization_tab.tab_data_model.streams.value:
@@ -453,6 +492,20 @@ class CorrelationController(object):
             sl.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = s.raw[0].metadata[model.MD_PIXEL_SIZE_COR]
 
             update_image_in_views(s, self.localization_tab.tab_data_model.views.value)
+
+        if self.fibsem_tab and s in self.fibsem_tab.tab_data_model.streams.value:
+            logging.debug(f"Updating fibsem stream: {s.name.value}")
+
+            # get stream in fibsem tab
+            idx = self.fibsem_tab.tab_data_model.streams.value.index(s)
+            sl = self.fibsem_tab.tab_data_model.streams.value[idx]
+
+            # match cor metadata
+            sl.raw[0].metadata[model.MD_POS_COR] = s.raw[0].metadata[model.MD_POS_COR]
+            sl.raw[0].metadata[model.MD_ROTATION_COR] = s.raw[0].metadata[model.MD_ROTATION_COR]
+            sl.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = s.raw[0].metadata[model.MD_PIXEL_SIZE_COR]
+
+            update_image_in_views(s, self.fibsem_tab.tab_data_model.views.value)
 
     def _move_stream_to_pos(self, pos: tuple) -> None:
         """move the selected stream to the position pos
