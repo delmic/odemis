@@ -93,13 +93,13 @@ def get_version_simplified():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = "Copyright © 2012-2024 Delmic"
+__copyright__ = "Copyright © 2012-2025 Delmic"
 __authors__ = ["Éric Piel", "Rinze de Laat", "Kimon Tsitsikas",
                "Philip Winkler", "Anders Muskens", "Sabrina Rossberger",
                "Thera Pals", "Victoria Mavrikopoulou", "Kornee Kleijwegt",
                "Bassim Lazem", "Mahmoud Barazi", "Arthur Helsloot", "Bas Holweg",
                "Canberk Akın", "Stefan Sneep", "Karishma Kumar", "Nandish Patel",
-               "Patrick Cleeve", "Tim Moerkerken",
+               "Patrick Cleeve", "Tim Moerkerken", "Alexéy Ilyushkin",
                ]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
@@ -114,5 +114,3 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """)
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
