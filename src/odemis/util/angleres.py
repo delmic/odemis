@@ -21,7 +21,7 @@ If not, see http://www.gnu.org/licenses/.
 
 import logging
 import math
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib
 matplotlib.use("Agg")  # use non-GUI backend
@@ -53,7 +53,9 @@ AR_XMAX = 13.25e-3  # m, the distance between the parabola origin and the cutoff
 AR_HOLE_DIAMETER = 0.6e-3  # m, diameter of the hole in the mirror
 AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/(4f): f: focal point of mirror (place of sample)
-SLIT_WIDTH = 10e-6  # m, width of the slit used in the spectrometer
+DEFAULT_SLIT_WIDTH = 10e-6  # m, width of the slit used in the spectrometer
+DEFAULT_SENSOR_PIXEL_SIZE = (10e-6, 10e-6)  # m, pixel size of the sensor used in the spectrometer
+DEFAULT_BINNING = (1, 1)  # (x, y) binning of the sensor used in the spectrometer
 
 
 def _ExtractAngleInformation(data, hole):
@@ -655,7 +657,7 @@ def ExtractThetaList(data: model.DataArray) -> List[float]:
     # for simple calculations related to omega list
     theta_list, _, first_px, last_px = _get_angle_list_wl(wl, line_bottom, line_top,
                                                        focus_dist, x_max, parabola_f,
-                                                       data.shape[0], [1, 1], SLIT_WIDTH)
+                                                       data.shape[0], None, None)
 
     # Replace the angles outside of valid data by NaN
     theta_list[:first_px] = math.nan
@@ -672,9 +674,9 @@ def _get_angle_list_wl(
     x_max: float,
     parabola_f: float,
     length: int,
-    sensor_pixel_size: Tuple[float, float],
-    slit_width: float
-) -> Tuple[numpy.ndarray, numpy.ndarray, int, int]:
+    sensor_pixel_size: Optional[Tuple[float, float]],
+    slit_width: Optional[float]
+) -> Tuple[numpy.ndarray, Optional[numpy.ndarray], int, int]:
     """
     Computes the list of theta and omega values given the mirror parameters. More
     specifically, given that the slit is closed and focused on the center of the
@@ -692,12 +694,14 @@ def _get_angle_list_wl(
     :param slit_width: The width of the slit in m
     :return:
       theta_list: the list of angles (in radians) with length equal to
-      data.shape[0], corresponding to the pixels at the center wavelength. The
-      angle list should be within the range [-90, 90] in degrees, approximately
-      [-1.6, 1.6] in radians. Theoretically, the values are within the range [0, 90]°
-      for φ = 0° and φ = 180°. Values for φ = 0° are passed as negative values.
+                  data.shape[0], corresponding to the pixels at the center wavelength. The
+                  angle list should be within the range [-90, 90] in degrees, approximately
+                  [-1.6, 1.6] in radians. Theoretically, the values are within the range [0, 90]°
+                  for φ = 0° and φ = 180°. Values for φ = 0° are passed as negative values.
       omega_list: the list of omega values (in radians) with length equal to
-      data.shape[0], corresponding to the pixels at the center wavelength.
+                  data.shape[0], corresponding to the pixels at the center wavelength.
+                  The sensor pixel size and slit width need to be provided
+                  to calculate the solid angle. If not provided, it will be None.
       first_px: the index of the first pixel with valid data
       last_px: the index of the last pixel with valid data
     """
@@ -768,83 +772,24 @@ def _get_angle_list_wl(
     pole_y = top_px + (bottom_px - top_px) * pos_ratio  # px (float)
     theta[:int(pole_y) + 1] *= -1  # +1, to include that index too
 
-    mirror_image_size_y = top_phys - bottom_phys
-    detector_image_size_y = (last_px - first_px + 1) * sensor_pixel_size[1]
+    omega = None
+    if sensor_pixel_size and slit_width:
+        mirror_image_size_y = top_phys - bottom_phys
+        detector_image_size_y = (last_px - first_px + 1) * sensor_pixel_size[1]
 
-    # Optical magnification, scaling the detector plane to the mirror plane
-    magn_y = mirror_image_size_y / detector_image_size_y
+        # Optical magnification, scaling the detector plane to the mirror plane
+        magn_y = mirror_image_size_y / detector_image_size_y
 
-    detector_pixel_area = slit_width * sensor_pixel_size[1]
-    pixel_area_on_mirror = detector_pixel_area * (magn_y ** 2)
+        detector_pixel_area = slit_width * sensor_pixel_size[1]
+        pixel_area_on_mirror = detector_pixel_area * (magn_y ** 2)
 
-    # 'omega' is the solid angle (in steradians) of the light collection cone for each pixel.
-    # It is used to correct the raw intensity, since pixels at different angles collect
-    # light from geometrically different areas on the mirror surface
-    omega = pixel_area_on_mirror * \
-            (a * y_pos ** 2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+        # 'omega' is the solid angle (in steradians) of the light collection cone for each pixel.
+        # It is used to correct the raw intensity, since pixels at different angles collect
+        # light from geometrically different areas on the mirror surface
+        omega = pixel_area_on_mirror * \
+                (a * y_pos ** 2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
 
     return theta, omega, first_px, last_px
-
-
-def get_extra_settings_va_value(
-    metadata: dict,
-    component_name: str,
-    va_name: str,
-    sub_key: Optional[str] = None,
-    return_unit: bool = False
-) -> Any:
-    """
-    Extracts a specific VA value from the MD_EXTRA_SETTINGS of a metadata dictionary.
-
-    :param metadata: The metadata containing 'Extra settings'.
-    :param component_name: The name of the hardware component (e.g., 'Camera').
-    :param va_name: The name of the VA to retrieve (e.g., 'exposureTime').
-    :param sub_key: If the VA's value is a dictionary,
-        this key is used to extract a value from it. Defaults to None.
-    :param return_unit: If True, returns a tuple of (value, unit).
-            If False, returns only the value. Defaults to False.
-
-    :returns: The requested value. If return_unit is True, returns a (value, unit)
-              tuple. Returns None if any part of the path is not found.
-    """
-    try:
-        # Safely navigate the dictionary structure using .get() to avoid KeyErrors
-        component = metadata.get(model.MD_EXTRA_SETTINGS, {}).get(component_name)
-        if component is None:
-            logging.debug(f"Component '{component_name}' not found.")
-            return None
-
-        va = component.get(va_name)
-        if va is None:
-            logging.debug(f"VA '{va_name}' not found in component '{component_name}'.")
-            return None
-
-        # The data is stored as a [value, unit] list
-        value, unit = va
-
-        # If a sub_key is provided, the main value should be a dictionary
-        if sub_key:
-            if isinstance(value, dict) and sub_key in value:
-                final_value = value.get(sub_key)
-            else:
-                logging.debug(f"Sub-key '{sub_key}' not found in '{va_name}' for component '{component_name}'.")
-                return None
-        else:
-            final_value = value
-
-        # Return either the value alone or the value with its unit
-        if return_unit:
-            return final_value, unit
-        else:
-            return final_value
-
-    except (TypeError, ValueError) as e:
-        # This catches cases where `va` is not a [value, unit] list
-        logging.warning(
-            f"Could not parse VA '{va_name}' for component '{component_name}'. "
-            f"Error: {e}"
-        )
-        return None
 
 
 def project_angular_spectrum_to_grid(
@@ -885,21 +830,10 @@ def project_angular_spectrum_to_grid(
     focus_dist = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
     x_max = data.metadata.get(model.MD_AR_XMAX, AR_XMAX)  # optical axis
     parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
-    slit_width = SLIT_WIDTH
-    slit_pos_x = get_extra_settings_va_value(data.metadata, "Slit", "position", "x")
-    if slit_pos_x is not None and slit_pos_x != 0:
-        slit_in = get_extra_settings_va_value(data.metadata, "Spectrograph", "position", "slit-in")
-        if slit_in is not None:
-            slit_width = slit_in
-    pixel_size = get_extra_settings_va_value(data.metadata, "Camera", "pixelSize")
-    binning = get_extra_settings_va_value(data.metadata, "Camera", "binning")
-    if pixel_size is None and binning is None:
-        # If no pixel size or binning is found, try the spectral camera
-        pixel_size = get_extra_settings_va_value(data.metadata, "Spectral Camera", "pixelSize")
-        binning = get_extra_settings_va_value(data.metadata, "Spectral Camera", "binning")
-        if pixel_size is None and binning is None:
-            raise ValueError("No sensor pixel size and binning found in metadata.")
-    sensor_pixel_size = (pixel_size[0] * binning[0], pixel_size[1] * binning[1])
+    slit_width = data.metadata.get(model.MD_SLIT_WIDTH, DEFAULT_SLIT_WIDTH)
+    binning  = data.metadata.get(model.MD_BINNING, DEFAULT_BINNING)
+    sensor_pixel_size = data.metadata.get(model.MD_SENSOR_PIXEL_SIZE, DEFAULT_SENSOR_PIXEL_SIZE)
+    sensor_pixel_size = (sensor_pixel_size[0] * binning[0], sensor_pixel_size[1] * binning[1])
 
     # Compute the angles at the top and bottom, based on physical properties of the mirror
     a = 1 / (4 * parabola_f)
