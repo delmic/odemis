@@ -162,8 +162,8 @@ def get_polygon_grid_cells(polygon_vertices: numpy.ndarray, include_neighbours: 
 
     :return: A set of (row, col) tuples representing the intersected grid cells (tiles).
     :raises ValueError: If the polygon has less than 3 vertices or if the vertices are not in 2D format.
-
-    Note: Efficiently implemented using Bresenham's line algorithm for minimal memory and fast performance.
+    """
+    # Note: Efficiently implemented using Bresenham's line algorithm for minimal memory and fast performance.
     #  █ █ █ █ █ █ █ █ █ █ █ █ █ █ █
     #  █ ░ █ █ █ █ █ █ █ █ █ █ █ █ █
     #  █ █ ░ ░ █ █ █ █ █ █ █ █ █ █ █
@@ -203,7 +203,7 @@ def get_polygon_grid_cells(polygon_vertices: numpy.ndarray, include_neighbours: 
     # '░' - Cells forming the polygon's outline
     # '\' - Visual boundary
     # if include_neighbours is True, the adjacent cells of '░' will also be included in the output set.
-    """
+
     if polygon_vertices.shape[0] < 3:
         raise ValueError("The polygon must have at least 3 vertices.")
     if polygon_vertices.shape[1] != 2:
