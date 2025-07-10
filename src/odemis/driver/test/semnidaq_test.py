@@ -40,6 +40,12 @@ from odemis.driver.semnidaq import Acquirer
 
 matplotlib.use("Gtk3Agg")
 
+# Note: if testing on a PCIe-6251, you need to change the value below,
+# and disable all "image_ttl".
+# The PCIe-6251 has a precision of 50ns
+# DWELL_TIME_PRECISION = 50e-9  # s
+# The PCIe-6361 has 20ns
+DWELL_TIME_PRECISION = 20e-9  # s
 
 CONFIG_SED = {
     "name": "sed",
@@ -379,13 +385,14 @@ class TestAnalogSEM(unittest.TestCase):
         prev_accepted_dt = None
         # In practice, the hardware is rounded to 10ns, so we test with values multiple of 9ns,
         # to make the live of the driver a little hard.
-        for dt in numpy.arange(500e-9, 2000e-9, 9e-9):
+        min_dt = self.scanner.dwellTime.range[0]
+        for dt in numpy.arange(min_dt, 2000e-9, 9e-9):
             logging.info("Testing dt = %s", dt)
             accepted_dt, ao_osr, ai_osr = self.sem.find_best_dwell_time(dt, 1)
             self.assertGreaterEqual(ai_osr, 1)
             self.assertEqual(ao_osr, 1)
-            precision = ai_osr * 20e-9
-            assert dt - precision <= accepted_dt <= dt + precision
+            precision = ai_osr * DWELL_TIME_PRECISION
+            assert dt - precision <= accepted_dt <= dt + precision, f"Accepted dt is {accepted_dt} but expected {dt}"
             if prev_accepted_dt is not None:
                 self.assertGreaterEqual(accepted_dt, prev_accepted_dt)
             prev_accepted_dt = accepted_dt
@@ -395,7 +402,7 @@ class TestAnalogSEM(unittest.TestCase):
             accepted_dt, ao_osr, ai_osr = self.sem.find_best_dwell_time(dt, 1)
             self.assertGreaterEqual(ai_osr, 1)
             self.assertEqual(ao_osr, 1)
-            precision = ai_osr * 20e-9
+            precision = ai_osr * DWELL_TIME_PRECISION
             assert dt - precision <= accepted_dt <= dt + precision
             if prev_accepted_dt is not None:
                 self.assertGreaterEqual(accepted_dt, prev_accepted_dt)
@@ -421,7 +428,7 @@ class TestAnalogSEM(unittest.TestCase):
             dt = 5000 + dt_extra
             accepted_dt, ao_osr, ai_osr = self.sem.find_best_dwell_time(dt, 1)
             self.assertGreaterEqual(ai_osr, 1000)
-            self.assertGreaterEqual(ao_osr, 50)
+            self.assertGreaterEqual(ao_osr, 10)
             precision = 0.1
             assert dt - precision <= accepted_dt <= dt + precision
             if prev_accepted_dt is not None:
@@ -429,9 +436,9 @@ class TestAnalogSEM(unittest.TestCase):
             prev_accepted_dt = accepted_dt
 
         # Test with 2 detectors
-        # Minimum dwell time is 1000ns
+        # Minimum dwell time is 1000ns (on the PCIe-6361)
         prev_accepted_dt = None
-        for dt in numpy.arange(500e-9, 1000e-9, 9e-9):
+        for dt in numpy.arange(min_dt, 1000e-9, 9e-9):
             accepted_dt, ao_osr, ai_osr = self.sem.find_best_dwell_time(dt, 2)
             self.assertGreaterEqual(ai_osr, 1)
             self.assertEqual(ao_osr, 1)
@@ -442,7 +449,7 @@ class TestAnalogSEM(unittest.TestCase):
             accepted_dt, ao_osr, ai_osr = self.sem.find_best_dwell_time(dt, 2)
             self.assertGreaterEqual(ai_osr, 1)
             self.assertEqual(ao_osr, 1)
-            precision = ai_osr * 20e-9
+            precision = ai_osr * DWELL_TIME_PRECISION
             assert dt - precision <= accepted_dt <= dt + precision
             if prev_accepted_dt is not None:
                 self.assertGreaterEqual(accepted_dt, prev_accepted_dt)

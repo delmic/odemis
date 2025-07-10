@@ -27,7 +27,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # voltage). The DAQ card is controlled via the NI DAQmx driver and framework.
 #
 # Although it should in theory be quite generic, this driver is tested on
-# Ubuntu 20.04 & 22.04, with nidaqmx 1.0 and a NI PCIe 6361 DAQ card (and 6363).
+# Ubuntu 22.04, with nidaqmx 1.0 and a NI PCIe 6361 DAQ card (and 6363).
+# It probably should work on most "X series" NI DAQ cards. It has also been lightly
+# tested on a PCIe 6251, aka "M series".
 #
 # From the point of view of Odemis, this driver provides several HwComponents.
 # The e-beam position control is represented by an Scanner (Emitter) component,
@@ -41,7 +43,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #
 # To install the NI driver, here is a summary of the commands needed:
 # Download from https://www.ni.com/nl-nl/support/documentation/supplemental/18/downloading-and-installing-ni-driver-software-on-linux-desktop.html
-# sudo apt install ./ni-ubuntu2004-drivers-stream.deb
+# sudo apt install ./ni-ubuntu2204-drivers-stream.deb
 # sudo apt update
 # sudo apt install ni-daqmx ni-hwcfg-utility
 # sudo dkms autoinstall
@@ -83,7 +85,7 @@ import numpy
 from nidaqmx.constants import (AcquisitionType, DigitalWidthUnits,
                                LineGrouping, TerminalConfiguration,
                                VoltageUnits, RegenerationMode, Edge, CountDirection,
-                               TriggerType)
+                               TriggerType, ProductCategory)
 from nidaqmx.stream_readers import CounterReader, AnalogUnscaledReader
 from nidaqmx.stream_writers import AnalogUnscaledWriter
 from numpy.polynomial import polynomial
@@ -490,7 +492,7 @@ class AnalogSEM(model.HwComponent):
 
     def _get_closest_period_above(self, task: nidaqmx.Task, period: float) -> float:
         step_size = 10e-9  # s, as we know the hardware has a 10 ns resolution
-        for i in range(5):  # max 5 trials
+        for i in range(10):  # max 100 ns (the PCIe-6251 is the slowest and has 50ns "rounding")
             accepted_period = self._get_closest_period(task, period + i * step_size - 1e-12)
             if accepted_period + 1e-18 >= period:  # almost equal or above
                 return accepted_period
@@ -2381,6 +2383,21 @@ class Scanner(model.Emitter):
         fast_do_channels = set()  # set of ints, to check all channels are unique
         if image_ttl is None:
             image_ttl = {}
+
+        # We don't support fast TTLs on PCIe-62xx (aka M series).
+        # That's because DO on M series NI-DAQ don't have their own clock. Instead,
+        # they have to be driven by the AO (or AI) sample clock. However, for the pixel TTL,
+        # which is the most useful one, we need a clock 2x faster than the AO sample clock.
+        # So that would require to do these changes:
+        #  * double the minimum dwell time
+        #  * AO sample clock = 2 x dwell time
+        #  * duplicate the AO over-sampling rate (OSR), so that each point is doubled
+        #  * DO task uses source="ao/SampleClock" (instead of "OnboardClock")
+        if (self.parent._nidev.product_category == ProductCategory.M_SERIES_DAQ
+            and image_ttl
+        ):
+            raise ValueError("image_ttl not currently supported on M series NI-DAQ")
+
         if (not isinstance(image_ttl, dict)
             or not all(isinstance(k, str) and isinstance(v, dict) for k, v in image_ttl.items())
            ):
@@ -2430,6 +2447,8 @@ class Scanner(model.Emitter):
 
         # TODO: have a better way to indicate the channel number as it's limited to port0
         # while there is also port 1 & 2. Explicitly ask the full NI name? as "port1/line3"? Or as written on hardware "P1.3"?
+        # However, the PCIe-63xx only support "hardware-timed" DO on port 0, anyway.
+        # The DOs on ports 1 & 2 could still be used for the "slow" TTLs, though.
         self._fast_do_names = ",".join(f"{self.parent._device_name}/port0/line{n}" for n in fast_do_channels)
 
         # In theory the maximum resolution depends on the precision of the e-beam
