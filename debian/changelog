@@ -1,3 +1,85 @@
+odemis (3.7.0-1) focal; urgency=medium
+
+  * New version: 3.7
+  * Main new changes and features:
+    - METEOR introduce optional functionality to automate SEM and FIB milling
+    - METEOR introduce optional functionality to do 3D correlation between FIB and FM
+    - METEOR improved stage positioning on TFS SEMs
+    - FASTEM support for "tiled overview acquisitions" (TOA)
+    - SPARC FPLM alignment now provides a red overlay for CL spot
+    - SPARC Temporal Spectrum automated light protection during acquisition
+    - SPARC acquisitions interrupted due to hardware failure are now stored, with "-failed" in the filename
+    - Support for controlling TFS SEMs via the Autoscript API
+    - Support for the Ephemeron MightyEBIC (SPARC)
+    - Support for the PicoHarp PH330 (SPARC)
+    - Add option in the Odemis icon menu to change the update channel
+    - Basic support for Ubuntu 24.04
+  * Other improvements and bug fixes:
+    - METEOR adjusted Feature icons from pin to circle
+    - METEOR improved time estimation of overview acquisition
+    - METEOR improved reliability with Andor Sona cameras
+    - METEOR Fix "Show pixel value" not working on Z-stacks
+    - Fix loading TIFF file with mix of z-stack and non z-stack
+    - FASTEM improved time estimation of overview acquisition
+    - FASTEM restructured calibration panel for more fluent usage
+    - FASTEM allow to start auto-stigmation from Odemis
+    - FASTEM allow to re-reference the stage from Odemis
+    - FASTEM allow to enter customer HFW value in the GUI
+    - FASTEM reorganize project info columns to be more intuitive
+    - FASTEM add scintillator column for ROA and TOA
+    - FASTEM calibration regions now have a visibility toggle
+    - FASTEM Technolution driver remove scanning first field twice
+    - Hardware settings metadata in acquisition files contain more information
+    - SPARC Angular spectrum images are always displayed from  -90° to +90°
+    - Improved timing in SPARC acquisitions with software synchronization
+    - Tescan e-beam current is now updated when changed on the SEM side
+    - Fix SPARC monochromator acquisitions with a filter sometimes having incorrect wavelength metadata
+    - Fix SPARC alignment sometimes showing for a few seconds an odd vertical image
+    - SPARC streakcam alignment now starts with the slit almost closed for extra safety
+    - Fix could not set a filename containing a 6 digit number starting with 24 to 29
+    - New plugin spectrum_laser_protection, for laser protection with SPARC FPLM
+    - GUI window name now shows "(development)" when running Odemis from the development channel
+    - Updated instructions on how to use Odemis as Python module on Windows
+  * Improvements and bug fixes already present in the v3.6 branch:
+    - SPARC acquisition: after acquisition, hardware settings (eg external, blanker) must be restored
+    - Limit dwell time of time-correlator to ~15 min (SPARC)
+    - Make sure the GUI is always started with the configured log-level
+    - Tescan: when blanking/unblanking e-beam, wait for the beam to be ready
+    - Tescan: if stage fails to move to requested position, report an error
+    - Andor Newton/iDus: never needs shutter when acquiring a spectrum
+    - TFS: make sure to not wait too long after moving a very small distance
+    - Raise error message if Meteor focus position is outside the range
+    - METEOR fix invalid detector settings offset position in metadata
+    - SPARC newlines in AR csv export (Windows)
+    - cl_acquisition: e-beam scan settings could be sometimes incorrect
+    - driver zeiss: SetMagnification() should pass a float (not just int)
+    - Fix MeasureSpotsFocus() to work with all dtypes
+    - Sort the items of FASTEM active project's combobox
+    - Sort the FASTEM combobox items and projects tree on project name change event
+    - FASTEM fix stack overflow python error for ProgressiveBatchFuture having large number of sub-futures
+    - FASTEM project pnl and btn enabling in current_project and is_acquiring va callbacks
+    - FASTEM manually create immersion mode checkbox to control the gridbag sizer's position and span
+    - FASTEM gui changes to make it compatible with Ubuntu 22
+    - FASTEM Make the beamshift correction save path unique
+    - Fix stage switching equations in Meteor Tescan posture manager
+    - METEOR correct the check to find which axes are requested to move
+    - METEOR prevent circular updates and sync issues when loading overview data
+    - METEOR store power correctly for each channel in metadata
+    - METEOR change label for max intensity projection
+    - tileacq: don't switch external mode between each tile
+    - SPARC alignment of tunnel lens did not save the aligned position
+    - SPARC SpectrumSettingsStream with light component didn't turn light on during acquisition
+    - andorcam3 improve temperature message
+    - andorcam3: fix sona missed one gain
+    - SPARC acq: handle floating point error in comparison
+    - SPARC alignment slit overlay highlight low signal
+    - SPARC limit how quickly turnOnLight() acquires images
+    - SPARC gui: alignment tab: update mirror shape whenever needed
+    - SPARC gui: time estimation should be updated when drift correction is adjusted
+    - SPARC: fix plugin blanker_control never started
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 10 Jul 2025 11:43:13 +0200
+
 odemis (3.6.0-1) focal; urgency=medium
 
   * New version: 3.6
