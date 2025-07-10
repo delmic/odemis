@@ -131,4 +131,14 @@ git reset --hard HEAD
 
 dput ${PPA_NAME} ../odemis_${PVERSION}jammy1_source.changes
 
+# Also rebuild the package to "noble" (Ubuntu 24.04)
+# Just add to debian changelog
+dch -D noble -v ${PVERSION}noble1 "Rebuild for noble"
+
+debuild -S || exit 1
+# Immediately drop the changes
+git reset --hard HEAD
+
+dput ${PPA_NAME} ../odemis_${PVERSION}noble1_source.changes
+
 # TODO: also compile for Windows
