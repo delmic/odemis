@@ -26,7 +26,7 @@ import time
 from collections.abc import Iterable
 from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 
 import numpy
 
@@ -122,7 +122,8 @@ def _DoBinaryFocus(
         focus: model.Actuator,
         dfbkg: Optional[model.DataFlow],
         good_focus: Optional[float],
-        rng_focus: Optional[Tuple[float, float]]
+        rng_focus: Optional[Tuple[float, float]],
+        measure_func: Optional[Callable] = None
 ) -> Tuple[float, float, float]:
     """
     Iteratively acquires an optical image, measures its focus level and adjusts
@@ -136,6 +137,9 @@ def _DoBinaryFocus(
       taken into consideration while autofocusing
     rng_focus: if provided, the search of the best focus position is limited
       within this range
+    measure_func: function to measure the focus level on the image,
+      for instance MeasureSEMFocus. If None the focus metric used is based
+      on the detector.
     returns:
         (float): Focus position (m)
         (float): Focus level
@@ -212,19 +216,23 @@ def _DoBinaryFocus(
         # are typically just a point (ie, shape == data depth).
         # TODO: is this working as expected? Alternatively, we could check
         # MD_DET_TYPE.
-        if len(detector.shape) > 1:
-            if detector.role == 'diagnostic-ccd':
-                logging.debug("Using Spot method to estimate focus")
-                Measure = MeasureSpotsFocus
-            elif detector.resolution.value[1] == 1:
-                logging.debug("Using 1d method to estimate focus")
-                Measure = Measure1d
+        if measure_func is None:
+            if len(detector.shape) > 1:
+                if detector.role == 'diagnostic-ccd':
+                    logging.debug("Using Spot method to estimate focus")
+                    Measure = MeasureSpotsFocus
+                elif detector.resolution.value[1] == 1:
+                    logging.debug("Using 1d method to estimate focus")
+                    Measure = Measure1d
+                else:
+                    logging.debug("Using Spot method to estimate focus")
+                    Measure = MeasureSpotsFocus
             else:
-                logging.debug("Using Spot method to estimate focus")
-                Measure = MeasureSpotsFocus
+                logging.debug("Using SEM method to estimate focus")
+                Measure = MeasureSEMFocus
         else:
-            logging.debug("Using SEM method to estimate focus")
-            Measure = MeasureSEMFocus
+            logging.debug(f"Using measure function {measure_func.__name__} to estimate focus")
+            Measure = measure_func
 
         step_factor = 2 ** 7
         if good_focus is not None:
@@ -386,7 +394,8 @@ def _DoExhaustiveFocus(
         focus: model.Actuator,
         dfbkg: Optional[model.DataFlow],
         good_focus: Optional[float],
-        rng_focus: Optional[Tuple[float, float]]
+        rng_focus: Optional[Tuple[float, float]],
+        measure_func: Optional[Callable] = None
 ) -> Tuple[float, float, float]:
     """
     Moves the optical focus through the whole given range, measures the focus
@@ -402,6 +411,9 @@ def _DoExhaustiveFocus(
       taken into consideration while autofocusing
     rng_focus: if provided, the search of the best focus position is limited
       within this range
+    measure_func: function to measure the focus level on the image,
+      for instance MeasureSEMFocus. If None the focus metric used is based
+      on the detector.
     returns:
         (float): Focus position (m)
         (float): Focus level
@@ -437,19 +449,23 @@ def _DoExhaustiveFocus(
         # are typically just a point (ie, shape == data depth).
         # TODO: is this working as expected? Alternatively, we could check
         # MD_DET_TYPE.
-        if len(detector.shape) > 1:
-            if detector.role == 'diagnostic-ccd':
-                logging.debug("Using Spot method to estimate focus")
-                Measure = MeasureSpotsFocus
-            elif detector.resolution.value[1] == 1:
-                logging.debug("Using 1d method to estimate focus")
-                Measure = Measure1d
+        if measure_func is None:
+            if len(detector.shape) > 1:
+                if detector.role == 'diagnostic-ccd':
+                    logging.debug("Using Spot method to estimate focus")
+                    Measure = MeasureSpotsFocus
+                elif detector.resolution.value[1] == 1:
+                    logging.debug("Using 1d method to estimate focus")
+                    Measure = Measure1d
+                else:
+                    logging.debug("Using Spot method to estimate focus")
+                    Measure = MeasureSpotsFocus
             else:
-                logging.debug("Using Spot method to estimate focus")
-                Measure = MeasureSpotsFocus
+                logging.debug("Using SEM method to estimate focus")
+                Measure = MeasureSEMFocus
         else:
-            logging.debug("Using SEM method to estimate focus")
-            Measure = MeasureSEMFocus
+            logging.debug(f"Using measure function {measure_func.__name__} to estimate focus")
+            Measure = measure_func
 
         # adjust to rng_focus if provided
         rng = focus.axes["z"].range
@@ -493,7 +509,7 @@ def _DoExhaustiveFocus(
                 # trigger binary search on if significant deviation was
                 # found in current position
                 return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos,
-                                      (best_pos - 2 * step, best_pos + 2 * step))
+                                      (best_pos - 2 * step, best_pos + 2 * step), measure_func=measure_func)
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
@@ -513,7 +529,7 @@ def _DoExhaustiveFocus(
                 # trigger binary search on if significant deviation was
                 # found in current position
                 return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos,
-                                      (best_pos - 2 * step, best_pos + 2 * step))
+                                      (best_pos - 2 * step, best_pos + 2 * step), measure_func=measure_func)
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
@@ -521,7 +537,8 @@ def _DoExhaustiveFocus(
         logging.debug("No significant focus level was found so far, thus we just move to the best position found %.7g",
                       best_pos)
         focus.moveAbsSync({"z": best_pos})
-        return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
+        return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step),
+                              measure_func=measure_func)
 
     except CancelledError:
         # Go to the best position known so far
@@ -1033,7 +1050,8 @@ def AutoFocus(
         dfbkg: Optional[model.DataFlow] = None,
         good_focus: Optional[float] = None,
         rng_focus: Optional[Tuple[float, float]] = None,
-        method: int = MTD_BINARY
+        method: int = MTD_BINARY,
+        measure_func: Optional[Callable] = None
 ) -> model.ProgressiveFuture:
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus
@@ -1052,6 +1070,9 @@ def AutoFocus(
       within this range
     method (MTD_*): focusing method, if BINARY we follow a dichotomic method while in
       case of EXHAUSTIVE we iterate through the whole provided range
+    measure_func: function to measure the focus level on the image,
+      for instance MeasureSEMFocus. If None the focus metric used is based
+      on the detector.
     returns:  Progress of DoAutoFocus, whose result() will return:
             Focus position (m)
             Focus level
@@ -1074,7 +1095,7 @@ def AutoFocus(
         raise ValueError("Unknown autofocus method")
 
     executeAsyncTask(f, autofocus_fn,
-                     args=(f, detector, emt, focus, dfbkg, good_focus, rng_focus))
+                     args=(f, detector, emt, focus, dfbkg, good_focus, rng_focus, measure_func))
     return f
 
 
