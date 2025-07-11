@@ -45,7 +45,7 @@ from odemis.acq import align, fastem, stream
 from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, ROASkipped, estimate_acquisition_time
-from odemis.acq.stream import FastEMOverviewStream
+from odemis.acq.stream import StaticSEMStream
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
@@ -313,7 +313,7 @@ class FastEMOverviewAcquiController(object):
             fn = self._load_overview_img_ctrl.GetValue()
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
-            s = FastEMOverviewStream(s.name.value, s.raw[0])
+            s = StaticSEMStream(s.name.value, s.raw[0], forcemd={"merge_ratio": 1})
             # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
             ovv_ss = self._main_data_model.overview_streams.value.copy()
             ovv_ss[num] = s
@@ -498,7 +498,7 @@ class FastEMOverviewAcquiController(object):
             dataio.tiff.export(fn, da, pyramid=True)
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
-            s = FastEMOverviewStream(s.name.value, s.raw[0])
+            s = StaticSEMStream(s.name.value, s.raw[0], forcemd={"merge_ratio": 1})
             # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
             ovv_ss = self._main_data_model.overview_streams.value.copy()
             ovv_ss[num] = s
@@ -870,7 +870,7 @@ class FastEMSingleBeamAcquiController(object):
             dataio.tiff.export(fn, da, pyramid=True)
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
-            s = FastEMOverviewStream(s.name.value, s.raw[0])
+            s = StaticSEMStream(s.name.value, s.raw[0], forcemd={"merge_ratio": 1})
             # Set the necessary visibility_btn attributes, to be used inside on_visibility_btn callback
             if not hasattr(window.visibility_btn, "shape"):
                 setattr(window.visibility_btn, "shape", toa.shape)

@@ -36,7 +36,7 @@ import odemis.acq.stream as acqstream
 import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
-from odemis.acq.stream import FastEMOverviewStream, StaticSEMStream, StaticStream
+from odemis.acq.stream import StaticSEMStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
@@ -1192,13 +1192,13 @@ class FastEMStreamsBarController(StreamBarController):
             canvas = active_viewport.canvas
             # Remove old streams from view
             for s in tab_streams:
-                if isinstance(s, FastEMOverviewStream) and s not in ovv_streams:
+                if isinstance(s, StaticSEMStream) and s not in ovv_streams:
                     tab_streams.remove(s)
                     canvas.view.removeStream(s)
 
             # Add stream to view if it's not already there
             for s in ovv_streams:
-                if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
+                if isinstance(s, StaticSEMStream) and s not in tab_streams:
                     tab_streams.append(s)
                     canvas.view.addStream(s)
 
