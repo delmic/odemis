@@ -118,8 +118,9 @@ MAX_ZLEVELS = 500
 
 def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: float) -> List[float]:
     """
-    Calculates the zlevels for a zstack acquisition, using the zmax, zmin
-    and zstep, as well as the current focus z position.
+    Calculates the zlevels for a zstack acquisition such that zstep is the distance between two successive zlevels and
+    the zlevels are within the valid z range. The zlevels are based on the current focus position. In a rare case when
+    the when the zstep is larger than the z range, the z range itself is returned as a list of two elements.
     :param focuser: Actuator component with a "z" axis, to control the focus.
     :param zrange: contains the zmin and zmax, respectively. It's relative to the
     current position of the focuser. If the range would go out of the actuator
@@ -132,6 +133,11 @@ def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: fl
     In that case IndexError is raised.
     :returns: list of zlevels, where each zlevel is absolute position for
     the focuser.
+    :raises ZeroDivisionError: if zstep is zero.
+    :raises ValueError: if the zrange is not correct, i.e. the first value is
+    larger than the second one.
+    :raises KeyError: if the focuser does not have a "z" axis.
+    :raises IndexError: if the number of zlevels exceeds MAX_ZLEVELS.
     """
     if zstep == 0:
         raise ZeroDivisionError("The step size 'zstep' can not be zero")
@@ -162,22 +168,21 @@ def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: fl
     if n > MAX_ZLEVELS:
         raise IndexError(f"The number of zlevels, {n}, is too large. Reduce the zstep value to < {MAX_ZLEVELS}.")
 
-    # zstep often doesn't exactly fit to have a round number of zlevels. So try
-    # the floor and ceil values for the number of zlevels, and take the one that
-    # give a step closest to the requested zstep.
+    # When the zstep is larger than the z range
+    # we return the z range itself
     n_f = math.floor(n)
-    n_c = math.ceil(n)
+    if n_f <= 1:
+        return [zrange_abs[0], zrange_abs[1]]
 
-    if n_f <= 1:  # would cause a division by zero
-        # => do the minimum amount of steps
-        n = 2
-    else:
-        # errors
-        ef = abs((zrange_abs[1] - zrange_abs[0]) / (n_f - 1) - abs(zstep))
-        ec = abs((zrange_abs[1] - zrange_abs[0]) / (n_c - 1) - abs(zstep))
-        n = n_f if ef < ec else n_c
-
-    if zstep > 0:
-        return numpy.linspace(zrange_abs[0], zrange_abs[1], n).tolist()
-    elif zstep < 0:
-        return numpy.linspace(zrange_abs[1], zrange_abs[0], n).tolist()
+    abs_zstep = abs(zstep)
+    # to include the end of the range, we add a small offset to the zmax such that the floating point inaccuracy
+    # does not prevent the last zlevel to be included. Furthermore, using arange makes sure that difference between
+    # the consecutive zlevels is exactly the zstep value whereas using linspace is also possible, but it would
+    # be less explicit as linspace calculates the zlevels based on the number of levels and the range but not on the
+    # step size.
+    focus_array_min = numpy.arange(focuser_pos, zrange_abs[0] - abs_zstep/10, -abs_zstep)
+    focus_array_max = numpy.arange(focuser_pos, zrange_abs[1] + abs_zstep/10, abs_zstep)
+    zlevels_list = numpy.append(focus_array_min[1:][::-1], focus_array_max).tolist()
+    if zstep < 0:
+        zlevels_list = zlevels_list[::-1]
+    return zlevels_list
