@@ -164,6 +164,7 @@ HW_SETTINGS_CONFIG = {
         },
     "e-beam":
         OrderedDict((
+            ("beamPreset", {}),
             ("accelVoltage", {
                 "label": "Accel. voltage",
                 "tooltip": "Accelerating voltage",
@@ -244,6 +245,7 @@ HW_SETTINGS_CONFIG = {
         )),
         "ion-beam":
         OrderedDict((
+            ("beamPreset", {}),
             ("accelVoltage", {
                 "label": "Accel. voltage",
                 "tooltip": "Accelerating voltage",
@@ -644,6 +646,11 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "tooltip": "Mode of the electron detector",
             }),
+            ("bpp", {
+                "label": "Bit Depth",
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Bit depth per pixel",
+            }),
             ("type", {
                 "label": "Detector Type",
                 "control_type": odemis.gui.CONTROL_COMBO,
@@ -666,6 +673,11 @@ HW_SETTINGS_CONFIG = {
                 "label": "Detector Mode",
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "tooltip": "Mode of the ion detector",
+            }),
+            ("bpp", {
+                "label": "Bit Depth",
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Bit depth per pixel",
             }),
             ("type", {
                 "label": "Detector Type",
