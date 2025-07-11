@@ -11,7 +11,6 @@ This file is also automatically called from the Odemis Viewer Build script
 """
 
 from Cython.Build import cythonize
-from distutils import msvc9compiler
 from distutils.core import setup
 import glob
 import numpy
