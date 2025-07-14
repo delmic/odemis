@@ -49,7 +49,7 @@ try:
     gver = _get_version_git()
     if "-" in gver:
         sys.stderr.write("Warning: packaging a non-tagged version: %s\n" % gver)
-    if VERSION != gver:
+    if VERSION != gver.strip("v"):
         sys.stderr.write("Warning: package version and git version don't match:"
                          " %s <> %s\n" % (VERSION, gver))
 except LookupError:
