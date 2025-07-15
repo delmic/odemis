@@ -48,7 +48,7 @@ def _get_version_git():
 try:
     try:
         gver = _get_version_git()
-    except LookupError:
+    except Exception:
         gver = "0.0.0+nogit"
     if "-" in gver:
         sys.stderr.write("Warning: packaging a non-tagged version: %s\n" % gver)
