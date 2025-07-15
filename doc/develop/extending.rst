@@ -225,8 +225,8 @@ Open *PowerShell* and execute the following commands in succession::
    be installed, which requires a lot more dependencies. On miniconda, it's not
    installed by default.
 
-Download, install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_,
-and pick the "Visual C++ build tools". Install also the pre-selected options.
+Download, install `Microsoft C++ Build Tools <https://visualstudio.microsoft.com/visual-cpp-build-tools/>`_,
+and pick the "Desktop development with C++". Install all the pre-selected options.
 
 
 Final steps
@@ -262,7 +262,7 @@ Building Odemis Viewer and the installer
 
 Install `NSIS <https://nsis.sourceforge.io/Download>`_.
 
-Download the latest version of the `KillProc NSIS plugin <http://nsis.sourceforge.net/KillProc_plug-in>`_.
+Download the latest version of the `KillProc NSIS plugin <https://nsis.sourceforge.io/KillProc_plug-in>`_.
 Unzip it, and place the ``KillProc.dll`` in ``C:\\Program Files (x86)\\NSIS\\Plugins\\x86-unicode\``.
 
 (If not done at least once) Open *PowerShell* and execute the following commands in succession::
@@ -279,7 +279,8 @@ Once initialized, open *PowerShell* and execute the following commands in succes
 
 To build just the viewer executable::
 
-   pyinstaller -y install\windows\viewer.spec
+   cd install\windows\
+   pyinstaller -y viewer.spec
 
 To build the installer::
 

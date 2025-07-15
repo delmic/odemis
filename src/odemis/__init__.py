@@ -70,13 +70,17 @@ def _get_version():
         try:
             return _get_version_setuptools()
         except LookupError:
-            # Last attempt: see if there is a version file
+            # Last attempt: see if there is a version file (for the Windows Viewer)
             import sys
             if getattr(sys, 'frozen', False):
-                path = os.path.join(os.path.dirname(sys.executable), 'version.txt')
-                if os.path.exists(path):
-                    with open(path, 'r') as f:
-                        return f.readline().strip()
+                exe_path = os.path.dirname(sys.executable)
+                # Old versions of pyinstaller put everything in the same directory, and newer versions
+                # (v6.0+) place it in "_internal" subdirectory.
+                for subdir in ("", "_internal"):
+                    path = os.path.join(exe_path, subdir, 'version.txt')
+                    if os.path.exists(path):
+                        with open(path, 'r') as f:
+                            return f.readline().strip()
 
             logging.warning("Unable to find the actual version")
             return "Unknown"

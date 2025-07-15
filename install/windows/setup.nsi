@@ -65,7 +65,14 @@ ShowInstDetails show
 ShowUnInstDetails show
 
 Section "MainSection" SEC01
-  SetOutPath "$APPDATA\${PRODUCT_NAME}"
+  RMDir /r "$INSTDIR"  ; Remove old files to avoid loading old versions of the libraries
+  ; If it fails, it can be due to the exe file being in use
+  IfErrors 0 no_error_delete
+  MessageBox MB_OK "Please close Odemis Viewer first, and then press OK."
+  RMDir /r "$INSTDIR"
+
+  no_error_delete:
+  SetOutPath "$APPDATA\${PRODUCT_NAME}"  ; ensure this directory is created
   SetOutPath "$INSTDIR"
   File /r .\dist\${PRODUCT_NAME}\*.*
   CreateDirectory "$SMPROGRAMS\${PRODUCT_HNAME}"
