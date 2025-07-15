@@ -19,9 +19,17 @@ jobs:
     steps:
     - name: Checkout source
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set noninteractive frontend
       run: echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: apt-cache-${{ runner.os }}-${{ matrix.ubuntu_version }}
 
     - name: Install build dependencies
       run: |
