@@ -27,7 +27,7 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 20.04 (x86 64 bits)
+ * `Ubuntu <http://www.ubuntu.com>`_ 22.04 (x86 64 bits)
  * `PyCharm <https://www.jetbrains.com/pycharm/>`_
 
 The source code available via a public git repository: https://github.com/delmic/odemis.
@@ -44,8 +44,8 @@ the next section to install Odemis on this operating system.
 Detailed instructions
 ---------------------
 
-Download Ubuntu 20.04 at this address:
-https://releases.ubuntu.com/20.04.5/ubuntu-20.04.5-desktop-amd64.iso
+Download Ubuntu 22.04 at this address:
+https://releases.ubuntu.com/22.04/ubuntu-22.04.5-desktop-amd64.iso
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -78,9 +78,9 @@ Edit /etc/odemis.conf with::
 
     sudo gedit /etc/odemis.conf
 
-Modify the first lines so they read like this::
+Modify the first lines so they read like this (where USER is replaced by your user name)::
 
-    DEVPATH="$HOME/development"
+    DEVPATH="/home/USER/development"
     PYTHONPATH="$DEVPATH/odemis/src/:$PYTHONPATH"
 
 And edit the MODEL line for the model you want (probably a simulated microscope
@@ -103,6 +103,19 @@ and type the following::
 Finally, make it executable with ``sudo chmod a+x /etc/rc.local``. You can run
 it immediately by typing ``sudo /etc/rc.local``.
 
+Starting and stopping Odemis
+""""""""""""""""""""""""""""
+Odemis can be started as usual.
+``odemis-start`` starts Odemis with the default microscope file, defined in ``odemis.conf``.
+
+However, on a development computer, you probably want to use a different microscope.
+The name of the microscope file can be passed as argument.
+There are many options in ``odemis/install/linux/usr/share/odemis/sim/``. For
+instance, to run a SPARC simulator, you could run:
+``odemis-start install/linux/usr/share/odemis/sim/sparc2-sim.odm.yaml``
+
+You can stop Odemis from the command line with ``sudo odemis-stop``.
+
 Install PyCharm
 """""""""""""""
 `PyCharm <https://www.jetbrains.com/pycharm/>`_ is a good editor for Python code.
@@ -112,37 +125,11 @@ Install it with::
 
 In PyCharm, open the ``odemis`` directory.
 In the project settings, change the Python interpreter to the
-*system* interpreter (select Python 3.6).
+*system* interpreter (select Python 3.10).
 
-On Ubuntu 18.04, PyCharm will report that some dependencies are not satisfied (eg, wxPython),
+PyCharm might report that some dependencies are not satisfied (eg, wxPython),
 however, if you have already installed Odemis from the Ubuntu packages, this is
-fine, and you should not install new version via PyCharm.
-
-Install Eclipse and the plugins
-"""""""""""""""""""""""""""""""
-Alternatively, instead of PyCharm, you may prefer Eclipse.
-It has some more advanced debugging functionalities, but everything else is a
-little less polished than PyCharm.
-
-Go to the
-`Eclipse website <https://www.eclipse.org/downloads/>`_ to download the installer, uncompress it and run it.
-
-Go to *Help/Eclipse Marketplace...*. Search for *PyDev*, and install it.
-Optionally, you can also install the *ReST Editor*.
-
-Optionally, if you want to edit the microscope configuration files (``*.odm.yaml``),
-add a file association with the Python editor. For this, in the preference 
-window, go to *General/Editors/File Association* and add a file type "``*.yaml``". As
-default editor, add the Python editor.
-
-Edit Odemis with Eclipse
-""""""""""""""""""""""""
-
-#. Click on *File/New/PyDev Project*.
-#. Enter "odemis" as project name
-#. Select a directory for project contents: the place where Odemis was downloaded (i.e., ``/home/.../development/odemis``)
-#. Select "Create 'src' folder and add it to the PYTHONPATH"
-#. Click on Finish
+fine. You should *not* install new version via PyCharm.
 
 Learning Python
 """""""""""""""
@@ -311,7 +298,7 @@ Installing Odemis Viewer
 This is an optional step, which allows you to open and analyze acquisitions files
 straight into the same graphical interface as the acquisition software.
 
-Download the Odemis viewer from https://www.delmic.com/en/products/clem-solutions/secom. 
+Download the Odemis viewer from https://www.delmic.com/en/learn/resource-library . 
 In case your browser warns you about potential thread, confirm you are willing to download
 the file. Then run the executable, and Odemis viewer will be available as a
 standard software.
@@ -355,8 +342,8 @@ with the python version (3.6.13) on which Odemis has been well tested.
     conda activate odemis
     conda config --append channels conda-forge
     conda install --name odemis --file requirements-conda.txt
-    conda develop src   
-   
+    conda develop src
+
 #. To use this new conda python environment follow the instructions of 
    http://medium.com/@apremgeorge/using-conda-python-environments-with-spyder-ide-and-jupyter-notebooks-in-windows-4e0a905aaac5.
    Note that:
