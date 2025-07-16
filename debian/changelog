@@ -1,3 +1,15 @@
+odemis (3.6.5-1) focal; urgency=medium
+
+  * New version 3.6.5
+  * Main bug fixes:
+   - Fix loading TIFF file with mix of z-stack and non z-stack
+   - Fix to allow setting a filename containing a 6 digit number starting with 24 to 29
+   - METEOR improved reliability with Andor Sona cameras
+   - SPARC streakcam alignment now starts with the slit almost closed for extra safety
+   - Moving outside of stage limit in the GUI was sometimes not detected
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 16 Jul 2025 23:48:47 +0200
+
 odemis (3.6.4-1) focal; urgency=medium
 
   * New version 3.6.4
