@@ -1,3 +1,16 @@
+odemis (3.7.1-1) focal; urgency=medium
+
+  * New version: 3.7.1
+  * Main bug fixes and improvements:
+    - Ensure milling code is packaged too
+    - Fix building package on Ubuntu 24.04 due to documentation build
+    - Update build environment on Windows
+    - Don't rotate tiles during stiching based on e-beam scan rotation
+    - FASTEM Don't show TOAs with transparency
+    - semnidaq driver now also supports NI PCIe-625x cards
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 17 Jul 2025 17:45:50 +0200
+
 odemis (3.7.0-1) focal; urgency=medium
 
   * New version: 3.7
