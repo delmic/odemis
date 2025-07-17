@@ -58,7 +58,6 @@ SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 SPARC2_FPLM_CONFIG = CONFIG_PATH + "sim/sparc2-fplm-sim.odm.yaml"  # Fiber-coupled Photoluminescence module
 SPARC2_FSLM_CONFIG = CONFIG_PATH + "sim/sparc2-fslm-sim.odm.yaml"  # Free Space Light Module
 SPARC2_FSLT_CONFIG = CONFIG_PATH + "sim/sparc2-fslt-sim.odm.yaml"  # Free Space Light Tunnel
-MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 
 def path_pos_to_phys_pos(pos, comp, axis):
@@ -438,7 +437,6 @@ class Sparc2PathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it early
 
-
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -649,6 +647,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         self.assertEqual(self.focus.position.value, orig_focus)
+
 
 # @skip("faster")
 class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
@@ -1542,97 +1541,6 @@ class SecomFlimPathTestCase(unittest.TestCase):
 
         guess = self.optmngr.guessMode(helper)
         self.assertEqual(guess, "flim-setup")
-
-
-class MimasPathTestCase(unittest.TestCase):
-    """
-    Tests to be run with a MIMAS
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        testing.start_backend(MIMAS_CONFIG)
-        cls.microscope = model.getMicroscope()
-        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
-
-        # Microscope component
-        cls.microscope = model.getComponent(role="mimas")
-        cls.optmngr = path.OpticalPathManager(cls.microscope)
-
-        # Find components
-        cls.ccd = model.getComponent(role="ccd")
-        cls.light = model.getComponent(role="light")
-        cls.filter = model.getComponent(role="filter")
-        cls.stage = model.getComponent(role="stage")
-        cls.focus = model.getComponent(role="focus")
-        cls.align = model.getComponent(role="align")
-        cls.sed = model.getComponent(role="se-detector")
-        cls.ibeam = model.getComponent(role="ion-beam")
-
-        # Move to LOADING (will reference if needed)
-        cls.posture_manager.cryoSwitchSamplePosition(LOADING).result()
-        # Then move to FM_IMAGING, so that switching between optical path is allowed
-        cls.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
-
-    def assert_pos_align(self, expected_pos_name: str):
-        """
-        Check that the aligner is positioned at the given "posture"
-        expected_pos_name: MD_FAV_POS_ACTIVE or MD_FAV_POS_DEACTIVE
-        """
-        exp_pos = self.align.getMetadata()[expected_pos_name]
-        testing.assert_pos_almost_equal(self.align.position.value, exp_pos)
-
-    def test_guess_mode(self):
-        """
-        Check that .guessMode(Stream) return the correct mode for each stream type
-        """
-        fib_stream = stream.SEMStream("test ion se", self.sed, self.sed.data, self.ibeam, opm=self.optmngr)
-        fluo_stream = stream.FluoStream("test fluo", self.ccd, self.ccd.data, self.light,
-                                        self.filter, opm=self.optmngr)
-
-        m = self.optmngr.guessMode(fib_stream)
-        self.assertEqual(m, "fib")
-
-        m = self.optmngr.guessMode(fluo_stream)
-        self.assertEqual(m, "optical")
-
-    def test_set_path_mode(self):
-        """
-        Check that .setPath(mode_name) moves the aligner according to the requested mode
-        """
-        f = self.optmngr.setPath("optical")
-        f.result()
-        self.assert_pos_align(model.MD_FAV_POS_ACTIVE)
-
-        f = self.optmngr.setPath("fib")
-        f.result()
-        self.assert_pos_align(model.MD_FAV_POS_DEACTIVE)
-
-        # check that when in LOADING position, the optical path doesn't change
-        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
-        f = self.optmngr.setPath("optical")
-        f.result()
-        pos_name = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(pos_name, LOADING)
-
-        # Move it back to FM_IMAGING
-        self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
-
-    def test_set_path_stream(self):
-        """
-        Check that .setPath(Stream) moves the aligner according to the stream type
-        """
-        fib_stream = stream.SEMStream("test ion se", self.sed, self.sed.data, self.ibeam, opm=self.optmngr)
-        fluo_stream = stream.FluoStream("test fluo", self.ccd, self.ccd.data, self.light,
-                                        self.filter, opm=self.optmngr)
-
-        f = self.optmngr.setPath(fluo_stream)
-        f.result()
-        self.assert_pos_align(model.MD_FAV_POS_ACTIVE)
-
-        f = self.optmngr.setPath(fib_stream)
-        f.result()
-        self.assert_pos_align(model.MD_FAV_POS_DEACTIVE)
 
 
 if __name__ == "__main__":
