@@ -448,6 +448,10 @@ class FastEMTOA(FastEMROABase):
 
         num_tiles = len(self.field_indices)  # Total number of tiles
 
+        # Return if there are no tiles to acquire
+        if num_tiles == 0:
+            return 0.0
+
         # Time for tile acquisition
         acq_time_tile = self.res.value[0] * self.res.value[1] * acq_dwell_time
 
