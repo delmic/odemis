@@ -305,16 +305,17 @@ FASTEM-sim: {
 "Mirror Descanner": {
     # Internal child of ASM, so no class
     role: descanner,
-    # Default values (overwritten if stored in the persistent storage)
-    persistent: {
-        properties: [scanOffset, scanAmplitude],
-    },
     metadata: {
         # Factory calibrations of the descanner gain and offset
         SCAN_OFFSET: [-0.013, -0.119],  # [a.u._descan] start of the sawtooth descanner signal
         SCAN_AMPLITUDE: [0.0082, -0.0082],  # [a.u._descan] the dynamic amplitude of the sawtooth descanning signal
         # On the hardware the scan gain is calculated, for simulation this is not possible and therefore add it here.
         SCAN_GAIN: [5000, 5000],  # [px_dc/a.u._descan] the number of pixels a spot moves per arbitrary unit
+        CALIB: {'phase_shift': {1.0e-06: 0.0, 5.0e-06: 0.0}},  # example phase shift, 0.0 means no shift
+    },
+    # Default values (overwritten if stored in the persistent storage)
+    persistent: {
+        properties: [scanOffset, scanAmplitude],
     },
 }
 
