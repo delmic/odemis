@@ -53,6 +53,9 @@ AR_XMAX = 13.25e-3  # m, the distance between the parabola origin and the cutoff
 AR_HOLE_DIAMETER = 0.6e-3  # m, diameter of the hole in the mirror
 AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/(4f): f: focal point of mirror (place of sample)
+DEFAULT_SLIT_WIDTH = 10e-6  # m, width of the slit used in the spectrometer
+DEFAULT_SENSOR_PIXEL_SIZE = (10e-6, 10e-6)  # m, pixel size of the sensor used in the spectrometer
+DEFAULT_BINNING = (1, 1)  # (x, y) binning of the sensor used in the spectrometer
 
 
 def _ExtractAngleInformation(data, hole):
@@ -650,9 +653,11 @@ def ExtractThetaList(data: model.DataArray) -> List[float]:
     parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
 
     wl = wl_list[data.shape[1] // 2]  # wavelength at the middle (approximately)
-    theta_list, first_px, last_px = _get_theta_list_wl(wl, line_bottom, line_top,
+    # Since only theta list needs to be extracted, use sensor pixel size of [1, 1] and the default slit width
+    # for simple calculations related to omega list
+    theta_list, _, first_px, last_px = _get_angle_list_wl(wl, line_bottom, line_top,
                                                        focus_dist, x_max, parabola_f,
-                                                       data.shape[0])
+                                                       data.shape[0], None, None)
 
     # Replace the angles outside of valid data by NaN
     theta_list[:first_px] = math.nan
@@ -661,12 +666,19 @@ def ExtractThetaList(data: model.DataArray) -> List[float]:
     return theta_list.tolist()
 
 
-def _get_theta_list_wl(wl: float, line_bottom: Tuple[float], line_top: Tuple[float],
-                      focus_dist: float, x_max: float, parabola_f:float,
-                      length: int
-                     ) -> Tuple[numpy.ndarray, int, int]:
+def _get_angle_list_wl(
+    wl: float,
+    line_bottom: Tuple[float],
+    line_top: Tuple[float],
+    focus_dist: float,
+    x_max: float,
+    parabola_f: float,
+    length: int,
+    sensor_pixel_size: Optional[Tuple[float, float]],
+    input_slit_width: Optional[float]
+) -> Tuple[numpy.ndarray, Optional[numpy.ndarray], int, int]:
     """
-    Computes the list of theta values given the mirror parameters. More
+    Computes the list of theta and omega values given the mirror parameters. More
     specifically, given that the slit is closed and focused on the center of the
     mirror and based on the mirror geometry, the detector plane is calculated
     and the list of angles is derived.
@@ -678,12 +690,18 @@ def _get_theta_list_wl(wl: float, line_bottom: Tuple[float], line_top: Tuple[flo
     :param x_max: m, cf MD_AR_XMAX
     :param parabola_f: m, cf MD_AR_PARABOLA_F
     :param length > 0: the number of angles returned
+    :param pixel_size: The sensor pixel size in m, m, cf MD_SENSOR_PIXEL_SIZE
+    :param input_slit_width: The input slit width in m, cf MD_INPUT_SLIT_WIDTH.
     :return:
       theta_list: the list of angles (in radians) with length equal to
-      data.shape[0], corresponding to the pixels at the center wavelength. The
-      angle list should be within the range [-90, 90] in degrees, approximately
-      [-1.6, 1.6] in radians. Theoretically, the values are within the range [0, 90]°
-      for φ = 0° and φ = 180°. Values for φ = 0° are passed as negative values.
+                  data.shape[0], corresponding to the pixels at the center wavelength. The
+                  angle list should be within the range [-90, 90] in degrees, approximately
+                  [-1.6, 1.6] in radians. Theoretically, the values are within the range [0, 90]°
+                  for φ = 0° and φ = 180°. Values for φ = 0° are passed as negative values.
+      omega_list: the list of omega values (in radians) with length equal to
+                  data.shape[0], corresponding to the pixels at the center wavelength.
+                  The sensor pixel size and slit width need to be provided
+                  to calculate the solid angle. If not provided, it will be None.
       first_px: the index of the first pixel with valid data
       last_px: the index of the last pixel with valid data
     """
@@ -741,7 +759,9 @@ def _get_theta_list_wl(wl: float, line_bottom: Tuple[float], line_top: Tuple[flo
 
     # convert each distance to an angle
     xfocus = a * y_pos ** 2 - parabola_f
-    theta = numpy.arccos(y_pos / numpy.sqrt(xfocus ** 2 + y_pos ** 2))
+    xfocus2plusr2 = xfocus ** 2 + y_pos ** 2
+    sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
+    theta = numpy.arccos(y_pos / sqrtxfocus2plusr2)
 
     # Uses the hole position to update the theta data to be within the range
     # [-90, 90] after applying the mask. Theoretically, the values are within
@@ -752,7 +772,24 @@ def _get_theta_list_wl(wl: float, line_bottom: Tuple[float], line_top: Tuple[flo
     pole_y = top_px + (bottom_px - top_px) * pos_ratio  # px (float)
     theta[:int(pole_y) + 1] *= -1  # +1, to include that index too
 
-    return theta, first_px, last_px
+    omega = None
+    if sensor_pixel_size and input_slit_width:
+        mirror_image_size_y = top_phys - bottom_phys
+        detector_image_size_y = (last_px - first_px + 1) * sensor_pixel_size[1]
+
+        # Optical magnification, scaling the detector plane to the mirror plane
+        magn_y = mirror_image_size_y / detector_image_size_y
+
+        detector_pixel_area = input_slit_width * sensor_pixel_size[1]
+        pixel_area_on_mirror = detector_pixel_area * (magn_y ** 2)
+
+        # 'omega' is the solid angle (in steradians) of the light collection cone for each pixel.
+        # It is used to correct the raw intensity, since pixels at different angles collect
+        # light from geometrically different areas on the mirror surface
+        omega = pixel_area_on_mirror * \
+                (a * y_pos ** 2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+
+    return theta, omega, first_px, last_px
 
 
 def project_angular_spectrum_to_grid(
@@ -793,6 +830,10 @@ def project_angular_spectrum_to_grid(
     focus_dist = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
     x_max = data.metadata.get(model.MD_AR_XMAX, AR_XMAX)  # optical axis
     parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
+    input_slit_width = data.metadata.get(model.MD_INPUT_SLIT_WIDTH, DEFAULT_SLIT_WIDTH)
+    binning  = data.metadata.get(model.MD_BINNING, DEFAULT_BINNING)
+    sensor_pixel_size = data.metadata.get(model.MD_SENSOR_PIXEL_SIZE, DEFAULT_SENSOR_PIXEL_SIZE)
+    sensor_pixel_size = (sensor_pixel_size[0] * binning[0], sensor_pixel_size[1] * binning[1])
 
     # Compute the angles at the top and bottom, based on physical properties of the mirror
     a = 1 / (4 * parabola_f)
@@ -817,22 +858,25 @@ def project_angular_spectrum_to_grid(
     # Prepare final data array (always floats, as it's interpolated data)
     data_lin = numpy.zeros((theta_list_linear_len, data.shape[1]), dtype=numpy.float64)
 
-    # Compute the "theta list" for every wl (ie, along dim 1), based on the chromatic correction info
+    # Compute the "theta list" and "omega list" for every wl (ie, along dim 1), based on the chromatic correction info
     for wli in range(data.shape[1]):
         # TODO: pass all wavelengths at the same time?
-        theta_list_raw, first_px, last_px = _get_theta_list_wl(wl_list[wli], line_bottom, line_top,
-                                                               focus_dist, x_max, parabola_f,
-                                                               data.shape[0])
+        theta_list_raw, omega_list_raw, first_px, last_px = _get_angle_list_wl(wl_list[wli], line_bottom, line_top,
+                                                                               focus_dist, x_max, parabola_f,
+                                                                               data.shape[0], sensor_pixel_size,
+                                                                               input_slit_width)
 
-        # Interpolate for each wl, based on original theta list and target theta list, using actual data.
+        # Interpolate for each wl, based on original theta omega list and target theta omega list, using actual data.
         # We have to discard the data (really) outside of the valid range
         # because numpy.interp expects increasing x coordinates, and the angles
         # "wrap back" on the lower end of the mirror.
         theta_list_short = theta_list_raw[first_px: last_px + 1]
+        omega_list_short = omega_list_raw[first_px: last_px + 1]
         d = data[first_px: last_px + 1, wli]
+        d_corrected = d / omega_list_short
         # Pad with 0.0 for points outside (left and right) the source data's angular range.
         # This prevents creating artificial signal at the edges from clamping.
-        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d, left=0.0, right=0.0)
+        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d_corrected, left=0.0, right=0.0)
 
     # Prepare metadata: as the data is now processed, most of the original
     # metadata doesn't fit. So only keep the very strict minimum.

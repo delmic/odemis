@@ -764,6 +764,11 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "StreakMode", model.MD_STREAK_MODE, converter=bool)
         read_metadata(pdgroup, i, md, "TriggerDelay", model.MD_TRIGGER_DELAY, converter=float)
         read_metadata(pdgroup, i, md, "TriggerRate", model.MD_TRIGGER_RATE, converter=float)
+        # sensor pixel and binning
+        read_metadata(pdgroup, i, md, "SensorPixelSize", model.MD_SENSOR_PIXEL_SIZE, converter=tuple)
+        read_metadata(pdgroup, i, md, "Binning", model.MD_BINNING, converter=tuple)
+        # input slit width
+        read_metadata(pdgroup, i, md, "InputSlitWidth", model.MD_INPUT_SLIT_WIDTH, converter=float)
         # extra settings
         read_metadata(pdgroup, i, md, "ExtraSettings", model.MD_EXTRA_SETTINGS, converter=json.loads)
 
@@ -1122,6 +1127,13 @@ def _add_image_metadata(group, image, mds):
     # Streak delay generator: trigger rate (float) (aka blanking rate of ebeam)
     triggerRate, st_triggerRate = [], []
 
+    # Sensor pixel size: (tuple of floats) in meters, for each pixel in the image
+    sensor_pixel_size, st_sensor_pixel_size = [], []
+    # Binning: (tuple of ints) for each pixel in the image
+    binning, st_binning = [], []
+    # input slit width: (float) the width of the entrance slit of the spectrograph
+    input_slit_width, st_input_slit_width = [], []
+
     for md in mds:
         # dwell time ebeam or exposure time # if both not there -> append_metadata() will set entry to invalid
         if model.MD_DWELL_TIME in md:
@@ -1153,6 +1165,13 @@ def _add_image_metadata(group, image, mds):
         append_metadata(st_triggerDelay, triggerDelay, md, model.MD_TRIGGER_DELAY)
         append_metadata(st_triggerRate, triggerRate, md, model.MD_TRIGGER_RATE)
 
+        # Sensor pixel size
+        append_metadata(st_sensor_pixel_size, sensor_pixel_size, md, model.MD_SENSOR_PIXEL_SIZE, default_value=(0, 0))
+        # Binning
+        append_metadata(st_binning, binning, md, model.MD_BINNING, default_value=(1, 1))
+        # Input slit width
+        append_metadata(st_input_slit_width, input_slit_width, md, model.MD_INPUT_SLIT_WIDTH, default_value=0)
+
     # integration time
     set_metadata(gp, "IntegrationTime", st_its, its)
     # integration count
@@ -1179,6 +1198,13 @@ def _add_image_metadata(group, image, mds):
     set_metadata(gp, "StreakMode", st_streakMode, streakMode)
     set_metadata(gp, "TriggerDelay", st_triggerDelay, triggerDelay)
     set_metadata(gp, "TriggerRate", st_triggerRate, triggerRate)
+
+    # Sensor pixel size
+    set_metadata(gp, "SensorPixelSize", st_sensor_pixel_size, sensor_pixel_size)
+    # Binning
+    set_metadata(gp, "Binning", st_binning, binning)
+    # Input slit width
+    set_metadata(gp, "InputSlitWidth", st_input_slit_width, input_slit_width)
 
 
 def append_metadata(status_list, value_list, md, md_key, default_value=""):

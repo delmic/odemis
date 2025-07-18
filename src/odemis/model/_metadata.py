@@ -138,6 +138,7 @@ MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the
 MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror
 MD_AR_FOCUS_DISTANCE = "Focus distance"  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 MD_AR_PARABOLA_F = "Parabola parameter"  # m, parabola_parameter=1/4f
+MD_INPUT_SLIT_WIDTH = "Input slit width"  # m, the width of the entrance slit of the spectrograph
 
 MD_POL_MODE = "Polarization"  # (string), position of the polarization analyzer (see POL_POSITIONS in _base.py)
 MD_POL_POS_QWP = "Position quarter wave plate"  # rad, position of the quarter wave plate
