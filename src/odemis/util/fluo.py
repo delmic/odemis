@@ -38,7 +38,7 @@ def get_center(band):
         return 5000e-9  # Something large, so that if it's sorted, it's after every other band
 
     if isinstance(band, str):
-        raise TypeError("Band must be a list or a tuple")
+        raise TypeError(f"Band must be a list or a tuple, got '{band}'")
 
     if isinstance(next(iter(band)), Iterable):
         return tuple(get_center(b) for b in band)
