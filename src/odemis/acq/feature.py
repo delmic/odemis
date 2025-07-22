@@ -21,7 +21,7 @@ from odemis.acq.acqmng import (
 )
 from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
-from odemis.acq.milling.tasks import __file__ as milling_tasks_file
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.move import (
     FM_IMAGING,
     MILLING,
@@ -47,7 +47,6 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
     "Discarded",
 )
 
-MILLING_TASKS_PATH = os.path.join(os.path.dirname(milling_tasks_file), "milling_tasks.yaml")
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 
 
@@ -166,7 +165,7 @@ class CryoFeature(object):
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
         if milling_tasks is None:
-            milling_tasks = load_milling_tasks(MILLING_TASKS_PATH)
+            milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
         self.milling_tasks: Dict[str, MillingTaskSettings] = milling_tasks
 
         self.status = model.StringVA(FEATURE_ACTIVE)

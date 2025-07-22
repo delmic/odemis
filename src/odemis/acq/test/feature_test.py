@@ -1,11 +1,28 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Created on Oct 2021
+
+Copyright © Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+"""
 
 import json
 import logging
-import unittest
 import os
 import random
+import unittest
 
 import numpy
 
@@ -19,9 +36,9 @@ from odemis.acq.feature import (
     load_milling_tasks,
     FEATURE_READY_TO_MILL,
     MILLING,
-    MILLING_TASKS_PATH,
     REFERENCE_IMAGE_FILENAME,
 )
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -79,7 +96,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         stage_position = {"x": 25e-6, "y": 40e-6, "z": 32e-3, "rx": 0.31, "rz": 0}
         self.path = os.path.join(os.getcwd(), feature.name.value)
         reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
-        milling_tasks = load_milling_tasks(MILLING_TASKS_PATH)
+        milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
 
         # randomly remove some milling tasks (to simulate user choice)
         task_name = random.choice(list(milling_tasks.keys()))

@@ -37,16 +37,15 @@ import wx
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.milling import millmng
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
-    MILLING_TASKS_PATH,
     CryoFeature,
 )
+from odemis.acq.milling import millmng, DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
-from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
@@ -155,7 +154,7 @@ class MillingTaskController:
         self.conf = get_acqui_conf()
 
         # load the milling tasks
-        self.milling_tasks = load_milling_tasks(MILLING_TASKS_PATH) # TODO: move to main_data
+        self.milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH) # TODO: move to main_data
         self._default_milling_tasks = copy.deepcopy(self.milling_tasks)
         self.allow_milling_pattern_move = True
 
