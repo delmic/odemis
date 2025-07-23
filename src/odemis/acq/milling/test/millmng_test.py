@@ -1,22 +1,41 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Created on Apr 2025
+
+Copyright © Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+"""
 
 import glob
 import logging
 import os
-import unittest
 import time
+import unittest
+
 import numpy
+
 import odemis
 from odemis import model
 from odemis.acq.feature import (
-    MILLING_TASKS_PATH,
     CryoFeature,
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
 )
-from odemis.acq.milling.tasks import load_milling_tasks
+from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling, status_map
+from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.acq.move import (
     FM_IMAGING,
     GRID_1,
@@ -83,7 +102,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
             MillingWorkflowTask.Polishing,
         ]
 
-        cls.milling_tasks = load_milling_tasks(MILLING_TASKS_PATH)
+        cls.milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
 
         # save ref image
         pixelsize =  100e-6 / 1536
@@ -222,3 +241,6 @@ class TestAutomatedMillingManager(unittest.TestCase):
         f.cancel()
 
         self.assertTrue(f.cancelled())
+
+if __name__ == "__main__":
+    unittest.main()

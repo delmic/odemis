@@ -19,12 +19,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import os
-import unittest
 import time
+import unittest
+
 import odemis
 from odemis import model
-from odemis.acq.milling.tasks import load_milling_tasks, __file__ as MILLING_PATH
-from odemis.acq.milling import openfibsem
+from odemis.acq.milling import openfibsem, DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.milling.tasks import load_milling_tasks
 from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -32,7 +33,6 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_FISBEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
-MILLING_TASKS_PATH = os.path.join(os.path.dirname(MILLING_PATH),  "milling_tasks.yaml")
 
 class TestOpenFIBSEMMillingManager(unittest.TestCase):
 
@@ -54,7 +54,7 @@ class TestOpenFIBSEMMillingManager(unittest.TestCase):
                                     f"Got the error: {err}")
         testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
-        cls.milling_tasks = load_milling_tasks(MILLING_TASKS_PATH)
+        cls.milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
 
     def test_estimate_total_milling_time(self):
         """Test the estimate_total_milling_time function"""
