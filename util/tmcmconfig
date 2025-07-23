@@ -58,6 +58,7 @@ AXIS_PARAMS = {
     193: "Reference search mode",
     194: "Reference search speed",
     195: "Reference switch speed",
+    200: "Boost current",
     204: "Free wheeling delay (in 10ms)",  # Free wheeling mode on 1211/3214
     214: "Power down delay (in 10ms)",
 
@@ -105,9 +106,9 @@ NO_AXIS_STORAGE = {1211, 3214}
 
 # List of axis params which are _not_ present (per model)
 MISSING_AXIS_PARAMS = {
-    1211: {149, 153, 154},
-    3214: {149, 153, 154},
-    1410: {17, 24, 25, 26, 31, 251},
+    1211: {149, 153, 154, 200},
+    3214: {149, 153, 154, 200},
+    1140: {17, 24, 25, 26, 31, 251},
     3110: {17, 24, 25, 26, 31, 201, 212, 251},
     6110: {17, 24, 25, 26, 31, 201, 212, 251},
 }
@@ -116,7 +117,7 @@ MISSING_AXIS_PARAMS = {
 MISSING_GLOBAL_PARAMS = {
     1211: {(0, 79), (0, 90)},
     3214: {(0, 79), (0, 90)},
-    1410: {},
+    1140: {},
     3110: {},
     6110: {},
 }
