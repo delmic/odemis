@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import itertools
 import logging
-from typing import Optional, Tuple, Dict, Union, Iterable, List
+from typing import Optional, Tuple, Dict, Union, List
 
 from odemis import model, util
 
@@ -213,6 +213,8 @@ class MetadataUpdater(model.Component):
 
             # Depends on the actual size of the ccd's density (should be constant)
             captor_mpp = comp_affected.pixelSize.value  # m, m
+            md = {model.MD_SENSOR_PIXEL_SIZE: captor_mpp}
+            comp_affected.updateMetadata(md)
 
             # we need to keep the information on the detector to update
             def updatePixelDensity(unused, lens=lens, comp_affected=comp_affected, binva=binva):
@@ -226,7 +228,8 @@ class MetadataUpdater(model.Component):
                 mag = lens.magnification.value
                 mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag)
                 md = {model.MD_PIXEL_SIZE: mpp,
-                      model.MD_LENS_MAG: mag}
+                      model.MD_LENS_MAG: mag,
+                      model.MD_BINNING: binning,}
                 comp_affected.updateMetadata(md)
 
             lens.magnification.subscribe(updatePixelDensity, init=True)
@@ -460,6 +463,8 @@ class MetadataUpdater(model.Component):
                 pxs = det.pixelSize.value[0] * det.binning.value[0]
                 wll = sp.getPixelToWavelength(npixels, pxs)
                 md = {model.MD_WL_LIST: wll}
+                if "slit-in" in sp.position.value:
+                    md[model.MD_INPUT_SLIT_WIDTH] = sp.position.value["slit-in"]
                 det.updateMetadata(md)
 
             # Schedule metadata update whenever a VA changes
