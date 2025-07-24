@@ -7,7 +7,7 @@
 # Light (lamp with known spectrum)
 "Calibration Light": {
     class: light.Light,
-    role: "brightlight",
+    role: brightlight,
     power_supplier: "Power Control Unit",
     affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
@@ -19,7 +19,7 @@
     init: {
         mcc_device: "fake",
         ao_channels: [0],
-        do_channels: [7],
+        do_channels: [6],
         # 99% low, 25% low, centre, 25% high, 99% high wavelength in m
         spectra: [[527.e-9, 531.e-9, 532.e-9, 533.e-9, 537.e-9]],
         # Relation curve of voltage -> power, as linear segments
@@ -32,6 +32,9 @@
         ],
         # di_channels port B 8-15 -> pin 32-39
         # specified as [name, TLL_HIGH]
+        # In the simulator, port 6 is connected to port 14, so when the power is 0V,
+        # the interlock will be considered set (=True), and when power > 0, the interlock will
+        # be considered reset (=False)
         di_channels: {14: ["interlockTriggered", False]},
     },
     affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
@@ -131,6 +134,29 @@
     init: {
 #        image: "",
     },
+}
+
+"Scan Stage": { # wrapper to be able to scan with the stage instead of the e-beam
+    class: actuator.MultiplexActuator,
+    role: scan-stage,
+    dependencies: {"x": "Sample Stage", "y": "Sample Stage"},
+    init: {
+        axes_map: {"x": "x", "y": "y"},
+    },
+    affects: ["Sample Stage"],
+}
+
+"Sample Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {
+        axes: ["x", "y"],
+        ranges: {"x": [-0.014, 0.014], "y": [-0.028, 0.028]},
+    },
+    properties: {
+        speed: {"x": 0.01, "y": 0.01}, # m/s
+    },
+    affects: ["SEM E-beam"],
 }
 
 # Depending exactly on the configuration, it might also be used for spectrometer
