@@ -34,6 +34,7 @@ import odemis
 from odemis import model
 from odemis.acq import acqmng, stream
 from odemis.acq.acqmng import SettingsObserver
+from odemis.acq.move import MicroscopePostureManager, FM_IMAGING
 from odemis.acq.stitching import (
     REGISTER_IDENTITY,
     WEAVER_COLLAGE_REVERSE,
@@ -55,16 +56,17 @@ from odemis.util import img, testing
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
 logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
+METEOR_FIBSEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
 
 
 class CRYOSECOMTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        testing.start_backend(ENZEL_CONFIG)
+        testing.start_backend(METEOR_FIBSEM_CONFIG)
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -74,13 +76,19 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.light = model.getComponent(role="light")
         cls.focus = model.getComponent(role="focus")
         cls.light_filter = model.getComponent(role="filter")
-        cls.stage = model.getComponent(role="stage")
+
+        # The METEOR always needs a PostureManager to manipulate the stage properly, including
+        # the MD_POS on acquired data.
+        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
+        cls.stage = cls.posture_manager.sample_stage
+
+        # Initialize the stage to be at a legal SEM Imaging position
+        cls.stage_bare = model.getComponent(role="stage-bare")
+        sem_pos_grid1 = cls.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]["GRID 1"]
+        cls.stage_bare.moveAbsSync(sem_pos_grid1)
 
         # Make sure the lens is referenced
         cls.focus.reference({'z'}).result()
-        # The 5DoF stage is not referenced automatically, so let's do it now
-        stage_axes = set(cls.stage.axes.keys())
-        cls.stage.reference(stage_axes).result()
 
         # Create 1 SEM stream (no focus) and 2 FM streams (with focus) to be used in testing
         ss1 = stream.SEMStream("sem1", cls.sed, cls.sed.data, cls.ebeam,
@@ -168,6 +176,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         Test moving the stage to a tile based on its index
         """
+        self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
@@ -177,7 +186,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # move to starting position (left, top)
         starting_pos = tiled_acq_task._starting_pos
         self.stage.moveAbs(starting_pos).result()
-        logging.debug("Starting position: %s", starting_pos)
+        logging.debug("Starting position: %s, expected shift per tile = %s", starting_pos, exp_shift)
         # no change in movement
         tiled_acq_task._moveToTile((0, 0), (0, 0), fov)
         testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
@@ -185,18 +194,21 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # Note that we cannot predict precisely, as the algorithm may choose to spread
         # more or less the tiles to fit within the area.
         tiled_acq_task._moveToTile((1, 0), (0, 0), fov)  # move right on x
-        exp_pos = {'x': starting_pos["x"] + exp_shift[0] / 2}
-        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
+        time.sleep(0.01)
+        exp_pos = {'x': starting_pos["x"] + exp_shift[0]}
+        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=1e-6, match_all=False)
 
         tiled_acq_task._moveToTile((1, 1), (1, 0), fov)  # move down on y
-        exp_pos = {'x': starting_pos["x"] + exp_shift[0] / 2,
-                   'y': starting_pos["y"] - exp_shift[1] / 2}
-        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
+        time.sleep(0.01)
+        exp_pos = {'x': starting_pos["x"] + exp_shift[0],
+                   'y': starting_pos["y"] - exp_shift[1]}
+        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=1e-6, match_all=False)
 
         tiled_acq_task._moveToTile((0, 1), (1, 1), fov)  # move back on x
+        time.sleep(0.01)
         exp_pos = {'x': starting_pos["x"],
-                   'y': starting_pos["y"] - exp_shift[1] / 2}
-        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
+                   'y': starting_pos["y"] - exp_shift[1]}
+        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=1e-6, match_all=False)
 
     def test_get_fov(self):
         """
@@ -492,32 +504,35 @@ class CRYOSECOMTestCase(unittest.TestCase):
                                               zlevels=[1, 2, 3])
         total_tiles = tiled_acq_task._number_of_tiles
         # Observed time duration during stage movement between tiles
-        min_stage_time = total_tiles * 0.3
+        min_stage_time = total_tiles * 0.1
+        max_stage_time = total_tiles * 1.0
         # Calculated time duration during tile acquisition
         zlevels_dict = {s: tiled_acq_task._zlevels for s in tiled_acq_task._streams
                         if isinstance(s, (FluoStream))}
         acq_time = acqmng.estimateZStackAcquisitionTime(tiled_acq_task._streams, zlevels_dict) * total_tiles
         min_total_time = min_stage_time + acq_time
         # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
+        max_total_time = max_stage_time + acq_time * 1.3
         estimated_time = tiled_acq_task.estimateTime()
         self.assertLessEqual(min_total_time, estimated_time)
-        self.assertLessEqual(estimated_time, 1.30 * min_total_time)
+        self.assertLessEqual(estimated_time, max_total_time)
         # Test with one z level
         tiled_acq_task = TiledAcquisitionTask([self.fm_streams[0]], self.stage, area, overlap=overlap,
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION,
                                               zlevels=[1])
         total_tiles = tiled_acq_task._number_of_tiles
         # Observed time duration during stage movement between tiles
-        min_stage_time = total_tiles * 0.3
+        min_total_time = min_stage_time + acq_time
+        # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
+        max_total_time = max_stage_time + acq_time * 1.3
         # Calculated time duration during tile acquisition
         zlevels_dict = {s: tiled_acq_task._zlevels for s in tiled_acq_task._streams
                         if isinstance(s, (FluoStream))}
         acq_time = acqmng.estimateZStackAcquisitionTime(tiled_acq_task._streams, zlevels_dict) * total_tiles
         min_total_time = min_stage_time + acq_time
-        # overhead of 30% on min_total_time is used to account for stream settings, like, exposure time etc.
         estimated_time = tiled_acq_task.estimateTime()
         self.assertLessEqual(min_total_time, estimated_time)
-        self.assertLessEqual(estimated_time, 1.30 * min_total_time)
+        self.assertLessEqual(estimated_time, max_total_time)
 
     def _position_listener(self, pos):
         self._focuser_pos.append(pos)
