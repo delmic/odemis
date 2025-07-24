@@ -31,13 +31,14 @@ import odemis
 from odemis import model
 from odemis.acq import stream
 from odemis.acq.align.z_localization import determine_z_position, measure_z
+from odemis.acq.move import MicroscopePostureManager
 from odemis.dataio.tiff import read_data
 from odemis.util import comp, testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-tfs3-sim.odm.yaml"
 
 
 # Images and calibration data from the z-stack: 2021-06-28-17-20-07zstack_-28.432deg_step50nm_4.80884319rad
@@ -150,14 +151,19 @@ class TestMeasureZ(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        testing.start_backend(ENZEL_CONFIG)
+        testing.start_backend(METEOR_CONFIG)
 
-        cls.stage = model.getComponent(role="stage")
+        cls.microscope = model.getMicroscope()
         cls.ccd = model.getComponent(role="ccd")
         cls.light = model.getComponent(role="light")
         cls.stigmator = model.getComponent(role="stigmator")
         cls.focus = model.getComponent(role="focus")
         cls.filter = model.getComponent(role="filter")
+
+        # The METEOR always needs a PostureManager to handle the stage properly, including
+        # setting the MD_POS on acquired data.
+        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
+        cls.stage = cls.posture_manager.sample_stage
 
     def test_measure_z(self):
         """
