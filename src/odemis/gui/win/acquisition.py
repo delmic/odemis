@@ -848,6 +848,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.zsteps.subscribe(self.on_setting_change)
         self.focus_points_dist.subscribe(self.on_setting_change)
+        if self._main_data_model.ebeam:
+            self._main_data_model.ebeam.pixelSize.subscribe(self.on_pixel_size)
         self.tiles_nx.subscribe(self.on_tiles_number)
         self.tiles_ny.subscribe(self.on_tiles_number)
         self.autofocus_roi_ckbox.subscribe(self.on_setting_change)
@@ -1047,6 +1049,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def on_tiles_number(self, _=None):
         """
         Called when the user enters values for the tiles number in the GUI.
+        """
+        self.update_setting_display()
+
+    def on_pixel_size(self, _=None):
+        """
+        Called when the user changes the pixel size in the GUI.
         """
         self.update_setting_display()
 
