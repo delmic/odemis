@@ -1880,6 +1880,7 @@ class SampleStage(model.Actuator):
         pos = self._pm.to_sample_stage_from_stage_position(pos_dep)
         # it's read-only, so we change it via _value
         self.position._set_value(pos, force_write=True)
+        logging.debug("Sample stage position updated to %s", pos)
 
         # update related mds
         for comp in self._affected_components:
@@ -1910,7 +1911,6 @@ class SampleStage(model.Actuator):
         """
         self.speed._set_value(dep_speed, force_write=True)
 
-    @isasync
     def moveRel(self, shift: Dict[str, float], **kwargs) -> Future:
         """
         :param shift: The relative shift to be made
@@ -1921,7 +1921,6 @@ class SampleStage(model.Actuator):
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
-    @isasync
     def moveAbs(self, pos: Dict[str, float], **kwargs) -> Future:
         """
         :param pos: The absolute position to be moved to
@@ -1938,7 +1937,6 @@ class SampleStage(model.Actuator):
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
-    @isasync
     def moveRelChamberCoordinates(self, shift: Dict[str, float]) -> Future:
         """Move the stage vertically in the chamber. This is non-blocking. From OpenFIBSEM.
         The desired input shift (x, z) is transformed to x, y, z axis components such that the
