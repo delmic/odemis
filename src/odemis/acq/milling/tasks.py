@@ -128,5 +128,5 @@ def load_milling_tasks(path: str) -> Dict[str, MillingTaskSettings]:
 
     # convert the dictionary to Dict[str, MillingTaskSettings]
     milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in yaml_file.items()}
-
+    
     return milling_tasks
