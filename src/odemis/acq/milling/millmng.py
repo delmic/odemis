@@ -59,6 +59,8 @@ from odemis.dataio import find_fittest_converter
 from odemis.util import executeAsyncTask
 from odemis.util.dataio import open_acquisition
 
+USE_FIBSEMOS = True # TODO: add option to use FIBSEM-OS
+
 class TFSMillingTaskManager:
     """This class manages running milling tasks."""
 
@@ -242,7 +244,7 @@ class TFSMillingTaskManager:
             self._future._task_state = FINISHED
 
 
-# TODO: replace with run_milling_tasks_openfibsem
+# TODO: replace with run_milling_tasks_fibsemos
 def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream, filename: str = None) -> Future:
     """
     Run multiple milling tasks in order.
@@ -417,10 +419,9 @@ class AutomatedMillingManager(object):
         self._future.set_progress()
 
         filename = self.get_filename(feature, "Milling-Tasks")
-        USE_OPENFIBSEM = False # TODO: add option to use openfibsem
-        if USE_OPENFIBSEM:
-            from odemis.acq.milling.openfibsem import run_milling_tasks_openfibsem
-            self._future.running_subf = run_milling_tasks_openfibsem(tasks=milling_tasks)
+        if USE_FIBSEMOS:
+            from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
+            self._future.running_subf = run_milling_tasks_fibsemos(tasks=milling_tasks)
         else:
             self._future.running_subf = run_milling_tasks(tasks=milling_tasks,
                                                       fib_stream=self.fib_stream,
@@ -521,7 +522,7 @@ def run_automated_milling(features: List[CryoFeature],
 
     # set the progress of the future
     total_duration = len(task_list) * len(features) * 30
-    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate from openfibsem
+    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate from FIBSEM-OS
 
     # assign the acquisition task to the future
     executeAsyncTask(future, amm.run)
