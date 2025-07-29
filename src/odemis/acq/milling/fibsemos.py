@@ -189,7 +189,8 @@ class FIBSEMOSMillingTaskManager:
         :param path: The path to save the images (optional)
         """
         # create microscope connection
-        self.microscope = create_fibsemos_tescan_microscope()
+        # TODO: Eventually use create_fibsemos_tescan_microscope() once it can get host_ip/port from the model
+        self.microscope = create_fibsemos_thermo_microscope()
         if path is None:
             path = os.getcwd()
         self.microscope._last_imaging_settings.path = path # note: image acquisition post-milling is not yet supported via odemis
