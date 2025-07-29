@@ -1,4 +1,3 @@
-
 import logging
 import math
 import os
@@ -21,7 +20,7 @@ from odemis.acq.milling.tasks import (
 )
 from odemis.util import executeAsyncTask
 
-FIBSEMOS_INSTALLED: bool = True
+# Check if FIBSEM-OS is available
 try:
     from fibsem.microscopes.odemis_microscope import OdemisThermoMicroscope, OdemisTescanMicroscope
     from fibsem.milling import (
@@ -39,8 +38,17 @@ try:
     from fibsem.structures import FibsemMillingSettings, Point
     from fibsem.utils import load_microscope_configuration
     FIBSEMOS_INSTALLED = True
-except ImportError:
-    logging.warning("FIBSEM-OS is not installed. Please check the installation.")
+except ImportError as e:
+    logging.warning(f"FIBSEM-OS is not installed or not available: {e}")
+    FIBSEMOS_INSTALLED = False
+
+
+def is_fibsemos_available() -> bool:
+    """
+    Check if FIBSEM-OS is available for use.
+    """
+
+    return FIBSEMOS_INSTALLED
 
 def create_fibsemos_thermo_microscope() -> 'OdemisThermoMicroscope':
     """Create a FIBSEM-OS microscope instance with the current microscope configuration."""

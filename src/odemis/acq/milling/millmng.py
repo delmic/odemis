@@ -48,6 +48,7 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.milling.patterns import RectanglePatternParameters
+from odemis.acq.milling.fibsemos import is_fibsemos_available
 from odemis.acq.move import (
     MILLING,
     POSITION_NAMES,
@@ -59,7 +60,6 @@ from odemis.dataio import find_fittest_converter
 from odemis.util import executeAsyncTask
 from odemis.util.dataio import open_acquisition
 
-USE_FIBSEMOS = True # TODO: add option to use FIBSEM-OS
 
 class TFSMillingTaskManager:
     """This class manages running milling tasks."""
@@ -419,7 +419,7 @@ class AutomatedMillingManager(object):
         self._future.set_progress()
 
         filename = self.get_filename(feature, "Milling-Tasks")
-        if USE_FIBSEMOS:
+        if is_fibsemos_available():
             from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
             self._future.running_subf = run_milling_tasks_fibsemos(tasks=milling_tasks)
         else:
