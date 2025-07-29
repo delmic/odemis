@@ -30,7 +30,7 @@ from odemis.util import driver, testing
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
 
 
@@ -52,23 +52,23 @@ class TestBackendStarter(unittest.TestCase):
         # check if there is no running backend
         backend_status = driver.get_backend_status()
         self.assertIn(backend_status, [driver.BACKEND_STOPPED, driver.BACKEND_DEAD])
-        # run enzel
-        testing.start_backend(ENZEL_CONFIG)
-        # now check if the role is enzel
+        # run meteor
+        testing.start_backend(METEOR_CONFIG)
+        # now check if the role is meteor
         role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
+        self.assertEqual(role, "meteor")
 
     def test_running_backend_same_as_requested(self):
-        # run enzel backend
-        testing.start_backend(ENZEL_CONFIG)
-        # check if the role is enzel
+        # run meteor backend
+        testing.start_backend(METEOR_CONFIG)
+        # check if the role is meteor
         role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
-        # run enzel backend again
-        testing.start_backend(ENZEL_CONFIG)
-        # it should still be enzel.
+        self.assertEqual(role, "meteor")
+        # run meteor backend again
+        testing.start_backend(METEOR_CONFIG)
+        # it should still be meteor.
         role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
+        self.assertEqual(role, "meteor")
 
     def test_running_backend_different_from_requested(self):
         # run sparc backend
@@ -76,11 +76,11 @@ class TestBackendStarter(unittest.TestCase):
         # check if the role is sparc
         role = model.getMicroscope().role
         self.assertEqual(role, "sparc")
-        # now run another backend (enzel)
-        testing.start_backend(ENZEL_CONFIG)
-        # check if the role now is enzel instead of sparc
+        # now run another backend (meteor)
+        testing.start_backend(METEOR_CONFIG)
+        # check if the role now is meteor instead of sparc
         role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
+        self.assertEqual(role, "meteor")
 
 
 class TestFakeBackendDir(unittest.TestCase):

@@ -35,6 +35,7 @@ from odemis import model
 from odemis.acq import acqmng
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
 from odemis.acq.leech import ProbeCurrentAcquirer
+from odemis.acq.move import MicroscopePostureManager
 from odemis.driver import xt_client
 from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
 from odemis.util import testing
@@ -46,7 +47,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC_EBIC_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
 
 # Accept three values for TEST_NOHW
 # * TEST_NOHW = 1: not connected to anything => skip most of the tests
@@ -669,21 +670,13 @@ class SPARCEBICTestCase(unittest.TestCase):
 
         self.assertEqual(len(folds), 2)
 
-class CRYOSECOMTestCase(unittest.TestCase):
-    backend_was_running = False
+class MeteorTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        testing.start_backend(METEOR_CONFIG)
 
-        try:
-            testing.start_backend(ENZEL_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        cls.microscope = model.getMicroscope()
 
         # create some streams connected to the backend
         cls.ccd = model.getComponent(role="ccd")
@@ -694,18 +687,13 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.fm_focuser = model.getComponent(role="focus")
         cls.fm_focuser.reference({"z"}).result()
 
+        # The METEOR always needs a PostureManager to manipulate the stage properly, including
+        # the MD_POS on acquired data.
+        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
+
         cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
         self._nb_updates = 0
         self.streams = []
 
@@ -715,6 +703,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self._nb_updates += 1
 
     def test_only_FM_streams_with_zstack(self):
+        self.ccd.exposureTime.value = 0.1  # s
+
         # create streams
         s1 = stream.FluoStream(
             "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter, focuser=self.fm_focuser
@@ -727,7 +717,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         s2.excitation.value = sorted(s2.excitation.choices)[-1]
         self.streams = [s1, s2]
 
-        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels_list = generate_zlevels(self.fm_focuser, (-2e-6, 2e-6), 1e-6)
         zlevels = {}
         for s in self.streams:
             zlevels[s] = list(zlevels_list)
@@ -758,6 +748,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertGreaterEqual(self._nb_updates, 2)
 
     def test_only_SEM_streams_with_zstack(self):
+        self.ebeam.dwellTime.value = 1e-6  # s
         sems = stream.SEMStream("sem", self.sed, self.sed.data, self.ebeam)
         self.streams = [sems]
 
@@ -788,6 +779,9 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertGreaterEqual(self._nb_updates, 1)
 
     def test_FM_and_SEM_with_zstack(self):
+        self.ccd.exposureTime.value = 0.1  # s
+        self.ebeam.dwellTime.value = 1e-6  # s
+
         s1 = stream.FluoStream(
             "fluo1", self.ccd, self.ccd.data, self.light, self.light_filter, focuser=self.fm_focuser
         )
@@ -797,16 +791,16 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         self.streams = [s1, sems]
 
-        zlevels_list = generate_zlevels(self.fm_focuser, [-2e-6, 2e-6], 1e-6)
+        zlevels_list = generate_zlevels(self.fm_focuser, (-4e-6, 4e-6), 1e-6)
         zlevels = {}
         for s in self.streams:
             if isinstance(s, stream.FluoStream):
                 zlevels[s] = list(zlevels_list)
 
         est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
-        # about 5 seconds for fm streams, and 1 sec for sem stream, so should be
-        # greater than or equal 5 sec
-        self.assertGreaterEqual(est_time, 4)
+        # about 2 sec for fm streams, and 1 sec for sem stream, so should be
+        # greater than or equal 2 sec
+        self.assertGreaterEqual(est_time, 3)
 
         # start the acquisition
         f = acqmng.acquireZStack(self.streams, zlevels)
