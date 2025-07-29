@@ -186,7 +186,7 @@ choice=$(zenity --list --radiolist \
   $stable_selected "stable" "Stable channel" \
   $proposed_selected "proposed" "Release candidate channel" \
   $dev_selected "dev" "Development channel" \
-  --width=400 --height=250
+  --width=400 --height=350
 )
 
 echo "Selected Odemis channel: $choice"
