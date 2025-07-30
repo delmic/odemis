@@ -21,6 +21,10 @@ get_home_dir() {
 
 USER_HOME=$(get_home_dir)
 ODEMIS_DEV_PATH="$USER_HOME/development/odemis"
+PPA_PROPOSED_NAME="delmic-soft/odemis-proposed"
+PPA_STABLE_NAME="delmic-soft/odemis"
+
+PPA_PROPOSED_NAME_ESC="${PPA_PROPOSED_NAME//\//\\/}"  # Escape slashes for use in sed
 
 # Detect the current channel of Odemis.
 # Returns "stable", "proposed", or "dev".
@@ -31,10 +35,13 @@ detect_channel() {
         return
     fi
 
-    # If the "odemis-proposed" PPA is active, it's "proposed", otherwise "stable".
-    if grep -q -r -E '^deb.*delmic-soft/odemis-proposed' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; then
+    # "apt-get indextargets" automatically converts .list and .sources files to DEB822 format,
+    # and only outputs the enabled ones. That simplifies the parsing.
+    if apt-get indextargets --format '$(URI)' | grep -q "/${PPA_PROPOSED_NAME}/"; then
         echo "proposed"
-    else
+    else  # It must be the stable channel.
+        # TODO: check the odemis package is installed?
+        # For now, we assume that if this script is running, then Odemis was installed.
         echo "stable"
     fi
 }
@@ -56,9 +63,17 @@ enable_dev_mode() {
         chown -R "$owner":"$owner" "$ODEMIS_DEV_PATH"
     fi
 
+    # Often, there is a DEVPATH=... line, which is used by the PYTHONPATH line
+    # If someone has commented it out, we need to uncomment it.
+    if grep -q '^#\s*DEVPATH=' /etc/odemis.conf 2>/dev/null; then
+        echo "Enabling the DEVPATH line in /etc/odemis.conf"
+        sed -i 's/^#\s*\(DEVPATH=.*\)/\1/' /etc/odemis.conf
+    fi
+
     # Uncomment PYTHONPATH line in /etc/odemis.conf if commented out
     if grep -q '^#\s*PYTHONPATH=' /etc/odemis.conf 2>/dev/null; then
-        sudo sed -i 's/^#\s*\(PYTHONPATH=.*\)/\1/' /etc/odemis.conf
+        echo "Enabling the PYTHONPATH line in /etc/odemis.conf"
+        sed -i 's/^#\s*\(PYTHONPATH=.*\)/\1/' /etc/odemis.conf
     fi
 
     # Checked it worked (that there is now a PYTHONPATH= line with the right path)
@@ -66,6 +81,7 @@ enable_dev_mode() {
         echo "ERROR: Failed to enable PYTHONPATH in odemis.conf for development mode."
         exit 1
     fi
+    echo "Development mode enabled. Odemis will now use the development version from $ODEMIS_DEV_PATH."
 }
 
 disable_dev_mode() {
@@ -73,7 +89,7 @@ disable_dev_mode() {
 
     # Comment out the PYTHONPATH line if it is not already commented
     if grep -q '^PYTHONPATH=' /etc/odemis.conf 2>/dev/null; then
-        sudo sed -i 's/^\(PYTHONPATH=.*\)/#\1/' /etc/odemis.conf
+        sed -i 's/^\(PYTHONPATH=.*\)/#\1/' /etc/odemis.conf
     fi
 }
 
@@ -82,26 +98,61 @@ enable_proposed_mode() {
 
     # Add the proposed PPA
     # (it also refreshes the package lists)
-    sudo add-apt-repository -y ppa:delmic-soft/odemis-proposed
+    add-apt-repository -y ppa:${PPA_PROPOSED_NAME}
 
     # Upgrade/install the odemis package
-    sudo apt-get install odemis
+    apt-get -y install odemis
 }
 
 disable_proposed_mode() {
     echo "Disabling proposed mode..."
 
     # Comment out odemis-proposed lines in apt sources
-    sudo sed -i '/^deb.*delmic-soft\/odemis-proposed/s/^/# /' /etc/apt/sources.list /etc/apt/sources.list.d/*.list
+    sed -i "/^deb.*${PPA_PROPOSED_NAME_ESC}/s/^/# /" /etc/apt/sources.list /etc/apt/sources.list.d/*.list
+
+    # Do the same for DEB822 files (Ubuntu 24.04 and later)
+    # For file with a "URIs:..." line which contains the PPA, ensure "Enabled: no" is present.
+    # Note: a "simpler" option would be to just use "add-apt-repository --remove ...", however,
+    # it's slow (connects to internet), and completely delete the file, which prevents from easily
+    # re-enabling manually later.
+    for file in /etc/apt/sources.list.d/*.sources; do
+        [ -f "$file" ] || continue
+        # Skip if the file does not contain the PPA
+        grep -qE "^[[:space:]]*URIs:.*${PPA_PROPOSED_NAME}" "$file" || continue
+
+        # For now, we assume there is only one repo per file for now (which is the standard case for PPAs).
+        # So, warn if multiple URIs are present in the file
+        uri_count=$(grep -cE "^[[:space:]]*URIs:" "$file" || true)
+        if [ "$uri_count" -gt 1 ]; then
+            echo "Warning: multiple URIs found in '$file' (found $uri_count). Disabling PPA might not work properly." >&2
+        fi
+
+        if grep -qEi "^[[:space:]]*Enabled:" "$file"; then
+            # If an "Enabled: " line exists, set it to "Enabled: no"
+            sed -E -i "s/^[[:space:]]*(Enabled:)[[:space:]]*.*/\1 no/I" "$file"
+        else
+            # No "Enabled: " line => insert "Enabled: no" immediately after the URIs line
+            # Note: the backslash-newline after 'a\' is required by sed's append command.
+            sed -E -i "/URIs:.*${PPA_PROPOSED_NAME_ESC}/a\\
+Enabled: no
+" "$file"
+        fi
+    done
+
+    # Just in case, make sure the stable PPA is enabled
+    add-apt-repository -y ppa:${PPA_STABLE_NAME}
 
     # Update package lists
-    sudo apt-get update
+    apt-get update
 
     # Get the version of odemis from the stable channel
-    stable_ver=$(apt-cache policy odemis | sed 's/\*\*\*/   /'| awk '/delmic-soft\/odemis\// {print ver; exit} {ver=$1}')
-
-    # Force downgrade odemis to the candidate from the stable channel
-    sudo apt-get install odemis=$stable_ver --allow-downgrades --yes
+    stable_ver=$(apt-cache madison odemis | awk -v p="${PPA_STABLE_NAME}/" '$0 ~ p {print $3; exit}' || true)
+    if [ -z "$stable_ver" ]; then
+        echo "Warning: could not determine stable version from apt-cache madison. Skipping force-downgrade." >&2
+    else
+      # Force downgrade odemis to the candidate from the stable channel
+      apt-get install odemis=$stable_ver --allow-downgrades --yes
+    fi
 }
 
 # Adjust the system to use the given channel, which can be "stable", "proposed", or "dev".
@@ -192,11 +243,20 @@ choice=$(zenity --list --radiolist \
 echo "Selected Odemis channel: $choice"
 
 if [[ -z "$choice" || "$choice" == "$current_channel" ]]; then
-    echo "No change made"
+    echo "No change requested"
     exit 0
 fi
 
 # TRICK: changing the channel requires root privileges, so we need to run the command with sudo.
 # It's not possible to run the select_channel() function directly with sudo. So instead we call
 # this script again with the selected channel as an argument.
-pkexec "$0" --select "$choice"
+# Need the "or" to avoid exiting the script immediately on failure
+pkexec_status=0
+pkexec "$0" --select "$choice" || pkexec_status=$?
+
+# Show a dialog box to indicate the change is done
+if [[ $pkexec_status -eq 0 ]]; then
+    zenity --info --title="Odemis Channel Updated" --text="Odemis has been updated to the '$choice' channel and is ready to use."
+else
+    echo "Failed to change to channel '$choice'. Please run odemis-select-channel from a terminal and check the output."
+fi
