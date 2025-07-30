@@ -1768,10 +1768,10 @@ class AndorCam3(model.DigitalCamera):
                     cbuffer = self._get_new_frame(tend, size, buffers, max_discard)
                 except ATError as exp:
                     # Sometimes there is timeout, don't completely give up
-                    # Note: Timeouts can happen when the hardware buffer is full because the
+                    # Note: Timeouts (or comm errors) can happen when the hardware buffer is full because the
                     # framerate is faster than what we can process, or that the camera can transmit.
                     # In such case, a buffer flush is required to recover.
-                    if exp.errno in (11, 13, 100):  # ERR_NODATA, ERR_TIMEDOUT, ERR_HARDWARE_OVERFLOW
+                    if exp.errno in (11, 13, 17, 100):  # ERR_NODATA, ERR_TIMEDOUT, ERR_COMM, ERR_HARDWARE_OVERFLOW
                         num_errors += 1
                         if num_errors > 10:
                             logging.error("Giving up reconnection trials after %d errors", num_errors)
@@ -1783,7 +1783,7 @@ class AndorCam3(model.DigitalCamera):
                         logging.warning("Trying again to acquire image after error %s", exp)
                         need_reinit = True
                         continue
-                    elif exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
+                    elif exp.errno == 10:  # ERR_CONNECTION
                         logging.warning("Camera connection error %d while acquiring, will try to reconnect", exp.errno)
                         self._reconnect()
                         need_reinit = True
