@@ -221,6 +221,7 @@ def open_acquisition(filename, fmt=None):
             data = converter.read_data(filename)
     except Exception:
         logging.exception("Failed to open file '%s' with format %s", filename, fmt)
+        raise
 
     return data
 
