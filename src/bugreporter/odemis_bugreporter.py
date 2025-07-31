@@ -544,7 +544,7 @@ class BugreporterFrame(wx.Frame):
         gdpr_lbl.SetMinSize((-1, 100))  # High enough to fit all the text
         font = wx.Font(10, wx.NORMAL, wx.ITALIC, wx.NORMAL)
         gdpr_lbl.SetFont(font)
-        gdpr_sizer.Add(gdpr_lbl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
+        gdpr_sizer.Add(gdpr_lbl, 10, wx.EXPAND | wx.ALIGN_LEFT | wx.ALL, 10)
         sizer.Add(gdpr_sizer, 0, wx.EXPAND)
 
         # Status update label
