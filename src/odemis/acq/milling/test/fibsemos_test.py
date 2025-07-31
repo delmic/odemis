@@ -20,7 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 
-from odemis.acq.milling import fibsemos  # to load the FIBSEM-OS module
+from odemis.acq.milling import fibsemos  # to load the fibsemOS module
 
 try:
     from fibsem.milling import MillingAlignment
@@ -88,9 +88,9 @@ class TestConvertPatterns(unittest.TestCase):
     def setUpClass(cls):
         try:
             if not fibsemos.FIBSEMOS_INSTALLED:
-                raise ImportError("FIBSEM-OS package is not installed, please install to enabled milling.")
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the FIBSEM-OS tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
@@ -136,9 +136,9 @@ class TestConvertMillingSettings(unittest.TestCase):
     def setUpClass(cls):
         try:
             if not fibsemos.FIBSEMOS_INSTALLED:
-                raise ImportError("FIBSEM-OS package is not installed, please install to enabled milling.")
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the FIBSEM-OS tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
@@ -163,9 +163,9 @@ class TestConvertTaskToMillingStage(unittest.TestCase):
     def setUpClass(cls):
         try:
             if not fibsemos.FIBSEMOS_INSTALLED:
-                raise ImportError("FIBSEM-OS package is not installed, please install to enabled milling.")
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the FIBSEM-OS tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
@@ -206,9 +206,9 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
     def setUpClass(cls):
         try:
             if not fibsemos.FIBSEMOS_INSTALLED:
-                raise ImportError("FIBSEM-OS package is not installed, please install to enabled milling.")
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the FIBSEM-OS tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 

@@ -34,10 +34,10 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_FISBEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
 
-class TestFIBSEMOSMillingManager(unittest.TestCase):
+class TestFibsemOSMillingManager(unittest.TestCase):
 
     """
-    Test the FIBSEM-OS Milling Manager
+    Test the fibsemOS Milling Manager
     Requires the autoscript-adapter simulator to be running
     """
     MIC_CONFIG = METEOR_FISBEM_CONFIG
@@ -47,9 +47,9 @@ class TestFIBSEMOSMillingManager(unittest.TestCase):
     def setUpClass(cls):
         try:
             if not fibsemos.FIBSEMOS_INSTALLED:
-                raise ImportError("FIBSEM-OS package is not installed, please install to enabled milling.")
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the FIBSEM-OS tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
         testing.start_backend(cls.MIC_CONFIG)
@@ -58,7 +58,7 @@ class TestFIBSEMOSMillingManager(unittest.TestCase):
 
     def test_estimate_total_milling_time(self):
         """Test the estimate_total_milling_time function"""
-        fibsemos_milling_manager = fibsemos.FIBSEMOSMillingTaskManager(None,
+        fibsemos_milling_manager = fibsemos.FibsemOSMillingTaskManager(None,
                                                                        list(self.milling_tasks.values()))
 
         # check that the estimated time is greater than 0
@@ -66,7 +66,7 @@ class TestFIBSEMOSMillingManager(unittest.TestCase):
         self.assertGreater(estimated_time, 0)
 
     def test_fibsemos_milling_manager(self):
-        """Test the FIBSEMOSMillingManager"""
+        """Test the FibsemOSMillingManager"""
         tasks = list(self.milling_tasks.values())
 
         f = fibsemos.run_milling_tasks_fibsemos(tasks)
