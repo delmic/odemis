@@ -20,7 +20,7 @@ from odemis.acq.milling.tasks import (
 )
 from odemis.util import executeAsyncTask
 
-# Check if FIBSEM-OS is available
+# Check if fibsemOS is available
 try:
     from fibsem.microscopes.odemis_microscope import OdemisThermoMicroscope, OdemisTescanMicroscope
     from fibsem.milling import (
@@ -39,19 +39,19 @@ try:
     from fibsem.utils import load_microscope_configuration
     FIBSEMOS_INSTALLED = True
 except ImportError as e:
-    logging.warning(f"FIBSEM-OS is not installed or not available: {e}")
+    logging.warning(f"fibsemOS is not installed or not available: {e}")
     FIBSEMOS_INSTALLED = False
 
 
 def is_fibsemos_available() -> bool:
     """
-    Check if FIBSEM-OS is available for use.
+    Check if fibsemOS is available for use.
     """
 
     return FIBSEMOS_INSTALLED
 
 def create_fibsemos_thermo_microscope() -> 'OdemisThermoMicroscope':
-    """Create a FIBSEM-OS microscope instance with the current microscope configuration."""
+    """Create a fibsemOS microscope instance with the current microscope configuration."""
 
     # TODO: extract the rest of the required metadata
     # TODO: create tescan compatible version
@@ -72,7 +72,7 @@ def create_fibsemos_thermo_microscope() -> 'OdemisThermoMicroscope':
     return microscope
 
 def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
-    """Create a FIBSEM-OS Tescan microscope instance with the current microscope configuration."""
+    """Create a fibsemOS Tescan microscope instance with the current microscope configuration."""
 
     # TODO: Extract the rest of the required metadata
 
@@ -97,7 +97,7 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
     return microscope
 
 def convert_pattern_to_fibsemos(p: MillingPatternParameters) -> 'BasePattern':
-    """Convert from an Odemis pattern to a FIBSEM-OS pattern"""
+    """Convert from an Odemis pattern to a fibsemOS pattern"""
     if isinstance(p, RectanglePatternParameters):
         return _convert_rectangle_pattern(p)
 
@@ -140,7 +140,7 @@ def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> 'Micr
     )
 
 def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
-    """Convert from an Odemis milling settings to a FIBSEM-OS milling settings"""
+    """Convert from an Odemis milling settings to a fibsemOS milling settings"""
     return FibsemMillingSettings(
         milling_current=s.current.value,
         milling_voltage=s.voltage.value,
@@ -150,8 +150,8 @@ def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
 
 # task converter
 def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingStage':
-    """Convert from an Odemis milling task to a FIBSEM-OS milling stage.
-    A FIBSEM-OS milling stage is roughly equivalent to an Odemis milling task.
+    """Convert from an Odemis milling task to a fibsemOS milling stage.
+    A fibsemOS milling stage is roughly equivalent to an Odemis milling task.
     """
     s = convert_milling_settings(task.milling)
     p = convert_pattern_to_fibsemos(task.patterns[0])
@@ -166,8 +166,8 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingSt
     return milling_stage
 
 def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
-    """Convert from odemis milling tasks to FIBSEM-OS milling stages.
-    An FIBSEM-OS milling stage is roughly equivalent to an Odemis milling task.
+    """Convert from odemis milling tasks to fibsemOS milling stages.
+    An fibsemOS milling stage is roughly equivalent to an Odemis milling task.
     """
     milling_stages = []
 
@@ -177,8 +177,8 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
 
     return milling_stages
 
-class FIBSEMOSMillingTaskManager:
-    """This class manages running milling tasks via FIBSEM-OS."""
+class FibsemOSMillingTaskManager:
+    """This class manages running milling tasks via fibsemOS."""
 
     def __init__(self, future: futures.Future,
                  tasks: List[MillingTaskSettings],
@@ -228,7 +228,7 @@ class FIBSEMOSMillingTaskManager:
         return estimate_total_milling_time(self.milling_stages)
 
     def run_milling(self, stage: 'FibsemMillingStage') -> None:
-        """Run the milling tasks via FIBSEM-OS
+        """Run the milling tasks via fibsemOS
         :param stage: the milling stage to run"""
         mill_stages(self.microscope, [stage])
 
@@ -260,7 +260,7 @@ class FIBSEMOSMillingTaskManager:
 def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
                                path: Optional[str] = None) -> futures.Future:
     """
-    Run multiple milling tasks in order via FIBSEM-OS.
+    Run multiple milling tasks in order via fibsemOS.
     :param tasks: List of milling tasks to be executed in order.
     :param path: The path to save the images
     :return: ProgressiveFuture
@@ -268,7 +268,7 @@ def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
     # create milling task
-    millmng = FIBSEMOSMillingTaskManager(future, tasks, path)
+    millmng = FibsemOSMillingTaskManager(future, tasks, path)
     # add the ability of cancelling the future during execution
     future.task_canceller = millmng.cancel
 

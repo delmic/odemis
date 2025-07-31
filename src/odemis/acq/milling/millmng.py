@@ -522,7 +522,7 @@ def run_automated_milling(features: List[CryoFeature],
 
     # set the progress of the future
     total_duration = len(task_list) * len(features) * 30
-    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate from FIBSEM-OS
+    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate from fibsemOS
 
     # assign the acquisition task to the future
     executeAsyncTask(future, amm.run)
