@@ -4,11 +4,11 @@
 
 # Odemis
 Odemis (_Open Delmic Microscope Software_) is the open-source microscopy software of [Delmic B.V.](https://www.delmic.com). Odemis is used for controlling microscopes of Delmic and the Odemis viewer allows to load previous experimental data for visualization, analysis and export.
-Delmic’s mission is to empower companies and researchers by helping them achieve results that can be trusted implicitly with powerful and user-friendly solutions.
+Delmic's mission is to empower companies and researchers by helping them achieve results that can be trusted implicitly with powerful and user-friendly solutions.
 
 ## Requirements
-* Linux (tested on Ubuntu 18.04, 20.04, and 22.04 x86)
-* Python (v3.6+)
+* Linux (tested on Ubuntu 20.04, 22.04, 24.04 x86)
+* Python (v3.8+)
 * Special (forked) version of Pyro4 from Delmic
 
 Note: the viewer part is also tested to run on Windows (10+).
@@ -23,10 +23,10 @@ Launch the "Odemis" program, or type on a terminal:
 `odemis-start`
 Eventually the GUI (Graphical User Interface) will appear.
 As an argument it can take the name of the microscope file corresponding to the back-end.
+Such as: `odemis-start install/linux/usr/share/odemis/sim/meteor-sim.odm.yaml`
 
 It is not usually necessary, but if you want, to fully stop odemis (GUI and back-end), type:
 `odemis-stop`
-
 
 To run just the viewer, you can type:
 `odemis-gui --standalone`
@@ -41,19 +41,17 @@ possible commands see:
 For example:
 `odemisd --daemonize --log-level=2 src/odemis/odemisd/test/optical-sim.odm.yaml`
 
-
-
 To use the command line interface use:
-`odemis-cli --help`
+`odemis --help`
 
 To see the list of components:
-`odemis-cli --list`
+`odemis list`
 
 For example, to turn on the forth source of the "light" component, type:
-`odemis-cli --set-attr light power "0.0, 0.0, 0.0, 0.2"`
+`odemis set-attr light power "0.0, 0.0, 0.0, 0.2"`
 
 For example, to move the Y axis of the "stage" component by 100µm, type:
-`odemis-cli --move stage y 100`
+`odemis move stage y 100`
 
 
 ## License
