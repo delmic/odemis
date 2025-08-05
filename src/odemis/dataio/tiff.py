@@ -175,8 +175,6 @@ def _convertToTiffTag(metadata):
         # Could use GrayResponseCurve, DotRange, or TransferFunction?
         # TODO save the tint applied by the user? maybe WhitePoint can help
         # TODO save username as "Artist" ? => not gonna fly if the user is "odemis"
-        else:
-            logging.debug("Metadata tag '%s' skipped when saving TIFF metadata", key)
 
     return tiffmd
 
