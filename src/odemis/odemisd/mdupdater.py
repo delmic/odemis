@@ -213,8 +213,6 @@ class MetadataUpdater(model.Component):
 
             # Depends on the actual size of the ccd's density (should be constant)
             captor_mpp = comp_affected.pixelSize.value  # m, m
-            md = {model.MD_SENSOR_PIXEL_SIZE: captor_mpp}
-            comp_affected.updateMetadata(md)
 
             # we need to keep the information on the detector to update
             def updatePixelDensity(unused, lens=lens, comp_affected=comp_affected, binva=binva):
