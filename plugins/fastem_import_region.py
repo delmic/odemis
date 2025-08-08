@@ -603,6 +603,6 @@ class ImportRegionPlugin(Plugin):
                 labels = npy_page.get_labels()
                 self._create_regions(region_type, image_data, labels)
             else:
-                logging.debug(f"Import {region_type}s wizard was cancelled.")
+                logging.debug("Import region wizard was cancelled.")
         finally:
             wizard.Destroy()
