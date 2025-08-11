@@ -30,7 +30,7 @@
 
 import logging
 import math
-from typing import Any, List
+from typing import Any, List, Tuple, Dict, Callable, Optional
 
 import numpy
 import wx
@@ -1022,33 +1022,25 @@ class PopupImageButton(ImageTextButton):
         darken_image(btn_img, 0.8)
         self.bmpDisabled = wx.Bitmap(btn_img)
 
-        self.choices = {}
+        self.choices: Dict[str, Tuple[wx.MenuItem, Callable, Optional[Callable]]] = {}
         self.menu = wx.Menu()
         self.Bind(wx.EVT_BUTTON, self.show_menu)
         self.Disable()
 
-    def set_choices(self, choices):
-        """ Set the choices available to the user
-
-        :param choices: {string: function reference,..}
-        """
-        if choices:
-            self.Enable()
-        else:
-            self.Disable()
-
-        for label, callback in choices.items():
-            self.add_choice(label, callback)
-
-    def add_choice(self, label, callback, check_enabled=None):
+    def add_choice(self, label: str, callback, check_enabled=None):
         """ Add a labeled action to the popup button.
 
         :param label: Name to be shown in the menu
         :param callback: Function/method to run upon selection
         :param check_enabled: Function/method that returns True if the
             menu item should be enabled.
-
         """
+        if not label:
+            # MenuItem complains if the label is empty, and raises a very confusing error about
+            # "invalid stock item".
+            raise ValueError(f"Label must be a non empty string, but got '{label}'")
+        if label in self.choices:
+            raise ValueError(f"label '{label}' already exists in the menu")
 
         menu_id = wx.Window.NewControlId()
         menu_item = wx.MenuItem(self.menu, menu_id, label)
@@ -1057,10 +1049,10 @@ class PopupImageButton(ImageTextButton):
         self.menu.Append(menu_item)
         self.Enable()
 
-    def remove_choice(self, label):
-        """ Remove the choice associated with the name `1abel` """
+    def remove_choice(self, label: str):
+        """ Remove the choice associated with the name `label` """
         menu_item, cb, ce = self.choices.pop(label)
-        self.menu.Remove(menu_item)
+        self.menu.Delete(menu_item)
 
         if not self.choices:
             self.Disable()
@@ -1087,6 +1079,7 @@ class PopupImageButton(ImageTextButton):
             if menu_item.GetId() == event_id:
                 logging.debug("Performing %s callback", label)
                 callback()
+                break
 
 
 class GridSelectionPanel(wx.Panel):
