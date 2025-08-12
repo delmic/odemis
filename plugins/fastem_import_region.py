@@ -147,10 +147,17 @@ class MetadataPage(WizardPageSimple):
         )
         self.image_lbl.Hide()
         self.image_ctrl.Hide()
+        self.scale_factor_lbl, self.scale_factor_ctrl = self.md_settings.add_text_field(
+            "Scale factor",
+            value="(1, 1)",
+        )
+        self.scale_factor_ctrl.SetToolTip("Enter the scale factor between the mask and the image in the format (x, y)")
+        self.scale_factor_lbl.Hide()
+        self.scale_factor_ctrl.Hide()
 
         self.pixel_size_lbl, self.pixel_size_ctrl = self.md_settings.add_text_field(
             model.MD_PIXEL_SIZE,
-            value="(1, 1)",
+            value="(1.0e-6, 1.0e-6)",
         )
         self.pixel_size_ctrl.SetToolTip("Enter the pixel size in the format (x, y)")
         self.pixel_size_lbl.Hide()
@@ -187,6 +194,8 @@ class MetadataPage(WizardPageSimple):
         show_md = self.md_source == 2
         self.image_lbl.Show(show_image)
         self.image_ctrl.Show(show_image)
+        self.scale_factor_lbl.Show(show_image)
+        self.scale_factor_ctrl.Show(show_image)
 
         self.pixel_size_lbl.Show(show_md)
         self.pixel_size_ctrl.Show(show_md)
@@ -220,10 +229,19 @@ class MetadataPage(WizardPageSimple):
             show_validation_error("Please select an image file.")
             return False
 
-        image = tiff.read_data(path)[0]
-        self.pixel_size = image.metadata[model.MD_PIXEL_SIZE]
+        image = tiff.open_data(path).content[0]
+
+        scale = self.scale_factor_ctrl.GetValue().strip()
+        if not scale:
+            show_validation_error(f"Please enter the {self.scale_factor_lbl}.")
+            return False
+        scale = literal_eval(scale)
+
+        self.pixel_size = (image.metadata[model.MD_PIXEL_SIZE][0] * scale[0],
+                           image.metadata[model.MD_PIXEL_SIZE][1] * scale[1])
         self.center = image.metadata[model.MD_POS]
-        self.shape = image.shape
+        self.shape = (int(image.shape[0] / scale[0]),
+                      int(image.shape[1] / scale[1]))
 
         return self._validate_structures()
 
@@ -348,13 +366,13 @@ class ImportRegionPlugin(Plugin):
         return base_name, colour
 
     def _create_region_data(
-        self,
-        region_type: str,
-        idx: int,
-        contour: numpy.ndarray,
-        image_data: dict,
-        colour: str,
-        scintillator: Scintillator,
+            self,
+            region_type: str,
+            idx: int,
+            contour: numpy.ndarray,
+            image_data: dict,
+            colour: str,
+            scintillator: Scintillator,
     ) -> dict:
         """
         Creates a single region dictionary from a contour.
@@ -370,7 +388,7 @@ class ImportRegionPlugin(Plugin):
         """
         polygon = Polygon(contour)
         # Higher tolerance for less polygon points
-        simplified_polygon = polygon.simplify(10.0)
+        simplified_polygon = polygon.simplify(5.0)
         physical_contour = image_data[model.MD_POS] + to_physical_space(
             numpy.array(simplified_polygon.exterior.coords),
             image_data["Shape"],
@@ -389,11 +407,11 @@ class ImportRegionPlugin(Plugin):
             raise ValueError(f"Unknown region type: {region_type}")
 
     def _create_toa_data(
-        self,
-        idx: int,
-        physical_contour: numpy.ndarray,
-        colour: str,
-        scintillator: Scintillator,
+            self,
+            idx: int,
+            physical_contour: numpy.ndarray,
+            colour: str,
+            scintillator: Scintillator,
     ) -> dict:
         """
         Creates a single TOA dictionary from a contour.
@@ -444,11 +462,11 @@ class ImportRegionPlugin(Plugin):
         }
 
     def _create_roa_data(
-        self,
-        idx: int,
-        physical_contour: numpy.ndarray,
-        colour: str,
-        scintillator: Scintillator,
+            self,
+            idx: int,
+            physical_contour: numpy.ndarray,
+            colour: str,
+            scintillator: Scintillator,
     ) -> dict:
         """
         Creates a single ROA dictionary from a contour.
@@ -491,7 +509,7 @@ class ImportRegionPlugin(Plugin):
         }
 
     def _create_project_data(
-        self, sample_type: str, project_name: str, region_type: str, regions: list
+            self, sample_type: str, project_name: str, region_type: str, regions: list
     ) -> dict:
         """
         Creates project data from the sample type, project name, and regions.
@@ -536,7 +554,13 @@ class ImportRegionPlugin(Plugin):
         self._pm.is_import_btn_pressed = True
         try:
             regions = []
-            contours = find_contours(labels, level=0.5)
+            contours = []
+            # Find contours per label to ensure each label is a separate region
+            for label in numpy.unique(labels):
+                if label == 0:
+                    continue  # skip background if present
+                mask = (labels == label)
+                contours.extend(find_contours(mask.astype(numpy.uint8), level=0.5))
             project_name, colour = self._create_project()
             current_sample = self._pm.main_data.current_sample.value
             scintillator = current_sample.find_closest_scintillator(
