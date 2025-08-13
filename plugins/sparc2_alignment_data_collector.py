@@ -21,9 +21,9 @@ see http://www.gnu.org/licenses/.
 import logging
 import os
 import queue
-import statistics
 import threading
-from typing import List, Optional, Union
+from collections import defaultdict
+from typing import List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy
@@ -37,6 +37,9 @@ from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import get_picture_folder
+
+
+DELTA_LIMIT = 250e-6  # 250 micrometers, for safety limit the maximum delta
 
 
 class CancelledError(Exception):
@@ -266,7 +269,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             value=0.0,
             conf={
                 "min_val": 0.0,
-                "max_val": statistics.mean(self.mirror.axes["l"].range),
+                "max_val": DELTA_LIMIT,
                 "unit": "m",
                 "accuracy": 6,
                 "key_step": 1e-6,
@@ -282,7 +285,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             value=0.0,
             conf={
                 "min_val": 0.0,
-                "max_val": statistics.mean(self.mirror.axes["l"].range),
+                "max_val": DELTA_LIMIT,
                 "unit": "m",
                 "accuracy": 6,
                 "key_step": 1e-6,
@@ -299,7 +302,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             value=0.0,
             conf={
                 "min_val": 0.0,
-                "max_val": statistics.mean(self.mirror.axes["s"].range),
+                "max_val": DELTA_LIMIT,
                 "unit": "m",
                 "accuracy": 6,
                 "key_step": 1e-6,
@@ -313,7 +316,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             value=0.0,
             conf={
                 "min_val": 0.0,
-                "max_val": statistics.mean(self.mirror.axes["s"].range),
+                "max_val": DELTA_LIMIT,
                 "unit": "m",
                 "accuracy": 6,
                 "key_step": 1e-6,
@@ -330,7 +333,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             value=0.0,
             conf={
                 "min_val": 0.0,
-                "max_val": statistics.mean(self.stage.axes["z"].range),
+                "max_val": DELTA_LIMIT,
                 "unit": "m",
                 "accuracy": 6,
                 "key_step": 1e-6,
@@ -344,7 +347,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             value=0.0,
             conf={
                 "min_val": 0.0,
-                "max_val": statistics.mean(self.stage.axes["z"].range),
+                "max_val": DELTA_LIMIT,
                 "unit": "m",
                 "accuracy": 6,
                 "key_step": 1e-6,
@@ -482,8 +485,6 @@ class AlignmentDataCollectorDialog(wx.Dialog):
         self.pause_btn.Enable()
         self.cancel_btn.Enable()
         self.status_lbl.SetLabel("Status: Running...")
-        self.n_images = nl * ns * nz
-        self.progress.SetRange(self.n_images)
         self.progress.SetValue(0)
 
         self._aligned_pos = {
@@ -525,23 +526,197 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             self.mirror.moveAbs({"s": self._aligned_pos["s"]}).result()
             self.stage.moveAbs({"z": self._aligned_pos["z"]}).result()
 
-    def _update_plot(self, l, s, z):
+    def _update_plot(self, visited_l: list, visited_s: list, visited_z: list, full_path: numpy.ndarray):
         self.ax.clear()
-        self.ax.set_xlabel("Mirror l (m)", fontsize=10)
-        self.ax.set_ylabel("Mirror s (m)", fontsize=10)
-        self.ax.set_zlabel("Stage z (m)", fontsize=10)
-        self.ax.set_title("Acquisition Progress")
-        self.ax.scatter(l, s, z, c="gray", alpha=0.5)
-        self.ax.scatter([l[-1]], [s[-1]], [z[-1]], c="red", label="Current")
+
+        # Set labels and title with smaller fonts
+        self.ax.set_xlabel("Mirror l (m)", fontsize=8)
+        self.ax.set_ylabel("Mirror s (m)", fontsize=8)
+        self.ax.set_zlabel("Stage z (m)", fontsize=8)
+
+        # Adjust the size of the tick labels (the numbers on the axes)
+        self.ax.tick_params(axis='both', which='major', labelsize=7)
+
+        # Plot the static background and reference markers
         self.ax.scatter(
-            self._aligned_pos["l"],
-            self._aligned_pos["s"],
-            self._aligned_pos["z"],
-            c="blue",
-            label="Aligned",
+            full_path[-1, 0], full_path[-1, 1], full_path[-1, 2],
+            c='purple', s=100, label="Path End"
         )
-        self.ax.legend()
+
+        self.ax.scatter(
+            self._aligned_pos["l"], self._aligned_pos["s"], self._aligned_pos["z"],
+            c='blue', s=200, marker='*', label="Aligned Position"
+        )
+
+        # Plot the dynamic path elements
+        if visited_l and visited_s and visited_z:
+            self.ax.scatter(
+                full_path[0, 0], full_path[0, 1], full_path[0, 2],
+                c='green', s=100, label="Path Start"
+            )
+            self.ax.plot(visited_l, visited_s, visited_z, color='black', alpha=0.7, label='Path Taken')
+            self.ax.scatter(
+                visited_l[-1], visited_s[-1], visited_z[-1],
+                c='red', s=100, label="Current Position"
+            )
+
+        # Add a legend with a smaller font and redraw the canvas
+        self.ax.legend(loc='upper left', fontsize='x-small')
         self.canvas.draw()
+
+    def _generate_acquisition_path(
+        self,
+        l_values: list,
+        s_values: list,
+        z_values: list,
+    ) -> Tuple[numpy.ndarray, list[int]]:
+        """
+        Generates an acquisition path by traversing concentric shells around the
+        aligned mirror position. Uses a triple snake pattern to minimize movement:
+
+            1. Snake z between shells
+            2. Snake l between z-planes
+            3. Snake s within each l-line
+
+        Traversal order:
+            - Outer loop: shell distance (Chebyshev distance from start)
+            - Middle loop: z-layers (snaked per shell)
+            - Inner loop: l-lines (snaked per z)
+            - Deepest loop: s-values (snaked per l)
+
+        :param l_values: List of l-axis positions.
+        :param s_values: List of s-axis positions.
+        :param z_values: List of z-axis positions.
+        :return: (final_path_coords, shell_end_indices)
+                 final_path_coords: (N, 3) array of acquisition coordinates
+                 shell_end_indices: List of last index for each completed shell
+        """
+        nl, ns, nz = len(l_values), len(s_values), len(z_values)
+
+        # Create full grid in consistent C-order (l, s, z)
+        all_points_grid = numpy.stack(
+            numpy.meshgrid(l_values, s_values, z_values, indexing='ij'),
+            axis=-1
+        ).reshape(-1, 3)
+
+        # Find start point closest to the aligned position
+        aligned_pos = numpy.array([self._aligned_pos["l"], self._aligned_pos["s"], self._aligned_pos["z"]])
+        start_point_flat_idx = numpy.argmin(numpy.sum((all_points_grid - aligned_pos)**2, axis=1))
+        start_point_grid_idx = numpy.unravel_index(start_point_flat_idx, (nl, ns, nz))
+
+        # Group all points into shells based on Chebyshev distance
+        shells = defaultdict(list)
+        for i in range(nl):
+            for j in range(ns):
+                for k in range(nz):
+                    dist = max(
+                        abs(i - start_point_grid_idx[0]),
+                        abs(j - start_point_grid_idx[1]),
+                        abs(k - start_point_grid_idx[2])
+                    )
+                    shells[dist].append((i, j, k))
+
+        final_path_indices = []
+        shell_end_indices = []
+
+        for shell_idx, shell_dist in enumerate(sorted(shells.keys())):
+            shell_grid_indices = shells[shell_dist]
+
+            # Group by z-layer
+            z_planes = defaultdict(list)
+            for i, j, k in shell_grid_indices:
+                z_planes[k].append((i, j))
+
+            sorted_z_keys = sorted(z_planes.keys())
+            if shell_idx % 2 == 1:  # Snake z between shells
+                sorted_z_keys.reverse()
+
+            for z_idx, k in enumerate(sorted_z_keys):
+                ls_plane = z_planes[k]
+
+                # Group by l-index
+                l_lines = defaultdict(list)
+                for i, j in ls_plane:
+                    l_lines[i].append(j)
+
+                sorted_l_keys = sorted(l_lines.keys())
+                if z_idx % 2 == 1:  # Snake l between z-planes
+                    sorted_l_keys.reverse()
+
+                for l_idx, l_key in enumerate(sorted_l_keys):
+                    s_indices = sorted(l_lines[l_key])
+                    if l_idx % 2 == 1:  # Snake s within each l
+                        s_indices.reverse()
+
+                    for s_key in s_indices:
+                        final_path_indices.append((l_key, s_key, k))
+
+            # Mark shell completion
+            shell_end_indices.append(len(final_path_indices) - 1)
+
+        # Convert indices back to real coordinates
+        final_path_coords = numpy.array([
+            [l_values[i], s_values[j], z_values[k]]
+            for i, j, k in final_path_indices
+        ])
+
+        return final_path_coords, shell_end_indices
+
+    def _execute_single_acquisition(
+        self,
+        l_target: float,
+        s_target: float,
+        z_target: float,
+        filepath: str,
+    ) -> Tuple[float, float, float]:
+        """
+        Execute a single acquisition at the specified mirror (l, s) and stage (z) positions.
+
+        :param l_target: Target position for the mirror l-axis.
+        :param s_target: Target position for the mirror s-axis.
+        :param z_target: Target position for the stage z-axis.
+        :param filepath: The file path where the acquired data should be saved.
+        :return: The actual positions acquired (l, s, z).
+        """
+        logging.debug(f"Acquiring l={l_target:.6f} s={s_target:.6f} z={z_target:.6f}")
+        if l_target != self.mirror.position.value["l"]:
+            self.mirror.moveAbs({"l": l_target}).result()
+        if s_target != self.mirror.position.value["s"]:
+            self.mirror.moveAbs({"s": s_target}).result()
+        if z_target != self.stage.position.value["z"]:
+            self.stage.moveAbs({"z": z_target}).result()
+        # Acquire and process data
+        l_actual = self.mirror.position.value["l"]
+        s_actual = self.mirror.position.value["s"]
+        x_actual = self.mirror_xy.position.value["x"]
+        y_actual = self.mirror_xy.position.value["y"]
+        z_actual = self.stage.position.value["z"]
+        forcemd = {}
+        forcemd[model.MD_EXTRA_SETTINGS] = {
+            "l_aligned": self._aligned_pos["l"],
+            "s_aligned": self._aligned_pos["s"],
+            "x_aligned": self._aligned_pos["x"],
+            "y_aligned": self._aligned_pos["y"],
+            "z_aligned": self._aligned_pos["z"],
+            "l": l_actual,
+            "s": s_actual,
+            "x": x_actual,
+            "y": y_actual,
+            "z": z_actual,
+            "dl": self._aligned_pos["l"] - l_actual,
+            "ds": self._aligned_pos["s"] - s_actual,
+            "dx": self._aligned_pos["x"] - x_actual,
+            "dy": self._aligned_pos["y"] - y_actual,
+            "dz": self._aligned_pos["z"] - z_actual,
+            "wd": self.ebeam_focus.position.value["z"],
+        }
+        data = self.tab._ccd_stream.getSingleFrame()
+        data.metadata.update(forcemd)
+        self.tab._ccd_stream._onNewData(self.tab._ccd_stream._dataflow, data)
+        raw_data = self.tab._ccd_stream.raw
+        self._enqueue_save(filepath, raw_data)
+
+        return l_actual, s_actual, z_actual
 
     def _run_acquisition(
         self,
@@ -589,7 +764,15 @@ class AlignmentDataCollectorDialog(wx.Dialog):
         visited_l, visited_s, visited_z = [], [], []
 
         try:
-            idx = 0
+            progress_idx = 0
+
+            # Generate the optimized traversal path
+            wx.CallAfter(self.status_lbl.SetLabel, "Status: Calculating optimal acquisition path...")
+            acquisition_path, shell_end_indices = self._generate_acquisition_path(l_values, s_values, z_values)
+            self.n_images = len(acquisition_path) + len(shell_end_indices)
+            self.progress.SetRange(self.n_images)
+            wx.CallAfter(self.status_lbl.SetLabel, "Status: Path calculated. Starting acquisition...")
+
             # Pause the ccd stream
             self.tab._ccd_stream.is_active.value = False
             self.tab._ccd_stream.should_update.value = False
@@ -597,86 +780,62 @@ class AlignmentDataCollectorDialog(wx.Dialog):
             # make the mode as external and unblank the beam to get valid ccd data
             self.ebeam.external.value = True
             self.ebeam.blanker.value = False
-            for l in l_values:
+
+            for idx, (l_target, s_target, z_target) in enumerate(acquisition_path):
                 if self._cancel_requested:
                     raise CancelledError("Cancelled by user.")
-                self.mirror.moveAbs({"l": l}).result()
-                for s in s_values:
-                    if self._cancel_requested:
-                        raise CancelledError("Cancelled by user.")
-                    self.mirror.moveAbs({"s": s}).result()
-                    for z in z_values:
-                        if self._cancel_requested:
-                            raise CancelledError("Cancelled by user.")
-                        if self._pause_requested:
-                            self._restore_position()
-                            wx.CallAfter(self.status_lbl.SetLabel, "Status: Paused on aligned position")
-                            # Once paused, play the ccd stream for the user to check the ccd image
-                            # the user can do some re-alignment if necessary
-                            self.tab._ccd_stream.is_active.value = True
-                            self.tab._ccd_stream.should_update.value = True
-                            self._resume_requested.clear()
-                            self._resume_requested.wait()
-                            # Once resumed, update the aligned position
-                            # and make the ccd stream and e-beam ready for acquiring again
-                            self._aligned_pos = {
-                                "l": self.mirror.position.value["l"],
-                                "s": self.mirror.position.value["s"],
-                                "x": self.mirror_xy.position.value["x"],
-                                "y": self.mirror_xy.position.value["y"],
-                                "z": self.stage.position.value["z"],
-                            }
-                            self.tab._ccd_stream.is_active.value = False
-                            self.tab._ccd_stream.should_update.value = False
-                            self.ebeam.external.value = True
-                            self.ebeam.blanker.value = False
-                            self.mirror.moveAbs({"l": l}).result()
-                            self.mirror.moveAbs({"s": s}).result()
-                            wx.CallAfter(self.status_lbl.SetLabel, "Status: Resumed")
-                            logging.debug("Resumed. New aligned position: %s", self._aligned_pos)
-                        self.stage.moveAbs({"z": z}).result()
+                if self._pause_requested:
+                    self._restore_position()
+                    wx.CallAfter(self.status_lbl.SetLabel, "Status: Paused on aligned position")
+                    # Once paused, play the ccd stream for the user to check the ccd image
+                    # the user can do some re-alignment if necessary
+                    self.tab._ccd_stream.is_active.value = True
+                    self.tab._ccd_stream.should_update.value = True
+                    self._resume_requested.clear()
+                    self._resume_requested.wait()
+                    # Once resumed, update the aligned position
+                    # and make the ccd stream and e-beam ready for acquiring again
+                    self._aligned_pos = {
+                        "l": self.mirror.position.value["l"],
+                        "s": self.mirror.position.value["s"],
+                        "x": self.mirror_xy.position.value["x"],
+                        "y": self.mirror_xy.position.value["y"],
+                        "z": self.stage.position.value["z"],
+                    }
+                    self.tab._ccd_stream.is_active.value = False
+                    self.tab._ccd_stream.should_update.value = False
+                    self.ebeam.external.value = True
+                    self.ebeam.blanker.value = False
+                    wx.CallAfter(self.status_lbl.SetLabel, "Status: Resumed")
+                    logging.debug("Resumed. New aligned position: %s", self._aligned_pos)
 
-                        l = self.mirror.position.value["l"]
-                        s = self.mirror.position.value["s"]
-                        x = self.mirror_xy.position.value["x"]
-                        y = self.mirror_xy.position.value["y"]
-                        z = self.stage.position.value["z"]
-                        forcemd = {}
-                        forcemd[model.MD_EXTRA_SETTINGS] = {
-                            "l": l,
-                            "s": s,
-                            "x": x,
-                            "y": y,
-                            "z": z,
-                            "dl": self._aligned_pos["l"] - l,
-                            "ds": self._aligned_pos["s"] - s,
-                            "dx": self._aligned_pos["x"] - x,
-                            "dy": self._aligned_pos["y"] - y,
-                            "dz": self._aligned_pos["z"] - z,
-                            "l_aligned": self._aligned_pos["l"],
-                            "s_aligned": self._aligned_pos["s"],
-                            "x_aligned": self._aligned_pos["x"],
-                            "y_aligned": self._aligned_pos["y"],
-                            "z_aligned": self._aligned_pos["z"],
-                            "wd": self.ebeam_focus.position.value["z"],
-                        }
+                filepath = os.path.join(
+                    path, f"{idx}_snapshot_{l_target:.6f}_{s_target:.6f}_{z_target:.6f}" + hdf5.EXTENSIONS[0]
+                )
+                actual_l, actual_s, actual_z = self._execute_single_acquisition(l_target, s_target, z_target, filepath)
+                progress_idx += 1
 
-                        filepath = os.path.join(path, f"{idx}_snapshot_{l}_{s}_{z}" + hdf5.EXTENSIONS[0])
-                        logging.debug(f"Acquiring l={l} s={s} z={z}")
-                        data = self.tab._ccd_stream.getSingleFrame()
-                        data.metadata.update(forcemd)
-                        self.tab._ccd_stream._onNewData(self.tab._ccd_stream._dataflow, data)
-                        raw_data = self.tab._ccd_stream.raw
-                        self._enqueue_save(filepath, raw_data)
+                visited_l.append(actual_l)
+                visited_s.append(actual_s)
+                visited_z.append(actual_z)
 
-                        visited_l.append(l)
-                        visited_s.append(s)
-                        visited_z.append(z)
-                        idx += 1
+                wx.CallAfter(self._update_plot, visited_l, visited_s, visited_z, acquisition_path)
+                wx.CallAfter(self.progress.SetValue, progress_idx)
+                wx.CallAfter(self.status_lbl.SetLabel, f"Status: Running... ({progress_idx}/{self.n_images} images acquired)")
 
-                        wx.CallAfter(self._update_plot, visited_l, visited_s, visited_z)
-                        wx.CallAfter(self.progress.SetValue, idx)
-                        wx.CallAfter(self.status_lbl.SetLabel, f"Status: Running... ({idx}/{self.n_images} images acquired)")
+                # At the end of each shell, acquire an alignment snapshot
+                if idx in shell_end_indices:
+                    wx.CallAfter(self.status_lbl.SetLabel, "Status: Acquiring alignment snapshot")
+
+                    l0 = self._aligned_pos["l"]
+                    s0 = self._aligned_pos["s"]
+                    z0 = self._aligned_pos["z"]
+                    filepath_align = os.path.join(path, f"{idx}_snapshot_align_{l0:.6f}_{s0:.6f}_{z0:.6f}" + hdf5.EXTENSIONS[0])
+                    self._execute_single_acquisition(l0, s0, z0, filepath_align)
+                    progress_idx += 1
+
+                    wx.CallAfter(self.progress.SetValue, progress_idx)
+                    wx.CallAfter(self.status_lbl.SetLabel, f"Status: Running... ({progress_idx}/{self.n_images} images acquired)")
         except CancelledError:
             wx.CallAfter(self.status_lbl.SetLabel, "Status: Cancelled by user")
         except Exception as e:
@@ -721,6 +880,6 @@ class AlignmentDataCollectorDialog(wx.Dialog):
         Otherwise, allows the dialog to close normally.
         """
         if self._running:
-            wx.MessageBox("Acquisition is still _running.", "Warning")
+            wx.MessageBox("Acquisition is still running.", "Warning")
             return
         evt.Skip()
