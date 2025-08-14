@@ -190,7 +190,6 @@ def _DoBinaryFocus(
         else:
             logging.debug("No depth of field info found")
             dof = 1e-6  # m, not too bad value
-        logging.debug("Depth of field is %.7g", dof)
         min_step = dof / 2
 
         # adjust to rng_focus if provided
@@ -201,6 +200,8 @@ def _DoBinaryFocus(
         max_step = (rng[1] - rng[0]) / 2
         if max_step <= 0:
             raise ValueError("Unexpected focus range %s" % (rng,))
+        logging.debug("Depth of field is %.7g. Searching within z=%s at step size from %g to %g m",
+                      dof, rng, max_step, min_step)
 
         rough_search = True  # False once we've passed the maximum level (ie, start bouncing)
         # It's used to cache the focus level, to avoid reacquiring at the same
