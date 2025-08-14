@@ -241,3 +241,7 @@ class TestImageJTiffIO(unittest.TestCase):
                  (40, 1, 10, 300, 400)
                  ]
         self.checkImageJMetadata(sizes, num_channels=2, num_frames=1, num_slices=10)
+
+
+if __name__ == '__main__':
+    unittest.main()

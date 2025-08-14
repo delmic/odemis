@@ -145,3 +145,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         min_time = n_focus_points * estimateAutoFocusTime(self.ccd, None, self.focus, rng_focus=self.focus_range)
         estimated_time = estimate_autofocus_in_roi_time(n_focus_points, self.ccd, self.focus, self.focus_range)
         self.assertGreaterEqual(estimated_time, min_time)
+
+
+if __name__ == '__main__':
+    unittest.main()

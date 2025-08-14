@@ -96,3 +96,7 @@ class TestInterpolationUtil(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             interpolate_z_stack(model.DataArray(bad_dims, metadata=bad_md))
+
+
+if __name__ == '__main__':
+    unittest.main()
