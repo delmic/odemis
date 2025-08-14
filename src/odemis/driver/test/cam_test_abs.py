@@ -705,7 +705,14 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
         self.ccd.data.synchronizedOn(None)
 
         logging.info("Took %g s", self.end_time - start)
-        time.sleep(exp + readout)
+
+        # Wait for any pending acquisitions to complete
+        max_wait_time = (exp + readout) * 2  # 2x expected time
+        timeout_start = time.time()
+
+        while self.ccd_left > 0 and (time.time() - timeout_start) < max_wait_time:
+            time.sleep(0.1)  # Poll every 100ms
+
         self.assertEqual(self.ccd_left, 0)
 
         # check we can still get data normally
