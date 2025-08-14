@@ -21,10 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import asyncio
 import logging
 import os
+import sys
 import threading
 import time
 import unittest
 from typing import Optional
+
+if sys.version_info < (3, 9):
+    raise unittest.SkipTest("ephemeron does not work for Ubuntu 20.04 or lower")
 
 import numpy
 
