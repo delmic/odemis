@@ -1,7 +1,7 @@
 # Prerequisites: Simulators that need to be available
-# - xt adapter simulator: python3 xtadapter/server_sim_xttoolkit.py
+# - xt adapter simulator: python3 ~/development/xtlib-adapter/xtadapter/server_sim.py --type xttoolkit
 # - ASM and SAM simulator by Technolution, started with:
-#   technolution_asm_simulator/simulator2/run_the_simulator.sh
+#   technolution_asm_simulator/simulator/run_the_simulator.sh
 
 FASTEM-sim: {
     class: Microscope,
