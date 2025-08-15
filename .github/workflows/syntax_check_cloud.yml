@@ -25,9 +25,32 @@ jobs:
     - name: Check old style classes
       if: ${{ !cancelled() }}
       # Only use parenthesis in class definition if there is inheritance (code-style)
-      run: |        
+      run: |
         grep -IrE --colour "class .+\(\).*:" --include=*.py ./src/odemis || exit 0
         if [[ $? -eq 0 ]]; then
            echo "The above syntax errors were found, only use parenthesis in class definition if there is inheritance (code-style)."
-           exit 1  
+           exit 1
         fi
+
+    - name: Check test cases are runnable
+      if: ${{ !cancelled() }}
+      run: |
+        # Check that all test cases are runnable (i.e., have a proper __main__ guard)
+        # Discover all *_test.py under any */test/ folder from repo root.
+        mapfile -d '' -t testfiles < <(find . -type f -path '*/test/*_test.py' \
+          -not -path './.git/*' -print0)
+
+        if [[ ${#testfiles[@]} -eq 0 ]]; then
+          echo "No test files found under */test/*_test.py"
+          exit 0
+        fi
+
+        exit_code=0
+        for f in "${testfiles[@]}"; do
+          # Match the canonical main guard to reduce false positives
+          if ! grep -qE "^[[:space:]]*if[[:space:]]+__name__[[:space:]]*==[[:space:]]*[\"']__main__[\"'][[:space:]]*:" "$f"; then
+            echo "::warning title=Non-runnable test:: $f lacks an '__main__' guard"
+            exit_code=1
+          fi
+        done
+        exit "$exit_code"
