@@ -104,7 +104,7 @@ class TestFastEMCalibration(unittest.TestCase):
         except ValueError:
             # Handle optical autofocus calibration raised ValueError when confidence is low.
             # For now, pass and continue with the test, even with low confidence the stage should be close to the good position.
-            pass
+            logging.warning("Optical autofocus calibration got low confidence")
 
         # check that z stage position is close to good position
         # Note: This accuracy is dependent on the value chosen for the magnification on the lens.
