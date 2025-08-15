@@ -1,17 +1,32 @@
+import subprocess
 import threading
 import time
 import unittest
-import subprocess
+from unittest import mock
 
-from odemis.util import testing
-from odemis.odemisd.start import find_window, main
+import notify2
+
 from odemis.acq.test.stream_test import SECOM_CONFIG
+from odemis.odemisd.start import find_window, main
+from odemis.util import testing
+
 
 class StartTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # Patch notify2.init and notify2.Notification for all tests in this class
+        cls.notify2_patcher = mock.patch.multiple(
+            notify2,
+            init=mock.DEFAULT,
+            Notification=mock.DEFAULT,
+        )
+        cls.notify2_mocks = cls.notify2_patcher.start()
+
     @classmethod
     def tearDownClass(cls):
+        cls.notify2_patcher.stop()
         testing.stop_backend()
-
 
     def setUp(self):
         try:
@@ -38,10 +53,19 @@ class StartTestCase(unittest.TestCase):
             main([" ", SECOM_CONFIG])
 
         self._gui_thread = threading.Thread(target=thread_call, name="GUI/Back-end thread")
-        self._gui_thread.deamon = False
+        self._gui_thread.daemon = False
         self._gui_thread.start()
         time.sleep(30)  # Give the back-end & GUI time to properly start
 
+        # assert start.get_notify_object()
+        self.notify2_mocks['init'].assert_called_once_with('Odemis')
+        # assert start.BackendStarter.show_popup, internally start.BackendStarter._notif.update
+        notification_instance_mock = self.notify2_mocks['Notification'].return_value
+        notification_instance_mock.update.assert_called_with(
+            "Odemis back-end successfully started",
+            "Graphical interface will now start.",
+            "odemis"
+        )
         self.assertTrue(find_window("Odemis"))
 
 
@@ -57,7 +81,7 @@ class StartTestCase(unittest.TestCase):
             self.error_code = main(["", SECOM_CONFIG])
 
         self._gui_thread = threading.Thread(target=thread_call, name="GUI/Back-end thread")
-        self._gui_thread.deamon = False
+        self._gui_thread.daemon = False
         self._gui_thread.start()
         time.sleep(30)  # Give the back-end & GUI time to properly start
         time.sleep(10)  # Give the test-user time to close the pop-up dialogs for "main" in the thread to finish
