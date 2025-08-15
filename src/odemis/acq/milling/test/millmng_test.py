@@ -229,6 +229,9 @@ class TestAutomatedMillingManager(unittest.TestCase):
         """Automated milling shouldn't do anything if feature is active/deactive"""
         features = self.features.copy()
 
+        f = self.pm.cryoSwitchSamplePosition(MILLING)
+        f.result()
+
         f = run_automated_milling(
             features=features,
             stage=self.stage,

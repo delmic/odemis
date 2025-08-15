@@ -342,8 +342,10 @@ class AutomatedMillingManager(object):
 
             current_posture = self.pm.getCurrentPostureLabel()
             if current_posture not in [SEM_IMAGING, MILLING]:
-                raise ValueError(f"Current posture is {POSITION_NAMES[current_posture]}. "
-                                 "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
+                error_text = (f"Current posture is {POSITION_NAMES[current_posture]}. "
+                               "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
+                logging.error(error_text)
+                raise ValueError(error_text)
 
             for feature in self.features:
 
@@ -493,6 +495,7 @@ class AutomatedMillingManager(object):
         ts = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         filename = f"{self._prefix}-{basename}-{ts}.ome.tiff".replace(" ", "-")
         return os.path.join(os.path.join(feature.path, filename))
+
 
 def run_automated_milling(features: List[CryoFeature],
                           stage: model.Actuator,
