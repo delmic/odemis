@@ -925,4 +925,8 @@ class TestMicroscope(unittest.TestCase):
         self.assertTrue(isinstance(info["z"].range, tuple)) # (min, max)
         self.assertTrue(len(info["z"].range) == 2)
         self.assertTrue(isinstance(info["z"].range[0], (int,float)))
-        self.assertTrue(isinstance(info["z"].range[1], (int,float)))
+        self.assertTrue(isinstance(info["z"].range[1], (int, float)))
+
+
+if __name__ == '__main__':
+    unittest.main()

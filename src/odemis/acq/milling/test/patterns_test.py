@@ -224,3 +224,7 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertAlmostEqual(patterns[1].rotation.value, 0)
         numpy.testing.assert_array_almost_equal(patterns[1].center.value, (self.spacing, 0))
         self.assertEqual(patterns[1].scan_direction.value, "TopToBottom")
+
+
+if __name__ == '__main__':
+    unittest.main()
