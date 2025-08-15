@@ -1216,9 +1216,30 @@ class SecomStreamsController(StreamBarController):
         # self.stream_settings must be defined before super() to add new streams
         super().__init__(*args, **kwargs)
 
+    def _get_unique_action_name(self, label: str, fallback: str) -> str:
+        """
+        Ensures that the action label is unique and non-empty.
+        :param label: requested name
+        :param fallback: to be used if the label is empty
+        :return: "good" name
+        """
+        if not label.strip():
+            label = fallback
+
+        # If not unique, append a number, until no such label exist
+        i = 1
+        new_label = label
+        while new_label in self.menu_actions:
+            new_label = f"{label} {i}"
+            i += 1
+        label = new_label
+
+        return label
+
     def update_stream_settings(self):
         """
         Update the recently used stream setting when the stream settings are updated during an acquisition
+        Must be called within the main GUI thread.
         """
         streams = [s.stream for s in self.stream_controllers]
         self.stream_settings.update_entries(streams)
@@ -1226,19 +1247,21 @@ class SecomStreamsController(StreamBarController):
         if self.stream_settings.config_data:
             acq_names = sorted(self.stream_settings.entries)
             # remove the old list of settings and then update the menu list with the updated stream settings
-            for index, label in enumerate(list(self.menu_actions)):
+            for label in tuple(self.menu_actions.keys()):
                 self.remove_action(label)
             for label in acq_names:
-                call_label = functools.partial(self._addFluoWithSettings, label)
-                self.add_action(label, call_label)
+                display_label = self._get_unique_action_name(label, "Filtered colour")
+                call_label = functools.partial(self._addFluoWithSettings, label, display_label)
+                self.add_action(display_label, call_label)
 
-    def _addFluoWithSettings(self, label, **kwargs):
+    def _addFluoWithSettings(self, label, display_label, **kwargs):
         """
         Set the Fluostream attributes to the selected acquired stream panel setting
-        :param label: the name of stream used to locate the stream settings in the settings file
+        :param label: the name of the stream settings in the settings file
+        :param display_label: the name of the stream to create
         """
         stream = acqstream.FluoStream(
-            label,
+            display_label,
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
             self._main_data_model.light,
@@ -1285,8 +1308,9 @@ class SecomStreamsController(StreamBarController):
             if self.stream_settings.config_data:
                 acq_names = sorted(self.stream_settings.entries)
                 for label in acq_names:
-                    call_label = functools.partial(self._addFluoWithSettings, label)
-                    self.add_action(label, call_label, fluor_capable)
+                    display_label = self._get_unique_action_name(label, "Filtered colour")
+                    call_label = functools.partial(self._addFluoWithSettings, label, display_label)
+                    self.add_action(display_label, call_label, fluor_capable)
             else:
                 # Add default preset option if no old setting is available
                 self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
