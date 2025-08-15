@@ -13,25 +13,44 @@ Syntax
 A microscope file is a series of component descriptions in the `YAML format <http://www.yaml.org/spec/1.2/spec.html>`_.
 For edition, if your editor doesn't support explicitly YAML, you can select Python for correct syntax highlighting.
 
-The basic idea is to describe the model as set of named components (a mapping of
-a name (str) to a mapping). Each component description has the following information:
+The basic idea is to describe the model as a set of named components. In practice, it is
+represented in YAML as a *mapping* (aka a "dictionary") of a name (str) to a mapping (containing
+all the component description). Each component description has the following information:
 
- * Name of component
- * class (str): python class of the component. It should be a subclass of 
+ * Name of the component
+ * role (str or ``null``): the role of the component in the system. Each role is unique
+   (except if it's ``null``) and is used by the software to identify the component's utility in the
+   microscope.
+ * class (str): python class of the component. It should be a subclass of
    ``odemis.driver`` or be a ``Microscope``. It is written as ``module.class``.
    If the component is created by delegation (i.e., it is provided by another
    component), this is not a required key.
- * role (str): compulsory string representing the role of the component in the system
- * init: mapping of str → values representing the initialisation arguments (optional)
- * properties (optional) (mapping of str → values): properties to set at initialisation (should be existing and valid for the given component)
- * children (optional): mapping of str (arbitrary names defined by the class)
-   → str (names of other components provided or used by this component). 
- * creator (optional): name of the component that will create and provide this 
+ * init (optional, mapping of str → values): representing the initialisation arguments.
+   The allowed arguments are defined by the class of the component.
+ * children (optional, mapping of str → str): the series of extra components which are
+   also instantiated by the component. They are defined by their "internal role"
+   (arbitrary meaning defined by the class) to name of the child component in the microscope file.
+ * dependencies (optional, mapping of str → str): the series of components which are
+   required by the component to run. These dependencies components will be always instantiated
+   before the instantiation of the component. They are defined by their "internal role"
+   (arbitrary meaning defined by the class) to the name of the component used by this component.
+ * affects (optional, sequence of str): The names of other components that are physically affected
+   when the component is active. For instance an excitation light "affects" a CCD, if turning it on or
+   off can be seen in the signal of the CCD. By default it is empty.
+ * properties (optional, mapping of str → values): properties to set at initialisation
+   (should be existing and valid for the given component).
+ * metadata (optional, mapping of str → values): metadata to set at initialisation.
+   Metadata are used to store additional information about the component. Some might be
+   used by Odemis to adjust its behaviour.
+   The metadata keys are predefined in the ``model/_metadata.py`` file, and are written without the
+   ``MD_`` prefix, such as ``FAV_POS_ACTIVE``.
+
+
+The following keys were used in older versions of Odemis, but are now deprecated and ignored by Odemis:
+
+ * creator (optional): name of the component that will create and provide this
    component. It is only valid if the component has no class specified. The
-   creator component must have this component specified in its "children". 
-   This key will be automatically filled in unless several components 
-   use the component as a child (in which case it is required).
- * affects: sequence of str (names of other components). By default it is empty.
+   creator component must have this component specified in its "children".
  * emitters (only for Microscope): sequence of str (names of other components)
  * detectors (only for Microscope): sequence of str (names of other components)
  * actuators (only for Microscope): sequence of str (names of other components)
