@@ -27,7 +27,7 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 20.04 (x86 64 bits)
+ * `Ubuntu <http://www.ubuntu.com>`_ 22.04 (x86 64 bits)
  * `PyCharm <https://www.jetbrains.com/pycharm/>`_
 
 The source code available via a public git repository: https://github.com/delmic/odemis.
@@ -44,8 +44,8 @@ the next section to install Odemis on this operating system.
 Detailed instructions
 ---------------------
 
-Download Ubuntu 20.04 at this address:
-https://releases.ubuntu.com/20.04.5/ubuntu-20.04.5-desktop-amd64.iso
+Download Ubuntu 22.04 at this address:
+https://releases.ubuntu.com/22.04/ubuntu-22.04.5-desktop-amd64.iso
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -78,9 +78,9 @@ Edit /etc/odemis.conf with::
 
     sudo gedit /etc/odemis.conf
 
-Modify the first lines so they read like this::
+Modify the first lines so they read like this (where USER is replaced by your user name)::
 
-    DEVPATH="$HOME/development"
+    DEVPATH="/home/USER/development"
     PYTHONPATH="$DEVPATH/odemis/src/:$PYTHONPATH"
 
 And edit the MODEL line for the model you want (probably a simulated microscope
@@ -103,6 +103,19 @@ and type the following::
 Finally, make it executable with ``sudo chmod a+x /etc/rc.local``. You can run
 it immediately by typing ``sudo /etc/rc.local``.
 
+Starting and stopping Odemis
+""""""""""""""""""""""""""""
+Odemis can be started as usual.
+``odemis-start`` starts Odemis with the default microscope file, defined in ``odemis.conf``.
+
+However, on a development computer, you probably want to use a different microscope.
+The name of the microscope file can be passed as argument.
+There are many options in ``odemis/install/linux/usr/share/odemis/sim/``. For
+instance, to run a SPARC simulator, you could run:
+``odemis-start install/linux/usr/share/odemis/sim/sparc2-sim.odm.yaml``
+
+You can stop Odemis from the command line with ``sudo odemis-stop``.
+
 Install PyCharm
 """""""""""""""
 `PyCharm <https://www.jetbrains.com/pycharm/>`_ is a good editor for Python code.
@@ -112,37 +125,11 @@ Install it with::
 
 In PyCharm, open the ``odemis`` directory.
 In the project settings, change the Python interpreter to the
-*system* interpreter (select Python 3.6).
+*system* interpreter (select Python 3.10).
 
-On Ubuntu 18.04, PyCharm will report that some dependencies are not satisfied (eg, wxPython),
+PyCharm might report that some dependencies are not satisfied (eg, wxPython),
 however, if you have already installed Odemis from the Ubuntu packages, this is
-fine, and you should not install new version via PyCharm.
-
-Install Eclipse and the plugins
-"""""""""""""""""""""""""""""""
-Alternatively, instead of PyCharm, you may prefer Eclipse.
-It has some more advanced debugging functionalities, but everything else is a
-little less polished than PyCharm.
-
-Go to the
-`Eclipse website <https://www.eclipse.org/downloads/>`_ to download the installer, uncompress it and run it.
-
-Go to *Help/Eclipse Marketplace...*. Search for *PyDev*, and install it.
-Optionally, you can also install the *ReST Editor*.
-
-Optionally, if you want to edit the microscope configuration files (``*.odm.yaml``),
-add a file association with the Python editor. For this, in the preference 
-window, go to *General/Editors/File Association* and add a file type "``*.yaml``". As
-default editor, add the Python editor.
-
-Edit Odemis with Eclipse
-""""""""""""""""""""""""
-
-#. Click on *File/New/PyDev Project*.
-#. Enter "odemis" as project name
-#. Select a directory for project contents: the place where Odemis was downloaded (i.e., ``/home/.../development/odemis``)
-#. Select "Create 'src' folder and add it to the PYTHONPATH"
-#. Click on Finish
+fine. You should *not* install new version via PyCharm.
 
 Learning Python
 """""""""""""""
@@ -311,7 +298,7 @@ Installing Odemis Viewer
 This is an optional step, which allows you to open and analyze acquisitions files
 straight into the same graphical interface as the acquisition software.
 
-Download the Odemis viewer from https://www.delmic.com/en/products/clem-solutions/secom. 
+Download the Odemis viewer from https://www.delmic.com/en/learn/resource-library . 
 In case your browser warns you about potential thread, confirm you are willing to download
 the file. Then run the executable, and Odemis viewer will be available as a
 standard software.
@@ -323,54 +310,45 @@ Installing Python environment
 This allows you to manipulate the data in Python, either by writing Python
 scripts, or via a command-line interface.
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and pick the right
-architecture for your computer (most likely 64-bit). Note that the following instructions are valid
-for conda version 4.9.2. In case you have an older version make sure that you update the conda version
-through the Anaconda prompt before proceeding to the next steps.
-
-Anaconda typically comes with a newer version of Python (eg, 3.10). It's crucial to create a new environment
-with the python version (3.6.13) on which Odemis has been well tested.
-
-#. To create a new conda environment, named odemis, open the Anaconda command prompt and type:
-   ``conda create -n odemis python=3.6.13``.
-   
-#. Note that the new 'odemis' environment should be activated in order to do the
-   following steps. To activate the environment type ``conda activate odemis``.
-   Note that you will have to re-execute this command every time the Anaconda command-line is started.
-   Once it's activated, the environment name is shown in the command line of
-   Anaconda command prompt. It looks like:
-   ``(odemis) C:\Users\...``.
+#. Install `Anaconda <https://www.anaconda.com/distribution/>`_  or
+   `Miniconda <https://docs.anaconda.com/miniconda/install/#quick-command-line-install>`_ and
+   pick the right architecture for your computer (most likely 64-bit). Take note of the installation path.
+   Conda handles multiple versions of Python, so it is
+   fine that Conda states Python 3.12 while Odemis requires 3.10. Make sure that `conda` is installed on the Path
+   (it should be an option during installation).
 
 #. Download the ZIP file of the latest release of Odemis from:
    https://github.com/delmic/odemis/releases.
-      
+
 #. Extract the Odemis release into the folder Documents (or any folder of
    your preference). The folder is named with the release number of Odemis.
-   You can rename the extracted folder 'odemis-release_version' to 'Odemis'.
-    
-#. Open the anaconda prompt and make sure you are in the Odemis folder, with the
-   'odemis' python environment activated::
-   
+   You can rename the extracted folder 'odemis-3.x.x' to 'odemis'.
+
+#. Open the anaconda prompt and type the following commands ::
+
     cd Documents\Odemis
-    conda activate odemis
-    conda config --append channels conda-forge
-    conda install --name odemis --file requirements-conda.txt
-    conda develop src   
-   
-#. To use this new conda python environment follow the instructions of 
+    conda env create -f environment.yml
+    conda activate odemisdev
+    conda develop src
+    pip install https://github.com/delmic/Pyro4/archive/master.zip
+
+#. Note that this creates a new "odemisdev" environment, which needs to be "activated" everytime
+   you open a new command line window.
+   To activate the environment type ``conda activate odemisdev``.
+   Once it's activated, the environment name is shown in the command line of
+   Anaconda command prompt. It looks like:
+   ``(odemisdev) C:\Users\...``.
+
+#. To use this new conda python environment follow the instructions of
    http://medium.com/@apremgeorge/using-conda-python-environments-with-spyder-ide-and-jupyter-notebooks-in-windows-4e0a905aaac5.
    Note that:
       
-   #. to set the conda environment for jupyter install the kernel inside the 'odemis"
+   #. to set the conda environment for jupyter install the kernel inside the "odemisdev"
       environment by typing ``conda install -c anaconda ipykernel``.
       To use jupyter notebook, first install it by typing ``pip install jupyter notebook``.
 
    #. to set the conda environment for Spyder install the spyder kernel inside the environment 
-      and type ``conda install "spyder-kernels<1.10.0"``.
-    
-#. Install Delmic's special version of Pyro4, by typing in the Anaconda command
-   prompt the following command:
-   ``pip install https://github.com/delmic/Pyro4/archive/master.zip``.
+      and type ``conda install spyder-kernels``.
 
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
 Note that you may need to navigate to the Documents/Odemis/src folder to be able to import from odemis.
