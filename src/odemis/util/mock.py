@@ -17,11 +17,12 @@ You should have received a copy of the GNU General Public License along with Ode
 # Fake component for testing purpose
 
 import logging
+import threading
 import time
+import weakref
+from typing import Tuple, Optional
 
 from odemis import model
-import threading
-import weakref
 
 
 class MockComponent(model.HwComponent):
@@ -186,3 +187,139 @@ class CCDDataFlow(model.DataFlow):
             self.component().stop_acquire()
         except ReferenceError:
             pass
+
+
+class SimulatedAxis:
+    """
+    Generic simulated axis for simulator.
+    """
+    def __init__(self,
+                 position: Optional[float] = 0,
+                 speed: float = 1,
+                 rng: Optional[Tuple[float, float]] = None):
+        """
+        Simulates an axis with a given range, speed, and acceleration. Unit is arbitrary, called "u".
+        :param position: in u, the initial position of the axis.
+        :param speed: in u/s, the speed of the axis.
+        :param rng: min/max range of the axis (in u). The position will always be
+         within this range.
+        TODO: add param accel: in u/s², the acceleration of the axis.
+        """
+        # These 4 attributes can be updated by the user at any time
+        self.speed = speed
+        self.rng = rng
+        # if not moving: current position
+        # if moving: position before starting the move
+        self.position = position
+
+        # Default to position 0, unless it's not within the allowed range, in which case, default to the center
+        if rng and not rng[0] <= self.position <= rng[1]:
+            self.position = sum(rng) / 2
+
+        self._target_pos: Optional[float] = None  # if not None: a move is in progress
+        self._target_reached = True  # whether the last move was successful (ie, within range)
+        self._start_time = 0  # time when the last move started, used to compute the current position during a move
+
+    def _get_current_position(self) -> float:
+        """
+        Returns the current position of the axis, taking into account the target position if it's moving.
+        Also updates the state, based on the current time. If the move is finished, it will update
+        ._position to the position at the end of the move, and reset the target position.
+        :return: current position (in u)
+        """
+        if self._target_pos is None:  # Not moving => easy
+            return self.position
+
+        # In a move (or not updated yet) => compute the current position based on move profile and time
+        now = time.time()
+        start_pos = self.position
+        target_pos = self._target_pos
+        dur = abs(target_pos - start_pos) / self.speed
+        end_time = self._start_time + dur
+        if now >= end_time:
+            # Move finished, update the position and reset the target position
+            pos = target_pos
+            self._target_pos = None
+        else:  # Still moving
+            # Compute the position based on the time elapsed and speed
+            elapsed = now - self._start_time
+            pos = start_pos + (target_pos - start_pos) * (elapsed / dur)
+
+        if self.rng is not None:
+            pos = min(max(self.rng[0], pos), self.rng[1])  # Clamp to the range
+
+        if self._target_pos is None:  # Move finished => update the state
+            self.position = pos
+            self._target_reached = (pos == target_pos)
+
+        return pos
+
+    def move_abs(self, position: float) -> float:
+        """
+        Simulates a move to a given position. If it's currently moving, it will update the target
+        position and continue moving towards it.
+        :param position: target position. It can be outside of the range, in which case it will simulate
+        a move to the closest position within the range, and report a failure to reach the target position.
+        :return: expected duration to move (in seconds), not taking into account that the move could end
+        early due to being out of range.
+        """
+        self.stop()  # in case it's already moving, ensure it computes the move from the current position
+
+        self._target_pos = position
+        self._target_reached = False
+        self._start_time = time.time()
+        # TODO: simulate also the acceleration and deceleration
+        #  See driver.estimateMoveDuration(), but requires a little more work for computing the current position
+        dur = abs(self._target_pos - self.position) / self.speed  # duration in seconds
+        logging.debug("Simulated move from %s to %s, duration %f s", self.position, self._target_pos, dur)
+        return dur
+
+    def move_rel(self, shift: float) -> float:
+        """
+        Simulates a move by a given distance
+        :param shift: target position, relative to the current position.
+        :return: expected duration to move (in seconds), not taking into account that the move could end
+        early due to being out of range.
+        """
+        target = self._get_current_position() + shift
+        return self.move_abs(target)
+
+    def stop(self) -> None:
+        """
+        Simulates stopping the axis. If no move is active, does nothing.
+        """
+        self.position = self._get_current_position()
+        self._target_pos = None
+
+    def get_position(self) -> float:
+        """
+        Returns the current position of the axis.
+        :return: current position (arbitrary units)
+        """
+        return self._get_current_position()
+
+    def get_target_position(self) -> float:
+        """
+        Returns the target position of the axis (set by the last move).
+        If it's not moving, it returns the current position.
+        :return: target position (arbitrary units)
+        """
+        return self._target_pos if self._target_pos is not None else self.position
+
+    def is_moving(self) -> bool:
+        """
+        Returns whether the axis is currently moving.
+        :return: True if the axis is moving, False otherwise.
+        """
+        self._get_current_position()  # update the position
+        return self._target_pos is not None
+
+    def is_at_target(self) -> bool:
+        """
+        Returns whether the axis is at the target position (set by the last move).
+        :return: True if the axis is at the target position, False if either moving, or the target
+          was out of range.
+        """
+        self._get_current_position()  # update the position
+        # It has finished the move, and it was successful (ie, not out of range)
+        return self._target_pos is None and self._target_reached
