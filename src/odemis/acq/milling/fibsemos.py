@@ -54,7 +54,6 @@ def create_fibsemos_thermo_microscope() -> 'OdemisThermoMicroscope':
     """Create a fibsemOS microscope instance with the current microscope configuration."""
 
     # TODO: extract the rest of the required metadata
-    # TODO: create tescan compatible version
 
     # stage metadata
     stage_bare = model.getComponent(role="stage-bare")
