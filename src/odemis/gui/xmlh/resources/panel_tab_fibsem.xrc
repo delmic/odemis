@@ -254,7 +254,7 @@
                                 </object>
                                 <object class="sizeritem">
                                   <object class="OwnerDrawnComboBox" name="cmb_features">
-                                    <size>145,20</size>
+                                    <size>205,20</size>
                                     <fg>#2FA7D4</fg>
                                     <bg>#333333</bg>
                                     <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
@@ -285,7 +285,7 @@
                                 </object>
                                 <object class="sizeritem">
                                   <object class="OwnerDrawnComboBox" name="cmb_feature_status">
-                                    <size>122,16</size>
+                                    <size>182,16</size>
                                     <fg>#2FA7D4</fg>
                                     <bg>#333333</bg>
                                     <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
@@ -357,7 +357,7 @@
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
+                            <object class="sizeritem">  <!-- Posture switch row -->
                               <object class="wxGridBagSizer">
                                 <object class="sizeritem">
                                   <object class="ProgressRadioButton" name="btn_switch_sem_imaging">
@@ -409,51 +409,87 @@
                                 <hgap>20</hgap>
                               </object>
                             </object>
-                            <object class="sizeritem">
+                            <object class="sizeritem">  <!-- Milling angle row -->
                               <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                    <object class="wxStaticText" name="lbl_milling_angle">
-                                      <label>Milling Angle</label>
-                                      <fg>#BFBFBF</fg>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
-                                      <font>
-                                        <size>10</size>
-                                        <encoding>UTF-8</encoding>
-                                      </font>
-                                    </object>
-                                    <flag>wxTOP|wxLEFT</flag>
-                                    <border>25</border>
+                                <object class="sizeritem">  <!-- Label -->
+                                  <object class="wxStaticText" name="lbl_milling_angle">
+                                    <label>Milling Angle</label>
+                                    <fg>#BFBFBF</fg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <font>
+                                      <size>10</size>
+                                      <encoding>UTF-8</encoding>
+                                    </font>
                                   </object>
-                                  <object class="sizeritem">
-                                    <object class="UnitFloatCtrl" name="ctrl_milling_angle">
-                                      <size>-1,20</size>
-                                      <value>10</value>
-                                      <accuracy>3</accuracy>
-                                      <key_step>0.1</key_step>
-                                      <unit>°</unit>
-                                      <scale>linear</scale>
-                                      <accuracy>2</accuracy>
-                                      <font>
-                                        <size>10</size>
-                                        <encoding>UTF-8</encoding>
-                                      </font>
-                                      <style>wxBORDER_NONE</style>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
-                                    </object>
-                                    <orient>wxEXPAND</orient>
-                                    <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
-                                    <border>25</border>
-                                  </object>
-                                  <orient>wxHORIZONTAL</orient>
+                                  <flag>wxTOP|wxLEFT</flag>
+                                  <border>10</border>
                                 </object>
-                                <flag>wxALIGN_CENTRE</flag>
+                                <object class="sizeritem">  <!-- Input -->
+                                  <object class="UnitFloatCtrl" name="ctrl_milling_angle">
+                                    <size>-1,20</size>
+                                    <value>10</value>
+                                    <accuracy>3</accuracy>
+                                    <key_step>0.1</key_step>
+                                    <unit>°</unit>
+                                    <scale>linear</scale>
+                                    <accuracy>2</accuracy>
+                                    <font>
+                                      <size>10</size>
+                                      <encoding>UTF-8</encoding>
+                                    </font>
+                                    <style>wxBORDER_NONE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <orient>wxEXPAND</orient>
+                                  <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxALIGN_CENTRE</flag>
+                            </object>
+                            <object class="sizeritem">  <!-- Apply milling angle row -->
+                              <border>10</border>
+                              <flag>wxALIGN_CENTRE | wxALL</flag>
+                              <object class="wxBoxSizer">
+                                <orient>wxHORIZONTAL</orient>
+
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_apply_milling_angle_to_features">
+                                    <label>Apply to features:</label>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE</flag>
+                                </object>
+
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_apply_milling_angle_to_feature">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Selected</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE | wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_apply_milling_angle_to_features">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>All</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE | wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
                               </object>
                             </object>
                           </object>
+                        </object>
                       </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>

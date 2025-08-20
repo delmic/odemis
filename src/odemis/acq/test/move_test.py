@@ -28,7 +28,9 @@ import scipy
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
+from odemis.acq.move import (
+                             calculate_stage_tilt_from_milling_angle, calculate_milling_angle_from_stage_tilt,
+                             FM_IMAGING, GRID_1, GRID_2,
                              LOADING, ALIGNMENT, COATING, MILLING, LOADING_PATH,
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
                              SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, ROT_DIST_SCALING_FACTOR,
@@ -382,10 +384,19 @@ class TestMeteorTFS3Move(unittest.TestCase):
         cls.stage_grid_centers = stage_md[model.MD_SAMPLE_CENTERS]
         cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
 
+        pos_sem_grid1 = cls.stage_grid_centers[POSITION_NAMES[GRID_1]]
+        pos_sem_grid1.update(cls.pm.get_posture_orientation(SEM_IMAGING))
+
+        pos_sem_grid2 = cls.stage_grid_centers[POSITION_NAMES[GRID_2]]
+        pos_sem_grid2.update(cls.pm.get_posture_orientation(SEM_IMAGING))
+
+        cls.sem_grid1 = pos_sem_grid1
+        cls.sem_grid2 = pos_sem_grid2
+
     def test_switching_movements(self):
         """Test switching between different postures and check that the 3D transformations work as expected"""
         if self.pm.current_posture.value == UNKNOWN:
-            f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
+            f = self.stage_bare.moveAbs(self.sem_grid1)
             f.result()
 
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
@@ -406,24 +417,11 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
         self._test_3d_transformations()
 
-    def _test_3d_transformations(self):
-        """Test that the 3D transforms work the same as the 2D transforms for 0 scan rotation"""
-        # 3d transforms should produce the same result as the 2d transforms
-        self.pm.use_3d_transforms = False # make sure we're using 2D transforms
-        stage_pos = self.stage_bare.position.value
-        ssp = self.pm.to_sample_stage_from_stage_position(stage_pos)    # new 2D method
-        ssp2 = self.pm.to_sample_stage_from_stage_position2(stage_pos)  # new 3D method
-        ssp3 = self.pm._get_sample_pos(stage_pos)                       # old 2D method
-
-        # assert near Position
-        self.assertTrue(isNearPosition(ssp, ssp2, axes={"x", "y", "z"}))
-        self.assertTrue(isNearPosition(ssp, ssp3, axes={"x", "y", "z"}))
-
     def test_to_posture(self):
         """Test that posture projection is the same as moving to the posture"""
 
         # first move back to grid-1 to make sure we are in a known position
-        f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
+        f = self.stage_bare.moveAbs(self.sem_grid1)
         f.result()
 
         # move to SEM imaging posture
@@ -457,74 +455,68 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
     def test_sample_stage_movement(self):
         """Test sample stage movements in different postures match the expected movements"""
-
-        f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
+        # Make sure to not start from unknown position
+        f = self.stage_bare.moveAbs(self.sem_grid1)
         f.result()
 
         dx, dy = 50e-6, 50e-6
-        self.pm.use_3d_transforms = True
-        for posture in [FM_IMAGING, SEM_IMAGING]:
 
-            if self.pm.current_posture.value is not posture:
-                f = self.pm.cryoSwitchSamplePosition(posture)
-                f.result()
+        f = self.pm.cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        time.sleep(2) # simulated stage moves too fast, needs time to update
 
-            f = self.pm.cryoSwitchSamplePosition(GRID_1)
-            f.result()
-            time.sleep(2) # simulated stage moves too fast, needs time to update
+        # test relative movement
+        init_ss_pos = self.stage.position.value
+        init_sb_pos = self.stage_bare.position.value
 
-            # test relative movement
-            init_ss_pos = self.stage.position.value
-            init_sb_pos = self.stage_bare.position.value
+        f = self.stage.moveRel({"x": dx, "y": dy})
+        f.result()
+        time.sleep(2)
 
-            f = self.stage.moveRel({"x": dx, "y": dy})
-            f.result()
-            time.sleep(2)
+        new_pos = self.stage.position.value
+        new_sb_pos = self.stage_bare.position.value
 
-            new_pos = self.stage.position.value
-            new_sb_pos = self.stage_bare.position.value
+        # expected movement is along the x, y axes
+        self.assertAlmostEqual(new_pos["x"], init_ss_pos["x"] + dx, places=5)
+        self.assertAlmostEqual(new_pos["y"], init_ss_pos["y"] + dy, places=5)
 
-            # expected movement is along the x, y axes
-            self.assertAlmostEqual(new_pos["x"], init_ss_pos["x"] + dx, places=5)
-            self.assertAlmostEqual(new_pos["y"], init_ss_pos["y"] + dy, places=5)
+        # manually calculate the expected stage bare position
+        p = [dx, dy, 0]
 
-            # manually calculate the expected stage bare position
-            p = [dx, dy, 0]
+        tf = self.pm._inv_transforms[SEM_IMAGING] # to-stage bare
 
-            tf = self.pm._inv_transforms2[posture] # to-stage bare
+        q = numpy.dot(tf, p)
+        exp_sb_pos = {
+            "x": init_sb_pos["x"] + q[0],
+            "y": init_sb_pos["y"] + q[1],
+            "z": init_sb_pos["z"] + q[2],
+            "rx": init_sb_pos["rx"],
+            "rz": init_sb_pos["rz"]}
 
-            q = numpy.dot(tf, p)
-            exp_sb_pos = {
-                "x": init_sb_pos["x"] + q[0],
-                "y": init_sb_pos["y"] + q[1],
-                "z": init_sb_pos["z"] + q[2],
-                "rx": init_sb_pos["rx"],
-                "rz": init_sb_pos["rz"]}
+        # expected movement is projection of the movement along the x, y axes
+        self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
+                                    axes={"x", "y", "z", "rx", "rz"}))
 
-            # expected movement is projection of the movement along the x, y axes
-            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
-                                        axes={"x", "y", "z", "rx", "rz"}))
+        # test absolute movement
+        f = self.pm.cryoSwitchSamplePosition(GRID_1)
+        f.result()
+        time.sleep(2) # simulated stage moves too fast, needs time to update
 
-            # test absolute movement
-            f = self.pm.cryoSwitchSamplePosition(GRID_1)
-            f.result()
-            time.sleep(2) # simulated stage moves too fast, needs time to update
+        abs_pos = init_ss_pos.copy()
+        abs_pos["x"] += dx
+        abs_pos["y"] += dy
 
-            abs_pos = init_ss_pos.copy()
-            abs_pos["x"] += dx
-            abs_pos["y"] += dy
+        f = self.stage.moveAbs(abs_pos)
+        f.result()
+        time.sleep(2)
 
-            f = self.stage.moveAbs(abs_pos)
-            f.result()
-            time.sleep(2)
+        new_pos = self.stage.position.value
+        new_sb_pos = self.stage_bare.position.value
 
-            new_pos = self.stage.position.value
-            new_sb_pos = self.stage_bare.position.value
-
-            self.assertTrue(isNearPosition(new_pos, abs_pos,
-                                                  axes={"x", "y", "z"}))
-            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
-                                                  axes={"x", "y", "z", "rx", "rz"}))
+        self.assertTrue(isNearPosition(new_pos, abs_pos,
+                                                axes={"x", "y", "z"}))
+        self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
+                                                axes={"x", "y", "z", "rx", "rz"}))
 
         return
 
@@ -571,7 +563,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
         """Test the sample-stage to chamber transformation used for vertical movements."""
 
         # go to sem imaging
-        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f = self.stage_bare.moveAbs(self.sem_grid1)
         f.result()
         time.sleep(2)
 
@@ -871,6 +863,14 @@ class TestMoveUtil(unittest.TestCase):
                                         atol_linear=ATOL_LINEAR_TRANSFORM,
                                         atol_rotation=ATOL_ROTATION_TRANSFORM))
 
+    def test_stage_tilt_and_milling_angle_conversion(self):
+        """Test back and forth conversion between stage tilt and milling angle"""
+        milling_angle = math.radians(15)
+        pre_tilt = math.radians(30)
+        column_tilt = math.radians(52)
+        converted_stage_tilt = calculate_stage_tilt_from_milling_angle(milling_angle, pre_tilt, column_tilt)
+        converted_milling_angle = calculate_milling_angle_from_stage_tilt(converted_stage_tilt, pre_tilt, column_tilt)
+        self.assertAlmostEqual(milling_angle, converted_milling_angle)
 
 if __name__ == "__main__":
     unittest.main()
