@@ -136,7 +136,10 @@ class TestSymphotime(unittest.TestCase):
                 # Start measuring
                 self.controller.data.subscribe(callback)
 
-                # Should start measuring now
+                # Wait up to 2s for measuring to start, then assert
+                deadline = time.monotonic() + 2.0
+                while not self.controller.isMeasuring() and time.monotonic() < deadline:
+                    time.sleep(0.1)
                 self.assertTrue(self.controller.isMeasuring())
 
                 # Wait until the measurement completes
@@ -247,8 +250,10 @@ class TestSymphotime(unittest.TestCase):
         self.det_live.data.subscribe(callback1)
         time.sleep(0.1)
         self.det_live.data.subscribe(callback2)
-
-        # Should start measuring now
+        # Wait up to 2s for measuring to start, then assert
+        deadline = time.monotonic() + 2.0
+        while not self.controller.isMeasuring() and time.monotonic() < deadline:
+            time.sleep(0.1)
         self.assertTrue(self.controller.isMeasuring())
 
         # Wait until the measurement completes
@@ -275,7 +280,11 @@ class TestSymphotime(unittest.TestCase):
 
         # Start measuring
         self.det_live.data.subscribe(live_callback)
-        # Should start measuring now
+
+        # Wait up to 2s for measuring to start, then assert
+        deadline = time.monotonic() + 2.0
+        while not self.controller.isMeasuring() and time.monotonic() < deadline:
+            time.sleep(0.1)
         self.assertTrue(self.controller.isMeasuring())
 
         # Wait until the measurement completes
@@ -288,7 +297,7 @@ class TestSymphotime(unittest.TestCase):
         self.assertTrue(len(count_rates) > 0)
 
     def test_live_start(self):
-        # Test function if the live stream is started while another measuremnet occurs.
+        # Test function if the live stream is started while another measurement occurs.
         done = threading.Event()
 
         done.clear()
@@ -313,6 +322,10 @@ class TestSymphotime(unittest.TestCase):
         # Start measuring with the live first, then start a real acq
         logging.debug("Start live, then start regular")
         self.det_live.data.subscribe(live_callback)
+        # Wait up to 2s for measuring to start, then assert
+        deadline = time.monotonic() + 2.0
+        while not self.controller.isMeasuring() and time.monotonic() < deadline:
+            time.sleep(0.1)
         self.assertTrue(self.controller.isMeasuring())
         time.sleep(0.5)
         with self.assertRaises(RuntimeError):
@@ -337,7 +350,10 @@ class TestSymphotime(unittest.TestCase):
         # Now try to start measuring the live after real measurement is running
         logging.debug("Start regular, then live.")
         self.controller.data.subscribe(measurement_callback)
-        time.sleep(0.5)
+        # Wait up to 2s for measuring to start, then assert
+        deadline = time.monotonic() + 2.0
+        while not self.controller.isMeasuring() and time.monotonic() < deadline:
+            time.sleep(0.1)
         self.assertTrue(self.controller.isMeasuring())
         time.sleep(0.5)
         with self.assertRaises(RuntimeError):
