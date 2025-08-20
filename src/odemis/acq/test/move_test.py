@@ -589,6 +589,75 @@ class TestMeteorTFS3Move(unittest.TestCase):
         for axis in expected_vshift.keys():
             self.assertAlmostEqual(zshift[axis], expected_vshift[axis], places=5)
 
+    def test_fixed_fm_z(self):
+        """
+        With the fixed fm plane feature, the fm imaging distance should always be the same, independent of the previous
+        stage position. In this test we switch to the fm posture, coming from different stage positions.
+        We check that when requesting a fixed fm plane, the fm imaging distance stays the same. No matter the previous
+        stage position. Furthermore, we also check that for the same posture switches, the fm imaging distance changes
+        when explicitly not requesting the fixed fm imaging plane.
+        """
+        translational = self.stage_grid_centers[POSITION_NAMES[GRID_1]]
+        rotational = self.stage_bare.getMetadata().get(model.MD_FAV_SEM_POS_ACTIVE)
+        position_base = {**translational, **rotational}
+
+        position_a = {**position_base, "z": 0.020}
+        position_b = {**position_base, "z": 0.032}
+
+        # Test when fixing the fixed fm z, the fm sample z does not change between different positions
+        # with distinct z.
+        self.stage_bare.moveAbs(position_a).result()
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        position_fm_a = self.stage_bare.position.value
+        sample_z_a = self.pm.to_sample_stage_from_stage_position(position_fm_a, posture=FM_IMAGING)["z"]
+
+        self.stage_bare.moveAbs(position_b).result()
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        position_fm_b = self.stage_bare.position.value
+        sample_z_b = self.pm.to_sample_stage_from_stage_position(position_fm_b, posture=FM_IMAGING)["z"]
+
+        self.assertAlmostEqual(sample_z_a, sample_z_b, places=6)
+
+        # Now clear fixed fm position to see if sample z actually changes for same scenario.
+        self.stage_bare.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: None})
+        self.stage_bare.moveAbs(position_a).result()
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        position_fm_a = self.stage_bare.position.value
+        sample_z_a = self.pm.to_sample_stage_from_stage_position(position_fm_a, posture=FM_IMAGING)["z"]
+
+        self.stage_bare.moveAbs(position_b).result()
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        position_fm_b = self.stage_bare.position.value
+        sample_z_b = self.pm.to_sample_stage_from_stage_position(position_fm_b, posture=FM_IMAGING)["z"]
+
+        self.assertNotAlmostEqual(sample_z_a, sample_z_b, places=6)
+
+    def test_revert_from_fixed_fm_z(self):
+        """
+        Test that when requesting a fixed fm plane posture switch, we also revert to the previous stage bare position.
+        """
+        translational = self.stage_grid_centers[POSITION_NAMES[GRID_1]]
+        rotational = self.stage_bare.getMetadata().get(model.MD_FAV_SEM_POS_ACTIVE)
+        position_base = {**translational, **rotational}
+        position_requested = {**position_base, "z": 0.025}
+        self.stage_bare.moveAbs(position_requested).result()
+        position_initial = self.stage_bare.position.value
+        # Go from SEM posture to METEOR, and back. Check that we end up at the same spot as before
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        position_reverted = self.stage_bare.position.value
+        testing.assert_pos_almost_equal(position_reverted, position_initial)
+        # Also for milling to METEOR
+        self.pm.cryoSwitchSamplePosition(MILLING).result()
+        position_milling_initial = self.stage_bare.position.value
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        self.pm.cryoSwitchSamplePosition(MILLING).result()
+        position_reverted = self.stage_bare.position.value
+        testing.assert_pos_almost_equal(position_reverted, position_milling_initial)
+        self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        position_reverted = self.stage_bare.position.value
+        testing.assert_pos_almost_equal(position_reverted, position_initial)
+
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
     """
