@@ -92,3 +92,6 @@ class TestChromaticAberrationCorrection(unittest.TestCase):
         self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE_COR][0], DEFAULT_SCALE[0])
         self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE_COR][1], DEFAULT_SCALE[1])
         numpy.testing.assert_almost_equal(im.metadata[model.MD_POS_COR], DEFAULT_TRANSLATION)
+
+if __name__ == '__main__':
+    unittest.main()
