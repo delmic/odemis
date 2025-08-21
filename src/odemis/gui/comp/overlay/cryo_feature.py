@@ -32,7 +32,7 @@ import odemis.gui.img as guiimg
 import wx
 from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, FEATURE_READY_TO_MILL,
                                 FEATURE_POLISHED, FEATURE_ROUGH_MILLED, TargetType, get_feature_position_at_posture)
-from odemis.gui.comp.canvas import CAN_DRAG
+from odemis.gui.comp.canvas import CAN_DRAG, CAN_MOVE_STAGE
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
@@ -161,9 +161,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 self.tab_data.main.currentFeature.value = feature
             else:
                 # Move to selected point (if normally allowed to move)
-                if CAN_DRAG in self.cnvs.abilities:
-                    StagePointSelectOverlay.on_dbl_click(self, evt)
-                else:
+                if CAN_MOVE_STAGE in self.cnvs.abilities:
                     super().on_dbl_click(evt)
         else:
             super().on_dbl_click(evt)

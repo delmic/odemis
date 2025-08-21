@@ -26,12 +26,13 @@ import numpy
 
 import wx
 
+from odemis.gui.comp.canvas import CAN_DRAG, CAN_MOVE_STAGE
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING
+from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING, UNKNOWN, MILLING_RANGE
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -203,9 +204,12 @@ class FibsemTab(Tab):
         self.automation_controller = milling.AutomatedMillingController(tab_data, panel, self)
         panel.Layout()
 
-        # fib viewport double click event for vertical movements
         self.pm = self.tab_data_model.main.posture_manager
-        panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
+        # sem viewport drag and double click event for stage movements
+        panel.pnl_secom_grid.viewports[0].canvas.Bind(wx.EVT_LEFT_DOWN, self.on_sem_stage_movement)
+        panel.pnl_secom_grid.viewports[0].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_sem_stage_movement)
+        # fib viewport double click event for vertical movements
+        panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_fib_dbl_click)
 
         # TODO: replace with current_posture?
         self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
@@ -213,6 +217,7 @@ class FibsemTab(Tab):
 
         rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rx"]
         self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
+        self.panel.ctrl_milling_angle.SetValueRange(*MILLING_RANGE)
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
         self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
@@ -349,7 +354,20 @@ class FibsemTab(Tab):
     def _start_streams_subscriber(self):
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
-    def on_dbl_click(self, evt):
+    def on_sem_stage_movement(self, evt):
+        active_canvas = evt.GetEventObject()
+        logging.debug(f"mouse down event, canvas: {active_canvas}")
+
+        if not active_canvas._tab_data_model.tool.value and self.pm.current_posture.value != SEM_IMAGING:
+            logging.warning(("Moving the stage from the SEM stream is currently disabled. Please set the stage to the "
+                           "SEM posture to proceed. You can still use the FIB view for movement."
+                            "Warning"))
+
+        # super event passthrough
+        evt.ResumePropagation(1)
+        evt.Skip()
+
+    def on_fib_dbl_click(self, evt):
 
         active_canvas = evt.GetEventObject()
         logging.debug(f"mouse down event, canvas: {active_canvas}")
@@ -391,6 +409,17 @@ class FibsemTab(Tab):
             tooltip="FIBSEM tab is only available at SEM position"
         )
 
+        # Prevent moving stage from SEM view when not at SEM posture
+        sem_stream_playing = self.panel.vp_secom_tl._view.getStreams()[0].should_update.value
+        if self.pm.current_posture.value == SEM_IMAGING:
+            # Currently there are different abilities depending on if the stream is playing or not.
+            if sem_stream_playing:
+                self.panel.vp_secom_tl.canvas.abilities |= {CAN_DRAG, CAN_MOVE_STAGE}
+            else:
+                self.panel.vp_secom_tl.canvas.abilities |= {CAN_MOVE_STAGE}
+        else:
+            self.panel.vp_secom_tl.canvas.abilities -= {CAN_DRAG, CAN_MOVE_STAGE}
+
         # update stage pos label
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
@@ -418,6 +447,16 @@ class FibsemTab(Tab):
         # update the stage position buttons
         self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
         self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+
+        if posture == UNKNOWN:
+            self.panel.btn_switch_sem_imaging.Disable()
+            self.panel.btn_switch_milling.Disable()
+            self.panel.ctrl_milling_angle.Disable()
+        else:
+            self.panel.btn_switch_sem_imaging.Enable()
+            self.panel.btn_switch_milling.Enable()
+            self.panel.ctrl_milling_angle.Enable()
+
         if posture == SEM_IMAGING:
             self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
         if posture == MILLING:
@@ -436,7 +475,8 @@ class FibsemTab(Tab):
         md = self.pm.get_posture_orientation(MILLING)
         stage_tilt = md["rx"]
         self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
-                                                 f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
+                                                 f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}° \n"
+                                                 f"Min {MILLING_RANGE[0]}°, Max {MILLING_RANGE[1]}°")
 
         self._on_stage_pos(self.pm.stage.position.value)
 
@@ -459,25 +499,18 @@ class FibsemTab(Tab):
                 if milling_position is not None:
                     milling_position["rx"] = stage_tilt
                     feature.set_posture_position(MILLING, milling_position)
+        # If already in milling posture and the control is changed, apply it directly
+        if self.pm.getCurrentPostureLabel() == MILLING:
+            self._move_to_milling_position(None)
 
     def _move_to_milling_position(self, evt: wx.Event):
         logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
-
-        if self.pm.current_posture.value != SEM_IMAGING:
-            wx.MessageBox("Switch to SEM position first", "Error", wx.OK | wx.ICON_ERROR)
-            return
-
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
         self._on_stage_pos(self.pm.stage.position.value)
 
     def _move_to_sem(self, evt: wx.Event):
-
-        if self.pm.current_posture.value != MILLING:
-            wx.MessageBox("Switch to milling position first", "Error", wx.OK | wx.ICON_ERROR)
-            return
-
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
 

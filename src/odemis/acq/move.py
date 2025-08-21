@@ -77,6 +77,10 @@ TFS_FIB_COLUMN_TILT = math.radians(52)
 TESCAN_FIB_COLUMN_TILT = math.radians(55)
 ZEISS_FIB_COLUMN_TILT = math.radians(54)
 
+# These values might differ per system and would then require a configuration option per system.
+# Hardcoded for now. Note that these values correspond to the milling angle, and not the actual stage tilt.
+MILLING_RANGE = (5, 25)  # degrees
+
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -373,13 +377,15 @@ class MeteorPostureManager(MicroscopePostureManager):
         if isNearPosition(pos, stage_deactive, self.stage.axes):
             return LOADING
         if isInRange(pos, stage_fm_imaging_rng, self.linear_axes):
-            return FM_IMAGING
+            if self.at_fm_posture(pos, stage_md):
+                return FM_IMAGING
         if isInRange(pos, stage_sem_imaging_rng, self.linear_axes):
             if self.at_fib_posture(pos, stage_md):
                 return FIB_IMAGING
             if self.at_milling_posture(pos, stage_md):
                 return MILLING
-            return SEM_IMAGING
+            if self.at_sem_posture(pos, stage_md):
+                return SEM_IMAGING
         # None of the above -> unknown position
         return UNKNOWN
 
@@ -426,11 +432,23 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param stage_md the stage metadata
         :param return True if the stage is at the milling posture, False if not (or not available)"""
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            stage_milling = self.get_posture_orientation(MILLING)
-            if isNearPosition(pos,
-                            stage_milling,
-                            self.rotational_axes,
-                            atol_rotation=math.radians(3)):
+            milling_orientation = self.get_posture_orientation(MILLING)
+
+            stage_tilt_range = tuple(
+                calculate_stage_tilt_from_milling_angle(
+                    math.radians(x), self.pre_tilt, self.fib_column_tilt
+                )
+                for x in MILLING_RANGE
+            )
+
+            if isInRange(
+                pos,
+                {
+                    "rx": stage_tilt_range,
+                    "rz": [milling_orientation["rz"] - math.radians(1), milling_orientation["rz"] + math.radians(1)],
+                },
+                {"rx", "rz"}
+            ):
                 return True
         return False
 
@@ -445,7 +463,37 @@ class MeteorPostureManager(MicroscopePostureManager):
             if isNearPosition(pos,
                             stage_fib,
                             self.rotational_axes,
-                            atol_rotation=math.radians(3)):
+                            atol_rotation=math.radians(1)):
+                return True
+        return False
+
+    def at_sem_posture(self, pos: Dict[str, float], stage_md: Dict[str, float]) -> bool:
+        """SEM posture is not required for all meteor systems, so we need to
+        first check it's available
+        :param pos the stage position
+        :param stage_md the stage metadata
+        :param return True if the stage is at the SEM posture, False if not (or not available)"""
+        if model.MD_FAV_SEM_POS_ACTIVE in stage_md:
+            stage_sem = self.get_posture_orientation(SEM_IMAGING)
+            if isNearPosition(pos,
+                            stage_sem,
+                            self.rotational_axes,
+                            atol_rotation=math.radians(1)):
+                return True
+        return False
+
+    def at_fm_posture(self, pos: Dict[str, float], stage_md: Dict[str, float]) -> bool:
+        """FM posture is not required for all meteor systems, so we need to
+        first check it's available
+        :param pos the stage position
+        :param stage_md the stage metadata
+        :param return True if the stage is at the FM posture, False if not (or not available)"""
+        if model.MD_FAV_FM_POS_ACTIVE in stage_md:
+            stage_fm = self.get_posture_orientation(FM_IMAGING)
+            if isNearPosition(pos,
+                            stage_fm,
+                            self.rotational_axes,
+                            atol_rotation=math.radians(1)):
                 return True
         return False
 
@@ -837,8 +885,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             elif target_pos_lbl == FIB_IMAGING:
                 end_pos = self._transformFromMeteorToFIB(stage_position)
         elif current_position == MILLING:
-            if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]:
+            if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, FIB_IMAGING]:
                 end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
+            if target_pos_lbl == MILLING:
+                # If already in milling, it could be that the desired tilt angle was updated in the metadata.
+                # We should apply it in that case.
+                end_pos = {**stage_position, "rx": self.get_posture_orientation(MILLING)["rx"]}
         elif current_position == FIB_IMAGING:
             if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING]:
                 end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
@@ -973,7 +1025,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             current_label = self.getCurrentPostureLabel()
             current_name = POSITION_NAMES[current_label]
 
-            if current_label == target:
+            # The user can change milling angles, and it is thus not atypical to stay in the milling posture.
+            # We still need to reposition the stage to match the desired new milling tilt angle.
+            if current_label != MILLING and current_label == target:
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
