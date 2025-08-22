@@ -21,7 +21,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
-from unittest import skip
+import sys
+from unittest import SkipTest, skip
+
+if sys.version_info < (3, 9):
+    raise SkipTest("semnidaq does not work for Ubuntu 20.04 or lower")
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
