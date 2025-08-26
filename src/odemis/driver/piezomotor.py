@@ -19,7 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import copy
 import glob
 import logging
 import os
@@ -42,7 +41,7 @@ from odemis.model import (
     ParallelThreadPoolExecutor,
     isasync,
 )
-from odemis.util import to_str_escape
+from odemis.util import to_str_escape, mock
 from odemis.util.driver import getSerialDriver
 
 BAUDRATE = 115200
@@ -66,8 +65,8 @@ STROKE_RANGE = [-25e-3, 25e-3]  # m, referencing point is in the middle at posit
 # and motor steps (SPC value). This conversion factor is passed in the .tsv file.
 # A motor step is equivalent to 8192 microsteps.
 USTEPS_PER_STEP = 8192
-DEFAULT_MOTORSTEP_RESOLUTION = 4.5e-6  # LL06 motor
-DEFAULT_ENCODER_RESOLUTION = 1.22e-9  # Mercury II encoder
+DEFAULT_MOTORSTEP_RESOLUTION = 4.5e-6  # m/step, LL06 motor
+DEFAULT_ENCODER_RESOLUTION = 1.22e-9  # m/counts, Mercury II encoder
 
 
 class PMDError(Exception):
@@ -420,7 +419,7 @@ class PMD401Bus(Actuator):
                 if abs(val) >= self._encoder_resolution[axname]:
                     shifts[axname] = val
                     if self._closed_loop[axname]:
-                        encoder_cnts = val * self._counts_per_meter[axname]
+                        encoder_cnts = round(val * self._counts_per_meter[axname])
                         self.runRelTargetMove(self._axis_map[axname], encoder_cnts, self._speed_steps[axname])
                     else:
                         steps_float = val * self._steps_per_meter[axname]
@@ -583,7 +582,7 @@ class PMD401Bus(Actuator):
         """
         return int(self._sendCommand(b'X%dE' % self._axis_map[axname])) / self._counts_per_meter[axname]
 
-    def runRelTargetMove(self, axis, encoder_cnts, speed):
+    def runRelTargetMove(self, axis: int, encoder_cnts: int, speed: int):
         """
         Closed-loop relative move.
         :param axis: (int) axis number
@@ -605,7 +604,7 @@ class PMD401Bus(Actuator):
         """
         self._sendCommand(b'X%dJ%d,%d,%d' % (axis, motor_steps, usteps, speed))
 
-    def runAbsTargetMove(self, axis, encoder_cnts, speed):
+    def runAbsTargetMove(self, axis: int, encoder_cnts: int, speed: int):
         """
         Closed loop move.
         :param axis: (int) axis number
@@ -1034,9 +1033,9 @@ class PMD401Bus(Actuator):
             self.setParam(axis, param, val)
 
 
-class PMDSimulator(object):
+class PMDSimulator:
     """
-    Simulates beamshift controller with three axes on axes 1, 2 and 3.
+    Simulates PMD401 controller with three axes on axes 1, 2 and 3.
     """
     def __init__(self, timeout=0.3):
         self.timeout = timeout
@@ -1044,12 +1043,12 @@ class PMDSimulator(object):
         self._output_buf = ""
 
         self.waveform = {1: WAVEFORM_PARK, 2: WAVEFORM_PARK, 3: WAVEFORM_PARK}
-        self.target_pos = {1: 0, 2: 0, 3: 0}
-        self.current_pos = {1: 0, 2: 0, 3: 0}
-        self.speed = 0
-        self.is_moving = False
-        self.status = "0000"
-        self.indexing = True
+        self._axes = {  # position in encoder counts
+            1: mock.SimulatedAxis(),
+            2: mock.SimulatedAxis(),
+            3: mock.SimulatedAxis(),
+        }
+        self.indexing = False
         self.closed_loop = {1: False, 2: False, 3: False}
 
         self.executor = CancellableThreadPoolExecutor(1)
@@ -1128,53 +1127,57 @@ class PMDSimulator(object):
                     self._output_buf += ":PMD401 V1"
                 else:
                     raise ValueError()
-            elif cmd == "T":
-                # Absolute move
+            elif cmd == "T":  # Absolute move
                 self.closed_loop[axis] = True
                 if not args:
-                    self._output_buf += ":%d" % self.target_pos[axis]
+                    self._output_buf += ":%d" % self._axes[axis].get_target_position()
                 elif len(args) == 1:
-                    steps = int(args[0]) - self.target_pos[axis]
-                    self.target_pos[axis] = int(args[0])
-                    steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps, self.target_pos)
+                    target_pos = int(args[0])
+                    self._axes[axis].move_abs(target_pos)
                 elif len(args) == 2:
-                    steps = int(args[0]) - self.target_pos[axis]
-                    self.target_pos[axis] = int(args[0])
-                    self.speed = int(args[1])
-                    steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps, self.target_pos)
+                    target_pos = int(args[0])
+                    speed = int(args[1])  # in motor steps per second
+                    speed_enc = speed * DEFAULT_MOTORSTEP_RESOLUTION / DEFAULT_ENCODER_RESOLUTION
+                    logging.debug("Converted speed %d motor steps/s to %d encoder counts/s", speed, speed_enc)
+                    self._axes[axis].speed = speed_enc
+                    self._axes[axis].move_abs(target_pos)
+                else:
+                    raise ValueError()
+            elif cmd == "C":  # Relative move
+                self.closed_loop[axis] = True
+                if not args:
+                    self._output_buf += ":%d" % self._axes[axis].get_target_position()
+                elif len(args) == 1:
+                    shift = int(args[0])
+                    self._axes[axis].move_rel(shift)
+                elif len(args) == 2:
+                    shift = int(args[0])
+                    speed = int(args[1])  # in motor steps per second
+                    speed_enc = speed * DEFAULT_MOTORSTEP_RESOLUTION / DEFAULT_ENCODER_RESOLUTION
+                    logging.debug("Converted speed %d motor steps/s to %d encoder counts/s", speed, speed_enc)
+                    self._axes[axis].speed = speed_enc
+                    self._axes[axis].move_rel(shift)
                 else:
                     raise ValueError()
             elif cmd == "S":  # stop axis
-                self.is_moving = False
                 self.closed_loop[axis] = False
-            elif cmd == "C":
-                # Relative move
-                self.closed_loop[axis] = True
-                if not args:
-                    self._output_buf += ":%d" % self.target_pos[axis]
-                elif len(args) == 1:
-                    self.target_pos[axis] += int(args[0])
-                    steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps, self.target_pos)
-                elif len(args) == 2:
-                    self.target_pos[axis] += int(args[0])
-                    self.speed = int(args[1])
-                    steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps, self.target_pos)
-                else:
-                    raise ValueError()
+                self._axes[axis].stop()
             elif cmd == "E":
-                if not args:
-                    self._output_buf += ":%d" % self.current_pos[axis]
-                elif len(args) == 1:
-                    self.target_pos[axis] += int(args[0])
+                if not args: # Get encoder position
+                    self._output_buf += ":%d" % self._axes[axis].get_position()
+                elif len(args) == 1: # Set encoder position
+                    if self.closed_loop[axis]:
+                        # According to the doc, it changes (shifts) the encoder position.
+                        # Which means that if closed loop mode is active, the target position stays
+                        # the same, but the current position "jumps". This causes a move.
+                        # TODO: simulate this? For now, the driver doesn't use this behaviour.
+                        pass
                 else:
                     raise ValueError()
-            elif cmd == "J":
+            elif cmd == "J":  # Run motor (Jog)
+                self.closed_loop[axis] = False
                 if not args:
-                    if self.is_moving:
+                    if self._axes[axis].is_moving():
                         self._output_buf += ":222"
                     else:
                         self._output_buf += ":0"
@@ -1188,6 +1191,7 @@ class PMDSimulator(object):
                 else:
                     raise ValueError()
             elif cmd == "I":
+                self.closed_loop[axis] = False
                 self.find_index()
             elif cmd == "N":
                 if self.indexing:
@@ -1201,13 +1205,13 @@ class PMDSimulator(object):
                     elif int(args[0]) == 11:  # spc parameter
                         self._output_buf += ":70000"
             elif cmd == "U":
-                if self.is_moving:
-                    # "0020" means targetMode (closed loop mode) active
-                    self.status = "0020" if self.closed_loop[axis] else "0000"
-                else:
-                    # "0030" means targetMode (closed loop mode) active and targetReached, "0010" means targetReached
-                    self.status = "0030" if self.closed_loop[axis] else "0010"
-                self._output_buf += ":%s" % self.status
+                d1, d2, d3, d4 = 0, 0, 0, 0
+                # We only care about d3
+                if self.closed_loop[axis]:  # targetMode
+                    d3 |= 0b010
+                if self._axes[axis].is_at_target(): # targetReached
+                    d3 |= 0b001
+                self._output_buf += f":{d1}{d2}{d3}{d4}"
             else:
                 # Syntax error is indicated by inserting _??_ in the response
                 self._output_buf = self._output_buf[:-len(msg)]
@@ -1221,10 +1225,6 @@ class PMDSimulator(object):
 
         self._output_buf += sEOL
 
-    def move(self, steps, target_pos):
-        # simple move, same duration for every length, don't care about speed
-        self.executor.submit(self._do_move, steps, target_pos)
-
     def find_index(self):
         t = Thread(target=self._do_indexing)
         t.start()
@@ -1233,17 +1233,3 @@ class PMDSimulator(object):
         self.indexing = True
         time.sleep(1)
         self.indexing = False
-
-    def _do_move(self, steps, target_pos):
-        self.is_moving = True
-        startt = time.time()
-        dur = abs(steps / self.speed)
-        # be a bit faster than the real hardware because the real hardware can move multiple axes at the same time
-        dur /= 2
-        while time.time() < startt + dur:
-            if not self.is_moving:  # stopped
-                return
-            else:
-                time.sleep(0.1)
-        self.current_pos = copy.deepcopy(target_pos)
-        self.is_moving = False

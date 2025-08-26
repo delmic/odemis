@@ -58,7 +58,7 @@ import odemis
 from odemis import model, util
 from odemis.model import (isasync, ParallelThreadPoolExecutor, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
-from odemis.util import driver, TimeoutError, to_str_escape
+from odemis.util import driver, TimeoutError, to_str_escape, mock
 
 
 class TMCLError(Exception):
@@ -2324,25 +2324,11 @@ class TMCMSimulator(object):
         self._astates = [dict(self._orig_axis_state) for i in range(self._naxes)]
         self._do_states = [1, 0, 0, 0, 0, 0, 0, 0]  # state of digital outputs on bank 2 (0 or 1)
 
-        # (float, float, int) for each axis
-        # start, end, start position of a move
-        self._axis_move = [(0, 0, 0)] * self._naxes
+        self._axes = [mock.SimulatedAxis(0, speed=self._getMaxSpeed(i))
+                        for i in range(self._naxes)]
 
         # time at which the referencing ends
         self._ref_move = [0] * self._naxes
-
-    def _getCurrentPos(self, axis):
-        """
-        return (int): position in microsteps
-        """
-        now = time.time()
-        startt, endt, startp = self._axis_move[axis]
-        endp = self._astates[axis][0]
-        if endt < now:
-            return endp
-        # model as if it was linear (it's not, it's ramp-based positioning)
-        pos = startp + (endp - startp) * (now - startt) / (endt - startt)
-        return pos
 
     def _getMaxSpeed(self, axis):
         """
@@ -2416,11 +2402,10 @@ class TMCMSimulator(object):
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
-            # Note: the target position in axis param is not changed in the
-            # real controller, but to more easily simulate half-way stop, we
-            # update the target position to the current pos.
-            self._astates[mot][0] = self._getCurrentPos(mot)
-            self._axis_move[mot] = (0, 0, 0)
+            # Note: the target position in axis param is not changed in the real controller,
+            # but the SimulatedAxis does report target position as the current position.
+            # Currently, the driver doesn't use this behaviour, so not an issue.
+            self._axes[mot].stop()
             self._sendReply(inst)
         elif inst == 4: # Move to position
             if not 0 <= mot < self._naxes:
@@ -2429,17 +2414,13 @@ class TMCMSimulator(object):
             if typ not in (0, 1, 2):
                 self._sendReply(inst, status=3) # wrong type
                 return
-            pos = self._getCurrentPos(mot)
+            self._axes[mot].speed = self._getMaxSpeed(mot)
+            if typ == 0: # Absolute
+                self._axes[mot].move_abs(val)
             if typ == 1: # Relative
-                # convert to absolute and continue
-                val += pos
+                self._axes[mot].move_rel(val)
             elif typ == 2: # Coordinate
                 raise NotImplementedError("simulator doesn't support coordinates")
-            # new move
-            now = time.time()
-            end = now + abs(pos - val) / self._getMaxSpeed(mot)
-            self._astates[mot][0] = val
-            self._axis_move[mot] = (now, end, pos)
             self._sendReply(inst, val=val)
         elif inst == 5: # Set axis parameter
             if not 0 <= mot < self._naxes:
@@ -2450,7 +2431,7 @@ class TMCMSimulator(object):
                 return
             # Warning: we don't handle special addresses
             if typ == 1: # actual position
-                self._astates[mot][0] = val # set target position, which will be used for current pos
+                self._axes[mot].position = val
             else:
                 self._astates[mot][typ] = val
             self._sendReply(inst, val=val)
@@ -2462,12 +2443,14 @@ class TMCMSimulator(object):
                 self._sendReply(inst, status=3) # wrong type
                 return
             # special code for special values
-            if typ == 1: # actual position
-                rval = self._getCurrentPos(mot)
+            if typ == 0:  # target position
+                rval = self._axes[mot].get_target_position()  # same as current position if not moving
+            elif typ == 1: # actual position
+                rval = self._axes[mot].get_position()
             elif typ == 209:  # encoder position (simulated as actual position)
-                rval = self._getCurrentPos(mot)
+                rval = self._axes[mot].get_position()
             elif typ == 8: # target reached?
-                rval = 0 if self._axis_move[mot][1] > time.time() else 1
+                rval = 1 if self._axes[mot].is_at_target() else 0
             elif typ in (10, 11):  # left/right switch
                 rval = random.randint(0, 1)
             elif typ in (207, 208):  # error flags
@@ -2516,6 +2499,8 @@ class TMCMSimulator(object):
                 self._sendReply(inst, status=4) # invalid value
                 return
             if typ == 0:  # start
+                # Stop move, if it was going on
+                self._axes[mot].stop()
                 self._ref_move[mot] = time.time() + 5  # s, duration of ref search
                 # Simulate previous position
                 self._astates[mot][197] = random.randint(-1000, 1000)
@@ -2531,8 +2516,8 @@ class TMCMSimulator(object):
                     # Instead of using a timer, hope there will be a status
                     # check within a second.
                     if self._ref_move[mot] + 1 > time.time():
-                        self._astates[mot][0] = 0
-                        self._astates[mot][1] = 0
+                        self._axes[mot].stop()
+                        self._axes[mot].position = 0
                     rval = 0
                 self._sendReply(inst, val=rval)
             else:
