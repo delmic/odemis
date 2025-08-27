@@ -244,7 +244,8 @@ class FastEMUserSettingsPanel(object):
             dlg = wx.MessageDialog(
                 ctrl,
                 "Do you want to change the Voltage value? "
-                "If Yes, the system needs to be re-calibrated.",
+                "If Yes, the system needs to be re-calibrated, this can only be done"
+                " by a user trained on running the voltage adjustment script.",
                 "Confirm",
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
             )
