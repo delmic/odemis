@@ -24,11 +24,11 @@ from builtins import str
 import queue
 import logging
 import math
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import numpy
 from odemis import model, util, dataio
-from odemis.model import isasync, oneway
+from odemis.model import isasync, oneway, roattribute
 from odemis.util import img
 import os
 import random
@@ -122,10 +122,16 @@ class Scanner(model.Emitter):
     etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
     """
-    def __init__(self, name, role, parent, aperture=100e-6, wd=10e-3, **kwargs):
+    def __init__(self, name, role, parent,
+                 aperture: float = 100e-6,
+                 wd: float = 10e-3,
+                 vector_scanning: bool = False,
+                 **kwargs):
         """
-        aperture (0 < float): aperture diameter of the electron lens
-        wd (0 < float): working distance
+        :param aperture: (0 < float) aperture diameter of the electron lens (m)
+        :param wd: (0 < float) working distance (m)
+        :param vector_scanning: If True, the scanner will have a .scanPath attribute which allows
+         arbitrary scanning.
         """
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
@@ -206,6 +212,15 @@ class Scanner(model.Emitter):
         # (float) in rad => rotation of the image compared to the original axes
         self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad")
 
+        # Special VigilantAttribute which allows arbitrary (aka vector) scan.
+        # If it is None, the scanner behaves "normally", by following the settings of .scale,
+        # .resolution, .translation. If it's a (N, 2) numpy array, it will scan these points.
+        # The DataArray is of 1D (N), and its metadata (MD_POS, MD_PIXEL_SIZE) contains the
+        # values from the scanner metadata as-is.
+        if vector_scanning:
+            self.scanPath = model.VigilantAttribute(None, unit="px", setter=self._set_scan_path)
+            self.scanPath.subscribe(self._on_scan_path)  # to update metadata
+
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
         # VAs to control the ebeam, purely fake
@@ -219,11 +234,18 @@ class Scanner(model.Emitter):
         # Blanker has a None = "auto" mode which automatically blanks when not scanning
         self.blanker = model.VAEnumerated(None, choices={True: 'blanked', False: 'unblanked', None: 'auto'})
 
+    @roattribute
+    def settleTime(self):
+        return 0.1e-6  # s, simulates very fast settle time
+
     def _onHFV(self, hfv):
         self._updatePixelSize()
         self._updateDepthOfField()
 
     def _onScale(self, s):
+        self._updatePixelSize()
+
+    def _on_scan_path(self, path):
         self._updatePixelSize()
 
     def _updatePixelSize(self):
@@ -238,8 +260,11 @@ class Scanner(model.Emitter):
         self.pixelSize._value = pxs
         self.pixelSize.notify(pxs)
 
-        # If scaled up, the pixels are bigger
-        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+        if not hasattr(self, "scanPath") or self.scanPath.value is None:  # standard scan
+            # If scaled up, the pixels are bigger
+            pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+        else:  # arbitrary scan path, so no scaling
+            pxs_scaled = pxs
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
         # magnification
@@ -332,6 +357,37 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
+    def _set_scan_path(self, scan_path: Optional[numpy.ndarray]) -> Optional[numpy.ndarray]:
+        """
+        Check the scan path is correct, and mark it as updated.
+        :param scan_path: the scan path to set, as a 2D numpy array of shape (N, 2).
+        The first dimension defines the number of points in the scan path, and the second
+        dimension defines the X and Y coordinates of each point in pixels (as .translation).
+        If None, then the standard scanning behaviour is used, based on .scale, .resolution and .translation.
+        :return: the scan path as-is, if valid
+        :raises ValueError: if the scan path is not valid
+        """
+        if scan_path is None:  # It's fine, just means no scan path
+            return scan_path
+
+        if (not isinstance(scan_path, numpy.ndarray)
+            or scan_path.ndim != 2
+            or scan_path.shape[1] != 2
+            or scan_path.shape[0] == 0
+        ):
+            raise ValueError(f"scanPath should be of shape (N, 2), but got {scan_path.shape}")
+
+        # Check the scan path is within the limits of translation
+        min_x, min_y = numpy.min(scan_path, axis=0)
+        max_x, max_y = numpy.max(scan_path, axis=0)
+        limits = self.translation.range
+        if not (limits[0][0] <= min_x <= max_x <= limits[1][0] and
+                limits[0][1] <= min_y <= max_y <= limits[1][1]):
+            raise ValueError(f"scanPath has bounds in X {min_x}->{max_x} and in Y {min_y}->{max_y}, "
+                             f"which is out of the limits {limits} px")
+
+        return scan_path
+
 
 class Detector(model.Detector):
     """
@@ -369,7 +425,7 @@ class Detector(model.Detector):
         self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
 
         self.drift_factor = 2  # dummy value for drift in pixels
-        self.current_drift = 0
+        self.current_drift = (0, 0)  # px
         # Given that max resolution is half the shape of fake_img,
         # we set the drift bound to stay inside the fake_img bounds
         self.drift_bound = min(v // 4 for v in self.fake_img.shape[::-1])
@@ -432,18 +488,20 @@ class Detector(model.Detector):
         """
         Periodically updates drift according to drift_factor and drift_period.
         """
-        drift = self.current_drift + random.random() * self.drift_factor
-        if abs(drift) >= self.drift_bound:
-            # Make it bounce back
-            drift = math.copysign(1, drift) * (2 * self.drift_bound - abs(drift))
-            self.drift_factor = -self.drift_factor
+        new_drift = []
+        for drift in self.current_drift:
+            drift += random.random() * self.drift_factor
+            if abs(drift) >= self.drift_bound:
+                # Make it bounce back
+                drift = math.copysign(1, drift) * (2 * self.drift_bound - abs(drift))
+                self.drift_factor = -self.drift_factor
+            new_drift.append(drift)
 
-        self.current_drift = drift
+        self.current_drift = new_drift
 
-    def _simulate_image(self):
+    def _simulate_image(self) -> Tuple[model.DataArray, float]:
         """
-        Generates the fake output based on the translation, resolution and
-        current drift.
+        Generates the fake output based on the various scanner settings and focus position
         """
         metadata = self.parent._metadata.copy()
         scanner = self.parent._scanner
@@ -452,43 +510,39 @@ class Detector(model.Detector):
 
         with self._acquisition_init_lock:
             logging.debug("Simulating an image")
+            fov_img = self._simulate_fov()
+
             pxs = scanner.pixelSize.value  # m/px
-
-            pxs_pos = scanner.translation.value
+            trans = scanner.translation.value  # px
             scale = scanner.scale.value
-            res = scanner.resolution.value
-            shi = scanner.shift.value
-
+            res = scanner.resolution.value  # px
+            max_res = scanner.resolution.range[1]
             phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
-            shape = self.fake_img.shape
-            # Simulate shift and drift
-            center = (shape[1] / 2 - shi[0] / pxs[0] - self.current_drift,
-                      shape[0] / 2 - shi[1] / pxs[1] + self.current_drift)
+            if hasattr(scanner, "scanPath"):
+                scan_path = scanner.scanPath.value
+            else:
+                scan_path = None
 
-            # First and last index (eg, 0 -> 255)
-            ltrb = [center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
-                    center[1] + pxs_pos[1] - (res[1] / 2) * scale[1],
-                    center[0] + pxs_pos[0] + ((res[0] / 2) - 1) * scale[0],
-                    center[1] + pxs_pos[1] + ((res[1] / 2) - 1) * scale[1]
-                    ]
-            # If the shift caused the image to go out of bounds, limit it
-            if ltrb[0] < 0:
-                ltrb[0] = 0
-            elif ltrb[2] > shape[1] - 1:
-                ltrb[0] -= ltrb[2] - (shape[1] - 1)
-            if ltrb[1] < 0:
-                ltrb[1] = 0
-            elif ltrb[3] > shape[0] - 1:
-                ltrb[1] -= ltrb[3] - (shape[0] - 1)
-            assert(ltrb[0] >= 0 and ltrb[1] >= 0)
+            if scan_path is not None:
+                # vector scanning: the coordinates are relative to the center
+                center = (numpy.array(max_res) - 1) / 2
+                # Round the (floating point) coordinates
+                coord = numpy.empty(scan_path.shape, dtype=numpy.uint16)
+                numpy.rint(scan_path + center, out=coord, casting="unsafe")
+                sim_img = fov_img[coord[:, 1], coord[:, 0]]  # 1D
+            else:
+                # compute each row and column that will be included
+                first_x = trans[0] + (max_res[0] - res[0] * scale[0]) / 2
+                first_y = trans[1] + (max_res[1] - res[1] * scale[1]) / 2
+                coord = ([round(first_x + i * scale[0]) for i in range(res[0])],
+                         [round(first_y + i * scale[1]) for i in range(res[1])])
+                # Get every pixel of the grid
+                sim_img = fov_img[numpy.ix_(coord[1], coord[0])]  # copy
 
-            # compute each row and column that will be included
-            coord = ([int(round(ltrb[0] + i * scale[0])) for i in range(res[0])],
-                     [int(round(ltrb[1] + i * scale[1])) for i in range(res[1])])
-            sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])] # copy
+                # Update position metadata based on the translation
+                trans_phy = scanner.pixelToPhy(trans)
+                phy_pos = (phy_pos[0] + trans_phy[0], phy_pos[1] + trans_phy[1])
 
             # reduce image depth if requested
             bpp = self.bpp.value
@@ -503,27 +557,56 @@ class Detector(model.Detector):
 
             metadata[model.MD_BPP] = bpp
 
-            if self.parent._focus:
-                # apply the defocus
-                pos = self.parent._focus.position.value['z']
-                dist = abs(pos - self.parent._focus._good_focus) * 1e4
-                sim_img = ndimage.gaussian_filter(sim_img, sigma=dist)
-
             if not scanner.power.value:
                 sim_img[:] = 0
             elif scanner.blanker.value:  # None (auto) and False (unblank) are handled the same here
                 # Leave a tiny bit of signal
                 numpy.multiply(sim_img, 0.001, out=sim_img, casting="unsafe")
 
-            # update fake output metadata
-            metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
-            metadata[model.MD_ACQ_DATE] = time.time()
+            dwell_time = scanner.dwellTime.value
+            metadata[model.MD_POS] = phy_pos
             metadata[model.MD_ROTATION] = scanner.rotation.value
-            metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
+            metadata[model.MD_ACQ_DATE] = time.time()
+            metadata[model.MD_DWELL_TIME] = dwell_time
             metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value
             metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
-            return model.DataArray(sim_img, metadata)
+
+            da = model.DataArray(sim_img, metadata)
+            duration = sim_img.size * dwell_time
+            return da, duration
+
+    def _simulate_fov(self):
+        """
+        Generate simulated image based on translation, resolution and current drift.
+        """
+        scanner = self.parent._scanner
+        pxs = scanner.pixelSize.value  # m/px
+        shift = scanner.shift.value  # m
+        full_res = self.fake_img.shape[::-1]
+        max_res = scanner.resolution.range[1]
+
+        # Simulate shift and drift to compute the current FoV
+        min_x = round((full_res[0] - max_res[0]) / 2 - shift[0] / pxs[0] + self.current_drift[0])
+        min_y = round((full_res[1] - max_res[1]) / 2 - shift[1] / pxs[1] + self.current_drift[1])
+
+        # If the shift caused the image to go out of bounds, limit it
+        rng = ((0, full_res[0] - max_res[0]),
+               (0, full_res[1] - max_res[1]))
+        min_x = min(max(rng[0][0], min_x), rng[0][1])
+        min_y = min(max(rng[1][0], min_y), rng[1][1])
+
+        # Clip the data to the current FoV
+        fov_img = self.fake_img[min_y:min_y + max_res[1], min_x:min_x + max_res[0]]
+
+        # Simulate the focus
+        if self.parent._focus:
+            # apply the defocus
+            pos = self.parent._focus.position.value['z']
+            # Multiply by 10,000 to have a more pronounced effect (arbitrary value found by trial and error)
+            dist = abs(pos - self.parent._focus._good_focus) * 1e4
+            fov_img = ndimage.gaussian_filter(fov_img, sigma=dist)
+
+        return fov_img
 
     def _acquire_thread(self, callback):
         """
@@ -535,19 +618,18 @@ class Detector(model.Detector):
         try:
             first_frame = True
             while not self._acquisition_must_stop.is_set():
-                dwelltime = self.parent._scanner.dwellTime.value
-                resolution = self.parent._scanner.resolution.value
-                duration = numpy.prod(resolution) * dwelltime
-                if self._acquisition_must_stop.wait(duration):
-                    break
                 # TODO: it's not a very proper simulation for multiple detectors,
                 # as in Odemis the convention for SEM is that the ebeam waits
                 # for _all_ the detectors to be ready before scanning.
                 self.data._waitSync()
+
                 if first_frame:  # startScan event is sent at the beginning of the *first* frame only
                     self.parent._scanner.startScan.notify()
                     first_frame = False
-                callback(self._simulate_image())
+                img, duration = self._simulate_image()
+                if self._acquisition_must_stop.wait(duration):
+                    break
+                callback(img)
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:

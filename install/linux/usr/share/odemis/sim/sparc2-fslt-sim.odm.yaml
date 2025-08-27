@@ -96,7 +96,9 @@
 "SEM E-beam": {
     # Internal child of SimSEM, so no class
     role: e-beam,
-    init: {},
+    init: {
+        vector_scanning: true,  # To enable extra options
+    },
     properties: {
         dwellTime: 10.e-6, # s
     },
