@@ -1007,7 +1007,8 @@ class MirrorDescanner(model.Emitter):
         setpoints = numpy.minimum(setpoints, I16_SYM_RANGE[1] - 1)
 
         # Shift the setpoints to the right by a percentage of the total number of setpoints.
-        setpoints = numpy.roll(setpoints, round(len(setpoints) * self.shift.value))
+        # On python/numpy <= 3.8 round(...) returns a float, explicitly convert to int.
+        setpoints = numpy.roll(setpoints, int(round(len(setpoints) * self.shift.value)))
         return setpoints.tolist()
 
     def getYAcqSetpoints(self):
