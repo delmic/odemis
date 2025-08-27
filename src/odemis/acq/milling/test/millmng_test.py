@@ -23,6 +23,7 @@ import logging
 import os
 import time
 import unittest
+from copy import deepcopy
 
 import numpy
 
@@ -157,7 +158,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
     def test_automated_milling(self):
         """Test automated milling workflow, and data changes."""
         # simulator starts at unknown, first move to grid1
-        features = self.features.copy()
+        features = deepcopy(self.features)
         f = self.pm.stage.moveAbs(self.sem_grid1)
         f.result()
 
@@ -207,7 +208,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
 
     def test_automated_milling_doesnt_start(self):
         """Automated milling shouldn't do anything if feature is active/deactive"""
-        features = self.features.copy()
+        features = deepcopy(self.features)
         features[0].status.value = FEATURE_ACTIVE
         features[1].status.value = FEATURE_DEACTIVE
 
@@ -227,7 +228,12 @@ class TestAutomatedMillingManager(unittest.TestCase):
 
     def test_cancel_workflow(self):
         """Automated milling shouldn't do anything if feature is active/deactive"""
-        features = self.features.copy()
+        features = deepcopy(self.features)
+
+        # Make sure to start from a valid SEM position. If due to a previous test the stage would be at an UNKNOWN
+        # posture, the cryoSwitchSamplePosition could fail.
+        f = self.pm.stage.moveAbs(self.sem_grid1)
+        f.result()
 
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
