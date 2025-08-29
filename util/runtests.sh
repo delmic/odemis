@@ -165,23 +165,23 @@ for f in $testfiles; do
         echo $f returned $status >> "$TESTLOG" 2>&1
         if [ "$pytest" = True ]; then
           if [ "$status" -eq 124 ]; then
-              echo "Test $f timed out after $MAXTIME seconds" >> "$TESTLOG"
-              echo "Test $f timed out after $MAXTIME seconds" >> "$TIMEOUTSUMMARY"
+              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TESTLOG"
+              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TIMEOUTSUMMARY"
           elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
-              echo "Test $f was killed after $MAXTIME seconds" >> "$TESTLOG"
-              echo "Test $f was killed after $MAXTIME seconds" >> "$TIMEOUTSUMMARY"
+              echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
+              echo "FAILED $f was killed after $MAXTIME s" >> "$TIMEOUTSUMMARY"
           elif [ "$status" -ne 0 ]; then
-              echo "Test $f failed with status code $status" >> "$TESTLOG"
-              echo "Test $f failed with status code $status" >> "$ERRORSUMMARY"
+              echo "FAILED $f failed with status code $status" >> "$TESTLOG"
+              echo "FAILED $f failed with status code $status" >> "$ERRORSUMMARY"
           fi
         else
           # Still surface in TESTLOG when not using pytest
           if [ "$status" -eq 124 ]; then
-              echo "Test $f timed out after $MAXTIME seconds" >> "$TESTLOG"
+              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TESTLOG"
           elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
-              echo "Test $f was killed after $MAXTIME seconds" >> "$TESTLOG"
+              echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
           elif [ "$status" -ne 0 ]; then
-              echo "Test $f failed with status code $status" >> "$TESTLOG"
+              echo "FAILED $f failed with status code $status" >> "$TESTLOG"
           fi
         fi
     popd > /dev/null
