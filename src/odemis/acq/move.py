@@ -613,14 +613,17 @@ class MeteorPostureManager(MicroscopePostureManager):
         ppos[self._axes_dep["y"]] = pinv[2]
         return ppos
 
-    def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def from_sample_stage_to_stage_position(self, pos: Dict[str, float], posture: Optional[int] = None) -> Dict[str, float]:
         """
         Get stage position coordinates from sample stage coordinates (sample-stage -> stage-bare).
         :param pos: position in the sample-stage coordinates
+        :param posture: The posture to use for the transformation. If None, uses the current posture.
+            Valid values include SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING, etc.
         :return: position in the stage-bare coordinates
         """
         q = numpy.array([pos["x"], pos["y"], pos["z"]])
-        posture = self.current_posture.value
+        if posture is None:
+            posture = self.current_posture.value
         pinv = self._transforms[posture] @ q
 
         # add orientation (rx, rz)
@@ -633,14 +636,17 @@ class MeteorPostureManager(MicroscopePostureManager):
         ppos.update(orientation)
         return ppos
 
-    def to_sample_stage_from_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def to_sample_stage_from_stage_position(self, pos: Dict[str, float], posture: Optional[int] = None) -> Dict[str, float]:
         """
         Get sample stage coordinates from stage coordinates. (stage-bare -> sample stage)
         :param pos: position in the stage-bare coordinates
+        :param posture: The posture to use for the transformation. If None, uses the current posture.
+            Valid values include SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING, etc.
         :return: position in the sample-stage coordinates
         """
         p = numpy.array([pos["x"], pos[self._axes_dep["x"]], pos[self._axes_dep["y"]]])
-        posture = self.current_posture.value
+        if posture is None:
+            posture = self.current_posture.value
         q = self._inv_transforms[posture] @ p
 
         qpos = {}
@@ -1064,18 +1070,29 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
             self.postures.append(FIB_IMAGING)
 
+        # For FM imaging, fix the imaging plane so that all features always lie on the same plane.
+        # Pick a sane default for the sample stage z using grid 1.
+        sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+        sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        sem_grid1_pos_fm = self._transformFromSEMToMeteor(sem_grid1_pos, fix_fm_plane=False)
+        self.fixed_fm_sample_z = self.to_sample_stage_from_stage_position(sem_grid1_pos_fm, posture=FM_IMAGING)["z"]
+        self.fm_sample_z_starting_point = None  # allocate a variable for storing the sample z before fixing it later on
+
     def create_sample_stage(self):
         self.sample_stage = SampleStage(name="Sample Stage",
                                         role="stage",
                                         stage_bare = self.stage,
                                         posture_manager=self)
 
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transformFromSEMToMeteor(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
-        :param pos: (dict str->float) the initial stage position.
-        :return: (dict str->float) the transformed position.
+        :param pos: the initial stage position.
+        :param fix_fm_plane: If True, maintains a consistent FM imaging plane by keeping the z-coordinate
+            in sample-stage space constant. The original z value is stored in fm_sample_z_starting_point for
+            restoring the z height in sem posture later. If False, performs direct transformation without z-adjustment.
+        :return: the transformed position.
         """
         # NOTE: this transform now always rotates around the z axis (180deg)
         # for pure translation, use FIB -> FM transform
@@ -1091,6 +1108,16 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         transformed_pos["x"] = md_calib["dx"] - pos["x"]
         transformed_pos["y"] = md_calib["dy"] - pos["y"]
         transformed_pos.update(fm_pos_active)
+
+        if fix_fm_plane:
+            # transformed_pos -> sample_stage
+            sample_stage_pos = self.to_sample_stage_from_stage_position(transformed_pos, posture=FM_IMAGING)
+            # store original working distance snapshot for recovery
+            self.fm_sample_z_starting_point = sample_stage_pos["z"]
+            # sample_stage_pos[z] override
+            sample_stage_pos["z"] = self.fixed_fm_sample_z
+            # overridden sample_stage_pos -> stage bare
+            transformed_pos = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
 
         return transformed_pos
 
@@ -1108,12 +1135,22 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         md_calib = stage_md[model.MD_CALIB]
         sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
+        if self.fm_sample_z_starting_point is not None:
+            # transformed_pos -> sample_stage
+            sample_stage_pos = self.to_sample_stage_from_stage_position(transformed_pos, posture=FM_IMAGING)
+            # sample_stage_pos[z] override
+            sample_stage_pos["z"] = self.fm_sample_z_starting_point
+            # overridden sample_stage_pos -> stage bare
+            transformed_pos = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
+            # Unset the snapshotted position
+            self.fm_sample_z_starting_point = None
+
         # check if the stage positions have rz axes
         if not ("rz" in pos and "rz" in sem_pos_active):
             raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
 
-        transformed_pos["x"] = md_calib["dx"] - pos["x"]
-        transformed_pos["y"] = md_calib["dy"] - pos["y"]
+        transformed_pos["x"] = md_calib["dx"] - transformed_pos["x"]
+        transformed_pos["y"] = md_calib["dy"] - transformed_pos["y"]
         transformed_pos.update(sem_pos_active)
 
         return transformed_pos

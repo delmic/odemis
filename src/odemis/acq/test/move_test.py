@@ -589,6 +589,62 @@ class TestMeteorTFS3Move(unittest.TestCase):
         for axis in expected_vshift.keys():
             self.assertAlmostEqual(zshift[axis], expected_vshift[axis], places=5)
 
+    def test_fixed_fm_z(self):
+        """
+        With the fixed fm plane feature, the fm imaging distance should always be the same, independent of the previous
+        stage position. In this test we switch to the fm posture, coming from different stage positions.
+        We check that when requesting a fixed fm plane, the fm imaging distance stays the same. No matter the previous
+        stage position. Furthermore, we also check that for the same posture switches, the fm imaging distance changes
+        when explicitly not requesting the fixed fm imaging plane.
+        """
+        translational = self.stage_grid_centers[POSITION_NAMES[GRID_1]]
+        rotational = self.stage_bare.getMetadata().get(model.MD_FAV_SEM_POS_ACTIVE)
+        position_base = {**translational, **rotational}
+
+        position_a = {**position_base, "z": 0.029}
+        position_b = {**position_base, "z": 0.032}
+        # When not fixing the fm plane, we expect the fm imaging distance to change depending on the previous
+        # SEM posture
+        position_fm_a = self.pm._transformFromSEMToMeteor(position_a, fix_fm_plane=False)
+        sample_z_a = self.pm.to_sample_stage_from_stage_position(position_fm_a, posture=FM_IMAGING)["z"]
+        position_fm_b = self.pm._transformFromSEMToMeteor(position_b, fix_fm_plane=False)
+        sample_z_b = self.pm.to_sample_stage_from_stage_position(position_fm_b, posture=FM_IMAGING)["z"]
+        self.assertNotAlmostEqual(sample_z_a, sample_z_b)
+        # Checking when using the fix_fm_plane feature, the imaging distance indeed stays the same
+        position_fm_fixed_a = self.pm._transformFromSEMToMeteor(position_a, fix_fm_plane=True)
+        sample_z_fixed_a = self.pm.to_sample_stage_from_stage_position(
+            position_fm_fixed_a, posture=FM_IMAGING)["z"]
+        position_fm_fixed_b = self.pm._transformFromSEMToMeteor(position_b, fix_fm_plane=True)
+        sample_z_fixed_b = self.pm.to_sample_stage_from_stage_position(
+            position_fm_fixed_b, posture=FM_IMAGING)["z"]
+        self.assertAlmostEqual(sample_z_fixed_a, sample_z_fixed_b)
+
+    def test_revert_from_fixed_fm_z(self):
+        """
+        Test that when requesting a fixed fm plane posture switch, we also revert to the previous stage bare position.
+        """
+        translational = self.stage_grid_centers[POSITION_NAMES[GRID_1]]
+        rotational = self.stage_bare.getMetadata().get(model.MD_FAV_SEM_POS_ACTIVE)
+        position_base = {**translational, **rotational}
+
+        # Go from SEM posture to METEOR, and back. Check that we end up at the same spot as before
+        position_sem_initial = {**position_base, "z": 0.025}
+        position_fm_initial = self.pm._transformFromSEMToMeteor(position_sem_initial, fix_fm_plane=True)
+        position_initial_reverted = self.pm._transformFromMeteorToSEM(position_fm_initial)
+        testing.assert_pos_almost_equal(position_initial_reverted, position_sem_initial)
+        # Also for milling to METEOR
+        position_initial_mill = self.pm._transformFromSEMToMilling(position_sem_initial)
+        position_fm = self.pm._transformFromMillingToFM(position_initial_mill)
+        fm_z = self.pm.to_sample_stage_from_stage_position(position_fm, posture=FM_IMAGING)["z"]
+        # Check if still at correct fixed imaging distance
+        self.assertAlmostEqual(fm_z, self.pm.fixed_fm_sample_z)
+        # Check that we can revert back to milling
+        position_initial_mill_reverted = self.pm._transformFromMeteorToMilling(position_fm)
+        testing.assert_pos_almost_equal(position_initial_mill_reverted, position_initial_mill)
+        # And even back to SEM
+        position_initial_sem_reverted = self.pm._transformFromMillingToSEM(position_initial_mill_reverted)
+        testing.assert_pos_almost_equal(position_initial_sem_reverted, position_sem_initial)
+
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
     """
