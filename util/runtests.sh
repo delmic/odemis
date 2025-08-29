@@ -85,13 +85,30 @@ if [ $pytest = True ]; then
   # Remove any files which might already exist from a previously (expected incomplete) run of that day.
   rm -f $SHORTSUMMARY
   touch $SHORTSUMMARY
+  echo "================== Short summary for $DATE =================" > "$SHORTSUMMARY"
   SHORTSUMMARY="$(readlink -m "$SHORTSUMMARY")"
 
   WARNINGSUMMARY=/tmp/pytest-warning-summary.log
   # Remove any files which might already exist from a previously (expected incomplete) run of that day.
   rm -f $WARNINGSUMMARY
   touch $WARNINGSUMMARY
+  # Add a header to the warnings summary
+  echo "================ Warnings summary for $DATE ================" > "$WARNINGSUMMARY"
   WARNINGSUMMARY="$(readlink -m "$WARNINGSUMMARY")"
+
+  TIMEOUTSUMMARY=/tmp/pytest-timeout-summary.log
+  # Remove any files which might already exist from a previously (expected incomplete) run of that day.
+  rm -f $TIMEOUTSUMMARY
+  touch $TIMEOUTSUMMARY
+  echo "================= Timeout summary for $DATE ================" > "$TIMEOUTSUMMARY"
+  TIMEOUTSUMMARY="$(readlink -m "$TIMEOUTSUMMARY")"
+
+  ERRORSUMMARY=/tmp/pytest-error-summary.log
+  # Remove any files which might already exist from a previously (expected incomplete) run of that day.
+  rm -f $ERRORSUMMARY
+  touch $ERRORSUMMARY
+  echo "============== Other errors summary for $DATE ==============" > "$ERRORSUMMARY"
+  ERRORSUMMARY="$(readlink -m "$ERRORSUMMARY")"
 fi
 
 
@@ -146,6 +163,27 @@ for f in $testfiles; do
 
         status=$?
         echo $f returned $status >> "$TESTLOG" 2>&1
+        if [ "$pytest" = True ]; then
+          if [ "$status" -eq 124 ]; then
+              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TESTLOG"
+              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TIMEOUTSUMMARY"
+          elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
+              echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
+              echo "FAILED $f was killed after $MAXTIME s" >> "$TIMEOUTSUMMARY"
+          elif [ "$status" -ne 0 ]; then
+              echo "FAILED $f failed with status code $status" >> "$TESTLOG"
+              echo "FAILED $f failed with status code $status" >> "$ERRORSUMMARY"
+          fi
+        else
+          # Still surface in TESTLOG when not using pytest
+          if [ "$status" -eq 124 ]; then
+              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TESTLOG"
+          elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
+              echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
+          elif [ "$status" -ne 0 ]; then
+              echo "FAILED $f failed with status code $status" >> "$TESTLOG"
+          fi
+        fi
     popd > /dev/null
     # Don't show test output if the file hasn't grown, as it'd be the previous test output
     new_size=$(wc -l < "$TESTLOG")
@@ -185,7 +223,9 @@ for f in $testfiles; do
 done
 
 # combine the output of the short summary and the warnings into one file
-cat $SHORTSUMMARY $WARNINGSUMMARY >> $TESTSUMMARY
+if [ "$pytest" = True ]; then
+  cat $SHORTSUMMARY $TIMEOUTSUMMARY $ERRORSUMMARY $WARNINGSUMMARY >> $TESTSUMMARY
+fi
 
 if [ $failures -gt 0 ]; then
     echo "$failures test failed. See $TESTLOG for error messages."
