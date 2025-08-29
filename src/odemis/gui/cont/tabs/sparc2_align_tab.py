@@ -44,10 +44,12 @@ from odemis import model
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.gui.comp import popup
+from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
+from odemis.gui.cont.ai import AutoMirrorAlignment
 from odemis.gui.cont.settings import EBeamBlankerSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
@@ -56,6 +58,95 @@ from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.util import units, spot, limit_invocation, almost_equal, driver
+
+
+class PredictionDialog(wx.Dialog):
+    DELTA_LIMIT = 100e-6  # 100 micrometers, for safety
+    """
+    Dialog window for displaying and accepting predicted alignment corrections.
+
+    This dialog presents the predicted corrections for the mirror and stage axes (dl, ds, dz)
+    to the user, allowing them to review and optionally apply the suggested values.
+    Users can adjust the corrections before confirming or cancel the operation.
+
+    :param parent (wx.Window): The parent window for the dialog.
+    :param dl: Predicted correction for the 'l' axis (in meters).
+    :param ds: Predicted correction for the 's' axis (in meters).
+    :param dz: Predicted correction for the 'z' axis (in meters).
+    """
+    def __init__(self, parent, dl: float, ds: float, dz: float):
+        super().__init__(parent, title="Do Alignment", size=(300, 200))
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        settings_panel = SettingsPanel(self)
+
+        _, self.dl = settings_panel.add_float_field(
+            label_text="dl",
+            value=dl,
+            conf={
+                "min_val": -self.DELTA_LIMIT,
+                "max_val": self.DELTA_LIMIT,
+                "unit": "m",
+                "accuracy": 6,
+                "key_step": 1e-7,
+            },
+        )
+
+        _, self.ds = settings_panel.add_float_field(
+            label_text="ds",
+            value=ds,
+            conf={
+                "min_val": -self.DELTA_LIMIT,
+                "max_val": self.DELTA_LIMIT,
+                "unit": "m",
+                "accuracy": 6,
+                "key_step": 1e-7,
+            },
+        )
+
+        _, self.dz = settings_panel.add_float_field(
+            label_text="dz",
+            value=dz,
+            conf={
+                "min_val": -self.DELTA_LIMIT,
+                "max_val": self.DELTA_LIMIT,
+                "unit": "m",
+                "accuracy": 6,
+                "key_step": 1e-7,
+            },
+        )
+
+        vbox.Add(settings_panel, flag=wx.ALL | wx.EXPAND, border=5)
+
+        # Custom buttons
+        hbox_btn = wx.BoxSizer(wx.HORIZONTAL)
+        align_btn = wx.Button(self, label="Do Alignment")
+        cancel_btn = wx.Button(self, label="Cancel")
+        hbox_btn.Add(align_btn, flag=wx.ALL, border=5)
+        hbox_btn.Add(cancel_btn, flag=wx.ALL, border=5)
+        vbox.Add(hbox_btn, flag=wx.ALIGN_CENTER)
+
+        # Bind events
+        align_btn.Bind(wx.EVT_BUTTON, self.on_accept)
+        cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
+
+        self.SetSizerAndFit(vbox)
+        self.Layout()
+
+    def on_accept(self, evt):
+        self.EndModal(wx.ID_OK)
+
+    def on_cancel(self, evt):
+        self.EndModal(wx.ID_CANCEL)
+
+    def get_dl(self):
+        return float(self.dl.GetValue())
+
+    def get_ds(self):
+        return float(self.ds.GetValue())
+
+    def get_dz(self):
+        return float(self.dz.GetValue())
 
 
 class Sparc2AlignTab(Tab):
@@ -265,7 +356,6 @@ class Sparc2AlignTab(Tab):
             # align modes
             self._ccd_stream = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "LENS" alignment
             self._ccd_stream_center = acqstream.CameraStream(*ccd_args, **ccd_kwargs)  # "CENTERING" alignment
-
             # To activate the SEM spot when the CCD plays
             self._ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
             self._ccd_stream_center.should_update.subscribe(self._on_ccd_stream_play)
@@ -833,6 +923,51 @@ class Sparc2AlignTab(Tab):
         # TODO: Have a warning text to indicate there is no background image?
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
+
+        # Auto-mirror alignment settings panel
+        self.auto_mirror_alignment = AutoMirrorAlignment()
+        choices = self.auto_mirror_alignment.list_available_models()
+        self.auto_alignment_panel = SettingsPanel(
+            self.panel.pnl_auto_align, size=(self.panel.pnl_auto_align.Parent.Size[0], 60)
+        )
+        _, self.align_cbox = self.auto_alignment_panel.add_combobox_control(
+            "Choose CNN model",
+            value=choices[0],
+            conf={"choices": choices, "style": wx.CB_READONLY}
+        )
+        _, self.align_prection_btn = self.auto_alignment_panel.add_run_btn("Prediction")
+        self.align_prection_btn.Bind(wx.EVT_BUTTON, self._on_btn_align_prediction)
+        panel.Bind(wx.EVT_SIZE, self.on_pnl_size)
+
+    def on_pnl_size(self, evt):
+        self.auto_alignment_panel.SetSize(self.panel.pnl_auto_align.Parent.Size[0], 60)
+        self.auto_alignment_panel.Layout()
+        self.auto_alignment_panel.Refresh()
+
+    def _on_btn_align_prediction(self, evt):
+        is_active = self._ccd_stream.is_active.value
+        should_update = self._ccd_stream.should_update.value
+        self._ccd_stream.is_active.value = False
+        self._ccd_stream.should_update.value = False
+        # Pausing the ccd stream causes the e-beam to be blanked and mode as internal
+        # make the mode as external and unblank the beam to get valid ccd data
+        self.tab_data_model.main.ebeam.external.value = True
+        self.tab_data_model.main.ebeam.blanker.value = False
+        image = self._ccd_stream._dataflow.get(asap=False)
+        model_name = self.align_cbox.GetValue()
+        prediction = self.auto_mirror_alignment.make_prediction(model_name, image)
+        prediction = prediction * 1e-6  # [m]
+        dlg = PredictionDialog(self.panel, dl=prediction[0], ds=prediction[1], dz=prediction[2])
+        if dlg.ShowModal() == wx.ID_OK:
+            logging.debug("Prediction accepted...")
+            self.tab_data_model.main.mirror.moveRel({"l": dlg.get_dl()}).result()
+            self.tab_data_model.main.mirror.moveRel({"s": dlg.get_ds()}).result()
+            self.tab_data_model.main.stage.moveRel({"z": dlg.get_dz()}).result()
+        else:
+            logging.debug("Prediction cancelled.")
+        dlg.Destroy()
+        self._ccd_stream.is_active.value = is_active
+        self._ccd_stream.should_update.value = should_update
 
     def _on_fbdet1_should_update(self, should_update):
         if should_update:
