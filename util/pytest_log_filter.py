@@ -95,7 +95,7 @@ def filter_test_log(log_txt, filter_type='summary'):
         # find all lines that contain FAILED to be on the safe side.
         failed_lines = re.findall(r"^.*?FAILED.*?$", log_txt, re.MULTILINE)
         if failed_lines:
-            test_results = log_txt.split("\n")[0] + "\n" + "\n".join(failed_lines) + "\n"
+            test_results = log_txt.split("\n")[0] + "".join(["\nFAILED " + f for f in failed_lines]) + "\n"
         else:
             test_results = None
     else:
