@@ -90,6 +90,14 @@ def filter_test_log(log_txt, filter_type='summary'):
         test_results = test_results.split("\n")[1:]  # skip the first line
         test_results.insert(0, log_txt.split("\n")[0])  # start with the full test path
         test_results = "\n".join(test_results) + "\n"  # join the results into a single string and add an empty line
+    elif filter_type == "summary" and test_results == "":
+        # In case the test case did not exit properly there could be no summary,
+        # find all lines that contain FAILED to be on the safe side.
+        failed_lines = re.findall(r"^.*?FAILED.*?$", log_txt, re.MULTILINE)
+        if failed_lines:
+            test_results = log_txt.split("\n")[0] + "".join(["\nFAILED " + f for f in failed_lines]) + "\n"
+        else:
+            test_results = None
     else:
         test_results = None
     return test_results

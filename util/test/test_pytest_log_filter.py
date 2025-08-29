@@ -32,6 +32,16 @@ class TestFilterTestLog(unittest.TestCase):
         self.assertEqual(3, len(filtered_log.split("\n")))
         self.assertTrue(filtered_log.startswith("Running "))
 
+    def test_sample_input_ubuntu_20_04_no_summary(self):
+        """Test that the logs are filtered correctly on Ubuntu 20.04"""
+        with open("test_input_pytest_log_filter_20_04.txt") as f:
+            log_txt = f.read()
+        # remove the summary part to test the case where no summary is present
+        log_txt = log_txt.split("short test summary")[0]
+        filtered_log = filter_test_log(log_txt, 'summary')
+        self.assertTrue(filtered_log.startswith("Running"))
+        self.assertTrue("FAILED" in filtered_log)
+
     def test_sample_input_ubuntu_20_04_warning(self):
         """Test that the logs are filtered correctly on Ubuntu 20.04"""
         with open("test_input_pytest_log_filter_20_04.txt") as f:
