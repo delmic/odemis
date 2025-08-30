@@ -1095,13 +1095,13 @@ class ImageIntegrator(object):
         """
         self._step += 1
         if self._img is None:
-            orig_dtype = img.dtype
-            self._best_dtype = get_best_dtype_for_acc(orig_dtype, self.steps)
             integ_img = img
             self._img = integ_img
-
         else:
             integ_img = self._img
+            if self._best_dtype is None:
+                orig_dtype = self._img.dtype
+                self._best_dtype = get_best_dtype_for_acc(orig_dtype, self.steps)
             # The sum starts as a duplicate of the first image, on the second image received
             if self._step == 2:
                 data = integ_img.astype(self._best_dtype, copy=True)
