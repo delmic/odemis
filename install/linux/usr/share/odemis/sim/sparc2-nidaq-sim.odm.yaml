@@ -75,7 +75,7 @@
         channels: [1, 0],
         limits: [[-2.8, 2.8], [4.0, -4.0]],  # V
         park: [-3.0, -4.5], # V
-        max_res: [6144, 4096],  # px, to force the same ratio as the SEM (~8/7)
+        max_res: [6144, 4096],  # px, to force the same ratio as the SEM (3/2)
         settle_time: 100.e-6,  # s
         scan_active_delay: 0.01,  # s, time to wait before starting a new acquisition
         hfw_nomag: 0.4,  # m
@@ -165,6 +165,19 @@
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
     },
+}
+
+"Sample Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {
+        axes: ["x", "y"],
+        ranges: {"x": [-0.014, 0.014], "y": [-0.028, 0.028]},
+    },
+    properties: {
+        speed: {"x": 0.01, "y": 0.01}, # m/s
+    },
+    affects: ["SEM E-beam"],
 }
 
 # Depending exactly on the configuration, it might also be used for spectrometer
