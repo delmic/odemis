@@ -69,7 +69,7 @@ from odemis.model import (
     IntEnumerated,
     StringEnumerated,
     StringVA,
-    VigilantAttribute,
+    VigilantAttribute, getComponent,
 )
 from odemis.util.filename import create_filename, make_unique_name
 
@@ -261,6 +261,58 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
+        # the streams to correlate among all streams in .streams
+        self.selected_stream = model.VigilantAttribute(None)
+        # point on FIB stream to locate sample surface
+        # self.fib_surface_point = model.VigilantAttribute(None)
+        # Output of 3DCT
+        self.projected_points: List[Target] = []
+
+        # for export tool
+        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
+
+    def add_new_target(self, x: float, y: float, type: TargetType, z: Optional[float] = None) -> Optional[Target]:
+        """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
+        :param x: x position of the target
+        :param y: y position of the target
+        :param type: TargetType of the given target like Fiducial, PointOfInterest or SurfaceFiducial
+        :param z: Optional[float] optional z position for the given target. For target in FM, z is compulsory and for the target
+         in FIB, z is None.
+        :return: Target
+        """
+
+        fm_focus_position = self.main.focus.position.value['z']
+        existing_names = [str(f.name.value) for f in self.main.targets.value]
+        z = self.main.currentFeature.value.fm_focus_position.value['z']
+
+        if type == TargetType.Fiducial:
+            t_name = make_unique_name("FM-1", existing_names)
+            index = int(re.search(TARGET_INDEX, t_name).group(1))
+            target = Target(x, y, z=z, name=t_name, type=type,
+                            index=index, fm_focus_position=fm_focus_position)
+
+        elif type == TargetType.PointOfInterest:
+            target = Target(x, y, z=z, name="POI-1", type=type,
+                            index=1, fm_focus_position=fm_focus_position)
+
+        elif type == TargetType.SurfaceFiducial:
+            target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
+                            fm_focus_position=fm_focus_position)
+
+        elif type == TargetType.FibFiducial:
+            t_name = make_unique_name("FIB-1", existing_names)
+            index = int(re.search(TARGET_INDEX, t_name).group(1))
+            target = Target(x, y, z=0, name=t_name, type=type, index=index,
+                            fm_focus_position=fm_focus_position)
+
+        else:
+            logging.debug("No view is selected. Please select a view to add target.")
+            return
+
+        self.main.targets.value.append(target)
+        self.main.currentTarget.value = target
+        return target
+
     def add_new_feature(self, stage_position: Dict[str, float],
                         fm_focus_position: Dict[str, float] = None,
                         f_name: Optional[str] = None) -> CryoFeature:
@@ -346,6 +398,31 @@ class CryoLocalizationGUIData(CryoGUIData):
 
         # Current tool selected (from the toolbar)
         tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE}
+        if main.stigmator:
+            stig = getComponent(role="stigmator")
+            stig_md = stig.getMetadata()
+            stig_calib = stig_md.get(model.MD_CALIB, None)
+
+            if not stig_calib:
+                logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
+            else:
+                for key, subdict in stig_calib.items():
+                    if 'angle' in subdict:
+                        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE, TOOL_FIDUCIAL}
+                        target_sizes = frozenset(stig_calib.keys())
+                        self.fiducial_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
+                        self.poi_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
+                    else:
+                        angles = frozenset(stig_calib.keys())
+                        rng = main.stigmator.axes["rz"].range
+                        for a in angles:
+                            if not rng[0] <= a <= rng[1]:
+                                raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+
+                        self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
+
+                    break
+
         # Update the tool selection with the new tool list
         self.tool.choices = tools
         # VA for autofocus procedure mode
@@ -378,22 +455,6 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.streams.subscribe(self._on_stream_change, init=True)
 
         self.view_posture = model.VigilantAttribute(FM_IMAGING)
-
-        if main.stigmator:
-            # stigmator should have a "MD_CALIB" containing a dict[float, dict],
-            # where the key is the stigmator angle (rad), and the value contains
-            # the calibration to pass to z_localization.determine_z_position().
-            calib = main.stigmator.getMetadata().get(MD_CALIB)
-            if calib:
-                angles = frozenset(calib.keys())
-                rng = main.stigmator.axes["rz"].range
-                for a in angles:
-                    if not rng[0] <= a <= rng[1]:
-                        raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
-
-                self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
-            else:
-                logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
 
     def _updateZParams(self):
         # Calculate the new range of z pos
@@ -501,59 +562,6 @@ class CryoTdctCorrelationGUIData(CryoGUIData):
         tools = {TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
-
-        # the streams to correlate among all streams in .streams
-        self.selected_stream = model.VigilantAttribute(None)
-        # point on FIB stream to locate sample surface
-        self.fib_surface_point = model.VigilantAttribute(None)
-        # Output of 3DCT
-        self.projected_points: List[Target] = []
-
-        # for export tool
-        self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
-
-    def add_new_target(self, x: float, y: float, type: TargetType, z: Optional[float]=None) -> Optional[Target]:
-        """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
-        :param x: x position of the target
-        :param y: y position of the target
-        :param type: TargetType of the given target like Fiducial, PointOfInterest or SurfaceFiducial
-        :param z: Optional[float] optional z position for the given target. For target in FM, z is compulsory and for the target
-         in FIB, z is None.
-        :return: Target if parameters are valid otherwise logs error.
-        """
-
-        fm_focus_position = self.main.focus.position.value['z']
-        existing_names = [str(f.name.value) for f in self.main.targets.value]
-
-        if self.views.value[0] is self.focussedView.value: # FM view
-            if type == TargetType.Fiducial:
-                t_name = make_unique_name("FM-1", existing_names)
-                index = int(re.search(TARGET_INDEX, t_name).group(1))
-                target = Target(x, y, z=0, name=t_name, type=type,
-                                        index=index, fm_focus_position=fm_focus_position)
-
-            elif type == TargetType.PointOfInterest:
-                target = Target(x, y, z=0, name="POI-1", type=type,
-                                        index=1, fm_focus_position=fm_focus_position)
-
-        elif self.views.value[1] is self.focussedView.value: # FIB view
-            if type == TargetType.SurfaceFiducial:
-                target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,
-                                fm_focus_position=fm_focus_position)
-                self.fib_surface_point.value = target
-                return target
-            t_name = make_unique_name("FIB-1", existing_names)
-            index = int(re.search(TARGET_INDEX, t_name).group(1))
-            target = Target(x, y, z=0, name=t_name, type=type, index=index,
-                            fm_focus_position=fm_focus_position)
-
-        else:
-            logging.debug("No view is selected. Please select a view to add target.")
-            return
-
-        self.main.targets.value.append(target)
-        self.main.currentTarget.value = target
-        return target
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):

@@ -86,6 +86,11 @@ POL_POSITIONS_2_DISPLAY = {MD_POL_HORIZONTAL: "Horizontal",
                            MD_POL_UP: "Degree of unpolarized light"
                            }
 POL_MOVE_TIME = 6  # [s] extra time to move polarimetry hardware (value is very approximate)
+# For multipoint correlation, the z value in 3D FM coordinates for targets is referenced from the lowest z stack.
+# Whereas in some cases, the user is allowed to add targets independent of the Z stack as in the Localization tab.
+# In this case, to get the reference of z value lower than the stream acquisition position when there is no Z stack,
+# an offset is added to the z value to get a reference position lower than the acquisition position.
+Z_OFFSET = 10.e-06  # 10 um
 
 
 class Stream(object):
@@ -1291,6 +1296,79 @@ class Stream(object):
             else:
                 return None
         return pixel_pos
+
+    def getPixel3DCoordinates(self, p_pos: Tuple[float, float, float]) -> Optional[Tuple[float, float, float]]:
+        """
+        Translate 3D physical coordinates into 3D pixel coordinates. The z coordinate is computed assuming iso-voxel
+        between x, y and z.
+        :param p_pos: the position in physical coordinates (m). x and y are the sample position, z is the focus position
+        :returns: (x, y, z) in pixel coordinates or None if it's outside of the image. No boundary check is done
+        :raises LookupError: if the stream has no data
+        """
+        if not self.raw:
+            raise LookupError("Stream has no data")
+        raw = self.raw[0]
+        p_pos_z = p_pos[2]
+        p_pos = p_pos[0:2]
+        md = self._find_metadata(raw.metadata)
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+        # For multipoint correlation, we assume that the pixel size in x is the same as in y
+        if abs(pxs[0]-pxs[1]) > 1e-9:
+            logging.warning("Pixel size in x and y are not equal while computing pixel coordinates")
+        pxs = pxs[:2]  # Take only X & Y, even if Z is available
+        rotation = md.get(model.MD_ROTATION, 0)
+        shear = md.get(model.MD_SHEAR, 0)
+        translation = md.get(model.MD_POS, (0, 0))
+        translation = translation[:2]  # Take only X & Y, even if Z is available
+        size = raw.shape[-1], raw.shape[-2]
+        # The `pxs`, `rotation` and `shear` arguments are not directly passed
+        # in the `AffineTransform` because the formula of the `AffineTransform`
+        # uses a different definition of shear.
+        matrix = alt_transformation_matrix_from_implicit(pxs, rotation, -shear, "RSL")
+        tform = AffineTransform(matrix, translation)
+        pixel_pos_c = tform.inverse().apply(p_pos)
+        # MD_POS is the center of the image, so subtract half of the size to convert to pixel-coordinates
+        # A "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
+        # For , p_pos_z is the focus position and translation[2] is the z position of the image center. We find z in pixel
+        # coordinates by enforcing the iso-voxel condition between x, y and z
+        tpos = md.get(model.MD_POS, (0, 0, 0))
+        tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
+        # Z_OFFSET is used to have reference below the sample surface such that pixel values in z are always positive
+        z = ((p_pos_z + Z_OFFSET) - tpos_z) / pxs[1]
+        pixel_pos = (pixel_pos_c[0] + size[0] / 2, - (pixel_pos_c[1] - size[1] / 2), z)
+        return pixel_pos
+
+    def getPhysical3DCoordinates(self, pixel_pos: Tuple[float, float, float]) -> Optional[Tuple[float, float, float]]:
+        """
+        Translate 3D pixel coordinates into 3D physical coordinates. The z coordinate is computed assuming iso-voxel
+        between x, y and z.
+        :param pixel_pos: the position in pixel coordinates (x, y, z)
+        :returns: the position in physical coordinates (x, y, z) in meters
+        :raises LookupError: if the stream has no data
+        """
+        if not self.raw:
+            raise LookupError("Stream has no data")
+        raw = self.raw[0]
+        md = self._find_metadata(raw.metadata)
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[0:2]
+        rotation = md.get(model.MD_ROTATION, 0)
+        shear = md.get(model.MD_SHEAR, 0)
+        translation = md.get(model.MD_POS, (0, 0))[0:2]
+        size = raw.shape[-1], raw.shape[-2]
+        # The `pxs`, `rotation` and `shear` arguments are not directly passed
+        # in the `AffineTransform` because the formula of the `AffineTransform`
+        # uses a different definition of shear.
+        matrix = alt_transformation_matrix_from_implicit(pxs, rotation, -shear, "RSL")
+        tform = AffineTransform(matrix, translation)
+        # Convert pixel coordinates to physical coordinates
+        pixel_pos_c = (pixel_pos[0] - size[0] / 2, -(pixel_pos[1] - size[1] / 2))
+        p_pos = tform.apply(pixel_pos_c)
+
+        tpos = md.get(model.MD_POS, (0, 0, 0))
+        tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
+        # Z_OFFSET is used to have reference below the sample surface such that pixel values in z are always positive
+        p_pos_z = pixel_pos[2] * pxs[1] + tpos_z - Z_OFFSET
+        return (p_pos[0], p_pos[1], p_pos_z)
 
     def getPhysicalCoordinates(self, pixel_pos: Tuple[float, float]) -> Optional[Tuple[float, float]]:
         """
