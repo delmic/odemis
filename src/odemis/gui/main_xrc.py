@@ -866,7 +866,6 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.btn_acquire_all = xrc.XRCCTRL(self, "btn_acquire_all")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
         self.btn_tdct = xrc.XRCCTRL(self, "btn_tdct")
-        self.txt_tdct = xrc.XRCCTRL(self, "txt_tdct")
         self.fp_acquired = xrc.XRCCTRL(self, "fp_acquired")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
         self.fp_milling = xrc.XRCCTRL(self, "fp_milling")
@@ -1013,6 +1012,16 @@ class xrcpnl_tab_localization(wx.Panel):
         self.gauge_z_localization = xrc.XRCCTRL(self, "gauge_z_localization")
         self.lbl_stigmator_angle = xrc.XRCCTRL(self, "lbl_stigmator_angle")
         self.cmb_stigmator_angle = xrc.XRCCTRL(self, "cmb_stigmator_angle")
+        self.lbl_fiducial_size = xrc.XRCCTRL(self, "lbl_fiducial_size")
+        self.cmb_fiducial_size = xrc.XRCCTRL(self, "cmb_fiducial_size")
+        self.lbl_poi_size = xrc.XRCCTRL(self, "lbl_poi_size")
+        self.cmb_poi_size = xrc.XRCCTRL(self, "cmb_poi_size")
+        self.btn_delete_target = xrc.XRCCTRL(self, "btn_delete_target")
+        self.cmb_targets = xrc.XRCCTRL(self, "cmb_targets")
+        self.btn_go_to_target = xrc.XRCCTRL(self, "btn_go_to_target")
+        self.label_target_z = xrc.XRCCTRL(self, "label_target_z")
+        self.ctrl_target_z = xrc.XRCCTRL(self, "ctrl_target_z")
+        self.btn_use_current_target_z = xrc.XRCCTRL(self, "btn_use_current_target_z")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.fp_secom_streams = xrc.XRCCTRL(self, "fp_secom_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
@@ -10370,14 +10379,6 @@ B`\x82'''
                                     </XRCED>
                                   </object>
                                 </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText" name="txt_tdct">
-                                    <fg>#E5E5E5</fg>
-                                    <hidden>1</hidden>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
                                 <orient>wxHORIZONTAL</orient>
                                 <flag>wxTOP</flag>
                                 <border>17</border>
@@ -11895,6 +11896,148 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                 <orient>wxHORIZONTAL</orient>
                               </object>
                               <flag>wxLEFT|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_fiducial_size">
+                                    <label>Fiducial size</label>
+                                    <fg>#DDDDDD</fg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_fiducial_size">
+                                    <size>92,16</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER
+                                    </style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_poi_size">
+                                    <label>POI size     </label>
+                                    <fg>#DDDDDD</fg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_poi_size">
+                                    <size>92,16</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER
+                                    </style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>17</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_target">
+                                    <icon>______img_icon_ico_trash_png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_targets">
+                                    <size>145,20</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_go_to_target">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Go to Target Z</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>52</border>
+                                </object>
+<!--                                <object class="sizeritem">-->
+<!--                                  <object class="wxStaticText" name="lbl_select_target">-->
+<!--                                    <label>No Target Selected</label>-->
+<!--                                    <style>wxALIGN_CENTRE</style>-->
+<!--                                    <XRCED>-->
+<!--                                      <assign_var>1</assign_var>-->
+<!--                                    </XRCED>-->
+<!--                                    <fg>#DDDDDD</fg>-->
+<!--                                  </object>-->
+<!--                                  <flag>wxLEFT</flag>-->
+<!--                                  <border>3</border>-->
+<!--                                </object>-->
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="label_target_z">
+                                    <label>Target Z</label>
+                                    <fg>#DDDDDD</fg>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="UnitFloatCtrl" name="ctrl_target_z">
+                                    <size>-1,15</size>
+                                    <accuracy>5</accuracy>
+                                    <key_step>0.001</key_step>
+                                    <unit>m</unit>
+                                    <bg>#333333</bg>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_use_current_target_z">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Use Current Z </label>
+                                    <tooltip>Save the current position of the focus as the target Z position</tooltip>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>73</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
                               <border>10</border>
                             </object>
                             <flag>wxALIGN_RIGHT</flag>
