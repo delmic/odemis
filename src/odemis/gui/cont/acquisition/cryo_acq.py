@@ -26,8 +26,6 @@ This module contains classes to control the actions related to the acquisition
 of microscope images.
 
 """
-
-import configparser
 import logging
 import math
 import os
@@ -47,14 +45,13 @@ from odemis.acq.feature import (
     acquire_at_features,
     add_feature_info_to_filename,
 )
+from odemis.acq.move import FM_IMAGING
 from odemis.acq.stream import (
     BrightfieldStream,
-    FIBStream,
     FluoStream,
-    SEMStream,
     StaticStream,
     StaticFluoStream,
-    Stream, StaticFIBStream,
+    Stream,
 )
 from odemis.gui import conf
 from odemis.gui import model as guimod
@@ -77,6 +74,7 @@ from odemis.util.filename import create_filename, guess_pattern, update_counter
 ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
+
 
 class CryoAcquiController(object):
     """
@@ -183,11 +181,8 @@ class CryoAcquiController(object):
 
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-            self.txt_tdct = self._panel.txt_tdct
-            self.txt_tdct.Show(LICENCE_CORRELATION_ENABLED)
             self._panel.btn_tdct.Show(LICENCE_CORRELATION_ENABLED)
             self._panel.btn_tdct.Enable(False)
-            self._panel.txt_tdct.Enable(False)
             self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
             self._panel.btn_acquire_all.Bind(wx.EVT_BUTTON, self._on_acquire)
             self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
@@ -224,7 +219,6 @@ class CryoAcquiController(object):
             and any(isinstance(s, StaticFluoStream) and hasattr(s, "zIndex") for s in current_feature.streams.value)
         )
         self._panel.btn_tdct.Enable(tdct_available)
-        self._panel.txt_tdct.Enable(tdct_available)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -785,25 +779,34 @@ class CryoAcquiController(object):
         for stream in self._tab_data.main.currentFeature.value.streams.value:
             if isinstance(stream, StaticFluoStream) and getattr(stream, "zIndex", None):
                 z_stack = True
-                self.txt_tdct.SetLabel("Interpolation of Z stacks .... \nMay take a while")
                 wx.CallAfter(self._on_close_dialog, z_stack)
                 return  # Prevent continuing execution here
 
     def _on_close_dialog(self, z_stack):
         if z_stack:
             self.correlation_dialog_controller.open_correlation_dialog()
-            self.txt_tdct.SetLabel("")
 
             # redraw milling position
             fibsem_tab = self._tab_data.main.getTabByName("meteor-fibsem")
             if self._tab_data.main.currentFeature.value:
                 correlation_dict = self._tab_data.main.currentFeature.value.correlation_data
-                if self._tab_data.main.currentFeature.value.status.value in correlation_dict:
-                    correlation_data = correlation_dict[self._tab_data.main.currentFeature.value.status.value]
-                    if correlation_data.fib_projected_pois:
-                        target = correlation_data.fib_projected_pois[0]
-                        fibsem_tab.milling_task_controller.draw_milling_tasks(pos=(target.coordinates.value[0],
-                                                                                   target.coordinates.value[1]))
+                if correlation_dict and correlation_dict.fib_projected_pois:
+                    # Update feature position according to POI in FM
+                    pm = self._tab_data.main.posture_manager
+                    feature = self._tab_data.main.currentFeature.value
+                    feature_stage_bare = feature.get_posture_position(FM_IMAGING)
+                    poi = correlation_dict.fm_pois[0]
+                    poi_coords = poi.coordinates.value
+                    sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=FM_IMAGING)
+                    feature_stage_bare = pm.from_sample_stage_to_stage_position({"x":poi_coords[0],
+                                                                                "y":poi_coords[1],
+                                                                                "z":sample_pos["z"]}, posture=FM_IMAGING)
+                    feature.posture_positions[FM_IMAGING].update(feature_stage_bare)
+                    feature.fm_focus_position.value["z"] = poi_coords[2]
+                    # Draw milling position in FIBSEM tab around the projected POI
+                    target = correlation_dict.fib_projected_pois[0]
+                    fibsem_tab.milling_task_controller.draw_milling_tasks(pos=(target.coordinates.value[0],
+                                                                               target.coordinates.value[1]))
 
     @call_in_wx_main
     def _on_filename(self, name):
