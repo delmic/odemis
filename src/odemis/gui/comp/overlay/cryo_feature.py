@@ -42,14 +42,23 @@ from odemis.acq.move import MicroscopePostureManager, SEM_IMAGING, FM_IMAGING, U
 MODE_EDIT_FEATURES = 1
 MODE_SHOW_FEATURES = 2
 FEATURE_DIAMETER = 30  # pixels
-FEATURE_ICON_CENTER = 17  # pixels
+FEATURE_X_CENTER = 17  # pixels
+FEATURE_Y_CENTER = 30  # pixels
 
 MODE_EDIT_FIDUCIALS = 5
 MODE_SHOW_FIDUCIALS = 6
 MODE_EDIT_REFRACTIVE_INDEX = 3
 MODE_EDIT_POI = 4
-FIDUCIAL_DIAMETER = 17  # pixels
-POI_DIAMETER = 9  # pixels
+FIDUCIAL_CENTER = 17  # pixels
+POI_CENTER = 9  # pixels
+# keep the cursor away from the centre such that the top surface of the lamella is visible
+# while placing the surface fiducial on top of it
+# to keep the point in the centre use 102 px for x center
+SURFACE_FIDUCIAL_X_CENTER = 0  # pixels
+SURFACE_FIDUCIAL_Y_CENTER = 13  # pixels
+# constants for superZ defocus feature icon status and fiducial pairs icon status
+SUPERZ_DEFOCUS = "superz_defocus"
+FIDUCIAL_PAIR = "FiducialPair"
 
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
@@ -84,7 +93,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/feature_polished_unselected.png')),
             FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_discarded_unselected.png'))}
+                guiimg.getStream('/icon/feature_discarded_unselected.png')),
+            SUPERZ_DEFOCUS: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_defocus_unselected.png')
+            )}
         self._feature_icons_selected = {FEATURE_ACTIVE: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/feature_active_selected.png')),
             FEATURE_READY_TO_MILL: cairo.ImageSurface.create_from_png(
@@ -94,7 +106,10 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             FEATURE_POLISHED: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/feature_polished_selected.png')),
             FEATURE_DEACTIVE: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/feature_discarded_selected.png'))}
+                guiimg.getStream('/icon/feature_discarded_selected.png')),
+            SUPERZ_DEFOCUS: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/feature_defocus_selected.png')
+            )}
 
         if not hasattr(self.tab_data.main, "features"):
             raise ValueError("CryoFeatureOverlay requires features VA.")
@@ -326,21 +341,27 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                                                 offset=half_size_offset)
 
             def set_icon(feature_icon):
-                ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_ICON_CENTER, bpos[1] - FEATURE_ICON_CENTER)
+                ctx.set_source_surface(feature_icon, bpos[0] - FEATURE_X_CENTER, bpos[1] - FEATURE_Y_CENTER)
 
             # Show proper feature icon based on selected feature + status
             try:
                 if feature is self.tab_data.main.currentFeature.value:
-                    set_icon(self._feature_icons_selected[feature.status.value])
+                    if feature.superz_focused is False:
+                        set_icon(self._feature_icons_selected[SUPERZ_DEFOCUS])
+                    else:
+                        set_icon(self._feature_icons_selected[feature.status.value])
                 else:
-                    set_icon(self._feature_icons[feature.status.value])
+                    if feature.superz_focused is False:
+                        set_icon(self._feature_icons[SUPERZ_DEFOCUS])
+                    else:
+                        set_icon(self._feature_icons[feature.status.value])
             except KeyError:
                 logging.error("Feature status for feature {} is not one of the predefined statuses.".format(feature.name.value))
 
             if feature is self._hover_feature:
                 # show feature name on hover
                 self._label.text = feature.name.value
-                self._label.pos = (bpos[0], bpos[1])
+                self._label.pos = (bpos[0] + 15, bpos[1] + 15)
                 self._label.draw(ctx)
 
             ctx.paint()
@@ -399,15 +420,17 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
     """ Overlay for showing the correlation points between two streams """
 
-    def __init__(self, cnvs, tab_data):
+    def __init__(self, cnvs, tab_data, allowed_targets):
         """
         :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
         :param tab_data: (model.CryoTdctCorrelationGUIData) tab data model
+        :param allowed_targets: (list of TargetType) list of TargetType which are shown on the canvas
         """
         WorldOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
         self.tab_data = tab_data
         self._mode = MODE_SHOW_FIDUCIALS
+        self.allowed_targets = allowed_targets  # list of TargetType which are shown on the canvas
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         self._selected_target = None
@@ -416,6 +439,8 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
 
         self._feature_icons = {TargetType.Fiducial: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_unselected.png')),
+            TargetType.FibFiducial: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/fiducial_unselected.png')),
             TargetType.PointOfInterest: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/poi_unselected.png')),
             TargetType.ProjectedFiducial: cairo.ImageSurface.create_from_png(
@@ -423,14 +448,22 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             TargetType.ProjectedPOI: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/projected_poi.png')),
             TargetType.SurfaceFiducial: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/surface_fiducial.png'))}
+                guiimg.getStream('/icon/surface_fiducial.png')),
+            SUPERZ_DEFOCUS: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/fiducial_defocus_unselected.png')
+            )}
 
         self._feature_icons_selected = {TargetType.Fiducial: cairo.ImageSurface.create_from_png(
             guiimg.getStream('/icon/fiducial_selected.png')),
-            "FiducialPair": cairo.ImageSurface.create_from_png(
+            TargetType.FibFiducial: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/fiducial_selected.png')),
+            FIDUCIAL_PAIR: cairo.ImageSurface.create_from_png(
                 guiimg.getStream('/icon/highlighted_fiducial.png')),
             TargetType.PointOfInterest: cairo.ImageSurface.create_from_png(
-                guiimg.getStream('/icon/poi_selected.png'))}
+                guiimg.getStream('/icon/poi_selected.png')),
+            SUPERZ_DEFOCUS: cairo.ImageSurface.create_from_png(
+                guiimg.getStream('/icon/fiducial_defocus_selected.png'))}
+
 
         self._hover_target = None
         self._label = self.add_label("")
@@ -453,68 +486,6 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         Handle mouse left click down: Create/Move targets if the tool is toggled,
         otherwise let the canvas handle the event (for proper dragging)
         """
-        evt.Skip()
-
-    def on_left_up(self, evt):
-        """
-        Handle mouse click left up: Move the selected target to the designated point,
-        otherwise let the canvas handle the event when the overlay is active.
-        """
-        evt.Skip()
-
-    def on_motion(self, evt):
-        """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        evt.Skip()
-
-    def _update_selected_target_position(self, v_pos):
-        """
-        Update the selected target with the newly moved position
-        :param v_pos: (int, int) the coordinates in the view
-        """
-        p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-        self._selected_target.pos.value = [p_pos[0], p_pos[1], self._selected_target.pos.value[2]]
-        self.cnvs.update_drawing()
-
-    def _detect_point_inside_target(self, v_pos):
-        """
-        Detect if a given point is over a target
-        :param v_pos: (int, int) Point in view coordinates
-        :return: (Target or None) Found target, None if not found
-        """
-        pass
-
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
-        """
-        Draw all the targets, on their location, indicating their status.
-        """
-        pass
-
-
-class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
-
-    def _detect_point_inside_target(self, v_pos):
-        """
-        Detect if a given point is over a target
-        :param v_pos: (int, int) Point in view coordinates
-        :return: (Target or None) Found target, None if not found
-        """
-
-        def in_radius(c_x, c_y, r, x, y):
-            return math.hypot(c_x - x, c_y - y) <= r
-
-        offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
-        for target in self.tab_data.main.targets.value:
-            if "FM" in target.name.value or "POI" in target.name.value:
-                coordinates = target.coordinates.value
-                fvsp = self.cnvs.phys_to_view(coordinates, offset)
-                if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
-                    return target
-
-    def on_left_down(self, evt):
-        """
-        Handle mouse left click down: Create/Move feature if feature tool is toggled,
-        otherwise let the canvas handle the event (for proper dragging)
-        """
         if self.active.value:
             if evt.ControlDown():
                 self._selected_tool_va.value = TOOL_FIDUCIAL
@@ -524,20 +495,33 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
             v_pos = evt.Position
             target = self._detect_point_inside_target(v_pos)
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-            if self._mode == MODE_EDIT_POI:
-                # Only one poi can be added and not multiple pois.
+            if self._mode == MODE_EDIT_POI and TargetType.PointOfInterest in self.allowed_targets:
                 # Check for existing poi in order to change the position or introduce a new poi.
-                check_existing_poi = any("POI" in target.name.value for target in self.tab_data.main.targets.value)
-                if check_existing_poi:
-                    self.tab_data.main.currentTarget.value = target
-                    self._selected_target = target
+                # Note only one poi can be added and not multiple pois.
+                existing_poi = next((target for target in self.tab_data.main.targets.value if target.type.value == TargetType.PointOfInterest), None)
+                if existing_poi:
+                    self.tab_data.main.currentTarget.value = existing_poi
+                    self._selected_target = existing_poi
                     DragMixin._on_left_down(self, evt)
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
-                    # TODO rename type to PointOfInterest
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.PointOfInterest)
-            elif self._mode == MODE_EDIT_FIDUCIALS:
-                if target:
+            elif self._mode == MODE_EDIT_REFRACTIVE_INDEX and TargetType.SurfaceFiducial in self.allowed_targets:
+                # Check for existing surface fiducial in order to change the position or introduce a new one.
+                existing_surface = next((target for target in self.tab_data.main.targets.value if target.type.value == TargetType.SurfaceFiducial), None)
+                # if check_existing_surface:
+                if existing_surface:
+                    self.tab_data.main.currentTarget.value = existing_surface
+                    self._selected_target = existing_surface
+                    DragMixin._on_left_down(self, evt)
+                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+                else:
+                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.SurfaceFiducial)
+
+            elif self._mode == MODE_EDIT_FIDUCIALS and (TargetType.Fiducial in self.allowed_targets or
+                                                     TargetType.FibFiducial in self.allowed_targets):
+                fiducial_type = TargetType.Fiducial if TargetType.Fiducial in self.allowed_targets else TargetType.FibFiducial
+                if target and (target.type.value == fiducial_type):
                     # move/drag the selected target
                     self.tab_data.main.currentTarget.value = target
                     self._selected_target = target
@@ -545,7 +529,7 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1],
-                                                 type=TargetType.Fiducial)
+                                                 type=fiducial_type)
             else:
                 if target:
                     self.tab_data.main.currentTarget.value = target
@@ -580,59 +564,8 @@ class CryoCorrelationFmPointsOverlay(CryoCorrelationPointsOverlay):
                                                            self._selected_target.coordinates.value[2]]
                 self.cnvs.update_drawing()
                 return
-            target = self._detect_point_inside_target(v_pos)
-            if target:
-                return
-            else:
-                if self._mode == MODE_EDIT_FIDUCIALS or self._mode == MODE_EDIT_POI:
-                    self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
-                else:
-                    return
+
         WorldOverlay.on_motion(self, evt)
-
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
-        """
-        Draw all the targets, on their location, indicating their status.
-        """
-        if not self.show:
-            return
-
-        def set_icon(feature_icon, feature_type=TargetType.Fiducial):
-            if feature_type == TargetType.PointOfInterest:
-                ctx.set_source_surface(feature_icon, bpos[0] - POI_DIAMETER, bpos[1] - POI_DIAMETER)
-            else:
-                ctx.set_source_surface(feature_icon, bpos[0] - FIDUCIAL_DIAMETER, bpos[1] - FIDUCIAL_DIAMETER)
-
-        # Show each target icon and label if applicable
-        for target in self.tab_data.main.targets.value:
-            if "FM" in target.name.value or "POI" in target.name.value:
-                coordinates = target.coordinates.value
-                half_size_offset = self.cnvs.get_half_buffer_size()
-
-                # convert physical position to buffer 'world' coordinates
-                bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
-                                                    self.cnvs.scale,
-                                                    offset=half_size_offset)
-
-                # Show proper feature icon based on selected target + status
-                if target is self.tab_data.main.currentTarget.value:
-                    # Correct label positions such that label is outside the icon display
-                    set_icon(self._feature_icons_selected[target.type.value], target.type.value)
-                    self._label.text = target.index.value
-                    self._label.pos = (bpos[0] + 10, bpos[1] + 10)
-                    self._label.draw(ctx)
-                elif self.tab_data.main.currentTarget.value and (
-                        target.index.value == self.tab_data.main.currentTarget.value.index.value) and (
-                        "FIB" in self.tab_data.main.currentTarget.value.name.value) and (
-                        "POI" not in target.name.value):
-                    set_icon(self._feature_icons_selected["FiducialPair"], target.type.value)
-                else:
-                    set_icon(self._feature_icons[target.type.value], target.type.value)
-
-                ctx.paint()
-
-
-class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
 
     def _detect_point_inside_target(self, v_pos):
         """
@@ -640,95 +573,16 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
         :param v_pos: (int, int) Point in view coordinates
         :return: (Target or None) Found target, None if not found
         """
-
         def in_radius(c_x, c_y, r, x, y):
             return math.hypot(c_x - x, c_y - y) <= r
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical target positions to pixels
         for target in self.tab_data.main.targets.value:
-            if "FIB" in target.name.value:
+            if target.type.value in self.allowed_targets:
                 coordinates = target.coordinates.value
-                fvsp = self.cnvs.phys_to_view(coordinates, offset)
+                fvsp = self.cnvs.phys_to_view(coordinates[0:2], offset)
                 if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                     return target
-
-    def on_motion(self, evt):
-        """ Process drag motion if enabled, otherwise change cursor based on target detection/mode """
-        if self.active.value and self._mode != MODE_SHOW_FIDUCIALS:
-            v_pos = evt.Position
-            if self.left_dragging:
-                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                DragMixin._on_motion(self, evt)
-                p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-                if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                    self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
-                else:
-                    self._selected_target.coordinates.value = [p_pos[0], p_pos[1],
-                                                               self._selected_target.coordinates.value[2]]
-                self.cnvs.update_drawing()
-                return
-            target = self._detect_point_inside_target(v_pos)
-            if target or self.tab_data.fib_surface_point.value:
-                return
-            else:
-                if self._mode == MODE_EDIT_FIDUCIALS or self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                    self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
-                else:
-                    return
-        WorldOverlay.on_motion(self, evt)
-
-    def on_left_down(self, evt):
-        """
-        Handle mouse left click down: Create/Move feature if feature tool is toggled,
-        otherwise let the canvas handle the event (for proper dragging)
-        """
-        # Capture key presses and ignore the event
-        ctrl_mode = evt.ControlDown()
-        if self.active.value and ctrl_mode:
-            self._selected_tool_va.value = TOOL_FIDUCIAL
-        if self.active.value:
-            self.tab_data.focussedView.value = self.cnvs.view
-            v_pos = evt.Position
-            target = self._detect_point_inside_target(v_pos)
-            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
-            if self._mode == MODE_EDIT_REFRACTIVE_INDEX:
-                if self.tab_data.fib_surface_point.value:
-                    # add/modify fib_surface_fiducial
-                    self.tab_data.fib_surface_point.value.coordinates.value = [p_pos[0], p_pos[1], int(0)]
-                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                else:
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.SurfaceFiducial)
-            elif self._mode == MODE_EDIT_FIDUCIALS:
-                if target:
-                    # move/drag the selected target
-                    self.tab_data.main.currentTarget.value = target
-                    self._selected_target = target
-                    DragMixin._on_left_down(self, evt)
-                    self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                else:
-                    self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.Fiducial)
-
-            else:
-                if target:
-                    self.tab_data.main.currentTarget.value = target
-                evt.Skip()
-        else:
-            WorldOverlay.on_left_down(self, evt)
-
-    def on_left_up(self, evt):
-        """
-        Handle mouse click left up: Move the selected target to the designated point,
-        otherwise let the canvas handle the event when the overlay is active.
-        """
-        if self.active.value:
-            DragMixin._on_left_up(self, evt)
-            self.clear_drag()
-            self.cnvs.update_drawing()
-            self.cnvs.reset_dynamic_cursor()
-            WorldOverlay.on_left_up(self, evt)
-            self._selected_tool_va.value = TOOL_NONE
-        else:
-            WorldOverlay.on_left_up(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
@@ -738,14 +592,16 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
             return
 
         def set_icon(feature_icon, feature_type=TargetType.Fiducial):
-            if feature_type in (TargetType.ProjectedPOI, TargetType.SurfaceFiducial):
-                ctx.set_source_surface(feature_icon, bpos[0] - POI_DIAMETER, bpos[1] - POI_DIAMETER)
+            if feature_type in (TargetType.ProjectedPOI, TargetType.PointOfInterest):
+                ctx.set_source_surface(feature_icon, bpos[0] - POI_CENTER, bpos[1] - POI_CENTER)
+            elif feature_type == TargetType.SurfaceFiducial:
+                ctx.set_source_surface(feature_icon, bpos[0] - SURFACE_FIDUCIAL_X_CENTER, bpos[1] - SURFACE_FIDUCIAL_Y_CENTER)
             else:
-                ctx.set_source_surface(feature_icon, bpos[0] - FIDUCIAL_DIAMETER, bpos[1] - FIDUCIAL_DIAMETER)
+                ctx.set_source_surface(feature_icon, bpos[0] - FIDUCIAL_CENTER, bpos[1] - FIDUCIAL_CENTER)
 
         # Show each target icon and label if applicable
         for target in self.tab_data.main.targets.value:
-            if "FIB" in target.name.value:
+            if target.type.value in self.allowed_targets:
                 coordinates = target.coordinates.value
                 half_size_offset = self.cnvs.get_half_buffer_size()
 
@@ -755,50 +611,50 @@ class CryoCorrelationFibPointsOverlay(CryoCorrelationPointsOverlay):
                                                     offset=half_size_offset)
 
                 # Show proper feature icon based on selected target + status
-                if target is self.tab_data.main.currentTarget.value:
-                    set_icon(self._feature_icons_selected[target.type.value], target.type.value)
+                if target.type.value == TargetType.SurfaceFiducial:
+                    set_icon(self._feature_icons[target.type.value], target.type.value)
+                elif target is self.tab_data.main.currentTarget.value:
+                    # Correct label positions such that label is outside the icon display
+                    if target.superz_focused == False:  # can be None, True, False
+                        set_icon(self._feature_icons_selected[SUPERZ_DEFOCUS])
+                    else:
+                        set_icon(self._feature_icons_selected[target.type.value], target.type.value)
                     self._label.text = target.index.value
-                    self._label.pos = (bpos[0] + 10, bpos[1] + 10)
+                    self._label.pos = (bpos[0] + 15, bpos[1] + 15)
                     self._label.draw(ctx)
                 elif self.tab_data.main.currentTarget.value and (
                         target.index.value == self.tab_data.main.currentTarget.value.index.value) and (
-                        "FM" in self.tab_data.main.currentTarget.value.name.value):
-                    set_icon(self._feature_icons_selected["FiducialPair"], target.type.value)
+                        self.tab_data.main.currentTarget.value.type.value in [TargetType.Fiducial, TargetType.FibFiducial]) and (
+                        target.type.value in [TargetType.Fiducial, TargetType.FibFiducial]):
+                    set_icon(self._feature_icons_selected[FIDUCIAL_PAIR], target.type.value)
+                    self._label.text = target.index.value
+                    self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    self._label.draw(ctx)
                 else:
-                    set_icon(self._feature_icons[target.type.value], target.type.value)
-                    # Label the target if the correlation result is there for easy comparison
-                    # with the corresponding projected fiducials
-                    if self.tab_data.projected_points:
-                        self._label.text = target.index.value
-                        self._label.pos = (bpos[0] + 15, bpos[1] + 15)
-                        self._label.draw(ctx)
+                    if target.superz_focused == False:  # can be None, True, False
+                        set_icon(self._feature_icons[SUPERZ_DEFOCUS])
+                    else:
+                        set_icon(self._feature_icons[target.type.value], target.type.value)
+                    self._label.text = target.index.value
+                    self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    self._label.draw(ctx)
 
                 ctx.paint()
 
-        if self.tab_data.fib_surface_point.value:
-            fib_surface_target = self.tab_data.fib_surface_point.value
-            coordinates = fib_surface_target.coordinates.value
-            half_size_offset = self.cnvs.get_half_buffer_size()
-            bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
-                                                self.cnvs.scale,
-                                                offset=half_size_offset)
+        if TargetType.ProjectedFiducial in self.allowed_targets:
+            for target in self.tab_data.projected_points:
+                coordinates = target.coordinates.value
+                half_size_offset = self.cnvs.get_half_buffer_size()
 
-            set_icon(self._feature_icons[fib_surface_target.type.value],fib_surface_target.type.value)
-            ctx.paint()
+                # convert physical position to buffer 'world' coordinates
+                bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
+                                                    self.cnvs.scale,
+                                                    offset=half_size_offset)
 
-        for target in self.tab_data.projected_points:
-            coordinates = target.coordinates.value
-            half_size_offset = self.cnvs.get_half_buffer_size()
-
-            # convert physical position to buffer 'world' coordinates
-            bpos = self.cnvs.phys_to_buffer_pos((coordinates[0], coordinates[1]), self.cnvs.p_buffer_center,
-                                                self.cnvs.scale,
-                                                offset=half_size_offset)
-
-            set_icon(self._feature_icons[target.type.value])
-            # Label the projected fiducial for easy comparison with corresponding fiducials
-            if target.type.value is TargetType.ProjectedFiducial:
-                self._label.text = target.index.value
-                self._label.pos = (bpos[0] + 15, bpos[1] + 15)
-                self._label.draw(ctx)
-            ctx.paint()
+                set_icon(self._feature_icons[target.type.value])
+                # Label the projected fiducial for easy comparison with corresponding fiducials
+                if target.type.value is TargetType.ProjectedFiducial:
+                    self._label.text = target.index.value
+                    self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    self._label.draw(ctx)
+                ctx.paint()

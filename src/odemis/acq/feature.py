@@ -1,6 +1,5 @@
 import copy
 import glob
-import itertools
 import json
 import logging
 import os
@@ -52,7 +51,8 @@ REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 
 # define the target types
 class TargetType(Enum):
-    Fiducial = "Fiducial"
+    Fiducial = "FM Fiducial"
+    FibFiducial = "FIB Fiducial"
     PointOfInterest = "Point of Interest"
     SurfaceFiducial = "Surface Fiducial"
     ProjectedFiducial = "Projected Points"
@@ -179,6 +179,12 @@ class CryoFeature(object):
         self.path: str = None  # TODO:support path creation here, rather than on milling data save
         self.reference_image: model.DataArray = None
 
+        # Save the stream used for SuperZ workflow
+        self.superz_stream_name: Optional[str] = None
+
+        self.superz_focused: Optional[bool] = None  # True if super z focus has high accuracy, False otherwise,
+        # If None, it means that the super z focus was not used.
+
     def set_posture_position(self, posture: str, position: Dict[str, float]) -> None:
         """
         Set the stage position for the given posture.
@@ -280,8 +286,9 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
                         'fm_focus_position': feature.fm_focus_position.value,
                         'posture_positions': feature.posture_positions,
                         "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
-                        'correlation_data': {k: v.to_dict() for k, v in feature.correlation_data.items()} if feature.correlation_data  else {
-            }}
+                        'correlation_data': feature.correlation_data.to_dict() if feature.correlation_data  else {},
+                        'superz_stream_name': feature.superz_stream_name,
+                        'superz_focused': feature.superz_focused}
         if feature.path:
             feature_item['path'] = feature.path
         flist.append(feature_item)
@@ -310,11 +317,13 @@ class FeaturesDecoder(json.JSONDecoder):
                                   stage_position=stage_position,
                                   fm_focus_position=fm_focus_position
                                   )
-            feature.correlation_data = {k: FIBFMCorrelationData.from_dict(v) for k, v in correlation_data.items()}
+            feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
             feature.status.value = obj['status']
             feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
             feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
             feature.path = obj.get('path', None)
+            feature.superz_stream_name = obj.get('superz_stream_name', None)
+            feature.superz_focused = obj.get('superz_focused', None)
 
             # load the reference image
             if feature.path:
@@ -811,7 +820,7 @@ def acquire_at_features(
 
 
 class Target:
-    def __init__(self, x: float, y: float, z: float, name: str, type: TargetType, index: int, fm_focus_position: float):
+    def __init__(self, x: float, y: float, z: float, name: str, type: TargetType, index: int, fm_focus_position: float, superz_focused: Optional[bool] = None):
         """
         Target class to store the target information for multipoint correlation. The target can be a fiducial, point of
         interest, surface fiducial, projected fiducial or projected point of interest. The target information is used to
@@ -824,12 +833,15 @@ class Target:
         :param type: type of the given target like Fiducial, PointOfInterest, SurfaceFiducial, ProjectedFiducial,
         :param index: index of the target in the given type. For example, "FM-2" -> 2.
         :param fm_focus_position: position of the focus (objective in cased of Meteor) in meters
+        :param superz_focused: True if super z focus has high accuracy, False otherwise. If None, it means that the
+          super z focus was not used.
         """
         self.coordinates = model.ListVA((x, y, z), unit="m")
         self.type = model.VAEnumerated(type, choices={t for t in TargetType})
         self.name = model.StringVA(name)
         self.index = model.IntContinuous(index, range=(1, 99))
         self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")
+        self.superz_focused = superz_focused
 
     def to_dict(self) -> dict:
         return {
@@ -838,6 +850,7 @@ class Target:
             "name": self.name.value,
             "index": self.index.value,
             "fm_focus_position": self.fm_focus_position.value,
+            "superz_focused": self.superz_focused,
         }
 
     @staticmethod
@@ -851,4 +864,5 @@ class Target:
             type=TargetType(d["type"]),
             index=d["index"],
             fm_focus_position=d["fm_focus_position"],
+            superz_focused=d.get("superz_focused", None),
         )
