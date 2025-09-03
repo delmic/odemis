@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import asyncio
 import logging
 import os
+import sys
 import threading
 import time
 import unittest
@@ -98,6 +99,9 @@ class TestMightyEBICSyncAcq(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
+        if sys.version_info < (3, 9):
+            raise unittest.SkipTest("ephemeron does not work for Ubuntu 20.04 or lower")
+
         cls.ebic = ephemeron.MightyEBIC(**KWARGS_EBIC)
 
         cls.sem = semnidaq.AnalogSEM(**CONFIG_SEM)
@@ -167,6 +171,9 @@ class TestMightyEBICDetector(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
+        if sys.version_info < (3, 9):
+            raise unittest.SkipTest("ephemeron does not work for Ubuntu 20.04 or lower")
+
         cls.ebic_det = ephemeron.MightyEBIC(**KWARGS_EBIC)
         cls.acquired_data: Optional[model.DataArray] = None
         cls.dwell_time_values = [cls.ebic_det.dwellTime.range[0], 6e-6, 10e-6, 11.9e-6, 12e-6, 50e-6, 1.995e-3, 1.996e-3]
