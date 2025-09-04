@@ -210,6 +210,9 @@ class LiveStream(Stream):
         if model.MD_ACQ_TYPE not in data.metadata and self.acquisitionType.value is not None:
             data.metadata[model.MD_ACQ_TYPE] = self.acquisitionType.value
 
+        if hasattr(self, "tint"):
+            data.metadata[model.MD_USER_TINT] = img.tint_to_md_format(self.tint.value)
+
         if not self.raw:
             self.raw.append(data)
         else:
@@ -1117,7 +1120,6 @@ class FluoStream(CameraStream):
         self.power.subscribe(self._onPower)
         # Colouration of the image
         self.tint.value = conversion.wavelength2rgb(center_em)
-        self.tint.subscribe(self._onTint)
 
     def _onActive(self, active):
         if active:
@@ -1186,7 +1188,6 @@ class FluoStream(CameraStream):
         # Call _onPower to update emitter power
         self._onPower(self.power.value)
 
-
     def _onNewData(self, dataflow, data):
         if model.MD_OUT_WL not in data.metadata:
             # Add some metadata on the fluorescence
@@ -1194,15 +1195,7 @@ class FluoStream(CameraStream):
             em_band = fluo.get_one_band_em(self.emission.value, self.excitation.value)
             data.metadata[model.MD_OUT_WL] = em_band
 
-        data.metadata[model.MD_USER_TINT] = img.tint_to_md_format(self.tint.value)
-        super(FluoStream, self)._onNewData(dataflow, data)
-
-    def _onTint(self, tint):
-        """
-        Store the new tint value as metadata
-        """
-        if self.raw:
-            self.raw[0].metadata[model.MD_USER_TINT] = img.tint_to_md_format(tint)
+        super()._onNewData(dataflow, data)
 
 
 class StreakCamStream(CameraStream):
