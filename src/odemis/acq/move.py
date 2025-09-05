@@ -1303,9 +1303,14 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
         # Define values that are used more than once
-        rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
+        try:
+            rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
+            z = pos["z"]
+        except KeyError:
+            raise KeyError(f"The stage position does not have rx or z axis. pos={pos}")
+
         rx_fm = fm_pos_active["rx"]  # Calibrated tilt angle, for imaging perpendicular to objective
-        b_0 = pos["z"] - calibrated_values["z_ct"]
+        b_0 = z - calibrated_values["z_ct"]
         x_0 = calibrated_values["x"]
         y_0 = calibrated_values["y"]
         m_0 = calibrated_values["m"]
