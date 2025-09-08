@@ -1,23 +1,51 @@
+"""
+Created on Aug 1, 2025
+
+@author: Ilja Fiers & Éric Piel
+
+Copyright © 2025 Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+"""
+
+import ctypes
 import inspect
 import logging
-import ctypes
 import os
+import queue
+import tempfile
 import threading
 import time
-import unittest
+import weakref
 from ctypes import *
 from enum import Enum
-import ctypes
-
-#from odemis import model
-#from odemis.dataio import hdf5
+from typing import Tuple, Optional, Dict, Any
 
 import numpy.ctypeslib
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+from odemis import model, util
+
 
 class TUCamError(IOError):
     pass
+
+
+PXS_DHYANA_400BSI = (6.5e-6, 6.5e-6)  # pixel size in m
+
+# X resolution has to be a multiple of 8
+MIN_RES_DHYANA_400BSI = (48, 8)  # min ROI in px (X, Y), true for any binning
+
 
 tucam_error_codes = {
     0x00000001: "success code",
@@ -44,7 +72,8 @@ tucam_error_codes = {
     0x80000201: "API requires initialization",
     0x80000202: "API is busy",
     0x80000203: "API is not initialized",
-    0x80000204: "Some resources are used exclusivelyTUCAMRET_NOT_BUSY 0x80000205 API is not busy",
+    0x80000204: "Some resources are used exclusively",
+    0x80000205: "API is not busy",
     0x80000206: "API is not in ready",
     #Waiting Errors
     0x80000207: "Aborted",
@@ -509,7 +538,7 @@ class TUCAM_INIT(Structure):
 class TUCAM_OPEN(Structure):
     _fields_ = [
         ("uiIdxOpen",     c_uint32),
-        ("hIdxTUCam",     c_void_p)     # ("hIdxTUCam",     c_void_p)
+        ("hIdxTUCam",     c_void_p)
     ]
 
 # the image open struct
@@ -786,7 +815,7 @@ class TUCAM_ELEMENT(Structure):
         ("pTransfer",        c_char_p),
         ("pDesc",            c_char_p),
         ("pUnit",            c_char_p),
-        ("pEntries",         ctypes.POINTER(ctypes.c_char_p)),
+        ("pEntries",         POINTER(c_char_p)),
         ("PollingTime",      c_int64),
         ("DisplayPrecision", c_int64)
     ]
@@ -797,13 +826,17 @@ CONTEXT_CALLBACK = eval('CFUNCTYPE')(c_void_p)
 
 class TUCamDLL:
     def __init__(self):
-        if os.name == "nt":
-            # 32bit
-            # self.TUSDKdll = OleDLL("./lib/x86/TUCam.dll")
-            # 64bit
-            self.TUSDKdll = OleDLL("./lib/x64/TUCam.dll")
-        else:
-            self.TUSDKdll = CDLL("libTUCam.so.1")
+        try:
+            if os.name == "nt":
+                # Note: use WinDLL (isntead of OleDLL), so that there is no auto errcheck on HRESULT
+                # 32bit
+                # self.TUSDKdll = WinDLL("./lib/x86/TUCam.dll")
+                # 64bit
+                self.TUSDKdll = WinDLL("./lib/x64/TUCam.dll")
+            else:
+                self.TUSDKdll = CDLL("libTUCam.so.1")
+        except OSError:
+            raise OSError("Could not load TUCam library. Make sure the Tucsen SDK is installed with: sudo apt install libtucam")
 
         if hasattr(self.TUSDKdll, "TUCAM_Api_Init"):
             # "Simple" case: C functions are available
@@ -858,9 +891,11 @@ class TUCamDLL:
             self.TUCAM_Rec_SetAppendMode = self.TUSDKdll.TUCAM_Rec_SetAppendMode
             self.TUCAM_Cap_SetBIN = self.TUSDKdll.TUCAM_Cap_SetBIN
             self.TUCAM_Cap_GetBIN = self.TUSDKdll.TUCAM_Cap_GetBIN
-            self.TUCAM_Cap_SetBackGround = self.TUSDKdll.TUCAM_Cap_SetMath
+            self.TUCAM_Cap_GetBackGround = self.TUSDKdll.TUCAM_Cap_GetBackGround
+            self.TUCAM_Cap_SetBackGround = self.TUSDKdll.TUCAM_Cap_SetBackGround
             self.TUCAM_Cap_SetMath = self.TUSDKdll.TUCAM_Cap_SetMath
             self.TUCAM_Cap_GetMath = self.TUSDKdll.TUCAM_Cap_GetMath
+            self.TUCAM_GenICam_ElementAttr = self.TUSDKdll.TUCAM_GenICam_ElementAttr
             self.TUCAM_GenICam_ElementAttrNext = self.TUSDKdll.TUCAM_GenICam_ElementAttrNext
             self.TUCAM_GenICam_SetElementValue = self.TUSDKdll.TUCAM_GenICam_SetElementValue
             self.TUCAM_GenICam_GetElementValue = self.TUSDKdll.TUCAM_GenICam_GetElementValue
@@ -965,10 +1000,11 @@ class TUCamDLL:
 
         # Input/output arguments definition
 
-        # On Linux, the default return value is a (signed) int. However, the functions return uint32.
-        # This prevents converting properly the return to TUCAMRET
+        # The default return type is a (signed) int, when passing a Python callable.
+        # However, the functions return uint32, with all failure codes containing the highest bit set.
+        # This prevents converting properly the return to TUCAMRET_Enum, as they are interpreted as
+        # negative values, not existing.
         TUCAMRET = c_uint32
-        # TUCAMRET = None
         # TUCAMRET = TUCAMRET_Enum
 
         # init, uninit of API
@@ -1015,7 +1051,7 @@ class TUCamDLL:
         self.TUCAM_Buf_AbortWait.argtypes = [c_void_p]
         self.TUCAM_Buf_AbortWait.restype = TUCAMRET
         self.TUCAM_Buf_WaitForFrame.argtypes = [c_void_p, POINTER(TUCAM_FRAME), c_int32]
-        # self.TUCAM_Buf_WaitForFrame.restype = TUCAMRET
+        self.TUCAM_Buf_WaitForFrame.restype = TUCAMRET
         self.TUCAM_Buf_CopyFrame.argtypes = [c_void_p, POINTER(TUCAM_FRAME)]
         self.TUCAM_Buf_CopyFrame.restype = TUCAMRET
 
@@ -1122,9 +1158,8 @@ class TUCamDLL:
         # Subtract background
         self.TUCAM_Cap_SetBackGround.argtypes = [c_void_p, TUCAM_IMG_BACKGROUND]
         self.TUCAM_Cap_SetBackGround.restype = TUCAMRET
-        # self.TUCAM_Cap_GetBackGround = self.TUSDKdll.TUCAM_Cap_GetMath
-        # self.TUCAM_Cap_GetBackGround.argtypes = [c_void_p, POINTER(TUCAM_IMG_BACKGROUND)]
-        # self.TUCAM_Cap_GetBackGround.restype = TUCAMRET
+        self.TUCAM_Cap_GetBackGround.argtypes = [c_void_p, POINTER(TUCAM_IMG_BACKGROUND)]
+        self.TUCAM_Cap_GetBackGround.restype = TUCAMRET
 
         # Math
         self.TUCAM_Cap_SetMath.argtypes = [c_void_p, TUCAM_IMG_MATH]
@@ -1133,9 +1168,8 @@ class TUCamDLL:
         self.TUCAM_Cap_GetMath.restype = TUCAMRET
 
         # GenICam Element Attribute pName
-        # self.TUCAM_GenICam_ElementAttr = self.TUSDKdll.TUCAM_GenICam_ElementAttr
-        # self.TUCAM_GenICam_ElementAttr.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_void_p, c_int32]
-        # self.TUCAM_GenICam_ElementAttr.restype = TUCAMRET
+        self.TUCAM_GenICam_ElementAttr.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_void_p, c_int32]
+        self.TUCAM_GenICam_ElementAttr.restype = TUCAMRET
 
         # GenICam Element Attribute Next
         self.TUCAM_GenICam_ElementAttrNext.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_void_p, c_int32]
@@ -1163,28 +1197,17 @@ class TUCamDLL:
         self.TUCAM_Cap_ClearBuffer.argtypes = [c_void_p]
         self.TUCAM_Cap_ClearBuffer.restype = TUCAMRET
 
-        # for name, member in inspect.getmembers(self, inspect.isfunction):
-        #     if name.startswith("TUCAM_"):
-        #         member.errcheck = self._errcheck
+        for name, member in inspect.getmembers(self, callable):
+            if name.startswith("TUCAM_"):
+                member.errcheck = self._errcheck
 
-        # camera parameters
-        self._resolution = 0  # 0 = 2048,2040 1 = 2048,2040 HDR  2= 1024, 1020 2x2  3 = 512, 510 4x4
-        self._binning = (1, 1)
-        self._translation = (0, 0)
-        self._gain = 1.0
-        self._roi = (0, 0, 2048, 2010)
-        self._targetTemperature = -20.0
-        self._fan_speed = 0  # 0 = max, 3 = off (water cooling)
-        self._exposureTime = 1.0
-        self._parametersChanged = True
-        self._camThread = None
-
-        # call init and open
-        self.Path = './'
-        self.TUCAMINIT = TUCAM_INIT(0, self.Path.encode('utf-8'))
         self.TUCAMOPEN = TUCAM_OPEN(0, 0)
 
-        self.TUCAM_Api_Init(pointer(self.TUCAMINIT), 5000)
+        # Path where the library will store the camera current settings
+        config_path = tempfile.gettempdir()  # Always writable, and always forgotten next run => perfect!
+        init_args = TUCAM_INIT(0, config_path.encode('utf-8'))
+        self.TUCAM_Api_Init(pointer(init_args), 1000)  # timeout 1s
+        self._nrCameras = init_args.uiCamCount
 
         self._lock = threading.Lock()
 
@@ -1195,793 +1218,60 @@ class TUCamDLL:
         error.
         Follows the ctypes.errcheck callback convention
         """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if result >= TUCAMRET_Enum.TUCAMRET_FAILURE:
+        if result >= TUCAMRET_Enum.TUCAMRET_FAILURE.value:
             if result in tucam_error_codes:
-                raise TUCamError(result, "Call to %s failed with error code %d: %s" %
-                                 (str(func.__name__), result, tucam_error_codes[result]))
-            else:
-                raise TUCamError(result, "Call to %s failed with unknown error code %d" %
-                                 (str(func.__name__), result))
-        return result
-
-    # hardware interaction functionality
-    # gets and sets the physical parameters
-
-    def get_info(self, id: TUCAM_IDINFO):
-        tvinfo = TUCAM_VALUE_INFO(id.value, 0, 0, 0)
-        self.TUCAM_Dev_GetInfo(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
-        return ctypes.string_at(tvinfo.pText).decode('utf-8')
-
-    def get_info_ex(self, id: TUCAM_IDINFO):
-        tvinfo = TUCAM_VALUE_INFO(id.value, 0, 0, 0)
-        self.TUCAM_Dev_GetInfoEx(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
-        return ctypes.string_at(tvinfo.pText).decode('utf-8')
-
-    def get_capability_info(self, id: TUCAM_IDCAPA):
-        # returns information about the capability, meaning its minimum, maximum, default, step.
-        if (id.value >= TUCAM_IDCAPA.TUIDC_ENDCAPABILITY.value):
-            raise ValueError("No such capability")
-        capainfo = TUCAM_CAPA_ATTR()
-        capainfo.idCapa = id.value
-        self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capainfo))
-
-        return capainfo.nValMin, capainfo.nValMax, capainfo.nValDft, capainfo.nValStep
-
-    def set_capability_value(self, cap: TUCAM_IDCAPA, val):
-        # set the requested capability (see TUCAM_IDCAPA)
-        try:
-            capa = TUCAM_CAPA_ATTR()
-            capa.idCapa = cap.value
-            self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capa))
-            if val <= capa.nValMax and val >= capa.nValMin:
-                self.TUCAM_Capa_SetValue(self.TUCAMOPEN.hIdxTUCam, capa.idCapa, val)
-            else:
-                # you asked for an out of range value
-                raise Exception("Capability value out of range")
-        except Exception:
-            raise Exception("No such capability")
-
-    def get_property_info(self, id: TUCAM_IDPROP):
-        # return information about the property, meaning its minimum, maximum, default, step (all floats)
-        prop = TUCAM_PROP_ATTR()
-        prop.idProp = id.value
-        prop.nIdxChn = 0
-        try:
-            self.TUCAM_Prop_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(prop))
-            # print('PropID=%#d Min=%#d Max=%#d Dft=%#d Step=%#d' %(prop.idProp, prop.dbValMin, prop.dbValMax, prop.dbValDft, prop.dbValStep))
-        except Exception:
-            raise ValueError("No such property")
-        return prop.dbValMin, prop.dbValMax, prop.dbValDft, prop.dbValStep
-
-    def get_property_value(self, id: TUCAM_IDPROP):
-        value = c_double(-1.0)
-        try:
-            self.TUCAM_Prop_GetValue(self.TUCAMOPEN.hIdxTUCam, id.value, pointer(value), 0)
-            # print("PropID=", num, "The current value is=", value)
-        except Exception:
-            raise ValueError("No such property")
-        return value
-
-    def set_property_value(self, id: TUCAM_IDPROP, val: float):
-        try:
-            self.TUCAM_Prop_SetValue(self.TUCAMOPEN.hIdxTUCam, id.value, c_double(val), 0)
-        except Exception:
-            raise ValueError("No such property")
-
-    def get_resolution_info(self):
-        if self.TUCAMOPEN.hIdxTUCam == 0:
-            raise Exception("Camera not opened")
-        valText = TUCAM_VALUE_TEXT()
-
-        capa = TUCAM_CAPA_ATTR()
-        capa.idCapa = TUCAM_IDCAPA.TUIDC_RESOLUTION.value
-        try:
-            result = self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capa))
-            cnt = capa.nValMax - capa.nValMin + 1
-            szRes = (c_char * 64)()
-            for j in range(cnt):
-                valText.nID = TUCAM_IDCAPA.TUIDC_RESOLUTION.value
-                valText.dbValue = j
-                valText.nTextSize = 64
-                valText.pText = cast(szRes, c_char_p)
-                self.TUCAM_Capa_GetValueText(self.TUCAMOPEN.hIdxTUCam, pointer(valText))
-                print('%#d, Resolution =%#s' % (j, valText.pText))
-
-            # print('CapaID=%#d Min=%#d Max=%#d Dft=%#d Step=%#d' % (
-            # capa.idCapa, capa.nValMin, capa.nValMax, capa.nValDft, capa.nValStep))
-        except Exception:
-            raise Exception("Unable to get capability info")
-
-    def get_camera_info_astext(self, infoid):
-        if self.TUCAMOPEN.hIdxTUCam == 0:
-            raise Exception("Camera not opened")
-
-        try:
-            tvinfo = TUCAM_VALUE_INFO(infoid.value, 0, 0, 0)
-            self.TUCAM_Dev_GetInfo(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
-
-        except Exception:
-            raise Exception("Unable to get camera info")
-
-        return tvinfo.pText.decode('utf8')
-        # print('Camera Name:%#s' % TUCAMVALUEINFO.pText)
-
-    # functions to apply parameters to the actual hardware:
-
-    def _applyTargetTemperature(self):
-        self.set_property_value(TUCAM_IDPROP.TUIDP_TEMPERATURE, self._targetTemperature)
-
-    def _applyResolution(self):
-        self.set_capability_value(TUCAM_IDCAPA.TUIDC_RESOLUTION, self._resolution)
-
-    def _applyROI(self):
-        roi_parm = TUCAM_ROI_ATTR()
-        roi_parm.bEnable = 1
-        roi_parm.nHOffset = self._roi[0] + self._translation[0]
-        roi_parm.nVOffset = self._roi[1] + self._translation[1]
-        roi_parm.nWidth = self._roi[2]
-        roi_parm.nHeight = self._roi[3]
-
-        try:
-            self.TUCAM_Cap_SetROI(self.TUCAMOPEN.hIdxTUCam, roi_parm)
-            logging.debug('Set ROI state success, HOffset:%#d, VOffset:%#d, Width:%#d, Height:%#d' % (
-            roi_parm.nHOffset, roi_parm.nVOffset, roi_parm.nWidth, roi_parm.nHeight))
-        except Exception:
-            logging.exception('Set ROI state failure, HOffset:%#d, VOffset:%#d, Width:%#d, Height:%#d' % (
-            roi_parm.nHOffset, roi_parm.nVOffset, roi_parm.nWidth, roi_parm.nHeight))
-
-    def _applyFanSpeed(self):
-        try:
-            self.set_capability_value(TUCAM_IDCAPA.TUIDC_FAN_GEAR, self._fan_speed)
-        except Exception:
-            raise Exception("Setting fan speed failed")  # todo translate to Odemis
-
-    def _applyExposureTime(self):
-        try:
-            self.set_property_value(TUCAM_IDPROP.TUIDP_EXPOSURETM,
-                                    self._exposureTime * 1000.0)  # hardware takes milliseconds
-        except Exception:
-            raise Exception("Setting exposure time failed")
-
-    def applyParameters(self, fromThread=False):
-        # camera should be open
-
-        with self._lock:
-            if self.TUCAMOPEN.hIdxTUCam is None:
-                return
-
-            # continue if not from thread
-            if not (self._camThread is None or fromThread):
-                return
-
-            self._applyFanSpeed()
-            self._applyTargetTemperature()
-            self._applyResolution()
-            self._applyROI()
-            self._applyExposureTime()
-
-            self._parametersChanged = False
-
-    # capturing data:
-    # 1. call StartCapture
-    # 2. repeatedly call CaptureFrame
-    # 2a. optional, call SaveImage
-    # 3. call EndCapture.
-
-    def startCapture(self):
-        self.m_frame = TUCAM_FRAME()
-        self.m_format = TUIMG_FORMATS
-        self.m_frformat = TUFRM_FORMATS
-        self.m_capmode = TUCAM_CAPTURE_MODES
-
-        self.m_frame.pBuffer = 0
-        self.m_frame.ucFormatGet = self.m_frformat.TUFRM_FMT_USUAl.value
-        self.m_frame.uiRsdSize = 1
-        self.m_frameidx = 0  # keep counting frames
-
-        self.TUCAM_Buf_Alloc(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame))
-        self.TUCAM_Cap_Start(self.TUCAMOPEN.hIdxTUCam, self.m_capmode.TUCCM_SEQUENCE.value)
-
-    def captureFrame(self):
-
-        try:
-            self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), 1000)
-        except OSError as ex:
-            raise TUCamError("timeout", TUCAMRET_Enum.TUCAMRET_TIMEOUT)
-
-        self.m_frameidx += 1
-
-        # print(
-        #    "Frame grabbed, width:%d, height:%#d, channel:%#d, elembytes:%#d, image size:%#d" % (
-        #     self.m_frame.usWidth, self.m_frame.usHeight, self.m_frame.ucChannels,
-        #     self.m_frame.ucElemBytes, self.m_frame.uiImgSize)
-
-        # )
-
-        # Create an empty NumPy array of the same length and dtype ---
-        p = cast(self.m_frame.pBuffer + self.m_frame.usOffset, POINTER(c_uint16))
-        np_buffer = numpy.ctypeslib.as_array(p, (self.m_frame.usHeight, self.m_frame.usWidth))
-        np_array = np_buffer.copy()
-
-        #print(np_array)
-        # da = model.DataArray(np_array, {})
-        # hdf5.export(f"test_tucsen{self.m_frameidx}.h5", da)
-        # todo: now move the np array to Odemis
-
-    def captureFrameAndSave(self, image_name):
-        fs = TUCAM_FILE_SAVE()
-        fs.nSaveFmt = TUIMG_FORMATS.TUFMT_PNG.value  # save as png
-        fs.pFrame = pointer(self.m_frame)
-        ImgName = image_name + str(self.m_frameidx)
-        fs.pstrSavePath = ImgName.encode('utf-8')
-
-        self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), 1000)
-        self.TUCAM_File_SaveImage(self.TUCAMOPEN.hIdxTUCam, fs)
-
-    def endCapture(self):
-        self.TUCAM_Buf_AbortWait(self.TUCAMOPEN.hIdxTUCam)
-        self.TUCAM_Cap_Stop(self.TUCAMOPEN.hIdxTUCam)
-        self.TUCAM_Buf_Release(self.TUCAMOPEN.hIdxTUCam)
-
-    # camera properties
-    def _get_max_resolution(self):
-        if self._binning == (1, 1):
-            return (2048, 2040)
-        elif self._binning == (2, 2):
-            return (1024, 1020)
-        elif self._binning == (4, 4):
-            return (512, 510)
-        else:
-            raise Exception("Invalid value for binning set")
-
-    # property setters
-
-    def setBinning(self, value):
-        if self._binning == (1, 1):
-            self._resolution = 1
-        elif self._binning == (2, 2):
-            self._resolution = 2
-        elif self._binning == (4, 4):
-            self._resolution = 3
-        else:
-            raise Exception("Invalid value for binning set")
-
-        self._parametersChanged = True
-        self.applyParameters()
-
-    def getBinning(self):
-        return self._binning
-
-    def setResolution(self, res):
-        # call with tuple xres, yres. Set binning first
-        max_res = self._get_max_resolution()
-        if res[0] > max_res[0]:
-            res[0] = max_res[0]
-        if res[1] > max_res[1]:
-            res[1] = max_res[1]
-
-        self._roi = (int(max_res[0] / 2) - int(res[0] / 2),  # left
-                     int(max_res[1] / 2) - int(res[1] / 2),  # top
-                     res[0],  # width
-                     res[1])  # height
-
-        # clip translation. not allowed to walk outside camera ROI.
-
-        clipped_translation_x = self._translation[0]
-        if self._roi[0] + self._roi[2] + clipped_translation_x > max_res[0]:
-            clipped_translation_x = max_res[0] - self._roi[0] - self._roi[2]
-        clipped_translation_y = self._translation[1]
-        if self._roi[1] + self._roi[3] + clipped_translation_y > max_res[1]:
-            clipped_translation_y = max_res[0] - self._roi[0] - self._roi[2]
-        self._translation = (clipped_translation_x, clipped_translation_y)
-
-        self._parametersChanged = True
-        self.applyParameters()
-
-        return res
-
-    def getResolution(self):
-        return self._roi[2], self._roi[3]
-
-    def setFanSpeed(self, value):
-        # input : 1.0 is max, 0.0 is stop
-        # camera value:
-        # 0: "High"
-        # 1: "Medium"
-        # 2: "Low"
-        # 3: "Off (Water Cooling)"
-        value = int((1.0 - value) * 3.0)
-        if 0 <= value <= 3:
-            self._fan_speed = value
-
-            self._parametersChanged = True
-            self.applyParameters()
-        else:
-            raise Exception("invalid fan speed value")
-
-    def getFanSpeed(self):
-        return (1.0 - self._fan_speed) / 3.0
-
-    def getTargetTemperature(self):
-        return self._targetTemperature
-
-    def setTargetTemperature(self, value):
-        self._targetTemperature = value
-
-        self._parametersChanged = True
-        self.applyParameters()
-
-    def setGain(self, value):
-        self._gain = value
-
-    def getGain(self):
-        return self._gain
-
-    # todo exposure time
-    def getExposureTime(self):
-        return self._exposureTime
-
-    def setExposureTime(self, value):
-        self._exposureTime = value
-
-        self._parametersChanged = True
-        self.applyParameters()
-
-    def getTemperature(self):
-        return self.get_property_value(TUCAM_IDPROP.TUIDP_TEMPERATURE)
-
-    def getModelName(self):
-        return self.get_camera_info_astext(TUCAM_IDINFO.TUIDI_CAMERA_MODEL)
-
-    def getHwVersion(self):
-        return self.get_camera_info_astext(TUCAM_IDINFO.TUIDI_VERSION_API)
-
-    # camera feed using thread.
-    # call only on open camera.
-
-    def start_camera_feed(self):
-        self._camThread = CAMThread()
-        self._camThread.start_thread(dll=self)
-
-    def stop_camera_feed(self):
-        if self._camThread != None:
-            self._camThread.stop_thread()
-            self._camThread.join()
-        self._camThread = None
-
-    def __del__(self):
-        try:
-            self.TUCAM_Api_Uninit()
-        except Exception as e:
-            # library throws wierd excp if init failed. ignore this.
-            logging.debug("TUCAM_Api_Uninit exception")
-
-class TUCamDLL:
-    def __init__(self):
-        if os.name == "nt":
-            # 32bit
-            # self.TUSDKdll = OleDLL("./lib/x86/TUCam.dll")
-            # 64bit
-            self.TUSDKdll = OleDLL("./lib/x64/TUCam.dll")
-        else:
-            self.TUSDKdll = CDLL("/usr/lib/libTUCam.so")
-
-        if hasattr(self.TUSDKdll, "TUCAM_Api_Init"):
-            # "Simple" case: C functions are available
-            self.TUCAM_Api_Init   = self.TUSDKdll.TUCAM_Api_Init
-            self.TUCAM_Api_Uninit = self.TUSDKdll.TUCAM_Api_Uninit
-            self.TUCAM_Dev_Open   = self.TUSDKdll.TUCAM_Dev_Open
-            self.TUCAM_Dev_Close  = self.TUSDKdll.TUCAM_Dev_Close
-            self.TUCAM_Dev_GetInfo = self.TUSDKdll.TUCAM_Dev_GetInfo
-            self.TUCAM_Dev_GetInfoEx = self.TUSDKdll.TUCAM_Dev_GetInfoEx
-            self.TUCAM_Capa_GetAttr = self.TUSDKdll.TUCAM_Capa_GetAttr
-            self.TUCAM_Capa_GetValue = self.TUSDKdll.TUCAM_Capa_GetValue
-            self.TUCAM_Capa_SetValue = self.TUSDKdll.TUCAM_Capa_SetValue
-            self.TUCAM_Capa_GetValueText = self.TUSDKdll.TUCAM_Capa_GetValueText
-            self.TUCAM_Prop_GetAttr = self.TUSDKdll.TUCAM_Prop_GetAttr
-            self.TUCAM_Prop_GetValue = self.TUSDKdll.TUCAM_Prop_GetValue
-            self.TUCAM_Prop_SetValue = self.TUSDKdll.TUCAM_Prop_SetValue
-            self.TUCAM_Prop_GetValueText = self.TUSDKdll.TUCAM_Prop_GetValueText
-            self.TUCAM_Buf_Alloc = self.TUSDKdll.TUCAM_Buf_Alloc
-            self.TUCAM_Buf_Release = self.TUSDKdll.TUCAM_Buf_Release
-            self.TUCAM_Buf_AbortWait = self.TUSDKdll.TUCAM_Buf_AbortWait
-            self.TUCAM_Buf_WaitForFrame = self.TUSDKdll.TUCAM_Buf_WaitForFrame
-            self.TUCAM_Buf_CopyFrame = self.TUSDKdll.TUCAM_Buf_CopyFrame
-            self.TUCAM_Buf_DataCallBack = self.TUSDKdll.TUCAM_Buf_DataCallBack
-            self.TUCAM_Buf_GetData = self.TUSDKdll.TUCAM_Buf_GetData
-            self.TUCAM_Cap_SetROI = self.TUSDKdll.TUCAM_Cap_SetROI
-            self.TUCAM_Cap_GetROI = self.TUSDKdll.TUCAM_Cap_GetROI
-            self.TUCAM_Cap_SetMultiROI = self.TUSDKdll.TUCAM_Cap_SetMultiROI
-            self.TUCAM_Cap_GetMultiROI = self.TUSDKdll.TUCAM_Cap_GetMultiROI
-            self.TUCAM_Cap_SetTrigger = self.TUSDKdll.TUCAM_Cap_SetTrigger
-            self.TUCAM_Cap_GetTrigger = self.TUSDKdll.TUCAM_Cap_GetTrigger
-            self.TUCAM_Cap_DoSoftwareTrigger = self.TUSDKdll.TUCAM_Cap_DoSoftwareTrigger
-            self.TUCAM_Cap_SetTriggerOut = self.TUSDKdll.TUCAM_Cap_SetTriggerOut
-            self.TUCAM_Cap_GetTriggerOut = self.TUSDKdll.TUCAM_Cap_GetTriggerOut
-            self.TUCAM_Cap_Start = self.TUSDKdll.TUCAM_Cap_Start
-            self.TUCAM_Cap_Stop = self.TUSDKdll.TUCAM_Cap_Stop
-            self.TUCAM_File_SaveImage = self.TUSDKdll.TUCAM_File_SaveImage
-            self.TUCAM_File_LoadProfiles = self.TUSDKdll.TUCAM_File_LoadProfiles
-            self.TUCAM_File_SaveProfiles = self.TUSDKdll.TUCAM_File_SaveProfiles
-            self.TUCAM_Rec_Start = self.TUSDKdll.TUCAM_Rec_Start
-            self.TUCAM_Rec_AppendFrame = self.TUSDKdll.TUCAM_Rec_AppendFrame
-            self.TUCAM_Rec_Stop = self.TUSDKdll.TUCAM_Rec_Stop
-            self.TUIMG_File_Open = self.TUSDKdll.TUIMG_File_Open
-            self.TUIMG_File_Close = self.TUSDKdll.TUIMG_File_Close
-            self.TUCAM_Calc_SetROI = self.TUSDKdll.TUCAM_Calc_SetROI
-            self.TUCAM_Calc_GetROI = self.TUSDKdll.TUCAM_Calc_GetROI
-            self.TUCAM_Reg_Read = self.TUSDKdll.TUCAM_Reg_Read
-            self.TUCAM_Reg_Write = self.TUSDKdll.TUCAM_Reg_Write
-            self.TUCAM_Buf_Attach = self.TUSDKdll.TUCAM_Buf_Attach
-            self.TUCAM_Buf_Detach = self.TUSDKdll.TUCAM_Buf_Detach
-            self.TUCAM_Get_GrayValue = self.TUSDKdll.TUCAM_Get_GrayValue
-            self.TUCAM_Index_GetColorTemperature = self.TUSDKdll.TUCAM_Index_GetColorTemperature
-            self.TUCAM_Rec_SetAppendMode = self.TUSDKdll.TUCAM_Rec_SetAppendMode
-            self.TUCAM_Cap_SetBIN = self.TUSDKdll.TUCAM_Cap_SetBIN
-            self.TUCAM_Cap_GetBIN = self.TUSDKdll.TUCAM_Cap_GetBIN
-            self.TUCAM_Cap_SetBackGround = self.TUSDKdll.TUCAM_Cap_SetMath
-            self.TUCAM_Cap_SetMath = self.TUSDKdll.TUCAM_Cap_SetMath
-            self.TUCAM_Cap_GetMath = self.TUSDKdll.TUCAM_Cap_GetMath
-            self.TUCAM_GenICam_ElementAttrNext = self.TUSDKdll.TUCAM_GenICam_ElementAttrNext
-            self.TUCAM_GenICam_SetElementValue = self.TUSDKdll.TUCAM_GenICam_SetElementValue
-            self.TUCAM_GenICam_GetElementValue = self.TUSDKdll.TUCAM_GenICam_GetElementValue
-            self.TUCAM_GenICam_SetRegisterValue = self.TUSDKdll.TUCAM_GenICam_SetRegisterValue
-            self.TUCAM_GenICam_GetRegisterValue = self.TUSDKdll.TUCAM_GenICam_GetRegisterValue
-            self.TUCAM_Cap_AnnounceBuffer = self.TUSDKdll.TUCAM_Cap_AnnounceBuffer
-            self.TUCAM_Cap_ClearBuffer = self.TUSDKdll.TUCAM_Cap_ClearBuffer
-        else:  # C++ (mangled) functions are available => unmangle them
-            # Use these commands to find the mangled and unmangled names:
-            # nm -D --defined-only /usr/lib/libTUCam.so | grep TUCAM_ > mangled.txt
-            # cat mangled | c++filt > unmangled.txt
-            self.TUCAM_Api_Init = self.TUSDKdll._Z14TUCAM_Api_InitP14_tagTUCAM_INITi
-            self.TUCAM_Cap_Stop = self.TUSDKdll._Z14TUCAM_Cap_StopP9_tagTUCAM
-            self.TUCAM_Dev_Open = self.TUSDKdll._Z14TUCAM_Dev_OpenP14_tagTUCAM_OPEN
-            self.TUCAM_Rec_Stop = self.TUSDKdll._Z14TUCAM_Rec_StopP9_tagTUCAM
-            self.TUCAM_Reg_Read = self.TUSDKdll._Z14TUCAM_Reg_ReadP9_tagTUCAM16_tagTUCAM_REG_RW
-            self.TUCAM_Buf_Alloc = self.TUSDKdll._Z15TUCAM_Buf_AllocP9_tagTUCAMP15_tagTUCAM_FRAME
-            self.TUCAM_Cap_Start = self.TUSDKdll._Z15TUCAM_Cap_StartP9_tagTUCAMj
-            self.TUCAM_Dev_Close = self.TUSDKdll._Z15TUCAM_Dev_CloseP9_tagTUCAM
-            self.TUCAM_Draw_Init = self.TUSDKdll._Z15TUCAM_Draw_InitP9_tagTUCAM19_tagTUCAM_DRAW_INIT
-            self.TUCAM_Proc_Stop = self.TUSDKdll._Z15TUCAM_Proc_StopP9_tagTUCAM19_tagTUCAM_FILE_SAVE
-            self.TUCAM_Rec_Start = self.TUSDKdll._Z15TUCAM_Rec_StartP9_tagTUCAM18_tagTUCAM_REC_SAVE
-            self.TUCAM_Reg_Write = self.TUSDKdll._Z15TUCAM_Reg_WriteP9_tagTUCAM16_tagTUCAM_REG_RW
-            self.TUIMG_File_Open = self.TUSDKdll._Z15TUIMG_File_OpenP14_tagTUIMG_OPENPP15_tagTUCAM_FRAME
-            self.TUCAM_Api_Uninit = self.TUSDKdll._Z16TUCAM_Api_Uninitv
-            self.TUCAM_Buf_Attach = self.TUSDKdll._Z16TUCAM_Buf_AttachP9_tagTUCAMPhj
-            self.TUCAM_Buf_Detach = self.TUSDKdll._Z16TUCAM_Buf_DetachP9_tagTUCAM
-            self.TUCAM_Cap_GetBIN = self.TUSDKdll._Z16TUCAM_Cap_GetBINP9_tagTUCAMP18_tagTUCAM_BIN_ATTR
-            self.TUCAM_Cap_GetROI = self.TUSDKdll._Z16TUCAM_Cap_GetROIP9_tagTUCAMP18_tagTUCAM_ROI_ATTR
-            self.TUCAM_Cap_SetBIN = self.TUSDKdll._Z16TUCAM_Cap_SetBINP9_tagTUCAM18_tagTUCAM_BIN_ATTR
-            self.TUCAM_Cap_SetROI = self.TUSDKdll._Z16TUCAM_Cap_SetROIP9_tagTUCAM18_tagTUCAM_ROI_ATTR
-            self.TUCAM_Draw_Frame = self.TUSDKdll._Z16TUCAM_Draw_FrameP9_tagTUCAMP14_tagTUCAM_DRAW
-            self.TUCAM_Proc_Start = self.TUSDKdll._Z16TUCAM_Proc_StartP9_tagTUCAMi
-            self.TUCAM_Buf_GetData = self.TUSDKdll._Z17TUCAM_Buf_GetDataP9_tagTUCAMP23_tagTUCAM_RAWIMG_HEADER
-            self.TUCAM_Buf_Release = self.TUSDKdll._Z17TUCAM_Buf_ReleaseP9_tagTUCAM
-            self.TUCAM_Calc_GetROI = self.TUSDKdll._Z17TUCAM_Calc_GetROIP9_tagTUCAMP23_tagTUCAM_CALC_ROI_ATTR
-            self.TUCAM_Calc_SetROI = self.TUSDKdll._Z17TUCAM_Calc_SetROIP9_tagTUCAM23_tagTUCAM_CALC_ROI_ATTR
-            self.TUCAM_Cap_GetMath = self.TUSDKdll._Z17TUCAM_Cap_GetMathP9_tagTUCAMP18_tagTUCAM_IMG_MATH
-            self.TUCAM_Cap_SetMath = self.TUSDKdll._Z17TUCAM_Cap_SetMathP9_tagTUCAM18_tagTUCAM_IMG_MATH
-            self.TUCAM_Dev_GetInfo = self.TUSDKdll._Z17TUCAM_Dev_GetInfoP9_tagTUCAMP20_tagTUCAM_VALUE_INFO
-            self.TUCAM_Draw_Uninit = self.TUSDKdll._Z17TUCAM_Draw_UninitP9_tagTUCAM
-            self.TUCAM_Capa_GetAttr = self.TUSDKdll._Z18TUCAM_Capa_GetAttrP9_tagTUCAMP19_tagTUCAM_CAPA_ATTR
-            self.TUCAM_Prop_GetAttr = self.TUSDKdll._Z18TUCAM_Prop_GetAttrP9_tagTUCAMP19_tagTUCAM_PROP_ATTR
-            self.TUCAM_Buf_AbortWait = self.TUSDKdll._Z19TUCAM_Buf_AbortWaitP9_tagTUCAM
-            self.TUCAM_Buf_CopyFrame = self.TUSDKdll._Z19TUCAM_Buf_CopyFrameP9_tagTUCAMP15_tagTUCAM_FRAME
-            self.TUCAM_Capa_GetValue = self.TUSDKdll._Z19TUCAM_Capa_GetValueP9_tagTUCAMiPi
-            self.TUCAM_Capa_SetValue = self.TUSDKdll._Z19TUCAM_Capa_SetValueP9_tagTUCAMii
-            self.TUCAM_Dev_GetInfoEx = self.TUSDKdll._Z19TUCAM_Dev_GetInfoExjP20_tagTUCAM_VALUE_INFO
-            self.TUCAM_Get_GrayValue = self.TUSDKdll._Z19TUCAM_Get_GrayValueP9_tagTUCAMiiPt
-            self.TUCAM_Prop_GetValue = self.TUSDKdll._Z19TUCAM_Prop_GetValueP9_tagTUCAMiPdi
-            self.TUCAM_Prop_SetValue = self.TUSDKdll._Z19TUCAM_Prop_SetValueP9_tagTUCAMidi
-            self.TUCAM_Vendor_Config = self.TUSDKdll._Z19TUCAM_Vendor_ConfigP9_tagTUCAMj
-            self.TUCAM_Vendor_Update = self.TUSDKdll._Z19TUCAM_Vendor_UpdateP9_tagTUCAMP19_tagTUCAM_FW_UPDATE
-            self.TUCAM_Cap_GetTrigger = self.TUSDKdll._Z20TUCAM_Cap_GetTriggerP9_tagTUCAMP22_tagTUCAM_TRIGGER_ATTR
-            self.TUCAM_Cap_SetTrigger = self.TUSDKdll._Z20TUCAM_Cap_SetTriggerP9_tagTUCAM22_tagTUCAM_TRIGGER_ATTR
-            self.TUCAM_File_SaveImage = self.TUSDKdll._Z20TUCAM_File_SaveImageP9_tagTUCAM19_tagTUCAM_FILE_SAVE
-            self.TUCAM_Proc_AbortWait = self.TUSDKdll._Z20TUCAM_Proc_AbortWaitP9_tagTUCAM
-            self.TUCAM_Proc_CopyFrame = self.TUSDKdll._Z20TUCAM_Proc_CopyFrameP9_tagTUCAMPP15_tagTUCAM_FRAME
-            self.TUCAM_Cap_ClearBuffer = self.TUSDKdll._Z21TUCAM_Cap_ClearBufferP9_tagTUCAM
-            self.TUCAM_Cap_GetMultiROI = self.TUSDKdll._Z21TUCAM_Cap_GetMultiROIP9_tagTUCAMP23_tagTUCAM_MULTIROI_ATTR
-            self.TUCAM_Cap_SetMultiROI = self.TUSDKdll._Z21TUCAM_Cap_SetMultiROIP9_tagTUCAM23_tagTUCAM_MULTIROI_ATTR
-            self.TUCAM_Rec_AppendFrame = self.TUSDKdll._Z21TUCAM_Rec_AppendFrameP9_tagTUCAMP15_tagTUCAM_FRAME
-            self.TUCAM_Vendor_ConfigEx = self.TUSDKdll._Z21TUCAM_Vendor_ConfigExjj
-            self.TUCAM_Buf_DataCallBack = self.TUSDKdll._Z22TUCAM_Buf_DataCallBackP9_tagTUCAMPFvPvES1_
-            self.TUCAM_Buf_WaitForFrame = self.TUSDKdll._Z22TUCAM_Buf_WaitForFrameP9_tagTUCAMP15_tagTUCAM_FRAMEi
-            self.TUCAM_Proc_UpdateFrame = self.TUSDKdll._Z22TUCAM_Proc_UpdateFrameP9_tagTUCAMP15_tagTUCAM_FRAME
-            self.TUCAM_Capa_GetValueText = self.TUSDKdll._Z23TUCAM_Capa_GetValueTextP9_tagTUCAMP20_tagTUCAM_VALUE_TEXT
-            self.TUCAM_Cap_GetBackGround = self.TUSDKdll._Z23TUCAM_Cap_GetBackGroundP9_tagTUCAMP24_tagTUCAM_IMG_BACKGROUND
-            self.TUCAM_Cap_GetTriggerOut = self.TUSDKdll._Z23TUCAM_Cap_GetTriggerOutP9_tagTUCAMP21_tagTUCAM_TRGOUT_ATTR
-            self.TUCAM_Cap_SetBackGround = self.TUSDKdll._Z23TUCAM_Cap_SetBackGroundP9_tagTUCAM24_tagTUCAM_IMG_BACKGROUND
-            self.TUCAM_Cap_SetTriggerOut = self.TUSDKdll._Z23TUCAM_Cap_SetTriggerOutP9_tagTUCAM21_tagTUCAM_TRGOUT_ATTR
-            self.TUCAM_File_LoadProfiles = self.TUSDKdll._Z23TUCAM_File_LoadProfilesP9_tagTUCAMPc
-            self.TUCAM_File_SaveProfiles = self.TUSDKdll._Z23TUCAM_File_SaveProfilesP9_tagTUCAMPc
-            self.TUCAM_Proc_Prop_GetAttr = self.TUSDKdll._Z23TUCAM_Proc_Prop_GetAttrP9_tagTUCAMP20_tagTUCAM_PPROP_ATTR
-            self.TUCAM_Proc_WaitForFrame = self.TUSDKdll._Z23TUCAM_Proc_WaitForFrameP9_tagTUCAMPP15_tagTUCAM_FRAME
-            self.TUCAM_Prop_GetValueText = self.TUSDKdll._Z23TUCAM_Prop_GetValueTextP9_tagTUCAMP20_tagTUCAM_VALUE_TEXTi
-            self.TUCAM_Rec_SetAppendMode = self.TUSDKdll._Z23TUCAM_Rec_SetAppendModeP9_tagTUCAMj
-            self.TUCAM_Vendor_AFPlatform = self.TUSDKdll._Z23TUCAM_Vendor_AFPlatformP9_tagTUCAMP6NVILen
-            self.TUCAM_Cap_AnnounceBuffer = self.TUSDKdll._Z24TUCAM_Cap_AnnounceBufferP9_tagTUCAMjPv
-            self.TUCAM_Proc_Prop_GetValue = self.TUSDKdll._Z24TUCAM_Proc_Prop_GetValueP9_tagTUCAMiPd
-            self.TUCAM_Proc_Prop_SetValue = self.TUSDKdll._Z24TUCAM_Proc_Prop_SetValueP9_tagTUCAMid
-            self.TUCAM_GenICam_ElementAttr = self.TUSDKdll._Z25TUCAM_GenICam_ElementAttrP9_tagTUCAMP17_tagTUCAM_ELEMENTPc12TUXML_DEVICE
-            self.TUCAM_Vendor_Prop_GetAttr = self.TUSDKdll._Z25TUCAM_Vendor_Prop_GetAttrP9_tagTUCAMP20_tagTUCAM_VPROP_ATTR
-            self.TUCAM_Vendor_SetQueueMode = self.TUSDKdll._Z25TUCAM_Vendor_SetQueueModeP9_tagTUCAMj
-            self.TUCAM_Vendor_Prop_GetValue = self.TUSDKdll._Z26TUCAM_Vendor_Prop_GetValueP9_tagTUCAMiPdi
-            self.TUCAM_Vendor_Prop_SetValue = self.TUSDKdll._Z26TUCAM_Vendor_Prop_SetValueP9_tagTUCAMidi
-            self.TUCAM_Cap_DoSoftwareTrigger = self.TUSDKdll._Z27TUCAM_Cap_DoSoftwareTriggerP9_tagTUCAMj
-            self.TUCAM_Vendor_GetOldestFrame = self.TUSDKdll._Z27TUCAM_Vendor_GetOldestFrameP9_tagTUCAMP15_tagTUCAM_FRAMEj
-            self.TUCAM_Proc_Prop_GetValueText = self.TUSDKdll._Z28TUCAM_Proc_Prop_GetValueTextP9_tagTUCAMP20_tagTUCAM_VALUE_TEXT
-            self.TUCAM_Vendor_ResetIndexFrame = self.TUSDKdll._Z28TUCAM_Vendor_ResetIndexFrameP9_tagTUCAM
-            self.TUCAM_File_LoadFFCCoefficient = self.TUSDKdll._Z29TUCAM_File_LoadFFCCoefficientP9_tagTUCAMPc
-            self.TUCAM_File_SaveFFCCoefficient = self.TUSDKdll._Z29TUCAM_File_SaveFFCCoefficientP9_tagTUCAMPc
-            self.TUCAM_GenICam_ElementAttrNext = self.TUSDKdll._Z29TUCAM_GenICam_ElementAttrNextP9_tagTUCAMP17_tagTUCAM_ELEMENTPc12TUXML_DEVICE
-            self.TUCAM_GenICam_GetElementValue = self.TUSDKdll._Z29TUCAM_GenICam_GetElementValueP9_tagTUCAMP17_tagTUCAM_ELEMENT12TUXML_DEVICE
-            self.TUCAM_GenICam_SetElementValue = self.TUSDKdll._Z29TUCAM_GenICam_SetElementValueP9_tagTUCAMP17_tagTUCAM_ELEMENT12TUXML_DEVICE
-            self.TUCAM_Vendor_QueueOldestFrame = self.TUSDKdll._Z29TUCAM_Vendor_QueueOldestFrameP9_tagTUCAM
-            self.TUCAM_GenICam_GetRegisterValue = self.TUSDKdll._Z30TUCAM_GenICam_GetRegisterValueP9_tagTUCAMPhxx
-            self.TUCAM_GenICam_SetRegisterValue = self.TUSDKdll._Z30TUCAM_GenICam_SetRegisterValueP9_tagTUCAMPhxx
-            self.TUCAM_Vendor_Prop_GetValueText = self.TUSDKdll._Z30TUCAM_Vendor_Prop_GetValueTextP9_tagTUCAMP20_tagTUCAM_VALUE_TEXTi
-            self.TUCAM_Vendor_WaitForIndexFrame = self.TUSDKdll._Z30TUCAM_Vendor_WaitForIndexFrameP9_tagTUCAMP15_tagTUCAM_FRAME
-            self.TUCAM_Index_GetColorTemperature = self.TUSDKdll._Z31TUCAM_Index_GetColorTemperatureP9_tagTUCAMiiiPj
-
-        # Input/output arguments definition
-
-        # On Linux, the default return value is a (signed) int. However, the functions return uint32.
-        # This prevents converting properly the return to TUCAMRET
-        TUCAMRET = c_uint32
-        #TUCAMRET = None
-        # TUCAMRET = TUCAMRET_Enum
-
-        # init, uninit of API
-        self.TUCAM_Api_Init.argtypes = [POINTER(TUCAM_INIT), c_int32]
-        self.TUCAM_Api_Init.restype  = TUCAMRET
-
-        #opening, closing of the device
-        self.TUCAM_Dev_Open.argtypes = [POINTER(TUCAM_OPEN)]
-        self.TUCAM_Dev_Open.restype  = TUCAMRET
-        self.TUCAM_Dev_Close.argtypes = [c_void_p]
-        self.TUCAM_Dev_Close.restype  = TUCAMRET
-
-        # Get some device information (VID/PID/Version)
-        self.TUCAM_Dev_GetInfo.argtypes = [c_void_p, POINTER(TUCAM_VALUE_INFO)]
-        self.TUCAM_Dev_GetInfo.restype = TUCAMRET
-        self.TUCAM_Dev_GetInfoEx.argtypes = [c_uint, POINTER(TUCAM_VALUE_INFO)]
-        self.TUCAM_Dev_GetInfoEx.restype = TUCAMRET
-
-        # Capability control
-        self.TUCAM_Capa_GetAttr.argtypes = [c_void_p, POINTER(TUCAM_CAPA_ATTR)]
-        self.TUCAM_Capa_GetAttr.restype = TUCAMRET
-        self.TUCAM_Capa_GetValue.argtypes = [c_void_p, c_int32, c_void_p]
-        self.TUCAM_Capa_GetValue.restype = TUCAMRET
-        self.TUCAM_Capa_SetValue.argtypes = [c_void_p, c_int32, c_int32]
-        self.TUCAM_Capa_SetValue.restype = TUCAMRET
-        self.TUCAM_Capa_GetValueText.argtypes = [c_void_p, POINTER(TUCAM_VALUE_TEXT)]
-        self.TUCAM_Capa_GetValueText.restype = TUCAMRET
-
-        # Property control
-        self.TUCAM_Prop_GetAttr.argtypes = [c_void_p, POINTER(TUCAM_PROP_ATTR)]
-        self.TUCAM_Prop_GetAttr.restype = TUCAMRET
-        self.TUCAM_Prop_GetValue.argtypes = [c_void_p, c_int32, c_void_p, c_int32]
-        self.TUCAM_Prop_GetValue.restype = TUCAMRET
-        self.TUCAM_Prop_SetValue.argtypes = [c_void_p, c_int32, c_double, c_int32]
-        self.TUCAM_Prop_SetValue.restype = TUCAMRET
-        self.TUCAM_Prop_GetValueText.argtypes = [c_void_p, POINTER(TUCAM_VALUE_TEXT), c_int32]
-        self.TUCAM_Prop_GetValueText.restype = TUCAMRET
-
-        # Buffer control
-        self.TUCAM_Buf_Alloc.argtypes = [c_void_p, POINTER(TUCAM_FRAME)]
-        self.TUCAM_Buf_Alloc.restype = TUCAMRET
-        self.TUCAM_Buf_Release.argtypes = [c_void_p]
-        self.TUCAM_Buf_Release.restype = TUCAMRET
-        self.TUCAM_Buf_AbortWait.argtypes = [c_void_p]
-        self.TUCAM_Buf_AbortWait.restype = TUCAMRET
-        self.TUCAM_Buf_WaitForFrame.argtypes = [c_void_p, POINTER(TUCAM_FRAME), c_int32]
-        # self.TUCAM_Buf_WaitForFrame.restype = TUCAMRET
-        self.TUCAM_Buf_CopyFrame.argtypes = [c_void_p, POINTER(TUCAM_FRAME)]
-        self.TUCAM_Buf_CopyFrame.restype = TUCAMRET
-
-        # Buffer CallBack Function
-        self.TUCAM_Buf_DataCallBack.argtypes = [c_void_p, BUFFER_CALLBACK, c_void_p]
-        self.TUCAM_Buf_DataCallBack.restype = TUCAMRET
-        # Get Buffer Data
-        self.TUCAM_Buf_GetData.argtypes = [c_void_p, POINTER(TUCAM_RAWIMG_HEADER)]
-        self.TUCAM_Buf_GetData.restype = TUCAMRET
-
-        # Capturing control
-        self.TUCAM_Cap_SetROI.argtypes = [c_void_p, TUCAM_ROI_ATTR]
-        self.TUCAM_Cap_SetROI.restype = TUCAMRET
-        self.TUCAM_Cap_GetROI.argtypes = [c_void_p, POINTER(TUCAM_ROI_ATTR)]
-        self.TUCAM_Cap_GetROI.restype = TUCAMRET
-
-        # MultiROI
-        self.TUCAM_Cap_SetMultiROI.argtypes = [c_void_p, TUCAM_MULTIROI_ATTR]
-        self.TUCAM_Cap_SetMultiROI.restype = TUCAMRET
-        self.TUCAM_Cap_GetMultiROI.argtypes = [c_void_p, POINTER(TUCAM_MULTIROI_ATTR)]
-        self.TUCAM_Cap_GetMultiROI.restype = TUCAMRET
-
-        # Trigger
-        self.TUCAM_Cap_SetTrigger.argtypes = [c_void_p, TUCAM_TRIGGER_ATTR]
-        self.TUCAM_Cap_SetTrigger.restype = TUCAMRET
-        self.TUCAM_Cap_GetTrigger.argtypes = [c_void_p, POINTER(TUCAM_TRIGGER_ATTR)]
-        self.TUCAM_Cap_GetTrigger.restype = TUCAMRET
-        self.TUCAM_Cap_DoSoftwareTrigger.argtypes = [c_void_p, c_uint32]
-        self.TUCAM_Cap_DoSoftwareTrigger.restype = TUCAMRET
-
-        # Trigger Out
-        self.TUCAM_Cap_SetTriggerOut.argtypes = [c_void_p, TUCAM_TRGOUT_ATTR]
-        self.TUCAM_Cap_SetTriggerOut.restype = TUCAMRET
-        self.TUCAM_Cap_SetTriggerOut.argtypes = [c_void_p, POINTER(TUCAM_TRGOUT_ATTR)]
-        self.TUCAM_Cap_SetTriggerOut.restype = TUCAMRET
-
-        # Capturing
-        self.TUCAM_Cap_Start.argtypes = [c_void_p, c_uint]
-        self.TUCAM_Cap_Start.restype = TUCAMRET
-        self.TUCAM_Cap_Stop.argtypes = [c_void_p]
-        self.TUCAM_Cap_Stop.restype = TUCAMRET
-
-        # File control
-        # Image
-        self.TUCAM_File_SaveImage.argtypes = [c_void_p, TUCAM_FILE_SAVE]
-        self.TUCAM_File_SaveImage.restype = TUCAMRET
-
-        # Profiles
-        self.TUCAM_File_LoadProfiles.argtypes = [c_void_p, c_void_p]
-        self.TUCAM_File_LoadProfiles.restype = TUCAMRET
-        self.TUCAM_File_SaveProfiles.argtypes = [c_void_p, c_void_p]
-        self.TUCAM_File_SaveProfiles.restype = TUCAMRET
-
-        # Video
-        self.TUCAM_Rec_Start.argtypes = [c_void_p, TUCAM_REC_SAVE]
-        self.TUCAM_Rec_Start.restype = TUCAMRET
-        self.TUCAM_Rec_AppendFrame.argtypes = [c_void_p, POINTER(TUCAM_FRAME)]
-        self.TUCAM_Rec_AppendFrame.restype = TUCAMRET
-        self.TUCAM_Rec_Stop.argtypes = [c_void_p]
-        self.TUCAM_Rec_Stop.restype = TUCAMRET
-
-        self.TUIMG_File_Open.argtypes = [POINTER(TUIMG_OPEN), POINTER(POINTER(TUCAM_FRAME))]
-        self.TUIMG_File_Open.restype = TUCAMRET
-        # TODO: not available on old SDK? Not a big deal, we don't need it
-        # self.TUIMG_File_Close.argtypes = [c_void_p]
-        # self.TUIMG_File_Close.restype = TUCAMRET
-
-        # Calculatr roi
-        self.TUCAM_Calc_SetROI.argtypes = [c_void_p, TUCAM_CALC_ROI_ATTR]
-        self.TUCAM_Calc_SetROI.restype = TUCAMRET
-        self.TUCAM_Calc_GetROI.argtypes = [c_void_p, POINTER(TUCAM_CALC_ROI_ATTR)]
-        self.TUCAM_Calc_GetROI.restype = TUCAMRET
-
-        # Extened control
-        self.TUCAM_Reg_Read.argtypes = [c_void_p, TUCAM_REG_RW]
-        self.TUCAM_Reg_Read.restype = TUCAMRET
-        self.TUCAM_Reg_Write.argtypes = [c_void_p, TUCAM_REG_RW]
-        self.TUCAM_Reg_Write.restype = TUCAMRET
-
-        # buffer control
-        self.TUCAM_Buf_Attach.argtypes = [c_void_p, c_void_p, c_uint32]
-        self.TUCAM_Buf_Attach.restype = TUCAMRET
-        self.TUCAM_Buf_Detach.argtypes = [c_void_p]
-        self.TUCAM_Buf_Detach.restype = TUCAMRET
-
-        # Get GrayValue
-        self.TUCAM_Get_GrayValue.argtypes = [c_void_p, c_int32, c_int32, c_void_p]
-        self.TUCAM_Get_GrayValue.restype = TUCAMRET
-
-        # Find color temperature index value according to RGB
-        self.TUCAM_Index_GetColorTemperature.argtypes = [c_void_p, c_int32, c_int32, c_int32, c_void_p]
-        self.TUCAM_Index_GetColorTemperature.restype = TUCAMRET
-
-        # Set record save mode
-        self.TUCAM_Rec_SetAppendMode.argtypes = [c_void_p, c_uint]
-        self.TUCAM_Rec_SetAppendMode.restype = TUCAMRET
-
-        # Any-BIN
-        self.TUCAM_Cap_SetBIN.argtypes = [c_void_p, TUCAM_BIN_ATTR]
-        self.TUCAM_Cap_SetBIN.restype = TUCAMRET
-        self.TUCAM_Cap_GetBIN.argtypes = [c_void_p, POINTER(TUCAM_BIN_ATTR)]
-        self.TUCAM_Cap_GetBIN.restype = TUCAMRET
-
-        # Subtract background
-        self.TUCAM_Cap_SetBackGround.argtypes = [c_void_p, TUCAM_IMG_BACKGROUND]
-        self.TUCAM_Cap_SetBackGround.restype = TUCAMRET
-        # self.TUCAM_Cap_GetBackGround = self.TUSDKdll.TUCAM_Cap_GetMath
-        #self.TUCAM_Cap_GetBackGround.argtypes = [c_void_p, POINTER(TUCAM_IMG_BACKGROUND)]
-        #self.TUCAM_Cap_GetBackGround.restype = TUCAMRET
-
-        # Math
-        self.TUCAM_Cap_SetMath.argtypes = [c_void_p, TUCAM_IMG_MATH]
-        self.TUCAM_Cap_SetMath.restype = TUCAMRET
-        self.TUCAM_Cap_GetMath.argtypes = [c_void_p, POINTER(TUCAM_IMG_MATH)]
-        self.TUCAM_Cap_GetMath.restype = TUCAMRET
-
-        # GenICam Element Attribute pName
-        # self.TUCAM_GenICam_ElementAttr = self.TUSDKdll.TUCAM_GenICam_ElementAttr
-        #self.TUCAM_GenICam_ElementAttr.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_void_p, c_int32]
-        #self.TUCAM_GenICam_ElementAttr.restype = TUCAMRET
-
-        # GenICam Element Attribute Next
-        self.TUCAM_GenICam_ElementAttrNext.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_void_p, c_int32]
-        self.TUCAM_GenICam_ElementAttrNext.restype = TUCAMRET
-
-        # GenICam Set Element Value
-        self.TUCAM_GenICam_SetElementValue.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_int32]
-        self.TUCAM_GenICam_SetElementValue.restype = TUCAMRET
-
-        # GenICam Get Element Value
-        self.TUCAM_GenICam_GetElementValue.argtypes = [c_void_p, POINTER(TUCAM_ELEMENT), c_int32]
-        self.TUCAM_GenICam_GetElementValue.restype = TUCAMRET
-
-        # GenICam Set Register Value
-        self.TUCAM_GenICam_SetRegisterValue.argtypes = [c_void_p, c_void_p, c_int64, c_int64]
-        self.TUCAM_GenICam_SetRegisterValue.restype = TUCAMRET
-
-        # GenICam Get Register Value
-        self.TUCAM_GenICam_GetRegisterValue.argtypes = [c_void_p, c_void_p, c_int64, c_int64]
-        self.TUCAM_GenICam_GetRegisterValue.restype = TUCAMRET
-
-        # Only CXP Support
-        self.TUCAM_Cap_AnnounceBuffer.argtypes = [c_void_p, c_uint, c_void_p]
-        self.TUCAM_Cap_AnnounceBuffer.restype = TUCAMRET
-        self.TUCAM_Cap_ClearBuffer.argtypes = [c_void_p]
-        self.TUCAM_Cap_ClearBuffer.restype = TUCAMRET
-
-        # camera parameters
-        self._resolution = 0 #  0 = 2048,2040 1 = 2048,2040 HDR  2= 1024, 1020 2x2  3 = 512, 510 4x4
-        self._binning = (1, 1)
-        self._translation = (0,0)
-        self._gain = 1.0
-        self._roi = (0, 0, 2048, 2010)
-        self._targetTemperature = -20.0
-        self._fan_speed = 0                 # 0 = max, 3 = off (water cooling)
-        self._exposureTime = 1.0
-        self._parametersChanged = True
-        self._camThread = None
-
-        # call init and open
-        self.Path = './'
-        self.TUCAMINIT = TUCAM_INIT(0, self.Path.encode('utf-8'))
-        self.TUCAMOPEN = TUCAM_OPEN(0, 0)
-
-        self.TUCAM_Api_Init(pointer(self.TUCAMINIT), 5000)
-        self._nrCameras = self.TUCAMINIT.uiCamCount
-
-        self._lock = threading.Lock()
-
-        for name, member in inspect.getmembers(self, inspect.isfunction):
-             if name.startswith("TUCAM_"):
-                 member.errcheck = self._errcheck
-
-    @staticmethod
-    def _errcheck(result, func, args):
-        """
-        Analyse the return value of a call and raise an exception in case of
-        error.
-        Follows the ctypes.errcheck callback convention
-        """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if result >= TUCAMRET_Enum.TUCAMRET_FAILURE:
-            if result in tucam_error_codes:
-                raise TUCamError(result, "Call to %s failed with error code %d: %s" %
+                raise TUCamError(result, "Call to %s failed with error code 0x%x: %s" %
                                (str(func.__name__), result, tucam_error_codes[result]))
             else:
-                raise TUCamError(result, "Call to %s failed with unknown error code %d" %
+                raise TUCamError(result, "Call to %s failed with unknown error code 0x%x" %
                                (str(func.__name__), result))
         return result
 
     # hardware interaction functionality
     # gets and sets the physical parameters
 
-    def get_info(self, id: TUCAM_IDINFO):
+    def get_info(self, id: TUCAM_IDINFO) -> str:
+        """
+        Returns info on an open camera.
+
+        Parameters
+        ----------
+        id : TUCAM_IDINFO
+            The desired information identifier,
+
+        Returns
+        -------
+        str
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS
+        """
         tvinfo = TUCAM_VALUE_INFO(id.value, 0, 0, 0)
         self.TUCAM_Dev_GetInfo(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
         return ctypes.string_at(tvinfo.pText).decode('utf-8')
 
-    def get_info_ex(self, id: TUCAM_IDINFO):
-        tvinfo = TUCAM_VALUE_INFO(id.value, 0, 0, 0)
-        self.TUCAM_Dev_GetInfoEx(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
-        return ctypes.string_at(tvinfo.pText).decode('utf-8')
+    def get_capability_info(self, id: TUCAM_IDCAPA) -> Tuple[float, float, float, float]:
+        """
+        Returns capability  on an open camera.
 
-    def get_capability_info(self, id: TUCAM_IDCAPA):
+        Parameters
+        ----------
+        id : TUCAM_IDCAPA
+            The desired information identifier,
+
+        Returns
+        -------
+        tuple of min, max, default, step
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS
+        ValueError
+            If the requested capability does not exist.
+        """
         #returns information about the capability, meaning its minimum, maximum, default, step.
         if (id.value >= TUCAM_IDCAPA.TUIDC_ENDCAPABILITY.value):
             raise ValueError("No such capability")
@@ -1991,162 +1281,238 @@ class TUCamDLL:
 
         return capainfo.nValMin, capainfo.nValMax, capainfo.nValDft, capainfo.nValStep
 
-    def set_capability_value(self, cap: TUCAM_IDCAPA, val):
-        #set the requested capability (see TUCAM_IDCAPA) 
-        try:
-            capa = TUCAM_CAPA_ATTR()
-            capa.idCapa = cap.value
-            self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capa))
-            if val <= capa.nValMax and val >= capa.nValMin:
-                self.TUCAM_Capa_SetValue(self.TUCAMOPEN.hIdxTUCam, capa.idCapa, val)
-            else:
-                # you asked for an out of range value
-                raise Exception("Capability value out of range")
-        except Exception:
-            raise Exception("No such capability")
+    def set_capability_value(self, cap: TUCAM_IDCAPA, val: float) -> None:
+        """
+        Sets a capability on an open camera.
+        For a list of capabilities see the SDK, TUCAM_IDCAPA enum
 
-    def get_property_info(self, id: TUCAM_IDPROP):
-        #return information about the property, meaning its minimum, maximum, default, step (all floats)
+        Parameters
+        ----------
+        cap : TUCAM_IDCAPA
+            The desired information identifier,
+        val : number
+            The value (float or int) to set the capability to.
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS
+        ValueError
+            If the requested value is out of range
+        """
+        capa = TUCAM_CAPA_ATTR()
+        capa.idCapa = cap.value
+        self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capa))
+        if capa.nValMin <= val <= capa.nValMax:
+            self.TUCAM_Capa_SetValue(self.TUCAMOPEN.hIdxTUCam, capa.idCapa, val)
+        else:
+            # you asked for an out of range value
+            raise ValueError(f"Capability {cap} value {val} out of range")
+
+    def get_property_info(self, id: TUCAM_IDPROP) -> Tuple[float, float, float, float]:
+        """
+        Requests property info on an open camera.
+        For a list of properties see the SDK, TUCAM_IDPROP enum
+        Do not use this directly, see the helper functions like _applyExposureTime
+
+        Parameters
+        ----------
+        id: TUCAM_IDPROP
+            The desired information identifier,
+
+        Returns
+        -------
+        tuple of min, max, default, step values for that property
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS
+        """
         prop = TUCAM_PROP_ATTR()
         prop.idProp = id.value
         prop.nIdxChn = 0
-        try:
-            self.TUCAM_Prop_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(prop))
-            # print('PropID=%#d Min=%#d Max=%#d Dft=%#d Step=%#d' %(prop.idProp, prop.dbValMin, prop.dbValMax, prop.dbValDft, prop.dbValStep))
-        except Exception:
-            raise ValueError("No such property")
+        self.TUCAM_Prop_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(prop))
+        # logging.debug('PropID=%#d Min=%#d Max=%#d Dft=%#d Step=%#d' %(prop.idProp, prop.dbValMin, prop.dbValMax, prop.dbValDft, prop.dbValStep))
         return prop.dbValMin, prop.dbValMax, prop.dbValDft, prop.dbValStep
 
-    def get_property_value(self, id: TUCAM_IDPROP):
-        value = c_double(-1.0)
-        try:
-            self.TUCAM_Prop_GetValue(self.TUCAMOPEN.hIdxTUCam, id.value, pointer(value), 0)
-            #print("PropID=", num, "The current value is=", value)
-        except Exception:
-            raise ValueError("No such property")
-        return value
+    def get_property_value(self, id: TUCAM_IDPROP) -> float:
+        """
+        Requests the current value of a property, on an open camera.
+        For a list of properties see the SDK, TUCAM_IDPROP enum
 
-    def set_property_value(self, id: TUCAM_IDPROP, val: float):
-        try:
-            self.TUCAM_Prop_SetValue(self.TUCAMOPEN.hIdxTUCam, id.value, c_double(val), 0)
-        except Exception:
-            raise ValueError("No such property")
+        Parameters
+        ----------
+        id: TUCAM_IDPROP
+            The desired information identifier,
+
+        Returns
+        -------
+        The current value of the requested property
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS
+        """
+        cvalue = c_double(-1.0)
+        self.TUCAM_Prop_GetValue(self.TUCAMOPEN.hIdxTUCam, id.value, pointer(cvalue), 0)
+        return cvalue.value
+
+    def set_property_value(self, id: TUCAM_IDPROP, val: float) -> None:
+        """
+        Sets the value of a property, on an open camera.
+        For a list of properties see the SDK, TUCAM_IDPROP enum
+        Parameters
+        ----------
+        id: TUCAM_IDPROP
+            The desired information identifier,
+        val: float
+           The value to set.
+        Returns
+        -------
+        Nothing
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+            This would mean that the value is out of range, use get_property_info for the valid range.
+         """
+        self.TUCAM_Prop_SetValue(self.TUCAMOPEN.hIdxTUCam, id.value, c_double(val), 0)
 
     def get_resolution_info(self):
-        if self.TUCAMOPEN.hIdxTUCam == 0:
-            raise Exception("Camera not opened")
-        valText = TUCAM_VALUE_TEXT()
+        """
+        Queries the camera for available resolutions.
+        On the DHYANA camera, there is only one resolution available,
+        and we use ROI to reduce it.
 
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+        """
+        # TODO: make use of this function
         capa = TUCAM_CAPA_ATTR()
         capa.idCapa = TUCAM_IDCAPA.TUIDC_RESOLUTION.value
-        try:
-            result = self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capa))
-            cnt = capa.nValMax - capa.nValMin + 1
-            szRes = (c_char * 64)()
-            for j in range(cnt):
-                valText.nID = TUCAM_IDCAPA.TUIDC_RESOLUTION.value
-                valText.dbValue = j
-                valText.nTextSize = 64
-                valText.pText = cast(szRes, c_char_p)
-                self.TUCAM_Capa_GetValueText(self.TUCAMOPEN.hIdxTUCam, pointer(valText))
-                print('%#d, Resolution =%#s' % (j, valText.pText))
+        self.TUCAM_Capa_GetAttr(self.TUCAMOPEN.hIdxTUCam, pointer(capa))
+        # logging.debug('CapaID=%#d Min=%#d Max=%#d Dft=%#d Step=%#d' % (
+        # capa.idCapa, capa.nValMin, capa.nValMax, capa.nValDft, capa.nValStep))
 
-            #print('CapaID=%#d Min=%#d Max=%#d Dft=%#d Step=%#d' % (
-            #capa.idCapa, capa.nValMin, capa.nValMax, capa.nValDft, capa.nValStep))
-        except Exception:
-            raise Exception("Unable to get capability info")
+        valText = TUCAM_VALUE_TEXT()
+        cnt = capa.nValMax - capa.nValMin + 1
+        szRes = (c_char * 64)()
+        for j in range(cnt):
+            valText.nID = TUCAM_IDCAPA.TUIDC_RESOLUTION.value
+            valText.dbValue = j
+            valText.nTextSize = 64
+            valText.pText = cast(szRes, c_char_p)
+            self.TUCAM_Capa_GetValueText(self.TUCAMOPEN.hIdxTUCam, pointer(valText))
+            logging.info('%#d, Resolution =%#s' % (j, valText.pText))
 
-    def get_camera_info_astext(self, infoid):
-        if self.TUCAMOPEN.hIdxTUCam == 0:
-            raise Exception("Camera not opened")
+    def get_camera_info_astext(self, infoid: TUCAM_IDINFO) -> str:
+        """
+        Queries the camera for info, like name of type.
 
-        try:
-            tvinfo = TUCAM_VALUE_INFO(infoid.value, 0, 0, 0)
-            self.TUCAM_Dev_GetInfo(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
-            
-        except Exception:
-            raise Exception("Unable to get camera info")
+        Parameters
+        ----------
+        infoid: TUCAM_IDINFO
+        The requested info, see TUCAM_IDONFO enum
 
-        #return tvinfo.pText.decode('utf8')
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+        """
+        tvinfo = TUCAM_VALUE_INFO(infoid.value, 0, 0, 0)
+        self.TUCAM_Dev_GetInfo(self.TUCAMOPEN.hIdxTUCam, pointer(tvinfo))
         return ctypes.string_at(tvinfo.pText).decode('utf-8')
-        # print('Camera Name:%#s' % TUCAMVALUEINFO.pText)
 
-    # functions to apply parameters to the actual hardware:
+    def open_camera(self, idx: int) -> None:
+        """
+        This call opens a camera. If multiple cameras are present, set Idx to the desired index (>=0).
+        Only one camera can be open at any time, however the Idx parameter can be used to choose which one.
 
-    def _applyTargetTemperature(self):
-        self.set_property_value(TUCAM_IDPROP.TUIDP_TEMPERATURE, self._targetTemperature)
+        Parameters
+        ----------
+        idx: integer
+        The index of the camera to open, use 0 if only one camera is connected.
 
-    def _applyResolution(self):
-        self.set_capability_value(TUCAM_IDCAPA.TUIDC_RESOLUTION, self._resolution)
-
-    def _applyROI(self):
-        roi_parm = TUCAM_ROI_ATTR()
-        roi_parm.bEnable  = 1
-        roi_parm.nHOffset = self._roi[0] + self._translation[0]
-        roi_parm.nVOffset = self._roi[1] + self._translation[1]
-        roi_parm.nWidth   = self._roi[2]
-        roi_parm.nHeight  = self._roi[3]
-
-        try:
-            self.TUCAM_Cap_SetROI(self.TUCAMOPEN.hIdxTUCam, roi_parm)
-            logging.debug('Set ROI state success, HOffset:%#d, VOffset:%#d, Width:%#d, Height:%#d'%(roi_parm.nHOffset, roi_parm.nVOffset, roi_parm.nWidth, roi_parm.nHeight))
-        except Exception:
-            logging.exception('Set ROI state failure, HOffset:%#d, VOffset:%#d, Width:%#d, Height:%#d' % (roi_parm.nHOffset, roi_parm.nVOffset, roi_parm.nWidth,roi_parm.nHeight))
-
-    def _applyFanSpeed(self):
-        try:
-            self.set_capability_value(TUCAM_IDCAPA.TUIDC_FAN_GEAR, self._fan_speed)
-        except Exception:
-            raise Exception("Setting fan speed failed")  # todo translate to Odemis
-
-    def _applyExposureTime(self):
-        try:
-            self.set_property_value(TUCAM_IDPROP.TUIDP_EXPOSURETM, self._exposureTime * 1000.0) #hardware takes milliseconds
-        except Exception:
-            raise Exception("Setting exposure time failed")
-
-    def applyParameters(self, fromThread=False):
-        #camera should be open
-
-        with self._lock:
-            if self.TUCAMOPEN.hIdxTUCam is None:
-                return
-
-            # continue if not from thread
-            if not (self._camThread is None or fromThread):
-                return
-
-            self._applyFanSpeed()
-            self._applyTargetTemperature()
-            self._applyResolution()
-            self._applyROI()
-            self._applyExposureTime()
-
-            self._parametersChanged = False
-
-    # capturing data:
-    # 1. call StartCapture
-    # 2. repeatedly call CaptureFrame
-    # 2a. optional, call SaveImage
-    # 3. call EndCapture.
-
-    def openCamera(self, Idx):
+        Raises
+        ------
+        TUCamError
+         If the actual SDK function call does not return TUCAMRET_SUCCESS.
+         This means that a camera is not connected. be aware that it can take multiple seconds
+         after switching a camera on before it is recognised.
+        """
         self.TUCAM_Dev_Open(pointer(self.TUCAMOPEN))
         if 0 == self.TUCAMOPEN.hIdxTUCam:
             logging.debug("Open camera failed")
             raise TUCamError(TUCAMRET_Enum.TUCAMRET_NO_CAMERA, "Open camera failed")
         else:
-            logging.debug("Open camera succeeded, Idx=%d" % Idx)
+            logging.debug("Open camera succeeded, Idx=%d" % idx)
 
-    def closeCamera(self):
-        self.stop_camera_feed()
+    def close_camera(self) -> None:
+        """
+        This call closes an open camera.
+        It also stops the acquisition thread, if running.
 
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+            This means that a camera is not connected. be aware that it can take multiple seconds
+            after switching a camera on before it is recognised.
+        """
         if 0 != self.TUCAMOPEN.hIdxTUCam:
             self.TUCAM_Dev_Close(self.TUCAMOPEN.hIdxTUCam)
         self.TUCAMOPEN.hIdxTUCam = 0
 
+    def get_max_resolution(self, res_idx: int) -> Tuple[Tuple[int, int], int]:
+        """
+        Converts a resolution index into a resolution and binning factor.
+        :return: the maximum resolution (width, height) in pixels, and the binning factor (for both X & Y)
+        """
+        # Hardcoded for Dhyana 400BSI
+        # TODO: read from camera capabilities at init
+        if res_idx in (0, 1): # 0 = 2048,2040  and 1 = 2048,2040 Enhance (= 0 + some noise removal filter)
+            return (2048, 2040), 1
+        elif res_idx == 2:  # 1024, 1020 2x2
+            return (1024, 1020), 2
+        elif res_idx == 3:  # 512, 510 4x4
+            return (512, 510), 4
+        else:
+            raise ValueError(f"Invalid value for res_idx {res_idx}")
 
-    def startCapture(self):
+    def get_resolution_index(self, binning: Tuple[int, int]) -> int:
+        """
+        Converts a binning tuple into a resolution index.
+        :return: The resolution index as expected by _applyResolution()
+        """
+        if binning == (1, 1):
+            return 0
+        elif binning == (2, 2):
+            return 2
+        elif binning == (4, 4):
+            return 3
+        else:
+            raise ValueError(f"Invalid value for binning {binning}")
+
+    # capturing data:
+    # 1. call start_capture
+    # 2. repeatedly call capture_frame
+    # 2a. optional, call SaveImage
+    # 3. call end_capture.
+
+    def start_capture(self):
+        """
+        This call starts a capture on an open camera by calling the necessary SDK fucntions.
+        Do not use directly, it is part of the cpature thread.
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+        """
         self.m_frame = TUCAM_FRAME()
         self.m_format = TUIMG_FORMATS
         self.m_frformat = TUFRM_FORMATS
@@ -2155,653 +1521,991 @@ class TUCamDLL:
         self.m_frame.pBuffer = 0
         self.m_frame.ucFormatGet = self.m_frformat.TUFRM_FMT_USUAl.value
         self.m_frame.uiRsdSize = 1
-        self.m_frameidx = 0             # keep counting frames
 
         self.TUCAM_Buf_Alloc(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame))
         self.TUCAM_Cap_Start(self.TUCAMOPEN.hIdxTUCam, self.m_capmode.TUCCM_SEQUENCE.value)
 
-    def captureFrame(self):
+    def capture_frame(self, timeout: float) -> numpy.ndarray:
+        """
+        This call captures one frame by calling the necessary SDK functions.
+        Do not use directly, it is part of the capture thread.
 
-        try:
-            self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), 1000)
-        except OSError as ex:
-            raise TUCamError("timeout", TUCAMRET_Enum.TUCAMRET_TIMEOUT)
-        # print(ret)
-        #todo whatif timeout?
+        :param: timeout: maximum time to wait for a frame, in seconds.
+        :return: numpy array of the captured frame.
 
-        self.m_frameidx += 1
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+        """
+        # FIXME: timeout doesn't seem to work with SDK of 2025-08-18, it always waits until the image is received
+        # In new SDK (from 2025), WaitForFrame() ignores timeouts that are shorter than the exposure
+        # time. => Need to use TUCAM_Buf_AbortWait to stop waiting.
+        self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), int(timeout * 1000))
 
-        #print(
-        #    "Frame grabbed, width:%d, height:%#d, channel:%#d, elembytes:%#d, image size:%#d" % (
-        #     self.m_frame.usWidth, self.m_frame.usHeight, self.m_frame.ucChannels,
-        #     self.m_frame.ucElemBytes, self.m_frame.uiImgSize)
-
-        #)
-
-        # Create an empty NumPy array of the same length and dtype ---
+        # Copy the data into a NumPy array of the same length and dtype
         p = cast(self.m_frame.pBuffer + self.m_frame.usOffset, POINTER(c_uint16))
-        np_buffer = numpy.ctypeslib.as_array(p, ( self.m_frame.usHeight, self.m_frame.usWidth))
+        np_buffer = numpy.ctypeslib.as_array(p, (self.m_frame.usHeight, self.m_frame.usWidth))
         np_array = np_buffer.copy()
+        return np_array
 
-        print (np_array)
-        #da = model.DataArray(np_array, {})
-        #hdf5.export(f"test_tucsen{self.m_frameidx}.h5", da)
-            # todo: now move the np array to Odemis
+    # def capture_frame_and_save(self, image_name):
+    #     fs = TUCAM_FILE_SAVE()
+    #     fs.nSaveFmt = TUIMG_FORMATS.TUFMT_PNG.value  # save as png
+    #     fs.pFrame = pointer(self.m_frame)
+    #     ImgName = image_name + str(self.m_frameidx)
+    #     fs.pstrSavePath = ImgName.encode('utf-8')
+    #
+    #     self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), 1000)
+    #     self.TUCAM_File_SaveImage(self.TUCAMOPEN.hIdxTUCam, fs)
 
+    def end_capture(self):
+        """
+        This call stops a capture on an open camera by calling the necessary SDK functions.
+        Do not use directly, it is part of the capture thread.
 
-    def captureFrameAndSave(self, image_name):
-        fs = TUCAM_FILE_SAVE()
-        fs.nSaveFmt = TUIMG_FORMATS.TUFMT_PNG.value           #save as png
-        fs.pFrame = pointer(self.m_frame)
-        ImgName = image_name + str(self.m_frameidx)
-        fs.pstrSavePath = ImgName.encode('utf-8')
-
-        self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), 1000)
-        self.TUCAM_File_SaveImage(self.TUCAMOPEN.hIdxTUCam, fs)
-
-
-    def endCapture(self):
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+        """
         self.TUCAM_Buf_AbortWait(self.TUCAMOPEN.hIdxTUCam)
         self.TUCAM_Cap_Stop(self.TUCAMOPEN.hIdxTUCam)
         self.TUCAM_Buf_Release(self.TUCAMOPEN.hIdxTUCam)
 
+    # functions to apply parameters to the actual hardware:
+    def set_resolution(self, res_idx: int) -> None:
+        """
+        :param res_idx: the selected resolution index (essentially affects the binning)
+        :return:
+        """
+        self.set_capability_value(TUCAM_IDCAPA.TUIDC_RESOLUTION, res_idx)
 
-    #camera properties
-    def _get_max_resolution(self):
-        if self._binning == (1, 1):
-            return (2048,2040)
-        elif self._binning == (2, 2):
-            return (1024, 1020)
-        elif self._binning == (4, 4):
-            return (512, 510)
-        else:
-            raise Exception("Invalid value for binning set")
+    def set_roi(self, roi: Tuple[int, int, int, int], translation: Tuple[int, int]) -> None:
+        """
+        :param roi: left, top, width, height, in px (from 0) in the current resolution defined by
+        the "resolution index" (aka binning)
+        :param translation: shift of the roi, in px in the current resolution
+        """
+        roi_parm = TUCAM_ROI_ATTR()
+        roi_parm.bEnable = 1
+        roi_parm.nHOffset = roi[0] + translation[0]
+        roi_parm.nVOffset = roi[1] + translation[1]
+        roi_parm.nWidth = roi[2]
+        roi_parm.nHeight = roi[3]
 
-    # property setters
+        if roi_parm.nHOffset < 0 or roi_parm.nVOffset < 0:
+            raise ValueError(f"Negative ROI offset not allowed: roi = {roi}, translation = {translation}")
 
-    def setBinning(self, value):
-        if self._binning == (1, 1):
-            self._resolution = 1
-        elif self._binning == (2, 2):
-            self._resolution = 2
-        elif self._binning == (4, 4):
-            self._resolution = 3
-        else:
-            raise Exception("Invalid value for binning set")
+        logging.debug('Setting ROI: HOffset:%#d, VOffset:%#d, Width:%#d, Height:%#d',
+                      roi_parm.nHOffset, roi_parm.nVOffset, roi_parm.nWidth, roi_parm.nHeight)
+        self.TUCAM_Cap_SetROI(self.TUCAMOPEN.hIdxTUCam, roi_parm)
 
-        self._parametersChanged = True
-        self.applyParameters()
+    def set_fan_speed(self, fan_speed: int) -> None:
+        """
+        :param fan_speed:
+        0: "High"
+        1: "Medium"
+        2: "Low"
+        3: "Off (Water Cooling)"
+        """
+        self.set_capability_value(TUCAM_IDCAPA.TUIDC_FAN_GEAR, fan_speed)
 
-    def getBinning(self):
-        return self._binning
+    def set_target_temperature(self, temp: float) -> None:
+        """
+        Note: there is no option to read back the requested target temperature.
+        :param temp: in °C
+        """
+        # Dhyana 400 BSI formula: (not as documented in SDK)
+        # Theoretical range is between -50°C and +50°C, but camera cannot physically cool below
+        # ambient temperature - 45°C with water cooling, or abient temperature - 35°C with air cooling.
+        # Hardware accepts values between 0 and 1000.
+        # t_c = t_hw / 10 - 50
+        # t_hw = (t_c + 50) * 10
+        # Example:
+        # 450 -> -5 C
+        # 500 C -> 0 C
+        # Note: GUI program works differently!
+        temp_hw = float((temp + 50) * 10)
+        self.set_property_value(TUCAM_IDPROP.TUIDP_TEMPERATURE, temp_hw)
 
-    def setResolution(self, res):
-        # call with tuple xres, yres. Set binning first
-        max_res = self._get_max_resolution()
-        if res[0] > max_res[0]:
-           res[0] = max_res[0]
-        if res[1] > max_res[1]:
-           res[1] = max_res[1]
+    def get_target_temperature_range(self) -> Tuple[float, float, float, float]:
+        """
+        Returns info on the range of the target temperature
+        :return: min, max, default, step, in °C
 
-        self._roi = (int(max_res[0] / 2) - int(res[0] /2),  # left
-                    int(max_res[1] / 2) - int(res[1] / 2),  # top
-                    res[0],  # width
-                    res[1])                     # height
+        Raises
+        ------
+        TUCamError
+           If the actual SDK function call does not return TUCAMRET_SUCCESS.
+           See the exception for the actual cause.
+        """
+        mn, mx, dft, step = self.get_property_info(TUCAM_IDPROP.TUIDP_TEMPERATURE)
+        logging.debug("Temp range: %f %f %f %f", mn, mx, dft, step)
 
-        #clip translation. not allowed to walk outside camera ROI.
+        def target_to_c(targt):
+            return targt / 10 - 50
+        return target_to_c(mn), target_to_c(mx), target_to_c(dft), step / 10
 
-        clipped_translation_x = self._translation[0]
-        if self._roi[0] + self._roi[2] + clipped_translation_x > max_res[0]:
-            clipped_translation_x = max_res[0] - self._roi[0] - self._roi[2]
-        clipped_translation_y = self._translation[1]
-        if self._roi[1] + self._roi[3] + clipped_translation_y > max_res[1]:
-            clipped_translation_y = max_res[0] - self._roi[0] - self._roi[2]
-        self._translation = (clipped_translation_x, clipped_translation_y)
+    def get_temperature(self) -> float:
+        """
+        Returns actual temperature
 
-        self._parametersChanged = True
-        self.applyParameters()
+        Returns
+        -------
+        current temperature, float °C
 
-        return res
-
-    def getResolution(self):
-        return self._roi[2], self._roi[3]
-
-    def setFanSpeed(self, value):
-        # input : 1.0 is max, 0.0 is stop
-        # camera value:
-        #0: "High"
-        #1: "Medium"
-        #2: "Low"
-        #3: "Off (Water Cooling)"
-        value = int ((1.0 - value) * 3.0)
-        if 0 <= value <= 3:
-            self._fan_speed = value
-
-            self._parametersChanged = True
-            self.applyParameters()
-        else:
-            raise Exception("invalid fan speed value")
-
-    def getFanSpeed(self):
-        return (1.0 - self._fan_speed) / 3.0
-
-    def getTargetTemperature(self):
-        return self._targetTemperature
-
-    def setTargetTemperature(self, value):
-        self._targetTemperature = value
-
-        self._parametersChanged = True
-        self.applyParameters()
-
-    def setGain(self, value):
-        self._gain = value
-
-    def getGain(self):
-        return self._gain
-
-    #todo exposure time
-    def getExposureTime(self):
-        return self._exposureTime
-
-    def setExposureTime(self, value):
-        self._exposureTime = value
-
-        self._parametersChanged = True
-        self.applyParameters()
-
-    def getTemperature(self):
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+            See the exception for the actual cause.
+        """
+        # Note: when the USB camera is disconnected, returns -1°C
+        # When reading, it's directly in °C
         return self.get_property_value(TUCAM_IDPROP.TUIDP_TEMPERATURE)
 
-    def getModelName(self):
+    def get_exposure_time_range(self) -> Tuple[float, float, float, float]:
+        """
+        Returns info on the range of the exposure time.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        tuple of floats, min, max, default, step, in s
+
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+            See the exception for the actual cause.
+        """
+        # Values are in ms
+        mn, mx, dft, step = self.get_property_info(TUCAM_IDPROP.TUIDP_EXPOSURETM)
+        return mn / 1000, mx / 1000, dft / 1000, step / 1000  # s
+
+    def get_exposure_time(self) -> float:
+        """
+        Reads the actual exposure time from the hardware.
+
+        Returns
+        -------
+        current exposure time, float (in s)
+
+        Raises
+        ------
+        TUCamError
+          If the actual SDK function call does not return TUCAMRET_SUCCESS.
+          See the exception for the actual cause.
+        """
+        return self.get_property_value(TUCAM_IDPROP.TUIDP_EXPOSURETM) / 1000
+
+    def set_exposure_time(self, exp_time: float) -> None:
+        """
+        :param exp_time: in s
+        """
+        self.set_property_value(TUCAM_IDPROP.TUIDP_EXPOSURETM, exp_time * 1000.0)  # milliseconds
+
+    def set_global_gain(self, gain_idx: int) -> None:
+        """
+        Sets the global gain of the camera.
+        :param gain_idx:
+            The gain index, between 0 and 3:
+            0 = HDR (16 bits?!)
+            1: High gain (12 bits?)
+            2: Low gain (12 bits?)
+            3: HDR raw
+
+        Raises
+        ------
+        TUCamError
+            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+            This would mean that the value is out of range, use get_property_info for the valid range.
+        """
+        self.set_property_value(TUCAM_IDPROP.TUIDP_GLOBALGAIN, gain_idx)
+
+    def get_black_level(self) -> int:
+        """
+        Returns black level value (ie, the value returned when signal is zero)
+        :return: black level value
+        """
+        # Not implemented on the Dhyana 400 BSI!
+        return int(self.get_property_value(TUCAM_IDPROP.TUIDP_BLACKLEVEL))
+
+    def get_model_name(self) -> str:
+        """
+        Returns type of camera
+        """
         return self.get_camera_info_astext(TUCAM_IDINFO.TUIDI_CAMERA_MODEL)
 
-    def getHwVersion(self):
+    def get_sw_version(self) -> str:
+        """
+        Returns API version on camera
+        """
         return self.get_camera_info_astext(TUCAM_IDINFO.TUIDI_VERSION_API)
-    # camera feed using thread.
-    # call only on open camera.
 
-    def start_camera_feed(self):
-        self._camThread = CAMThread()
-        self._camThread.start_thread(dll = self)
-
-    def stop_camera_feed(self):
-        if self._camThread != None:
-            self._camThread.stop_thread()
-            self._camThread.join()
-        self._camThread = None
-
-    def __del__(self):
-        try:
-            self.TUCAM_Api_Uninit()
-        except Exception as e:
-            # library throws wierd excp if init failed. ignore this.
-            logging.debug("TUCAM_Api_Uninit exception")
+    def get_serial_number(self) -> str:
+        cSN = (c_char * 64)()
+        pSN = cast(cSN, c_char_p)
+        TUCAMREGRW = TUCAM_REG_RW(1, pSN, 64)
+        self.TUCAM_Reg_Read(self.TUCAMOPEN.hIdxTUCam, TUCAMREGRW)
+        sn = ctypes.string_at(pSN).decode('utf-8')
+        return sn
 
 
 class FakeTUCamDLL:
+    """
+    Simulator of the TUCamDLL
+    """
     def __init__(self):
-        self.TUSDKdll = None
-
-        # Input/output arguments definition
-
-        # On Linux, the default return value is a (signed) int. However, the functions return uint32.
-        # This prevents converting properly the return to TUCAMRET
-        TUCAMRET = c_uint32
-        # TUCAMRET = None
-        # TUCAMRET = TUCAMRET_Enum
-
         # camera parameters
-        self._resolution = 0  # 0 = 2048,2040 1 = 2048,2040 HDR  2= 1024, 1020 2x2  3 = 512, 510 4x4
-        self._binning = (1, 1)
-        self._translation = (0, 0)
-        self._gain = 1.0
+        self._res_id = 0  # 0 = 2048,2040 1 = 2048,2040 HDR  2= 1024, 1020 2x2  3 = 512, 510 4x4
         self._roi = (0, 0, 2048, 2010)
-        self._targetTemperature = -20.0
+        self._target_temperature = -20.0
         self._fan_speed = 0  # 0 = max, 3 = off (water cooling)
-        self._exposureTime = 1.0
-        self._parametersChanged = True
-        self._camThread = None
-        self._frameIdx = 0
-        self._nrCameras = 1     # fake one camera.
+        self._exposure_time = 1.0
+        self._gain = 0
 
-        # call init and open
-        self.Path = './'
-
-        self._lock = threading.Lock()
-
-        for name, member in inspect.getmembers(self, inspect.isfunction):
-            if name.startswith("TUCAM_"):
-                member.errcheck = self._errcheck
-
-    @staticmethod
-    def _errcheck(result, func, args):
-        """
-        Analyse the return value of a call and raise an exception in case of
-        error.
-        Follows the ctypes.errcheck callback convention
-        """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if result >= TUCAMRET_Enum.TUCAMRET_FAILURE:
-            if result in tucam_error_codes:
-                raise TUCamError(result, "Call to %s failed with error code %d: %s" %
-                                 (str(func.__name__), result, tucam_error_codes[result]))
-            else:
-                raise TUCamError(result, "Call to %s failed with unknown error code %d" %
-                                 (str(func.__name__), result))
-        return result
-
-    # hardware interaction functionality
-    # gets and sets the physical parameters
-
-
-    def applyParameters(self, fromThread=False):
-
-
-        with self._lock:
-            # camera should be open but ignore this
-            #if self.TUCAMOPEN.hIdxTUCam is None:
-            #    return
-
-            # continue if not from thread
-            if not (self._camThread is None or fromThread):
-                return
-
-            # do not talk to hardware, just acknowledge
-            self._parametersChanged = False
-
-    # capturing data:
-    # 1. call StartCapture
-    # 2. repeatedly call CaptureFrame
-    # 2a. optional, call SaveImage
-    # 3. call EndCapture.
-
-    def openCamera(self, Idx):
-        if (Idx >= self._nrCameras):
-            logging.debug("Open camera failed")
-            raise TUCamError(TUCAMRET_Enum.TUCAMRET_NO_CAMERA, "Open camera failed")
-        else:
-            logging.debug("Open camera succeeded, Idx=%d" % Idx)
-
-        self.stop_camera_feed()
-
-    def closeCamera(self):
+    def TUCAM_Api_Uninit(self):
         pass
 
-    def startCapture(self):
+    def open_camera(self, idx: int):
+        if idx >= 1:
+            logging.debug("Open camera %s failed", idx)
+            raise model.HwError("No Tucsen camera found, check the camera is turned on")
+
+        logging.debug("Open camera succeeded, idx=%d" % idx)
+
+    def close_camera(self):
         pass
 
-    def captureFrame(self):
-
-        # wait for camera exposure time, then produce a random noise image
-        time.sleep(self._exposureTime)
-
-        self._frameIdx += 1
-
-        # Create an empty NumPy array of the same length and dtype ---
-        arr = numpy.empty((self._roi[2], self._roi[3]))
-
-        # Fill with random integers between 0 and 150
-        np_array = numpy.random.randint(0, 150, size=arr.shape)  #
-
-        print(np_array)
-        # da = model.DataArray(np_array, {})
-        # hdf5.export(f"test_tucsen{self.m_frameidx}.h5", da)
-        # todo: now move the np array to Odemis
-
-    def captureFrameAndSave(self, image_name):
-        # cannot call TUCAM_File_SaveImage, so just sleep for the exposuretime
-        time.sleep(self._exposureTime)
-
-        self.m_frameidx += 1
-
-    def endCapture(self):
+    def start_capture(self):
         pass
+
+    def end_capture(self):
+        pass
+
+    def capture_frame(self, timeout: float) -> numpy.ndarray:
+        # Simulate the exposure time
+        # TODO: Simulate the timeout by sleeping the timeout time, and raising a TUCamError(TIMEOUT)
+        # on timeout if shorter than exposure time.
+        time.sleep(self._exposure_time)
+
+        # Create an empty NumPy array of the same length and dtype
+        arr = numpy.empty((self._roi[3], self._roi[2]), dtype=numpy.uint16)
+
+        # Basic: just a gradient
+        arr[:] = numpy.linspace(100, 2 ** 16 - 300, arr.shape[1])
+
+        # Add some noise
+        arr += numpy.random.randint(0, 200, arr.shape, dtype=arr.dtype)
+
+        return arr
 
     # camera properties
-    def _get_max_resolution(self):
-        if self._binning == (1, 1):
-            return (2048, 2040)
-        elif self._binning == (2, 2):
-            return (1024, 1020)
-        elif self._binning == (4, 4):
-            return (512, 510)
+    def get_max_resolution(self, res_idx: int) -> Tuple[Tuple[int, int], int]:
+        """
+        Helper function for setResolution
+        """
+        if res_idx in (0, 1):
+            return (2048, 2040), 1
+        elif res_idx == 2:
+            return (1024, 1020), 2
+        elif res_idx == 3:
+            return (512, 510), 4
         else:
-            raise Exception("Invalid value for binning set")
+            raise ValueError("Invalid value for res_idx set")
 
-    # property setters
-
-    def setBinning(self, value):
-        if self._binning == (1, 1):
-            self._resolution = 1
-        elif self._binning == (2, 2):
-            self._resolution = 2
-        elif self._binning == (4, 4):
-            self._resolution = 3
+    def get_resolution_index(self, binning: Tuple[int, int]) -> int:
+        """
+        Converts a binning tuple into a resolution index.
+        :return: The resolution index as expected by _applyResolution()
+        """
+        if binning == (1, 1):
+            return 0
+        elif binning == (2, 2):
+            return 2
+        elif binning == (4, 4):
+            return 3
         else:
-            raise Exception("Invalid value for binning set")
+            raise ValueError(f"Invalid value for binning {binning}")
 
-        self._parametersChanged = True
-        self.applyParameters()
+    def set_roi(self, roi: Tuple[int, int, int, int], translation: Tuple[int, int]):
+        self._roi = (roi[0] + translation[0],
+                     roi[1] + translation[1],
+                     roi[2],
+                     roi[3])
+        if self._roi[0] < 0 or self._roi[1] < 0:
+            raise ValueError(
+                f"Negative ROI offset not allowed: roi = {roi}, translation = {translation}")
+        logging.debug("Setting RoI to %s", self._roi)
 
-    def getBinning(self):
-        return self._binning
+    def set_resolution(self, res_idx: int) -> None:
+        assert 0 <= res_idx <= 3
+        self._res_id = res_idx
 
-    def setResolution(self, res):
-        # call with tuple xres, yres. Set binning first
-        max_res = self._get_max_resolution()
-        if res[0] > max_res[0]:
-            res[0] = max_res[0]
-        if res[1] > max_res[1]:
-            res[1] = max_res[1]
+    def set_fan_speed(self, value):
+        if 0 <= value <= 3:
+            self._fan_speed = value
+        else:
+            raise ValueError("invalid fan speed value")
+
+    def set_target_temperature(self, value):
+        self._target_temperature = value
+
+    def get_target_temperature_range(self):
+        return (-50.0, 50.0, -10.0, 0.1)  # °C
+
+    def get_exposure_time(self):
+        # the fake dll returns the set exposure time, the real one reads
+        # it from the hardware
+        return self._exposure_time
+
+    def set_exposure_time(self, value):
+        self._exposure_time = value
+
+    def get_exposure_time_range(self):
+        # min, max, default, step
+        return (0.0112e-3, 17.615, 10e-3, 0.0112e-3)
+
+    def get_temperature(self):
+        return self._target_temperature
+
+    def set_global_gain(self, gain_idx: int) -> None:
+        assert 0 <= gain_idx <= 3
+        self._gain = gain_idx
+
+    def get_black_level(self) -> int:
+        return 100
+
+    def get_model_name(self):
+        return "Dhyana 400BSI V3"
+
+    def get_sw_version(self):
+        return "1.0.0.fake"
+
+    def get_serial_number(self) -> str:
+        return "FAKE123456"
+
+
+# Acquisition control messages
+class AcqMessage(Enum):
+    START = "S"  # Start acquisition
+    STOP = "E"  # Stop acquisition
+    TERMINATE = "T"  # Terminate acquisition thread
+    SETTINGS = "U"  # Update settings
+
+
+class TerminationRequested(Exception):
+    """
+    Acquisition thread termination requested.
+    """
+    pass
+
+
+class TUCam(model.DigitalCamera):
+    """
+    HwComponent to support Tucsen camera.
+    For now, only tested on the Dhyana 400BSI V3 with USB3 connection.
+    Note: synchronized acquisition is *not* supported.
+
+    Note that the .binning, .resolution, .translation VAs are linked, so that the region of interest
+    stays approximately the same (in terms of physical area acquired). So to change them to specific
+    values, it is recommended to set them in the following order:
+    Binning > Resolution > Translation.
+    """
+    def __init__(self, name: str, role: str, device: Optional[str]=None, **kwargs) -> None:
+        """
+        See Digital Camera for the common parameters.
+        :param device: serial number of the device, or "fake" to use a simulator.
+        If None, the first camera found is used.
+        """
+        model.DigitalCamera.__init__(self, name, role, **kwargs)
+
+        # initialized early for making terminate() happy in case of failure at init
+        self._dll = None
+        self.temp_timer: Optional[util.RepeatingTimer] = None
+        self._acq_thread: Optional[threading.Thread] = None
+
+        # Queue to control the acquisition thread
+        self._genmsg = queue.Queue()  # GEN_* or float
+        self._need_settings_update = False
+
+        if device == "fake":
+            self._dll = FakeTUCamDLL()
+        else:
+            try:
+                self._dll = TUCamDLL()
+            except TUCamError as ex:
+                # Weirdly, the TUCAM_Api_Init() can fail if no camera is connected
+                if ex.errno == TUCAMRET_Enum.TUCAMRET_NOT_INIT.value:
+                    raise model.HwError("No Tucsen camera found, check the camera is turned on")
+                raise
+
+        self._open_camera(device)
+
+        # drivers/hardware info
+        hw_name = self._dll.get_model_name()
+        sn = self._dll.get_serial_number()
+        if not "Dhyana 400BSI" in hw_name:
+            logging.warning("Camera model %s not tested with Odemis, proceed with caution", hw_name)
+        self._hwVersion = f"{hw_name} (S/N {sn})"
+        self._metadata[model.MD_HW_NAME] = self._hwVersion
+        self._swVersion = self._dll.get_sw_version()
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+
+        # camera parameters: values to be set when update_settings() is called
+        self._resolution_idx = 0  # 0 = 2048,2040 1 = 2048,2040 Enhance  2= 1024, 1020 2x2  3 = 512, 510 4x4
+        self._translation = (0, 0)
+        self._roi = (0, 0, 2048, 2010)
+        self._exposure_time = 1.0
+
+        # Keep track of previous settings applied to the hardware, to avoid unnecessary updates
+        # Start with None to force initial update
+        self._prev_resolution_idx = None
+        self._prev_roi_trans = None
+        self._prev_exposure_time = None
+
+        # Max resolution depends on the binning, so to know the max resolution, need to set binning to 1x1
+        max_res, _ = self._dll.get_max_resolution(0)
+        self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(max_res)
+        self._dll.set_global_gain(0)  # HDR mode, 16 bits
+        # Note: the "IMGMODESELECT" property also affects the bit depth. By default, it is set to 2
+        # (HDR), which is what we want (16 bits).
+        self._metadata[model.MD_BPP] = 16
+
+        # TODO: rolling shutter is disabled by default, but can be enabled via the TUIDC_ROLLINGSCANMODE
+
+        # TUIDP_BLACKLEVEL doesn't seem to be implemented on the Dhyana 400BSI, but test show it's 100
+        self._metadata[model.MD_BASELINE] = 100  # average value for signal == 0
+
+        self._shape = max_res + (2 ** 16,)  # _shape always uses the hardware order
+
+        # The Dhyana supports changing from HDR to low/high gains 12 bits. We could provide a .gain
+        # VA to select between these settings, but it's typically not useful
+
+        # Report the detector pixelSize
+        psize = self._transposeSizeToUser(PXS_DHYANA_400BSI)
+        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
+
+        # The Dhyana only supports binning 1, 2 and 4
+        # TODO: read the available binnings (via the available "resolutions") from the device
+        bin_choices = {(1, 1), (2, 2), (4, 4)}
+        binning = (1, 1)
+        self.binning = model.VAEnumerated(self._transposeSizeToUser(binning),
+                                          choices={self._transposeSizeToUser(b) for b in bin_choices},
+                                          setter=self._set_binning)
+
+        self.resolution = model.ResolutionVA(self._transposeSizeToUser(max_res),
+                                             rng=(self._transposeSizeToUser(MIN_RES_DHYANA_400BSI),
+                                                  self._transposeSizeToUser(max_res)),
+                                             setter=self._set_resolution)
+
+        # Translation: to adjust the center of the RoI
+        hlf_shape = (max_res[0] // 2 - 1, max_res[1] // 2 - 1)
+        uh_shape = self._transposeSizeToUser(hlf_shape)
+        tran_rng = ((-uh_shape[0], -uh_shape[1]),
+                    (uh_shape[0], uh_shape[1]))
+        self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
+                                              setter=self._set_translation)
+
+        self._set_binning(self.binning.value)
+        self._set_resolution(self.resolution.value)
+
+        mn, mx, _, self._exp_step = self._dll.get_exposure_time_range()
+        self.exposureTime = model.FloatContinuous(1.0, (mn, mx),
+                                                  unit="s", setter=self._set_exposure_time)
+        self._set_exposure_time(self.exposureTime.value)
+
+        # Current temperature
+        current_temp = self._dll.get_temperature()
+        self.temperature = model.FloatVA(current_temp, unit="°C", readonly=True)
+        self._metadata[model.MD_SENSOR_TEMP] = current_temp
+        self.temp_timer = util.RepeatingTimer(10, self._update_temperature_va,
+                                              "Camera temperature update")
+        self.temp_timer.start()
+
+        # Dhyana max cooling is -50°C, according to SDK, and -45°C according to specs
+        mn, mx, dft, _ = self._dll.get_target_temperature_range()
+        self.targetTemperature = model.FloatContinuous(dft, (mn, mx), unit="°C",
+                                                       setter=self._set_target_temperature)
+        self._set_target_temperature(dft)
+
+        # fan speed = ratio to max speed, with max speed by default
+        self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
+                                              setter=self._set_fan_speed)
+        self._set_fan_speed(1.0)
+
+        self.data = DataFlow(self)
+
+        # Start the acquisition thread immediately, as it also takes care of updating the
+        # frameDuration whenever some of the settings change.
+        self._ensure_acq_thread_is_running()
+
+        logging.debug("Camera %s component ready to use.", device)
+
+    def __del__(self):
+        self.terminate()
+
+    def terminate(self):
+        """
+        Must be called at the end of the usage of the Camera instance
+        """
+        if self._dll:
+            if self._acq_thread:
+                self._genmsg.put(AcqMessage.TERMINATE)
+                self._acq_thread.join(5)
+                self._acq_thread = None
+
+            if self.temp_timer is not None:
+                self.temp_timer.cancel()
+                self.temp_timer.join(5)
+                self.temp_timer = None
+
+            self._dll.close_camera()
+            try:
+                self._dll.TUCAM_Api_Uninit()
+            except Exception as ex:
+                # library throws weird exceptions if init failed. ignore this.
+                logging.debug("Ignoring Api_Uninit() failure: %s", ex)
+
+            self._dll = None
+
+        super().terminate()
+
+    def _update_temperature_va(self):
+        """
+        to be called at regular interval to update the temperature
+        """
+        temp = self._dll.get_temperature()
+        self._metadata[model.MD_SENSOR_TEMP] = temp
+        # it's read-only, so we change it only via _value
+        self.temperature._value = temp
+        self.temperature.notify(self.temperature.value)
+        logging.debug("Temperature of %s is %f°C", self.name, temp)
+
+    # Wrappers to the actual DLL functions
+    def _open_camera(self, device: Optional[str]):
+        """
+        :raise: HwError if the camera cannot be opened
+        """
+        # TODO: support selecting the device via its serial number
+        try:
+            self._dll.open_camera(0)
+        except (OSError, TUCamError) as ex:
+            logging.exception("Failed to open Tucsen camera %s", device)
+            raise model.HwError("No Tucsen camera found, check the camera is turned on") from ex
+
+    # camera properties
+    def _set_binning(self, value: Tuple[int, int]) -> Tuple[int, int]:
+        """
+        Called when "binning" VA is modified. It actually modifies the camera binning.
+        """
+        # Dhyana only supports (1,1) (2,2) (4,4), this is already validated by the enumerated VA
+        binning = self._transposeSizeFromUser(value)
+        prev_binning = self._transposeSizeFromUser(self.binning.value)
+
+        # adapt resolution so that the RoI stays the same
+        change = (prev_binning[0] / binning[0],
+                  prev_binning[1] / binning[1])
+        old_resolution = self._transposeSizeFromUser(self.resolution.value)
+        new_res = (int(round(old_resolution[0] * change[0])),
+                   int(round(old_resolution[1] * change[1])))
+
+        self._resolution_idx = self._dll.get_resolution_index(binning)
+
+        # The low-level settings have been updated, so the resolution and translation setters can
+        # use it to know the new binning.
+        ures = self._transposeSizeToUser(new_res)
+        self.resolution.value = self.resolution.clip(ures)
+
+        self._should_apply_settings()
+        return self._transposeSizeToUser(binning)
+
+    def _set_resolution(self, value: Tuple[int, int]) -> Tuple[int, int]:
+        """
+        Called when the resolution VA is changed. The VA accepts all values, but the setter automatically
+        limits the resolution based on the current binning.
+        :param value: requested resolution
+        :return: accepted resolution
+        """
+        res = self._transposeSizeFromUser(value)
+
+        # The X resolution has to be a multiple of 8
+        res = res[0] - (res[0] % 8), res[1]
+        # Clip, according to the current binning (but cannot use .binning VA, as it might not be updated)
+        max_res, _ = self._dll.get_max_resolution(self._resolution_idx)  # depends on the binning
+        min_res = MIN_RES_DHYANA_400BSI
+        res = (min(max(min_res[0], res[0]), max_res[0]),
+               min(max(min_res[1], res[1]), max_res[1]))
 
         self._roi = (int(max_res[0] / 2) - int(res[0] / 2),  # left
                      int(max_res[1] / 2) - int(res[1] / 2),  # top
                      res[0],  # width
                      res[1])  # height
 
-        # clip translation. not allowed to walk outside camera ROI.
+        self.translation.value = self.translation.value  # force re-check
+        self._should_apply_settings()
+        return self._transposeSizeToUser(res)
 
-        clipped_translation_x = self._translation[0]
-        if self._roi[0] + self._roi[2] + clipped_translation_x > max_res[0]:
-            clipped_translation_x = max_res[0] - self._roi[0] - self._roi[2]
-        clipped_translation_y = self._translation[1]
-        if self._roi[1] + self._roi[3] + clipped_translation_y > max_res[1]:
-            clipped_translation_y = max_res[0] - self._roi[0] - self._roi[2]
-        self._translation = (clipped_translation_x, clipped_translation_y)
+    def _set_translation(self, value: Tuple[int, int]) -> Tuple[int, int]:
+        """
+        Called when the resolution VA is changed. The VA accepts all values,  it will always ensure
+        that the whole RoI fits the screen (taking into account binning and resolution)
+        :param value: shift from the center (px).
+        :return: accepted shift
+        """
+        trans = self._transposeTransFromUser(value)
+        # compute the min/max of the shift. It's the same as the margin between
+        # the centered ROI and the border, taking into account the binning.
+        max_res = self._shape[:2]
+        _, binning = self._dll.get_max_resolution(self._resolution_idx)
+        res = self._roi[2:]  # current resolution
+        max_tran = ((max_res[0] - res[0] * binning) // 2,
+                    (max_res[1] - res[1] * binning) // 2)
 
-        self._parametersChanged = True
-        self.applyParameters()
+        # between -margin and +margin
+        trans = (min(max(-max_tran[0], trans[0]), max_tran[0]),
+                 min(max(-max_tran[1], trans[1]), max_tran[1]))
+        trans_hw = trans[0] // binning, trans[1] // binning
+        trans = trans_hw[0] * binning, trans_hw[1] * binning  # to compute the rounding
+        self._translation = trans_hw
+        self._should_apply_settings()
+        return self._transposeTransToUser(trans)
 
-        return res
+    def _get_phys_trans(self) -> Tuple[float, float]:
+        """
+        Compute the translation in physical units (using the available metadata).
+        Note: the convention is that in internal coordinates Y goes down, while
+        in physical coordinates, Y goes up.
+        returns (tuple of 2 floats): physical position relative to the center in meters
+        """
+        try:
+            pxs = self._metadata[model.MD_PIXEL_SIZE]
+            # take into account correction
+            pxs_cor = self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+            pxs = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+        except KeyError:
+            pxs = self._metadata[model.MD_SENSOR_PIXEL_SIZE]
 
-    def getResolution(self):
-        return self._roi[2], self._roi[3]
+        binning = self.binning.value
+        pxs_bin1 = pxs[0] / binning[0], pxs[1] / binning[1]
+        trans = self.translation.value # use user transposed value, as it's external world
+        # subtract 0.5 px if the resolution is an odd number
+        shift = [t - (r % 2) / 2 for t, r in zip(trans, self.resolution.value)]
+        phyt = (shift[0] * pxs_bin1[0], -shift[1] * pxs_bin1[1]) # - to invert Y
 
-    def setFanSpeed(self, value):
+        return phyt
+
+    def _set_exposure_time(self, value: float) -> float:
+        # Round value to the nearest step
+        self._exposure_time = value
+        # Try to guess the value that will be actually set
+        value = round(value / self._exp_step) * self._exp_step
+        self.exposureTime.clip(value)  # to be extra sure it's in range
+        self._should_apply_settings()
+        return value
+
+    def _set_target_temperature(self, value: float) -> float:
+        self._dll.set_target_temperature(value)
+        return value
+
+    def _set_fan_speed(self, value: float) -> float:
         # input : 1.0 is max, 0.0 is stop
         # camera value:
         # 0: "High"
         # 1: "Medium"
         # 2: "Low"
         # 3: "Off (Water Cooling)"
-        value = int((1.0 - value) * 3.0)
+        fan_speed_hw = round((1.0 - value) * 3)
         if 0 <= value <= 3:
-            self._fan_speed = value
-
-            self._parametersChanged = True
-            self.applyParameters()
+            fan_speed = fan_speed_hw
         else:
-            raise Exception("invalid fan speed value")
+            raise ValueError("invalid fan speed value")
 
-    def getFanSpeed(self):
-        return (1.0 - self._fan_speed) / 3.0
+        self._dll.set_fan_speed(fan_speed)
+        value = 1.0 - (fan_speed / 3)  # Convert back to the accepted value
+        return value
 
-    def getTargetTemperature(self):
-        return self._targetTemperature
+    def _update_settings(self) -> float:
+        """
+          This call applies the parameters that have been set (targetTemperature, resolution, binning, roi)
 
-    def setTargetTemperature(self, value):
-        self._targetTemperature = value
+          :return: actual exposure time set (in s)
+          :raises TUCamError: if some settings failed to be applied.
+          """
+        logging.debug("Updating camera settings")
 
-        self._parametersChanged = True
-        self.applyParameters()
+        res_idx = self._resolution_idx
+        if res_idx != self._prev_resolution_idx:
+            self._dll.set_resolution(self._resolution_idx)
+            _, binning = self._dll.get_max_resolution(self._resolution_idx)
+            self._metadata[model.MD_BINNING] = (binning, binning)
+            self._prev_resolution_idx = res_idx
 
-    def setGain(self, value):
-        self._gain = value
+        roi, trans = self._roi, self._translation
+        if (roi, trans) != self._prev_roi_trans:
+            self._dll.set_roi(self._roi, self._translation)
+            self._prev_roi_trans = (roi, trans)
 
-    def getGain(self):
-        return self._gain
+        exp_time = self._prev_exposure_time
+        if self._exposure_time != exp_time:
+            self._dll.set_exposure_time(self._exposure_time)
+            self._prev_exposure_time = exp_time
 
-    # todo exposure time
-    def getExposureTime(self):
-        return self._exposureTime
+            exp = self._dll.get_exposure_time()
+            self._metadata[model.MD_EXP_TIME] = exp
 
-    def setExposureTime(self, value):
-        self._exposureTime = value
+            # update .exposureTime VA with actual value read from hardware
+            if self.exposureTime.value != exp:
+                logging.debug("Exposure time VA updated from %f to %f", self.exposureTime.value, exp)
+                self.exposureTime._value = exp
+                self.exposureTime.notify(exp)
+        else:
+            exp = self._dll.get_exposure_time()
 
-        self._parametersChanged = True
-        self.applyParameters()
+        return exp
 
-    def getTemperature(self):
-        return self._targetTemperature
+    # Acquisition methods
+    def _prepare_image_metadata(self) -> Dict[str, Any]:
+        metadata = dict(self._metadata)  # duplicate
+        center = metadata.get(model.MD_POS, (0, 0))
+        phyt = self._get_phys_trans()
+        metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
+        metadata[model.MD_ACQ_DATE] = time.time()
 
-    def getModelName(self):
-        return "Dhyana 400BSI V3"
+        return metadata
 
-    def getHwVersion(self):
-        return "2.0.8.0"
+    def _acquire_frame(self, timeout: float) -> bool:
+        # Acquire 1 frame
+        start_t = time.time()
+        metadata = self._prepare_image_metadata()
 
-    # camera feed using thread.
-    # call only on open camera.
+        logging.debug("Waiting for up to %g s", timeout)
 
-    def start_camera_feed(self):
-        self._camThread = CAMThread()
-        self._camThread.start_thread(dll=self)
+        tstart = time.time()
+        tend = tstart + timeout
+        # Wait until the frame has arrived
+        while True:
+            if self._acq_should_stop():
+                return True
 
-    def stop_camera_feed(self):
-        if self._camThread != None:
-            self._camThread.stop_thread()
-            self._camThread.join()
-        self._camThread = None
+            try:
+                array = self._dll.capture_frame(timeout=0.1)  # Never wait too long
+                logging.debug("Received image of %s after %s s", array.shape,
+                              time.time() - start_t)
 
-    def __del__(self):
-        pass
+                if self._acq_should_stop():
+                    return True
 
+                # An image!
+                da = model.DataArray(array, metadata)
+                self.data.notify(self._transposeDAToUser(da))
+                return False
+            except TUCamError as ex:
+                # Timeout is expected for any exposure time >= 0.1s
+                if ex.errno == TUCAMRET_Enum.TUCAMRET_TIMEOUT.value:
+                    if time.time() > tend:
+                        logging.warning("Timeout after %g s", time.time() - tstart)
+                        raise TimeoutError(f"Timeout after {time.time() - tstart} s")
+                    else:
+                        logging.debug("Waiting a little longer")
+                else:
+                    raise
 
-class CAMThread(threading.Thread):
-    def __init__(self):
-        super().__init__()
-        self._dll = None
-        self._stop_requested = False
-
-    def start_thread(self, dll:TUCamDLL):
-        self._dll = dll
-        self._stop_requested = False
-        self.start()
-
-    def stop_thread(self):
-        self._stop_requested = True
-
-    def run(self):
-        logging.debug("TUCAM CAMThread started")
+    def _acquire_images(self):
         try:
-            self._dll.startCapture()
+            logging.debug("Starting acquisition")
+            exp = self._update_settings()
+            self._need_settings_update = False
+            self._dll.start_capture()
 
-            while not self._stop_requested:
-
-                while not self._stop_requested and not self._dll._parametersChanged:
-                    # for real in odemis, use captureFrame
+            # Acquire until requested to stop
+            while True:
+                if self._need_settings_update:
                     try:
-                        self._dll.captureFrame()
-                    except TUCamError as ex:
-                        if ex.strerror == TUCAMRET_Enum.TUCAMRET_TIMEOUT:
-                            pass #print("Waiting a little longer")
+                        self._dll.end_capture()
+                    except Exception:
+                        logging.debug("Failed to stop capture")
+                    # If multiple settings update requests in a row, flush them
+                    while True:
+                        if self._acq_should_stop():
+                            logging.debug("Acquisition cancelled")
+                            return
                         else:
-                            raise
-                    #ret = self._dll.captureFrameAndSave("./tucsen")  # todo this is for testing, replace with feed to Odemis
-                    # time.sleep(3)                   # dont blow up my hdd please
+                            break  # Flushed
 
-                self._dll.applyParameters(True)
+                    exp = self._update_settings()
+                    self._need_settings_update = False
+                    self._dll.start_capture()
 
+                # Acquire one frame, with a timeout
+                timeout = exp * 2 + 5  # s, should be more than enough
+                should_stop = self._acquire_frame(timeout)
+                if should_stop:
+                    logging.debug("Acquisition cancelled")
+                    return
+        finally:
+            try:
+                self._dll.end_capture()
+            except Exception:
+                logging.debug("Failed to stop capture")
+
+            logging.debug("Acquisition ended")
+
+    def _acquire(self):
+        logging.debug("TUCAM acquisition thread started")
+        try:
+            while True: # Waiting/Acquiring loop
+                # Wait until we have a start (or terminate) message
+                self._acq_wait_start()
+
+                # acquisition loop (until stop requested)
+                self._acquire_images()
+
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure during acquisition")
-            try:
-                self._dll.endCapture()
-            except Exception:
-                logging.debug("Failed to stop capture during failure")
 
-        logging.debug("TUCAM CAMThread stopped")
+        logging.debug("TUCAM acquisition thread ended")
 
+    # The acquisition is based on a FSM that roughly looks like this:
+    # Event\State |   Stopped   |Ready for acq|  Acquiring |  Receiving data |
+    #  START      |Ready for acq|     .       |     .      |                 |
+    #  Im received|      .      |     .       |Receiving data|       .       |
+    #  STOP       |      .      |  Stopped    | Stopped    |    Stopped      |
+    #  TERM       |    Final    |   Final     |  Final     |    Final        |
+    # When sending a "SETTINGS" message, the settings are applied after the next
+    # image is received (if acquiring), or immediately if stopped.
 
-class TUCam:
-    def __init__(self):
-        if TEST_NOHW:
-            self._dll = FakeTUCamDLL()
+    def start_generate(self):
+        """
+        Starts the image acquisition
+        The image are sent via the .data DataFlow
+        """
+        self._genmsg.put(AcqMessage.START)
+        self._ensure_acq_thread_is_running()
+
+    def stop_generate(self):
+        """
+        Stop the image acquisition
+        Can be called from the acquisition thread itself, so should never join the thread here.
+        """
+        self._genmsg.put(AcqMessage.STOP)
+
+    def _should_apply_settings(self):
+        """
+        Report that the settings have changed and so should be used to reconfigure the camera, which
+        will happen "soon". If the acquisition is not running, that almost immediate, but if it's running,
+        it will be done after end of the current frame.
+        This way the .frameDuration value is updated.
+        """
+        self._genmsg.put(AcqMessage.SETTINGS)
+
+    def _ensure_acq_thread_is_running(self):
+        """
+        Start the acquisition thread if it's not already running
+        """
+        if not self._acq_thread or not self._acq_thread.is_alive():
+            logging.info("Starting acquisition thread")
+            self._acq_thread = threading.Thread(target=self._acquire,
+                                                name="TUCam acquisition thread")
+            self._acq_thread.daemon = True
+            self._acq_thread.start()
+
+    def _get_acq_msg(self, block=True) -> Optional[AcqMessage]:
+        """
+        Read one message from the acquisition queue
+        :param block: if True, block until a message is available. Otherwise, immediately return False.
+        :return: message, or None if no message and block is False
+        """
+        try:
+            msg = self._genmsg.get(block=block)
+        except queue.Empty:
+            # No message
+            return None
+
+        if not isinstance(msg, AcqMessage):
+            logging.debug("Acq received message %s", msg)
         else:
-            self._dll = TUCamDLL()
+            logging.warning("Acq received unexpected message %s", msg)
+        return msg
 
-    def OpenCamera(self, Idx=0):
-        if Idx >= self._dll._nrCameras:
-            raise TUCamError(TUCAMRET_Enum.TUCAMRET_NO_CAMERA, "Invalid camera Index")
+    def _acq_wait_start(self) -> None:
+        """
+        Blocks until the acquisition should start.
+        Note: it expects that the acquisition is stopped.
+        raise TerminationRequested: if a terminate message was received
+        """
+        self._old_triggers = []  # discard left-over triggers from previous acquisition
+        while True:
+            msg = self._get_acq_msg(block=True)
+            if msg == AcqMessage.TERMINATE:
+                raise TerminationRequested()
+            elif msg == AcqMessage.SETTINGS:
+                self._update_settings()
+                self._need_settings_update = False
+                continue  # wait for more message
+            elif msg == AcqMessage.START:
+                return
 
-        self._dll.openCamera(Idx)
+            # Either a (duplicated) Stop or a trigger => we don't care
+            logging.debug("Skipped message %s as acquisition is stopped", msg)
 
-    def CloseCamera(self):
-        self._dll.closeCamera()
+    def _acq_should_stop(self) -> bool:
+        """
+        Indicate whether the acquisition should stop now or can keep running.
+        Settings update requests are discarded, but flagged on _need_settings_update.
+        Non blocking.
+        Note: it expects that the acquisition is running.
+        :return: False if can continue, True if should stop
+        :raise: TerminationRequested if a terminate message was received
+        """
+        while True:
+            msg = self._get_acq_msg(block=False)
 
-    def StartCameraFeed(self):
-        self._dll.start_camera_feed()
-
-    def StopCameraFeed(self):
-        self._dll.stop_camera_feed()
-
-    def getModelName(self):
-        return self._dll.getModelName()
-
-    def getHwVersion(self):
-        return self._dll.getHwVersion()
-
-
-    # binning, call with (1,1) (2,2) (4,4)
-    @property
-    def binning(self):
-        return self._dll.getBinning()
-
-    @binning.setter
-    def binning(self, value):
-        self._dll.setBinning(value)
-
-    # resolution, call with (2048, 2010) or lower
-    @property
-    def resolution(self):
-        return self._dll.getResolution()
-
-    @resolution.setter
-    def resolution(self, value):
-        self._dll.setResolution(value)
-
-    # translation, shifts ROI
-    @property
-    def translation(self):
-        return self._dll.translation
-
-    @translation.setter
-    def translation(self, value):
-        self._dll.translation = value
-
-    # gain,  select between “high dynamic range” (2.0) and “high speed” (1.0)
-    # todo, check this, the camera does not support gain
-    @property
-    def gain(self):
-        return self._dll.getGain()
-    @gain.setter
-    def gain(self, value):
-        self._dll.setGain(value)
-
-    @property
-    def targetTemperature(self):
-        return self._dll.getTargetTemperature()
-
-    @targetTemperature.setter
-    def targetTemperature(self,value):
-        self._dll.setTargetTemperature(value)
-
-    @property
-    def temperature(self):
-        return self._dll.getTemperature()
-
-    @property
-    def fanSpeed(self):
-        return self._dll.getFanSpeed()
-
-    @fanSpeed.setter
-    def fanSpeed(self, value):
-        self._dll.setFanSpeed(value)
-
-    #todo exposure time
-    @property
-    def exposureTime(self):
-        return self._dll.getExposureTime()
-
-    @exposureTime.setter
-    def exposureTime(self, value):
-        self._dll.setExposureTime(value)
+            if msg == None:
+                return False
+            elif msg == AcqMessage.STOP:
+                return True
+            elif msg == AcqMessage.SETTINGS:
+                self._need_settings_update = True
+                logging.debug("Skipped settings update request while receiving data")
+            elif msg == AcqMessage.TERMINATE:
+                raise TerminationRequested()
+            else:  # Anything else shouldn't really happen
+                logging.warning("Skipped message %s as acquisition is waiting for data", msg)
 
 
-    # Unit test
-class TestTUCam(unittest.TestCase):
-    def test_getHwVersion(self):
-        camera = TUCam()
-        camera.OpenCamera(0)
-        hwversion = camera.getHwVersion()
-        camera.CloseCamera()
-        self.assertEqual("2.0.8.0", hwversion)
+class DataFlow(model.DataFlow):
+    def __init__(self, camera: model.DigitalCamera):
+        """
+        camera: DigitalCamera instance ready to acquire images
+        """
+        super().__init__()
+        self._sync_event = None  # synchronization Event
+        self.component = weakref.ref(camera)
 
-    def test_getModelname(self):
-        camera = TUCam()
-        camera.OpenCamera(0)
-        modelName = camera.getModelName()
-        camera.CloseCamera()
-        self.assertEqual("Dhyana 400BSI V3", modelName)
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        comp = self.component()
+        if comp is None:
+            # Camera has been deleted, it's all fine, this DataFlow will be gone soon too
+            return
 
-    def test_captureFrame(self):
-        camera = TUCam()
-        camera.OpenCamera(0)
-        camera.exposureTime = 2.0
-        camera.StartCameraFeed()
-        time.sleep(3)
-        camera.StopCameraFeed()
-        camera.CloseCamera()
+        comp.start_generate()
 
+    def stop_generate(self):
+        comp = self.component()
+        if comp is None:
+            # Camera has been deleted, it's all fine, this DataFlow will be gone soon too
+            return
 
-if __name__ == '__main__':
-
-    if __name__ == "__main__":
-        unittest.main()
-
-    #logging.basicConfig(filename = "C:\\Users\\iljaf\\TUCam.log", filemode='w', level = logging.DEBUG)
-
-    #print("Hello")
-    #demo = TUCam()
-    #demo.OpenCamera(0)
-
-    #print("Opened")
-
-    # test fanSpeed
-    #demo.fanSpeed = 0
-    #time.sleep(3)
-    #demo.fanSpeed = 0.5
-    #time.sleep(3)
-    #demo.fanSpeed = 0
-    #time.sleep(3)
-
-    #demo.targetTemperature = 1
-    #demo.resolution = 250,250
-
-    #name = demo.getModelName()
-    #print(name)
-    #v = demo.getHwVersion()
-    #print(v)
-
-    #demo.exposureTime = 2.0
-
-    #name = demo.getHwVersion()
-    #print (name)
-
-    #show temperature
-    #temp = demo.temperature
-    #print ("temperature:", temp)
-
-    #demo.StartCameraFeed()
-    #time.sleep(10)
-    #demo.StopCameraFeed()
-
-    #demo._dll.SetROI()
-    #demo._dll.StartCapture()
-    #demo._dll.CaptureFrame()
-    #demo._dll.saveCapturedFrame("C:\\Users\\iljaf\\tucsen_cap")
-    #demo._dll.EndCapture()
-
-    #demo.CloseCamera()
-
-    #print("done")
+        comp.stop_generate()
