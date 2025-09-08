@@ -1287,6 +1287,13 @@ class Acquirer:
             self._scanner.configure_ao_task(ao_task)
             self._ao_task = ao_task
             self._ao_writer = AnalogUnscaledWriter(self._ao_task.out_stream)
+            # Immediately write the first pixel, to give extra time for the e-beam to move there (from
+            # the park position, which can be far away), while we are readying the hardware.
+            pixel0_data = numpy.ascontiguousarray(scan_array[:, :1])
+            self._ao_writer.auto_start = True
+            self._ao_writer.write_int16(pixel0_data)  # < 1ms
+            logging.debug("Set e-beam to first pixel position %s, %s", pixel0_data[0, 0], pixel0_data[1, 0])
+
             self._ao_writer.auto_start = False
 
             if acq_settings.do_samples_n:
@@ -2364,7 +2371,7 @@ class Scanner(model.Emitter):
             raise ValueError(f"park must be a 2-tuple of float but got {park}")
         # Prepare the task, and also check that the voltage is acceptable for the hardware.
         # For the voltage limits, we just need to have limits that fits the (single) value that will be output,
-        # but the configuration requires to have a range, which must not be 2 different values. So we have to find
+        # but the configuration requires to have a range, which must be 2 different values. So we have to find
         # a second value which is also valid, but *different* from park. => use any of the scan limits.
         park_limits = [[park[0], limits[0][0] if limits[0][0] != park[0] else limits[0][1]],
                        [park[1], limits[1][0] if limits[1][0] != park[1] else limits[1][1]]]
@@ -2750,10 +2757,9 @@ class Scanner(model.Emitter):
         Set the beam to the park position. That's to ensure the beam is always at the same position
         when not scanning. Especially important when blanker TTL is not available.
         """
-        logging.debug("Setting to park position at %s", self._park_data)
         try:
+            logging.debug("Setting e-beam to park position %s", self._park_data)
             self._park_task.write(self._park_data, auto_start=True)
-            logging.debug("Park position set")
         except nidaqmx.DaqError:
             logging.warning("Failed to set to park position", exc_info=True)
 
