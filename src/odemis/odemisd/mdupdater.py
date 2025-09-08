@@ -111,7 +111,7 @@ class MetadataUpdater(model.Component):
                     self._det_to_spectrograph[dn] = a
                     # update the output wavelength range
                     observed = self.observeSpectrograph(a, d)
-                elif a.role in ("cl-filter", "filter"):
+                elif a.role in ("cl-filter", "filter", "tc-filter"):
                     self._det_to_filter[dn] = a
                     # update the output wavelength range
                     observed = self.observeFilter(a, d)
