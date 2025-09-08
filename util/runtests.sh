@@ -165,8 +165,8 @@ for f in $testfiles; do
         echo $f returned $status >> "$TESTLOG" 2>&1
         if [ "$pytest" = True ]; then
           if [ "$status" -eq 124 ]; then
-              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TESTLOG"
-              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TIMEOUTSUMMARY"
+              echo "ERROR $f timed out after $MAXTIME s" >> "$TESTLOG"
+              echo "ERROR $f timed out after $MAXTIME s" >> "$TIMEOUTSUMMARY"
           elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
               echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
               echo "FAILED $f was killed after $MAXTIME s" >> "$TIMEOUTSUMMARY"
@@ -177,7 +177,7 @@ for f in $testfiles; do
         else
           # Still surface in TESTLOG when not using pytest
           if [ "$status" -eq 124 ]; then
-              echo "TIMEOUT $f timed out after $MAXTIME s" >> "$TESTLOG"
+              echo "ERROR $f timed out after $MAXTIME s" >> "$TESTLOG"
           elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
               echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
           elif [ "$status" -ne 0 ]; then
