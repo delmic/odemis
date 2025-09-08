@@ -27,7 +27,7 @@ from typing import Iterator, NamedTuple, Optional, Tuple, Type, TypeVar
 
 import numpy
 import scipy.spatial
-from odemis.util.cluster import kmeans2
+from scipy.cluster.vq import kmeans2
 from odemis.util.graph import (
     SkewSymmetricAdjacencyGraph,
     depth_first_walk,
