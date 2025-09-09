@@ -1,3 +1,17 @@
+odemis (3.7.2-1) focal; urgency=medium
+
+  * New version: 3.7.2
+  * Main bug fixes and improvements:
+    - Ensure milling default configuration is packaged too (METEOR)
+    - Do not fail after acquiring a stream without names (METEOR)
+    - Angular Spectrum data display now compensates for mirror solid angle (SPARC)
+    - Improve descanner reliability (FASTEM)
+    - "Import region" plugin keeps RoAs appart (FASTEM)
+    - Fix bug reporter failing to start on Ubuntu 24.04
+    - Improve logging information in some cases
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 09 Sep 2025 10:27:55 +0200
+
 odemis (3.7.1-1) focal; urgency=medium
 
   * New version: 3.7.1
