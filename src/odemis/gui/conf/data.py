@@ -1165,6 +1165,8 @@ STREAM_SETTINGS_CONFIG = {
             ("filter", {  # from filter, cl-filter, or tc-filter
                 "choices": util.format_band_choices,
             }),
+            ("rotation", {
+            }),
         )),
     stream.ScannedTCSettingsStream:
         OrderedDict((
