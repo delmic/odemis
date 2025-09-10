@@ -1,52 +1,34 @@
 # Simulates a METEOR on TFS SEM, without control of the FIB
+# It requires the separate xtadapter-autoscript simulator. To start it, do:
+# python3 path/to/xtlib-adapter/xtadapter/server_sim.py --type xtlib --port 4242
+
 "METEOR TFSv3 Sim": {
     class: Microscope,
     role: meteor,
 }
 
 "SEM": {
-    class: simsem.SimSEM,
+    class: xt_client.SEM,
     role: null,
     init: {
-        image: "simsem-fake-output.h5", # any large 16 bit image is fine
+        address: "PYRO:Microscope@localhost:4242",
     },
     children: {
         scanner: "EBeam",
-        detector0: "SE Detector",
-        focus: "EBeam Focus",
+        stage: "Stage",
     }
 }
 
 "EBeam": {
     role: e-beam,
-    init: {},
-    affects: ["SE Detector"],
-}
-
-"SE Detector": {
-    role: se-detector,
-    init: {},
-}
-
-"EBeam Focus": {
-    role: ebeam-focus,
-    init: {},
-    affects: ["EBeam"]
+    init: {
+        hfw_nomag: 0.114,
+    },
 }
 
 # Normally provided by the SEM
 "Stage": {
-    class: tmcm.TMCLController,
     role: stage-bare,
-    init: {
-        port: "/dev/fake6",
-        address: null,
-        axes: ["x", "y", "z", "rx", "rz"],
-        ustepsize: [1.e-6, 1.e-6, 1.e-6, 1.2e-5, 1.2e-5], # unit/step
-        rng: [[-0.1, 0.1], [-0.05, 0.05], [-0.05, 0.1], [-2, 2], [0, 6.28]],
-        unit: ["m", "m", "m", "rad", "rad"],
-        refproc: "Standard",
-    },
     metadata: {
         # Loading position:
         FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 29.e-3 },
