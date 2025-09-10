@@ -848,7 +848,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.zsteps.subscribe(self.on_setting_change)
         self.focus_points_dist.subscribe(self.on_setting_change)
-        if self._main_data_model.ebeam:
+        if self._main_data_model.ebeam and model.hasVA(self._main_data_model.ebeam, "pixelSize"):
             self._main_data_model.ebeam.pixelSize.subscribe(self.on_pixel_size)
         self.tiles_nx.subscribe(self.on_tiles_number)
         self.tiles_ny.subscribe(self.on_tiles_number)
