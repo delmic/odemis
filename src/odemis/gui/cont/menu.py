@@ -131,8 +131,8 @@ class MenuController(object):
         main_frame.Bind(wx.EVT_MENU, self._on_debug_menu, id=main_frame.menu_item_debug.GetId())
         main_data.debug.subscribe(self._on_debug_va, init=True)
 
-        # /Help/Development/Edit METEOR Calibration : only show if it's a METEOR
-        if main_data.role != "meteor":
+        # /Help/Development/Edit METEOR Calibration : only show if it's a METEOR with Calibration metadata
+        if main_data.role != "meteor" or (main_data.stage.getMetadata().get(model.MD_CALIB, None) is None):
             menu_dev = main_frame.menu_item_edit_meteor_calibration.GetMenu()
             menu_dev.Delete(main_frame.menu_item_edit_meteor_calibration)
 
