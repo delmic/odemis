@@ -1,3 +1,12 @@
+odemis (3.7.3-1) focal; urgency=medium
+
+  * New version: 3.7.3
+  * Main bug fixes:
+   - METEOR overview acquisition window failed to open on some installations
+   - Recover quicker from Andor Sona cameras dropping frames due to high frame rate
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 10 Sep 2025 23:58:27 +0200
+
 odemis (3.7.2-1) focal; urgency=medium
 
   * New version: 3.7.2
