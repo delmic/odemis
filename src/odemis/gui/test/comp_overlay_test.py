@@ -60,7 +60,6 @@ from odemis.gui.comp.overlay.spectrum_line_select import LineSelectOverlay, \
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
-from odemis.gui.comp.overlay.view_select import ViewSelectOverlay
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
 from odemis.gui.model import (TOOL_LABEL, TOOL_LINE, TOOL_POINT, TOOL_RULER,
@@ -365,18 +364,6 @@ class OverlayTestCase(test.GuiTestCase):
         view._focus = [FakeFocus(), FakeFocus()]
         cnvs.setView(view, tab_mod)
 
-        test.gui_loop()
-
-    def test_view_select_overlay(self):
-        test.goto_manual()
-        # Create and add a miccanvas
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-
-        vsol = ViewSelectOverlay(cnvs)
-        vsol.active.value = True
-        cnvs.add_view_overlay(vsol)
-        # cnvs.current_mode = guimodel.TOOL_ZOOM
         test.gui_loop()
 
     def test_marking_line_overlay(self):
