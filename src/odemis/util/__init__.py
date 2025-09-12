@@ -38,7 +38,7 @@ import weakref
 from collections.abc import Mapping
 from concurrent.futures import CancelledError
 from functools import wraps
-from typing import Iterable, Tuple, TypeVar, Callable
+from typing import Iterable, Tuple, TypeVar, Callable, List, Optional
 
 import numpy
 from decorator import decorator
@@ -423,6 +423,103 @@ def expand_rect(rect, margin):
     """
     minx, miny, maxx, maxy = rect
     return minx - margin, miny - margin, maxx + margin, maxy + margin
+
+
+def rotate_rect(rect: Tuple[float, float, float, float],
+                angle: float,
+                center: Optional[Tuple[float, float]] = None
+                ) -> List[Tuple[float, float]]:
+    """
+    Rotate a rectangle (aligned on the axes) around a center point.
+    :param rect: minx, miny, maxx, maxy positions of rectangle
+    :param angle: angle of rotation in radians
+    :param center: x, y coordinates of center point. If None, the rectangle center is used.
+    :return: position (x, y) of the 4 corners of the rotated rectangle (ordered clockwise, starting from minx, miny)
+    """
+    minx, miny, maxx, maxy = rect
+    if center is None:
+        center = ((minx + maxx) / 2, (miny + maxy) / 2)
+    cx, cy = center
+
+    corners = [(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)]
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+
+    rotated_corners = []
+    for x, y in corners:
+        # Translate point to origin
+        x -= cx
+        y -= cy
+
+        # Rotate point
+        x_new = x * cos_a - y * sin_a
+        y_new = x * sin_a + y * cos_a
+
+        # Translate point back
+        x_new += cx
+        y_new += cy
+
+        rotated_corners.append((x_new, y_new))
+
+    return rotated_corners
+
+
+def separate_rect_rotation(corners: List[Tuple[float, float]],
+                           ) -> Tuple[Tuple[float, float, float, float], float]:
+    """
+    Given a rectangle defined by its 4 corner points, return a rectangle aligned with the axes
+    plus an angle of rotation to be applied around the center.
+    It assumes the corners correspond to a rotated rectangle (no noise).
+    :param corners: position (x, y) of the 4 corners of the rectangle. The order is:
+     +---------------------> X
+     |   0 -------------- 1
+     |   |                |
+     |   |                |
+     |   |                |
+     V   3 -------------- 2
+     Y
+    :return:
+      * rect (minx, miny, maxx, maxy): positions of the rectangle aligned with the axes
+      * angle: rotation in radians (between 0 and 2pi)
+    """
+    # Compute the rotation as the angle from corner 0 to corner 1
+    x0, y0 = corners[0]
+    x1, y1 = corners[1]
+    if x0 == x1 and y0 == y1:
+        # If corners 0 & 1 are at the same position (meaning it's extremely thin rectangle), it's
+        # not possible to deduce the rotation from them. So instead, we use corners 0 & 3 + 90° to define
+        # the rotation.
+        x3, y3 = corners[3]
+        if x1 == x3 and y1 == y3:  # It's just a point => let's say the rotation is 0
+            return (x1, y1, x3, y3), 0.0
+        angle = (math.atan2(y3 - y0, x3 - x0) - math.pi / 2) % (2 * math.pi)
+    else:
+        angle = math.atan2(y1 - y0, x1 - x0) % (2 * math.pi)
+        x3, y3 = corners[3]
+
+    # Rotate the first and third corner back to align with the axes
+    cx = (x0 + corners[2][0]) / 2
+    cy = (y0 + corners[2][1]) / 2
+
+    cos_a = math.cos(-angle)
+    sin_a = math.sin(-angle)
+
+    rect = []
+    for x, y in (corners[0], corners[2]):
+        # Translate point to origin
+        x -= cx
+        y -= cy
+
+        # Rotate point
+        x_new = x * cos_a - y * sin_a
+        y_new = x * sin_a + y * cos_a
+
+        # Translate point back
+        rect.append(x_new + cx)
+        rect.append(y_new + cy)
+
+    rect = normalize_rect(tuple(rect))
+    return rect, angle
 
 
 def get_polygon_bbox(coordinates):
