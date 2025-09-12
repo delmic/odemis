@@ -345,7 +345,9 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
     ROTATION_AXES = {'rx', 'rm'}
 
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
-        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        """
+        Check if the stage moves in the right direction when moving in the fm imaging grid 1 area.
+        """
         super().test_moving_in_grid1_fm_imaging_area_after_loading()
 
         # move in the same imaging mode using linked YM stage
@@ -358,6 +360,39 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
+
+    def test_transformFromSEMToMeteor(self):
+        """
+        Test the keys in stage position for _transformFromSEMToMeteor.
+        """
+        stage_md = self.stage.getMetadata()
+        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        # Above position are updated in linear axes and do not have rotation axes,
+        # so should raise KeyError when rotation axes are accessed
+        with self.assertRaises(KeyError):
+            self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+        with self.assertRaises(KeyError):
+            self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+
+        # update the stage with rotation axes
+        grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        # check if no error is raised (test fails if error is raised)
+        try:
+            self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+            self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+        except Exception as e:
+            self.fail(f"_transformFromSEMToMeteor raised error when it shouldn't: {e}")
+
+    def test_unknown_label_at_initialization(self):
+        arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0e-3}
+        self.stage.moveAbs(arbitrary_position).result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(UNKNOWN, current_imaging_mode)
+        current_grid = self.posture_manager.getCurrentGridLabel()
+        self.assertEqual(current_grid, None)
 
 
 class TestMeteorTFS3Move(unittest.TestCase):
