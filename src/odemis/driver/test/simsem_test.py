@@ -21,7 +21,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import Pyro4
 import copy
 import logging
+
 from odemis import model
+from odemis.acq import scan
 from odemis.driver import simsem
 from odemis.util import testing
 import os
@@ -33,12 +35,13 @@ from unittest.case import skip
 
 import numpy
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s",
+                    level=logging.DEBUG)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed"}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "vector_scanning": True}
 CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
@@ -133,6 +136,7 @@ class TestSEM(unittest.TestCase):
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
         self.scanner.resolution.value = (512, 256)
+        self.scanner.scanPath.value = None
         self.scanner.blanker.value = False
         self.scanner.power.value = True
         self.sed.bpp.value = max(self.sed.bpp.choices)
@@ -165,6 +169,46 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+    def test_acquire_vector(self):
+        self.scanner.dwellTime.value = 2e-6 # s
+        max_res = self.scanner.resolution.range[1]
+        res = (max_res[0], max_res[1] // 2)
+        scale = (1, 1)
+        trans = (0, 0)
+        # RoI to match the res + scale + trans
+        roi = (0, 0.25, 1.0, 0.75)
+        rotation = 0
+
+        # Acquire first a standard image, to use as a "ground truth"
+        self.scanner.resolution.value = res
+        self.scanner.scale.value = scale
+        self.scanner.translation.value = trans
+        self.scanner.rotation.value = rotation
+        dwell_time = self.scanner.dwellTime.value
+        expected_duration = self.compute_expected_duration()
+
+        std_im = self.sed.data.get()
+        self.assertEqual(std_im.shape, res[::-1])
+
+        # Convert scale + trans + res to RoI
+        scan_path_std, margin, md_cor = scan.generate_scan_vector(
+            self.scanner, res, roi, rotation, dwell_time
+        )
+
+        self.scanner.scanPath.value = scan_path_std
+        start = time.time()
+        vector_data = self.sed.data.get()
+        duration = time.time() - start
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+
+        # Returned data should be a vector (1D)
+        self.assertEqual(vector_data.shape, (scan_path_std.shape[0],))
+
+        # Convert back to an image => It should be the same as the standard one
+        img = scan.vector_data_to_img(vector_data, res, margin, md_cor)
+        numpy.testing.assert_array_equal(std_im, img)
+        self.assertEqual(img.metadata[model.MD_DWELL_TIME], dwell_time)
+
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6 # s
         expected_duration = self.compute_expected_duration()
@@ -176,6 +220,32 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_scale(self):
+        self.scanner.dwellTime.value = 1e-6 # s
+        max_res = self.scanner.resolution.range[1]
+        scale = (4, 2.5)
+        res = (int(max_res[0] / scale[0]), int(max_res[1] / scale[1]))
+        self.scanner.scale.value = scale
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (0, 0)  # only translation possible as we use max FoV
+
+        im = self.sed.data.get()
+        self.assertEqual(im.shape, res[::-1])
+
+    def test_trans(self):
+        self.scanner.dwellTime.value = 1e-6  # s
+        max_res = self.scanner.resolution.range[1]
+        scale = (1, 1)
+        res = (max_res[0] // 2, max_res[1] // 2)
+        trans = (-max_res[0] // 4, max_res[1] // 4)  # maximum possible
+        self.scanner.scale.value = scale
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = trans
+        self.assertEqual(self.scanner.translation.value, trans)
+
+        im = self.sed.data.get()
+        self.assertEqual(im.shape, res[::-1])
 
     def test_blanker(self):
         self.scanner.dwellTime.value = 1e-6  # s
@@ -309,24 +379,6 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         testing.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
-
-    @skip("faster")
-    def test_acquire_high_osr(self):
-        """
-        small resolution, but large osr, to force acquisition not by whole array
-        """
-        self.scanner.resolution.value = (256, 200)
-        self.size = self.scanner.resolution.value
-        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
-        expected_duration = self.compute_expected_duration()  # about 1 min
-
-        start = time.time()
-        im = self.sed.data.get()
-        duration = time.time() - start
-
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
-        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
-        self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
     def test_long_dwell_time(self):
         """
@@ -517,6 +569,8 @@ class TestSEMDrift(TestSEM):
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
 
+        time.sleep(0.2)  # Make sure some drift has been applied
+
     def test_shift(self):
         """
         check that .shift works
@@ -543,6 +597,43 @@ class TestSEMDrift(TestSEM):
         self.scanner.shift.value = self.scanner.shift.range[0][1], self.scanner.shift.range[1][0]
         im_big_shift = self.sed.data.get()
         testing.assert_array_not_equal(im_no_shift, im_big_shift)
+
+    # Overrides the standard test because it's not possible to compare 2 images in a row, due to the drift
+    def test_acquire_vector(self):
+        self.scanner.dwellTime.value = 2e-6 # s
+        max_res = self.scanner.resolution.range[1]
+        res = (max_res[0], max_res[1] // 2)
+        scale = (1, 1)
+        trans = (0, 0)
+        # RoI to match the res + scale + trans
+        roi = (0, 0.25, 1.0, 0.75)
+        rotation = 0
+
+        # Acquire first a standard image, to use as a "ground truth"
+        self.scanner.resolution.value = res
+        self.scanner.scale.value = scale
+        self.scanner.translation.value = trans
+        self.scanner.rotation.value = rotation
+        dwell_time = self.scanner.dwellTime.value
+        expected_duration = self.compute_expected_duration()
+
+        # Convert scale + trans + res to RoI
+        scan_path_std, margin, md_cor = scan.generate_scan_vector(
+            self.scanner, res, roi, rotation, dwell_time
+        )
+
+        self.scanner.scanPath.value = scan_path_std
+        start = time.time()
+        vector_data = self.sed.data.get()
+        duration = time.time() - start
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+
+        # Returned data should be a vector (1D)
+        self.assertEqual(vector_data.shape, (scan_path_std.shape[0],))
+
+        # Convert back to an image => It should be the same as the standard one
+        img = scan.vector_data_to_img(vector_data, res, margin, md_cor)
+        self.assertEqual(img.metadata[model.MD_DWELL_TIME], dwell_time)
 
 
 class TestIndependentDetector(unittest.TestCase):

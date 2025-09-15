@@ -242,6 +242,18 @@ HW_SETTINGS_CONFIG = {
             ("scanner", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("scanPath", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("scanPixelTTL", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("scanLineTTL", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("scanFrameTTL", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
         )),
         "ion-beam":
         OrderedDict((
