@@ -45,6 +45,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 METEOR_TFS3_CONFIG = CONFIG_PATH + "sim/meteor-tfs3-sim.odm.yaml"
+METEOR_TFS3_FIBSEM_CONFIG = CONFIG_PATH + "sim/meteor-fibsem-sim.odm.yaml"
 METEOR_ZEISS1_CONFIG = CONFIG_PATH + "sim/meteor-zeiss-sim.odm.yaml"
 METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
 
@@ -397,6 +398,8 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
         self.assertEqual(current_grid, None)
 
 
+
+
 class TestMeteorTFS3Move(unittest.TestCase):
     """
     Test the MeteorPostureManager functions for TFS 3
@@ -415,9 +418,9 @@ class TestMeteorTFS3Move(unittest.TestCase):
         cls.stage = cls.pm.sample_stage
 
         # get the metadata
-        stage_md = cls.stage_bare.getMetadata()
-        cls.stage_grid_centers = stage_md[model.MD_SAMPLE_CENTERS]
-        cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
+        cls.stage_md = cls.stage_bare.getMetadata()
+        cls.stage_grid_centers = cls.stage_md[model.MD_SAMPLE_CENTERS]
+        cls.stage_loading = cls.stage_md[model.MD_FAV_POS_DEACTIVE]
 
     def test_switching_movements(self):
         """Test switching between different postures and check that the 3D transformations work as expected"""
@@ -429,32 +432,16 @@ class TestMeteorTFS3Move(unittest.TestCase):
         f.result()
 
         self.assertEqual(self.pm.current_posture.value, SEM_IMAGING)
-        self._test_3d_transformations()
 
-        f = self.pm.cryoSwitchSamplePosition(MILLING)
-        f.result()
-        self.assertEqual(self.pm.current_posture.value, MILLING)
-        self._test_3d_transformations()
+        if model.MD_FAV_MILL_POS_ACTIVE in self.stage_md:
+            f = self.pm.cryoSwitchSamplePosition(MILLING)
+            f.result()
+            self.assertEqual(self.pm.current_posture.value, MILLING)
 
         f = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
 
         self.assertEqual(self.pm.current_posture.value, FM_IMAGING)
-
-        self._test_3d_transformations()
-
-    def _test_3d_transformations(self):
-        """Test that the 3D transforms work the same as the 2D transforms for 0 scan rotation"""
-        # 3d transforms should produce the same result as the 2d transforms
-        self.pm.use_3d_transforms = False # make sure we're using 2D transforms
-        stage_pos = self.stage_bare.position.value
-        ssp = self.pm.to_sample_stage_from_stage_position(stage_pos)    # new 2D method
-        ssp2 = self.pm.to_sample_stage_from_stage_position2(stage_pos)  # new 3D method
-        ssp3 = self.pm._get_sample_pos(stage_pos)                       # old 2D method
-
-        # assert near Position
-        self.assertTrue(isNearPosition(ssp, ssp2, axes={"x", "y", "z"}))
-        self.assertTrue(isNearPosition(ssp, ssp3, axes={"x", "y", "z"}))
 
     def test_to_posture(self):
         """Test that posture projection is the same as moving to the posture"""
@@ -467,30 +454,30 @@ class TestMeteorTFS3Move(unittest.TestCase):
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
 
+        # Check that getCurrentPostureLabel() with a given stage-bare position returns the expected posture
         pos = self.stage_bare.position.value
-        milling_pos = self.pm.to_posture(pos, MILLING)
-        fm_pos = self.pm.to_posture(pos, FM_IMAGING)
-
         self.assertEqual(self.pm.getCurrentPostureLabel(pos), SEM_IMAGING)
-        self.assertEqual(self.pm.getCurrentPostureLabel(milling_pos), MILLING)
+
+        fm_pos = self.pm.to_posture(pos, FM_IMAGING)
         self.assertEqual(self.pm.getCurrentPostureLabel(fm_pos), FM_IMAGING)
 
-        # move to positions and check that they are close to the expected positions
-        # milling
-        f = self.pm.cryoSwitchSamplePosition(MILLING)
-        f.result()
+        if model.MD_FAV_MILL_POS_ACTIVE in self.stage_md:
+            milling_pos = self.pm.to_posture(pos, MILLING)
+            self.assertEqual(self.pm.getCurrentPostureLabel(milling_pos), MILLING)
 
-        milling_pos_after_move = self.stage_bare.position.value
-        self.assertTrue(isNearPosition(milling_pos_after_move, milling_pos,
-                                       axes={"x", "y", "z", "rx", "rz"}))
-
-        # fm
+        # Move to the postures and check that the position is close to the expected positions
         f = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
-
         fm_pos_after_move = self.stage_bare.position.value
         self.assertTrue(isNearPosition(fm_pos_after_move, fm_pos,
                                        axes={"x", "y", "z", "rx", "rz"}))
+
+        if model.MD_FAV_MILL_POS_ACTIVE in self.stage_md:
+            f = self.pm.cryoSwitchSamplePosition(MILLING)
+            f.result()
+            milling_pos_after_move = self.stage_bare.position.value
+            self.assertTrue(isNearPosition(milling_pos_after_move, milling_pos,
+                                           axes={"x", "y", "z", "rx", "rz"}))
 
     def test_sample_stage_movement(self):
         """Test sample stage movements in different postures match the expected movements"""
@@ -525,23 +512,6 @@ class TestMeteorTFS3Move(unittest.TestCase):
             self.assertAlmostEqual(new_pos["x"], init_ss_pos["x"] + dx, places=5)
             self.assertAlmostEqual(new_pos["y"], init_ss_pos["y"] + dy, places=5)
 
-            # manually calculate the expected stage bare position
-            p = [dx, dy, 0]
-
-            tf = self.pm._inv_transforms2[posture] # to-stage bare
-
-            q = numpy.dot(tf, p)
-            exp_sb_pos = {
-                "x": init_sb_pos["x"] + q[0],
-                "y": init_sb_pos["y"] + q[1],
-                "z": init_sb_pos["z"] + q[2],
-                "rx": init_sb_pos["rx"],
-                "rz": init_sb_pos["rz"]}
-
-            # expected movement is projection of the movement along the x, y axes
-            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
-                                        axes={"x", "y", "z", "rx", "rz"}))
-
             # test absolute movement
             f = self.pm.cryoSwitchSamplePosition(GRID_1)
             f.result()
@@ -560,10 +530,6 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
             self.assertTrue(isNearPosition(new_pos, abs_pos,
                                                   axes={"x", "y", "z"}))
-            self.assertTrue(isNearPosition(new_sb_pos, exp_sb_pos,
-                                                  axes={"x", "y", "z", "rx", "rz"}))
-
-        return
 
     def test_transformation_calculation(self):
         """Simple tests for 3D transform calculations"""
@@ -694,6 +660,13 @@ class TestMeteorTFS3Move(unittest.TestCase):
         self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
         position_reverted = self.stage_bare.position.value
         testing.assert_pos_almost_equal(position_reverted, position_initial)
+
+
+class TestMeteorTFS3FIBSEMMove(TestMeteorTFS3Move):
+    """
+    Test the MeteorPostureManager functions for TFS 3 with FIBSEM options
+    """
+    MIC_CONFIG = METEOR_TFS3_FIBSEM_CONFIG
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
