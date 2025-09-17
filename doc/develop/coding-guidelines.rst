@@ -196,7 +196,6 @@ For e.g. 4.1 standard and internal imports
 
 .. code-block:: python
 
-
       import logging
       from collections.abc import Iterable, Mapping
 
@@ -265,3 +264,61 @@ Naming Convention for Pull Requests, Branches and Commits
         **ci**: Changes to our CI configuration files and scripts (example scopes: GitHub CI)
 
         **config**: Changes to simulator or microscope configuration files
+
+
+Import conventions
+==================
+
+Odemis is organized into several sub-modules, and specific rules govern how they can interact
+with each other. Not all sub-modules are allowed to import from one another. For example, code in
+the ``acq`` sub-module must not import anything from ``gui``, and the ``driver`` sub-module is fully
+isolated—no other sub-module may import it. These restrictions are designed to decouple the
+codebase and prevent circular imports, ensuring a cleaner and more maintainable architecture.
+Related to this, only the ``gui`` module is allowed to import wxPython. All other sub-modules should
+avoid direct reliance on a GUI framework.
+
+The following diagram illustrates the allowed import relationships between the main sub-modules.
+Modules which can import from another module are connected by arrows pointing to the imported module.
+
+.. figure:: module-dependencies.*
+    :width: 50%
+    :align: center
+
+    Connections between sub-modules. A pointing arrow indicates that the source module can import from
+    the target module.
+
+The external dependencies should be kept to a minimum. A new dependency should only be
+introduced when it is strictly necessary. If the functionality is small and limited to just one
+or two classes or functions, it is preferable to copy the code directly into Odemis (also known
+as "vendoring"). In such cases, the license must be verified for compatibility with GPLv2, and
+the original source and version should be clearly indicated in the file header. This approach
+helps avoid common issues: future updates to external packages may break compatibility, different
+packages may require conflicting dependency versions, and packaging additional dependencies for
+Ubuntu creates extra maintenance work.
+
+Please also note that when importing the ``numpy`` package, it should always be imported
+using its full name, i.e., ``import numpy`` (not as ``np``).
+
+Unit testing
+==================
+
+Each Odemis module should have some associated unit tests. The test cases should be stored in a
+dedicated file within a test subdirectory. The file name should follow the convention
+<modulename>_test.py. Tests must be written as standard Python unittest files so they can be
+executed directly. For example, a test can be run with a command such as:
+``python src/odemis/.../test/mymodule_test.py``
+
+To enable this, the test file should end with:
+
+.. code-block:: python
+
+    if __name__ == "__main__":
+        unittest.main()
+
+When applicable, tests should support both real hardware and simulator modes. The selection is
+controlled by the environment variable ``TEST_NOHW``, which defaults to ``0`` (real hardware) but
+can be set to ``1`` to run against the simulator. During automated testing in the CI pipeline,
+``TEST_NOHW`` is set to ``1`` to ensure tests run in simulator mode. For test cases which connect to
+an external simulator, not provided on the CI server, they can be adjusted to accept the special value
+``sim`` to explicitly request connecting to that simulator. In such tests, when ``TEST_NOHW`` is ``1``,
+only tests which can run without the external simulator (or the hardware) should be executed.
