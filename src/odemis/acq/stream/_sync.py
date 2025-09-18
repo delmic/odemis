@@ -3821,16 +3821,18 @@ class SEMCCDAcquirerHwSync(SEMCCDAcquirer):
         # TODO: make the frameDuration getter blocking until all the settings have been updated?
         time.sleep(0.1)  # give a bit of time for the frameDuration to be updated
         frame_duration = self._mdstream._ccd.frameDuration.value
-        logging.debug("Frame duration of the CCD is %s (for exposure time %s)", frame_duration, self._mdstream._ccd.exposureTime.value)
 
         # Dwell time should be the same as the frame duration of the CCD, or a tiny bit longer, to be certain
         # the CCD is ready to receive the next hardware trigger (otherwise, it'll just be ignored)
-        frame_duration_safe = frame_duration + CCD_FRAME_OVERHEAD
+        # frame_duration_safe = frame_duration + CCD_FRAME_OVERHEAD
+        frame_duration_safe = frame_duration + self._mdstream._sccd.frameOverhead.value
         c_dwell_time = self._mdstream._emitter.dwellTime.clip(frame_duration_safe * integration_count)
         if c_dwell_time != frame_duration_safe * integration_count:
             logging.warning("Dwell time requested (%s) != accepted (%s)",
                             c_dwell_time, frame_duration_safe * integration_count)
         self._mdstream._emitter.dwellTime.value = c_dwell_time
+        logging.debug("Frame duration of the CCD is %s (for exposure time %s), will use dwell time = %s s",
+                      frame_duration, self._mdstream._ccd.exposureTime.value, self._mdstream._emitter.dwellTime.value)
 
         # Compute a scan vector, with the corresponding TTL pixel signal
         rep = self._rep
