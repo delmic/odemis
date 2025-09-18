@@ -143,6 +143,9 @@ class RepetitionStream(LiveStream):
 
         self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit="rad")
 
+        # Only used with hardware sync DEBUG
+        self.frameOverhead = model.FloatContinuous(0, range=(0, 1), unit="s")
+
         # fuzzy scanning avoids aliasing by sub-scanning each region of a pixel
         # Note: some subclasses for which it doesn't make sense will remove it
         self.fuzzing = model.BooleanVA(False)

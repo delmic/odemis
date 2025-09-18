@@ -88,7 +88,8 @@ class ExternalAcquisition:
         # Time info
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
-        self.frameOverhead = model.FloatContinuous(0, range=(0, 1000), unit="s", readonly=True)
+        # 2ms overhead by default
+        self.frameOverhead = model.FloatContinuous(2e-6, range=(0, 1000), unit="s", readonly=True)
         if model.hasVA(spec, "frameDuration"):
             self.frameDuration = spec.frameDuration
         else:
