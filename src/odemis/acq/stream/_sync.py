@@ -1009,6 +1009,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         # Display only the SEM image taken in the last polarization and convert to RGB + display
         try:
             raw_data = self._live_data[0][-1]
+            logging.debug("Updating live image with shape %s", raw_data.shape) #DEBUG
         except IndexError:  # Can happen if the acquisition has just finished
             if self._acq_done.is_set():
                 logging.debug("Not updating live image, as acquisition is over")
@@ -1393,6 +1394,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             continue
                         self._assembleLiveData(s_idx, da, px_idx, px_pos, rep, pol_idx, acquirer.pos_center)
 
+                    # TODO: use _live_update_period?
                     # Run _updateImage thread to update the live image of the SEM data
                     self._shouldUpdateImage()
                     logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
