@@ -92,13 +92,11 @@ class SparcAcquisitionTab(Tab):
 
         # Check the settings are proper for a survey stream (as they could be
         # left over from spot mode)
-        # => full FoV + not too low scale + not too long dwell time
+        # => full FoV + not too high scale + short dwell time
         if hasattr(sem_stream, "emtDwellTime"):
-            if sem_stream.emtDwellTime.value > 100e-6:
-                sem_stream.emtDwellTime.value = sem_stream.emtDwellTime.clip(10e-6)
+            sem_stream.emtDwellTime.value = sem_stream.emtDwellTime.clip(1e-6)
         if hasattr(sem_stream, "emtScale"):
-            if any(s > 16  for s in sem_stream.emtScale.value):
-                sem_stream.emtScale.value = sem_stream.emtScale.clip((16, 16))
+            sem_stream.emtScale.value = sem_stream.emtScale.clip((8, 8))
             sem_scale = sem_stream.emtScale.value
         else:
             sem_scale = 1, 1
