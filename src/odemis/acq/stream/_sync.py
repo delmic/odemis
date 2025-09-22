@@ -979,6 +979,10 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         return (DataArray): 3D DataArray.
         """
 
+        # FIXME: for now _acq_mask is defined and updated by 2 functions, differently.
+        # _assembleLiveDataTiles and _assembleLiveData2D. We should ensure that no acquisition method
+        # uses both functions, or else the mask might be wrong.
+        # It should be done just for the SEM data, initialized the same way as _current_scan_area
         acq_mask = self._acq_mask.copy() # because of threading issues this variable needs to be copied
         scan_area = self._current_scan_area
         if scan_area is None:
@@ -1013,9 +1017,14 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         except IndexError:  # Can happen if the acquisition has just finished
             if self._acq_done.is_set():
                 logging.debug("Not updating live image, as acquisition is over")
+                return
             else:
                 logging.debug("No SEM data to update live image")  # DEBUG: just don't show anything?
-            return
+
+                # FIXME: replace by black image, with the right shape and position.
+                logging.debug("No SEM data to update live image, using a black image")
+                raw_data = numpy.zeros(self._sem_shape, dtype=numpy.uint8)
+                raw_data = model.DataArray(raw_data, metadata=self._sem_md)
 
         self.streams[0].raw = [raw_data]  # For GetBoundingBox()
         rgbim = self._projectXY2RGB(raw_data)
@@ -1345,6 +1354,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
             acquirer.prepare_acquisition()
             self._pxs = acquirer.pxs  # Used by some of the data assembling functions
 
+            # DEBUG: merge into _reset_live_data()
+            rotation = self.rotation.value
+            self._sem_shape = (rep[1] * acquirer.tile_size[1], rep[0] * acquirer.tile_size[0])  # Y, X
+            pxs_sem = self._pxs[0] / acquirer.tile_size[0], self._pxs[1] / acquirer.tile_size[1]
+            self._sem_md = {
+                MD_POS: acquirer.pos_center,
+                MD_PIXEL_SIZE: pxs_sem,
+                MD_ROTATION: rotation,
+            }
+            self._acq_mask = numpy.zeros(self._sem_shape, dtype=bool)
+
             self._last_ccd_update = 0  # TODO: move to _prepare_live_pixel()?
             # Iterate for the polarisations
             start_t = time.time()
@@ -1394,8 +1414,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             continue
                         self._assembleLiveData(s_idx, da, px_idx, px_pos, rep, pol_idx, acquirer.pos_center)
 
-                    # TODO: use _live_update_period?
                     # Run _updateImage thread to update the live image of the SEM data
+                    #DEBUG  do it explicitly here, instead of every time a SEM tile is received?
+                    self._acq_mask[px_idx[0] * acquirer.tile_size[0]:(px_idx[0] + 1) * acquirer.tile_size[0],
+                                   px_idx[1] * acquirer.tile_size[1]:(px_idx[1] + 1) * acquirer.tile_size[1]] = True
+
                     self._shouldUpdateImage()
                     logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
 
@@ -2947,6 +2970,7 @@ class SEMCCDAcquirer(abc.ABC):
         self.pxs = self._mdstream._getPixelSize() # physical size a whole pixel in m (X,Y)
         self._rep = self._mdstream.repetition.value # number of pixels in the spatial image (of the CL data)
         self.pos_center = None  # position of the center of the spatial acquisition in physical coordinates in m (X,Y)
+        self.tile_size = (1, 1)  # number of sub-pixels in the SEM spatial image (X,Y) (= 1,1 if no fuzzing)
 
         # the coordinates (X,Y) of each point scanned (2D index) in px relative to the center of the FoV
         # Computed by _prepare_spot_positions()
@@ -3074,7 +3098,6 @@ class SEMCCDAcquirerRectangle(SEMCCDAcquirer):
         super().__init__(mdstream)
 
         self.sem_time = 0.0  # time in s for one SEM acquisition during a snapshot (equal or shorter to the snapshot time)
-        self.tile_size = None  # number of sub-pixels in the SEM spatial image (X,Y) (= 1,1 if no fuzzing)
 
     def prepare_hardware(self, max_snapshot_duration: Optional[float] = None) -> None:
         """
