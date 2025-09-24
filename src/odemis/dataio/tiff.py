@@ -284,14 +284,14 @@ def _readTiffTag(tfile):
         except Exception as e:
             logging.info(f"Failed to parse Tescan metadata: {e}", exc_info=True)
 
-    # parse openfibsem metadata
-    openfibsem_md = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-    if openfibsem_md is not None:
+    # parse fibsemos metadata
+    fibsemos_md = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
+    if fibsemos_md is not None:
         try:
-            omd = openfibsem_md.decode("utf-8")
-            md.update(_convert_openfibsem_to_odemis_metadata(omd))
+            omd = fibsemos_md.decode("utf-8")
+            md.update(_convert_fibsemos_to_odemis_metadata(omd))
         except Exception as e:
-            logging.debug(f"Failed to parse OpenFIBSEM metadata: {e}")
+            logging.debug(f"Failed to parse fibsemOS metadata: {e}")
 
     return md
 
@@ -3359,16 +3359,16 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
 
     return md
 
-def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
+def _convert_fibsemos_to_odemis_metadata(metadata: str) -> dict:
 
     # load json metadata
     try:
         omd = json.loads(metadata)
         version = omd["system"]["info"]["fibsem_version"]
     except ValueError as e:
-        raise ValueError(f"Failed to parse OpenFIBSEM metadata json: {e}")
+        raise ValueError(f"Failed to parse fibsemOS metadata json: {e}")
     except KeyError as e:
-        raise ValueError(f"Invalid json structure for OpenFIBSEM metadata: {e}")
+        raise ValueError(f"Invalid json structure for fibsemOS metadata: {e}")
 
     md = {}
 
@@ -3377,30 +3377,30 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
         timestamp = omd["microscope_state"]["timestamp"]
         md[model.MD_ACQ_DATE] = timestamp
     except Exception as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_ACQ_DATE} - {type(e)}: {e}")
+        logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_ACQ_DATE} - {type(e)}: {e}")
 
     try:
         system_info = omd["system"]["info"]
         md[model.MD_HW_NAME] = system_info["manufacturer"] + " " + system_info["model"] + "-" + system_info["serial_number"]
     except KeyError as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
+        logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
 
     try:
         system_info = omd["system"]["info"]
         md[model.MD_HW_VERSION] = system_info["hardware_version"]
     except KeyError as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
+        logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
 
     try:
         md[model.MD_SW_VERSION] = omd["system"]["info"]["fibsem_version"]
     except KeyError as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
+        logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
 
     try:
         md[model.MD_PIXEL_SIZE] = (float(omd["pixel_size"]["x"]),
                                    float(omd["pixel_size"]["y"]))
     except KeyError as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}")
+        logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}")
 
     # beam metadata
     try:
@@ -3408,14 +3408,14 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
         try:
             md[model.MD_DWELL_TIME] = float(omd["image"]["dwell_time"])
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_DWELL_TIME} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_DWELL_TIME} - {e}")
         try:
             # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
             md[model.MD_POS] = (float(omd["microscope_state"]["stage_position"]["x"]),
                                 float(omd["microscope_state"]["stage_position"]["y"])
                                 )
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_POS} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_POS} - {e}")
 
         try:
             acq_map =  {
@@ -3425,7 +3425,7 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
             md[model.MD_ACQ_TYPE] = acq_map[beam_type]
 
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_ACQ_TYPE} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_ACQ_TYPE} - {e}")
 
         beam_type_settings = "electron_beam" if beam_type == "ELECTRON" else "ion_beam"
         beam_settings = omd["microscope_state"][beam_type_settings]
@@ -3433,17 +3433,17 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
         try:
             md[model.MD_BEAM_SCAN_ROTATION] = math.radians(float(beam_settings["scan_rotation"]))
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_BEAM_SCAN_ROTATION} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_BEAM_SCAN_ROTATION} - {e}")
 
         try:
             md[model.MD_EBEAM_VOLTAGE] = float(beam_settings["voltage"])
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_EBEAM_VOLTAGE} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_EBEAM_VOLTAGE} - {e}")
 
         try:
             md[model.MD_EBEAM_CURRENT] = float(beam_settings["beam_current"])
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_EBEAM_CURRENT} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_EBEAM_CURRENT} - {e}")
 
         # beam spot size: Not Available
         try:
@@ -3454,14 +3454,14 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
                                         if detector_type in ["ETD", "TLD", "E-T", "SE"]
                                         else model.MD_DT_INTEGRATING)
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_DET_TYPE} - {e}")
+            logging.warning(f"Failed to parse fibsemOS metadata: {model.MD_DET_TYPE} - {e}")
 
     except Exception as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {e}", exc_info=True)
+        logging.warning(f"Failed to parse fibsemOS metadata: {e}", exc_info=True)
 
     # if the md is still empty, something else was using ImageDescription tag,
     # so we raise an error so external metadata is not updated
     if not md:
-        raise ValueError("ImageDescription tag contained data, but no OpenFIBSEM metadata found... falling back to previous metadata...")
+        raise ValueError("ImageDescription tag contained data, but no fibsemOS metadata found... falling back to previous metadata...")
 
     return md

@@ -468,13 +468,16 @@ class MillingTaskController:
         self._panel.txt_milling_est_time.Show()
 
         # Update the milling status text
-        try:
-            future.result()
-            milling_status_txt = "Milling completed."
-        except CancelledError:
+        if future is None:
             milling_status_txt = "Milling cancelled."
-        except Exception:
-            milling_status_txt = "Milling failed."
+        else:
+            try:
+                future.result()
+                milling_status_txt = "Milling completed."
+            except CancelledError:
+                milling_status_txt = "Milling cancelled."
+            except Exception:
+                milling_status_txt = "Milling failed."
 
         self._panel.txt_milling_est_time.SetLabel(milling_status_txt)
 
@@ -665,7 +668,6 @@ class AutomatedMillingController:
 
         @call_in_wx_main
         def _update_progress(future, start, end):
-
             if hasattr(future, "msg"):
                 startdt = datetime.fromtimestamp(start).strftime('%Y-%m-%d_%H-%M-%S')
                 enddt = datetime.fromtimestamp(end).strftime('%Y-%m-%d_%H-%M-%S')
@@ -702,7 +704,9 @@ class AutomatedMillingController:
         except CancelledError:
             milling_status_txt = "Milling cancelled."
         except Exception:
+            logging.exception("Automated milling failed.")
             milling_status_txt = "Milling failed."
+        logging.info(f"Automated milling done: {milling_status_txt}")
 
         self._panel.txt_automated_milling_est_time.SetLabel(milling_status_txt)
         self._panel.txt_automated_milling_status.SetLabel(milling_status_txt)
