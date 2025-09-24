@@ -3,9 +3,12 @@ Back-end Application Programming Interface
 ******************************************
 
 This describes the core API of Odemis. This is the API that device adapters must
-follow to provide access to the underlying hardware. The back-end manager takes care
-of instantiating all the components of the microscope and sharing them with the
-front-end. User interfaces and scripts can control the hardware via the use of this
+adhere to in order to provide access to the underlying hardware. Although Python and the
+back-end could allow each component to provide additional methods, only those documented below should
+be provided, to ensure compatibility between different hardware components.
+
+The back-end manager takes care of instantiating all the components of the microscope and sharing
+them with the front-end. User interfaces and scripts can control the hardware via the use of this
 API. It is specifically focused to represent and manipulate microscope hardware.
 
 To get the (root) microscope component, the special :py:meth:`model.getMicroscope`
@@ -623,7 +626,7 @@ Most of the data in Odemis is represented either as standard Python types, as
 :py:class:`DataArray` or as :py:class:`VigilantAttribute`. This means that often
 they do not bear unit information explicitly, even though they represent physical
 quantities. The convention is to use the standard
-`SI <http://en.wikipedia.org/wiki/SI>`_ measurement units whenever it can be
+`SI <https://en.wikipedia.org/wiki/International_System_of_Units>`_ measurement units whenever it can be
 applied. For example, distance and wavelengths are expressed in meters (m), angles
 in radians (rad), and times in seconds (s). Never express anything in multiples of a
 official unit (e.g., never put anything in nm). An exception to this rule is the
