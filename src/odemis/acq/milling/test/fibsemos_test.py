@@ -20,7 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 
-from odemis.acq.milling import openfibsem  # to load the openfibsem module
+from odemis.acq.milling import fibsemos  # to load the fibsemOS module
 
 try:
     from fibsem.milling import MillingAlignment
@@ -31,10 +31,10 @@ try:
         TrenchPattern,
     )
     from fibsem.structures import Point
-    from odemis.acq.milling.openfibsem import (
+    from odemis.acq.milling.fibsemos import (
         convert_milling_settings,
         convert_milling_tasks_to_milling_stages,
-        convert_pattern_to_openfibsem,
+        convert_pattern_to_fibsemos,
         convert_task_to_milling_stage,
     )
 except ImportError:
@@ -87,16 +87,16 @@ class TestConvertPatterns(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            if not openfibsem.OPENFIBSEM_INSTALLED:
-                raise ImportError("OpenFIBSEM package is not installed, please install to enabled milling.")
+            if not fibsemos.FIBSEMOS_INSTALLED:
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the openfibsem tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
     def test_convert_rectangle_pattern(self):
         pattern_param = create_rectangle_pattern_params()
-        converted = convert_pattern_to_openfibsem(pattern_param)
+        converted = convert_pattern_to_fibsemos(pattern_param)
         self.assertIsInstance(converted, RectanglePattern)
         self.assertAlmostEqual(converted.width, pattern_param.width.value)
         self.assertAlmostEqual(converted.height, pattern_param.height.value)
@@ -108,7 +108,7 @@ class TestConvertPatterns(unittest.TestCase):
 
     def test_convert_trench_pattern(self):
         pattern_param = create_trench_pattern_params()
-        converted = convert_pattern_to_openfibsem(pattern_param)
+        converted = convert_pattern_to_fibsemos(pattern_param)
         self.assertIsInstance(converted, TrenchPattern)
         self.assertAlmostEqual(converted.width, pattern_param.width.value)
         # Both upper and lower trench heights should be equal to pattern_param.height.value
@@ -121,7 +121,7 @@ class TestConvertPatterns(unittest.TestCase):
 
     def test_convert_microexpansion_pattern(self):
         pattern_param = create_microexpansion_pattern_params()
-        converted = convert_pattern_to_openfibsem(pattern_param)
+        converted = convert_pattern_to_fibsemos(pattern_param)
         self.assertIsInstance(converted, MicroExpansionPattern)
         self.assertAlmostEqual(converted.width, pattern_param.width.value)
         self.assertAlmostEqual(converted.height, pattern_param.height.value)
@@ -135,10 +135,10 @@ class TestConvertMillingSettings(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            if not openfibsem.OPENFIBSEM_INSTALLED:
-                raise ImportError("OpenFIBSEM package is not installed, please install to enabled milling.")
+            if not fibsemos.FIBSEMOS_INSTALLED:
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the openfibsem tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
@@ -162,10 +162,10 @@ class TestConvertTaskToMillingStage(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            if not openfibsem.OPENFIBSEM_INSTALLED:
-                raise ImportError("OpenFIBSEM package is not installed, please install to enabled milling.")
+            if not fibsemos.FIBSEMOS_INSTALLED:
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the openfibsem tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
@@ -205,10 +205,10 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            if not openfibsem.OPENFIBSEM_INSTALLED:
-                raise ImportError("OpenFIBSEM package is not installed, please install to enabled milling.")
+            if not fibsemos.FIBSEMOS_INSTALLED:
+                raise ImportError("fibsemOS package is not installed, please install to enabled milling.")
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the openfibsem tests, correct libraries "
+            raise unittest.SkipTest(f"Skipping the fibsemOS tests, correct libraries "
                                     f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 

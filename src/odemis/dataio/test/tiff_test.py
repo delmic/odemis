@@ -2543,11 +2543,11 @@ class TestTiffIO(unittest.TestCase):
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
 
-    def test_convert_openfibsem_to_odemis_metadata(self):
+    def test_convert_fibsemos_to_odemis_metadata(self):
 
         # open example image
-        OPENFIBSEM_FILENAME = os.path.join(os.path.dirname(__file__), "openfibsem_example_sem.tif")
-        data = tiff.open_data(OPENFIBSEM_FILENAME)
+        FIBSEMOS_FILENAME = os.path.join(os.path.dirname(__file__), "fibsemos_example_sem.tif")
+        data = tiff.open_data(FIBSEMOS_FILENAME)
 
         # assert data
         self.assertIsInstance(data, tiff.AcquisitionDataTIFF)
@@ -2567,7 +2567,7 @@ class TestTiffIO(unittest.TestCase):
             model.MD_EBEAM_CURRENT: 1e-12,
             model.MD_ACQ_TYPE: model.MD_AT_EM,
             model.MD_DET_TYPE: model.MD_DT_NORMAL,
-            model.MD_DESCRIPTION: os.path.basename(OPENFIBSEM_FILENAME).replace(".tif", ""),
+            model.MD_DESCRIPTION: os.path.basename(FIBSEMOS_FILENAME).replace(".tif", ""),
         }
 
         for key in md.keys():

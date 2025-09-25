@@ -1938,7 +1938,7 @@ class SampleStage(model.Actuator):
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     def moveRelChamberCoordinates(self, shift: Dict[str, float]) -> Future:
-        """Move the stage vertically in the chamber. This is non-blocking. From OpenFIBSEM.
+        """Move the stage vertically in the chamber. This is non-blocking. From fibsemOS.
         The desired input shift (x, z) is transformed to x, y, z axis components such that the
         the stage moves in the vertical direction in the chamber.
         The input shift is expected in the sample-stage coordinates. A feature in the FIB FoV is
