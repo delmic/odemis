@@ -1,5 +1,6 @@
 import copy
 import logging
+import math
 import os
 
 import wx
@@ -16,6 +17,7 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.move import (
+    calculate_milling_angle_from_stage_tilt,
     FM_IMAGING,
     MILLING,
     POSITION_NAMES,
@@ -24,7 +26,7 @@ from odemis.acq.move import (
 )
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
-from odemis.gui.model import TOOL_FEATURE
+from odemis.gui.model import TOOL_FEATURE, CryoLocalizationGUIData, CryoFIBSEMGUIData
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
@@ -268,7 +270,14 @@ class CryoFeatureController(object):
         features = self._tab_data_model.main.features.value
         self._panel.cmb_features.Clear()
         for i, feature in enumerate(features):
-            self._panel.cmb_features.Insert(feature.name.value, i, feature)
+            if isinstance(self._tab_data_model, CryoLocalizationGUIData):
+                self._panel.cmb_features.Insert(feature.name.value, i, feature)
+            elif isinstance(self._tab_data_model, CryoFIBSEMGUIData):
+                stage_tilt = feature.posture_positions[MILLING]["rx"]
+                milling_angle = calculate_milling_angle_from_stage_tilt(
+                    stage_tilt, pre_tilt=self.pm.pre_tilt, column_tilt=self.pm.fib_column_tilt)
+                milling_angle = round(math.degrees(milling_angle), 1)
+                self._panel.cmb_features.Insert(f"{feature.name.value}, {feature.status.value}, {milling_angle}°", i, feature)
 
         # Special case: there is no selected feature
         if current_feature is None:
@@ -379,6 +388,8 @@ class CryoFeatureController(object):
         :param feature_status: (string) the updated feature status
         """
         self._panel.cmb_feature_status.SetValue(feature_status)
+        # Since the features list now shows the status, update it as well
+        self._update_feature_cmb_list()
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def _on_cmb_features_change(self, evt):
