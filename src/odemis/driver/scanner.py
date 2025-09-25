@@ -70,11 +70,19 @@ class CompositedScanner(model.Emitter):
 
         # Copy VAs directly related to scanning from external
         self._shape = self._external_scanner.shape
-        for vaname in ("pixelSize", "translation", "resolution", "scale",
-                       "dwellTime"):
+        for vaname in ("pixelSize", "translation", "resolution", "scale", "dwellTime",
+                       "scanPath", "scanPixelTTL", "scanLineTTL", "scanFrameTTL"):
             if model.hasVA(self._external_scanner, vaname):
                 va = getattr(self._external_scanner, vaname)
                 setattr(self, vaname, va)
+
+        # Copy ROAttributes from the external scanner.
+        # It's a little bit tricky, because they appear very much like standard attributes, so we
+        # use the same mechanism as for component proxies.
+        extra_ro_attrs = {name: value
+                            for name, value in model.getROAttributes(self._external_scanner).items()
+                            if not hasattr(self, name)}
+        model.load_roattributes(self, extra_ro_attrs)
 
         # Copy Events from the external scanner
         for evtname, evt in model.getEvents(self._external_scanner).items():
