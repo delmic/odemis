@@ -839,7 +839,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             elif target_pos_lbl in [SEM_IMAGING, MILLING, FIB_IMAGING]:
                 # Revert to deactive position if available
                 deactive_fm_position = stage_md.get(model.MD_FM_POS_SAMPLE_DEACTIVE)
-                if deactive_fm_position:
+                if deactive_fm_position and "z" in deactive_fm_position:
                     sample_stage_pos = self.to_sample_stage_from_stage_position(stage_position, posture=FM_IMAGING)
                     sample_stage_pos["z"] = deactive_fm_position["z"]
                     stage_position = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
@@ -1028,12 +1028,13 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     sub_moves.append((self.focus, focus_deactive))
 
                 if current_label in [SEM_IMAGING, MILLING, FIB_IMAGING] and target == FM_IMAGING:
-                    # We need to know the SEM, Milling or FIB position in meteor, as is, without the fixed plane
-                    # correction. The rotational component is overwritten internally, so we can just use SEM to Meteor
+                    # Store the Z position, for recovery when going back to SEM.
+                    # We record it by computing its projection in FM sample coordinates, without the fixed plane
+                    # correction. As Z is the same for SEM, Milling or FIB, and it's fine to just use SEM to Meteor
                     # for all occasions.
                     target_pos_unfixed = self._transformFromSEMToMeteor(current_pos, fix_fm_plane=False)
                     sample_stage_pos = self.to_sample_stage_from_stage_position(target_pos_unfixed, posture=FM_IMAGING)
-                    # store original sample z for recovery
+                    sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
                     self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
 
                 # Move translation axes, then rotational ones
@@ -1092,10 +1093,9 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             # Pick a sane default for the sample stage z using grid 1.
             sem_grid1_pos = dict(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
             sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-            sem_grid1_pos_fm = self._transformFromSEMToMeteor(sem_grid1_pos)
-            # TODO: drop x and y since unused
+            sem_grid1_pos_fm = self._transformFromSEMToMeteor(sem_grid1_pos, fix_fm_plane=False)
             fixed_fm_sample = self.to_sample_stage_from_stage_position(sem_grid1_pos_fm, posture=FM_IMAGING)
-            # Only z will be relevant, but store the rest for completeness
+            fixed_fm_sample = {"z": fixed_fm_sample["z"]}  # Drop x and y, to make clear only z is used
             self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: fixed_fm_sample})
 
     def create_sample_stage(self):
@@ -1106,12 +1106,11 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
     def _transformFromSEMToMeteor(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
-        Transforms the current stage position from the SEM imaging area to the
-        meteor/FM imaging area.
+        Transforms the current stage position from the SEM imaging area to the meteor/FM imaging area.
         :param pos: the initial stage position.
         :param fix_fm_plane: If True, maintains a consistent FM imaging plane by keeping the z-coordinate
-            in sample-stage space constant. The original z value is stored in fm_sample_z_starting_point for
-            restoring the z height in sem posture later. If False, performs direct transformation without z-adjustment.
+            in sample-stage space constant. It uses the z value stored in MD_FM_POS_SAMPLE_ACTIVE.
+            If False, performs direct transformation without z-adjustment.
         :return: the transformed position.
         """
         # NOTE: this transform now always rotates around the z axis (180deg)
@@ -1130,7 +1129,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         transformed_pos["y"] = md_calib["dy"] - pos["y"]
         transformed_pos.update(fm_pos_active)
 
-        if fix_fm_plane and fm_sample_pos_active:
+        if fix_fm_plane and fm_sample_pos_active and "z" in fm_sample_pos_active:
             sample_stage_pos = self.to_sample_stage_from_stage_position(transformed_pos, posture=FM_IMAGING)
             sample_stage_pos["z"] = fm_sample_pos_active["z"]
             transformed_pos = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
@@ -1155,8 +1154,8 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         if not ("rz" in pos and "rz" in sem_pos_active):
             raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
 
-        transformed_pos["x"] = md_calib["dx"] - transformed_pos["x"]
-        transformed_pos["y"] = md_calib["dy"] - transformed_pos["y"]
+        transformed_pos["x"] = md_calib["dx"] - pos["x"]
+        transformed_pos["y"] = md_calib["dy"] - pos["y"]
         transformed_pos.update(sem_pos_active)
 
         return transformed_pos

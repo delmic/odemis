@@ -236,7 +236,7 @@ MD_FAV_MILL_POS_ACTIVE = "Favourite Milling position active"  # dict -> float re
 # Assuming sample plane axis is positive from left to right and FIB imaging axis is positive from up to down.
 # This rx is converted to the stage tilt when the user moves to the milling position.
 MD_FM_POS_SAMPLE_ACTIVE = "Sample FM position active"  #  dict[str, float] representing fixed sample stage position for FM imaging
-MD_FM_POS_SAMPLE_DEACTIVE = "Sample FM position deactive"  #  dict[str, float] representing last FM sample stage position when switched from SEM to FM
+MD_FM_POS_SAMPLE_DEACTIVE = "Sample FM position deactive"  #  dict[str, float] representing the last SEM (z) position, projected in FM sample stage coordinates
 
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.

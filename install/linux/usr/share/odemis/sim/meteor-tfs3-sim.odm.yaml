@@ -65,8 +65,8 @@
         },
         # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
         FAV_FM_POS_ACTIVE: {"rx": 0.29670597283903605  , "rz":  3.141592653589793}, # 17° - 180°
-        FAV_MILL_POS_ACTIVE: {"rx": 0.29, "rz": 0},  # Note that milling angle (rx) can be changed per session
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°, 0° rotation
+        FAV_MILL_POS_ACTIVE: {"rx": 0.2443461, "rz": 0},  # rx (14°) defines the "milling angle" (ie, angle between ion beam column and sample plane)
     },
 }
 
