@@ -634,6 +634,7 @@ class CryoChamberTab(Tab):
     def _update_movement_controls(self):
         """
         Enable/disable chamber move controls (position and stage) based on current move
+        Must be called within the main GUI thread
         """
         # Get current movement (including unknown and on the path)
         self._current_posture = self.posture_manager.current_posture.value
@@ -895,6 +896,7 @@ class CryoChamberTab(Tab):
         self._end_pos = end_pos
         return self.posture_manager.cryoSwitchSamplePosition(self._target_posture)
 
+    @call_in_wx_main
     def _on_posture(self, posture: int) -> None:
         logging.info(f"Stage posture changed to {POSITION_NAMES[posture]}")
         self._update_movement_controls()
