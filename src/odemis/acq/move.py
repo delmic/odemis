@@ -1013,21 +1013,24 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING):
-                # NOTE: prior to TFS3, no distinction was made between SEM and MILL positions, and these
-                # were dynamically updated based on the current SEM position when switching to FM,
-                # and used to restore the same position when switching back from FM -> SEM.
-                # From TFS3, there is a separate MILLING position, so the SEM position has really a
-                # fixed rotation and tilt.
-                if (isinstance(self, MeteorTFS1PostureManager)
-                    and current_label == SEM_IMAGING and target == FM_IMAGING
-                   ):
-                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_pos['rx'],
-                                                                             'rz': current_pos['rz']}})
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
 
-                if current_label in [SEM_IMAGING, MILLING, FIB_IMAGING] and target == FM_IMAGING:
+                if (isinstance(self, MeteorTFS1PostureManager)
+                    and current_label == SEM_IMAGING and target == FM_IMAGING
+                   ):
+                    # NOTE: with TFS1, no distinction was made between SEM and MILL positions, and these
+                    # were dynamically updated based on the current SEM position when switching to FM,
+                    # and used to restore the same position when switching back from FM -> SEM.
+                    # From TFS3, there is a separate MILLING position, so the SEM position has really a
+                    # fixed rotation and tilt.
+                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_pos['rx'],
+                                                                             'rz': current_pos['rz']}})
+                elif (isinstance(self, MeteorTFS3PostureManager)
+                      and current_label in [SEM_IMAGING, MILLING, FIB_IMAGING]
+                      and target == FM_IMAGING
+                     ):
                     # Store the Z position, for recovery when going back to SEM.
                     # We record it by computing its projection in FM sample coordinates, without the fixed plane
                     # correction. As Z is the same for SEM, Milling or FIB, and it's fine to just use SEM to Meteor
