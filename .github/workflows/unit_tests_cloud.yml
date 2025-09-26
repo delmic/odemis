@@ -175,6 +175,14 @@ jobs:
           python3 -m unittest src/odemis/acq/milling/test/patterns_test.py --verbose
           python3 -m unittest src/odemis/acq/milling/test/tasks_test.py --verbose
 
+    # Note: some tests rely on simple backends like TestMeteorTFS1Move or TestMeteorZeiss1Move,
+    # however, they are very long (>10 min) and sometimes block at the end.
+    - name: Run tests from odemis.acq.move (which do not require backend)
+      if: ${{ !cancelled() }}
+      run: |
+          export PYTHONPATH="$PWD/src:$PYTHONPATH"
+          python3 -m unittest --verbose src.odemis.acq.test.move_test.TestMoveUtil
+
     - name: Run tests from odemis.acq.leech
       if: ${{ !cancelled() }}
       run: |
