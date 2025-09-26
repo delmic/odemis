@@ -716,7 +716,8 @@ class StreamBarController(object):
         else:
             # The stream is now paused. If it used the spot stream, pause that one too.
             if isinstance(stream, self._spot_required) and spots:
-                self._tab_data_model.tool.value = TOOL_NONE
+                if self._tab_data_model.tool.value == TOOL_SPOT:
+                    self._tab_data_model.tool.value = TOOL_NONE
                 spots.is_active.value = False
 
     def on_tool_change(self, tool):
