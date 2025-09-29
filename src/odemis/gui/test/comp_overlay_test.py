@@ -28,7 +28,6 @@ import re
 import unittest
 import warnings
 from builtins import range
-from unittest.mock import patch, Mock
 
 import numpy
 import wx
@@ -39,7 +38,6 @@ import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
 from odemis import model
-from odemis.acq.move import FM_IMAGING, MicroscopePostureManager
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
@@ -57,7 +55,8 @@ from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
 from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
-from odemis.gui.comp.overlay.spectrum_line_select import LineSelectOverlay, SpectrumLineSelectOverlay
+from odemis.gui.comp.overlay.spectrum_line_select import LineSelectOverlay, \
+    SpectrumLineSelectOverlay
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
@@ -67,7 +66,6 @@ from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
 from odemis.gui.model import (TOOL_LABEL, TOOL_LINE, TOOL_POINT, TOOL_RULER,
                               FeatureOverviewView)
 from odemis.gui.util.img import wxImage2NDImage
-from odemis.model import getMicroscope
 from odemis.util import mock
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
@@ -476,65 +474,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         tab_mod = self.create_cryo_tab_model()
 
-        stage = TMCLController(name="test_stage", role="stage-bare",
-                               port="/dev/fake6",
-                               axes=["x", "y", " z", "rx", "rz"],
-                               ustepsize=[1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
-                               rng=[[-6, 6], [-6, 6], [-6, 6], [-6, 6], [-6, 6]],
-                               refproc="Standard")
-
-        stage.updateMetadata({model.MD_FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313, "rz": 5.06145},
-                    model.MD_FAV_SEM_POS_ACTIVE: {"rx": 0, "rz": 0},
-                    model.MD_FAV_POS_DEACTIVE: {'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975},
-                    model.MD_POS_COR: [0.02447, -0.000017],
-                    model.MD_SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0},
-                                              "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
-                    model.MD_SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
-                    model.MD_FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
-                    model.MD_ROTATION_COR: 0.0, })
-        focus = TMCLController(name="test_focus", role="focus",
-                               port="/dev/fake3",
-                               axes=["z"],
-                               ustepsize=[1e-6],
-                               rng=[[-3e-3, 3e-3]],
-                               refproc="Standard")
-        tab_mod.main.stage = stage
-        tab_mod.main.focus = focus
-        tab_mod.view_posture = model.VigilantAttribute(FM_IMAGING)
-
-        class FakeMicroscope:
-            """Mock class to simulate a microscope with a stage and focus controller without running the backend"""
-
-            def __init__(self, dependencies=None):
-                self.role = "meteor"
-                self.children = model.ListVA()
-
-        def getComponent(name="None", role="None"):
-            """
-            Mock function to return a component based on its name and role.
-            :return (Component): fake component based on name and role
-            raise LookupError: if no component with such a name is given
-            """
-            if name is None and role is None:
-                raise ValueError("Need to specify at least a name or a role")
-
-            if role == "stage-bare":
-                return stage
-            elif role == "focus":
-                return focus
-            elif name == "Linked YZ":
-                return stage
-            return None
-
-        # Mock getMicroscope to return FakeMicroscope
-        with patch('odemis.gui.test.comp_overlay_test.getMicroscope', return_value=FakeMicroscope()), \
-                patch('odemis.acq.move.model.getComponent', side_effect=getComponent), \
-                patch('odemis.acq.move.MeteorPostureManager._get_scan_rotation', return_value=0.0):
-
-            microscope = getMicroscope()
-            tab_mod.main.posture_manager = MicroscopePostureManager(microscope)
-
-        fview = FeatureOverviewView("fakeview", stage=stage)
+        fview = FeatureOverviewView("fakeview", stage=tab_mod.main.stage)
         tab_mod.views.value.append(fview)
         tab_mod.focussedView.value = fview
         cnvs.setView(fview, tab_mod)

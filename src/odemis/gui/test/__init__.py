@@ -20,22 +20,24 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from odemis.gui.util import wx_adapter
-
 import logging
-import numpy
-from odemis.gui.model import MainGUIData
-from odemis.gui.xmlh import odemis_get_test_resources
 import os
 import os.path
 import random
 import time
 import unittest
-import wx
 from builtins import range
+from unittest.mock import patch
+
+import numpy
+import wx
 
 import odemis.gui.model as gmodel
-import odemis.model as omodel
+from odemis import model
+from odemis.acq.move import FM_IMAGING, MeteorTFS3PostureManager
+from odemis.driver.tmcm import TMCLController
+from odemis.gui.model import MainGUIData
+from odemis.gui.xmlh import odemis_get_test_resources
 from . import test_gui
 
 # Common configuration and code for the GUI test cases
@@ -219,16 +221,76 @@ class GuiTestCase(unittest.TestCase):
         return tab
 
     def create_cryo_tab_model(self):
-        main = gmodel.MainGUIData(None)  # no microscope backend
+        stage = TMCLController(name="Stage",
+                               role="stage-bare",
+                               port="/dev/fake6",
+                               axes=["x", "y", "z", "rx", "rz"],
+                               ustepsize=[1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
+                               rng=[[-6, 6], [-6, 6], [-6, 6], [-6, 6], [-6, 6]],
+                               refproc="Standard")
+
+        stage.updateMetadata({
+            model.MD_CALIB: {
+                "version": "tfs_3",
+                "dx": 0.0506252, "dy": 0.0049832,  # mirroring values between SEM - METEOR
+                "pre-tilt": 0.6108652381980153,  # rad, 35°
+            },
+            model.MD_SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0},
+                                      "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
+            model.MD_FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313, "rz": 5.06145},
+            model.MD_FAV_SEM_POS_ACTIVE: {"rx": 0, "rz": 0},
+            model.MD_FAV_POS_DEACTIVE: {'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975},
+            model.MD_SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
+            model.MD_FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
+        })
+        focus = TMCLController(name="Focuser", role="focus",
+                               port="/dev/fake3",
+                               axes=["z"],
+                               ustepsize=[1e-6],
+                               rng=[[-3e-3, 3e-3]],
+                               refproc="Standard")
+
+        light = model.HwComponent(name="Light", role="light")
+        ccd = model.HwComponent(name="Camera", role="ccd")
+
+        class FakeMicroscope:
+            """Mock class to simulate a microscope with a stage and focus controller without running the backend"""
+
+            def __init__(self):
+                self.name = "FakeMicroscope"
+                self.role = "meteor"
+                self.alive = model.ListVA([focus, stage])
+
+        def getComponents():
+            return {stage, focus, light, ccd}
+
+        def getComponent(name=None, role=None):
+            for c in getComponents():
+                if name is not None and c.name != name:
+                    continue
+                if role is not None and c.role != role:
+                    continue
+                return c
+            raise KeyError(name or role)
+
+        microscope = FakeMicroscope()
+        # Mock getMicroscope to return FakeMicroscope
+        with patch('odemis.model.getComponent', side_effect=getComponent),\
+             patch('odemis.model.getComponents', side_effect=getComponents):
+            main = gmodel.CryoMainGUIData(microscope)
+            main.posture_manager = MeteorTFS3PostureManager(microscope)
+
         # add role, features and currentFeature directly
-        main.role = "enzel"
-        main.features = omodel.ListVA()
-        main.currentFeature = omodel.VigilantAttribute(None)
+        main.role = "meteor"
+        main.features = model.ListVA()
+        main.currentFeature = model.VigilantAttribute(None)
+
         tab = gmodel.CryoGUIData(main)
 
         # Add one view
         fview = gmodel.MicroscopeView("fakeview")
         tab.views.value.append(fview)
+        tab.view_posture = model.VigilantAttribute(FM_IMAGING)
         tab.focussedView.value = fview
 
         return tab
@@ -246,13 +308,13 @@ class FakeMicroscopeModel(object):
     """
     def __init__(self):
         fview = gmodel.MicroscopeView("fakeview")
-        self.focussedView = omodel.VigilantAttribute(fview)
+        self.focussedView = model.VigilantAttribute(fview)
 
         self.main = Object()
         self.main.light = None
         self.main.ebeam = None
-        self.main.debug = omodel.VigilantAttribute(fview)
-        self.focussedView = omodel.VigilantAttribute(fview)
+        self.main.debug = model.VigilantAttribute(fview)
+        self.focussedView = model.VigilantAttribute(fview)
 
         self.light = None
         self.light_filter = None
@@ -265,8 +327,8 @@ class FakeMicroscopeModel(object):
 
 # Utility functions
 def set_img_meta(img, pixel_size, pos):
-    img.metadata[omodel.MD_PIXEL_SIZE] = pixel_size
-    img.metadata[omodel.MD_POS] = pos
+    img.metadata[model.MD_PIXEL_SIZE] = pixel_size
+    img.metadata[model.MD_POS] = pos
 
 
 def generate_img_data(width, height, depth, alpha=255, color=None):
@@ -325,7 +387,7 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
                 else:
                     rgb[h, w] = random_color((230, 230, 255), alpha)
 
-    return omodel.DataArray(rgb)
+    return model.DataArray(rgb)
 
 
 def random_color(mix_color=None, alpha=255):
