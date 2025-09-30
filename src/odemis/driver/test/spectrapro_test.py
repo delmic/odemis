@@ -38,7 +38,6 @@ else:
 CCDCLASS = andorcam2.FakeAndorCam2 # can also use  pvcam.PVCam if real hardware is available
 CCDKWARGS = {"name": "spccd", "role": "sp-ccd", "device": 0,
              "image": "sparc-spec-sim.h5"}
-ccd = CCDCLASS(**CCDKWARGS)
 
 CLASS = spectrapro.FakeSpectraPro # use FakeSpectraPro if no hardware present
 KWARGS = {"name": "test", "role": "spectrograph", "port": PORT,
@@ -56,7 +55,6 @@ KWARGS = {"name": "test", "role": "spectrograph", "port": PORT,
                 [2000, 150, "6e,34,80,b7,40,82,2e,40", "c1,f9,2d,6a,92,80,1a,3f",
                  "9a,99,99,99,99,89,72,40", "33,33,33,33,33,13,40,40", "b8,1e,85,eb,51,b8,f6,bf"],
             ],
-          "dependencies": {"ccd": ccd}
           }
 
 # @unittest.skip("faster")
@@ -64,20 +62,29 @@ class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
     """
+    @classmethod
+    def setUpClass(cls):
+        cls.ccd = CCDCLASS(**CCDKWARGS)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.ccd.terminate()
+
     @skipIf(CLASS == spectrapro.FakeSpectraPro, "Scanning cannot work without real hardware")
     def test_scan(self):
         devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            sem = CLASS(name, "spec", dependencies={"ccd": ccd}, **kwargs)
+            sem = CLASS(name, "spec", dependencies={"ccd": self.ccd}, **kwargs)
             self.assertTrue(sem.selfTest(), "self test failed.")
+            sem.terminate()
 
     def test_creation(self):
         """
         Doesn't even try to acquire an image, just create and delete components
         """
-        sp = CLASS(**KWARGS)
+        sp = CLASS(**KWARGS, dependencies={"ccd": self.ccd})
 
         self.assertGreater(len(sp.axes["grating"].choices), 0)
 
@@ -88,7 +95,7 @@ class TestStatic(unittest.TestCase):
         """
         Just makes sure we don't (completely) break FakeSpectraPro after an update
         """
-        sp = spectrapro.FakeSpectraPro(**KWARGS)
+        sp = spectrapro.FakeSpectraPro(**KWARGS, dependencies={"ccd": self.ccd})
 
         self.assertGreater(len(sp.axes["grating"].choices), 0)
         sp.moveAbs({"wavelength":300e-9})
@@ -96,13 +103,15 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
 
+
 class TestSP(unittest.TestCase):
     """
     Tests which need a component ready
     """
 
     def setUp(self):
-        self.sp = CLASS(**KWARGS)
+        self.ccd = CCDCLASS(**CCDKWARGS)
+        self.sp = CLASS(**KWARGS, dependencies={"ccd": self.ccd})
         self.orig_pos = dict(self.sp.position.value)
 
     def tearDown(self):
@@ -110,6 +119,7 @@ class TestSP(unittest.TestCase):
         f = self.sp.moveAbs(self.orig_pos)
         f.result()
         self.sp.terminate()
+        self.ccd.terminate()
 
     def test_moverel(self):
         move = {'wavelength':1e-9} # +1nm => should be fast
