@@ -26,12 +26,13 @@ import numpy
 
 import wx
 
+from odemis.gui.comp.canvas import CAN_DRAG, CAN_MOVE_STAGE
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING
+from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING, UNKNOWN, MILLING_RANGE
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -203,9 +204,9 @@ class FibsemTab(Tab):
         self.automation_controller = milling.AutomatedMillingController(tab_data, panel, self)
         panel.Layout()
 
-        # fib viewport double click event for vertical movements
         self.pm = self.tab_data_model.main.posture_manager
-        panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
+        # fib viewport double click event for vertical movements
+        panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_fib_dbl_click)
 
         # TODO: replace with current_posture?
         self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
@@ -213,10 +214,14 @@ class FibsemTab(Tab):
 
         rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rx"]
         self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
+        self.panel.ctrl_milling_angle.SetValueRange(*MILLING_RANGE)
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
         self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
         self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
+        self.panel.btn_apply_milling_angle_to_feature.Bind(wx.EVT_BUTTON, self._on_apply_angle_to_feature)
+        self.panel.btn_apply_milling_angle_to_features.Bind(wx.EVT_BUTTON, self._on_apply_angle_to_features)
+        self.main_data.currentFeature.subscribe(self._on_current_feature_va, init=True)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
     def _on_view(self, view):
@@ -349,7 +354,7 @@ class FibsemTab(Tab):
     def _start_streams_subscriber(self):
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
-    def on_dbl_click(self, evt):
+    def on_fib_dbl_click(self, evt):
 
         active_canvas = evt.GetEventObject()
         logging.debug(f"mouse down event, canvas: {active_canvas}")
@@ -418,6 +423,16 @@ class FibsemTab(Tab):
         # update the stage position buttons
         self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
         self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+
+        if posture == UNKNOWN:
+            self.panel.btn_switch_sem_imaging.Disable()
+            self.panel.btn_switch_milling.Disable()
+            self.panel.ctrl_milling_angle.Disable()
+        else:
+            self.panel.btn_switch_sem_imaging.Enable()
+            self.panel.btn_switch_milling.Enable()
+            self.panel.ctrl_milling_angle.Enable()
+
         if posture == SEM_IMAGING:
             self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
         if posture == MILLING:
@@ -436,7 +451,8 @@ class FibsemTab(Tab):
         md = self.pm.get_posture_orientation(MILLING)
         stage_tilt = md["rx"]
         self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
-                                                 f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
+                                                 f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}° \n"
+                                                 f"Min {MILLING_RANGE[0]}°, Max {MILLING_RANGE[1]}°")
 
         self._on_stage_pos(self.pm.stage.position.value)
 
@@ -444,44 +460,49 @@ class FibsemTab(Tab):
         if evt is None: # if the event is None, it means this is the initial update, dont ask the user
             return
 
-        # changing milling angle, causes previously defined features at milling angle to be "seen" as SEM_IMAGING
-        # QUERY: should we update the features to the new milling angle?
-        box = wx.MessageDialog(self.main_frame,
-                            message=f"Do you want to update existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)?",
-                            caption="Update existing feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
-
-        ans = box.ShowModal()  # Waits for the window to be closed
-        if ans == wx.ID_YES:
-            logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
-            # NOTE: use stage_tilt, not milling_angle
-            for feature in self.main_data.features.value:
-                milling_position = feature.get_posture_position(MILLING)
-                if milling_position is not None:
-                    milling_position["rx"] = stage_tilt
-                    feature.set_posture_position(MILLING, milling_position)
+        # If already in milling posture and the control is changed, apply it directly
+        if self.pm.getCurrentPostureLabel() == MILLING:
+            self._move_to_milling_position(None)
 
     def _move_to_milling_position(self, evt: wx.Event):
         logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
-
-        if self.pm.current_posture.value != SEM_IMAGING:
-            wx.MessageBox("Switch to SEM position first", "Error", wx.OK | wx.ICON_ERROR)
-            return
-
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
         self._on_stage_pos(self.pm.stage.position.value)
 
     def _move_to_sem(self, evt: wx.Event):
-
-        if self.pm.current_posture.value != MILLING:
-            wx.MessageBox("Switch to milling position first", "Error", wx.OK | wx.ICON_ERROR)
-            return
-
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
 
         self._on_stage_pos(self.pm.stage.position.value)
+
+    def _on_apply_angle_to_feature(self, evt: wx.Event):
+        if self.main_data.currentFeature.value:
+            self._apply_angle_to_features([self.main_data.currentFeature.value])
+
+    def _on_apply_angle_to_features(self, evt: wx.Event):
+        self._apply_angle_to_features(self.main_data.features.value)
+
+    def _apply_angle_to_features(self, features):
+        md = self.pm.get_posture_orientation(MILLING)
+        stage_tilt = md["rx"]
+        for feature in features:
+            milling_position = feature.get_posture_position(MILLING)
+            if milling_position is not None:
+                milling_position["rx"] = stage_tilt
+                feature.set_posture_position(MILLING, milling_position)
+
+        # The posture_positions property is not a VA, therefore we cannot have a callback.
+        # Manually call it for now. This updates the display of the feature list and saves it to disk.
+        # Maybe make the reactivity better in the future.
+        self._feature_panel_controller._on_features_changes(self.main_data.features.value)
+
+    def _on_current_feature_va(self, evt: wx.Event):
+        if self.main_data.currentFeature.value:
+            self.panel.btn_apply_milling_angle_to_feature.Enable()
+        else:
+            self.panel.btn_apply_milling_angle_to_feature.Disable()
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
