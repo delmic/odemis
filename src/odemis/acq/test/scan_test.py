@@ -203,7 +203,7 @@ class TestVectorAcquisition(unittest.TestCase):
         ebeam_fov = ebeam_pxs[0] * ebeam_max_res[0], ebeam_pxs[1] * ebeam_max_res[1]
         exp_pxs = (ebeam_fov[0] / res[0], ebeam_fov[1] / res[1])
         testing.assert_tuple_almost_equal(img_md[model.MD_PIXEL_SIZE], exp_pxs)
-        testing.assert_tuple_almost_equal(img_md[model.MD_POS], ebeam_md[model.MD_POS])  # Full FoV, so no translation
+        testing.assert_tuple_almost_equal(img_md[model.MD_POS], ebeam_md.get(model.MD_POS, (0, 0)))  # Full FoV, so no translation
         self.assertEqual(img_md[model.MD_ROTATION], rotation)
 
     def test_2d_img_rotated(self):
@@ -238,7 +238,7 @@ class TestVectorAcquisition(unittest.TestCase):
         exp_pxs = (fov_ratio[0] * ebeam_fov[0] / res[0], fov_ratio[1] * ebeam_fov[1] / res[1])
         testing.assert_tuple_almost_equal(img_md[model.MD_PIXEL_SIZE], exp_pxs)
         # RoI centered on FoV, so no translation
-        testing.assert_tuple_almost_equal(img_md[model.MD_POS], ebeam_md[model.MD_POS])
+        testing.assert_tuple_almost_equal(img_md[model.MD_POS], ebeam_md.get(model.MD_POS, (0, 0)))
         self.assertEqual(img_md[model.MD_ROTATION], rotation)
 
 
