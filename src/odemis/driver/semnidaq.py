@@ -3111,7 +3111,7 @@ class Scanner(model.Emitter):
             # 1. for each output port which is controlled by the pixel signal,
             pixel_mask = dtype(sum(1 << c for c in self._pixel_ttl))
             # 2. all the samples where the signal is high is converted to the bitmask (using boolean AND bitmask)
-            pixel_bits = pixel_signal & pixel_mask
+            pixel_bits = pixel_signal * pixel_mask
             # 3. Invert all high samples => they are switched from inactive to active (using XOR)
             ttl_signal_dup[...] ^= pixel_bits
 
@@ -3125,7 +3125,7 @@ class Scanner(model.Emitter):
 
         if line_signal is not None and self._line_ttl:
             line_mask = dtype(sum(1 << c for c in self._line_ttl))
-            line_bits = line_signal & line_mask
+            line_bits = line_signal * line_mask
             ttl_signal_dup[...] ^= line_bits
 
         # Frame: copy as-is
@@ -3138,7 +3138,7 @@ class Scanner(model.Emitter):
 
         if frame_signal is not None and self._frame_ttl:
             frame_mask = dtype(sum(1 << c for c in self._frame_ttl))
-            frame_bits = frame_signal & frame_mask
+            frame_bits = frame_signal * frame_mask
             ttl_signal_dup[...] ^= frame_bits
 
         return ttl_signal
