@@ -1219,6 +1219,11 @@ class Acquirer:
         self._do_data = ttl_array
         self._do_data_next_sample = 0  # position of the next sample to write to the board (updated by _write_do_data())
 
+        # DEBUG:
+        # count the number of bytes that are high
+        n_active = numpy.count_nonzero(ttl_array)
+        logging.debug("Scan path TTL: %s px != 0",n_active)
+
         # we want to read not too frequently as it'd have a large overhead, and not too unfrequently
         # as this would require a huge memory buffer to process all at once: CHUNK_DURATION.
         acq_settings.ai_chunk_size = self._find_good_ai_chunk_size(acq_settings, CHUNK_DURATION)
@@ -3140,6 +3145,11 @@ class Scanner(model.Emitter):
             frame_mask = dtype(sum(1 << c for c in self._frame_ttl))
             frame_bits = frame_signal * frame_mask
             ttl_signal_dup[...] ^= frame_bits
+
+        #DEBUG:
+        n_active = numpy.count_nonzero(ttl_signal != inactive_bitmap)
+        logging.debug("Scan path TTL: %d active, inactive bitmap 0x%X",
+                      n_active, inactive_bitmap)
 
         return ttl_signal
 
