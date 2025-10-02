@@ -1329,7 +1329,7 @@ class TestAnalogSEM(unittest.TestCase):
             [0, 0]     # Center
         ], dtype=float)
         # TTL signal: everything is a pixel, a line and a frame
-        all_high = numpy.ones(scan_path.shape[0] * 2, dtype=numpy.bool_)
+        all_high = numpy.ones(scan_path.shape[0] * 2, dtype=bool)
 
         self.scanner.scanPath.value = scan_path
         self.scanner.scanPixelTTL.value = all_high
