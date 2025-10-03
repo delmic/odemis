@@ -246,8 +246,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if guimodel.TOOL_ROA in tools_possible:
             # Get the region of interest and link it to the ROA overlay
             self._roa = tab_data.roa
-            self.roa_overlay = RepetitionSelectOverlay(self, self._roa,
-                                                                     tab_data.fovComp)
+            self.roa_overlay = RepetitionSelectOverlay(self, self._roa, tab_data.fovComp,
+                                                       tab_data.roa_rotation)
             self.add_world_overlay(self.roa_overlay)
 
         if guimodel.TOOL_RO_ANCHOR in tools_possible:

@@ -23,18 +23,23 @@ This file is part of Odemis.
 """
 
 import logging
+import math
+from typing import List, Optional, Tuple
+
+import cairo
+import numpy
+import wx
 
 import odemis.gui as gui
-import odemis.gui.img as guiimg
-import wx
 from odemis import util
 from odemis.acq.stream import UNDEFINED_ROI
-from odemis.gui.comp.overlay.base import SEL_MODE_EDIT
-from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
+from odemis.gui.comp.overlay.base import RectangleEditingMixin, WorldOverlay, Vec, Label, \
+    SEL_MODE_EDIT, SEL_MODE_CREATE, SEL_MODE_NONE, cairo_polygon
+from odemis.util import units
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 
 
-class RepetitionSelectOverlay(WorldSelectOverlay):
+class RepetitionSelectOverlay(WorldOverlay, RectangleEditingMixin):
     """
     Same as world selection overlay, but can also display a repetition over it.
     The type of display for the repetition is set by the .fill and repetition
@@ -45,7 +50,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     FILL_GRID = 1
     FILL_POINT = 2
 
-    def __init__(self, cnvs, roa=None, scanner=None, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, roa=None, scanner=None, rotation=None, colour=gui.SELECTION_COLOUR):
         """
         roa (None or VA of 4 floats): If not None, it's linked to the rectangle
           displayed (ie, when the user changes the rectangle, its value is
@@ -53,22 +58,53 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
           accordingly). Value is relative to the scanner (if passed), and otherwise it's absolute (in m).
         scanner (None or HwComponent): The scanner component to which the relative
          ROA. If None, the roa argument is interpreted as absolute physical coordinates (m). If it's a HwComponent, the roa will be interpreted as a ratio of its fielf of viewd.
-
-
+        :param rotation: FloatVA or None: the rotation of the rectangle in radians (counter-clockwise).
+         If None, the rectangle cannot be rotated.
         """
-        WorldSelectOverlay.__init__(self, cnvs, colour)
+        can_rotate = rotation is not None
+        WorldOverlay.__init__(self, cnvs)
+        RectangleEditingMixin.__init__(self, colour, can_rotate=can_rotate)
 
         self._fill = self.FILL_NONE
         self._repetition = (0, 0)
 
-        self._roa = roa
         self._scanner = scanner
+        self._roa = roa
         if roa:
             self._roa.subscribe(self.on_roa, init=True)
+        self._rotation_va = rotation
+        if rotation:
+            rotation.subscribe(self.on_rotation, init=True)
 
-        self._bmp = None  # used to cache repetition with FILL_POINT
-        # ROI for which the bmp is valid
-        self._bmp_bpos = (None, None, None, None)
+        # Vec in physical coordinates (m), corresponding to the v_point* of RectangleEditingMixin
+        self.p_point1 = None
+        self.p_point2 = None
+        self.p_point3 = None
+        self.p_point4 = None
+
+        # Labels for the bottom and right side length of the rectangle
+        self._side1_label = Label(
+            text="",
+            pos=(0, 0),
+            font_size=12,
+            flip=False,
+            align=wx.ALIGN_RIGHT,
+            colour=(1.0, 1.0, 1.0),  # white
+            opacity=1.0,
+            deg=None,
+            background=(0, 0, 0),  # black
+        )
+        self._side2_label = Label(
+            text="",
+            pos=(0, 0),
+            font_size=12,
+            flip=False,
+            align=wx.ALIGN_RIGHT,
+            colour=(1.0, 1.0, 1.0),  # white
+            opacity=1.0,
+            deg=None,
+            background=(0, 0, 0),  # black
+        )
 
     @property
     def fill(self):
@@ -78,7 +114,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     def fill(self, val):
         assert(val in [self.FILL_NONE, self.FILL_GRID, self.FILL_POINT])
         self._fill = val
-        self._bmp = None
 
     @property
     def repetition(self):
@@ -88,12 +123,85 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     def repetition(self, val):
         assert(len(val) == 2)
         self._repetition = val
-        self._bmp = None
+
+    # Callbacks when the .active VA changes
+    def _activate(self):
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _deactivate(self):
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def clear_selection(self):
+        """ Clear the current selection """
+        RectangleEditingMixin.clear_selection(self)
+        self.p_point1 = None
+        self.p_point2 = None
+        self.p_point3 = None
+        self.p_point4 = None
+
+    def _view_to_phys(self):
+        """ Update the physical position to reflect the view position """
+        offset = self.cnvs.get_half_buffer_size()
+        if self.v_point1:
+            self.p_point1 = Vec(self.cnvs.view_to_phys(self.v_point1, offset))
+        if self.v_point2:
+            self.p_point2 = Vec(self.cnvs.view_to_phys(self.v_point2, offset))
+        if self.v_point3:
+            self.p_point3 = Vec(self.cnvs.view_to_phys(self.v_point3, offset))
+        if self.v_point4:
+            self.p_point4 = Vec(self.cnvs.view_to_phys(self.v_point4, offset))
+
+    def _phys_to_view(self):
+        """ Update the view position to reflect the physical position """
+        offset = self.cnvs.get_half_buffer_size()
+        if self.p_point1:
+            self.v_point1 = Vec(self.cnvs.phys_to_view(self.p_point1, offset))
+        if self.p_point2:
+            self.v_point2 = Vec(self.cnvs.phys_to_view(self.p_point2, offset))
+        if self.p_point3:
+            self.v_point3 = Vec(self.cnvs.phys_to_view(self.p_point3, offset))
+        if self.p_point4:
+            self.v_point4 = Vec(self.cnvs.phys_to_view(self.p_point4, offset))
+
+    def get_physical_sel(self) -> Optional[List[Tuple[float, float]]]:
+        """ Return the selected rectangle in physical coordinates
+        :return: Physical position in m of the 4 corners, or None if no selection
+        """
+        if self.p_point1 and self.p_point2 and self.p_point3 and self.p_point4:
+            # Internally, the points are normalized in view coordinates. To return a normalized
+            # rectangle in physical coordinates, we need to reorder the points (as Y is inverted).
+            return [self.p_point4, self.p_point3, self.p_point2, self.p_point1]
+        else:
+            return None
+
+    def set_physical_sel(self, corners: Optional[List[Tuple[float, float]]]):
+        """ Set the selection using the provided physical coordinates
+
+        :param corners: x, y position in m, or None to clear the selection
+        """
+        if self.selection_mode != SEL_MODE_NONE:
+            logging.warning("Cannot set physical selection while in selection mode: %s", self.selection_mode)
+            return
+
+        if corners is None:
+            self.clear_selection()
+        else:
+            self.p_point1 = Vec(corners[0])
+            self.p_point2 = Vec(corners[1])
+            self.p_point3 = Vec(corners[2])
+            self.p_point4 = Vec(corners[3])
+            self._phys_to_view()
+
+            # Normalize the rectangle internally, and then update back the physical positions,
+            # so that they are always in sync.
+            self._normalize_rectangle()
+            self._view_to_phys()
+            self._calc_edges()
 
     def _get_scanner_rect(self):
         """
         Returns the (theoretical) scanning area of the scanner. Works even if the
-        scanner has not send any image yet.
+        scanner has not sent any image yet.
         returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
         raises ValueError if scanner is not set or not actually a scanner
         """
@@ -117,7 +225,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # Position of the complete scan in physical coordinates
         sem_rect = self._get_scanner_rect()
 
-        # Take only the intersection so that that ROA is always inside the SEM scan
+        # Take only the intersection so that the ROA is always within the SEM scan
         phys_rect = util.rect_intersect(phys_rect, sem_rect)
         if phys_rect is None:
             return UNDEFINED_ROI
@@ -169,181 +277,191 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         return phys_rect
 
-    def on_roa(self, roa):
+    def on_roa(self, roa: Optional[Tuple[float, float, float, float]]):
         """ Update the ROA overlay with the new roa VA data
 
         roi (tuple of 4 floats): left, top, right, bottom position relative to the SEM image
 
         """
+        phys_rot = 2 * math.pi - self.rotation  # Y inverted => clockwise rotation becomes counter-clockwise
         if self._scanner:
             phys_rect = self.convert_roi_ratio_to_phys(roa)
         else:
             phys_rect = roa
 
-        self.set_physical_sel(phys_rect)
+        if phys_rect is None:
+            corners = None
+        else:
+            corners = util.rotate_rect(phys_rect, phys_rot)
+
+        self.set_physical_sel(corners)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
+    def on_rotation(self, rotation: float):
+        """ Update the rotation of the rectangle """
+        if self.selection_mode != SEL_MODE_NONE:
+            logging.warning("Cannot set physical selection while in selection mode: %s", self.selection_mode)
+            return
+
+        # Convert from rotation in physical coordinates to pixel coordinates:
+        # Y is inverted, so counter-clockwise becomes clockwise (in the coordinate system)
+        self._set_rotation(2 * math.pi - rotation)
+        self._view_to_phys()
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    # Event Handlers
+
+    def on_left_down(self, evt):
+        """
+        Similar to the same function in RectangleEditingMixin, but only starts a selection, if .coordinates is undefined.
+        If a rectangle has already been selected for this overlay, any left click outside this reactangle will be ignored.
+        """
+        if not self.active.value:
+            evt.Skip()
+            return
+
+        self._on_left_down(evt)  # Call the RectangleEditingMixin left down handler
+        self._view_to_phys()
+        self.cnvs.update_drawing()
+
     def on_left_up(self, evt):
-        WorldSelectOverlay.on_left_up(self, evt)
+        """
+        Check if left click was in rectangle. If so, select the overlay. Otherwise, unselect.
+        """
+        if not self.active.value:
+            evt.Skip()
+            return
+
+        self._on_left_up(evt)  # Call the RectangleEditingMixin left up handler
+        self._view_to_phys()
+
         if self._roa:
-            if self.active.value:
-                if self.get_size() != (None, None):
-                    phys_rect = self.get_physical_sel()
-                    if self._scanner:
-                        rect = self.convert_roi_phys_to_ratio(phys_rect)
-                    else:
-                        rect = phys_rect
+            if self.p_point1 and self.p_point2 and self.p_point3 and self.p_point4:
+                corners = self.get_physical_sel()
+                phys_rect, rotation = util.separate_rect_rotation(corners)
 
-                    # Update VA. We need to unsubscribe to be sure we don't received
-                    # intermediary values as the VA is modified by the stream further on, and
-                    # VA don't ensure the notifications are ordered (so the listener could
-                    # receive the final value, and then our requested ROI value).
-                    self._roa.unsubscribe(self.on_roa)
-                    self._roa.value = rect
-                    self._roa.subscribe(self.on_roa, init=True)
+                # TODO: clip rect to scanner FOV, with the rotation.
+                # See shapely.clip_by_rect() -> returns a polygon
+                # Then, need to find the largest rectangle withing the polygon (at a given rotation?).
+                # "Largest" is hard, but a simpler way is to find a rectangle staring from the first
+                # polygon point, shoot a horizontal ray, and find the first intersection, and
+                # same vertically.
+                # It gets tricky when there is a large rotation (eg 90°), as the rect could be
+                # larger than 1 in one dimension, and still correct.
+                # For now, we just assume there is no rotation, and clip the rectangle to the
+                # scanner FOV. It's not perfect, but at least it works fine when there is no rotation.
+                # TODO: for now, if rotated, increase the scanner FoV to be the bounding box between
+                # the FoV at 0° and 90°. This way, it's a little bit less constaining, and still
+                # easy to implement. Anything moe complex is handled by the GUI controller by checking
+                # the RoA is within the scanner FoV, and if not disabling the "acquire" button.
+                if self._scanner:
+                    rect = self.convert_roi_phys_to_ratio(phys_rect)
                 else:
-                    self._roa.value = UNDEFINED_ROI
+                    rect = phys_rect
 
+                # Update VA. We need to unsubscribe to be sure we don't received
+                # intermediary values as the VA is modified by the stream further on, and
+                # VA don't ensure the notifications are ordered (so the listener could
+                # receive the final value, and then our requested ROI value).
+                self._roa.unsubscribe(self.on_roa)
+                self._roa.value = rect
+                if self._rotation_va:
+                    self._rotation_va.value = rotation
+                self._roa.subscribe(self.on_roa, init=True)
+            else:
+                self._roa.value = UNDEFINED_ROI
+
+        self.cnvs.update_drawing()
+
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise call super method so event will propagate """
+
+        if not self.active.value:
+            evt.Skip()
+            return
+        self._on_motion(evt)  # Call the RectangleEditingMixin motion handler
+
+        if not self.dragging:
+            if self.hover == gui.HOVER_SELECTION:
+                self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
+            elif self.hover == gui.HOVER_LINE:
+                if self.hover_direction == gui.HOVER_DIRECTION_NS:
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENS)
+                elif self.hover_direction == gui.HOVER_DIRECTION_EW:
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZEWE)
+            elif self.hover == gui.HOVER_ROTATION:
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_MAGNIFIER)
+            elif self.hover == gui.HOVER_EDGE:
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZING)
+            else:
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
         else:
-            logging.warning("Expected ROA not found!")
+            self._view_to_phys()
+            self.cnvs.update_drawing()
 
-    def _draw_points(self, ctx):
-        # Calculate the offset of the center of the buffer relative to the
-        # top left of the buffer
-        offset = self.cnvs.get_half_buffer_size()
-
-        # The start and end position, in buffer coordinates. The return
-        # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.cnvs.phys_to_buffer(self.p_start_pos, offset) +
-                 self.cnvs.phys_to_buffer(self.p_end_pos, offset))
-        b_pos = self._normalize_rect(b_pos)
-        # logging.debug("start and end buffer pos: %s", b_pos)
-
+    def _draw_points(self, ctx, b_points: List[Vec]):
         # Calculate the width and height in buffer pixels. Again, this may
         # be wider and higher than the actual buffer.
-        width = b_pos[2] - b_pos[0]
-        height = b_pos[3] - b_pos[1]
-
-        # logging.debug("width and height: %s %s", width, height)
-
-        # Clip the start and end positions using the actual buffer size
-        start_x, start_y = self.cnvs.clip_to_buffer(b_pos[:2])
-        end_x, end_y = self.cnvs.clip_to_buffer(b_pos[2:4])
-
-        # logging.debug(
-        #     "clipped start and end: %s", (start_x, start_y, end_x, end_y))
+        width = math.dist(b_points[0], b_points[1])
+        height = math.dist(b_points[1], b_points[2])
 
         rep_x, rep_y = self.repetition
+        tot_positions = rep_x * rep_y
 
         # The step size in pixels
         step_x = width / rep_x
         step_y = height / rep_y
 
-        if width // 3 < rep_x or height // 3 < rep_y:
-            # If we cannot fit enough 3 bitmaps into either direction,
+        # If too many points (> 50K), just fill a rectangle too, to avoid taking too much time
+        if step_x < 4 or step_y < 4 or tot_positions > 50000:
+            # If we cannot fit 3x3 px bitmaps into either direction,
             # then we just fill a semi transparent rectangle
-            logging.debug("simple fill")
             r, g, b, _ = self.colour
             ctx.set_source_rgba(r, g, b, 0.5)
-            ctx.rectangle(
-                start_x, start_y,
-                int(end_x - start_x), int(end_y - start_y))
+            # Generic code to draw a polygon... though normally b_points should be 4 points
+            cairo_polygon(ctx, b_points)
             ctx.fill()
-            ctx.stroke()
         else:
-            # This cairo-way would work, but it's a little slow
-            #             r, g, b, _ = self.colour
-            #             ctx.set_source_rgba(r, g, b, 0.9)
-            #             ctx.set_line_width(1)
-            #
-            #             # The number of repetitions that fits into the buffer clipped
-            #             # selection
-            #             buf_rep_x = int((end_x - start_x) / step_x)
-            #             buf_rep_y = int((end_y - start_y) / step_y)
-            #             buf_shift_x = (b_pos[0] - start_x) % step_x + step_x / 2  # - 3 / 2
-            #             buf_shift_y = (b_pos[1] - start_y) % step_y + step_y / 2  # - 3 / 2
-            #
-            #             for i in range(buf_rep_x):
-            #                 for j in range(buf_rep_y):
-            #                     ctx.arc(start_x + buf_shift_x + i * step_x,
-            #                             start_y + buf_shift_y + j * step_y,
-            #                             2, 0, 2 * math.pi)
-            #                     ctx.stroke()
+            r, g, b, _ = self.colour
+            ctx.set_source_rgba(r, g, b, 0.9)
+            ctx.set_line_width(1.5)
+            # ctx.set_antialias(cairo.ANTIALIAS_DEFAULT)
 
-            # check whether the cache is still valid
-            cl_pos = (start_x, start_y, end_x, end_y)
-            if not self._bmp or self._bmp_bpos != cl_pos:
-                # Cache the image as it's quite a lot of computations
-                half_step_x = step_x / 2
-                half_step_y = step_y / 2
+            # Compute point position as by interpolating vertically between vertex 0 -> 1,
+            # and horizontally between vertex 0 -> 3.
+            b_point0 = numpy.array(b_points[0])
+            hor_shift = numpy.array(b_points[1] - b_points[0])
+            ver_shift = numpy.array(b_points[3] - b_points[0])
+            hor_start = b_point0 + hor_shift * (0.5 / rep_x)
+            hor_end = b_point0 + hor_shift * ((rep_x - 0.5) / rep_x)
+            ver_start = ver_shift * (0.5 / rep_y)
+            ver_end = ver_shift * ((rep_y - 0.5) / rep_y)
 
-                # The number of repetitions that fits into the buffer
-                # clipped selection
-                buf_rep_x = int((end_x - start_x) / step_x)
-                buf_rep_y = int((end_y - start_y) / step_y)
+            ver_shifts = numpy.linspace(ver_start, ver_end, rep_y)
+            # TODO: draw a "diamond" (aka square rotated by 45deg) instead of a small square?
+            # It's about 4 times slower to draw by cairo, though... Or can we use a rotation matrix?
+            # diamond_pos = numpy.array([[-1.5, 0], [0, -1.5], [1.5, 0], [0, 1.5]])
+            # corners = (diamond_pos + p_center).tolist()
+            # ctx.move_to(*corners[0])
+            # ctx.line_to(*corners[1])
+            # ctx.line_to(*corners[2])
+            # ctx.line_to(*corners[3])
+            # ctx.close_path()
+            # Currently, for 100x100 points it takes about 50ms to trace all the rectangles, and
+            # 100ms for cairo to "stroke" them. Drawing a diamond is about 4 times slower.
 
-                logging.debug("Rendering %sx%s points", buf_rep_x, buf_rep_y)
+            for x in numpy.linspace(hor_start, hor_end, rep_x):
+                for y in ver_shifts:
+                    p_center = x + y
+                    ctx.rectangle(p_center[0] - 0.5, p_center[1] - 0.5, 1, 1)
 
-                point = guiimg.getBitmap("dot.png")
-                point_dc = wx.MemoryDC()
-                point_dc.SelectObject(point)
-                point.SetMaskColour(wx.BLACK)
+            ctx.stroke()
 
-                horz_dc = wx.MemoryDC()
-                horz_bmp = wx.Bitmap(int(end_x - start_x), 3)
-                horz_dc.SelectObject(horz_bmp)
-                horz_dc.SetBackground(wx.BLACK_BRUSH)
-                horz_dc.Clear()
-
-                blit = horz_dc.Blit
-                for i in range(buf_rep_x):
-                    x = int(i * step_x + half_step_x)
-                    blit(x, 0, 3, 3, point_dc, 0, 0)
-
-                total_dc = wx.MemoryDC()
-                self._bmp = wx.Bitmap(int(end_x - start_x), int(end_y - start_y))
-                total_dc.SelectObject(self._bmp)
-                total_dc.SetBackground(wx.BLACK_BRUSH)
-                total_dc.Clear()
-
-                blit = total_dc.Blit
-                for j in range(buf_rep_y):
-                    y = int(j * step_y + half_step_y)
-                    blit(0, y, int(end_x - start_x), 3, horz_dc, 0, 0)
-
-                self._bmp.SetMaskColour(wx.BLACK)
-                self._bmp_bpos = cl_pos
-
-            self.cnvs.dc_buffer.DrawBitmap(self._bmp,
-                int(start_x + (b_pos[0] - start_x) % step_x),
-                int(start_y + (b_pos[1] - start_y) % step_y),
-                useMask=True
-            )
-
-    def _draw_grid(self, ctx):
-        # Calculate the offset of the center of the buffer relative to the
-        # top left op the buffer
-        offset = self.cnvs.get_half_buffer_size()
-
-        # The start and end position, in buffer coordinates. The return
-        # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.cnvs.phys_to_buffer(self.p_start_pos, offset) +
-                 self.cnvs.phys_to_buffer(self.p_end_pos, offset))
-        b_pos = self._normalize_rect(b_pos)
-        # logging.debug("start and end buffer pos: %s", b_pos)
-
-        # Calculate the width and height in buffer pixels. Again, this may
-        # be wider and higher than the actual buffer.
-        width = b_pos[2] - b_pos[0]
-        height = b_pos[3] - b_pos[1]
-
-        # logging.debug("width and height: %s %s", width, height)
-
-        # Clip the start and end positions using the actual buffer size
-        start_x, start_y = self.cnvs.clip_to_buffer(b_pos[:2])
-        end_x, end_y = self.cnvs.clip_to_buffer(b_pos[2:4])
-
-        # logging.debug("clipped start and end: %s", (start_x, start_y, end_x, end_y))
+    def _draw_grid(self, ctx, b_points: List[Vec]):
+        # Calculate the width and height in buffer pixels. This may be wider and higher than the
+        # actual buffer, but cairo doesn't mind. Typically, the whole rectangle is visible.
+        width = math.dist(b_points[0], b_points[1])
+        height = math.dist(b_points[1], b_points[2])
 
         rep_x, rep_y = self.repetition
 
@@ -353,48 +471,161 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         r, g, b, _ = self.colour
 
-        # If there are more repetitions in either direction than there
-        # are pixels, just fill a semi transparent rectangle
-        if width < rep_x or height < rep_y:
+        # If the line density is less than one every third pixel, it'd just look like a mess,
+        # so just fill a semi transparent rectangle
+        if step_x < 3 or step_y < 3:
             ctx.set_source_rgba(r, g, b, 0.5)
-            ctx.rectangle(
-                start_x, start_y,
-                int(end_x - start_x), int(end_y - start_y))
+            cairo_polygon(ctx, b_points)
             ctx.fill()
         else:
             ctx.set_source_rgba(r, g, b, 0.9)
             ctx.set_line_width(1)
             # ctx.set_antialias(cairo.ANTIALIAS_DEFAULT)
 
-            # The number of repetitions that fits into the buffer clipped
-            # selection
-            buf_rep_x = int((end_x - start_x) / step_x)
-            buf_rep_y = int((end_y - start_y) / step_y)
-            buf_shift_x = (b_pos[0] - start_x) % step_x
-            buf_shift_y = (b_pos[1] - start_y) % step_y
+            # Compute start and end of the "vertical" lines (if rotation == 0) by interpolating
+            # start and end points between vertex 0 -> 1 and 3 -> 2.
+            for i in range(1, rep_x):
+                p_start = b_points[0] + (b_points[1] - b_points[0]) * (i / rep_x)
+                p_end = b_points[3] + (b_points[2] - b_points[3]) * (i / rep_x)
+                ctx.move_to(p_start[0], p_start[1])
+                ctx.line_to(p_end[0], p_end[1])
 
-            for i in range(1, buf_rep_x):
-                ctx.move_to(start_x + buf_shift_x + i * step_x, start_y)
-                ctx.line_to(start_x + buf_shift_x + i * step_x, end_y)
-
-            for i in range(1, buf_rep_y):
-                ctx.move_to(start_x, start_y - buf_shift_y + i * step_y)
-                ctx.line_to(end_x, start_y - buf_shift_y + i * step_y)
+            # For "horizontal" lines (if rotation == 0), interpolate between vertex 0 -> 3 and 1 -> 2
+            for i in range(1, rep_y):
+                p_start = b_points[0] + (b_points[3] - b_points[0]) * (i / rep_y)
+                p_end = b_points[1] + (b_points[2] - b_points[1]) * (i / rep_y)
+                ctx.move_to(p_start[0], p_start[1])
+                ctx.line_to(p_end[0], p_end[1])
 
             ctx.stroke()
+
+    # TODO: refactor to share code with RectangleOverlay.draw_edges()?
+    def _draw_edit_knobs(self, ctx, b_point1: Vec, b_point2: Vec, b_point3: Vec, b_point4: Vec):
+        mid_point12 = Vec((b_point1.x + b_point2.x) / 2, (b_point1.y + b_point2.y) / 2)
+        mid_point23 = Vec((b_point2.x + b_point3.x) / 2, (b_point2.y + b_point3.y) / 2)
+        mid_point34 = Vec((b_point3.x + b_point4.x) / 2, (b_point3.y + b_point4.y) / 2)
+        mid_point41 = Vec((b_point4.x + b_point1.x) / 2, (b_point4.y + b_point1.y) / 2)
+
+        # Draw the edit and rotation points
+        ctx.set_dash([])
+        ctx.set_line_width(1)
+        r, g, b, _ = self.colour
+        ctx.set_source_rgba(r, g, b, 0.8)
+
+        if self.can_rotate:
+            b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
+            ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
+            ctx.fill()
+
+        ctx.arc(mid_point12.x, mid_point12.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(mid_point23.x, mid_point23.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(mid_point34.x, mid_point34.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(mid_point41.x, mid_point41.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(b_point1.x, b_point1.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(b_point2.x, b_point2.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(b_point3.x, b_point3.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.arc(b_point4.x, b_point4.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        ctx.stroke()
+
+    def _draw_border(self, ctx, b_points: List[Vec]):
+        # Draws the rectangle border
+        # TODO: refactor with RectangleOverlay.draw()...?
+        line_width = 4  # px
+
+        # Draw a black border, and then a dotted coloured line on top
+        lines = [((0, 0, 0, 0.5), []),  # Black background
+                 (self.colour, [2])]  # Dotted line
+        ctx.set_line_width(line_width)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        for colour, dash in lines:
+            ctx.set_dash(dash)
+            ctx.set_source_rgba(*colour)
+            cairo_polygon(ctx, b_points)
+            ctx.stroke()
+
+        self._calc_edges()
+
+    # TODO: merge with overlay.RectangleOverlay
+    def _draw_side_labels(self, ctx, b_point1: Vec, b_point2: Vec, b_point3: Vec, b_point4: Vec):
+        """ Draw the labels for the side lengths of the rectangle"""
+        points = {
+            self.p_point1: b_point1,
+            self.p_point2: b_point2,
+            self.p_point3: b_point3,
+            self.p_point4: b_point4,
+        }
+        p_xmin_ymin = min(points.keys(), key=lambda p: (p.x + p.y))
+        p_xmax_ymin = max(points.keys(), key=lambda p: (p.x - p.y))
+        p_xmax_ymax = max(points.keys(), key=lambda p: (p.x + p.y))
+        b_xmin_ymin = points[p_xmin_ymin]
+        b_xmax_ymin = points[p_xmax_ymin]
+        b_xmax_ymax = points[p_xmax_ymax]
+
+        side1_length = math.dist(p_xmin_ymin, p_xmax_ymin)
+        side1_angle = math.atan2((b_xmax_ymin.y - b_xmin_ymin.y), (b_xmax_ymin.x - b_xmin_ymin.x))
+
+        side2_length = math.dist(p_xmax_ymax, p_xmax_ymin)
+        side2_angle = math.atan2((b_xmax_ymax.y - b_xmax_ymin.y), (b_xmax_ymax.x - b_xmax_ymin.x))
+
+        # Shift the label a bit away from the rectangle, perpendicular to the side
+        shift_v = Vec(20, 10).rotate(side1_angle, (0, 0))
+        self._side1_label.pos = Vec(
+            (b_xmax_ymin.x + b_xmin_ymin.x) / 2 + shift_v.x,
+            (b_xmax_ymin.y + b_xmin_ymin.y) / 2 + shift_v.y,
+        )
+        self._side1_label.text = units.readable_str(side1_length, "m", sig=3)
+        self._side1_label.deg = math.degrees(side1_angle)
+        self._side1_label.draw(ctx)
+
+        shift_v = Vec(20, 10).rotate(side2_angle, (0, 0))
+        self._side2_label.pos = Vec(
+            (b_xmax_ymax.x + b_xmax_ymin.x) / 2 + shift_v.x,
+            (b_xmax_ymax.y + b_xmax_ymin.y) / 2 + shift_v.y,
+        )
+        self._side2_label.text = units.readable_str(side2_length, "m", sig=3)
+        self._side2_label.deg = math.degrees(side2_angle)
+        self._side2_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw the selection as a rectangle and the repetition inside of that """
 
-        mode_cache = self.selection_mode
+        # No rectangle defined?
+        if not self.p_point1 or not self.p_point2 or not self.p_point3 or not self.p_point4:
+            return
 
-        if self.p_start_pos and self.p_end_pos and 0 not in self.repetition:
+        # User started to drag, but rectangle is still not defined?
+        if self.p_point1 == self.p_point3:
+            return
+
+        offset = self.cnvs.get_half_buffer_size()
+        b_point1 = Vec(self.cnvs.phys_to_buffer(self.p_point1, offset))
+        b_point2 = Vec(self.cnvs.phys_to_buffer(self.p_point2, offset))
+        b_point3 = Vec(self.cnvs.phys_to_buffer(self.p_point3, offset))
+        b_point4 = Vec(self.cnvs.phys_to_buffer(self.p_point4, offset))
+
+        self.update_projection(b_point1, b_point2, b_point3, b_point4, (shift[0], shift[1], scale))
+
+        b_points = [b_point1, b_point2, b_point3, b_point4]
+
+        # Don't show the repetitions when resizing the rectangle, as (1) it's incorrect (because the
+        # repetition is updated after finishing the edit), and (2) it slows down the GUI interaction.
+        if 0 not in self.repetition and self.selection_mode not in (SEL_MODE_EDIT, SEL_MODE_CREATE):
             if self.fill == self.FILL_POINT:
-                self._draw_points(ctx)
-                self.selection_mode = SEL_MODE_EDIT
+                self._draw_points(ctx, b_points)
             elif self.fill == self.FILL_GRID:
-                self._draw_grid(ctx)
-                self.selection_mode = SEL_MODE_EDIT
+                self._draw_grid(ctx, b_points)
 
-        WorldSelectOverlay.draw(self, ctx, shift, scale)
-        self.selection_mode = mode_cache
+        self._draw_border(ctx, b_points)
+
+        # When the user can edit the rectangle, show the edit points & size of the sides
+        if self.active.value:
+            self._draw_edit_knobs(ctx, b_point1, b_point2, b_point3, b_point4)
+            self._draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
