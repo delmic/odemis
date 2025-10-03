@@ -24,11 +24,14 @@ This file is part of Odemis.
 
 import logging
 import math
+from typing import List, Tuple
+
+import cairo
+import wx
 
 import odemis.gui as gui
 import odemis.util.conversion as conversion
-import wx
-from odemis.gui.comp.overlay.base import DragMixin, PixelDataMixin, WorldOverlay
+from odemis.gui.comp.overlay.base import DragMixin, PixelDataMixin, WorldOverlay, cairo_polygon
 
 
 class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
@@ -160,24 +163,18 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
 
         # If a selection VA is assigned...
         if self._selected_pixel_va:
-            if (
-                self._pixel_pos and
-                self._selected_pixel_va.value != self._pixel_pos and
-                self.is_over_pixel_data()
-            ):
-
-                for point in self.selection_points(self._pixel_pos):
-                    rect = self.pixel_to_rect(point, scale)
-
-                    ctx.set_source_rgba(*self.colour)
-                    ctx.rectangle(*rect)
-                    ctx.fill()
-
+            # Draw the selected pixel (yellow)
             if self._selected_pixel_va.value not in (None, (None, None)):
-
+                ctx.set_source_rgba(*self.select_color)
                 for point in self.selection_points(self._selected_pixel_va.value):
-                    rect = self.pixel_to_rect(point, scale)
+                    corners = self.pixel_to_rect(point, scale)
+                    cairo_polygon(ctx, corners)
+                ctx.fill()
 
-                    ctx.set_source_rgba(*self.select_color)
-                    ctx.rectangle(*rect)
-                    ctx.fill()
+            # Draw the hover pixel (blue)
+            if self._pixel_pos and self.is_over_pixel_data() and not self.dragging:
+                ctx.set_source_rgba(*self.colour)
+                for point in self.selection_points(self._pixel_pos):
+                    corners = self.pixel_to_rect(point, scale)
+                    cairo_polygon(ctx, corners)
+                ctx.fill()
