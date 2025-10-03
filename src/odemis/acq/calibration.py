@@ -337,6 +337,34 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
                                 wl_data[0] * 1e9, wl_data[-1] * 1e9)
 
             data = img.Subtract(data, bckg)
+    else:
+        # If no background is provided, estimate and subtract a constant noise floor.
+        # The robust method is to take the MEDIAN of pixel values from corner REGIONS.
+        # This is resistant to outliers (hot pixels, cosmic rays) and signal bleed-over.
+
+        corner_size = 5  # Use a 5x5 pixel square from each corner
+
+        # Use ellipsis '...' to handle any number of leading dimensions (C, T, Z, etc.)
+        # This correctly slices the Y and X dimensions (the last two).
+        top_left = data[..., :corner_size, :corner_size]
+        top_right = data[..., :corner_size, -corner_size:]
+        bottom_left = data[..., -corner_size:, :corner_size]
+        bottom_right = data[..., -corner_size:, -corner_size:]
+
+        # Concatenate all corner pixels into a single 1D array
+        # .ravel() flattens the N-D corner arrays into 1D arrays
+        all_corners = numpy.concatenate((
+            top_left.ravel(),
+            top_right.ravel(),
+            bottom_left.ravel(),
+            bottom_right.ravel()
+        ))
+
+        # Calculate the median of all corner pixels.
+        noise = numpy.median(all_corners)
+
+        # Subtract the estimated noise floor
+        data = img.Subtract(data, noise)
 
     if model.MD_THETA_LIST in data.metadata:
         try:
