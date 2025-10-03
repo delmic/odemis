@@ -845,7 +845,7 @@ def project_angular_spectrum_to_grid(
     xfocus = a * y_pos ** 2 - parabola_f
     theta_mn_mx = numpy.arccos(y_pos / numpy.sqrt(xfocus ** 2 + y_pos ** 2))
     # The first part is negative angle => get the negative value
-    theta_mn_mx = (-theta_mn_mx[0], theta_mn_mx[1]) if angle_range is None else angle_range
+    theta_mn_mx = (-theta_mn_mx[0], theta_mn_mx[1])
 
     # Define the ideal theta list. Use the min/max angle and linearly spread 1 mrad.
     theta_list_linear_len = int(round((theta_mn_mx[1] - theta_mn_mx[0]) / 1e-3))
@@ -874,19 +874,75 @@ def project_angular_spectrum_to_grid(
         omega_list_short = omega_list_raw[first_px: last_px + 1]
         d = data[first_px: last_px + 1, wli]
         d_corrected = d / omega_list_short
-        # Pad with 0.0 for points outside (left and right) the source data's angular range.
-        # This prevents creating artificial signal at the edges from clamping.
-        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d_corrected, left=0.0, right=0.0)
+        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d_corrected)
+
+    final_theta_list = theta_list_linear
+    final_data = data_lin
+    # Apply the user-provided angle_range here, by cropping/extending the
+    # already-interpolated data onto a new theta grid.
+    if angle_range is not None:
+        min_angle, max_angle = angle_range
+
+        # Create the final theta list with the same resolution as the original list
+        step = theta_list_linear[1] - theta_list_linear[0]
+        final_len = int(round((max_angle - min_angle) / step)) + 1
+        final_theta_list = numpy.linspace(min_angle, max_angle, final_len)
+
+        # Create the final data with NaNs
+        final_data = numpy.full((final_len, data_lin.shape[1]), numpy.nan, dtype=numpy.float64)
+
+        # Determine the overlapping angular interval between original and final grid
+        overlap_min = max(theta_list_linear[0], final_theta_list[0])
+        overlap_max = min(theta_list_linear[-1], final_theta_list[-1])
+
+        if overlap_min <= overlap_max:
+            # There is an overlap. Use index-based slicing for a robust copy
+
+            # Find the start/end indices of the slice to copy from the original grid
+            source_start_idx = numpy.searchsorted(theta_list_linear, overlap_min, side='left')
+            source_end_idx = numpy.searchsorted(theta_list_linear, overlap_max, side='right')
+
+            # Find the start/end indices of the destination slice in the final grid
+            dest_start_idx = numpy.searchsorted(final_theta_list, overlap_min, side='left')
+            dest_end_idx = numpy.searchsorted(final_theta_list, overlap_max, side='right')
+
+            # Calculate the lengths of both slices
+            source_len = source_end_idx - source_start_idx
+            dest_len = dest_end_idx - dest_start_idx
+
+            # Use the minimum of the two lengths to guarantee no broadcasting error
+            # This robustly handles any potential off-by-one floating point discrepancy.
+            num_elements_to_copy = min(source_len, dest_len)
+
+            if source_len != dest_len:
+                logging.debug(
+                    "Slight floating point mismatch in grid alignment detected "
+                    f"({source_len} vs {dest_len} elements). Truncating to shorter length."
+                )
+
+            if num_elements_to_copy > 0:
+                # Perform the copy using explicit, equal-length slices
+                source_slice = slice(source_start_idx, source_start_idx + num_elements_to_copy)
+                dest_slice = slice(dest_start_idx, dest_start_idx + num_elements_to_copy)
+
+                final_data[dest_slice, :] = data_lin[source_slice, :]
+                # Fill remaining NaNs in the final data with the minimum value, this makes image look better
+                final_data = numpy.nan_to_num(final_data, nan=numpy.nanmin(final_data))
+            else:
+                logging.warning(
+                    "No overlapping angular range between original and final grids after alignment. "
+                    "The output data will be entirely NaN."
+                )
 
     # Prepare metadata: as the data is now processed, most of the original
     # metadata doesn't fit. So only keep the very strict minimum.
     md = {
         model.MD_DIMS: "AC",
         model.MD_WL_LIST: wl_list,
-        model.MD_THETA_LIST: theta_list_linear,
+        model.MD_THETA_LIST: final_theta_list,
     }
     for k in (model.MD_EXP_TIME, model.MD_ACQ_DATE):
         if k in data.metadata:
             md[k] = data.metadata[k]
 
-    return model.DataArray(data_lin, md)
+    return model.DataArray(final_data, md)
