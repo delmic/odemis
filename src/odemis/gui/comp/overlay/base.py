@@ -43,6 +43,7 @@ import odemis.gui as gui
 import odemis.util as util
 import odemis.util.conversion as conversion
 from odemis import model
+from odemis.acq.stream import Stream
 from odemis.gui import EVT_BUFFER_SIZE
 from odemis.model import BooleanVA, TupleVA
 from odemis.util.raster import point_in_polygon
@@ -1973,113 +1974,80 @@ class PixelDataMixin(object):
         self._mouse_vpos = None
 
         # External values
+        self._stream: Optional[Stream] = None
         self._data_resolution = None  # Resolution of the pixel data (int, int)
-        self._data_mpp = None  # size of one pixel in meters
+        self._phys_pxs = None  # Physical size of the pixels (float, float) in meters
+        self._rotation = 0.0  # rad
 
         # Calculated values
-        self._pixel_data_p_rect = None  # ltbr physical coordinates
         self._pixel_pos = None  # position of the current pixel (int, int)
 
-    def set_data_properties(self, mpp, physical_center, resolution):
-        """ Set the values needed for mapping mouse positions to data pixel coordinates
-
-        :param mpp: (float) Size of the data pixels in meters
-        :param physical_center: (float, float) The center of the pixel data in physical coordinates
-        :param resolution: (int, int) The width and height of the pixel data
-
-        """
-
-        self._data_resolution = Vec(resolution)
-
-        # We calculate the physical size of the data: width/height
-        p_size = self._data_resolution * mpp
-
-        # Get the top left corner of the pixel data
-        # Remember that in physical coordinates, up is positive!
-        p_center = Vec(physical_center)
-
-        self._pixel_data_p_rect = (
-            p_center.x - p_size.x / 2.0,
-            p_center.y - p_size.y / 2.0,
-            p_center.x + p_size.x / 2.0,
-            p_center.y + p_size.y / 2.0,
-        )
-
-        logging.debug("Physical center of spectrum data: %s", physical_center)
-
-        self._data_mpp = mpp
+    def set_stream(self, stream: Stream) -> None:
+        self._stream = stream
+        raw = stream.raw[0]
+        self._data_resolution = Vec(raw.shape[-1:-3:-1])  # CTZYX -> XY
+        md = stream._find_metadata(raw.metadata)
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[0:2]
+        self._phys_pxs = pxs
+        self._rotation = md.get(model.MD_ROTATION, 0.0)
 
     @property
     def data_properties_are_set(self):
-        return None not in (self._data_resolution, self._pixel_data_p_rect, self._data_mpp)
+        return (self._data_resolution is not None)
 
     def _on_motion(self, evt):
         self._mouse_vpos = Vec(evt.Position)
 
-    def is_over_pixel_data(self, v_pos=None):
+    def is_over_pixel_data(self, v_pos: Optional[Tuple[int, int]]=None) -> bool:
         """ Check if the mouse cursor is over an area containing pixel data """
 
         if self._mouse_vpos or v_pos:
             offset = self.cnvs.get_half_buffer_size()
             p_pos = self.cnvs.view_to_phys(self._mouse_vpos or v_pos, offset)
-            return (self._pixel_data_p_rect[0] < p_pos[0] < self._pixel_data_p_rect[2] and
-                    self._pixel_data_p_rect[1] < p_pos[1] < self._pixel_data_p_rect[3])
+            px_pos = self._stream.getPixelCoordinates(p_pos)  # None if outside the bounding-box
+            return (px_pos is not None)
 
         return False
 
-    def view_to_data_pixel(self, v_pos):
+    def view_to_data_pixel(self, v_pos: Tuple[int, int]) -> Tuple[int, int]:
         """ Translate a view coordinate into a data pixel coordinate
 
         The data pixel coordinates have their 0,0 origin at the top left.
 
         """
-
-        # The offset, in pixels, to the center of the physical coordinates
         offset = self.cnvs.get_half_buffer_size()
         p_pos = self.cnvs.view_to_phys(v_pos, offset)
+        px_pos = self._stream.getPixelCoordinates(p_pos, check_bbox=False)
+        return int(px_pos[0]), int(px_pos[1])
 
-        # Calculate the distance to the left bottom in physical units
-        dist = (p_pos[0] - self._pixel_data_p_rect[0],
-                - (p_pos[1] - self._pixel_data_p_rect[3]))
-
-        # Calculate and return the data pixel, (0,0) is top left.
-        return int(dist[0] / self._data_mpp), int(dist[1] / self._data_mpp)
-
-    def data_pixel_to_view(self, data_pixel):
+    def data_pixel_to_view(self, px_pos: Tuple[int, int]) -> Tuple[int, int]:
         """ Return the view coordinates of the center of the given pixel """
-
-        p_x = self._pixel_data_p_rect[0] + (data_pixel[0] + 0.5) * self._data_mpp
-        p_y = self._pixel_data_p_rect[3] - (data_pixel[1] + 0.5) * self._data_mpp
+        p_pos = self._stream.getPhysicalCoordinates((px_pos[0] + 0.5, px_pos[1] + 0.5))
         offset = self.cnvs.get_half_buffer_size()
+        return self.cnvs.phys_to_view(p_pos, offset)
 
-        return self.cnvs.phys_to_view((p_x, p_y), offset)
-
-    def pixel_to_rect(self, pixel, scale):
+    def pixel_to_rect(self, px_pos: Tuple[int, int], scale: float
+                      ) -> List[Tuple[float, float]]:
         """ Return a rectangle, in buffer coordinates, describing the given data pixel
 
-        :param pixel: (int, int) The pixel position
-        :param scale: (float) The scale to draw the pixel at.
-        :return: (top, left, width, height) in px
-
-        *NOTE*
-
-        The return type is structured like it is, because Cairo's rectangle drawing routine likes
-        them in this form (top, left, width, height).
-
+        :param px_pos: The pixel position (index)
+        :param scale: The scale to draw the pixel at.
+        :return: The rectangle as 4 corners (x, y)
         """
-        # The whole thing is weird, because although the Y in physical coordinates
-        # is going up (instead of down for the buffer), each pixel is displayed
-        # from top to bottom. So the first line (ie, index 0) is at the lowest Y.
-
-        # First we calculate the position of the bottom left in buffer pixels
-        p_left_bot = (self._pixel_data_p_rect[0] + pixel[0] * self._data_mpp,
-                      self._pixel_data_p_rect[3] - (pixel[1] * self._data_mpp))
+        # First compute the center, as it is at the center of rotation, so unaffected by rotation
+        p_center = self._stream.getPhysicalCoordinates((px_pos[0] + 0.5, px_pos[1] + 0.5))
+        p_left_bot = (p_center[0] - self._phys_pxs[0] / 2, p_center[1] + self._phys_pxs[1] / 2)
 
         offset = self.cnvs.get_half_buffer_size()
         b_top_left = self.cnvs.phys_to_buffer(p_left_bot, offset)
-        b_pixel_size = (self._data_mpp * scale + 0.5, self._data_mpp * scale + 0.5)
+        b_pixel_size = (self._phys_pxs[0] * scale, self._phys_pxs[0] * scale)
 
-        return b_top_left + b_pixel_size
+        # Convert to ltbr
+        rect = (b_top_left[0], b_top_left[1],
+                b_top_left[0] + b_pixel_size[0], b_top_left[1] + b_pixel_size[1])
+        # Convert to 4 corners, with rotation
+        corners = util.rotate_rect(rect, -self._rotation)  # negative rotation because physical Y is up
+        return corners
 
 
 class ViewOverlay(Overlay):
