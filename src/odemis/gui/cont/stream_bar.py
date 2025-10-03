@@ -958,10 +958,13 @@ class StreamBarController(object):
         stream.roi.value = self._tab_data_model.roa.value
         self._tab_data_model.roa.subscribe(self._onROA)
 
+        if self._tab_data_model.roa_rotation:
+            stream.rotation.value = self._tab_data_model.roa_rotation.value
+            self._tab_data_model.roa_rotation.subscribe(self._on_roa_rotation)
+
         listener = functools.partial(self._onStreamROI, stream)
         stream.roi.subscribe(listener)
         self._roi_listeners[stream] = listener
-
 
     def _disconnectROI(self, stream):
         """
@@ -1031,6 +1034,18 @@ class StreamBarController(object):
 
         finally:
             self._enableROISub()
+
+    def _on_roa_rotation(self, angle: float) -> None:
+        """
+        Called when the ROA rotation is changed.
+        Copies the angle to all the (settings) streams with ROI.
+        :param angle: rotation angle in radians (0 -> 2pi)
+        """
+        for s in self._tab_data_model.streams.value:
+            if s not in self._roi_listeners:
+                continue
+            # The streams always accept the rotation as-is, so no need to read it back
+            s.rotation.value = angle
 
     def show_roa_repetition(self, stream, rep, style=None):
         """

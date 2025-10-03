@@ -36,6 +36,8 @@ from odemis.gui.comp.overlay.base import (
 )
 
 
+# TODO: merge SelectionMixin and WorldSelectOverlay and LineSelectOverlay into one class (with just EDIT_MODE_POINT)
+# Change FastEMROCOverlay to inherit from RepetitionSelectOverlay.
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
