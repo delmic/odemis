@@ -31,6 +31,7 @@ from builtins import range
 
 import numpy
 import wx
+from odemis.acq import stream
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
@@ -779,7 +780,22 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
         self.assertIsNone(sol.p_pos, None)
 
+    def _create_spectrum_stream(self) -> stream.StaticSpectrumStream:
+        """ Create a very simple static spectrum stream for testing overlays """
+        data = numpy.ones((251, 1, 1, 19, 17), dtype="uint16")
+        # spectrum metadata
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
+        md = {
+            model.MD_PIXEL_SIZE: (10e-6, 10e-6),  # m/px
+            model.MD_POS: (0.1e-6, -0.2e-6),  # m
+            model.MD_ROTATION: 0.3,  # rad
+            model.MD_WL_LIST: wld,
+        }
+        spec_da = model.DataArray(data, md)
+        return stream.StaticSpectrumStream("test", spec_da)
+
     def test_pixel_select_overlay(self):
+        specs = self._create_spectrum_stream()
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         tab_mod = self.create_simple_tab_model()
@@ -797,7 +813,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(psol)
 
-        psol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        psol.set_stream(specs)
         width_va = model.IntVA(1)
 
         psol.connect_selection(model.TupleVA(), width_va)
@@ -836,6 +852,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Bind(wx.EVT_KEY_UP, on_key)
 
     def test_spectrum_line_select_overlay(self):
+        specs = self._create_spectrum_stream()
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         tab_mod = self.create_simple_tab_model()
@@ -850,7 +867,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(slol)
 
-        slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        slol.set_stream(specs)
         width_va = model.IntVA(1)
         line_va = model.TupleVA(((None, None), (None, None)))
         slol.connect_selection(line_va, width_va)

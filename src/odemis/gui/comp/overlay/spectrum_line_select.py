@@ -25,10 +25,11 @@ This file is part of Odemis.
 import math
 
 import cairo
+import wx
+
 import odemis.gui as gui
 import odemis.util.conversion as conversion
-import wx
-from odemis.gui.comp.overlay.base import EDIT_MODE_POINT,PixelDataMixin, Vec
+from odemis.gui.comp.overlay.base import EDIT_MODE_POINT, PixelDataMixin, Vec, cairo_polygon
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 from odemis.util import clip_line
 from odemis.util.raster import rasterize_line
@@ -288,9 +289,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
                 ctx.set_source_rgba(*self._pixel_colour)
             else:
                 ctx.set_source_rgba(*self._width_colour)
-            rect = self.pixel_to_rect(point, scale)
-            ctx.rectangle(*rect)
-            ctx.rectangle(*rect)
+            corners = self.pixel_to_rect(point, scale)
+            cairo_polygon(ctx, corners)
             ctx.fill()
 
         LineSelectOverlay.draw(self, ctx, shift, scale)
