@@ -23,16 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # This is not a real test case, but just a stub to be used for each camera driver.
 
 from abc import ABCMeta, abstractproperty
-import gc
 import logging
 import numpy
 from odemis import model
+from odemis.util import testing
 from odemis.driver import semcomedi
 import os
 import queue
 import threading
 import time
-import unittest
 
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
@@ -151,8 +150,10 @@ class VirtualTestCam(metaclass=ABCMeta):
         orig_fs = self.camera.fanSpeed.value
         self.camera.fanSpeed.value = self.camera.fanSpeed.range[0]
         self.assertEqual(self.camera.fanSpeed.value, self.camera.fanSpeed.range[0])
+        time.sleep(0.1)
         self.camera.fanSpeed.value = self.camera.fanSpeed.range[1]
         self.assertEqual(self.camera.fanSpeed.value, self.camera.fanSpeed.range[1])
+        time.sleep(0.1)
         self.camera.fanSpeed.value = orig_fs
         self.assertEqual(self.camera.fanSpeed.value, orig_fs)
 
@@ -210,10 +211,13 @@ class VirtualTestCam(metaclass=ABCMeta):
 
         # Check the translation can be changed
         self.camera.binning.value = (2, 2)
-        self.camera.resolution.value = (16, 16)
+        small_res = self.camera.resolution.clip((16, 16))
+        self.camera.resolution.value = small_res
         self.camera.translation.value = (-10, 3) # values are small enough they should always be fine
+        # Some cameras might round the translation to binning unit => 3 can become 2 or 4
+        testing.assert_tuple_almost_equal(self.camera.translation.value, (-10, 3), delta=1)
         im = self.camera.data.get()
-        self.assertEqual(self.camera.translation.value, (-10, 3))
+        testing.assert_tuple_almost_equal(self.camera.translation.value, (-10, 3), delta=1)
 
         # Check the translation automatically fits after putting a large ROI
         self.camera.binning.value = (1, 1)
@@ -230,15 +234,17 @@ class VirtualTestCam(metaclass=ABCMeta):
         im = self.camera.data.get()
         self.assertEqual(im.metadata[model.MD_POS], orig_md[model.MD_POS])
 
-        self.camera.binning.value = (2, 2)
-        self.camera.updateMetadata({model.MD_PIXEL_SIZE: (2e-6, 2e-6)})
-        self.camera.resolution.value = (16, 16)
+        self.camera.binning.value = (4, 4)
+        self.camera.updateMetadata({model.MD_PIXEL_SIZE: (4e-6, 4e-6)})
+        self.camera.resolution.value = small_res
         im = self.camera.data.get()
         self.assertEqual(im.metadata[model.MD_POS], orig_md[model.MD_POS])
 
         self.camera.translation.value = (-10, 3)
         im = self.camera.data.get()
-        exp_pos = (-1.1 + (-10 * 2e-6 * 0.5), 0.9 - (3 * 2e-6 * 0.5))  # phys Y goes opposite direction
+        trans = self.camera.translation.value
+        # Translation is defined in px at binning 1, so always use pixel size of binning 1
+        exp_pos = (-1.1 + (trans[0] * 0.5e-6), 0.9 - (trans[1] * 0.5e-6))  # phys Y goes opposite direction
         self.assertEqual(im.metadata[model.MD_POS], exp_pos)
 
         # Note: the position of the image when the resolution is odd can be slightly
