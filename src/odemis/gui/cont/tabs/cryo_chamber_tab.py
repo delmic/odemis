@@ -127,7 +127,7 @@ class CryoChamberTab(Tab):
         # enable meteor calibration
         # For other roles and METEOR without calibration metadata, the menu item is deleted
         # The deletion in handled in gui.cont.menu
-        if self._role == 'meteor' and self.tab_data_model.main.stage.getMetadata().get(model.MD_CALIB, None) is not None:
+        if self._role == 'meteor' and self.tab_data_model.main.stage_bare.getMetadata().get(model.MD_CALIB, None) is not None:
             main_frame.Bind(wx.EVT_MENU, self._edit_meteor_calibration,
                             id=main_frame.menu_item_edit_meteor_calibration.GetId())
             main_frame.menu_item_edit_meteor_calibration.Enable(True)
