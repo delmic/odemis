@@ -394,7 +394,8 @@ class TestSpectrum(unittest.TestCase):
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        compensated = calibration.apply_spectrum_corrections(spec, coef=calib)
+        dummy_bckg = model.DataArray(numpy.zeros_like(spec), spec.metadata)
+        compensated = calibration.apply_spectrum_corrections(spec, bckg=dummy_bckg, coef=calib)
 
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
@@ -434,7 +435,8 @@ class TestSpectrum(unittest.TestCase):
         orig_arspec = data.copy()
         orig_md = md.copy()
 
-        calibrated = calibration.apply_spectrum_corrections(arspec)
+        dummy_bckg = model.DataArray(numpy.zeros_like(arspec), arspec.metadata)
+        calibrated = calibration.apply_spectrum_corrections(arspec, bckg=dummy_bckg)
 
         # MD_THETA_LIST should have no NaNs
         angles_cal = calibrated.metadata[model.MD_THETA_LIST]
@@ -451,6 +453,52 @@ class TestSpectrum(unittest.TestCase):
         # The original data shouldn't have been changed
         numpy.testing.assert_array_equal(arspec, orig_arspec)
         self.assertEqual(arspec.metadata, orig_md)
+
+    def test_automatic_noise_subtraction(self):
+        """Checks that the fallback noise subtraction works correctly when no bckg is given."""
+        # Use the data we designed before, with a clear signal and background
+        dims = (50, 100, 1, 12, 12) # CAZYX
+        background_level = 10
+        signal_level = 100
+        data = numpy.full(dims, background_level, dtype=numpy.uint16)
+        data[:, 10:-10, :, 5:7, 5:7] = signal_level
+        wld = numpy.linspace(333e-9, 511e-9, data.shape[0])
+        angles = numpy.linspace(-1.1, 1.5, data.shape[1])
+
+        md = {
+            model.MD_WL_LIST: wld.tolist(),
+            model.MD_THETA_LIST: angles.tolist(),
+            model.MD_DIMS: "CAZYX",
+            model.MD_AR_MIRROR_TOP: [90.0, 0.0],
+            model.MD_AR_MIRROR_BOTTOM: [10.0, 0.0],
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_POS: (1e-3, -30e-3),  # m
+            model.MD_SENSOR_PIXEL_SIZE: (2.6e-5, 2.6e-5),  # m
+            model.MD_INPUT_SLIT_WIDTH: 10e-5,  # m
+        }
+        arspec = model.DataArray(data, md)
+
+        # Call the function with NO background and NO coefficient
+        calibrated = calibration.apply_spectrum_corrections(arspec)
+
+        # The expected signal AFTER noise subtraction but BEFORE solid angle correction
+        expected_signal_pre_correction = float(signal_level - background_level)  # This is 90.0
+
+        # Find the center of the projected angular grid
+        calibrated_angles = numpy.array(calibrated.metadata[model.MD_THETA_LIST])
+        center_angle_idx = numpy.argmin(numpy.abs(calibrated_angles))
+
+        # Extract the raw numeric value from the DataArray object
+        signal_region_mean = float(numpy.mean(calibrated[:, center_angle_idx, :, 5:7, 5:7]))
+        background_region_mean = float(numpy.mean(calibrated[..., :2, :2]))
+
+        # Assert that the solid angle correction happened (value is > 90)
+        self.assertGreater(signal_region_mean, expected_signal_pre_correction)
+
+        # Assert that the background was correctly subtracted (value is near 0)
+        self.assertAlmostEqual(background_region_mean, 0.0, delta=1e-5)
 
 
 TIME_RANGE_TO_DELAY_EX = {1e-09: 7.99e-09,
