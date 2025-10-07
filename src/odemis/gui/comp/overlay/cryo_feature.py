@@ -219,8 +219,6 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         stage_position = self._view_to_stage_pos(v_pos)
         self._selected_feature.stage_position.value = stage_position
         self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
-
-        # ask user to recalculate the feature position for all other postures
         self._update_other_postures()
 
         # Reset the selected tool to signal end of feature moving operation
@@ -230,20 +228,28 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
     def _update_other_postures(self):
         """Ask the user to recalculate the feature position for all other postures"""
-        self.tab = self.tab_data.main.getTabByName(self.tab_name)
-        box = wx.MessageDialog(self.tab.main_frame,
-                            message="Do you want to recalculate this feature position for all other postures?",
-                            caption="Recalculate feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
 
-        ans = box.ShowModal()  # Waits for the window to be closed
-        if ans == wx.ID_YES:
-            for posture in self.pm.postures:
-                if posture != self.pm.current_posture.value:
-                    logging.info(f"updating {posture} for {self._selected_feature.name.value}")
-                    get_feature_position_at_posture(pm=self.pm,
-                                                    feature=self._selected_feature,
-                                                    posture=posture,
-                                                    recalculate=True)
+        # It's actually only useful to not update the position in other postures, if the position had
+        # been set explicitly in one of these postures.
+        # HACK: for now, we detect that if there are only 2 postures, it's a standard Odemis, so it's
+        # only possible to set the position in FM, so it's never needed to ask the user.
+        # TODO: only ask if the posture had been set explicitly in a different posture previously.
+        if len(self.pm.postures) > 2:
+            box = wx.MessageDialog(wx.GetApp().main_frame,
+                                message="Do you want to recalculate this feature position for all other postures?",
+                                caption="Recalculate feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+            ans = box.ShowModal()  # Waits for the window to be closed
+            if ans != wx.ID_YES:
+                return
+
+        for posture in self.pm.postures:
+            if posture != self.pm.current_posture.value:
+                logging.info(f"updating {posture} for {self._selected_feature.name.value}")
+                get_feature_position_at_posture(pm=self.pm,
+                                                feature=self._selected_feature,
+                                                posture=posture,
+                                                recalculate=True)
 
     def _detect_point_inside_feature(self, v_pos):
         """
