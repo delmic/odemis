@@ -83,11 +83,15 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
     config.system.stage.rotation_reference = math.degrees(rotation_reference)
     # Used by fibsemOS for moving the stage flat to the ion beam
     config.system.stage.rotation_180 = math.degrees(rotation_reference + math.pi)
+
+    # Get the Tescan SEM component to extract host and port info
+    fibsem = model.getComponent(role="fibsem")
+    ip_address: str = fibsem.host
+    port: int = fibsem.port
+    # Pass the IP address to the fibsemOS config as well
+    config.system.info.ip_address = ip_address
     microscope = OdemisTescanMicroscope(config.system)
 
-    # TODO: Read from the fibsem component .host attribute
-    ip_address: str = "192.168.56.101"
-    port: int = 8300
     microscope.connect_to_microscope(ip_address, port)
 
     return microscope
