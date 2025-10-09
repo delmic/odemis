@@ -848,15 +848,16 @@ def project_angular_spectrum_to_grid(
     theta_mn_mx = (-theta_mn_mx[0], theta_mn_mx[1]) if angle_range is None else angle_range
 
     # Define the ideal theta list. Use the min/max angle and linearly spread 1 mrad.
-    theta_list_linear_len = int(round((theta_mn_mx[1] - theta_mn_mx[0]) / 1e-3))
+    theta_list_linear_len = round((theta_mn_mx[1] - theta_mn_mx[0]) / 1e-3)
     # Make sure it's not too small, if range is tiny or image is very fine
     if theta_list_linear_len < data.shape[0]:  # TODO use the length of the biggest theta_list_wl
         logging.info("Increasing theta list length to %s, from %s", data.shape[0], theta_list_linear_len)
         theta_list_linear_len = data.shape[0]
     theta_list_linear = numpy.linspace(theta_mn_mx[0], theta_mn_mx[1], theta_list_linear_len)
 
-    # Prepare final data array (always floats, as it's interpolated data)
-    data_lin = numpy.zeros((theta_list_linear_len, data.shape[1]), dtype=numpy.float64)
+    # Prepare final data array (the initial fill value is numpy.nan, later replaced by interpolation result
+    # and global minimum of valid data)
+    data_lin = numpy.full((theta_list_linear_len, data.shape[1]), fill_value=numpy.nan, dtype=numpy.float64)
 
     # Compute the "theta list" and "omega list" for every wl (ie, along dim 1), based on the chromatic correction info
     for wli in range(data.shape[1]):
@@ -874,9 +875,34 @@ def project_angular_spectrum_to_grid(
         omega_list_short = omega_list_raw[first_px: last_px + 1]
         d = data[first_px: last_px + 1, wli]
         d_corrected = d / omega_list_short
-        # Pad with 0.0 for points outside (left and right) the source data's angular range.
-        # This prevents creating artificial signal at the edges from clamping.
-        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d_corrected, left=0.0, right=0.0)
+        # Pad with numpy.nan for points outside (left and right) the source data's angular range.
+        # By doing so, we can later identify which rows are fully valid (no NaN i.e. useful data)
+        # and which are not, and fill the non-valid rows with the global minimum of the valid data
+        # for a better visual output.
+        data_lin[:, wli] = numpy.interp(theta_list_linear, theta_list_short, d_corrected, left=numpy.nan, right=numpy.nan)
+
+    # Identify which rows are completely free of NaN values.
+    rows_fully_valid = numpy.all(~numpy.isnan(data_lin), axis=1)
+    valid_row_indices = numpy.where(rows_fully_valid)[0]
+
+    if valid_row_indices.size > 0:
+        # Find the global minimum of all valid data points in the entire array.
+        # This value will be used to replace the NaN cells.
+        min_val = numpy.nanmin(data_lin)
+
+        # Get the first and last valid row index
+        first_valid_idx = valid_row_indices[0]
+        last_valid_idx = valid_row_indices[-1]
+
+        data_lin[0:first_valid_idx, :] = min_val
+        data_lin[last_valid_idx + 1:, :] = min_val
+    else:
+        logging.warning(
+            "No valid rows were found after interpolation. "
+            "The central data block could not be identified. "
+            "Filling all NaN values in the entire array with 0 as a fallback."
+        )
+        numpy.nan_to_num(data_lin, copy=False, nan=0.0)
 
     # Prepare metadata: as the data is now processed, most of the original
     # metadata doesn't fit. So only keep the very strict minimum.
