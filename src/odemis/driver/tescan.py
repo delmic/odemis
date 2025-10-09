@@ -33,7 +33,7 @@ import weakref
 from typing import List, Literal, Callable, Any, Dict, Tuple, Union
 
 import numpy
-from tescan import sem
+from tescansharksem import sem
 
 from odemis import model, util
 from odemis.model import (HwError, isasync, CancellableThreadPoolExecutor,
