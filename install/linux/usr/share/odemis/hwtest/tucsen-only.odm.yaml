@@ -1,0 +1,63 @@
+"Tucsen Optical": {
+    class: Microscope,
+    role: optical,
+}
+
+"Light": {
+    class: simulated.Light,
+    role: light,
+    affects: ["Camera"],
+    properties: {
+        #power: 10 # W
+    }
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Camera"]
+}
+
+"Optical Emission Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    affects: ["Camera"]
+}
+
+"Camera": {
+    class: tucsen.TUCam,
+    role: ccd,
+    init: {
+        device: null, # null = first device available
+#        device: "fake",
+    },
+    properties: {
+        targetTemperature: 20,  # °C, to reduce active cooling
+        fanSpeed: 0.3  # To reduce the fan
+    }
+}
+
+"Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: ["Camera"],
+    properties: {
+        speed: {'x':0.1, 'y':0.1} #m/s
+    }
+}
+
+"Optical Focus": {
+    class: simulated.Stage,
+    role: focus,
+    affects: ["Camera"],
+    init: {
+        axes: ["z"],
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
