@@ -99,8 +99,20 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
 def create_fibsemos_microscope() -> 'OdemisThermoMicroscope | OdemisTescanMicroscope':
     """Create a fibsemOS microscope instance with the current microscope configuration.
     """
-    # TODO: Eventually automatically select TFS or Tescan once create_fibsemos_tescan_microscope() can get host_ip/port from the fibsem component
-    return create_fibsemos_tfs_microscope()
+    stage_bare = model.getComponent(role="stage-bare")
+    stage_md = stage_bare.getMetadata()
+    md_calib = stage_md.get(model.MD_CALIB, {})
+    stage_version = md_calib.get("version", None)
+
+    if stage_version == "tfs_1":
+        return create_fibsemos_tfs_microscope()
+    elif stage_version == "tfs_3":
+        return create_fibsemos_tfs_microscope()
+    elif stage_version == "tescan_1":
+        return create_fibsemos_tescan_microscope()
+    else:
+        raise ValueError(f"Stage version {stage_version} is not supported")
+
 
 def convert_pattern_to_fibsemos(p: MillingPatternParameters) -> 'BasePattern':
     """Convert from an Odemis pattern to a fibsemOS pattern"""
@@ -126,7 +138,6 @@ def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePatte
     )
 
 def _convert_trench_pattern(p: TrenchPatternParameters) -> 'TrenchPattern':
-
     return TrenchPattern(
         width=p.width.value,
         upper_trench_height=p.height.value,
