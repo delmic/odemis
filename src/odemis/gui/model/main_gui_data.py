@@ -322,11 +322,11 @@ class MainGUIData(object):
                 if self.role == "enzel":
                     required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
-                required_roles += ["light", "stage", "focus", "stage-bare"]
+                required_roles += ["light", "focus", "stage-bare"]
                 # add additional roles when fibsem control enabled
                 if self.fibsem:
                     required_roles += ["e-beam", "se-detector", "ebeam-focus",
-                                       "ion-beam", "se-detector-ion", "ion-focus"]
+                                       "ion-beam", "se-detector-ion"]
             elif self.role == "mimas":
                 required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):
@@ -336,13 +336,6 @@ class MainGUIData(object):
                     required_roles += ["lens"]
             elif self.role == "mbsem":
                 required_roles += ["e-beam", "stage"]
-
-            # (special case): remove stage role for meteor tfs_3, as it's replaced with sample_stage
-            if self.role == "meteor":
-                stage_bare = model.getComponent(role="stage-bare")
-                md = stage_bare.getMetadata().get(model.MD_CALIB, {})
-                if md.get("version", "tfs_1") == "tfs_3":
-                    required_roles.remove("stage")
 
             for crole in required_roles:
                 attrname = self._ROLE_TO_ATTR[crole]
