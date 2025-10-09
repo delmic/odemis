@@ -1,3 +1,18 @@
+odemis (3.7.4-1) focal; urgency=medium
+
+  * New version: 3.7.4
+  * Main bug fixes and improvements:
+   - SPARC: At acquisition, stream "tint" is also stored for SEM survey
+   - SPARC: Going directly from spot mode to RoA mode now works
+   - METEOR: only show calibration menu on microscopes which support it
+   - METEOR: when moving a feature, don't ask whether all postures should be
+     updated on Odemis standard, as it's always useful.
+   - METEOR: switching posture could sometimes lead to a GUI crash
+   - Update channel selector didn't uncomment DEVPATH when switching to
+     development channel.
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 09 Oct 2025 09:19:44 +0200
+
 odemis (3.7.3-1) focal; urgency=medium
 
   * New version: 3.7.3
