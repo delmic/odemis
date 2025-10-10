@@ -1,10 +1,18 @@
+# Simulator of the METEOR JEOL, for the JIB4700F.
+# There are two options to run it:
+# * Use the JEOL EIK server simulator (runs on the local PC), which can be run
+#   python3 src/odemis/driver/jeol/api/eik/server.py --port 8000
+# * Use the Multibeam Offline program (runs on a remote/virtual Windows PC)
+# Then, after starting the backend, you can reach the SEM posture with:
+# odemis position stage-bare z 0.0085
+
 "METEOR Jeol Sim": {
-  class: Microscope,
-  role: meteor,
+    class: Microscope,
+    role: meteor,
 }
 
 "SEM": {
-    class: eiksem.Sem,
+    class: jeol.EIKSEM,
     role: null,
     init: {
         #Settings if using JEOL External Control Server simulator running on the local PC
@@ -16,22 +24,21 @@
     },
     children: {
         stage: "Stage",
-    }
+    },
 }
 
 "Stage": {
     role: stage-bare,
     init: {
         stage_range: {
-            #Stage ranges. These are required to be correctly specified for 
+            # Stage ranges. These are required to be correctly specified for 
             # the stage to be controllable by Odemis
-            "x": [-55.e-3, 10.e-3],
-            "y": [-15.e-3, 15.e-3],
-            "z": [4.e-3, 41.5e-3],
-            "rx": [-3.3161, 3.3161], # angle range in degrees is -190 to +190
-            "rz": [-0.2617, 0.9599] # angle range in degrees is -15 to +55
+            "x": [-55.e-3, 10.e-3],  # m
+            "y": [-15.e-3, 15.e-3],  # m
+            "z": [0.e-3, 41.5e-3],  # m
+            "rx": [-3.3161, 3.3161],  # rad, angle range in degrees is -190 to +190
+            "rz": [-0.2617, 0.9599]  # rad, angle range in degrees is -15 to +55
         },
-        
     },
     metadata: {
         SAMPLE_CENTERS: {
@@ -50,8 +57,7 @@
             "version": "jeol_1"
         },
         FAV_FM_POS_ACTIVE: {
-            #+40 degrees tilt
-            "rx": 0.69813,
+            "rx": 0.69813,  # rad (40°)
             "rz": 0.0
         },
         FAV_SEM_POS_ACTIVE: {
@@ -68,23 +74,7 @@
             "y": [-8.25e-3, 8.25e-3],
             "z": [5.5e-3, 11.5e-3]
         },
-        FAV_POS_DEACTIVE: { "x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0 }
-    },
-    
-}
-
-# TODO: not needed
-"Meteor Stage": {
-    class: actuator.MultiplexActuator,
-    role: stage,
-    dependencies: { "x": "Stage", "y": "Stage", "z": "Stage", },
-    init: {
-        axes_map: { "x": "x", "y": "y", "z": "z",},
-    },
-    #affects: ["Camera", "EBeam"],
-    metadata: {
-        # Should match exactly the FM imaging range metadata for the "Stage" component!
-        POS_ACTIVE_RANGE: {"x": [-55.e-3, -44.75e-3], "y": [-8.25e-3, 8.25e-3], "z": [5.5e-3, 11.5e-3]}
+        FAV_POS_DEACTIVE: {"x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0 }
     },
 }
 
@@ -127,7 +117,7 @@
 #        targetTemperature: 0,
     },
     metadata: {
-        # The camera is not exactly parallel to the stage axes
+        # If the camera is not exactly parallel to the stage axes, the angle can be adjusted
         ROTATION: 0, # [rad] (=0°)
     },
 }

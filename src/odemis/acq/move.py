@@ -1877,22 +1877,19 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
             missed_axes = {'x', 'y', 'z', 'rx', 'rz'} - self.stage.axes.keys()
             raise KeyError(f"The stage misses {missed_axes} axes")
 
-        # Automatic conversion to sample-stage axes (similar to Tescan)
-        # self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
-        self.postures = [SEM_IMAGING, FM_IMAGING]
+        if self.pre_tilt is None:
+            self.pre_tilt = 0  # Standard on JEOL is no pre-tilt (ie, 0°)
 
-    def check_calib_data(self, required_keys: set):
-        """
-        Checks the keys in the stage metadata MD_CALIB.
-        :param required_keys : A set of keys that must be present in the MD_CALIB metadata.
-        :raises ValueError: if the metadata does not have all required keys.
-        """
-        stage_md = self.stage.getMetadata()
-        calibrated_md = stage_md[model.MD_CALIB]
-        if not required_keys.issubset(calibrated_md.keys()):
-            missing_keys = required_keys - calibrated_md.keys()
-            raise ValueError(
-                f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
+        self.postures = [SEM_IMAGING, FM_IMAGING]
+        # Automatic conversion to sample-stage axes
+        self._initialise_transformation(axes=["y", "z"])
+        self.create_sample_stage()
+
+    def create_sample_stage(self):
+        self.sample_stage = SampleStage(name="Sample Stage",
+                                        role="stage",
+                                        stage_bare=self.stage,
+                                        posture_manager=self)
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -1911,14 +1908,19 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
             pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[grid_label]])
             return pos
 
-        if current_position in [SEM_IMAGING]:
+        if target_pos_lbl == LOADING:
+            end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
+        if current_position in [LOADING, SEM_IMAGING]:
             if target_pos_lbl in [SEM_IMAGING, GRID_1]:
                 end_pos = get_sem_grid(GRID_1)
             elif target_pos_lbl == GRID_2:
                 end_pos = get_sem_grid(GRID_2)
             elif target_pos_lbl == FM_IMAGING:
-                end_pos = self._transformFromSEMToMeteor(self.stage.position.value)
-
+                if current_position == LOADING:
+                    # if at loading and fm is pressed, choose grid1 by default
+                    end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_1))
+                else:
+                    end_pos = self._transformFromSEMToMeteor(self.stage.position.value)
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
                 end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_1))
@@ -2017,49 +2019,17 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target_pos):
+    def _doCryoSwitchSamplePosition(self, future, target_posture: int):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
-        :param target_pos: (int) target position
+        :param target_posture: target posture
         """
-        try:
-            target_name = POSITION_NAMES[target_pos]
-        except KeyError as ke:
-            raise ValueError(f"Unknown target '{target_pos}'") from ke
+        if target_posture not in POSITION_NAMES:
+            raise ValueError(f"Unknown target '{target_posture}'")
 
-        stage_md = self.stage.getMetadata()
-        sample_centers = stage_md[model.MD_SAMPLE_CENTERS]
-        sem_orientation = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-
-        # Construct target position directly
-        if target_pos == GRID_1:
-            target_position = sample_centers["GRID 1"].copy()
-            target_position.update(sem_orientation)
-        elif target_pos == GRID_2:
-            target_position = sample_centers["GRID 2"].copy()
-            target_position.update(sem_orientation)
-        elif target_pos == SEM_IMAGING:
-            target_position = self._transformFromMeteorToSEM(self.stage.position.value)
-        elif target_pos == FM_IMAGING:
-            # DMcG has changed code here***********************************************************
-            # Enables switching from both GRID1 and GRID2 positions to appropriate FM position
-
-            sem_grid1 = sample_centers["GRID 1"].copy()
-            sem_grid1.update(sem_orientation)
-            sem_grid2 = sample_centers["GRID 2"].copy()
-            sem_grid2.update(sem_orientation)
-            # target_position = self._transformFromSEMToMeteor(sem_grid1)
-
-            current_pos = self.stage.position.value
-            if current_pos == sem_grid1:
-                target_position = self._transformFromSEMToMeteor(sem_grid1)
-            elif current_pos == sem_grid2:
-                target_position = self._transformFromSEMToMeteor(sem_grid2)
-        else:
-            raise ValueError(f"Unsupported target position: {target_name}")
-
-        # Move stage directly
+        # Move stage directly (the JEOL software takes care of the safety aspects)
+        target_position = self.getTargetPosition(target_posture)
         self._run_sub_move(future, self.stage, target_position)
 
         with future._task_lock:
@@ -2070,8 +2040,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
     def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from stage bare to chamber coordinates.
         Used for moving the stage vertically in the chamber.
-        For tescan, the z-axis is already aligned with the chamber axis,
-        so this function returns the input.
+        Should not be used in JEOL1 configuration.
         :param shift: The shift to be transformed
         :return: The transformed shift
         """
