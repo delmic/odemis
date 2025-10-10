@@ -95,6 +95,8 @@ class MicroscopePostureManager:
                 return super().__new__(MeteorTFS3PostureManager)
             elif stage_version == "tescan_1":
                 return super().__new__(MeteorTescan1PostureManager)
+            elif stage_version == "jeol_1":
+                return super().__new__(MeteorJeol1PostureManager)
             else:
                 raise ValueError(f"Stage version {stage_version} is not supported")
         else:
@@ -1859,6 +1861,221 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """
         vshift = {"x": shift.get("x", 0), "z": shift.get("z", 0)}
         return vshift
+
+
+class MeteorJeol1PostureManager(MeteorPostureManager):
+    def __init__(self, microscope):
+        super().__init__(microscope)
+        # Check required metadata used during switching
+        required_keys_jeol1 = {"x_0", "y_0", "z_0", "dx", "dy", "dz"}
+        self.required_keys.add(model.MD_CALIB)
+        self.check_stage_metadata(self.required_keys)
+        self.check_calib_data(required_keys_jeol1)
+
+        # Jeol microscopes typically use x, y, z, rx, rz axes
+        if not {"x", "y", "z", "rx", "rz"}.issubset(self.stage.axes):
+            missed_axes = {'x', 'y', 'z', 'rx', 'rz'} - self.stage.axes.keys()
+            raise KeyError(f"The stage misses {missed_axes} axes")
+
+        # Automatic conversion to sample-stage axes (similar to Tescan)
+        # self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+        self.postures = [SEM_IMAGING, FM_IMAGING]
+
+    def check_calib_data(self, required_keys: set):
+        """
+        Checks the keys in the stage metadata MD_CALIB.
+        :param required_keys : A set of keys that must be present in the MD_CALIB metadata.
+        :raises ValueError: if the metadata does not have all required keys.
+        """
+        stage_md = self.stage.getMetadata()
+        calibrated_md = stage_md[model.MD_CALIB]
+        if not required_keys.issubset(calibrated_md.keys()):
+            missing_keys = required_keys - calibrated_md.keys()
+            raise ValueError(
+                f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
+
+    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+        """
+        Returns the position that the stage would go to.
+        :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        :return: (dict str->float) the end position of the stage
+        :raises ValueError: if the target position is not supported
+        """
+        stage_md = self.stage.getMetadata()
+        current_position = self.getCurrentPostureLabel()
+        end_pos = None
+
+        # SEM posture + grid center
+        def get_sem_grid(grid_label):
+            pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE].copy()
+            pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[grid_label]])
+            return pos
+
+        if current_position in [SEM_IMAGING]:
+            if target_pos_lbl in [SEM_IMAGING, GRID_1]:
+                end_pos = get_sem_grid(GRID_1)
+            elif target_pos_lbl == GRID_2:
+                end_pos = get_sem_grid(GRID_2)
+            elif target_pos_lbl == FM_IMAGING:
+                end_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+
+        elif current_position == FM_IMAGING:
+            if target_pos_lbl == GRID_1:
+                end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_1))
+            elif target_pos_lbl == GRID_2:
+                end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_2))
+            elif target_pos_lbl == SEM_IMAGING:
+                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+
+        if end_pos is None:
+            raise ValueError(
+                f"Unknown target position {POSITION_NAMES.get(target_pos_lbl, target_pos_lbl)} "
+                f"when in {POSITION_NAMES.get(current_position, current_position)}")
+
+        return end_pos
+
+    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the SEM imaging area to the
+        meteor/FM imaging area.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Get calibrated values and stage angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+
+        # Define reference positions and current tilt
+        rx_sem = pos["rx"]  # Current tilt angle
+        rx_fm = fm_pos_active["rx"]  # FM tilt angle
+        z_0 = calibrated_values["z_0"]
+
+        # Calculate position transformation considering tilt compensation
+        # For Jeol systems, typically use simple translation with tilt correction
+        dx = calibrated_values["dx"]
+        dy = calibrated_values["dy"]
+        dz = calibrated_values.get("dz", 0)
+
+        # Apply tilt-dependent correction (similar to Tescan approach)
+        z_offset = pos["z"] - z_0
+        tilt_correction_y = z_offset * (math.sin(rx_fm) - math.sin(rx_sem))
+        tilt_correction_z = z_offset * (math.cos(rx_sem) - math.cos(rx_fm))
+
+        # Calculate transformed position
+        transformed_pos["x"] = pos["x"] + dx
+        transformed_pos["y"] = pos["y"] + dy + tilt_correction_y
+        transformed_pos["z"] = pos["z"] + dz + tilt_correction_z
+
+        # Update angles to FM position
+        transformed_pos.update(fm_pos_active)
+
+        return transformed_pos
+
+    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the meteor/FM imaging area
+        to the SEM imaging area.
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Get calibrated values and stage angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+        sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+
+        # Define reference positions and angles
+        rx_sem = sem_pos_active["rx"]
+        rx_fm = fm_pos_active["rx"]
+        z_0 = calibrated_values["z_0"]
+
+        # Calculate reverse transformation
+        dx = calibrated_values["dx"]
+        dy = calibrated_values["dy"]
+        dz = calibrated_values.get("dz", 0)
+
+        # Apply reverse tilt-dependent correction
+        z_offset = pos["z"] - z_0
+        tilt_correction_y = z_offset * (math.sin(rx_sem) - math.sin(rx_fm))
+        tilt_correction_z = z_offset * (math.cos(rx_fm) - math.cos(rx_sem))
+
+        # Calculate transformed position (reverse transformation)
+        transformed_pos["x"] = pos["x"] - dx
+        transformed_pos["y"] = pos["y"] - dy + tilt_correction_y
+        transformed_pos["z"] = pos["z"] - dz + tilt_correction_z
+
+        # Update angles to SEM position
+        transformed_pos.update(sem_pos_active)
+
+        return transformed_pos
+
+    def _doCryoSwitchSamplePosition(self, future, target_pos):
+        """
+        Do the actual switching procedure for cryoSwitchSamplePosition
+        :param future: cancellable future of the move
+        :param target_pos: (int) target position
+        """
+        try:
+            target_name = POSITION_NAMES[target_pos]
+        except KeyError as ke:
+            raise ValueError(f"Unknown target '{target_pos}'") from ke
+
+        stage_md = self.stage.getMetadata()
+        sample_centers = stage_md[model.MD_SAMPLE_CENTERS]
+        sem_orientation = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+
+        # Construct target position directly
+        if target_pos == GRID_1:
+            target_position = sample_centers["GRID 1"].copy()
+            target_position.update(sem_orientation)
+        elif target_pos == GRID_2:
+            target_position = sample_centers["GRID 2"].copy()
+            target_position.update(sem_orientation)
+        elif target_pos == SEM_IMAGING:
+            target_position = self._transformFromMeteorToSEM(self.stage.position.value)
+        elif target_pos == FM_IMAGING:
+            # DMcG has changed code here***********************************************************
+            # Enables switching from both GRID1 and GRID2 positions to appropriate FM position
+
+            sem_grid1 = sample_centers["GRID 1"].copy()
+            sem_grid1.update(sem_orientation)
+            sem_grid2 = sample_centers["GRID 2"].copy()
+            sem_grid2.update(sem_orientation)
+            # target_position = self._transformFromSEMToMeteor(sem_grid1)
+
+            current_pos = self.stage.position.value
+            if current_pos == sem_grid1:
+                target_position = self._transformFromSEMToMeteor(sem_grid1)
+            elif current_pos == sem_grid2:
+                target_position = self._transformFromSEMToMeteor(sem_grid2)
+        else:
+            raise ValueError(f"Unsupported target position: {target_name}")
+
+        # Move stage directly
+        self._run_sub_move(future, self.stage, target_position)
+
+        with future._task_lock:
+            if future._task_state == CANCELLED:
+                raise CancelledError()
+            future._task_state = FINISHED
+
+    def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
+        """Transform the shift from stage bare to chamber coordinates.
+        Used for moving the stage vertically in the chamber.
+        For tescan, the z-axis is already aligned with the chamber axis,
+        so this function returns the input.
+        :param shift: The shift to be transformed
+        :return: The transformed shift
+        """
+        raise NotImplementedError("_transformFromChamberToStage is not used in JEOL1 configuration")
 
 
 class SampleStage(model.Actuator):
