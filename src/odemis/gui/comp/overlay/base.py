@@ -57,6 +57,21 @@ class EdgeBoundingBox:
         self.index = index  # Index of the edge, default None for a non-vertex edge
 
 
+def cairo_polygon(ctx: cairo.Context, points: List[Tuple[float, float]]) -> None:
+    """
+    Trace a polygon in the given cairo context
+    :param ctx: the cairo context to draw in
+    :param points: list of (x, y) points. The last point is automatically connected to the first
+    """
+    if not points:
+        return
+
+    ctx.move_to(*points[0])
+    for p in points[1:]:
+        ctx.line_to(*p)
+    ctx.close_path()
+
+
 class Label(object):
     """ Small helper class that stores label properties """
 
