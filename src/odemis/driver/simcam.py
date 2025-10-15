@@ -19,18 +19,22 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import math
-import threading
-from builtins import str
-import queue
 import logging
-import numpy
-from odemis import model, util, dataio
-from odemis.model import oneway
+import math
 import os
-from scipy import ndimage
+import queue
+import statistics
+import threading
 import time
+from builtins import str
+
+import numpy
 from PIL import Image, ImageDraw, ImageFont
+from scipy import ndimage
+
+from odemis import dataio, model, util
+from odemis.driver.simulated import ParabolicMirrorRayTracer
+from odemis.model import oneway
 
 ERROR_STATE_FILE = "simcam-hw.error"
 
@@ -150,6 +154,31 @@ class Camera(model.DigitalCamera):
             logging.info("Will not simulate focus")
             self._focus = None
 
+        self._img_simulator = None
+        # Simulated image generator based on ray tracing for a parabola mirror system with a lens and camera (SPARC2)
+        # Requires a mirror with 'l' and 's' axes, and a stage with a 'z' axis
+        try:
+            mirror = dependencies["mirror"]
+            stage = dependencies["stage"]
+            if (not isinstance(mirror, model.ComponentBase) or not hasattr(mirror, "axes")
+                or not isinstance(mirror.axes, dict) or "l" not in mirror.axes or "s" not in mirror.axes):
+                raise ValueError("mirror %s must be a Component with 'l' and 's' axes" % (mirror,))
+            if (not isinstance(stage, model.ComponentBase) or not hasattr(stage, "axes")
+                or not isinstance(stage.axes, dict) or "z" not in stage.axes):
+                raise ValueError("stage %s must be a Component with a 'z' axis" % (stage,))
+
+            z_aligned = statistics.mean(stage.axes["z"].range)
+            mirror_md = mirror.getMetadata()
+            l_aligned = mirror_md[model.MD_FAV_POS_ACTIVE]["l"]
+            s_aligned = mirror_md[model.MD_FAV_POS_ACTIVE]["s"]
+
+            self._img_simulator = ParabolicMirrorRayTracer(mirror, stage, self._img)
+            self._img_simulator.move_aligned_pos(l_aligned, s_aligned, z_aligned)
+            self._img_simulator.move_misaligned_pos(dl_misaligned=30e-6, ds_misaligned=-40e-6, dz_misaligned=100e-6)
+            logging.debug("Will simulate ray traced images using mirror %s and stage %s", mirror.name, stage.name)
+        except (TypeError, KeyError):
+            logging.info("Will not simulate ray traced images")
+
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
         self.data = SimpleDataFlow(self)
@@ -258,7 +287,12 @@ class Camera(model.DigitalCamera):
             logging.debug("Sleeping extra %g s, for simulating event", extra_time)
             time.sleep(extra_time)
 
-        gen_img = self._simulate()
+        if self._img_simulator:
+            gen_img = self._img_simulator.simulate()
+        else:
+            # Default simulation if simulated image generator is not available
+            gen_img = self._simulate()
+
         metadata = gen_img.metadata.copy()  # MD of image
         metadata.update(self._metadata)  # MD of camera
 
