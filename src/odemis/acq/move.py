@@ -1017,7 +1017,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
 
-                if (isinstance(self, MeteorTFS1PostureManager)
+                if (type(self) == MeteorTFS1PostureManager
                     and current_label == SEM_IMAGING and target == FM_IMAGING
                    ):
                     # NOTE: with TFS1, no distinction was made between SEM and MILL positions, and these
@@ -1027,7 +1027,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     # fixed rotation and tilt.
                     self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_pos['rx'],
                                                                              'rz': current_pos['rz']}})
-                elif (isinstance(self, MeteorTFS3PostureManager)
+                elif (type(self) == MeteorTFS3PostureManager
                       and current_label in [SEM_IMAGING, MILLING, FIB_IMAGING]
                       and target == FM_IMAGING
                      ):
