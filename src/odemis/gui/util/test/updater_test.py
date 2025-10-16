@@ -40,6 +40,15 @@ class FakeApp(wx.App):
         super().__init__(*args, **kwargs)
 
 class TestWindowsUpdater(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = FakeApp(standalone=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.app.ExitMainLoop()
+
     def test_version(self):
         # That should work on any OS
         u = updater.WindowsUpdater()
@@ -52,8 +61,7 @@ class TestWindowsUpdater(unittest.TestCase):
         # u.check_for_update()
 
     def test_downloader(self):
-        app = FakeApp(standalone=True)
-        app.main_frame = wx.Frame()
+        self.app.main_frame = wx.Frame()
         u = updater.WindowsUpdater()
         rv = u.get_remote_version()
         self.assertIsInstance(rv, str)
