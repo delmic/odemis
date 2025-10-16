@@ -337,19 +337,18 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
                                 wl_data[0] * 1e9, wl_data[-1] * 1e9)
 
             data = img.Subtract(data, bckg)
-    else:
-        # If no background is provided, estimate and subtract a constant noise floor.
-        # The robust method is to take the MEDIAN of pixel values from corner REGIONS.
+    elif model.MD_THETA_LIST in data.metadata:
+        # If no background is provided on EK data, estimate and subtract a constant noise floor.
+        # In an EK acquisition, the corner regions are outside the mirror image, so typically always get dark signal.
+        # A robust method is to take the median of pixel values from corner regions.
         # This is resistant to outliers (hot pixels, cosmic rays) and signal bleed-over.
-
         corner_size = 5  # Use a 5x5 pixel square from each corner
 
-        # Use ellipsis '...' to handle any number of leading dimensions (C, T, Z, etc.)
-        # This correctly slices the Y and X dimensions (the last two).
-        top_left = data[..., :corner_size, :corner_size]
-        top_right = data[..., :corner_size, -corner_size:]
-        bottom_left = data[..., -corner_size:, :corner_size]
-        bottom_right = data[..., -corner_size:, -corner_size:]
+        # This slices the C and A dimensions (the CCD image dimensions).
+        top_left = data[:corner_size, :corner_size]
+        top_right = data[:corner_size, -corner_size:]
+        bottom_left = data[-corner_size:, :corner_size]
+        bottom_right = data[-corner_size:, -corner_size:]
 
         # Concatenate all corner pixels into a single 1D array
         # .ravel() flattens the N-D corner arrays into 1D arrays
