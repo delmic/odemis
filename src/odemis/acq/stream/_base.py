@@ -1302,8 +1302,7 @@ class Stream(object):
         Translate 3D physical coordinates into 3D pixel coordinates. The z coordinate is computed assuming iso-voxel
         between x, y and z.
         :param p_pos: the position in physical coordinates (m). x and y are the sample position, z is the focus position
-        :returns: the x, y and z position in pixel coordinates or None if it's outside of the image and check_boundary
-         is True
+        :returns: (x, y, z) in pixel coordinates or None if it's outside of the image. No boundary check is done
         :raises LookupError: if the stream has no data
         """
         if not self.raw:
