@@ -63,47 +63,35 @@ FIDUCIAL_PATTERN = r"^[^-]+-"
 REFRACTIVE_SCALE = 0.495  # Refractive index scale factor of the medium (water) for Z correction
 
 
-def update_feature_correlation_target(correlation_target: FIBFMCorrelationData, tab_data:CryoGUIData, surface_fiducial:bool=False) -> FIBFMCorrelationData:
+def update_feature_correlation_target(correlation_target: FIBFMCorrelationData,
+                                      tab_data: CryoGUIData) -> FIBFMCorrelationData:
     """
-    #TODO
-    Populate the correlation target based on the latest changes to save it.
-    :param surface_fiducial: (bool) True if the fib surface fiducial is present, False otherwise
+    Update the correlation target with the latest fiducials and POIs from the tab data model.
+    :param correlation_target: (FIBFMCorrelationData) the correlation target to update
+    :param tab_data: (CryoGUIData) the tab data model
+    :return: (FIBFMCorrelationData) the updated correlation target
     """
-    if not correlation_target:
-        return None
-
-    if surface_fiducial:
-        fib_surface_fiducial = tab_data.fib_surface_point.value
-        correlation_target.fib_surface_fiducial = fib_surface_fiducial
-    else:
-        # Corner case: When fiducials are deleted and the indices are not continiuos. Then the fiducial pairs
-        # will be incorrectly matched together.
-        # TODO Handle the corner case
-        fib_fiducials = []
-        fm_fiducials = []
-        correlation_target.fm_pois = []
-        correlation_target.fib_surface_fiducial = None
-        for target in tab_data.main.targets.value:
-            # if target.name.value.startswith("FIB"):
-            #     fib_fiducials.append(target)
-            # elif target.name.value.startswith("FM"):
-            #     fm_fiducials.append(target)
-            # elif target.name.value.startswith("POI"):
-            #     correlation_target.fm_pois.append(target)
-            if target.type.value == TargetType.FibFiducial: ## TODO in or ==
-                fib_fiducials.append(target)
-            elif target.type.value == TargetType.Fiducial:
-                fm_fiducials.append(target)
-            elif target.type.value == TargetType.PointOfInterest:
-                correlation_target.fm_pois.append(target)
-            elif target.type.value == TargetType.SurfaceFiducial:
-                correlation_target.fib_surface_fiducial = target
-        if fib_fiducials:
-            fib_fiducials.sort(key=lambda x: x.index.value)
-        correlation_target.fib_fiducials = fib_fiducials
-        if fm_fiducials:
-            fm_fiducials.sort(key=lambda x: x.index.value) # TODO sorting is not needed as they are sorted later
-        correlation_target.fm_fiducials = fm_fiducials
+    # Corner case: When fiducials are deleted and the indices are not continuous. Then the fiducial pairs
+    # will be incorrectly matched together.
+    # TODO Handle the corner case
+    fib_fiducials = []
+    fm_fiducials = []
+    correlation_target.fm_pois = []
+    for target in tab_data.main.targets.value:
+        if target.type.value == TargetType.FibFiducial:
+            fib_fiducials.append(target)
+        elif target.type.value == TargetType.Fiducial:
+            fm_fiducials.append(target)
+        elif target.type.value == TargetType.PointOfInterest:
+            correlation_target.fm_pois.append(target)
+        elif target.type.value == TargetType.SurfaceFiducial:
+            correlation_target.fib_surface_fiducial = target
+    if fib_fiducials:
+        fib_fiducials.sort(key=lambda x: x.index.value)
+    correlation_target.fib_fiducials = fib_fiducials
+    if fm_fiducials:
+        fm_fiducials.sort(key=lambda x: x.index.value)
+    correlation_target.fm_fiducials = fm_fiducials
 
     acq_conf = conf.get_acqui_conf()
     save_features(acq_conf.pj_last_path, tab_data.main.features.value)

@@ -444,7 +444,7 @@ def _run_superz_manager(f: ProgressiveFuture, stigmator, focus,
                     logging.warning("Unexpected extra DataArray from acquisition: %s", data)
 
                 pos = target.coordinates.value[0:2]  # (X, Y) in metres of the sample plane
-                pos_px = stream.getPixelCoordinates(pos, check_bbox=False)  # pixels<---metres
+                pos_px = stream.getPixelCoordinates(pos, check_bbox=True)  # pixels<---metres
                 pos_px = tuple(int(x) for x in pos_px)
                 if pos_px is None:
                     raise ValueError(f"Target {target.name.value} position {pos} is outside of "
@@ -484,10 +484,10 @@ def _run_superz_manager(f: ProgressiveFuture, stigmator, focus,
                               f"accuracy <= {SUPERZ_THRESHOLD} is {target.superz_focus}")
                 target.coordinates.value[2] = new_focus_position
 
-                if zshift <= SUPERZ_THRESHOLD and iteration > 0:
+                if abs(zshift) <= SUPERZ_THRESHOLD and iteration > 0:
                     break
 
-                iteration +=1
+                iteration += 1
         return targets
 
     except CancelledError:

@@ -532,7 +532,7 @@ class CryoZLocalizationController(object):
         """Get and save the stream option when an aption is selected in the pop-up menu"""
         menu_id = evt.GetId()
         self._selected_stream = self._menu_to_stream[menu_id]
-        if self._tab_data.main.currentFeature:
+        if self._tab_data.main.currentFeature.value:
             feature = self._tab_data.main.currentFeature.value
             feature.superz_stream_name = self._selected_stream.name.value
 
