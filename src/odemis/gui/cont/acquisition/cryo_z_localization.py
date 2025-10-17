@@ -179,19 +179,19 @@ class CryoZLocalizationController(object):
 
         # To check if a target is selected
         self.current_target_coordinate_subscription = False
-        # Todo how to unsubscribe when closing Odemis?  # decoration
         self._tab_data.main.targets.subscribe(self._on_targets_changes)
         self._tab_data.main.currentTarget.subscribe(self._on_current_target_changes)
 
         # To check that a feature is selected
-        tab_data.main.currentFeature.subscribe(self._check_button_available, init=True)
+        tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
 
         # To disable the button during acquisition
-        tab_data.main.is_acquiring.subscribe(self._check_button_available)
+        tab_data.main.is_acquiring.subscribe(self._on_current_feature)
 
     def _enable_target_ctrls(self, enable: bool) -> None:
         """
-        Enables/disables the target controls
+        Enables/disables the target controls.
+        To be called in the main GUI thread.
         enable: If True, allow all the target controls to be used
         """
         self._panel.btn_go_to_target.Enable(enable)
@@ -331,7 +331,6 @@ class CryoZLocalizationController(object):
                                                                       va_2_ctrl=self._on_target_focus_pos)
 
             self._tab_data.main.currentTarget.value.coordinates.unsubscribe(self._on_current_coordinates_changes)
-            #TODO does it need to unsubscribed after closing Odemis?
             self._tab_data.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
                                                                                 init=True)
 
@@ -450,9 +449,11 @@ class CryoZLocalizationController(object):
             logging.warning("Combobox poi size has no value %s", value)
 
     @call_in_wx_main
-    def _check_button_available(self, evt) -> None:
+    def _on_current_feature(self, _=None) -> None:
         """
-        Enable/disable the localization button depending on the current state of the parameters.
+        Called when the current feature is changed, or is_acquiring is changed
+        Enable/disable the localization button depending on the current state of the parameters and reload the
+        relevant parameters related to the current feature.
         """
         # Only possible to run the function iff:
         # * A feature is selected
@@ -552,6 +553,7 @@ class CryoZLocalizationController(object):
     def _start_z_manager(self):
         """
         Called on button press, to start the localization that includes superZ manager with fiducials and poi.
+        Used as one alternative of "self._localization" method.
         """
         s = self._selected_stream
         if s is None:
@@ -645,6 +647,7 @@ class CryoZLocalizationController(object):
     def _start_z_localization(self):
         """
         Called on button press, to start the localization based on stigmator angle only.
+        Used as one alternative of "self._localization" method.
         """
         s = self._selected_stream
         if s is None:
