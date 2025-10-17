@@ -45,3 +45,52 @@ jobs:
               flake8 "$changed_file" --select W291,W292,W293,W391,E999  --exclude src/odemis/gui/main_xrc.py,src/odemis/gui/win/dialog_xrc.py
             fi
           done
+
+      - name: Install pngcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pngcheck
+
+      - name: Check PNG files have no metadata
+        run: |
+          set -euo pipefail
+          forbidden_chunks_regex='(tEXt|zTXt|iTXt|eXIf|tIME)'
+          has_issues=0
+          files='${{ steps.changed-files.outputs.all_changed_files }}'
+          if test -z "$files"
+          then
+            echo "No files changed; skipping PNG metadata check."
+            exit 0
+          fi
+          printf "Files to consider for PNG check:\n%s\n" "$files"
+          for file in $files
+          do
+            # Only consider png files
+            case "$file" in
+              *.png|*.PNG) ;;
+              *) continue ;;
+            esac
+            # Skip files that no longer exist (deleted/renamed out of tree)
+            if test ! -f "$file"
+            then
+              echo "Skipping non-existent: $file"
+              continue
+            fi
+            echo "Inspecting: $file"
+            # pngcheck -v exits non-zero for some structural issues; don't fail the loop on that alone
+            chunks=$(pngcheck -v "$file" 2>&1 || true)
+            if echo "$chunks" | grep -E -q "$forbidden_chunks_regex"
+            then
+              echo "::error file=$file::Contains forbidden metadata chunks"
+              echo "$chunks" | grep -E "$forbidden_chunks_regex" || true
+              has_issues=1
+            else
+              echo "OK: $file has no forbidden metadata chunks"
+            fi
+          done
+          if test "$has_issues" -ne 0
+          then
+            echo "One or more PNG files contain metadata (tEXt, zTXt, iTXt, eXIf or tIME)."
+            echo "Please strip metadata and commit again. For instance, call: ./util/groom-img.py src/odemis/gui/img/ "
+            exit 1
+          fi
