@@ -284,7 +284,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                                                                                         TargetType.ProjectedFiducial,
                                                                                         TargetType.SurfaceFiducial))
 
-        if (guimodel.TOOL_FIDUCIAL in tools_possible) and not (guimodel.TOOL_REGION_OF_INTEREST in tools_possible):
+        if (guimodel.TOOL_FIDUCIAL in tools_possible) and (guimodel.TOOL_REGION_OF_INTEREST not in tools_possible):
             self.cryotarget_fm_overlay = CryoCorrelationPointsOverlay(self, tab_data,
                                                                       allowed_targets=(TargetType.Fiducial,))
 
