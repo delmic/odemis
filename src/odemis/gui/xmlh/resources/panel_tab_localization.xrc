@@ -314,7 +314,7 @@
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxStaticText" name="label_feature_z">
+                                  <object class="wxStaticText" name="lbl_feature_z">
                                     <label>Feature Z</label>
                                     <fg>#DDDDDD</fg>
                                   </object>
@@ -529,18 +529,6 @@
                                   <flag>wxLEFT</flag>
                                   <border>52</border>
                                 </object>
-<!--                                <object class="sizeritem">-->
-<!--                                  <object class="wxStaticText" name="lbl_select_target">-->
-<!--                                    <label>No Target Selected</label>-->
-<!--                                    <style>wxALIGN_CENTRE</style>-->
-<!--                                    <XRCED>-->
-<!--                                      <assign_var>1</assign_var>-->
-<!--                                    </XRCED>-->
-<!--                                    <fg>#DDDDDD</fg>-->
-<!--                                  </object>-->
-<!--                                  <flag>wxLEFT</flag>-->
-<!--                                  <border>3</border>-->
-<!--                                </object>-->
                                 <orient>wxHORIZONTAL</orient>
                               </object>
                               <flag>wxLEFT</flag>
@@ -549,7 +537,7 @@
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxStaticText" name="label_target_z">
+                                  <object class="wxStaticText" name="lbl_target_z">
                                     <label>Target Z</label>
                                     <fg>#DDDDDD</fg>
                                   </object>

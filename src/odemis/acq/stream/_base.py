@@ -1313,7 +1313,7 @@ class Stream(object):
         md = self._find_metadata(raw.metadata)
         pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
         # For multipoint correlation, we assume that the pixel size in x is the same as in y
-        if abs(pxs[0]-pxs[1])>1e-9:
+        if abs(pxs[0]-pxs[1]) > 1e-9:
             logging.warning("Pixel size in x and y are not equal while computing pixel coordinates")
         pxs = pxs[:2]  # Take only X & Y, even if Z is available
         rotation = md.get(model.MD_ROTATION, 0)
@@ -1331,9 +1331,10 @@ class Stream(object):
         # A "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
         # For , p_pos_z is the focus position and translation[2] is the z position of the image center. We find z in pixel
         # coordinates by enforcing the iso-voxel condition between x, y and z
-        translation = md.get(model.MD_POS, (0, 0, 0))
+        tpos = md.get(model.MD_POS, (0, 0, 0))
+        tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
         # Z_OFFSET is used to have reference below the sample surface such that pixel values in z are always positive
-        z = ((p_pos_z + Z_OFFSET) - translation[2])/pxs[1]
+        z = ((p_pos_z + Z_OFFSET) - tpos_z) / pxs[1]
         pixel_pos = (pixel_pos_c[0] + size[0] / 2, - (pixel_pos_c[1] - size[1] / 2), z)
         return pixel_pos
 
@@ -1363,9 +1364,10 @@ class Stream(object):
         pixel_pos_c = (pixel_pos[0] - size[0] / 2, -(pixel_pos[1] - size[1] / 2))
         p_pos = tform.apply(pixel_pos_c)
 
-        translation = md.get(model.MD_POS, (0, 0, 0))
+        tpos = md.get(model.MD_POS, (0, 0, 0))
+        tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
         # Z_OFFSET is used to have reference below the sample surface such that pixel values in z are always positive
-        p_pos_z = pixel_pos[2] * pxs[1] + translation[2] - Z_OFFSET
+        p_pos_z = pixel_pos[2] * pxs[1] + tpos_z - Z_OFFSET
         return (p_pos[0], p_pos[1], p_pos_z)
 
     def getPhysicalCoordinates(self, pixel_pos: Tuple[float, float]) -> Optional[Tuple[float, float]]:
