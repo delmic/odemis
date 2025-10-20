@@ -104,9 +104,7 @@ def create_fibsemos_microscope() -> 'OdemisThermoMicroscope | OdemisTescanMicros
     md_calib = stage_md.get(model.MD_CALIB, {})
     stage_version = md_calib.get("version", None)
 
-    if stage_version == "tfs_1":
-        return create_fibsemos_tfs_microscope()
-    elif stage_version == "tfs_3":
+    if stage_version == "tfs_3":
         return create_fibsemos_tfs_microscope()
     elif stage_version == "tescan_1":
         return create_fibsemos_tescan_microscope()
