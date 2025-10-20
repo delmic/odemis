@@ -87,7 +87,7 @@ class CryoZLocalizationController(object):
             self._panel.btn_delete_target.Hide()
             self._panel.cmb_targets.Hide()
             self._panel.btn_go_to_target.Hide()
-            self._panel.label_target_z.Hide()
+            self._panel.lbl_target_z.Hide()
             self._panel.ctrl_target_z.Hide()
             self._panel.btn_use_current_target_z.Hide()
             self._panel.Layout()
@@ -154,7 +154,7 @@ class CryoZLocalizationController(object):
             self._panel.btn_delete_target.Hide()
             self._panel.cmb_targets.Hide()
             self._panel.btn_go_to_target.Hide()
-            self._panel.label_target_z.Hide()
+            self._panel.lbl_target_z.Hide()
             self._panel.ctrl_target_z.Hide()
             self._panel.btn_use_current_target_z.Hide()
             self._panel.Layout()
@@ -224,10 +224,11 @@ class CryoZLocalizationController(object):
         elif current_target.type.value == TargetType.Fiducial:
             self._enable_target_ctrls(True)
             # Select the current feature
-            index = fib_fiducial.index(current_target)
-            if index == -1:
-                logging.debug("Current selected target '%s' is not part of the list of targets",
-                              current_target.name.value)
+            try:
+                index = fib_fiducial.index(current_target)
+            except ValueError:
+                logging.warning("Current selected target '%s' is not part of the list of targets",
+                                current_target.name.value)
                 return
 
             self._panel.cmb_targets.SetSelection(index)

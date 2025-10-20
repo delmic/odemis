@@ -317,7 +317,7 @@ class FeaturesDecoder(json.JSONDecoder):
                                   stage_position=stage_position,
                                   fm_focus_position=fm_focus_position
                                   )
-            feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data)  if correlation_data else None
+            feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
             feature.status.value = obj['status']
             feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
             feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}

@@ -164,13 +164,6 @@ class CorrelationPointsController:
         # Key of the selected group chosen previously
         self.previous_group: Optional[tuple[tuple[int], tuple[float]]] = None
 
-        # Reset targets and current target and populate it based on the current feature
-        self.correlation_target = None
-        self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
-        self.current_target_coordinate_subscription = False
-        self.current_fib_surface_fiducial_subscription = False
-        self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
-
         # Interpolate the fm streams such that the pixel size in z is the same as in x and y
         streams_list = []
         for stream in self._tab_data_model.main.currentFeature.value.streams.value:
@@ -179,20 +172,17 @@ class CorrelationPointsController:
 
 
         self.streams_list = streams_list
-        correlation_data = self._tab_data_model.main.currentFeature.value.correlation_data
-        self.pm = self._tab_data_model.main.posture_manager
+        self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data
 
-        # Check if the correlation data is already present in the current feature
-        # Then load the streams, otherwise initialize the correlation data
-        if correlation_data:
-            self.correlation_target = correlation_data
-            # Load the streams
-            self.group_streams()
-            self._add_stream_group()
-        else:
-            self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data
-            self.group_streams()
-            self._add_stream_group()
+        # Reset targets and current target and populate it based on the current feature
+        self.current_target_coordinate_subscription = False
+        self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
+        self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
+
+        # Group the FM streams based on the shape and position
+        # Load the streams (FIB and FM) in the multipoint correlation window
+        self.group_streams()
+        self._add_stream_group()
 
         self._panel.fp_correlation_panel.Show(True)
 
@@ -227,7 +217,6 @@ class CorrelationPointsController:
             return
         self.previous_group = group_key
 
-        # self.correlation_target.fm_streams = []
         for key, indices in self.stream_groups.items():
             for index in indices:
                 stream = self.streams_list[index]
@@ -266,16 +255,25 @@ class CorrelationPointsController:
                 centre_pos = tuple([round(pos, 6) for pos in centre_pos])  # to handle floating point precision
                 self.correlation_target.fib_stream_key = (current_shape, centre_pos)
 
+        last_key = None
+        last_indices = None
+
         for insertion_index, (key, indices) in enumerate(self.stream_groups.items()):
-            self.correlation_target.fm_streams = []
-            self.correlation_target.fm_stream_key = key
             for index in indices:
-                self.correlation_target.fm_streams.append(self.streams_list[index])
                 stream = self.streams_list[index]
                 if isinstance(stream, StaticFluoStream):
                     stream.name.value = f"{stream.name.value}-Group-{insertion_index}"
                     self.streams_list[index] = stream
                     self._panel.streambar_controller.addStream(self.streams_list[index], play=False)
+            last_key, last_indices = key, indices
+
+        # Assign correlation target explicitly for the last group processed
+        # This fm group will be used for the coordinate conversions later on
+        # from physical to pixel space and vice versa.
+        if last_key and last_indices:
+            self.correlation_target.fm_stream_key = last_key
+            self.correlation_target.fm_streams = [self.streams_list[i] for i in last_indices]
+
         # Update the group visibility based on the latest changes
         self._tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_fm_streams_visiblity, init=True)
 
@@ -632,7 +630,7 @@ class CorrelationPointsController:
         # Enable or disable buttons based on stream selection.
         # When FM is selected, the Z-targeting button is enabled.
         # When FIB is selected, the Z-targeting button is disabled.
-        # For new targets, automatically perform Z targeting if MIP is checked for atleast one FM stream
+        # For new targets, automatically perform Z targeting if MIP is checked for at least one FM stream
         if not target:
             self.grid.ClearSelection()
             self.z_targeting_btn.Enable(False)
