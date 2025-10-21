@@ -156,7 +156,7 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
         unit: ["m", "m", "m", "rad", "rad"],
         refproc: "Standard",
     },
-    affects: ["Camera", "Spectrometer", "CL Detector", "SEM E-beam Full"],
+    affects: ["Camera", "Spectrometer", "SEM E-beam Full"],
 },
 
 # Merges the scan interface e-beam and the e-beam control (via API)
@@ -178,7 +178,7 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
         dwellTime: 10.e-6, # s
     },
     # affects the CCD in case of cathodoluminescence
-    affects: ["SEM Detector", "CL Detector", "Camera", "Spectrometer"],
+    affects: ["SEM Detector", "Camera", "Spectrometer"],
 },
 
 # Wraps the detectors, so that the "external" mode is set automatically when acquiring
@@ -230,7 +230,7 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
         FAV_POS_ACTIVE: {"x": -0.0499320073}, # m
         POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
     },
-    affects: ["Camera", "Spectrometer", "CL Detector"],
+    affects: ["Camera", "Spectrometer"],
 },
 
 # Controller for the motors moving the various parts of the optical box
@@ -253,55 +253,16 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
     },
 },
 
-# Mirror in Plate 2, selects between spectrometer and cl-detector
-"CL Selector": {
-    class: actuator.FixedPositionsActuator,
-    role: "cl-det-selector",
-    dependencies: {"x": "Optical Actuators"},
-    init: {
-        axis_name: "cl-sel",
-        positions: {
-            0.003: ["CL Detector"],
-            0.036: ["Spec CCD Flipper"]
-        },
-    },
-    affects: ["Spec CCD Flipper", "CL Detector"],
-},
-
-"CL Filter Wheel": {
-    class: actuator.FixedPositionsActuator,
-    role: cl-filter,
-    dependencies: {"band": "Optical Actuators"},
-    init: {
-        axis_name: "fw",
-        # It supports up to 8 filters
-        positions: {
-            # pos (rad) -> m,m
-            0.33920:       "pass-through",     # 1
-            1.12460:       [375.e-9, 425.e-9], # 2
-            1.91000:       [425.e-9, 475.e-9], # 3
-            2.69539:       [475.e-9, 525.e-9], # 4
-            3.48079:       [525.e-9, 575.e-9], # 5
-            4.26619:       [575.e-9, 625.e-9], # 6
-            5.05159:       [625.e-9, 675.e-9], # 7
-            5.83699:       [675.e-9, 725.e-9], # 8
-        },
-        cycle: 6.283185, # position of ref switch (0) after a full turn
-    },
-    affects: ["CL Detector"],
-},
-
 "Camera": {
     class: simcam.Camera,
     role: ccd,
     power_supplier: "Power Control Unit",
     init: {
-        image: "sparc-ar-mirror-aligned-pos.h5",  # only for simulator
+        image: "sparc-ar-mirror-align.h5",  # only for simulator
     },
     dependencies: {
         focus: "Spectrograph focus",
-        mirror: "Mirror Actuators",
-        stage: "XT Stage",
+        mirror: "Mirror Position Simulator",
     },
 },
 
@@ -363,7 +324,7 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
         #AXES_ORDER_REF: ["s", "l"],
-        FAV_POS_ACTIVE: {"l": 0.20792998299999998, 's': 0.0017800240999999999},  # m, m
+        FAV_POS_ACTIVE: {"l": 0.20792998299999998, "s": 0.0017800240999999999},  # m, m
     },
 },
 
@@ -377,6 +338,24 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
         axes: ["l", "s"], # mapped respectively to X, Y
         # TODO: to be measured (so that in the alignment tab, moving in X only moves horizontally in the SEM image)
         rotation: 2.37365 # rad (= 136°)
+    },
+},
+
+# Virtual component that exposes the mirror (l, s) and stage (z) positions as a
+# single logical actuator used by simulation and alignment code.
+"Mirror Position Simulator": {
+    class: actuator.MultiplexActuator,
+    role: null,
+    dependencies: {
+        "x": "Mirror Actuators in XY referential",
+        "y": "Mirror Actuators in XY referential",
+        "z": "XT Stage",
+    },
+    init: {
+        axes_map: {"x": "x", "y": "y", "z": "z"},
+    },
+    metadata: {
+        FAV_POS_ACTIVE: {"x": -0.14836, "y": -0.14571, "z": 0.05},  # m, m, m
     },
 },
 
