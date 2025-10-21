@@ -23,7 +23,6 @@ import logging
 import math
 import os
 import queue
-import statistics
 import threading
 import time
 from builtins import str
@@ -33,8 +32,8 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 from odemis import dataio, model, util
-from odemis.driver.simulated import ParabolicMirrorRayTracer
 from odemis.model import oneway
+from odemis.util.synthetic import ParabolicMirrorRayTracer
 
 ERROR_STATE_FILE = "simcam-hw.error"
 
@@ -154,30 +153,29 @@ class Camera(model.DigitalCamera):
             logging.info("Will not simulate focus")
             self._focus = None
 
-        self._img_simulator = None
         # Simulated image generator based on ray tracing for a parabola mirror system with a lens and camera (SPARC2)
-        # Requires a mirror with 'l' and 's' axes, and a stage with a 'z' axis
+        # Requires a mirror with 'x', 'y' and stage with 'z' axes
         try:
             mirror = dependencies["mirror"]
-            stage = dependencies["stage"]
-            if (not isinstance(mirror, model.ComponentBase) or not hasattr(mirror, "axes")
-                or not isinstance(mirror.axes, dict) or "l" not in mirror.axes or "s" not in mirror.axes):
-                raise ValueError("mirror %s must be a Component with 'l' and 's' axes" % (mirror,))
-            if (not isinstance(stage, model.ComponentBase) or not hasattr(stage, "axes")
-                or not isinstance(stage.axes, dict) or "z" not in stage.axes):
-                raise ValueError("stage %s must be a Component with a 'z' axis" % (stage,))
+            required_axes = ("x", "y", "z")
+            if not (
+                isinstance(mirror, model.ComponentBase)
+                and hasattr(mirror, "axes")
+                and isinstance(mirror.axes, dict)
+                and all(axis in mirror.axes for axis in required_axes)
+            ):
+                raise ValueError("mirror %s must be a Component with 'x', 'y' and 'z' axes" % (mirror))
 
-            z_aligned = statistics.mean(stage.axes["z"].range)
             mirror_md = mirror.getMetadata()
-            l_aligned = mirror_md[model.MD_FAV_POS_ACTIVE]["l"]
-            s_aligned = mirror_md[model.MD_FAV_POS_ACTIVE]["s"]
+            good_pos = mirror_md[model.MD_FAV_POS_ACTIVE]
 
-            self._img_simulator = ParabolicMirrorRayTracer(mirror, stage, self._img)
-            self._img_simulator.move_aligned_pos(l_aligned, s_aligned, z_aligned)
-            self._img_simulator.move_misaligned_pos(dl_misaligned=30e-6, ds_misaligned=-40e-6, dz_misaligned=100e-6)
-            logging.debug("Will simulate ray traced images using mirror %s and stage %s", mirror.name, stage.name)
+            self._img_simulator = ParabolicMirrorRayTracer(good_pos)
+            self._mirror = mirror
+            logging.debug("Will simulate ray traced images using mirror %s", mirror.name)
         except (TypeError, KeyError):
             logging.info("Will not simulate ray traced images")
+            self._img_simulator = None
+            self._mirror = None
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
@@ -287,8 +285,15 @@ class Camera(model.DigitalCamera):
             logging.debug("Sleeping extra %g s, for simulating event", extra_time)
             time.sleep(extra_time)
 
-        if self._img_simulator:
-            gen_img = self._img_simulator.simulate()
+        if self._img_simulator and self._mirror:
+            sim_img = self._img_simulator.simulate(self._mirror.position.value)
+            # Add some noise
+            mx = sim_img.max()
+            sim_img += numpy.random.randint(0, max(mx // 100, 10), sim_img.shape, dtype=sim_img.dtype)
+            # Clip, but faster than clip() on big array.
+            # There can still be some overflow, but let's just consider this "strong noise"
+            sim_img[sim_img > mx] = mx
+            gen_img = model.DataArray(sim_img)
         else:
             # Default simulation if simulated image generator is not available
             gen_img = self._simulate()
