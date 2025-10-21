@@ -381,10 +381,12 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
         grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
 
         # check if no error is raised (test fails if error is raised)
-        self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+        fm_grid_1_pos = self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+        self.stage.moveAbs(fm_grid_1_pos).result()
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_1, current_grid)
-        self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+        fm_grid_2_pos = self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+        self.stage.moveAbs(fm_grid_2_pos).result()
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_2, current_grid)
 
