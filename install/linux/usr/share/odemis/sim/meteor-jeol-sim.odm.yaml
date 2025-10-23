@@ -1,0 +1,205 @@
+# Simulator of the METEOR JEOL, for the JIB4700F.
+# There are two options to run it:
+# * Use the JEOL EIK server simulator (runs on the local PC), which can be run
+#   python3 src/odemis/driver/jeol/api/eik/server.py --port 8000
+# * Use the Multibeam Offline program (runs on a remote/virtual Windows PC)
+# Then, after starting the backend, you can reach the SEM posture with:
+# odemis position stage-bare z 0.0085
+
+"METEOR Jeol Sim": {
+    class: Microscope,
+    role: meteor,
+}
+
+"SEM": {
+    class: jeol.EIKSEM,
+    role: null,
+    init: {
+        #Settings if using JEOL External Control Server simulator running on the local PC
+        host: "127.0.0.1",
+        port: 8000,
+        #Settings if using the Multibeam Offline program on a remote PC
+        #host: "192.168.1.226",
+        #port: 22218,
+    },
+    children: {
+        stage: "Stage",
+    },
+}
+
+"Stage": {
+    role: stage-bare,
+    init: {
+        stage_range: {
+            # Stage ranges. These are required to be correctly specified for 
+            # the stage to be controllable by Odemis
+            "x": [-55.e-3, 10.e-3],  # m
+            "y": [-15.e-3, 15.e-3],  # m
+            "z": [0.e-3, 41.5e-3],  # m
+            "rx": [-3.3161, 3.3161],  # rad, angle range in degrees is -190 to +190
+            "rz": [-0.2617, 0.9599]  # rad, angle range in degrees is -15 to +55
+        },
+    },
+    metadata: {
+        SAMPLE_CENTERS: {
+            #DISH
+            "GRID 1": {"x": 0.e-3, "y": 0.e-3, "z": 8.5e-3},
+            #GRID
+            "GRID 2": {"x": 6.25e-3, "y": 0.e-3, "z": 8.5e-3}
+        },
+        CALIB: {
+            "x_0": 0.e-3,
+            "y_0": 0.e-3,
+            "z_0": 8.5e-3,
+            "dx": -53.e-3,
+            "dy": 0.0,
+            "dz": 0.0,
+            "version": "jeol_1"
+        },
+        FAV_FM_POS_ACTIVE: {
+            "rx": 0.69813,  # rad (40°)
+            "rz": 0.0
+        },
+        FAV_SEM_POS_ACTIVE: {
+            "rx": 0.0,
+            "rz": 0.0
+        },
+        SEM_IMAGING_RANGE: {
+            "x": [-2.e-3, 8.25e-3],
+            "y": [-2.e-3, 2.e-3],
+            "z": [4.e-3, 41.5e-3]
+        },
+        FM_IMAGING_RANGE: {
+            "x": [-55.e-3, -44.75e-3],
+            "y": [-8.25e-3, 8.25e-3],
+            "z": [5.5e-3, 11.5e-3]
+        },
+        FAV_POS_DEACTIVE: {"x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0 }
+    },
+}
+
+"Light Source": {
+    class: omicronxx.HubxX,
+    role: light,
+    init: {
+        port: "/dev/fakehub", # Simulator
+    },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        # Update these values based on the objective currently used:
+        mag: 84.0, # ratio, effective magnification of complete light path -> mag = objective_mag * 300 / 180
+        na: 0.8, # ratio, numerical aperture of objective
+        ri: 1.0, # ratio, refractive index of the medium between the objective and the sample (1.0 for vacuum)
+    },
+    affects: ["Camera"]
+}
+
+# Andor Zyla
+"Camera": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    init: {
+        # device: 0,  # if a real camera is plugged in, it's usually 0
+        device: "fake",
+        # TODO: adjust the axes so that they match the SEM orientation (with scan rotation = 0)
+        transp: [2, 1], # To swap/invert axes
+        # TODO: adjust the cropping (use multiple of 4, for a better handling of the binning)
+        # Calibrate per system to obtain right balance between uniform image and large field of view.
+        # max_res: [2048, 2048], # Crop the image as the optical FoV is smaller than the whole CMOS area
+    },
+    properties: {
+        # To change some default settings
+#        targetTemperature: 0,
+    },
+    metadata: {
+        # If the camera is not exactly parallel to the stage axes, the angle can be adjusted
+        ROTATION: 0, # [rad] (=0°)
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["fw"],
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        #inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    dependencies: {"slave": "Optical Actuators"},
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    affects: ["Camera"],
+}
+
+# CLS3252dsc-1
+"Optical Focus": {
+    class: smaract.MCS2,
+    role: focus,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 0mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-15.e-3, 5.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -11.5e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': -1e-3}
+    },
+    affects: ["Camera"],
+}
