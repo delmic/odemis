@@ -307,8 +307,13 @@ class Camera(model.DigitalCamera):
 
         shape = image.shape
         binning = self.binning.value
-        fnt_size = int(80/binning[0])
-        fnt = ImageFont.truetype('FreeSans.ttf', fnt_size)
+        fnt_size = max(2, 80 // binning[0])
+        try:
+            fnt = ImageFont.truetype("DejaVuSans.ttf", fnt_size)
+        except OSError as ex:
+            # Fall back to default font
+            logging.warning("Could not load 'DejaVuSans.ttf' font (%s), falling back to tiny default font", ex)
+            fnt = ImageFont.load_default()
         # create txt image for overlay
         im_txt = Image.new('F', shape[::-1], 0)
         d = ImageDraw.Draw(im_txt)
