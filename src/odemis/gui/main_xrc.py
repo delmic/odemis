@@ -1302,7 +1302,11 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_lens_switch_x = xrc.XRCCTRL(self, "btn_m_lens_switch_x")
         self.btn_p_lens_switch_x = xrc.XRCCTRL(self, "btn_p_lens_switch_x")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
+        self.btn_auto_align = xrc.XRCCTRL(self, "btn_auto_align")
+        self.gauge_auto_align = xrc.XRCCTRL(self, "gauge_auto_align")
         self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
+        self.lbl_step_size_z = xrc.XRCCTRL(self, "lbl_step_size_z")
+        self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
         self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
         self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
         self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
@@ -1311,6 +1315,10 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.btn_p_stage_z = xrc.XRCCTRL(self, "btn_p_stage_z")
+        self.btn_m_stage_z = xrc.XRCCTRL(self, "btn_m_stage_z")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
         self.pnl_light_aligner = xrc.XRCCTRL(self, "pnl_light_aligner")
         self.slider_light_aligner = xrc.XRCCTRL(self, "slider_light_aligner")
         self.lbl_p_light_aligner_z = xrc.XRCCTRL(self, "lbl_p_light_aligner_z")
@@ -15613,16 +15621,91 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_auto_align">
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <label>Auto align</label>
+                          <hidden>1</hidden>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxGauge" name="gauge_auto_align">
+                          <size>-1,10</size>
+                          <range>100</range>
+                          <value>0</value>
+                          <hidden>1</hidden>
+                          <style>wxGA_SMOOTH</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>7</border>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <vgap>5</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>1</growablecols>
+                      <growablerows/>
+                    </object>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText">
-                          <label>Step size</label>
+                          <label>Step size (X, Y)</label>
                         </object>
                         <flag>wxRIGHT</flag>
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitFloatSlider" name="slider_mirror">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_step_size_z">
+                          <label>Step size (Z)</label>
+                          <hidden>1</hidden>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_stage">
+                          <hidden>1</hidden>
                           <size>-1,20</size>
                           <value>0.000001</value>
                           <min>0.0000001</min>
@@ -15777,6 +15860,78 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           </XRCED>
                         </object>
                         <cellpos>2,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_pz">
+                          <label>+Z</label>
+                          <hidden>1</hidden>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,6</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_stage_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↑</label>
+                          <hidden>1</hidden>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,6</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_stage_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↓</label>
+                          <hidden>1</hidden>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,6</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mz">
+                          <label>-Z</label>
+                          <hidden>1</hidden>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,6</cellpos>
                       </object>
                       <vgap>0</vgap>
                       <hgap>5</hgap>

@@ -33,7 +33,6 @@ from functools import partial
 
 import pkg_resources
 import wx
-from odemis.acq.stream_settings import StreamSettingsConfig
 
 import odemis.acq.stream as acqstream
 import odemis.gui
@@ -41,10 +40,14 @@ import odemis.gui.conf.file
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
-from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.acq.align.autofocus import (
+    GetSpectrometerFocusingDetectors,
+    Sparc2AutoFocus,
+    Sparc2ManualFocus,
+)
+from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
-from odemis.gui.conf.data import get_local_vas, get_hw_config
+from odemis.gui.conf.data import get_hw_config, get_local_vas
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
@@ -53,9 +56,18 @@ from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
+from odemis.gui.util.widgets import AxisConnector, ProgressiveFutureConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
-from odemis.util import units, spot, limit_invocation, almost_equal, driver
+from odemis.util import almost_equal, driver, limit_invocation, spot, units
+
+try:
+    from sparc_calibrations.parabolic_mirror_alignment import parabolic_mirror_alignment, AlignmentAxis
+    sparc_calib_available = True
+except ImportError as err:
+    sparc_calib_available = False
+    logging.info("sparc_calibrations module not available, mirror auto alignment will be disabled: %s", err)
+
+EBEAM_WD_LIMIT = 200e-6  # [m] max distance between current ebeam focus and calibrated focus for automatic mirror alignment
 
 
 class Sparc2AlignTab(Tab):
@@ -818,6 +830,25 @@ class Sparc2AlignTab(Tab):
         if main_data.brightlight_ext:
             main_data.brightlight_ext.power.value = main_data.brightlight_ext.power.range[0]
 
+        # Mirror auto-alignment
+        if sparc_calib_available and main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
+            mirror_md = main_data.mirror.getMetadata()
+            calib = mirror_md.get(model.MD_CALIB, {})
+            if "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib:
+                # hidden by default in xrc file
+                self.panel.lbl_step_size_z.Show(True)
+                self.panel.slider_stage.Show(True)
+                self.panel.lbl_pz.Show(True)
+                self.panel.btn_p_stage_z.Show(True)
+                self.panel.btn_m_stage_z.Show(True)
+                self.panel.lbl_mz.Show(True)
+                self.panel.btn_auto_align.Show(True)
+                self.panel.gauge_auto_align.Show(True)
+                self.panel.gauge_auto_align.SetRange(100)
+                self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
+                self._mirror_auto_align_future = model.InstantaneousFuture()
+                logging.debug("Mirror auto-alignment enabled.")
+
         # Bind moving buttons & keys
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
@@ -832,6 +863,85 @@ class Sparc2AlignTab(Tab):
         # TODO: Have a warning text to indicate there is no background image?
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
+
+    def _on_btn_auto_align(self, evt):
+        """
+        Handle the "Auto alignment" button click.
+
+        Starts or cancels the mirror auto-alignment task. If an alignment is
+        currently running this will cancel it. Otherwise it launches a new
+        mirror alignment using the current values from the auto-alignment
+        settings (search range and max iterations).
+        The button label is updated to indicate the running/cancellable state.
+        """
+        if self._mirror_auto_align_future.running():
+            self._mirror_auto_align_future.cancel()
+            return
+        self.panel.gauge_auto_align.SetValue(0)
+        mirror_md = self.tab_data_model.main.mirror.getMetadata()
+        calib = mirror_md[model.MD_CALIB]
+        min_step_size = calib["auto_align_min_step_size"]
+        calib_ebeam_wd = calib["ebeam_working_distance"]
+        actual_ebeam_wd = self.tab_data_model.main.ebeam_focus.position.value["z"]
+        # Give a warning message and return if the ebeam working distance differs too much from the calibrated value
+        if abs(calib_ebeam_wd - actual_ebeam_wd) > EBEAM_WD_LIMIT:
+            dlg = wx.MessageDialog(
+                None,
+                "The electron beam working distance %.3f mm differs more than %.3f mm from the "
+                "calibrated value %.3f mm.\n\n"
+                "Do you want to continue with auto-alignment?"
+                % (actual_ebeam_wd * 1e3, EBEAM_WD_LIMIT * 1e3, calib_ebeam_wd * 1e3),
+                "Auto-alignment warning",
+                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
+            )
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result != wx.ID_YES:
+                return
+        l_align = AlignmentAxis("l", min_step_size["l"], self.tab_data_model.main.mirror)
+        s_align = AlignmentAxis("s", min_step_size["s"], self.tab_data_model.main.mirror)
+        z_align = AlignmentAxis("z", min_step_size["z"], self.tab_data_model.main.stage)
+        self._mirror_auto_align_future = parabolic_mirror_alignment(
+            [l_align, s_align, z_align],  # the order matters
+            self.tab_data_model.main.ccd,
+        )
+        self._mirror_auto_align_future.add_update_callback(self._on_auto_align_update)
+        self._mirror_auto_align_future.add_done_callback(self._on_auto_align_done)
+        self.panel.btn_auto_align.SetLabel("Cancel")
+
+    def _on_auto_align_update(self, future, start, end):
+        """
+        Callback invoked when the auto-alignment task has an update.
+
+        Updates the auto-alignment progress gauge (via wx.CallAfter) to reflect
+        the current progress.
+        """
+        if hasattr(future, "current_step") and hasattr(future, "n_steps") and future.n_steps > 0:
+            logging.debug("Auto align step progress: %s / %s", future.current_step, future.n_steps)
+            wx.CallAfter(self.panel.gauge_auto_align.SetValue, int(future.current_step / future.n_steps * 100))
+
+    def _on_auto_align_done(self, f):
+        """
+        Callback invoked when the auto-alignment task finishes.
+
+        Retrieves the future result to surface any exceptions and logs the outcome.
+        Always resets the auto-alignment button label back to "Auto align" (via wx.CallAfter)
+        so the GUI returns to the idle state.
+
+        :param f: (concurrent.futures.Future) Future returned by parabolic_mirror_alignment
+                  (or a ProgressiveFuture). Calling f.result() will re-raise any
+                  exception that occurred during the task.
+        """
+        try:
+            f.result()
+            logging.debug("Auto alignment successful")
+        except CancelledError:
+            logging.debug("Auto alignment cancelled")
+        except Exception:
+            logging.exception("Auto alignment failed")
+        finally:
+            self._mirror_auto_align_future = model.InstantaneousFuture()
+            wx.CallAfter(self.panel.btn_auto_align.SetLabel, "Auto align")
 
     def _on_fbdet1_should_update(self, should_update):
         if should_update:
@@ -1361,6 +1471,7 @@ class Sparc2AlignTab(Tab):
             pages.append("doc/sparc2_lens.html")
         elif mode == "mirror-align":
             pages.append("doc/sparc2_mirror.html")
+            pages.append("doc/sparc2_mirror_auto_alignment.html")
         elif mode == "lens2-align":
             pages.append("doc/sparc2_lens_switch.html")
         elif mode == "center-align":
