@@ -33,7 +33,6 @@ from functools import partial
 
 import pkg_resources
 import wx
-from odemis.acq.stream_settings import StreamSettingsConfig
 
 import odemis.acq.stream as acqstream
 import odemis.gui
@@ -41,10 +40,16 @@ import odemis.gui.conf.file
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
-from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.acq.align.autofocus import (
+    GetSpectrometerFocusingDetectors,
+    Sparc2AutoFocus,
+    Sparc2ManualFocus,
+)
+from odemis.acq.align.mirror import mirror_alignment
+from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
-from odemis.gui.conf.data import get_local_vas, get_hw_config
+from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.conf.data import get_hw_config, get_local_vas
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
@@ -53,9 +58,9 @@ from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
+from odemis.gui.util.widgets import AxisConnector, ProgressiveFutureConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
-from odemis.util import units, spot, limit_invocation, almost_equal, driver
+from odemis.util import almost_equal, driver, limit_invocation, spot, units
 
 
 class Sparc2AlignTab(Tab):
@@ -833,6 +838,81 @@ class Sparc2AlignTab(Tab):
         # TODO: Have a warning text to indicate there is no background image?
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
+        if main_data.mirror and main_data.stage and main_data.ccd:
+            self.auto_align_panel = SettingsPanel(
+                self.panel.pnl_auto_align, size=(self.panel.pnl_auto_align.Parent.Size[0], 90)
+            )
+            self.auto_align_panel.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+            _, self.auto_align_rng = self.auto_align_panel.add_float_field(
+                label_text="Search range",
+                value=50e-6,
+                conf={
+                  "min_val": 10e-6,
+                  "max_val": 100e-6,
+                  "unit": "m",
+                  "accuracy": 6,
+                  "key_step": 1e-6,
+                },
+            )
+            self.auto_align_rng.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+            _, self.auto_align_max_iter = self.auto_align_panel.add_int_field(
+                label_text="Max iterations",
+                value=200,
+                conf={
+                  "min_val": 100,
+                  "max_val": 500,
+                  "key_step": 5,
+                },
+            )
+            self.auto_align_max_iter.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+            _, self.btn_auto_align = self.auto_align_panel.add_run_btn("Auto alignment")
+            self.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
+            self.auto_align_future = model.InstantaneousFuture()
+
+    def _on_btn_auto_align(self, evt):
+        """
+        Handle the "Auto alignment" button click.
+
+        Starts or cancels the mirror auto-alignment task. If an alignment is
+        currently running this will cancel it. Otherwise it launches a new
+        mirror alignment using the current values from the auto-alignment
+        settings (search range and max iterations).
+        The button label is updated to indicate the running/cancellable state.
+        """
+        if self.auto_align_future.running():
+            self.auto_align_future.cancel()
+            return
+        self.auto_align_future = mirror_alignment(
+            self.tab_data_model.main.mirror,
+            self.tab_data_model.main.stage,
+            self.tab_data_model.main.ccd,
+            search_range=float(self.auto_align_rng.GetValue()),
+            max_iter=int(self.auto_align_max_iter.GetValue()),
+        )
+        self.auto_align_future.add_done_callback(self._on_auto_align_done)
+        self.btn_auto_align.SetLabel("Cancel")
+
+    def _on_auto_align_done(self, f):
+        """
+        Callback invoked when the auto-alignment task finishes.
+
+        Retrieves the future result to surface any exceptions and logs the outcome.
+        Always resets the auto-alignment button label back to "Run" (via wx.CallAfter)
+        so the GUI returns to the idle state.
+
+        :param f: (concurrent.futures.Future) Future returned by mirror_alignment
+                  (or a ProgressiveFuture). Calling f.result() will re-raise any
+                  exception that occurred during the task.
+        """
+        try:
+            f.result()
+            logging.debug("Auto alignment successful")
+        except CancelledError:
+            logging.debug("Auto alignment cancelled")
+        except Exception:
+            logging.exception("Auto alignment failed")
+        finally:
+            wx.CallAfter(self.btn_auto_align.SetLabel, "Run")
 
     def _on_fbdet1_should_update(self, should_update):
         if should_update:
