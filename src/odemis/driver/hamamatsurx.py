@@ -1043,13 +1043,26 @@ class DelayGenerator(model.HwComponent):
             # Create a VA, with a corresponding setter function
             delay_setter = functools.partial(self._setDelayByName, rx_param)
             self._delay_setters[rx_param] = delay_setter  # keep a ref to the partial so that it's not garbage collected
-            delay_va = model.FloatContinuous(delay, range_delay, setter=delay_setter, unit="s")
+            if rx_param == "Delay Time":  # C12270
+                # On this delay generator, the unit is just arbitrary, representing the number of internal
+                # ticks relative to the frequency of the signal. IOW, it's not possible to map it to
+                # a time unit reliably. Moreover, it's an int, so the range is much larger than other VAs.
+                unit = None
+            else:
+                unit = "s"
+
+            delay_va = model.FloatContinuous(delay, range_delay, setter=delay_setter, unit=unit)
             setattr(self, va_name, delay_va)
 
-        # TODO: on Synchroscan (C12270), the delay generator has a "Lock Mode" parameter.
-        # It could be controlled as a VA phaseLocked. The "Device Status" parameter indicates whether
+        # With the Synchroscan (C12270), the delay generator has a "Lock Mode" parameter.
+        # It could be controlled as a VA phaseLock. The "Device Status" parameter indicates whether
         # the phase lock (aka PLL) works or not. If not, the .state VA could be changed accordingly,
-        # and phaseLocked reset to False.
+        # and phaseLock reset to False.
+        # According to the manual, the values can be "UNLOCKED" -> SCANNING -> LOCKED
+        # Device status can be "Lock Error" (while the lock mode is "Locked")
+        if "Lock Mode" in avail_params:
+            locked = self.GetLockMode()
+            self.phaseLock = model.BooleanVA(locked, setter=self._set_phase_lock)
 
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
@@ -1093,6 +1106,41 @@ class DelayGenerator(model.HwComponent):
         triggerRate_raw = self.parent.DevParamGet(self.location, "Repetition Rate")  # returns a list
         return float(triggerRate_raw[0])
 
+    def GetLockMode(self) -> bool:
+        """
+        Get the (phase) lock mode status
+        :return: the current mode
+        """
+        mode_raw = self.parent.DevParamGet(self.location, "Lock Mode")  # returns a list
+        mode_str = mode_raw[0].lower()
+        # From tests, it seems it can only be "Locked" or "Unlocked", and what actually happens is
+        # reported in the "Device Status".
+        if mode_str == "locked":
+            return True
+        elif mode_str == "unlocked":
+            return False
+        else:
+            # TODO: need to return a different value, and the caller would do something more sensible
+            # with it. It can typically indicate that the locking failed (because of the signal not
+            # containing the expected frequency). One option would be then to change the .state to error.
+            # and report unlocked.
+            logging.warning("Unknown delay generator lock mode: %s", mode_raw[0])
+            return False
+
+    def SetLockMode(self, locked: bool) -> None:
+        """
+        Changes the (phase) lock mode status.
+        Note: blocking. When setting Locked, it can take a while (> 10 s).
+        """
+        mode = "Locked" if locked else "Unlocked"
+        # DevParamSet doesn't have a timeout parameter, so directly use the low-level function.
+        # self.parent.DevParamSet(self.location, "Lock Mode", mode)
+        self.parent.sendCommand("DevParamSet", self.location, "Lock Mode", mode, timeout=30)
+
+    def _set_phase_lock(self, lock: bool) -> bool:
+        self.SetLockMode(lock)  # Blocking, can take long
+        return self.GetLockMode()
+
     def GetDelayByName(self, delay_name: str):
         """
         Get the current value from the trigger delay HW (RemoteEx: delay D).
@@ -1101,7 +1149,6 @@ class DelayGenerator(model.HwComponent):
         """
         delay_raw = self.parent.DevParamGet(self.location, delay_name)  # returns a list
         delay = float(delay_raw[0])
-
         return delay
 
     def _setDelayByName(self, delay_name: str, value: float):
@@ -1123,7 +1170,6 @@ class DelayGenerator(model.HwComponent):
         """
         min_time = 0
         max_time = float(self.parent.DevParamInfoEx(self.location, delay_name)[-1])
-        max_time = min(max_time, 10)  # don't report too high range
         range_time = (min_time, max_time)
 
         return range_time
@@ -1148,6 +1194,12 @@ class DelayGenerator(model.HwComponent):
                 if va._value != rx_val:
                     va._value = rx_val
                     va.notify(rx_val)
+
+            if hasattr(self, "phaseLock"):
+                lock_mode = self.GetLockMode()
+                if lock_mode != self.phaseLock._value:
+                    self.phaseLock._value = lock_mode
+                    self.phaseLock.notify(lock_mode)
 
         except Exception:
             logging.exception("Unexpected failure when polling delay generator settings")
