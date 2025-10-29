@@ -848,7 +848,7 @@ def project_angular_spectrum_to_grid(
     theta_mn_mx = (-theta_mn_mx[0], theta_mn_mx[1]) if angle_range is None else angle_range
 
     # Define the ideal theta list. Use the min/max angle and linearly spread 1 mrad.
-    theta_list_linear_len = round((theta_mn_mx[1] - theta_mn_mx[0]) / 1e-3)
+    theta_list_linear_len = int(round((theta_mn_mx[1] - theta_mn_mx[0]) / 1e-3))
     # Make sure it's not too small, if range is tiny or image is very fine
     if theta_list_linear_len < data.shape[0]:  # TODO use the length of the biggest theta_list_wl
         logging.info("Increasing theta list length to %s, from %s", data.shape[0], theta_list_linear_len)
