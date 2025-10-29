@@ -1,3 +1,12 @@
+odemis (3.7.5-1) focal; urgency=medium
+
+  * New version: 3.7.5
+  * Main bug fixes and improvements:
+   - Windows: fix "XRC error 472", which happened on some Windows 11 computers
+   - SPARC: improve angular spectrum display when no background data is available
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 29 Oct 2025 15:35:24 +0100
+
 odemis (3.7.4-1) focal; urgency=medium
 
   * New version: 3.7.4
