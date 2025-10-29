@@ -361,6 +361,12 @@ class MeteorPostureManager(MicroscopePostureManager):
          }
         }
 
+    def create_sample_stage(self):
+        self.sample_stage = SampleStage(name="Sample Stage",
+                                        role="stage",
+                                        stage_bare=self.stage,
+                                        posture_manager=self)
+
     def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
         """
         Detects the current stage position of meteor
@@ -610,17 +616,14 @@ class MeteorPostureManager(MicroscopePostureManager):
         Get the scan rotation value for SEM/FIB, and ensure they match.
         :return: the scan rotation value in radians
         """
-
-        # need to check if e-beam and ion-beam are available
-        comps = model.getComponents()
-        roles = [comp.role for comp in comps]
-        if not ("e-beam" in roles and "ion-beam" in roles):
-            logging.warning("e-beam and/or ion-beam not available, scan rotation will be set to 0")
+        try:
+            ebeam = model.getComponent(role='e-beam')
+            ion_beam = model.getComponent(role='ion-beam')
+        except LookupError:
+            logging.warning("e-beam and/or ion-beam not available, scan rotation assumed to 0°")
             return 0
 
         # check if e-beam and ion-beam have the same rotation
-        ebeam = model.getComponent(role='e-beam')
-        ion_beam = model.getComponent(role='ion-beam')
         sr = ebeam.rotation.value
         ion_sr = ion_beam.rotation.value
         if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
@@ -1127,12 +1130,6 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             fixed_fm_sample = {"z": fixed_fm_sample["z"]}  # Drop x and y, to make clear only z is used
             self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: fixed_fm_sample})
 
-    def create_sample_stage(self):
-        self.sample_stage = SampleStage(name="Sample Stage",
-                                        role="stage",
-                                        stage_bare = self.stage,
-                                        posture_manager=self)
-
     def _transformFromSEMToMeteor(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the meteor/FM imaging area.
@@ -1592,13 +1589,120 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # Y/Z axes are not perpendicular. The angle depends on rx (if rx==0°, they are perpendicular)
         # To compensate for this, we use shear and scale.
         stage_md = self.stage.getMetadata()
-        rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
-        shear = (-math.tan(rx_fm), 0)
-        scale = (1, 1 / math.cos(rx_fm))
 
         # Automatic conversion to sample-stage axes
         self.postures = [SEM_IMAGING, FM_IMAGING]
-        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt, shear=shear, scale=scale)
+        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+            self.postures.append(MILLING)
+        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+        self.create_sample_stage()
+
+        # Update the posture based on the actual metadata
+        self._update_posture(self.stage.position.value)
+
+    def _initialise_transformation(
+            self,
+            axes: Sequence[str],
+            rotation: float = 0,
+            scale: tuple = (1, 1),
+            translation: tuple = (0, 0),
+            shear: tuple = (0, 0),
+    ):
+        """
+        Initializes the transformation parameters that allows conversion between stage-bare and sample plane.
+        :param axes: stage axes which are used to calculate transformation parameters
+        :param rotation: rotation in radians from sample plane to stage
+        :param scale: scale from sample to stage
+        :param translation: translation from sample to stage
+        :param shear: shear from sample to stage
+        """
+        self._axes_dep = {"x": axes[0], "y": axes[1]}  # TODO: Should be called y, z... or even better: also take x as first axis
+        self._update_conversion(rotation)
+        self._initialise_offset()
+
+    def _update_conversion(self,
+                           rotation: float,
+                           ):
+        """
+        Computes transformation parameters based on the given metadata to allow conversion
+        stage-bare and sample plane.
+        NOTE: transformations are defined as sample stage -> stage bare
+        the inverse transformation is used for stage bare -> sample stage
+        :param rotation: pre-tilt in radians, rotation from sample plane to stage
+        """
+        tf_id = numpy.eye(3)
+        tf_reverse = -tf_id  # The Tescan stage convention is opposite of Odemis so inverse the direction of the XYZ axis.
+
+        # FM imaging
+        stage_md = self.stage.getMetadata()
+        rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
+        rot_matrix_3d, _ = get_rotation_transforms(rx=rotation)
+        tf_tilt = self._get_tilt_transformation(rx_fm)
+        tf_fm = tf_reverse @ tf_tilt @ rot_matrix_3d
+        tf_fm_inv = numpy.linalg.inv(tf_fm)
+
+        # Compensate for the scan rotation (around Z) when in SEM imaging, and for the pre-tilt
+        # with the expectation that the stage rz is 180° opposite of the FM imaging => - pre_tilt
+        sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
+        tf_sr, _ = get_rotation_transforms(rx=-rotation, rz=-sr)
+
+        rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
+        tf_tilt = self._get_tilt_transformation(rx_sem)
+        tf_sem = tf_reverse @ tf_tilt @ tf_sr
+        tf_sem_inv = numpy.linalg.inv(tf_sem)
+
+        # TODO: update MILLING transformations when changing milling angle
+        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+            mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+            rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["rx"],
+                                                              pre_tilt=self.pre_tilt,
+                                                              column_tilt=self.fib_column_tilt)
+            # Scan rotation and pre-tilt are the same as in SEM imaging, so can reuse tf_sr
+            tf_tilt = self._get_tilt_transformation(rx_mill)
+            tf_mill = tf_reverse @ tf_tilt @ tf_sr
+        else:
+            tf_mill = tf_id
+
+        tf_mill_inv = numpy.linalg.inv(tf_mill)
+        logging.debug(f"tf_matrix: {tf_fm}, tf_sem: {tf_sem}, tf_mill: {tf_mill}")
+
+        # From sample-stage to stage-bare
+        self._transforms = {FM_IMAGING: tf_fm,
+                            SEM_IMAGING: tf_sem,
+                            MILLING: tf_mill,
+                            UNKNOWN: tf_id}
+        # From stage-bare to sample-stage
+        self._inv_transforms = {FM_IMAGING: tf_fm_inv,
+                                SEM_IMAGING: tf_sem_inv,
+                                MILLING: tf_mill_inv,
+                                UNKNOWN: tf_id}
+
+    def _get_tilt_transformation(self, rx: float) -> numpy.ndarray:
+        """
+        Computes the transformation matrix based on the given tilt (rx) angle, on the Tescan stage.
+        Note that this is special on Tescan because the Z axis is not perpendicular to Y when the
+        stage is tilted.
+        :param rx: stage-bare tilt angle in radians
+        :return: tilt transformation matrix
+        """
+        shear = (-math.tan(rx), 0)
+        scale = (1, 1 / math.cos(rx))  # rx is always < 90°, so no division by zero
+        # The shear & scale parameters are for the 2nd and 3rd axes (Y and Z) because Z stays always
+        # parallel to the e-beam column, while Y changes with the stage tilt.
+        shear_matrix_3d = numpy.array([
+            [1, 0, 0],         # x-axis remains unaffected
+            [0, 1, shear[0]],  # y-axis shear
+            [0, shear[1], 1],  # z-axis shear
+        ])
+
+        scale_matrix_3d = numpy.array([
+            [1, 0, 0],  # x-axis remains unaffected
+            [0, scale[0], 0],  # y-axis scale
+            [0, 0, scale[1]],  # z-axis scale
+        ])
+
+        tf_tilt = scale_matrix_3d @ shear_matrix_3d
+        return tf_tilt
 
     def check_calib_data(self, required_keys: set):
         """
@@ -1621,46 +1725,29 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
-        current_position = self.getCurrentPostureLabel()
-        end_pos = None
+        stage_position = self.stage.position.value
+        current_posture = self.getCurrentPostureLabel(stage_position)
 
-        if target_pos_lbl == LOADING:
+        if target_pos_lbl in (GRID_1, GRID_2):
+            # Go to grid center: only works if in a supported sample stage posture
+            if current_posture not in self.postures:
+                raise ValueError(f"Cannot go to grid position from current posture {current_posture}")
+            sem_grid_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[target_pos_lbl]]
+            sem_grid_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            end_pos = self.to_posture(pos=sem_grid_pos, posture=current_posture)
+        elif target_pos_lbl == LOADING:
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
-        elif current_position in [LOADING, SEM_IMAGING]:
-            if target_pos_lbl in [SEM_IMAGING, GRID_1]:
-                # if at loading, and sem is pressed, choose grid1 by default
-                sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
-                sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-                end_pos = sem_grid1_pos
-            elif target_pos_lbl == GRID_2:
-                sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-                end_pos = sem_grid2_pos
-            elif target_pos_lbl == FM_IMAGING:
-                if current_position == LOADING:
-                    # if at loading and fm is pressed, choose grid1 by default
-                    sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                    sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-                    fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
-                elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
-                end_pos = fm_target_pos
-        elif current_position == FM_IMAGING:
-            if target_pos_lbl == GRID_1:
-                sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
-                sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-                end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
-            elif target_pos_lbl == GRID_2:
-                sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-                end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
-            elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
-
-        if end_pos is None:
+        elif current_posture == LOADING:
+            # Go always to GRID 1 center, in the posture requested
+            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+            sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            end_pos = self.to_posture(pos=sem_grid1_pos, posture=target_pos_lbl)
+        elif current_posture in self.postures:
+            end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
+        else:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
-                POSITION_NAMES.get(current_position, current_position))
+                POSITION_NAMES.get(current_posture, current_posture))
             )
 
         return end_pos
@@ -1765,13 +1852,107 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
+    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the SEM imaging area to the
+        milling imaging area.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Call out calibrated values and stage tilt and rotation angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE].copy()
+
+        # Define values that are used more than once
+        rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
+        # NOTE: mill_pos_active uses the "rx" key to refer to the milling angle (the angle between the ion beam and the sample plane)
+        # not the actual Rx (the tilt with regard to the SEM column axis)!
+        # TODO MD_FAV_MILL_POS_ACTIVE["rx"] should be renamed for better clarity to something like "milling_angle"
+        mill_angle = mill_pos_active.pop("rx")
+        rx_mill = calculate_stage_tilt_from_milling_angle(mill_angle, pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
+        mill_pos_active["rx"] = rx_mill # update the computed rx based on the milling angle, see the note above
+
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_sem) + b_y * math.sin(rx_sem)
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+        # at the SEM position stage tilt
+        sem_current_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_current_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+
+        # Calculate the equivalent coordinates of the calibrated position, at the milling position
+        mill_target_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_mill)) - b_z * math.tan(rx_mill)
+        mill_target_pos_z = 0 - b_y * math.tan(rx_mill) - b_z * (1 - 1 / math.cos(rx_mill))
+
+        # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+        # at the milling position.
+        # X stays the same as when switching from SEM to MILL only Y and Z change.
+        transformed_pos["x"] = pos["x"]
+        transformed_pos["y"] = mill_target_pos_y + (pos["y"] - sem_current_pos_y)
+        transformed_pos["z"] = mill_target_pos_z + (pos["z"] - sem_current_pos_z)
+
+        # Update the angles to the MILL position angles
+        transformed_pos.update(mill_pos_active)
+
+        return transformed_pos
+
+    def _transformFromMillingToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the milling imaging area
+        to the SEM imaging area.
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Call out calibrated values and stage tilt and rotation angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+        sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+
+        # Define values that are used more than once
+        rx_sem = sem_pos_active["rx"]
+        rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["rx"], pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
+
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_mill) + b_y * math.sin(rx_mill)
+
+        # Calculate the equivalent coordinates of the calibrated position, at the milling position
+        mill_current_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_mill)) - b_z * math.tan(rx_mill)
+        mill_current_pos_z = 0 - b_y * math.tan(rx_mill) - b_z * (1 - 1 / math.cos(rx_mill))
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
+        sem_target_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_target_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+
+        # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+        # at the milling position.
+        # X stays the same as when switching from SEM to MILL only Y and Z change.
+        transformed_pos["x"] = pos["x"]
+        transformed_pos["y"] = sem_target_pos_y + (pos["y"] - mill_current_pos_y)
+        transformed_pos["z"] = sem_target_pos_z + (pos["z"] - mill_current_pos_z)
+
+        # Update the angles to the milling position angles
+        transformed_pos.update(sem_pos_active)
+
+        return transformed_pos
+
     def _doCryoSwitchSamplePosition(self, future, target):
         try:
-            try:
-                target_name = POSITION_NAMES[target]
-            except KeyError:
-                raise ValueError(f"Unknown target '{target}'")
+            target_name = POSITION_NAMES[target]
+        except KeyError:
+            raise ValueError(f"Unknown target '{target}'")
 
+        try:
             # Create axis->pos dict from target position given smaller number of axes
             filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
@@ -1785,7 +1966,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             sub_moves = []  # list of tuples (component, position)
 
             # get the current label
-            current_label = self.getCurrentPostureLabel()
+            pos = self.stage.position.value
+            current_label = self.getCurrentPostureLabel(pos)
             current_name = POSITION_NAMES[current_label]
 
             if current_label == target:
@@ -1816,10 +1998,20 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                 sub_moves.append((stage, filter_dict({'z'}, target_pos)))
 
-            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING):
                 # Park the focuser for safety
                 if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
                     sub_moves.append((focus, focus_deactive))
+
+                if current_label == MILLING:
+                    # Store current milling angle, to go back to that same position next time
+                    rx_milling = calculate_milling_angle_from_stage_tilt(pos["rx"],
+                                            pre_tilt=self.pre_tilt,
+                                            column_tilt=self.fib_column_tilt)
+                    mill_pos_active = self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]
+                    mill_pos_active["rx"] = rx_milling
+                    self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_pos_active})
+                    # TODO: update transformation matrices for milling
 
                 if target == LOADING:
                     sub_moves.append((stage, filter_dict({'z'}, target_pos)))
@@ -1833,8 +2025,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-                if target == FM_IMAGING:
 
+                if target == FM_IMAGING:
                     if current_label == LOADING:
                         # In practice, the user will not go directly from LOADING to FM_IMAGING
                         sub_moves.append((stage, filter_dict({'x'}, target_pos)))
@@ -1846,6 +2038,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         # save rotation and tilt in SEM before switching to FM imaging
                         # to restore rotation and tilt while switching back from FM -> SEM
                         current_value = self.stage.position.value
+                        # TODO: now that we have a MILLING posture, should we still save rx & rz?
+                        # Now that we have a dedicated MILLING posture, that makes less sense, as rx should always be 90° from the e-beam...
+                        # but for old systems, with only "SEM" posture (which was the MILLING posture), this is still handy
                         self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
                                                                                  'rz': current_value['rz']}})
                         # when switching from SEM to FM
@@ -1856,6 +2051,13 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         sub_moves.append((stage, filter_dict({'x'}, target_pos)))
                     # Engage the focuser
                     sub_moves.append((focus, focus_active))
+
+                if target == MILLING:
+                    # when switching from SEM to MILLING
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
@@ -1908,12 +2110,6 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "z"])
         self.create_sample_stage()
-
-    def create_sample_stage(self):
-        self.sample_stage = SampleStage(name="Sample Stage",
-                                        role="stage",
-                                        stage_bare=self.stage,
-                                        posture_manager=self)
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -2225,7 +2421,7 @@ class SampleStage(model.Actuator):
         self._stage_bare.stop()
 
 
-def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: int = math.radians(52)) -> float:
+def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: float, column_tilt: float) -> float:
     """Calculate the stage tilt from the milling angle and the pre-tilt.
     :param milling_angle: the milling angle in radians
     :param pre_tilt: the pre-tilt in radians
@@ -2239,3 +2435,16 @@ def calculate_stage_tilt_from_milling_angle(milling_angle: float, pre_tilt: floa
     # calculate the stage tilt from the milling angle and the pre-tilt
     stage_tilt = milling_angle + pre_tilt + column_tilt - math.radians(90)
     return stage_tilt
+
+
+def calculate_milling_angle_from_stage_tilt(rx: float, pre_tilt: float, column_tilt: float) -> float:
+    """
+    Calculate the milling angle from the stage tilt, pre-tilt, and column tilt.
+    :param rx: the stage tilt angle in radians
+    :param pre_tilt: the pre-tilt in radians
+    :param column_tilt: the column tilt in radians
+    :return: the milling angle in radians
+    """
+    # calculate the stage tilt from the milling angle and the pre-tilt
+    milling_angle = rx - pre_tilt - column_tilt + math.radians(90)
+    return milling_angle
