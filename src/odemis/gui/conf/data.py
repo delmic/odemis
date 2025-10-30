@@ -882,7 +882,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "label": "Resolution",
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "tooltip": "Number of pixels in the image",
-                "choices": None,
+                "choices": util.resolution_from_range,
                 "accuracy": None,  # never simplify the numbers
             },
             "probeCurrent": {
@@ -891,6 +891,22 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "type": "float",
                 "scale": "linear",
                 "event": wx.EVT_SCROLL_CHANGED
+            },
+        },
+        "ion-beam": {
+            "beamPreset": {
+                "label": "Beam Preset",
+                "tooltip": "Beam Preset",
+            },
+            "scale": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "resolution": {
+                "label": "Resolution",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": util.resolution_from_range,
+                "accuracy": None,  # never simplify the numbers
             },
         },
     }
