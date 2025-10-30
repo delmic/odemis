@@ -90,7 +90,7 @@
             'rx': 0.0,
             'rz': -1.0471975511965976,
             'x': -30.e-3,
-            'y': -40.e-03,
+            'y': -40.e-3,
             'z': 45.e-3
         },
         # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
