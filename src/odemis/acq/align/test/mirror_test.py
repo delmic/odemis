@@ -28,7 +28,7 @@ from concurrent.futures import CancelledError
 
 import odemis
 from odemis import model
-from odemis.acq.align.mirror import mirror_alignment
+from odemis.acq.align.mirror import parabolic_mirror_alignment
 from odemis.util import testing
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -37,9 +37,9 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SPARC2_MIRROR_CONFIG = CONFIG_PATH + "sim/sparc2-mirror-alignment-sim.odm.yaml"
 
 
-class TestMirrorAlignment(unittest.TestCase):
+class TestParabolicMirrorAlignment(unittest.TestCase):
     """
-    Test mirror alignment functions
+    Test parabolic mirror alignment functions
     """
 
     @classmethod
@@ -89,7 +89,7 @@ class TestMirrorAlignment(unittest.TestCase):
             time.sleep(1)
 
             # Run alignment
-            f = mirror_alignment(self.mirror, self.stage, self.ccd, max_iter=200, stop_early=False)
+            f = parabolic_mirror_alignment(self.mirror, self.stage, self.ccd, max_iter=200, stop_early=False)
             try:
                 f.result()
             except CancelledError:
