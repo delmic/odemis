@@ -1628,38 +1628,49 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         current_position = self.getCurrentPostureLabel()
         end_pos = None
 
+        sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
+        sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
+        sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
+
+        stage_position = self.stage.position.value
+
         if target_pos_lbl == LOADING:
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
         elif current_position in [LOADING, SEM_IMAGING]:
             if target_pos_lbl in [SEM_IMAGING, GRID_1]:
                 # if at loading, and sem is pressed, choose grid1 by default
-                sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
-                sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
                 end_pos = sem_grid1_pos
             elif target_pos_lbl == GRID_2:
-                sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
                 end_pos = sem_grid2_pos
             elif target_pos_lbl == FM_IMAGING:
                 if current_position == LOADING:
                     # if at loading and fm is pressed, choose grid1 by default
-                    sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                    sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
                     fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
                 elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+                    fm_target_pos = self._transformFromSEMToMeteor(stage_position)
                 end_pos = fm_target_pos
+            elif target_pos_lbl == MILLING:
+                end_pos = self._transformFromSEMToMilling(stage_position)
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
-                sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
-                sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
                 end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
             elif target_pos_lbl == GRID_2:
-                sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-                sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
                 end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
-            elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+            elif target_pos_lbl in [SEM_IMAGING, MILLING]:
+                # Revert to deactive position if available
+                deactive_fm_position = stage_md.get(model.MD_FM_POS_SAMPLE_DEACTIVE)
+                if deactive_fm_position and "z" in deactive_fm_position:
+                    sample_stage_pos = self.to_sample_stage_from_stage_position(stage_position, posture=FM_IMAGING)
+                    sample_stage_pos["z"] = deactive_fm_position["z"]
+                    stage_position = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
+                if target_pos_lbl == SEM_IMAGING:
+                    end_pos = self._transformFromMeteorToSEM(stage_position)
+                elif target_pos_lbl == MILLING:
+                    end_pos = self._transformFromMeteorToMilling(stage_position)
+        elif current_position == MILLING:
+            if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING]:
+                end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
 
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
@@ -1820,7 +1831,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                 sub_moves.append((stage, filter_dict({'z'}, target_pos)))
 
-            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING):
                 # Park the focuser for safety
                 if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
                     sub_moves.append((focus, focus_deactive))
@@ -1837,8 +1848,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-                if target == FM_IMAGING:
 
+                if target == FM_IMAGING:
                     if current_label == LOADING:
                         # In practice, the user will not go directly from LOADING to FM_IMAGING
                         sub_moves.append((stage, filter_dict({'x'}, target_pos)))
@@ -1860,6 +1871,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         sub_moves.append((stage, filter_dict({'x'}, target_pos)))
                     # Engage the focuser
                     sub_moves.append((focus, focus_active))
+
+                if target == MILLING:
+                    # when switching from SEM to MILLING
+                    # TODO: Check the sequence correctness!
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
