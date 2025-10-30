@@ -32,7 +32,7 @@ from odemis import model
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
 
-def mirror_alignment(
+def parabolic_mirror_alignment(
     mirror: model.HwComponent,
     stage: model.HwComponent,
     ccd: model.HwComponent,
@@ -41,9 +41,9 @@ def mirror_alignment(
     stop_early: bool = True,
 ) -> model.ProgressiveFuture:
     """
-    Starts a MirrorAlignmentTask that performs a multi-stage optimization
+    Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
     (coarse per-axis scans followed by Nelder-Mead refinements) to align the
-    mirror and stage based on camera measurements.
+    mirror and stage based on camera measurements for SPARC.
 
     :param mirror: Mirror actuator component to move (axes l/s).
     :param stage: Stage actuator component to move (axis z).
@@ -64,7 +64,7 @@ def mirror_alignment(
         returned_future.result().
     """
     f = model.ProgressiveFuture()
-    task = MirrorAlignmentTask(mirror, stage, ccd, stop_early=stop_early)
+    task = ParabolicMirrorAlignmentTask(mirror, stage, ccd, stop_early=stop_early)
     f.task_canceller = task.cancel
     _executor.submitf(
         f, task.align_mirror, search_range=search_range, max_iter=max_iter
@@ -72,9 +72,9 @@ def mirror_alignment(
     return f
 
 
-class MirrorAlignmentTask:
+class ParabolicMirrorAlignmentTask:
     """
-    Encapsulates a cancellable mirror auto-alignment routine.
+    Encapsulates a cancellable mirror auto-alignment routine for SPARC.
 
     The task implements a multi-stage procedure to align mirror (l, s) and
     stage (z) actuators by evaluating image-based spot quality metrics and

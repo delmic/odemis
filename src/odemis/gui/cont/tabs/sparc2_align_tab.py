@@ -45,7 +45,7 @@ from odemis.acq.align.autofocus import (
     Sparc2AutoFocus,
     Sparc2ManualFocus,
 )
-from odemis.acq.align.mirror import mirror_alignment
+from odemis.acq.align.mirror import parabolic_mirror_alignment
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
 from odemis.gui.comp.settings import SettingsPanel
@@ -882,7 +882,7 @@ class Sparc2AlignTab(Tab):
         if self.auto_align_future.running():
             self.auto_align_future.cancel()
             return
-        self.auto_align_future = mirror_alignment(
+        self.auto_align_future = parabolic_mirror_alignment(
             self.tab_data_model.main.mirror,
             self.tab_data_model.main.stage,
             self.tab_data_model.main.ccd,
@@ -900,7 +900,7 @@ class Sparc2AlignTab(Tab):
         Always resets the auto-alignment button label back to "Run" (via wx.CallAfter)
         so the GUI returns to the idle state.
 
-        :param f: (concurrent.futures.Future) Future returned by mirror_alignment
+        :param f: (concurrent.futures.Future) Future returned by parabolic_mirror_alignment
                   (or a ProgressiveFuture). Calling f.result() will re-raise any
                   exception that occurred during the task.
         """
