@@ -91,6 +91,7 @@ def scan_order_4x4(rep: Tuple[int, int]) -> List[Tuple[int, int]]:
     """
     return _scan_order_mxn(rep, (4, 4))
 
+
 def _scan_order_mxn(rep: Tuple[int, int], skip: Tuple[int, int]) -> List[Tuple[int, int]]:
     """
     Scan every MxN pixels, and then restart, but from the next point (+1 in X, then +1 in Y)
@@ -138,19 +139,13 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
     Same as Spectrum stream, but different scan order. The idea is that for some samples it might
     be better to not immediately scan the pixel adjacent to each other as there can be physical
     interaction. So instead, scan pixels in a different time order.
-    The actual scan order is to be selected by modifying ._get_scan_order() (and making it
-    call a different function that one of the two examples).
+    The actual scan order is to be selected by modifying ._get_scan_order()
     """
 
     # overrides SEMCCDStream method, to disable hardware sync
     def _supports_hw_sync(self) -> bool:
         # arbitrary scan order does not support hardware sync (at least for now)
         return False
-
-    # overrides SEMCCDStream method, to disable scan stage acquisition
-    def _runAcquisitionScanStage(self, future):
-        # This could be implemented, by overriding _getScanStagePositions(), but that's not yet done
-        raise NotImplementedError("Arbitrary scan order does not support scan stage acquisition")
 
     def _get_scan_order(self, rep: Tuple[int, int]) -> List[Tuple[int, int]]:
         """
@@ -162,65 +157,35 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
         strategy_func = self._sccd._scan_strategies[strategy]
         return strategy_func(rep)
 
-    def _getSpotPositions(self):
-        """
-        Compute the positions of the e-beam for each point in the ROI
-        return (numpy ndarray of floats of shape (Y,X,2)): each value is for a
-          given Y,X in the rep grid -> 2 floats corresponding to the
-          translation X,Y. Note that the dimension order is different between
-          index and content, because X should be scanned first, so it's last
-          dimension in the index.
-        """
-        rep = tuple(self.repetition.value)
-        roi = self.roi.value
-        width = (roi[2] - roi[0], roi[3] - roi[1])
+    def _run_acquisition_ccd(self, future, acquirer):
+        # HACK WARNING: in order to change the scan order without copying the whole method,
+        # we monkey-patch numpy.ndindex() to return our custom scan order. As ndindex() is only
+        # used to compute the scan order in the original method, this works.
 
-        # Take into account the "border" around each pixel
-        pxs_rel = (width[0] / rep[0], width[1] / rep[1])
-        lim = (roi[0] + pxs_rel[0] / 2, roi[1] + pxs_rel[1] / 2)
+        # Temporarily patch numpy.ndindex for this acquisition
+        original_ndindex = numpy.ndindex
+        rep = self.repetition.value
 
-        shape = self._emitter.shape
-        # convert into SEM translation coordinates: distance in px from center
-        # (situated at 0.5, 0.5), can be floats
-        pos00 = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5))
-        pxs_sem = shape[0] * pxs_rel[0], shape[1] * pxs_rel[1]
-        logging.debug("Generating points from %s with pxs %s, from rep %s and roi %s",
-                      pos00, pxs_sem, rep, roi)
+        def custom_ndindex(*args):
+            # Does it look like the call to compute the scan order?
+            if args == tuple(rep[::-1]):
+                order = self._get_scan_order(rep)
+                logging.debug("Arbitrary order: %s", order)
+                # Order is a list of (x,y), but ndindex yields (y,x)
+                return ((y, x) for (x, y) in order)
+            else:
+                return original_ndindex(*args)
 
-        pos = numpy.empty((rep[1], rep[0], 2), dtype=float)
-        order = self._get_scan_order(rep)
-        logging.debug("Arbitrary order: %s", order)
-        self._px_order = order
-
-        raw_order = numpy.ndindex(*rep[::-1])
-        for raw_idx, px_idx in zip(raw_order, order):
-            beam_pos = (pos00[0] + px_idx[0] * pxs_sem[0],
-                        pos00[1] + px_idx[1] * pxs_sem[1],)
-            pos[raw_idx] = beam_pos
-
-        logging.debug("Will acquire at beam pos: %s", pos)
-        return pos
-
-    def _assembleLiveData(self, n: int, raw_data: "DataArray",
-                          px_idx: Tuple[int, int], px_pos: Tuple[float, float],
-                          rep: Tuple[int, int], pol_idx: int = 0):
-        """
-        Wrapper for _assembleLiveData() to convert back the standard px_idx (eg, (0,0), (0,1), (0,2)...)
-        into the index that was actually scanned at that moment.
-        :param px_idx: y, x position
-        :param pxs_pos: position of center of data in m: x, y
-        :param rep: x, y number of points in the scan
-        For other parameters, see MultipleDetectorStream._assembleLiveData()
-        """
-        px_idx_flat = px_idx[0] * rep[0] + px_idx[1]
-        act_px_idx = self._px_order[px_idx_flat][::-1]
-        logging.debug("Converted back idx %s to %s", px_idx, act_px_idx)
-        return super()._assembleLiveData(n, raw_data, act_px_idx, px_pos, rep, pol_idx)
+        try:
+            numpy.ndindex = custom_ndindex
+            return super()._run_acquisition_ccd(future, acquirer)
+        finally:
+            numpy.ndindex = original_ndindex
 
 
 class SpectrumArbitraryScanOrderPlugin(Plugin):
     name = "Spectrum acquisition in arbitrary scan order"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
