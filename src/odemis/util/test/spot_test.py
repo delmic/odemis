@@ -81,7 +81,7 @@ class TestSpotIntensity(unittest.TestCase):
 
     def test_precomputed(self):
         # These are example data (computer generated)
-        data = hdf5.read_data("image1.h5")[0]
+        data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "image1.h5"))[0]
         data.shape = data.shape[-2:]
         si = spot.SpotIntensity(data)  # guessed background
         self.assertAlmostEqual(si, 0.713582339927869)
@@ -100,8 +100,8 @@ class TestFindCenterCoordinates(unittest.TestCase):
     """
 
     def setUp(self):
-        self.imgdata = tiff.read_data('spotdata.tif')
-        self.coords0 = numpy.genfromtxt('spotdata.csv', delimiter=',')
+        self.imgdata = tiff.read_data(os.path.join(TEST_IMAGE_PATH, 'spotdata.tif'))
+        self.coords0 = numpy.genfromtxt(os.path.join(TEST_IMAGE_PATH, 'spotdata.csv'), delimiter=',')
 
     def test_find_center(self):
         """
