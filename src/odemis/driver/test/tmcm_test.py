@@ -522,6 +522,29 @@ class TestActuator(unittest.TestCase):
         # Close shutters
         self.dev.moveAbsSync({"shutter0": 0, "shutter1": 10})
 
+    def test_protection(self):
+        """Check the LED protection"""
+        # Not much to test, but at least we can set .protection VA on and off and check the related
+        # axes (shutter*) have moved.
+        self.dev.protection.value = True
+        self.assertTrue(self.dev.protection.value)
+
+        pos =self.dev.position.value
+        self.assertEqual(pos["shutter0"], 0)
+        self.assertEqual(pos["shutter1"], 10)
+
+        # Referencing should also activate the protection internally, and afterward set it back to the latest value
+        f = self.dev.reference({"x"})
+        f.result()
+        self.assertTrue(self.dev.protection.value)
+
+        time.sleep(0.1)
+        self.dev.protection.value = False
+        self.assertFalse(self.dev.protection.value)
+        pos = self.dev.position.value
+        self.assertEqual(pos["shutter0"], 1)
+        self.assertEqual(pos["shutter1"], 5)
+
 
 class TestActuatorAbsEnc(TestActuator):
 
