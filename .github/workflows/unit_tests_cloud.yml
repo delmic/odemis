@@ -231,3 +231,9 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/util/test/mock_test.py --verbose
 
+    - name: Run tests from odemis.util.spot
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/spot_test.py --verbose
+
