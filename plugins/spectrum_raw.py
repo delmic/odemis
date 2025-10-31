@@ -384,7 +384,7 @@ class SpectrumRawPlugin(Plugin):
             # Removes exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
-        spectrograph = stctrl._getAffectingSpectrograph(main_data.ccd)
+        spectrograph = stctrl._getAffectingSpectrograph(main_data.ccd, default=main_data.spectrograph)
         spectrometer = stctrl._find_spectrometer(main_data.ccd)
 
         axes = {"wavelength": ("wavelength", spectrograph),
