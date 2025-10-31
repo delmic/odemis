@@ -89,13 +89,18 @@ def filter_test_log(log_txt, filter_type='summary'):
     if "\n" in test_results:  # Only a message with multiple lines contains interesting information.
         test_results = test_results.split("\n")[1:]  # skip the first line
         test_results.insert(0, log_txt.split("\n")[0])  # start with the full test path
+        # Lines with status code 1 contain the filename of the individual failures, which are already reported.
+        test_results = [ln for ln in test_results if "status code 1" not in ln]
         test_results = "\n".join(test_results) + "\n"  # join the results into a single string and add an empty line
     elif filter_type == "summary" and test_results == "":
         # In case the test case did not exit properly there could be no summary,
         # find all lines that contain FAILED to be on the safe side.
         failed_lines = re.findall(r"^.*?FAILED.*?$", log_txt, re.MULTILINE)
         if failed_lines:
-            test_results = log_txt.split("\n")[0] + "".join(["\nFAILED " + f for f in failed_lines]) + "\n"
+            # Lines with status code 1 contain the filename of the individual failures, which are already reported.
+            test_results = log_txt.split("\n")[0] + "".join(
+                ["\nFAILED " + f for f in failed_lines if "status code 1" not in f]
+            ) + "\n"
         else:
             test_results = None
     else:
