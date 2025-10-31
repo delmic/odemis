@@ -245,7 +245,7 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
 
         logging.debug("Adding spectrum arbitrary order stream for %s", detector.name)
 
-        spectrograph = stctrl._getAffectingSpectrograph(detector)
+        spectrograph = stctrl._getAffectingSpectrograph(detector, default=main_data.spectrograph)
 
         axes = {"wavelength": ("wavelength", spectrograph),
                 "grating": ("grating", spectrograph),

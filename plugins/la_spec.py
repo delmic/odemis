@@ -276,7 +276,7 @@ class SpecExtraPlugin(Plugin):
         main_data = self.main_app.main_data
         stctrl = self._tab.streambar_controller
 
-        spg = stctrl._getAffectingSpectrograph(detector)
+        spg = stctrl._getAffectingSpectrograph(detector, default=main_data.spectrograph)
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),

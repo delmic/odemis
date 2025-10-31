@@ -1531,22 +1531,26 @@ class SparcStreamsController(StreamBarController):
                         self._tab_data_model.acquisitionStreams.discard(acqs)
                         break
 
-    def _getAffectingSpectrograph(self, comp):
+    def _getAffectingSpectrograph(self, comp: model.HwComponent,
+                                  default: Optional[model.Actuator] = None,
+                                  ) -> Optional[model.Actuator]:
         """
         Find which spectrograph matters for the given component (ex, spectrometer)
-        comp (Component): the hardware which is affected by a spectrograph
-        return (None or Component): the spectrograph affecting the component
+        :param comp: the hardware which is affected by a spectrograph
+        :param default: component to return if none found
+        :return: the spectrograph affecting the component (or default, if none is found affecting the component)
         """
         cname = comp.name
         main_data = self._main_data_model
         for spg in (main_data.spectrograph, main_data.spectrograph_ded):
             if spg is not None and cname in spg.affects.value:
                 return spg
-        else:
-            logging.warning("No spectrograph found affecting component %s", cname)
-            # spg should be None, but in case it's an error in the microscope file
-            # and actually, there is a spectrograph, then use that one
-            return main_data.spectrograph
+
+        # No spectrograph found
+        if default is not None:
+            logging.warning("No spectrograph found affecting component %s, assuming it's %s",
+                            cname, default.name)
+        return default
 
     def _find_spectrometer(self, detector):
         """
@@ -1806,7 +1810,7 @@ class SparcStreamsController(StreamBarController):
             detector = main_data.spectrometer
         logging.debug("Adding spectrum stream for %s", detector.name)
 
-        spg = self._getAffectingSpectrograph(detector)
+        spg = self._getAffectingSpectrograph(detector, default=main_data.spectrograph)
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
@@ -1862,7 +1866,7 @@ class SparcStreamsController(StreamBarController):
             # Removes exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
-        spectrograph = self._getAffectingSpectrograph(main_data.ccd)
+        spectrograph = self._getAffectingSpectrograph(main_data.ccd, default=main_data.spectrograph)
         spectrometer = self._find_spectrometer(main_data.ccd)
 
         axes = {"wavelength": ("wavelength", spectrograph),
@@ -1907,7 +1911,7 @@ class SparcStreamsController(StreamBarController):
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
-        spg = self._getAffectingSpectrograph(main_data.streak_ccd)
+        spg = self._getAffectingSpectrograph(main_data.streak_ccd, default=main_data.spectrograph)
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
@@ -1951,7 +1955,7 @@ class SparcStreamsController(StreamBarController):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
-        spg = self._getAffectingSpectrograph(main_data.spectrometer)
+        spg = self._getAffectingSpectrograph(main_data.monochromator, default=main_data.spectrograph)
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
@@ -1960,8 +1964,6 @@ class SparcStreamsController(StreamBarController):
                 "slit-monochromator": ("slit-monochromator", spg),
                }
 
-        axes = self._filter_axes(axes)
-
         # Also add light filter if it affects the detector
         for fw in (main_data.cl_filter, main_data.light_filter):
             if fw is None:
@@ -1969,6 +1971,8 @@ class SparcStreamsController(StreamBarController):
             if main_data.monochromator.name in fw.affects.value:
                 axes["filter"] = ("band", fw)
                 break
+
+        axes = self._filter_axes(axes)
 
         monoch_stream = acqstream.MonochromatorSettingsStream(
             "Monochromator",
@@ -1997,8 +2001,24 @@ class SparcStreamsController(StreamBarController):
 
         main_data = self._main_data_model
 
+        # Axes on the "LabCube", which are always affecting the time-correlator
         axes = {"density": ("density", main_data.tc_od_filter),
                 "filter": ("band", main_data.tc_filter)}
+
+        spg = self._getAffectingSpectrograph(main_data.time_correlator)
+        if spg:
+            axes.update({
+                "wavelength": ("wavelength", spg),
+                "grating": ("grating", spg),
+                "iris-in": ("iris-in", spg),
+                "slit-in": ("slit-in", spg),
+                "slit-monochromator": ("slit-monochromator", spg),
+            })
+
+        # Also add the spectrograph filter if it affects the detector
+        filter_in = main_data.light_filter
+        if filter_in and main_data.time_correlator.name in filter_in.affects.value:
+            axes["filter-in"] = ("band", filter_in)
 
         axes = self._filter_axes(axes)
 
