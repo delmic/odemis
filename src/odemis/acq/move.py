@@ -1594,7 +1594,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         scale = (1, 1 / math.cos(rx_fm))
 
         # Automatic conversion to sample-stage axes
-        self.postures = [SEM_IMAGING, FM_IMAGING, MILLING]
+        self.postures = [SEM_IMAGING, FM_IMAGING]
+        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+            self.postures.append(MILLING)
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt, shear=shear, scale=scale)
         self.create_sample_stage()
 
