@@ -33,7 +33,7 @@ from odemis.model import DataArray
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import get_best_dtype_for_acc, transform
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
-from typing import Tuple, List, Union
+from typing import Tuple, List, Optional
 import matplotlib.colors as colors
 from matplotlib import cm
 
@@ -357,7 +357,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         0, max val of data => whole range is mapped.
         min must be < max, and must be of the same type as data.dtype.
     :param tint: Could be:
-        - (3-tuple of 0 < int <256) RGB colour of the final image (each
+        - (3-tuple of 0 <= int <= 255) RGB colour of the final image (each
         pixel is multiplied by the value. Default is white.
         - colors.Colormap Object
     :return: (numpy.ndarray of 3*shape of uint8) converted image in RGB with the
@@ -483,6 +483,100 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         numpy.multiply(drescaled, gtint / 255, out=rgb[:, :, 1], casting="unsafe")
         numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2], casting="unsafe")
 
+    return rgb
+
+
+def projectYXC2RGB8(data: numpy.ndarray, irange: Optional[Tuple[int, int]] = None,
+                    tint: Tuple[int, int, int] = (255, 255, 255)) -> numpy.ndarray:
+    """
+    :param data: 2D image (shape YXC) with RGB or RGBA channels
+    :param irange: (None or tuple of 2 values) min/max intensities mapped
+        to black/white
+        None => auto (min, max are from the data);
+        0, max val of data => whole range is mapped.
+        min must be < max, and must be of the same type as data.dtype.
+    :param tint: (3-tuple of 0 <= int <= 255) RGB colour of the final image (each
+        pixel is multiplied by the value. Default is white.
+    :return: (numpy.ndarray of uint8 with shape YXC) converted image in RGB(A) with the
+        same dimension
+    """
+    assert(data.ndim == 3)  # YXC
+    assert(data.shape[2] in (3, 4))  # => RGB or RGBA
+
+    # TODO: if alpha channel is present, treat it differently, and just copy it as-is (if uint8) or
+    # by rescaling it only.
+
+    # Discard the DataArray aspect and just get the raw array, to be sure we
+    # don't get a DataArray as result of the numpy operations
+    data = data.view(numpy.ndarray)
+
+    # fit it to 8 bits and update brightness and contrast at the same time
+    if irange is None:
+        irange = (numpy.nanmin(data[:3]), numpy.nanmax(data[:3]))  # only look at RGB channels
+        if math.isnan(irange[0]):
+            logging.warning("Trying to convert all-NaN data to RGB")
+            data = numpy.nan_to_num(data)  # Converts NaN to 0
+            irange = (0, 1)
+    else:
+        # ensure irange is the same type as the data. It ensures we don't get
+        # crazy values, and also that numpy doesn't get confused in the
+        # intermediary dtype (cf .clip()).
+        irange = numpy.array(irange, data.dtype)
+        if irange[0] == irange[1]:
+            logging.info("Requested RGB conversion with null-range %s", irange)
+
+    if data.dtype == numpy.uint8 and irange[0] == 0 and irange[1] == 255:
+        # short-cut when data is already the same type
+        rgb = data
+        # TODO: also write short-cut for 16 bits by reading only the high byte?
+    else:
+        # If data might go outside of the range, clip first
+        if data.dtype.kind in "iu":
+            # no need to clip if irange is the whole possible range
+            idt = numpy.iinfo(data.dtype)
+            # Ensure B&W if there is only one value allowed
+            if irange[0] >= irange[1]:
+                if irange[0] > idt.min:
+                    irange = (irange[0] - 1, irange[0])
+                else:
+                    irange = (irange[0], irange[0] + 1)
+
+            if irange[0] > idt.min or irange[1] < idt.max:
+                data = data.clip(*irange)
+        else: # floats et al. => always clip
+            # Ensure B&W if there is just one value allowed
+            if irange[0] >= irange[1]:
+                irange = (irange[0] - 1e-9, irange[0])
+            data = data.clip(*irange)
+
+        # use .tolist() to force conversion to "safe" Python type, which avoid overflows
+        range_width = irange[1].tolist() - irange[0].tolist()
+        if data.dtype.kind == "i":
+            # Signed ints are "special" because we cannot use the same type to store the values shifted to 0.
+            dtype_uint = numpy.min_scalar_type(max(255, range_width))
+            dshift = numpy.subtract(data, irange[0], dtype=dtype_uint, casting="unsafe")
+        else:
+            dshift = data - irange[0]
+
+        if dshift.dtype == numpy.uint8:
+            rgb = dshift  # re-use memory for the result
+        else:
+            rgb = numpy.empty(data.shape, dtype=numpy.uint8)
+        # Ideally, it would be 255 / (irange[1] - irange[0]) + 0.5, but to avoid
+        # the addition, we can just use 255.99, and with the rounding down, it's
+        # very similar.
+        b = 255.99 / range_width
+        numpy.multiply(dshift, b, out=rgb, casting="unsafe")
+
+    # Tint (colouration)
+    if tint != (255, 255, 255):
+        if rgb is data:
+            rgb = rgb.copy()  # avoid modifying original data
+        if rgb.shape[2] == 4:  # Alpha channel => pass it as-is
+            tint = (tint[0], tint[1], tint[2], 255)
+        numpy.multiply(rgb, numpy.asarray(tint) / 255, out=rgb, casting="unsafe")
+
+    rgb.flags.writeable = False
     return rgb
 
 
