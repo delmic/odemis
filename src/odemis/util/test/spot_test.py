@@ -27,6 +27,8 @@ import unittest
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
 
+scipy_version = tuple(map(int, scipy.__version__.split(".")))
+scipy_old_ckdtree = (scipy_version < (1, 6, 0))
 
 class TestMomentOfInertia(unittest.TestCase):
     """
@@ -79,7 +81,7 @@ class TestSpotIntensity(unittest.TestCase):
 
     def test_precomputed(self):
         # These are example data (computer generated)
-        data = hdf5.read_data("image1.h5")[0]
+        data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "image1.h5"))[0]
         data.shape = data.shape[-2:]
         si = spot.SpotIntensity(data)  # guessed background
         self.assertAlmostEqual(si, 0.713582339927869)
@@ -98,8 +100,8 @@ class TestFindCenterCoordinates(unittest.TestCase):
     """
 
     def setUp(self):
-        self.imgdata = tiff.read_data('spotdata.tif')
-        self.coords0 = numpy.genfromtxt('spotdata.csv', delimiter=',')
+        self.imgdata = tiff.read_data(os.path.join(TEST_IMAGE_PATH, 'spotdata.tif'))
+        self.coords0 = numpy.genfromtxt(os.path.join(TEST_IMAGE_PATH, 'spotdata.csv'), delimiter=',')
 
     def test_find_center(self):
         """
@@ -332,7 +334,13 @@ class TestFindSpotPositions(unittest.TestCase):
         # Map the found spot locations to the known spot locations.
         tree = scipy.spatial.cKDTree(loc)
         # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
-        distances, indices = tree.query(ji, k=1, n_jobs=-1)
+        # Ubuntu 20.04: v1.3.3 -> n_jobs
+        # Ubuntu 22.04: v1.8.0 -> workers or n_jobs
+        # Ubuntu 24.04: v1.11.4 -> workers
+        if scipy_old_ckdtree:
+            distances, indices = tree.query(ji, k=1, n_jobs=-1)
+        else:
+            distances, indices = tree.query(ji, k=1, workers=-1)
 
         # Check that all spot positions have been found within the required
         # accuracy.
