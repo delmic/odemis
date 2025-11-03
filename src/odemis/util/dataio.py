@@ -126,6 +126,9 @@ def data_to_static_streams(data):
             # Only decide it's RGB as last resort, because most microscopy data is not RGB
             name = d.metadata.get(model.MD_DESCRIPTION, "RGB data")
             klass = stream.RGBStream
+        elif acqtype == model.MD_AT_FIB:
+            name = d.metadata.get(model.MD_DESCRIPTION, "FIB")
+            klass = stream.StaticFIBStream
         else:
             # Now, either it's a flat greyscale image and we decide it's a SEM image,
             # or it's gone too weird and we try again on flat images
