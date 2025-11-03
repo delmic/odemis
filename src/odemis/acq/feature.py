@@ -230,7 +230,7 @@ class CryoFeature(object):
         exporter.export(filename, reference_image)
 
         # save the milling position (it can be updated by the user)
-        self.set_posture_position(posture=MILLING, position=stage_position)
+        #self.set_posture_position(posture=MILLING, position=stage_position)
 
         # set the feature status to ready to mill
         self.status.value = FEATURE_READY_TO_MILL
