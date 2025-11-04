@@ -90,9 +90,10 @@ class VideoDisplayerGrid(VideoDisplayer):
             self.app.rotation = tform_xy.rotation
             self.app.squeeze = tform_xy.squeeze
             self.app.shear = tform_xy.shear
-        except ValueError as err:
+        except (ValueError, IndexError) as err:
             logging.warning("No grid found on image, cannot display spots: %s", err)
-            self.app.spots = None
+        except Exception as err:
+            logging.warning("Unexpected error, cannot display spots: %s", err)
 
         super(VideoDisplayerGrid, self).new_image(data)
 
@@ -129,6 +130,7 @@ class ImageWindowApp(wx.App):
         self.frame.Show()
 
         self.pixel_size = pixel_size
+        self.spots = None
 
     def update_view(self):
         logging.debug("Received a new image of %d x %d", *self.img.GetSize())
