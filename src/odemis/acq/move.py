@@ -1638,6 +1638,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """
 
         tf_id = numpy.eye(3)
+        tf_reverse = -tf_id  # The Tescan stage convention is opposite of Odemis so inverse the direction of the XYZ axis.
 
         stage_md = self.stage.getMetadata()
         rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
@@ -1659,7 +1660,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # FM imaging
         # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
         rot_matrix_3d, _ = get_rotation_transforms(rx=rotation)
-        tf_fm = scale_matrix_3d @ shear_matrix_3d @ rot_matrix_3d
+        tf_fm = tf_reverse @ scale_matrix_3d @ shear_matrix_3d @ rot_matrix_3d
         tf_fm_inv = numpy.linalg.inv(tf_fm)
 
         # get the scan rotation value
@@ -1684,7 +1685,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             [0, scale[0], 0],  # y-axis scale
             [0, 0, scale[1]],  # z-axis scale
         ])
-        tf_sem = scale_matrix_3d @ shear_matrix_3d @ tf_sr
+        tf_sem = tf_reverse @ scale_matrix_3d @ shear_matrix_3d @ tf_sr
         tf_sem_inv = numpy.linalg.inv(tf_sem)
 
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
@@ -1703,7 +1704,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 [0, scale[0], 0],  # y-axis scale
                 [0, 0, scale[1]],  # z-axis scale
             ])
-            tf_mill = scale_matrix_3d @ shear_matrix_3d @ tf_sr
+            tf_mill = tf_reverse @ scale_matrix_3d @ shear_matrix_3d @ tf_sr
         else:
             tf_mill = tf_id
 
@@ -1844,6 +1845,57 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
+    # FIXME: THIS METHOD DOES NOT COMPUTE THE Y COORDINATE CORRECTLY
+    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the SEM imaging area to the
+        milling imaging area.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Call out calibrated values and stage tilt and rotation angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+
+        # Define values that are used more than once
+        rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
+        rx_mill = calculate_milling_angle_from_stage_tilt(mill_pos_active["rx"],
+                                                          pre_tilt=self.pre_tilt,
+                                                          column_tilt=self.fib_column_tilt)  # Calibrated tilt angle, for imaging perpendicular to objective
+        rx_mill = math.radians(20)
+
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_sem) + b_y * math.sin(rx_sem)
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+        # at the SEM position stage tilt
+        sem_current_pos_x = 0
+        sem_current_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_current_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+
+        # Calculate the equivalent coordinates of the calibrated position, at the FM position
+        mill_target_pos_x = 0
+        mill_target_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_mill)) - b_z * math.tan(rx_mill)
+        mill_target_pos_z = 0 - b_y * math.tan(rx_mill) - b_z * (1 - 1 / math.cos(rx_mill))
+
+        # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+        # at the FM position.
+        transformed_pos["x"] = mill_target_pos_x + (pos["x"] - sem_current_pos_x)
+        transformed_pos["y"] = mill_target_pos_y + (pos["y"] - sem_current_pos_y)
+        transformed_pos["z"] = mill_target_pos_z + (pos["z"] - sem_current_pos_z)
+
+        # Update the angles to the MILL position angles
+        transformed_pos.update(mill_pos_active)
+
+        return transformed_pos
+
     # Note: this transformation consists of translation and rotation.
     # The translations are along the x, y and m axes. They are calculated based on
     # the current position and some calibrated values existing in metadata "CALIB".
@@ -1895,18 +1947,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """
-        Transforms the stage position from sem imaging to milling position"
-        :param pos: (dict str->float) the current stage position
-        :return: (dict str->float) the transformed stage position.
-        """
-        # FIXME need to take into account the compucentric rotation
-        
-        position = pos.copy()
-        position.update(self.get_posture_orientation(MILLING))
-
-        return position
     
     def _doCryoSwitchSamplePosition(self, future, target):
         try:
