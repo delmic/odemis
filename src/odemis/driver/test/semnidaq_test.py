@@ -36,8 +36,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy
 from odemis import model, util
-from odemis.driver import semnidaq
-from odemis.driver.semnidaq import Acquirer
 
 matplotlib.use("Gtk3Agg")
 
@@ -157,6 +155,14 @@ class TestAnalogSEM(unittest.TestCase):
         if sys.version_info < (3, 9):
             raise SkipTest("semnidaq does not work for Ubuntu 20.04 or lower")
 
+        try:
+            from odemis.driver import semnidaq
+            from odemis.driver.semnidaq import Acquirer
+        except ModuleNotFoundError as e:
+            raise SkipTest(
+                f"semnidaq driver not available: {e}. Install required packages for your Ubuntu version") from e
+
+        cls.acquirer = Acquirer
         cls.sem = semnidaq.AnalogSEM(**CONFIG_SEM)
 
         for child in cls.sem.children.value:
@@ -178,7 +184,6 @@ class TestAnalogSEM(unittest.TestCase):
         cls.pixel_bit_inv = sum(1 << c for c, inv in pixel_ttls_conf if inv)
         cls.line_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["line"]["ports"])
         cls.frame_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["frame"]["ports"])
-
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -558,7 +563,7 @@ class TestAnalogSEM(unittest.TestCase):
         data = numpy.zeros(res[::-1], dtype=numpy.int16)
         buffer = numpy.linspace(500, 1500, (res[1] * (res[0] + margin)) * osr, dtype=numpy.int16)
         acc_dtype = util.get_best_dtype_for_acc(buffer.dtype, osr)
-        samples_n, samples_sum = Acquirer._downsample_data(data, res, margin, 0, osr,
+        samples_n, samples_sum = self.acquirer._downsample_data(data, res, margin, 0, osr,
                                                            buffer, 0, 0,
                                                            acc_dtype)
 
@@ -574,7 +579,7 @@ class TestAnalogSEM(unittest.TestCase):
         data = numpy.zeros(res[::-1], dtype=numpy.int16)  # reset
         acc_dtype = util.get_best_dtype_for_acc(buffer.dtype, osr)
         for i, d in enumerate(buffer):
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          i, osr,
                                                                          numpy.array([d]),
                                                                          prev_samples_n, prev_samples_sum,
@@ -589,7 +594,7 @@ class TestAnalogSEM(unittest.TestCase):
         data = numpy.zeros(res[::-1], dtype=numpy.int16)  # reset
         buffer_osr13 = buffer.repeat(osr)
         acc_dtype = util.get_best_dtype_for_acc(buffer_osr13.dtype, osr)
-        samples_n, samples_sum = Acquirer._downsample_data(data, res, margin, 0, osr,
+        samples_n, samples_sum = self.acquirer._downsample_data(data, res, margin, 0, osr,
                                                            buffer_osr13, 0, 0,
                                                            acc_dtype)
 
@@ -605,7 +610,7 @@ class TestAnalogSEM(unittest.TestCase):
         data = numpy.zeros(res[::-1], dtype=numpy.int16)  # reset
         acc_dtype = util.get_best_dtype_for_acc(buffer_osr13.dtype, osr)
         for i, d in enumerate(buffer_osr13):
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          i, osr,
                                                                          numpy.array([d]),
                                                                          prev_samples_n, prev_samples_sum,
@@ -625,7 +630,7 @@ class TestAnalogSEM(unittest.TestCase):
         acc_dtype = util.get_best_dtype_for_acc(buffer_osr13.dtype, osr)
         acquired_n = 0
         while left_buffer.size > 0:
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          acquired_n, osr,
                                                                          left_buffer[:grain],
                                                                          prev_samples_n, prev_samples_sum,
@@ -648,7 +653,7 @@ class TestAnalogSEM(unittest.TestCase):
         acc_dtype = util.get_best_dtype_for_acc(buffer_osr13.dtype, osr)
         acquired_n = 0
         while left_buffer.size > 0:
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          acquired_n, osr,
                                                                          left_buffer[:grain],
                                                                          prev_samples_n, prev_samples_sum,
@@ -671,7 +676,7 @@ class TestAnalogSEM(unittest.TestCase):
         acc_dtype = util.get_best_dtype_for_acc(buffer_osr13.dtype, osr)
         acquired_n = 0
         while left_buffer.size > 0:
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          acquired_n, osr,
                                                                          left_buffer[:grain],
                                                                          prev_samples_n, prev_samples_sum,
@@ -695,14 +700,14 @@ class TestAnalogSEM(unittest.TestCase):
         acc_dtype = util.get_best_dtype_for_acc(buffer_osr13.dtype, osr)
         acquired_n = 0
         while left_buffer.size > 0:
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          acquired_n, osr,
                                                                          left_buffer[:grain1],
                                                                          prev_samples_n, prev_samples_sum,
                                                                          acc_dtype)
             acquired_n += grain1
             left_buffer = left_buffer[grain1:]
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          acquired_n, osr,
                                                                          left_buffer[:grain2],
                                                                          prev_samples_n, prev_samples_sum,
@@ -729,7 +734,7 @@ class TestAnalogSEM(unittest.TestCase):
         acquired_n = 0
         while left_buffer.size > 0:
             logging.debug(f"Passing another {grain} samples, still {left_buffer.size} left")
-            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+            prev_samples_n, prev_samples_sum = self.acquirer._downsample_data(data, res, margin,
                                                                          acquired_n, osr,
                                                                          left_buffer[:grain],
                                                                          prev_samples_n, prev_samples_sum,
