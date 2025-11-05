@@ -36,8 +36,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy
 from odemis import model, util
-from odemis.driver import semnidaq
-from odemis.driver.semnidaq import Acquirer
+
+try:
+    from odemis.driver import semnidaq
+    from odemis.driver.semnidaq import Acquirer
+except ModuleNotFoundError:
+    # Failure to load the module typically indicate some packages are missing, but let's nicely skip the tests in such case
+    semnidaq = None
 
 matplotlib.use("Gtk3Agg")
 
@@ -154,8 +159,8 @@ class TestAnalogSEM(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        if sys.version_info < (3, 9):
-            raise SkipTest("semnidaq does not work for Ubuntu 20.04 or lower")
+        if not semnidaq:
+            raise SkipTest("semnidaq driver is not available. Check if python3-nidaqmx is installed.")
 
         cls.sem = semnidaq.AnalogSEM(**CONFIG_SEM)
 
