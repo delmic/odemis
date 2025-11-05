@@ -767,8 +767,8 @@ class FastEMMainGUIData(MainGUIData):
                         colour = FG_COLOUR_BLIND_BLUE
                         calibration.sequence.value = calib_1_calibrations
                         # overlay location left on init
-                        xmin -= 1.2 * sz[0]
-                        xmax -= 1.2 * sz[0]
+                        xmin -= 10 * sz[0]
+                        xmax -= 10 * sz[0]
                     elif calibration_name == CALIBRATION_2:
                         number = 2
                         colour = FG_COLOUR_BLIND_ORANGE
@@ -779,8 +779,8 @@ class FastEMMainGUIData(MainGUIData):
                         colour = FG_COLOUR_BLIND_PINK
                         calibration.sequence.value = calib_3_calibrations
                         # overlay location right on init
-                        xmin += 1.2 * sz[0]
-                        xmax += 1.2 * sz[0]
+                        xmin += 10 * sz[0]
+                        xmax += 10 * sz[0]
                     calibration.region = FastEMROC(name=str(number),
                                                    scintillator_number=int(scintillator_number),
                                                    coordinates=(xmin, ymin, xmax, ymax), colour=colour)
