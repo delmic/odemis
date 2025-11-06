@@ -77,6 +77,9 @@ TFS_FIB_COLUMN_TILT = math.radians(52)
 TESCAN_FIB_COLUMN_TILT = math.radians(55)
 ZEISS_FIB_COLUMN_TILT = math.radians(54)
 
+# These values might differ per system and would then require a configuration option per system.
+# Hardcoded for now. Note that these values correspond to the milling angle, and not the actual stage tilt.
+MILLING_RANGE = (5, 30)  # degrees
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
