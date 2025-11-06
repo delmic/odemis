@@ -1845,57 +1845,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
-        """
-        Transforms the current stage position from the SEM imaging area to the
-        milling imaging area.
-        :param pos: the current stage position.
-        :return: the transformed position.
-        """
-        if "rx" not in pos:
-            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
-
-        stage_md = self.stage.getMetadata()
-        transformed_pos = pos.copy()
-
-        # Call out calibrated values and stage tilt and rotation angles
-        calibrated_values = stage_md[model.MD_CALIB]
-        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
-
-        # Define values that are used more than once
-        rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
-        # NOTE: mill_pos_active uses the "rx" key to refer to the milling angle (the angle between the ion beam and the sample plane)
-        # not the actual Rx (the tilt with regard to the SEM column axis)!
-        # mill_pos_active["rx"] should be renamed in the future for better clarity to something like mill_pos_active["milling_angle"]
-        rx_mill = calculate_stage_tilt_from_milling_angle(mill_pos_active["rx"], pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
-        mill_pos_active["rx"] = rx_mill # update the computed rx based on the milling angle, see the note above
-
-        z_ct = calibrated_values["z_ct"]
-        b_y = calibrated_values["b_y"]
-        b_z = (pos["z"] - z_ct) * math.cos(rx_sem) + b_y * math.sin(rx_sem)
-
-        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
-        # at the SEM position stage tilt
-        sem_current_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
-        sem_current_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
-
-        # Calculate the equivalent coordinates of the calibrated position, at the milling position
-        mill_target_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_mill)) - b_z * math.tan(rx_mill)
-        mill_target_pos_z = 0 - b_y * math.tan(rx_mill) - b_z * (1 - 1 / math.cos(rx_mill))
-
-        # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
-        # at the milling position.
-        # X stays the same as when swithing from SEM to MILL only Y and Z change as we essentially slide
-        # the sample plane tangent to an imaginary cylinder of revolution defined around the X axis.
-        transformed_pos["x"] = pos["x"]
-        transformed_pos["y"] = mill_target_pos_y + (pos["y"] - sem_current_pos_y)
-        transformed_pos["z"] = mill_target_pos_z + (pos["z"] - sem_current_pos_z)
-
-        # Update the angles to the MILL position angles
-        transformed_pos.update(mill_pos_active)
-
-        return transformed_pos
-
     # Note: this transformation consists of translation and rotation.
     # The translations are along the x, y and m axes. They are calculated based on
     # the current position and some calibrated values existing in metadata "CALIB".
@@ -1947,6 +1896,98 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
+    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the SEM imaging area to the
+        milling imaging area.
+        :param pos: the current stage position.
+        :return: the transformed position.
+        """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Call out calibrated values and stage tilt and rotation angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+
+        # Define values that are used more than once
+        rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
+        # NOTE: mill_pos_active uses the "rx" key to refer to the milling angle (the angle between the ion beam and the sample plane)
+        # not the actual Rx (the tilt with regard to the SEM column axis)!
+        # mill_pos_active["rx"] should be renamed in the future for better clarity to something like mill_pos_active["milling_angle"]
+        rx_mill = calculate_stage_tilt_from_milling_angle(mill_pos_active["rx"], pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
+        mill_pos_active["rx"] = rx_mill # update the computed rx based on the milling angle, see the note above
+
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_sem) + b_y * math.sin(rx_sem)
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+        # at the SEM position stage tilt
+        sem_current_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_current_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+
+        # Calculate the equivalent coordinates of the calibrated position, at the milling position
+        mill_target_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_mill)) - b_z * math.tan(rx_mill)
+        mill_target_pos_z = 0 - b_y * math.tan(rx_mill) - b_z * (1 - 1 / math.cos(rx_mill))
+
+        # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+        # at the milling position.
+        # X stays the same as when swithing from SEM to MILL only Y and Z change.
+        transformed_pos["x"] = pos["x"]
+        transformed_pos["y"] = mill_target_pos_y + (pos["y"] - sem_current_pos_y)
+        transformed_pos["z"] = mill_target_pos_z + (pos["z"] - sem_current_pos_z)
+
+        # Update the angles to the MILL position angles
+        transformed_pos.update(mill_pos_active)
+
+        return transformed_pos
+    
+    def _transformFromMillingToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the milling imaging area
+        to the SEM imaging area.
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+
+        # Call out calibrated values and stage tilt and rotation angles
+        calibrated_values = stage_md[model.MD_CALIB]
+        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+        sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+
+        # Define values that are used more than once
+        rx_sem = sem_pos_active["rx"]
+        rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["rx"], pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
+
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_mill) + b_y * math.sin(rx_mill)
+
+        # Calculate the equivalent coordinates of the calibrated position, at the milling position
+        mill_current_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_mill)) - b_z * math.tan(rx_mill)
+        mill_current_pos_z = 0 - b_y * math.tan(rx_mill) - b_z * (1 - 1 / math.cos(rx_mill))
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
+        sem_target_pos_y = 0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_target_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+
+        # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+        # at the milling position.
+        # X stays the same as when swithing from SEM to MILL only Y and Z change.
+        transformed_pos["x"] = pos["x"]
+        transformed_pos["y"] = sem_target_pos_y + (pos["y"] - mill_current_pos_y)
+        transformed_pos["z"] = sem_target_pos_z + (pos["z"] - mill_current_pos_z)
+
+        # Update the angles to the milling position angles
+        transformed_pos.update(sem_pos_active)
+
+        return transformed_pos
     
     def _doCryoSwitchSamplePosition(self, future, target):
         try:
