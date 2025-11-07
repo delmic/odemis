@@ -24,6 +24,7 @@ import logging
 from concurrent.futures import CancelledError
 from typing import Tuple
 
+import cv2
 import numpy
 from scipy.optimize import OptimizeResult, minimize, minimize_scalar
 
@@ -138,15 +139,20 @@ class ParabolicMirrorAlignmentTask:
 
     def _get_spot_measurement(self) -> Tuple[int, int, float]:
         """
-        Measure spot quality from the current camera image.
+        Measure spot quality from the current camera image using contour detection.
 
-        The method estimates background noise from small corner regions, computes
-        a threshold and returns:
-          - spot_pixel_count: number of pixels above noise threshold (int)
-          - spot_intensity: peak pixel value (int)
+        The method:
+        1. Estimates background noise from small corner regions
+        2. Pre-processes the image with Gaussian blur, CLAHE
+        3. Uses Otsu thresholding to separate signal from background
+        4. Applies morphological operations to clean up the binary mask
+        5. Finds the largest contour which represents the spot
+        6. Returns:
+          - spot_pixel_count: area of the largest contour in pixels (int)
+          - spot_intensity: peak pixel value from original image (int)
           - noise: estimated background level (float)
 
-        The method checks for cancellation before acquiring data.
+        If no contours are found, falls back to counting pixels above noise threshold.
 
         :raises CancelledError: if the task was cancelled.
         :returns: (spot_pixel_count, spot_intensity, noise)
@@ -171,7 +177,39 @@ class ParabolicMirrorAlignmentTask:
         )
 
         noise = 1.3 * numpy.median(all_corners)
-        spot_pixel_count = numpy.count_nonzero(image > noise)
+
+        # Slight Gaussian blur to reduce pixel noise
+        # Prevents threshold from overreacting
+        blurred = cv2.GaussianBlur(image, (7, 7), 0)
+        image_norm = cv2.normalize(blurred, None, 0, 255, cv2.NORM_MINMAX)
+        image_uint8 = image_norm.astype(numpy.uint8)
+
+        # Use Contrast Limited Adaptive Histogram Equalization (CLAHE)
+        # This enhances local contrast without amplifying background noise across
+        # the entire image
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced_image = clahe.apply(image_uint8)
+
+        # Otsu thresholding automatically separates signal from background
+        # Adapts to changing brightness and exposure
+        _, binary_mask = cv2.threshold(
+            enhanced_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
+
+        # Morphological cleanup to fill small gaps
+        # Makes countour area continuous
+        kernel = numpy.ones((7, 7), numpy.uint8)
+        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+
+        # Contour detection
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if contours:
+            main_contour = max(contours, key=cv2.contourArea)
+            spot_pixel_count = int(cv2.contourArea(main_contour))
+        else:
+            spot_pixel_count = numpy.count_nonzero(image > noise)
+
         spot_intensity = int(image.max())
 
         return spot_pixel_count, spot_intensity, noise
