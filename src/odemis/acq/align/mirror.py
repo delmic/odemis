@@ -85,6 +85,7 @@ class ParabolicMirrorAlignmentTask:
     - Two successive 3D Nelder-Mead refinements over [l, s, z] combining
       normalized spot pixel count and intensity into a single score.
     """
+    MIN_SEARCH_RANGE = 5e-6  # [μm]
     MIN_PIXEL_COUNT = 25  # [px]
     MAX_PIXEL_COUNT = 10000  # [px]
     MAX_INTENSITY = 50000  # [a.u.]
@@ -486,7 +487,7 @@ class ParabolicMirrorAlignmentTask:
         max_iter -= z_result.nit
         if max_iter < 1:
             return
-        search_range /= 2
+        search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
         l0 = self._mirror.position.value["l"]
         s0 = self._mirror.position.value["s"]
         z0 = self._stage.position.value["z"]
@@ -550,7 +551,7 @@ class ParabolicMirrorAlignmentTask:
         max_iter -= lsz_result.nit
         if max_iter < 1:
             return
-        search_range /= 2
+        search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
         l0 = self._mirror.position.value["l"]
         s0 = self._mirror.position.value["s"]
         z0 = self._stage.position.value["z"]
