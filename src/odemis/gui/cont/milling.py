@@ -46,6 +46,9 @@ from odemis.acq.milling import millmng, DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
+from odemis.acq.move import (
+    MILLING,
+)
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
@@ -315,7 +318,7 @@ class MillingTaskController:
         self.milling_tasks = copy.deepcopy(milling_tasks)
 
         # unsubscribe from updates to the selected tasks
-        self.selected_tasks.unsubscribe(self.draw_milling_tasks)
+        self.selected_tasks.unsubscribe(self._on_saving_position)
         self._panel.milling_task_chk_list.Unbind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
 
         # update the selected tasks to tasks in milling_tasks
@@ -327,13 +330,17 @@ class MillingTaskController:
             self._panel.milling_task_chk_list.Check(i, is_checked)
 
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_selected_tasks)
-        self.selected_tasks.subscribe(self.draw_milling_tasks, init=True)
+        self.selected_tasks.subscribe(self._on_saving_position, init=True)
 
         self._create_panels()
         self._panel.Layout()
     # NOTE: we should add the bottom right viewport as the feature viewport, to show the saved reference image and the milling patterns
     # it's too confusing to hav the 'live' view and the 'saved' view in the same viewport
     # -> workflow tab is probably easier to use for this purpose
+
+    def _on_saving_position(self, tasks):
+        pos = self.pm.to_sample_stage_from_stage_position(self._tab_data.main.currentFeature.value.position.value, MILLING)
+        self.draw_milling_tasks((pos['x'], pos['y']))
 
     @call_in_wx_main
     def draw_milling_tasks(self, pos: Optional[Tuple[float, float]] = None, convert_pos: bool = True):
@@ -379,7 +386,7 @@ class MillingTaskController:
                 pos = _get_pattern_centre(pos, self.acq_cont.stream)
             for task_name, task in self.milling_tasks.items():
                 for pattern in task.patterns:
-                    pattern.center.value = pos # image centre
+                    pattern.center.value = pos # image center
 
         # redraw all patterns
         for i, (task_name, task) in enumerate(self.milling_tasks.items()):
