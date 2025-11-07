@@ -263,7 +263,7 @@ class ParabolicMirrorAlignmentTask:
         score = (weight * norm_area) + ((1 - weight) * norm_intensity)
         return score
 
-    def _objective_lsz(
+    def _objective_3d(
         self,
         xk: numpy.ndarray,
         l_range: Tuple[float, float],
@@ -289,7 +289,7 @@ class ParabolicMirrorAlignmentTask:
             Computed score for the candidate position.
         """
         if self._cancelled:
-            raise CancelledError("Alignment was cancelled by user")
+            raise CancelledError("3D alignment was cancelled by user")
 
         if xk.size != 3:
             raise ValueError(f"Expected xk to have 3 elements (l, s, z), got {xk.size}")
@@ -313,61 +313,31 @@ class ParabolicMirrorAlignmentTask:
 
         return score
 
-    def _objective_z(self, z):
+    def _objective_1d(self, pos: float, axis: str, hw_comp: model.HwComponent):
         """
-        1D objective for optimizing 'z' (stage) by maximizing intensity.
+        1D objective for optimizing hardware component's axis by maximizing intensity.
 
-        The optimizer calls this with candidate z; the function moves the stage,
-        measures intensity and returns -intensity because the optimizer minimizes.
-
-        :param z: (float) Candidate z position.
-        :raises CancelledError: if the task was cancelled.
-        :returns: float
-            Negative measured intensity (-intensity) so higher intensity is preferred.
-        """
-        if self._cancelled:
-            raise CancelledError("Alignment was cancelled by user")
-
-        self._stage.moveAbs({"z": z}).result()
-        _, intensity, _ = self._get_spot_measurement()
-
-        return -intensity
-
-    def _objective_s(self, s):
-        """
-        1D objective for optimizing mirror 's' by maximizing intensity.
-
-        :param s: (float) Candidate s position.
+        :param pos: Candidate position.
+        :param axis: Axis which need to be moved to pos.
+        :param hw_comp: The HW Component containing the axis.
         :raises CancelledError: if the task was cancelled.
         :returns: float
             Negative measured intensity (-intensity).
         """
         if self._cancelled:
-            raise CancelledError("Alignment was cancelled by user")
+            raise CancelledError(f"1D alignment for {axis} was cancelled by user")
 
-        self._mirror.moveAbs({"s": s}).result()
+        hw_comp.moveAbs({axis: pos}).result()
         _, intensity, _ = self._get_spot_measurement()
 
-        return -intensity
+        # Normalize intensity
+        # Score is 0 for best intensity, 1 for worst
+        norm_intensity = 1.0 - (intensity / self.MAX_INTENSITY)
+        norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
 
-    def _objective_l(self, l):
-        """
-        1D objective for optimizing mirror 'l' by maximizing intensity.
+        return norm_intensity
 
-        :param l: (float) Candidate l position.
-        :raises CancelledError: if the task was cancelled.
-        :returns: float
-            Negative measured intensity (-intensity).
-        """
-        if self._cancelled:
-            raise CancelledError("Alignment was cancelled by user")
-
-        self._mirror.moveAbs({"l": l}).result()
-        _, intensity, _ = self._get_spot_measurement()
-
-        return -intensity
-
-    def _callback_lsz(self, xk: numpy.ndarray):
+    def _callback_3d(self, xk: numpy.ndarray):
         """
         Optimizer callback executed after each Nelder-Mead iteration.
 
@@ -432,7 +402,8 @@ class ParabolicMirrorAlignmentTask:
                 f"Starting initial l alignment with search range: {search_range}, max iter: {max_iter}"
             )
             l_result = minimize_scalar(
-                fun=self._objective_l,
+                fun=self._objective_1d,
+                args=("l", self._mirror),
                 bounds=l_abs_bound,
                 method="bounded",
                 options={
@@ -461,7 +432,8 @@ class ParabolicMirrorAlignmentTask:
                 f"Starting initial s alignment with search range: {search_range}, max iter: {max_iter}"
             )
             s_result = minimize_scalar(
-                fun=self._objective_s,
+                fun=self._objective_1d,
+                args=("s", self._mirror),
                 bounds=s_abs_bound,
                 method="bounded",
                 options={
@@ -490,7 +462,8 @@ class ParabolicMirrorAlignmentTask:
                 f"Starting initial z alignment with search range: {search_range}, max iter: {max_iter}"
             )
             z_result = minimize_scalar(
-                fun=self._objective_z,
+                fun=self._objective_1d,
+                args=("z", self._stage),
                 bounds=z_abs_bound,
                 method="bounded",
                 options={
@@ -540,12 +513,12 @@ class ParabolicMirrorAlignmentTask:
                 f"Starting first [l, s, z] alignment with initial guess: {initial_guess}, search range: {search_range}, max iter: {max_iter}"
             )
             lsz_result = minimize(
-                fun=self._objective_lsz,
+                fun=self._objective_3d,
                 x0=initial_guess,
                 args=(l_range, s_range, z_range, weight),
                 method="Nelder-Mead",
                 bounds=(l_range, s_range, z_range),
-                callback=self._callback_lsz,
+                callback=self._callback_3d,
                 options={
                     "maxiter": max_iter,
                     "adaptive": True,
@@ -604,12 +577,12 @@ class ParabolicMirrorAlignmentTask:
                 f"Starting second [l, s, z] alignment with initial guess: {initial_guess}, search range: {search_range}, max iter: {max_iter}"
             )
             lsz_result = minimize(
-                fun=self._objective_lsz,
+                fun=self._objective_3d,
                 x0=initial_guess,
                 args=(l_range, s_range, z_range, weight),
                 method="Nelder-Mead",
                 bounds=(l_range, s_range, z_range),
-                callback=self._callback_lsz,
+                callback=self._callback_3d,
                 options={
                     "maxiter": max_iter,
                     "adaptive": True,
