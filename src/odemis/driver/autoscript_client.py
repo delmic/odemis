@@ -2049,6 +2049,8 @@ class Focus(model.Actuator):
         update the position VA
         """
         z = self.parent.get_working_distance(self.channel)
+        if self.position.value["z"] != z:
+            logging.debug("Updating %s position to %s for channel %s", self.name, z, self.channel)
         self.position._set_value({"z": z}, force_write=True)
 
     def _refreshPosition(self):
@@ -2057,11 +2059,10 @@ class Focus(model.Actuator):
         """
         # We don't use the VA setters, to avoid sending back to the hardware a
         # set request
-        logging.debug("Updating SEM focus position")
         try:
             self._updatePosition()
         except Exception:
-            logging.exception("Unexpected failure when updating position")
+            logging.exception("Unexpected failure when updating SEM focus position")
 
     def _doMoveRel(self, foc):
         """
