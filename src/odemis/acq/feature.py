@@ -159,7 +159,8 @@ class CryoFeature(object):
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
         """
         self.name = model.StringVA(name)
-        self.position = model.VigilantAttribute(name, unit="m") # sample stage aka "ideal stage", with x, y, z axes
+        # FIXME: The 'position' parameter should eventually contain the SampleStage coordinates and not stage bare from the stage_position!
+        self.position = model.VigilantAttribute(stage_position, unit="m") # sample stage aka "ideal stage", with x, y, z axes
         self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare, in the first posture found # TODO: drop
         self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
