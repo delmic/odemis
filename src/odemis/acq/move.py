@@ -2062,12 +2062,18 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     sub_moves.append((stage, filter_dict({'x', 'y', 'rz'}, target_pos)))
 
                 if target == SEM_IMAGING:
-                    # when switching from FM to SEM
-                    # move in the following order
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                    if current_label == MILLING:
+                        sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rz', 'y'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    else:
+                        # when switching from FM to SEM
+                        # move in the following order
+                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'z'}, target_pos)))
 
                 if target == FM_IMAGING:
                     if current_label == LOADING:
