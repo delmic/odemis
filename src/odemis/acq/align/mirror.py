@@ -33,12 +33,49 @@ from scipy.optimize._optimize import (
     _check_unknown_options,
     _MaxFuncCallError,
     _status_message,
-    _wrap_scalar_function_maxfun_validation,
 )
 
 from odemis import model
 
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+
+def _wrap_closed_loop_function(function, args, maxfun):
+    """
+    A custom wrapper for a "closed-loop" objective function.
+
+    - Counts the number of function evaluations.
+    - Enforces the `maxfun` (maxfev) limit.
+    - Validates that the function returns the expected tuple: (score, position_vector).
+    - Passes the full tuple back to the optimizer.
+    """
+    ncalls = [0]
+    if function is None:
+        return ncalls, None
+
+    def function_wrapper(x, *wrapper_args):
+        if ncalls[0] >= maxfun:
+            raise _MaxFuncCallError("Too many function calls")
+        ncalls[0] += 1
+
+        # Call the user's objective function (e.g., _objective_lsz)
+        result = function(numpy.copy(x), *(wrapper_args + args))
+
+        # --- MODIFICATION: Our custom validation logic ---
+        if not isinstance(result, tuple) or len(result) != 2:
+            raise ValueError("The closed-loop objective function must return a tuple of (score, position_vector).")
+
+        score, position = result
+
+        if not numpy.isscalar(score):
+            raise ValueError(f"The score returned by the objective function must be a scalar. Got: {score}")
+        if not isinstance(position, numpy.ndarray):
+            raise ValueError(f"The position returned by the objective function must be a numpy array. Got: {type(position)}")
+
+        # Return the validated, complete tuple
+        return score, position
+
+    return ncalls, function_wrapper
 
 
 def _probabilistic_snap_to_grid(x, x0, min_step_size, rng=None):
@@ -251,11 +288,11 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
     one2np1 = list(range(1, N + 1))
     fsim = numpy.full((N + 1,), numpy.inf, dtype=float)
 
-    fcalls, func = _wrap_scalar_function_maxfun_validation(func, args, maxfun)
+    fcalls, func = _wrap_closed_loop_function(func, args, maxfun)
 
     try:
         for k in range(N + 1):
-            fsim[k] = func(sim[k])
+            fsim[k], sim[k] = func(sim[k])
     except _MaxFuncCallError:
         pass
     finally:
@@ -281,7 +318,7 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
             xr = _probabilistic_snap_to_grid(xr, x0, min_step_size, rng)  # MODIFICATION
             if bounds is not None:
                 xr = numpy.clip(xr, lower_bound, upper_bound)
-            fxr = func(xr)
+            fxr, xr = func(xr)
             doshrink = 0
 
             if fxr < fsim[0]:
@@ -289,7 +326,7 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                 xe = _probabilistic_snap_to_grid(xe, x0, min_step_size, rng)  # MODIFICATION
                 if bounds is not None:
                     xe = numpy.clip(xe, lower_bound, upper_bound)
-                fxe = func(xe)
+                fxe, xe = func(xe)
 
                 if fxe < fxr:
                     sim[-1] = xe
@@ -308,7 +345,7 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                         xc = _probabilistic_snap_to_grid(xc, x0, min_step_size, rng)  # MODIFICATION
                         if bounds is not None:
                             xc = numpy.clip(xc, lower_bound, upper_bound)
-                        fxc = func(xc)
+                        fxc, xc = func(xc)
 
                         if fxc <= fxr:
                             sim[-1] = xc
@@ -321,7 +358,7 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                         xcc = _probabilistic_snap_to_grid(xcc, x0, min_step_size, rng)  # MODIFICATION
                         if bounds is not None:
                             xcc = numpy.clip(xcc, lower_bound, upper_bound)
-                        fxcc = func(xcc)
+                        fxcc, xcc = func(xcc)
 
                         if fxcc < fsim[-1]:
                             sim[-1] = xcc
@@ -336,7 +373,7 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                             if bounds is not None:
                                 sim[j] = numpy.clip(
                                     sim[j], lower_bound, upper_bound)
-                            fsim[j] = func(sim[j])
+                            fsim[j], sim[j] = func(sim[j])
             iterations += 1
         except _MaxFuncCallError:
             pass
@@ -696,7 +733,12 @@ class ParabolicMirrorAlignmentTask:
         self._last_intensity = intensity
         self._last_score = score
 
-        return score
+        l_actual = self._mirror.position.value["l"]
+        s_actual = self._mirror.position.value["s"]
+        z_actual = self._stage.position.value["z"]
+        xk_actual = numpy.array([l_actual, s_actual, z_actual])
+
+        return score, xk_actual
 
     def _objective_1d(self, pos: float, axis: str, hw_comp: model.HwComponent):
         """
@@ -756,7 +798,7 @@ class ParabolicMirrorAlignmentTask:
         )
         self._iteration_count += 1
 
-    def align_mirror(self, search_range: float, max_iter: int, min_step_size: Tuple[float] = (1e-6, 1e-6, 1e-6)):
+    def align_mirror(self, search_range: float, max_iter: int, min_step_size: Tuple[float] = (1.5e-6, 1.5e-6, 2e-6)):
         """
         Execute the full alignment procedure.
 
@@ -954,8 +996,8 @@ class ParabolicMirrorAlignmentTask:
             max(z_abs_bound[0], z0 - search_range),
             min(z_abs_bound[1], z0 + search_range)
         )
-        # More weight to spot pixel count than peak intensity
-        weight = 0.7
+        # More weight to peak intensity than spot pixel count
+        weight = 0.4
         initial_guess = [l0, s0, z0]
         bounds = standardize_bounds((l_range, s_range, z_range), initial_guess, "nelder-mead")
 
