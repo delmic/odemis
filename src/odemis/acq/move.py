@@ -77,6 +77,15 @@ TFS_FIB_COLUMN_TILT = math.radians(52)
 TESCAN_FIB_COLUMN_TILT = math.radians(55)
 ZEISS_FIB_COLUMN_TILT = math.radians(54)
 
+def filter_dict(keys: set, d: Dict[str, float]) -> Dict[str, float]:
+    """
+    Filter a dictionary to only keep the given keys
+    :param keys: keys to keep
+    :param d: complete dict
+    :return: filtered dict
+    """
+    return {key: d[key] for key in keys}
+
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -602,6 +611,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             p1_sample = numpy.array([p1_sample["x"], p1_sample["y"], p1_sample["z"]])
             self._offset[p] = p1_sample - ref_p1
 
+        logging.debug("Sample stage transformation offsets: %s", self._offset)
+
     def _get_scan_rotation(self) -> float:
         """
         Get the scan rotation value for SEM/FIB, and ensure they match.
@@ -992,9 +1003,6 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 target_name = POSITION_NAMES[target]
             except KeyError:
                 raise ValueError(f"Unknown target '{target}'")
-
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
             # get the meta data
             focus_md = self.focus.getMetadata()
@@ -1463,9 +1471,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 target_name = POSITION_NAMES[target]
             except KeyError:
                 raise ValueError(f"Unknown target '{target}'")
-
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
             focus = model.getComponent(role='focus')
             stage = model.getComponent(role='stage-bare')
@@ -1999,9 +2004,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             raise ValueError(f"Unknown target '{target}'")
 
         try:
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
-
             # get the meta data
             focus_md = self.focus.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
@@ -2419,6 +2421,8 @@ class SampleStage(model.Actuator):
         # missing values are assumed to be zero
         shift_stage = self._pm.from_sample_stage_to_stage_movement(shift)
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
+        # Only the linear axes are necesary for the move, so drop the others (to avoid extraneous moves)
+        shift_stage = filter_dict({"x", "y", "z", "m"}, shift_stage)
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
     def moveAbs(self, pos: Dict[str, float], **kwargs) -> Future:
@@ -2435,6 +2439,8 @@ class SampleStage(model.Actuator):
         # pos is a position, so absolute conversion
         pos_stage = self._pm.from_sample_stage_to_stage_position(pos)
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
+        # Only the linear axes are necesary for the move, so drop the others (to avoid extraneous moves)
+        pos_stage = filter_dict({"x", "y", "z", "m"}, pos_stage)
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     def moveRelChamberCoordinates(self, shift: Dict[str, float]) -> Future:
