@@ -1567,6 +1567,9 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                     raise CancelledError()
                 future._task_state = FINISHED
 
+# Extra Z margin, to be certain no intermediary move can cause a collision during posture switch
+TESCAN_SAFETY_Z_MARGIN = 7e-3  # m
+
 
 class MeteorTescan1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
@@ -1956,120 +1959,108 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             # Create axis->pos dict from target position given smaller number of axes
             filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
-            focus = model.getComponent(role='focus')
-            stage = model.getComponent(role='stage-bare')
             # get the meta data
-            focus_md = focus.getMetadata()
+            focus_md = self.focus.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             # To hold the ordered sub moves list
             sub_moves = []  # list of tuples (component, position)
 
             # get the current label
-            pos = self.stage.position.value
-            current_label = self.getCurrentPostureLabel(pos)
-            current_name = POSITION_NAMES[current_label]
+            current_pos = self.stage.position.value
+            current_posture = self.getCurrentPostureLabel(current_pos)
+            current_name = POSITION_NAMES[current_posture]
 
-            if current_label == target:
+            if current_posture == target:
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
             target_pos = self.getTargetPosition(target)
 
+            # In many cases, to move safely, we force the stage Z to go down first + extra margin,
+            # do the actual moves, and then move back up. But on Tescan (stage-bare), the Z axis
+            # *increases* when going down.
+            lowest_z = max(target_pos["z"], current_pos["z"])
+            safety_z = lowest_z + TESCAN_SAFETY_Z_MARGIN
+            # Handle the (very unlikely) case where we would ask to go too low
+            z_range = self.stage.axes["z"].range
+            if safety_z > z_range[1]:
+                logging.warning("Limiting Z safety position from %s m to %s m due to axis range", safety_z, z_range[1])
+                safety_z = z_range[1]
+
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
             # by SEM_IMAGING and then go to the actual requested position.
-            if current_label == UNKNOWN:
-                logging.warning("Moving stage while current position is unknown.")
+            if current_posture == UNKNOWN:
+                logging.warning("Moving stage while current position is unknown (at %s).", current_pos)
                 if target not in (LOADING, SEM_IMAGING):
                     logging.debug("Moving first to SEM_IMAGING position")
                     target_pos_sem = self.getTargetPosition(SEM_IMAGING)
-                    if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                        sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos_sem)))
-                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos_sem)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos_sem)))
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos_sem)))
+                    if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                        sub_moves.append((self.focus, focus_deactive))
+
+                    sub_moves.append((self.stage, {'z': safety_z}))
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_pos_sem)))
+                    # Don't move in Z of SEM_IMAGING, as it'll move down first to safety_z later
 
             if target in (GRID_1, GRID_2):
-                # The current mode doesn't change.
-                sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
-                sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                # The current posture doesn't change.
+                # Moving should mostly consist in a move in X (and Y+Z to go back to the center of the grid)
+                pos_rotation = filter_dict({'rx', 'rz'}, current_pos)
+                target_rotation = filter_dict({'rx', 'rz'}, target_pos)
+                if not isNearPosition(pos_rotation, target_rotation, {'rx', 'rz'}):
+                    raise ValueError(f"Unexpected change of stage rotation/tilt when moving to grid "
+                                     f"position: {pos_rotation} vs {target_rotation}. Aborting move.")
+                sub_moves.append((self.stage, filter_dict({'x'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'y', 'z'}, target_pos)))
 
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING, MILLING):
                 # Park the focuser for safety
-                if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
-                    sub_moves.append((focus, focus_deactive))
+                if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                    sub_moves.append((self.focus, focus_deactive))
 
-                if current_label == MILLING:
+                if current_posture == MILLING:
                     # Store current milling angle, to go back to that same position next time
-                    rx_milling = calculate_milling_angle_from_stage_tilt(pos["rx"],
+                    rx_milling = calculate_milling_angle_from_stage_tilt(current_pos["rx"],
                                             pre_tilt=self.pre_tilt,
                                             column_tilt=self.fib_column_tilt)
                     mill_pos_active = self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]
                     mill_pos_active["rx"] = rx_milling
                     self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_pos_active})
-                    # TODO: update transformation matrices for milling
+                    # TODO: update transformation matrices for milling (at the moment the milling angle is changed)
 
-                if target == LOADING:
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'rz'}, target_pos)))
+                # In the Odemis Standard case, which doesn't distinguish between SEM_IMAGING and MILLING,
+                # the user might have changed the tilt/rotation of the stage while in SEM mode,
+                # to change posture. So store them so that when going back to SEM_IMAGING,
+                # we can go back to the same posture.
+                # TODO: if there is a MILLING posture, should we still save rx & rz?
+                if current_posture == SEM_IMAGING and target == FM_IMAGING:
+                    pos_rotation = filter_dict({'rx', 'rz'}, current_pos)
+                    sem_pos_active = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+                    if not isNearPosition(pos_rotation, sem_pos_active, {"rx", "rz"}):
+                        logging.info("Updating SEM posture from %s to %s", sem_pos_active, pos_rotation)
+                        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: pos_rotation})
 
-                if target == SEM_IMAGING:
-                    # when switching from FM to SEM
-                    # move in the following order
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                # Same order in every case:
+                sub_moves.append((self.stage, {'z': safety_z}))  # Move Z to really low position
+                sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_pos)))  # Do all moves simultaneously
+                sub_moves.append((self.stage, filter_dict({'z'}, target_pos)))  # Move the final Z
 
                 if target == FM_IMAGING:
-                    if current_label == LOADING:
-                        # In practice, the user will not go directly from LOADING to FM_IMAGING
-                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-
-                    if current_label == SEM_IMAGING:
-                        # save rotation and tilt in SEM before switching to FM imaging
-                        # to restore rotation and tilt while switching back from FM -> SEM
-                        current_value = self.stage.position.value
-                        # TODO: now that we have a MILLING posture, should we still save rx & rz?
-                        # Now that we have a dedicated MILLING posture, that makes less sense, as rx should always be 90° from the e-beam...
-                        # but for old systems, with only "SEM" posture (which was the MILLING posture), this is still handy
-                        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
-                                                                                 'rz': current_value['rz']}})
-                        # when switching from SEM to FM
-                        # move in the following order :
-                        sub_moves.append((stage, filter_dict({'z'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rz', 'y'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                    # Engage the focuser
-                    sub_moves.append((focus, focus_active))
-
-                if target == MILLING:
-                    # when switching from SEM to MILLING
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'y', 'rz'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos)))
+                    # Engage the focuser as last move
+                    sub_moves.append((self.focus, focus_active))
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
             # run the moves
-            logging.info("Moving from position {} to position {}.".format(current_name, target_name))
+            logging.info("Moving from position %s to position %s.",current_name, target_name)
             for component, sub_move in sub_moves:
                 self._run_sub_move(future, component, sub_move)
 
         except CancelledError:
             logging.info("CryoSwitchSamplePosition cancelled.")
         except Exception:
-            logging.exception("Failure to move to {} position.".format(target_name))
+            logging.exception("Failure to move to %s position.", target_name)
             raise
         finally:
             with future._task_lock:
