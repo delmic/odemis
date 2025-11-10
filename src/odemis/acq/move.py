@@ -64,6 +64,10 @@ ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
 SAFETY_MARGIN_5DOF = 100e-6  # m
 SAFETY_MARGIN_3DOF = 200e-6  # m
 
+# The possible axes for linear and rotational movements
+LINEAR_AXES = {'x', 'y', 'z', 'm'}
+ROTATION_AXES = {'rx', 'ry', 'rz', 'rm'}
+
 # Tolerance for the difference between the current position and the target position
 # these should only be used for TFS1MeteorPostureManager _transformFromSEMToMeteor / _transformFromMeteorToSEM
 ATOL_ROTATION_TRANSFORM = 0.04  # rad ~2.5 deg
@@ -80,6 +84,16 @@ ZEISS_FIB_COLUMN_TILT = math.radians(54)
 # These values might differ per system and would then require a configuration option per system.
 # Hardcoded for now. Note that these values correspond to the milling angle, and not the actual stage tilt.
 MILLING_RANGE = (5, 30)  # degrees
+
+def filter_dict(keys: set, d: Dict[str, float]) -> Dict[str, float]:
+    """
+    Filter a dictionary to only keep the given keys
+    :param keys: keys to keep
+    :param d: complete dict
+    :return: filtered dict
+    """
+    return {key: d[key] for key in keys if key in d}
+
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -178,8 +192,8 @@ class MicroscopePostureManager:
         return (float >= 0): the difference between two 3D postures.
         """
         axes = start.keys() & end.keys()
-        lin_axes = axes & {'x', 'y', 'z', 'm'}  # only the axes found on both points
-        rot_axes = axes & {'rx', 'ry', 'rz', 'rm'}  # only the axes found on both points
+        lin_axes = axes & LINEAR_AXES  # only the axes found on both points
+        rot_axes = axes & ROTATION_AXES  # only the axes found on both points
         if not lin_axes and not rot_axes:
             raise ValueError("No common axes found between the two postures")
 
@@ -301,8 +315,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.focus = model.getComponent(role='focus')
         # set linear axes and rotational axes used
         self.axes = self.stage.axes
-        self.linear_axes = set(key for key in self.axes.keys() if key in {'x', 'y', 'z', 'm'})
-        self.rotational_axes = set(key for key in self.axes.keys() if key in {'rx', 'ry', 'rz', 'rm'})
+        self.linear_axes = set(key for key in self.axes.keys() if key in LINEAR_AXES)
+        self.rotational_axes = set(key for key in self.axes.keys() if key in ROTATION_AXES)
         # required keys that must be present in the stage metadata
         self.required_keys = {
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
@@ -610,6 +624,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             p1_sample = self.to_sample_stage_from_stage_position(grid1_pos, p)
             p1_sample = numpy.array([p1_sample["x"], p1_sample["y"], p1_sample["z"]])
             self._offset[p] = p1_sample - ref_p1
+
+        logging.debug("Sample stage transformation offsets: %s", self._offset)
 
     def _get_scan_rotation(self) -> float:
         """
@@ -998,9 +1014,6 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 target_name = POSITION_NAMES[target]
             except KeyError:
                 raise ValueError(f"Unknown target '{target}'")
-
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
             # get the meta data
             focus_md = self.focus.getMetadata()
@@ -1463,9 +1476,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 target_name = POSITION_NAMES[target]
             except KeyError:
                 raise ValueError(f"Unknown target '{target}'")
-
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
 
             focus = model.getComponent(role='focus')
             stage = model.getComponent(role='stage-bare')
@@ -1956,9 +1966,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             raise ValueError(f"Unknown target '{target}'")
 
         try:
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
-
             # get the meta data
             focus_md = self.focus.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
@@ -2369,6 +2376,8 @@ class SampleStage(model.Actuator):
         """
         # missing values are assumed to be zero
         shift_stage = self._pm.from_sample_stage_to_stage_movement(shift)
+        # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
+        shift_stage = filter_dict(LINEAR_AXES, shift_stage)
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
@@ -2385,6 +2394,8 @@ class SampleStage(model.Actuator):
 
         # pos is a position, so absolute conversion
         pos_stage = self._pm.from_sample_stage_to_stage_position(pos)
+        # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
+        pos_stage = filter_dict(LINEAR_AXES, pos_stage)
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
