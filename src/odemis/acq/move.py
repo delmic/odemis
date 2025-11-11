@@ -64,6 +64,10 @@ ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
 SAFETY_MARGIN_5DOF = 100e-6  # m
 SAFETY_MARGIN_3DOF = 200e-6  # m
 
+# The possible axes for linear and rotational movements
+LINEAR_AXES = {'x', 'y', 'z', 'm'}
+ROTATION_AXES = {'rx', 'ry', 'rz', 'rm'}
+
 # Tolerance for the difference between the current position and the target position
 # these should only be used for TFS1MeteorPostureManager _transformFromSEMToMeteor / _transformFromMeteorToSEM
 ATOL_ROTATION_TRANSFORM = 0.04  # rad ~2.5 deg
@@ -84,7 +88,7 @@ def filter_dict(keys: set, d: Dict[str, float]) -> Dict[str, float]:
     :param d: complete dict
     :return: filtered dict
     """
-    return {key: d[key] for key in keys}
+    return {key: d[key] for key in keys if key in d}
 
 
 class MicroscopePostureManager:
@@ -184,8 +188,8 @@ class MicroscopePostureManager:
         return (float >= 0): the difference between two 3D postures.
         """
         axes = start.keys() & end.keys()
-        lin_axes = axes & {'x', 'y', 'z', 'm'}  # only the axes found on both points
-        rot_axes = axes & {'rx', 'ry', 'rz', 'rm'}  # only the axes found on both points
+        lin_axes = axes & LINEAR_AXES  # only the axes found on both points
+        rot_axes = axes & ROTATION_AXES  # only the axes found on both points
         if not lin_axes and not rot_axes:
             raise ValueError("No common axes found between the two postures")
 
@@ -307,8 +311,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.focus = model.getComponent(role='focus')
         # set linear axes and rotational axes used
         self.axes = self.stage.axes
-        self.linear_axes = set(key for key in self.axes.keys() if key in {'x', 'y', 'z', 'm'})
-        self.rotational_axes = set(key for key in self.axes.keys() if key in {'rx', 'ry', 'rz', 'rm'})
+        self.linear_axes = set(key for key in self.axes.keys() if key in LINEAR_AXES)
+        self.rotational_axes = set(key for key in self.axes.keys() if key in ROTATION_AXES)
         # required keys that must be present in the stage metadata
         self.required_keys = {
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
@@ -2420,9 +2424,9 @@ class SampleStage(model.Actuator):
         """
         # missing values are assumed to be zero
         shift_stage = self._pm.from_sample_stage_to_stage_movement(shift)
+        # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
+        shift_stage = filter_dict(LINEAR_AXES, shift_stage)
         logging.debug("converted relative move from %s to %s", shift, shift_stage)
-        # Only the linear axes are necesary for the move, so drop the others (to avoid extraneous moves)
-        shift_stage = filter_dict({"x", "y", "z", "m"}, shift_stage)
         return self._stage_bare.moveRel(shift_stage, **kwargs)
 
     def moveAbs(self, pos: Dict[str, float], **kwargs) -> Future:
@@ -2438,9 +2442,9 @@ class SampleStage(model.Actuator):
 
         # pos is a position, so absolute conversion
         pos_stage = self._pm.from_sample_stage_to_stage_position(pos)
+        # Only the linear axes are necessary for the move, so drop the others (to avoid extraneous moves)
+        pos_stage = filter_dict(LINEAR_AXES, pos_stage)
         logging.debug("converted absolute move from %s to %s", pos, pos_stage)
-        # Only the linear axes are necesary for the move, so drop the others (to avoid extraneous moves)
-        pos_stage = filter_dict({"x", "y", "z", "m"}, pos_stage)
         return self._stage_bare.moveAbs(pos_stage, **kwargs)
 
     def moveRelChamberCoordinates(self, shift: Dict[str, float]) -> Future:
