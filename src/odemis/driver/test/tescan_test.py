@@ -500,6 +500,18 @@ class BaseSEMTest(object):
         time.sleep(6)
         testing.assert_pos_almost_equal(self.stage.position.value, p)
 
+    def test_move_abs_single_axis(self):
+        """
+        Check it's possible to move the stage in absolute coordinates over a single axis
+        """
+        p = self.stage.position.value.copy()
+        subpos = {'x': p['x'] + 50e-6}
+        f = self.stage.moveAbs(subpos)
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, {**p, **subpos})
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, {**p, **subpos})
+
     # @skip("not working with the newer simulator Tescan Essence v1.2.2")
     def test_stop(self):
         """

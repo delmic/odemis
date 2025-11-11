@@ -1430,9 +1430,6 @@ class Stage(model.Actuator):
         with self.parent._acq_progress_lock:
             logging.debug("Requesting stage move to %s", pos)
 
-            x, y, z, rz, rx = self.parent._device.StgGetPosition()
-            current_pos = {"x": x, "y": y, "z": z, "rz": rz, "rx": rx}
-
             req_pos = {}
 
             for axis in {"x", "y", "z", "rz", "rx"}:
@@ -1443,18 +1440,18 @@ class Stage(model.Actuator):
                     # convert from radians to degrees for the rotational axes
                     elif axis in {"rz", "rx"}:
                         req_pos[axis] = math.degrees(pos[axis])
-
-            current_pos.update(req_pos)
+                else:
+                    req_pos[axis] = None
 
             orig_pos = self._position
 
             # always issue a move command containing values for all 5 axes so
             # there is no separate code needed for backward compatibility
-            self.parent._device.StgMoveTo(current_pos["x"],
-                                          current_pos["y"],
-                                          current_pos["z"],
-                                          current_pos["rz"],
-                                          current_pos["rx"],
+            self.parent._device.StgMoveTo(req_pos["x"],
+                                          req_pos["y"],
+                                          req_pos["z"],
+                                          req_pos["rz"],
+                                          req_pos["rx"],
                                           )
 
             # a very small delay before checking if the stage is busy
@@ -1479,7 +1476,7 @@ class Stage(model.Actuator):
         :param shift (dict[str, float]): shift of linear axes in m or rotational axes in radians
         """
         self._updatePosition()
-        pos = self._position.copy()
+        pos = {axis: position for axis, position in self._position.items() if axis in shift}
 
         # add the requested change to the current position
         for axis, change in shift.items():
