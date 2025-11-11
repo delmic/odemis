@@ -406,6 +406,23 @@ class BaseSEMTest(object):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_vol, ebeam.accelVoltage.value)
 
+    def test_scan_rotation(self):
+        ebeam = self.scanner
+
+        orig_rotation = ebeam.rotation.value
+        new_rotation = math.pi
+        if orig_rotation == new_rotation:
+            new_rotation = math.pi / 2
+        ebeam.rotation.value = new_rotation
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(new_rotation, ebeam.rotation.value)
+
+        # Reset
+        ebeam.rotation.value = orig_rotation
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(orig_rotation, ebeam.rotation.value)
+
+
     def test_blanker(self):
         """
         Check it's possible to blank/unblank
