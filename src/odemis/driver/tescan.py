@@ -51,6 +51,8 @@ PROBE_CURRENT_RANGE = (10e-12, 100e-9)
 
 DEFAULT_ION_PRESET = ""
 
+MIN_MOVE_SIZE_LIN_MM = 10e-6  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
+MIN_MOVE_SIZE_ROT_DEG = 0.05
 
 class DeviceType(Enum):
     ELECTRON = "electron"
@@ -1423,25 +1425,40 @@ class Stage(model.Actuator):
 
     def _doMoveAbs(self, pos: dict):
         """
-        move to the requested (absolute) position
+        move to the requested (absolute) position. If a move on a requested axis is deemed insignificant
+        by this method, the move for that axis will not be requested. This is to prevent the stage from applying undesired anti-backlash
+        correction.
         :param pos (dict[str, float]): positions of linear axes in m or rotational axes in radians
         """
         # TODO: support cancelling (= call StgStop) will be addressed in separate PR
         with self.parent._acq_progress_lock:
             logging.debug("Requesting stage move to %s", pos)
 
+            x, y, z, rz, rx = self.parent._device.StgGetPosition()
+            current_pos = {"x": x, "y": y, "z": z, "rz": rz, "rx": rx}
             req_pos = {}
 
             for axis in {"x", "y", "z", "rz", "rx"}:
                 if axis in pos:
-                    # convert from m to mm and invert for the linear axes
+                    # Convert from m to mm and invert for the linear axes
+                    # Also, per axis, check if requested move is significant enough. Otherwise, drop the request to move that axis.
+                    # This helps preventing unneeded stage movement due to anti-backlash correction.
                     if axis in {"x", "y", "z"}:
-                        req_pos[axis] = -pos[axis] * 1e3
+                        tescan_pos = -pos[axis] * 1e3
+                        move_distance = abs(tescan_pos - current_pos[axis])
+                        if move_distance < MIN_MOVE_SIZE_LIN_MM:  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
+                            tescan_pos = None
+                            logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
                     # convert from radians to degrees for the rotational axes
                     elif axis in {"rz", "rx"}:
-                        req_pos[axis] = math.degrees(pos[axis])
+                        tescan_pos = math.degrees(pos[axis])
+                        move_distance = abs(tescan_pos - current_pos[axis])
+                        if move_distance < MIN_MOVE_SIZE_ROT_DEG:
+                            tescan_pos = None
+                            logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
                 else:
-                    req_pos[axis] = None
+                    tescan_pos = None
+                req_pos[axis] = tescan_pos
 
             orig_pos = self._position
 

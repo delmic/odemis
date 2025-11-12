@@ -27,6 +27,7 @@ import threading
 import time
 import unittest
 from concurrent.futures import CancelledError
+from unittest import mock
 
 import numpy
 import Pyro4
@@ -511,6 +512,25 @@ class BaseSEMTest(object):
         testing.assert_pos_almost_equal(self.stage.position.value, {**p, **subpos})
         time.sleep(6)
         testing.assert_pos_almost_equal(self.stage.position.value, {**p, **subpos})
+
+    def test_move_abs_insignificant_axis(self):
+        """
+        Check if requested move is ignored when move is insignificant
+        """
+        p = self.stage.position.value.copy()
+        # Significant move is >10e-9, so x should be insignificant and y should be significant
+        subpos = {'x': p['x'] + 5e-9, 'y': p['y'] + 20e-9}
+        with mock.patch.object(self.stage.parent._device, 'StgMoveTo') as mock_stg_move_to:
+            f = self.stage.moveAbs(subpos)
+            f.result()
+
+            mock_stg_move_to.assert_called_once_with(
+                None,      # req_pos["x"] should be None (insignificant)
+                mock.ANY,  # req_pos["y"] should be passed (significant)
+                None,      # req_pos["z"] should be None (unrequested)
+                None,      # req_pos["rz"] should be None (unrequested)
+                None,      # req_pos["rx"] should be None (unrequested)
+            )
 
     # @skip("not working with the newer simulator Tescan Essence v1.2.2")
     def test_stop(self):
