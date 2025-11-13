@@ -109,7 +109,7 @@ def rectangle_pattern_to_shape(canvas,
                         colour: str = "#FFFF00",
                         name: str = None) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
-    rect = RectangleOverlay(cnvs=canvas, colour = colour)
+    rect = RectangleOverlay(cnvs=canvas, colour = colour, show_selection_points = False)
     width = pattern.width.value
     height = pattern.height.value
     x, y = _to_physical_position(pattern.center.value, stream) # image coordinates -> physical coordinates
