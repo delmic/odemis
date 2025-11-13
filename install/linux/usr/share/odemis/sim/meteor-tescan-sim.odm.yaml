@@ -42,8 +42,8 @@
         refproc: "Standard",
     },
     metadata: {
-        # Loading position:
-        FAV_POS_DEACTIVE: {'rx': 0.0, 'rz': -1.0471975511965976, 'x': -30.e-3, 'y':  -40.e-03, 'z':  45.e-3}, # T 0°, R -60°/300°
+        # Loading position: (fake one, so that it's easy to start from there)
+        FAV_POS_DEACTIVE: {'rx': 0.0, 'rz': 0.0, 'x': 0.0, 'y':  0.0, 'z': 0.0},
         # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
         # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
         SEM_IMAGING_RANGE: {"x": [-13.e-3, 7.e-3], "y": [-10.e-3, 10.e-3], "z": [28.e-3, 32.e-3]},
