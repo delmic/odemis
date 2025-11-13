@@ -33,6 +33,7 @@ from scipy.optimize._optimize import (
     _check_unknown_options,
     _MaxFuncCallError,
     _status_message,
+    _endprint,
 )
 
 from odemis import model
@@ -45,7 +46,7 @@ def _wrap_closed_loop_function(function, args, maxfun):
     A custom wrapper for a "closed-loop" objective function.
 
     - Counts the number of function evaluations.
-    - Enforces the `maxfun` (maxfev) limit.
+    - Enforces the 'maxfun' (maxfev) limit.
     - Validates that the function returns the expected tuple: (score, position_vector).
     - Passes the full tuple back to the optimizer.
     """
@@ -61,7 +62,6 @@ def _wrap_closed_loop_function(function, args, maxfun):
         # Call the user's objective function (e.g., _objective_lsz)
         result = function(numpy.copy(x), *(wrapper_args + args))
 
-        # --- MODIFICATION: Our custom validation logic ---
         if not isinstance(result, tuple) or len(result) != 2:
             raise ValueError("The closed-loop objective function must return a tuple of (score, position_vector).")
 
@@ -78,13 +78,26 @@ def _wrap_closed_loop_function(function, args, maxfun):
     return ncalls, function_wrapper
 
 
-def _probabilistic_snap_to_grid(x, x0, min_step_size, rng=None):
+def _probabilistic_snap_to_grid(x, x0, min_step_size=None, rng=None):
     """
-    Snaps a point (or array of points) x to a grid defined by an origin x0
-    and a per-axis step size using probabilistic rounding.
+    Probabilistically snap positions to a hardware step grid.
 
-    This prevents deterministic oscillation when the simplex vertices
-    fall between discrete hardware step positions.
+    Snaps a scalar or array of positions 'x' to a grid defined by origin
+    'x0' and per-axis minimum step size 'min_step_size' using
+    probabilistic rounding. For each element the continuous grid multiple
+    is computed as '(x - x0) / min_step_size'. The integer part is the
+    lower grid index and the fractional part is used as the probability to
+    round up to the next index (i.e. fractional part p -> round up with
+    probability p). This reduces deterministic oscillation when optimizer
+    vertices fall between discrete actuator steps.
+
+    If 'min_step_size' is 'None' the input 'x' is returned unchanged.
+
+    :param x: Position(s) to snap.
+    :param x0: Grid origin. Broadcastable to 'x'.
+    :param min_step_size: Per-axis minimum step size in same units as 'x' or 'None' to disable snapping.
+    :param rng: Random number generator to use. If 'None', a new 'numpy.random.default_rng()' is created.
+    :return: Snapped position(s) with same shape as 'x'.
     """
     if min_step_size is None:
         return x
@@ -115,12 +128,180 @@ def _probabilistic_snap_to_grid(x, x0, min_step_size, rng=None):
     return x0 + final_multiple * min_step_size
 
 
+def _custom_minimize_scalar_bounded(func, bounds, x0, min_step_size=None,
+                                    rng=None, args=(), xatol=1e-5, maxiter=500, disp=0,
+                                    **unknown_options):
+    """
+    Parameters
+    ----------
+    func : callable
+        Objective callable of the form 'func(x, *args) -> (fval, x_actual)'.
+        'fval' must be a scalar. 'x_actual' may be a scalar or numpy array.
+    bounds : sequence
+        Two-element sequence '(lower, upper)' describing the allowed range for
+        the scalar variable.
+    x0 : float
+        Initial guess for the scalar variable. Will be clipped to 'bounds'.
+    min_step_size : None, float or array_like, optional
+        Per-axis minimum hardware step size used by probabilistic snapping.
+        If 'None' (default) no snapping is performed.
+    rng : numpy.random.Generator or None, optional
+        Random number generator used by the probabilistic snapping routine. If
+        'None' a new generator is created.
+    Options
+    -------
+    maxiter : int
+        Maximum number of iterations to perform.
+    disp: int, optional
+        If non-zero, logging.debug messages.
+            0 : no message printing.
+            1 : non-convergence notification messages only.
+            2 : logging.debug a message on convergence too.
+            3 : logging.debug iteration results.
+    xatol : float
+        Absolute error in solution 'xopt' acceptable for convergence.
+
+    """
+    _check_unknown_options(unknown_options)
+    maxfun = maxiter
+    # Test bounds are of correct form
+    if len(bounds) != 2:
+        raise ValueError('bounds must have two elements.')
+    x1, x2 = bounds
+
+    if not (numpy.size(x1) == 1 and numpy.size(x2) == 1):
+        raise ValueError("Optimization bounds must be scalars"
+                         " or array scalars.")
+    if x1 > x2:
+        raise ValueError("The lower bound exceeds the upper bound.")
+
+    x0 = numpy.clip(x0, bounds[0], bounds[1])  # Modification
+
+    flag = 0
+    header = ' Func-count     x          f(x)          Procedure'
+    step = '       initial'
+
+    sqrt_eps = numpy.sqrt(2.2e-16)
+    golden_mean = 0.5 * (3.0 - numpy.sqrt(5.0))
+    a, b = x1, x2
+    fulc = a + golden_mean * (b - a)
+    nfc, xf = fulc, fulc
+    rat = e = 0.0
+    x = xf
+    x = _probabilistic_snap_to_grid(x, x0, min_step_size, rng)  # Modification
+    x = numpy.clip(x, bounds[0], bounds[1])  # Modification
+    fx, x = func(x, *args)  # Modification
+    xf = nfc = fulc = x  # Modification
+    num = 1
+    fmin_data = (1, xf, fx)
+    fu = numpy.inf
+
+    ffulc = fnfc = fx
+    xm = 0.5 * (a + b)
+    tol1 = sqrt_eps * numpy.abs(xf) + xatol / 3.0
+    tol2 = 2.0 * tol1
+
+    if disp > 2:
+        logging.debug(" ")
+        logging.debug(header)
+        logging.debug("%5.0f   %12.6g %12.6g %s" % (fmin_data + (step,)))
+
+    while (numpy.abs(xf - xm) > (tol2 - 0.5 * (b - a))):
+        golden = 1
+        # Check for parabolic fit
+        if numpy.abs(e) > tol1:
+            golden = 0
+            r = (xf - nfc) * (fx - ffulc)
+            q = (xf - fulc) * (fx - fnfc)
+            p = (xf - fulc) * q - (xf - nfc) * r
+            q = 2.0 * (q - r)
+            if q > 0.0:
+                p = -p
+            q = numpy.abs(q)
+            r = e
+            e = rat
+
+            # Check for acceptability of parabola
+            if ((numpy.abs(p) < numpy.abs(0.5*q*r)) and (p > q*(a - xf)) and
+                    (p < q * (b - xf))):
+                rat = (p + 0.0) / q
+                x = xf + rat
+                step = '       parabolic'
+
+                if ((x - a) < tol2) or ((b - x) < tol2):
+                    si = numpy.sign(xm - xf) + ((xm - xf) == 0)
+                    rat = tol1 * si
+            else:      # do a golden-section step
+                golden = 1
+
+        if golden:  # do a golden-section step
+            if xf >= xm:
+                e = a - xf
+            else:
+                e = b - xf
+            rat = golden_mean*e
+            step = '       golden'
+
+        si = numpy.sign(rat) + (rat == 0)
+        x = xf + si * numpy.maximum(numpy.abs(rat), tol1)
+        x = _probabilistic_snap_to_grid(x, x0, min_step_size, rng)  # Modification
+        x = numpy.clip(x, bounds[0], bounds[1])  # Modification
+        fu, x = func(x, *args)  # Modification
+        num += 1
+        fmin_data = (num, x, fu)
+        if disp > 2:
+            logging.debug("%5.0f   %12.6g %12.6g %s" % (fmin_data + (step,)))
+
+        if fu <= fx:
+            if x >= xf:
+                a = xf
+            else:
+                b = xf
+            fulc, ffulc = nfc, fnfc
+            nfc, fnfc = xf, fx
+            xf, fx = x, fu
+        else:
+            if x < xf:
+                a = x
+            else:
+                b = x
+            if (fu <= fnfc) or (nfc == xf):
+                fulc, ffulc = nfc, fnfc
+                nfc, fnfc = x, fu
+            elif (fu <= ffulc) or (fulc == xf) or (fulc == nfc):
+                fulc, ffulc = x, fu
+
+        xm = 0.5 * (a + b)
+        tol1 = sqrt_eps * numpy.abs(xf) + xatol / 3.0
+        tol2 = 2.0 * tol1
+
+        if num >= maxfun:
+            flag = 1
+            break
+
+    if numpy.isnan(xf) or numpy.isnan(fx) or numpy.isnan(fu):
+        flag = 2
+
+    fval = fx
+    if disp > 0:
+        _endprint(x, flag, fval, maxfun, xatol, disp)
+
+    result = OptimizeResult(fun=fval, status=flag, success=(flag == 0),
+                            message={0: 'Solution found.',
+                                     1: 'Maximum number of function calls '
+                                        'reached.',
+                                     2: _status_message['nan']}.get(flag, ''),
+                            x=xf, nfev=num, nit=num)
+
+    return result
+
+
 def _custom_minimize_neldermead(func, x0, args=(), callback=None,
-                         maxiter=None, maxfev=None, disp=False,
-                         return_all=False, initial_simplex=None,
-                         xatol=1e-4, fatol=1e-3, adaptive=False, bounds=None,
-                         min_step_size=None, rng=numpy.random.default_rng(7),
-                         **unknown_options):
+                                maxiter=None, maxfev=None, disp=False,
+                                return_all=False, initial_simplex=None,
+                                xatol=1e-4, fatol=1e-3, adaptive=False, bounds=None,
+                                min_step_size=None, rng=None,
+                                **unknown_options):
     """
     Minimization of scalar function of one or more variables using the
     Nelder-Mead algorithm  with optional probabilistic snapping to a hardware
@@ -129,21 +310,21 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
     Options
     -------
     disp : bool
-        Set to True to print convergence messages.
+        Set to True to logging.debug convergence messages.
     maxiter, maxfev : int
         Maximum allowed number of iterations and function evaluations.
-        Will default to ``N*200``, where ``N`` is the number of
-        variables, if neither `maxiter` or `maxfev` is set. If both
-        `maxiter` and `maxfev` are set, minimization will stop at the
+        Will default to 'N*200', where 'N' is the number of
+        variables, if neither 'maxiter' or 'maxfev' is set. If both
+        'maxiter' and 'maxfev' are set, minimization will stop at the
         first reached.
     return_all : bool, optional
         Set to True to return a list of the best solution at each of the
         iterations.
     initial_simplex : array_like of shape (N + 1, N)
-        Initial simplex. If given, overrides `x0`.
-        ``initial_simplex[j,:]`` should contain the coordinates of
-        the jth vertex of the ``N+1`` vertices in the simplex, where
-        ``N`` is the dimension.
+        Initial simplex. If given, overrides 'x0'.
+        'initial_simplex[j,:]' should contain the coordinates of
+        the jth vertex of the 'N+1' vertices in the simplex, where
+        'N' is the dimension.
     xatol : float, optional
         Absolute error in xopt between iterations that is acceptable for
         convergence.
@@ -153,11 +334,11 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
     adaptive : bool, optional
         Adapt algorithm parameters to dimensionality of problem. Useful for
         high-dimensional minimization [1]_.
-    bounds : sequence or `Bounds`, optional
+    bounds : sequence or 'Bounds', optional
         Bounds on variables. There are two ways to specify the bounds:
 
-            1. Instance of `Bounds` class.
-            2. Sequence of ``(min, max)`` pairs for each element in `x`. None
+            1. Instance of 'Bounds' class.
+            2. Sequence of '(min, max)' pairs for each element in 'x'. None
                is used to specify no bound.
 
         Note that this just clips all vertices in simplex based on
@@ -167,7 +348,7 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
         provided, candidate vertices produced by the Nelder-Mead operations
         (reflection/expansion/contraction/shrink) are snapped to the nearest
         grid points using probabilistic rounding implemented in
-        :func:`_probabilistic_snap_to_grid`. Passing a scalar applies the same
+        :func:'_probabilistic_snap_to_grid'. Passing a scalar applies the same
         minimum step for all dimensions; passing an array_like allows
         per-dimension step sizes. If None (default) no snapping is applied.
         Using a non-zero min_step_size can help the optimizer respect discrete
@@ -175,9 +356,9 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
         positions that are indistinguishable to the device.
     rng : numpy.random.Generator, optional
         Random number generator used for the probabilistic rounding. Default
-        is ``numpy.random.default_rng(7)``. Provide a deterministic
-        :class:`numpy.random.Generator` to make the snapping behaviour
-        reproducible across runs. If ``rng`` is ``None``, a new generator
+        is 'numpy.random.default_rng(7)'. Provide a deterministic
+        :class:'numpy.random.Generator' to make the snapping behaviour
+        reproducible across runs. If 'rng' is 'None', a new generator
         will be created internally.
 
     References
@@ -257,9 +438,9 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
     else:
         sim = numpy.asfarray(initial_simplex).copy()
         if sim.ndim != 2 or sim.shape[0] != sim.shape[1] + 1:
-            raise ValueError("`initial_simplex` should be an array of shape (N+1,N)")
+            raise ValueError("'initial_simplex' should be an array of shape (N+1,N)")
         if len(x0) != sim.shape[1]:
-            raise ValueError("Size of `initial_simplex` is not consistent with `x0`")
+            raise ValueError("Size of 'initial_simplex' is not consistent with 'x0'")
         N = sim.shape[1]
 
     if retall:
@@ -315,18 +496,18 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
 
             xbar = numpy.add.reduce(sim[:-1], 0) / N
             xr = (1 + rho) * xbar - rho * sim[-1]
-            xr = _probabilistic_snap_to_grid(xr, x0, min_step_size, rng)  # MODIFICATION
+            xr = _probabilistic_snap_to_grid(xr, x0, min_step_size, rng)  # Modification
             if bounds is not None:
                 xr = numpy.clip(xr, lower_bound, upper_bound)
-            fxr, xr = func(xr)
+            fxr, xr = func(xr)  # Modification
             doshrink = 0
 
             if fxr < fsim[0]:
                 xe = (1 + rho * chi) * xbar - rho * chi * sim[-1]
-                xe = _probabilistic_snap_to_grid(xe, x0, min_step_size, rng)  # MODIFICATION
+                xe = _probabilistic_snap_to_grid(xe, x0, min_step_size, rng)  # Modification
                 if bounds is not None:
                     xe = numpy.clip(xe, lower_bound, upper_bound)
-                fxe, xe = func(xe)
+                fxe, xe = func(xe)  # Modification
 
                 if fxe < fxr:
                     sim[-1] = xe
@@ -342,10 +523,10 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                     # Perform contraction
                     if fxr < fsim[-1]:
                         xc = (1 + psi * rho) * xbar - psi * rho * sim[-1]
-                        xc = _probabilistic_snap_to_grid(xc, x0, min_step_size, rng)  # MODIFICATION
+                        xc = _probabilistic_snap_to_grid(xc, x0, min_step_size, rng)  # Modification
                         if bounds is not None:
                             xc = numpy.clip(xc, lower_bound, upper_bound)
-                        fxc, xc = func(xc)
+                        fxc, xc = func(xc)  # Modification
 
                         if fxc <= fxr:
                             sim[-1] = xc
@@ -355,10 +536,10 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                     else:
                         # Perform an inside contraction
                         xcc = (1 - psi) * xbar + psi * sim[-1]
-                        xcc = _probabilistic_snap_to_grid(xcc, x0, min_step_size, rng)  # MODIFICATION
+                        xcc = _probabilistic_snap_to_grid(xcc, x0, min_step_size, rng)  # Modification
                         if bounds is not None:
                             xcc = numpy.clip(xcc, lower_bound, upper_bound)
-                        fxcc, xcc = func(xcc)
+                        fxcc, xcc = func(xcc)  # Modification
 
                         if fxcc < fsim[-1]:
                             sim[-1] = xcc
@@ -369,11 +550,11 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                     if doshrink:
                         for j in one2np1:
                             sim[j] = sim[0] + sigma * (sim[j] - sim[0])
-                            sim[j] = _probabilistic_snap_to_grid(sim[j], x0, min_step_size, rng)  # MODIFICATION
+                            sim[j] = _probabilistic_snap_to_grid(sim[j], x0, min_step_size, rng)  # Modification
                             if bounds is not None:
                                 sim[j] = numpy.clip(
                                     sim[j], lower_bound, upper_bound)
-                            fsim[j], sim[j] = func(sim[j])
+                            fsim[j], sim[j] = func(sim[j])  # Modification
             iterations += 1
         except _MaxFuncCallError:
             pass
@@ -423,6 +604,7 @@ def parabolic_mirror_alignment(
     search_range: float = 50e-6,
     max_iter: int = 100,
     stop_early: bool = True,
+    min_step_size: Tuple[float, float, float] = (1.5e-6, 1.5e-6, 2e-6)
 ) -> model.ProgressiveFuture:
     """
     Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
@@ -441,6 +623,10 @@ def parabolic_mirror_alignment(
                        if progress stalls. Set to False to force the optimizers to run
                        until their normal convergence criteria or the supplied max_iter
                        budget is exhausted.
+    :param min_step_size : Tuple[float, float, float], optional
+                           Per-axis minimum hardware step sizes (metres) for [l, s, z]. Used by
+                           probabilistic snapping to round candidate positions to discrete actuator
+                           steps. Defaults to (1.5e-6, 1.5e-6, 2e-6).
     :returns: model.ProgressiveFuture
         A future representing the background alignment task. The future's
         task_canceller is set so callers (or GUI) can cancel the running task.
@@ -451,7 +637,7 @@ def parabolic_mirror_alignment(
     task = ParabolicMirrorAlignmentTask(mirror, stage, ccd, stop_early=stop_early)
     f.task_canceller = task.cancel
     _executor.submitf(
-        f, task.align_mirror, search_range=search_range, max_iter=max_iter
+        f, task.align_mirror, search_range=search_range, max_iter=max_iter, min_step_size=min_step_size
     )
     return f
 
@@ -497,10 +683,6 @@ class ParabolicMirrorAlignmentTask:
         self._ccd = ccd
         self._stop_early = stop_early
         self._cancelled = False
-        self._last_pixel_count = 0
-        self._last_intensity = 0
-        self._last_noise = 0
-        self._last_score = 0
         self._last_xk = numpy.zeros(3)
         self._iteration_count = 0
         self._stall_count = 0
@@ -520,46 +702,30 @@ class ParabolicMirrorAlignmentTask:
         self._cancelled = True
         return True
 
-    def _get_spot_measurement(self) -> Tuple[int, int, float]:
+    def _get_spot_measurement(self) -> Tuple[int, int]:
         """
         Measure spot quality from the current camera image using contour detection.
 
         The method:
-        1. Estimates background noise from small corner regions
-        2. Pre-processes the image with Gaussian blur, CLAHE
-        3. Uses Otsu thresholding to separate signal from background
-        4. Applies morphological operations to clean up the binary mask
-        5. Finds the largest contour which represents the spot
-        6. Returns:
+        1. Pre-processes the image with Gaussian blur, CLAHE
+        2. Uses Otsu thresholding to separate signal from background
+        3. Applies morphological operations to clean up the binary mask
+        4. Finds the largest contour which represents the spot
+        5. Returns:
           - spot_pixel_count: area of the largest contour in pixels (int)
           - spot_intensity: peak pixel value from original image (int)
-          - noise: estimated background level (float)
 
-        If no contours are found, falls back to counting pixels above noise threshold.
+        If no contours are found, falls back to returning the full image size
 
         :raises CancelledError: if the task was cancelled.
-        :returns: (spot_pixel_count, spot_intensity, noise)
+        :returns: (spot_pixel_count, spot_intensity)
+                  - spot_pixel_count: area of the detected spot in pixels.
+                  - spot_intensity: peak pixel value from the original image.
         """
         if self._cancelled:
             raise CancelledError("Alignment was cancelled by user")
 
         image = self._ccd.data.get(asap=False)
-
-        corner_size = 5  # Use a 5x5 pixel square from each corner
-        top_left = image[:corner_size, :corner_size]
-        top_right = image[:corner_size, -corner_size:]
-        bottom_left = image[-corner_size:, :corner_size]
-        bottom_right = image[-corner_size:, -corner_size:]
-        all_corners = numpy.concatenate(
-            (
-                top_left.ravel(),
-                top_right.ravel(),
-                bottom_left.ravel(),
-                bottom_right.ravel(),
-            )
-        )
-
-        noise = 1.3 * numpy.median(all_corners)
 
         # Slight Gaussian blur to reduce pixel noise
         # Prevents threshold from overreacting
@@ -567,16 +733,17 @@ class ParabolicMirrorAlignmentTask:
         image_norm = cv2.normalize(blurred, None, 0, 255, cv2.NORM_MINMAX)
         image_uint8 = image_norm.astype(numpy.uint8)
 
+        # TODO: CLAHE sometimes cannot help detect focussed spot?
         # Use Contrast Limited Adaptive Histogram Equalization (CLAHE)
         # This enhances local contrast without amplifying background noise across
         # the entire image
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced_image = clahe.apply(image_uint8)
+        # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        # enhanced_image = clahe.apply(image_uint8)
 
         # Otsu thresholding automatically separates signal from background
         # Adapts to changing brightness and exposure
         _, binary_mask = cv2.threshold(
-            enhanced_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            image_uint8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
 
         # Morphological cleanup to fill small gaps
@@ -591,72 +758,28 @@ class ParabolicMirrorAlignmentTask:
             main_contour = max(contours, key=cv2.contourArea)
             spot_pixel_count = int(cv2.contourArea(main_contour))
         else:
+            logging.debug("No contours found, using fallback pixel count method")
+            corner_size = 5  # Use a 5x5 pixel square from each corner
+            top_left = image[:corner_size, :corner_size]
+            top_right = image[:corner_size, -corner_size:]
+            bottom_left = image[-corner_size:, :corner_size]
+            bottom_right = image[-corner_size:, -corner_size:]
+            all_corners = numpy.concatenate(
+                (
+                    top_left.ravel(),
+                    top_right.ravel(),
+                    bottom_left.ravel(),
+                    bottom_right.ravel(),
+                )
+            )
+            noise = 1.3 * numpy.median(all_corners)
             spot_pixel_count = numpy.count_nonzero(image > noise)
 
         spot_intensity = int(image.max())
 
-        return spot_pixel_count, spot_intensity, noise
+        return spot_pixel_count, spot_intensity
 
-    # def _get_spot_measurement(self) -> Tuple[float, float, float]:
-    #     """
-    #     Measure the spot quality based on 2D FWHM and peak intensity,
-    #     without assuming a single central peak.
-    #     """
-    #     if self._cancelled:
-    #         raise CancelledError("Alignment was cancelled by user")
-
-    #     image = self._ccd.data.get(asap=False)
-
-    #     # Estimate background noise from corners
-    #     corner_size = 5
-    #     corners = numpy.concatenate([
-    #         image[:corner_size, :corner_size].ravel(),
-    #         image[:corner_size, -corner_size:].ravel(),
-    #         image[-corner_size:, :corner_size].ravel(),
-    #         image[-corner_size:, -corner_size:].ravel(),
-    #     ])
-    #     noise = 1.3 * numpy.median(corners)
-
-    #     # Compute half-max threshold
-    #     peak = image.max()
-    #     half_max = noise + 0.5 * (peak - noise)
-
-    #     # Create binary mask above half-maximum
-    #     mask = image >= half_max
-    #     if not numpy.any(mask):
-    #         return 0.0, float(peak), float(noise)
-
-    #     # Compute FWHM along x and y (width of mask projection)
-    #     # Project the mask along each axis
-    #     proj_x = mask.any(axis=0)
-    #     proj_y = mask.any(axis=1)
-
-    #     # FWHM = width (count of continuous True values)
-    #     def contiguous_width(projection: numpy.ndarray) -> int:
-    #         """Return width of the largest contiguous True region."""
-    #         if not numpy.any(projection):
-    #             return 0
-    #         # Identify start and end of each contiguous True segment
-    #         diff = numpy.diff(numpy.concatenate([[0], projection.view(numpy.int8), [0]]))
-    #         starts = numpy.where(diff == 1)[0]
-    #         ends = numpy.where(diff == -1)[0]
-    #         widths = ends - starts
-    #         return int(widths.max()) if len(widths) > 0 else 0
-
-    #     fwhm_x = contiguous_width(proj_x)
-    #     fwhm_y = contiguous_width(proj_y)
-
-    #     # Fallback to max if one axis fails
-    #     if fwhm_x == 0 or fwhm_y == 0:
-    #         fwhm_x = fwhm_y = max(fwhm_x, fwhm_y)
-
-    #     # Spot pixel count and intensity
-    #     spot_pixel_count = fwhm_x * fwhm_y
-    #     spot_intensity = int(peak)
-
-    #     return int(spot_pixel_count), spot_intensity, float(noise)
-
-    def _get_score(self, pixel_count: int, intensity: int, weight=0.5):
+    def _get_score(self, pixel_count: int, intensity: int, weight: float = 0.5):
         """
         Compute a scalar score combining normalized pixel count and intensity.
 
@@ -724,19 +847,22 @@ class ParabolicMirrorAlignmentTask:
         self._mirror.moveAbs({"l": l, "s": s}).result()
         self._stage.moveAbs({"z": z}).result()
 
-        pixel_count, intensity, noise = self._get_spot_measurement()
+        pixel_count, intensity = self._get_spot_measurement()
         score = self._get_score(pixel_count, intensity, weight)
 
-        # For logging purposes
-        self._last_noise = noise
-        self._last_pixel_count = pixel_count
-        self._last_intensity = intensity
-        self._last_score = score
-
+        # For closed-loop feedback to the optimizer
         l_actual = self._mirror.position.value["l"]
         s_actual = self._mirror.position.value["s"]
         z_actual = self._stage.position.value["z"]
         xk_actual = numpy.array([l_actual, s_actual, z_actual])
+
+        logging.debug(
+            f"Pos (target → actual): "
+            f"l={l:.8f} → {l_actual:.8f} m, "
+            f"s={s:.8f} → {s_actual:.8f} m, "
+            f"z={z:.8f} → {z_actual:.8f} m | "
+            f"Score={score:.4f}, Pixels={pixel_count}, Intensity={intensity}"
+        )
 
         return score, xk_actual
 
@@ -755,14 +881,17 @@ class ParabolicMirrorAlignmentTask:
             raise CancelledError(f"1D alignment for {axis} was cancelled by user")
 
         hw_comp.moveAbs({axis: pos}).result()
-        _, intensity, _ = self._get_spot_measurement()
+        _, intensity = self._get_spot_measurement()
 
         # Normalize intensity
         # Score is 0 for best intensity, 1 for worst
         norm_intensity = 1.0 - (intensity / self.MAX_INTENSITY)
         norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
 
-        return norm_intensity
+        # For closed-loop feedback to the optimizer
+        pos_actual = hw_comp.position.value[axis]
+
+        return norm_intensity, pos_actual
 
     def _callback_3d(self, xk: numpy.ndarray):
         """
@@ -792,13 +921,10 @@ class ParabolicMirrorAlignmentTask:
             self._last_xk = xk
 
         l, s, z = xk
-        logging.debug(
-            f"Iter {self._iteration_count}: l={l:.8f} m, s={s:.8f} m, z={z:.8f} m | "
-            f"Score={self._last_score:.4f}, Pixels={self._last_pixel_count}, Intensity={self._last_intensity}, Noise={self._last_noise:.1f}"
-        )
+        logging.debug(f"Iter {self._iteration_count}: l={l:.8f} m, s={s:.8f} m, z={z:.8f} m")
         self._iteration_count += 1
 
-    def align_mirror(self, search_range: float, max_iter: int, min_step_size: Tuple[float] = (1.5e-6, 1.5e-6, 2e-6)):
+    def align_mirror(self, search_range: float, max_iter: int, min_step_size: Tuple[float, float, float]):
         """
         Execute the full alignment procedure.
 
@@ -823,6 +949,8 @@ class ParabolicMirrorAlignmentTask:
         s_abs_bound = (s0 - search_range, s0 + search_range)
         z_abs_bound = (z0 - search_range, z0 + search_range)
 
+        rng = numpy.random.default_rng(7)
+
         # Initial l alignment
         try:
             logging.debug(
@@ -832,9 +960,13 @@ class ParabolicMirrorAlignmentTask:
                 fun=self._objective_1d,
                 args=("l", self._mirror),
                 bounds=l_abs_bound,
-                method="bounded",
+                method=_custom_minimize_scalar_bounded,
                 options={
                     "maxiter": max_iter,
+                    "x0": l0,
+                    "min_step_size": min_step_size[0],
+                    "rng": rng,
+                    "disp": 3,
                 },
             )
         except CancelledError:
@@ -862,9 +994,13 @@ class ParabolicMirrorAlignmentTask:
                 fun=self._objective_1d,
                 args=("s", self._mirror),
                 bounds=s_abs_bound,
-                method="bounded",
+                method=_custom_minimize_scalar_bounded,
                 options={
                     "maxiter": max_iter,
+                    "x0": s0,
+                    "min_step_size": min_step_size[1],
+                    "rng": rng,
+                    "disp": 3,
                 },
             )
         except CancelledError:
@@ -892,9 +1028,13 @@ class ParabolicMirrorAlignmentTask:
                 fun=self._objective_1d,
                 args=("z", self._stage),
                 bounds=z_abs_bound,
-                method="bounded",
+                method=_custom_minimize_scalar_bounded,
                 options={
                     "maxiter": max_iter,
+                    "x0": z0,
+                    "min_step_size": min_step_size[2],
+                    "rng": rng,
+                    "disp": 3,
                 },
             )
         except CancelledError:
@@ -952,6 +1092,7 @@ class ParabolicMirrorAlignmentTask:
                     "adaptive": True,
                     "disp": True,
                     "min_step_size": numpy.array(min_step_size),
+                    "rng": rng,
                 },
             )
         except StopIteration as e:
@@ -1019,6 +1160,7 @@ class ParabolicMirrorAlignmentTask:
                     "adaptive": True,
                     "disp": True,
                     "min_step_size": numpy.array(min_step_size),
+                    "rng": rng,
                 },
             )
         except StopIteration as e:
