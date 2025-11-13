@@ -3,6 +3,7 @@ import math
 import os
 import threading
 import time
+from pathlib import Path
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from typing import List, Optional
@@ -65,7 +66,7 @@ def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
 
     return microscope
 
-def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
+def create_fibsemos_tescan_microscope(config_path: Path = None) -> 'OdemisTescanMicroscope':
     """Create a fibsemOS Tescan microscope instance with the current microscope configuration."""
 
     # TODO: Extract the rest of the required metadata
@@ -77,7 +78,7 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
     rotation_reference = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rz"]
 
     # loads the default config
-    config = load_microscope_configuration()
+    config = load_microscope_configuration(config_path)
     config.system.stage.shuttle_pre_tilt = math.degrees(pre_tilt)
     # Used by fibsemOS for moving the stage flat to the electron beam
     config.system.stage.rotation_reference = math.degrees(rotation_reference)
@@ -96,7 +97,7 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
 
     return microscope
 
-def create_fibsemos_microscope() -> 'OdemisThermoMicroscope | OdemisTescanMicroscope':
+def create_fibsemos_microscope(config_path: Path = None) -> 'OdemisThermoMicroscope | OdemisTescanMicroscope':
     """Create a fibsemOS microscope instance with the current microscope configuration.
     """
     stage_bare = model.getComponent(role="stage-bare")
@@ -107,7 +108,7 @@ def create_fibsemos_microscope() -> 'OdemisThermoMicroscope | OdemisTescanMicros
     if stage_version == "tfs_3":
         return create_fibsemos_tfs_microscope()
     elif stage_version == "tescan_1":
-        return create_fibsemos_tescan_microscope()
+        return create_fibsemos_tescan_microscope(config_path)
     else:
         raise ValueError(f"Stage version {stage_version} is not supported")
 
@@ -161,6 +162,8 @@ def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
         milling_voltage=s.voltage.value,
         patterning_mode=s.mode.value,
         hfw=s.field_of_view.value,
+        rate=s.rate.value,                # um^3/nA/s
+        dwell_time=s.dwell_time.value     # us
     )
 
 # task converter
@@ -197,14 +200,17 @@ class FibsemOSMillingTaskManager:
 
     def __init__(self, future: futures.Future,
                  tasks: List[MillingTaskSettings],
-                 path: Optional[str] = None):
+                 path: Optional[str] = None,
+                 config_path: Path = None):
         """
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
         :param path: The path to save the images (optional)
+        :param config_path: The path to the fibsemOS microscope configuration file
         """
+
         # create microscope connection
-        self.microscope = create_fibsemos_microscope()
+        self.microscope = create_fibsemos_microscope(config_path)
         if path is None:
             path = os.getcwd()
         self.microscope._last_imaging_settings.path = path # note: image acquisition post-milling is not yet supported via odemis
@@ -272,17 +278,19 @@ class FibsemOSMillingTaskManager:
 
 
 def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
-                               path: Optional[str] = None) -> futures.Future:
+                               path: Optional[str] = None,
+                               config_path: Path = None) -> futures.Future:
     """
     Run multiple milling tasks in order via fibsemOS.
     :param tasks: List of milling tasks to be executed in order.
     :param path: The path to save the images
+    :param config_path: The path to the fibsemOS microscope configuration file
     :return: ProgressiveFuture
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
     # create milling task
-    millmng = FibsemOSMillingTaskManager(future, tasks, path)
+    millmng = FibsemOSMillingTaskManager(future, tasks, path, config_path)
     # add the ability of cancelling the future during execution
     future.task_canceller = millmng.cancel
 
