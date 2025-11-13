@@ -3,6 +3,7 @@ import math
 import os
 import threading
 import time
+from pathlib import Path
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from typing import List, Optional, Union
@@ -122,8 +123,8 @@ def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
 
     return microscope
 
-def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
-    """Create, connect, and return a fibsemOS Tescan microscope instance."""
+def create_fibsemos_tescan_microscope(config_path: Path = None) -> 'OdemisTescanMicroscope':
+    """Create a fibsemOS Tescan microscope instance with the current microscope configuration."""
 
     # TODO: Extract the rest of the required metadata
 
@@ -134,7 +135,7 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
     rotation_reference = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rz"]
 
     # loads the default config
-    config = load_microscope_configuration()
+    config = load_microscope_configuration(config_path)
     config.system.stage.shuttle_pre_tilt = math.degrees(pre_tilt)
     # Used by fibsemOS for moving the stage flat to the electron beam
     config.system.stage.rotation_reference = math.degrees(rotation_reference)
@@ -153,8 +154,8 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
 
     return microscope
 
-def create_fibsemos_microscope() -> Union['OdemisThermoMicroscope', 'OdemisTescanMicroscope']:
-    """Create and return a fibsemOS microscope instance matching the detected stage version."""
+def create_fibsemos_microscope(config_path: Path = None) -> Union['OdemisThermoMicroscope | OdemisTescanMicroscope']:
+    """Create a fibsemOS microscope instance with the current microscope configuration."""
     stage_bare = model.getComponent(role="stage-bare")
     stage_md = stage_bare.getMetadata()
     md_calib = stage_md.get(model.MD_CALIB, {})
@@ -163,7 +164,7 @@ def create_fibsemos_microscope() -> Union['OdemisThermoMicroscope', 'OdemisTesca
     if stage_version == "tfs_3":
         return create_fibsemos_tfs_microscope()
     elif stage_version == "tescan_1":
-        return create_fibsemos_tescan_microscope()
+        return create_fibsemos_tescan_microscope(config_path)
     else:
         raise ValueError(f"Stage version {stage_version} is not supported")
 
@@ -220,6 +221,8 @@ def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
         milling_voltage=s.voltage.value,
         patterning_mode=s.mode.value,
         hfw=s.field_of_view.value,
+        rate=s.rate.value,                # um^3/nA/s
+        dwell_time=s.dwell_time.value     # us
     )
 
 # task converter
@@ -250,10 +253,10 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
 class FibsemOSMillingTaskManager:
     """Manage running milling tasks via fibsemOS using a persistent microscope connection."""
 
-    def __init__(self):
+    def __init__(self, config_path: Optional[str] = None):
         """Initialize the manager and establish the fibsemOS microscope connection."""
         # create microscope connection
-        self.microscope = create_fibsemos_microscope()
+        self.microscope = create_fibsemos_microscope(config_path)
         self._lock = threading.Lock()
         self._active = False
         self._cancel_requested = False
@@ -350,12 +353,12 @@ class FibsemOSMillingTaskManager:
         return self._future
 
 
-def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], feature: CryoFeature, path: Optional[str] = None) -> futures.Future:
+def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], feature: CryoFeature, path: Optional[str] = None, config_path: Optional[str] = None) -> futures.Future:
     """Run the given milling tasks asynchronously using a persistent fibsemOS manager."""
     global _persistent_millmng
 
     if _persistent_millmng is None:
-        _persistent_millmng = FibsemOSMillingTaskManager()
+        _persistent_millmng = FibsemOSMillingTaskManager(config_path)
 
     future = model.ProgressiveFuture()
     return _persistent_millmng.async_run(future=future, tasks=tasks, feature=feature, path=path)

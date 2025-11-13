@@ -34,7 +34,7 @@ from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Tar
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
 from odemis.acq.stream import StaticFluoStream
 from odemis.gui import conf
-from odemis.gui.conf import get_general_conf
+from odemis.gui.conf import get_general_conf, get_milling_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
 from odemis.gui.model._constants import (
     FLM_ALIGN,
@@ -260,6 +260,7 @@ class CryoGUIData(MicroscopyGUIData):
             raise ValueError(
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
+        self.milling_conf = get_milling_conf()
 
         # the streams to correlate among all streams in .streams
         self.selected_stream = model.VigilantAttribute(None)
@@ -342,7 +343,13 @@ class CryoGUIData(MicroscopyGUIData):
             else:
                 md = self.main.focus.getMetadata()
                 fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
-        feature = CryoFeature(f_name, stage_position, fm_focus_position)
+
+        # general milling parameters applicable to all the milling tasks
+        general_params = {
+            "rate": self.milling_conf.rate,
+            "dwell_time": self.milling_conf.dwell_time
+        }
+        feature = CryoFeature(f_name, stage_position, fm_focus_position, general_params=general_params)
         for p in pm.postures: # calculate the position at all postures
             get_feature_position_at_posture(pm, feature, p)
 

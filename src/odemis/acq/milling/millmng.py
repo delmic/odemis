@@ -27,6 +27,7 @@ import logging
 import os
 import threading
 import time
+from pathlib import Path
 from concurrent.futures import Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from datetime import datetime
@@ -245,7 +246,7 @@ class TFSMillingTaskManager:
             self._future._task_state = FINISHED
 
 
-# TODO: replace with run_milling_tasks_fibsemos
+# NOTE: replaced with run_milling_tasks_fibsemos
 def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream, filename: str = None) -> Future:
     """
     Run multiple milling tasks in order.
@@ -302,6 +303,7 @@ class AutomatedMillingManager(object):
                  sem_stream: SEMStream,
                  fib_stream: FIBStream,
                  task_list: List[MillingWorkflowTask],
+                 config_path: Path=None
                  ):
 
         self.stage = stage
@@ -313,6 +315,7 @@ class AutomatedMillingManager(object):
         self._exporter = find_fittest_converter("filename.ome.tiff")
         self.pm = MicroscopePostureManager(model.getMicroscope())
         self._prefix: str = ""
+        self.config_path = config_path
 
         self._future = future
         if future is not None:
@@ -432,7 +435,7 @@ class AutomatedMillingManager(object):
         self._future.set_progress()
 
         if fibsemos.FIBSEMOS_INSTALLED:
-            self._future.running_subf = run_milling_tasks_fibsemos(tasks=milling_tasks, feature=feature, path=feature.path)
+            self._future.running_subf = run_milling_tasks_fibsemos(tasks=milling_tasks, feature=feature, path=feature.path, config_path=self.config_path)
         else:
             filename = self.get_filename(feature, "Milling-Tasks")
             self._future.running_subf = run_milling_tasks(tasks=milling_tasks,
@@ -513,6 +516,7 @@ def run_automated_milling(features: List[CryoFeature],
                           sem_stream: SEMStream,
                           fib_stream: FIBStream,
                           task_list: List[MillingWorkflowTask],
+                          config_path: Path=None
                           ) -> Future:
     """
     Automatically mill and image a list of features.
@@ -529,6 +533,7 @@ def run_automated_milling(features: List[CryoFeature],
         fib_stream=fib_stream,
         task_list=task_list,
         features=features,
+        config_path=config_path
     )
     # add the ability of cancelling the future during execution
     future.task_canceller = amm.cancel
