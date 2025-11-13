@@ -207,8 +207,6 @@ class MillingTaskController:
 
     @call_in_wx_main
     def _create_panels(self):
-
-
         if hasattr(self._panel.pnl_patterns, "_panel_sizer"):
             # self._panel.pnl_patterns._panel_sizer.Clear()
             # self._panel.pnl_patterns.Destroy()
@@ -530,6 +528,7 @@ class MillingTaskController:
         valid_patterns = self.valid_patterns.value
         milling_enabled = not is_acquiring and valid_patterns
         self._panel.btn_run_milling.Enable(milling_enabled)
+        self._panel.btn_run_automated_milling.Enable(milling_enabled)
 
         if not has_tasks:
             txt = "No Tasks Selected..."
