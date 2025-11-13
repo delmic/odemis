@@ -573,3 +573,45 @@ class CalibrationConfig(Config):
                 logging.exception("Failed to read calibration data")
 
         return None
+
+
+class MillingConfig(Config):
+    """ FIB milling configuration values """
+
+    file_name = "milling.config"
+
+    def __init__(self):
+        super(MillingConfig, self).__init__()
+
+        # Define the default settings for milling
+        self.default.add_section("milling")
+        self.default.set("milling", "rate", "1e-8")
+        self.default.set("milling", "dwell_time", "1e-6")
+
+        # Define the default settings for fibsemOS
+        self.default.add_section("fibsemos")
+        self.default.set("fibsemos", "config_path", "microscope-configuration.yaml")
+
+    @property
+    def rate(self):
+        return float(self.get("milling", "rate"))
+
+    @rate.setter
+    def rate(self, value):
+        self.set("milling", "rate", value)
+
+    @property
+    def dwell_time(self):
+        return float(self.get("milling", "dwell_time"))
+
+    @dwell_time.setter
+    def dwell_time(self, value):
+        self.set("milling", "dwell_time", value)
+
+    @property
+    def config_path(self):
+        return self.get("fibsemos", "config_path")
+
+    @config_path.setter
+    def config_path(self, config_path):
+        self.set("fibsemos", "config_path", config_path)
