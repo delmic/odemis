@@ -533,12 +533,13 @@ class TestAngularSpetrumLinear(unittest.TestCase):
         # 1. The version on the expanded, forced grid
         da_forced = angleres.project_angular_spectrum_to_grid(da, angle_range=(-math.pi/2, math.pi/2))
         theta_list_forced = numpy.asarray(da_forced.metadata[model.MD_THETA_LIST])
+        min_value_da_forced = numpy.min(da_forced)
 
         # 2. The version on the default, physical grid (to define the data boundaries)
         da_physical_range = angleres.project_angular_spectrum_to_grid(da)
         theta_list_physical = numpy.asarray(da_physical_range.metadata[model.MD_THETA_LIST])
 
-        # --- Check for Zero-Padding ---
+        # --- Check for minimum value Padding ---
         # 1. Define the physical boundaries of the real data
         min_phys_angle = theta_list_physical[0]
         max_phys_angle = theta_list_physical[-1]
@@ -551,12 +552,13 @@ class TestAngularSpetrumLinear(unittest.TestCase):
         self.assertTrue(numpy.any(start_padding_mask), "Should have a padded region at the start")
         self.assertTrue(numpy.any(end_padding_mask), "Should have a padded region at the end")
 
-        # 4. Use the masks to select the padded data and assert it is all zero.
+        # 4. Use the masks to select the padded data and assert it is almost min value.
         padded_region_start = da_forced[start_padding_mask]
         padded_region_end = da_forced[end_padding_mask]
 
-        numpy.testing.assert_array_equal(padded_region_start, 0, "Start of array should be zero-padded")
-        numpy.testing.assert_array_equal(padded_region_end, 0, "End of array should be zero-padded")
+        numpy.testing.assert_array_almost_equal(padded_region_start, min_value_da_forced, err_msg="Start padding should be assigned min value")
+        numpy.testing.assert_array_almost_equal(padded_region_end, min_value_da_forced, err_msg="End padding should be assigned min value")
+
 
 if __name__ == "__main__":
     # for debug:

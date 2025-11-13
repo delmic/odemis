@@ -48,7 +48,7 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import CryoZLocalizationController
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS
+from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
 
@@ -77,18 +77,6 @@ class LocalizationTab(Tab):
         # Order matters!
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
-        # If the camera native resolution is larger than the viewport, the image displayed will be
-        # scaled down. On the screen, at digital zoom levels just below 1x, or around x0.5, x0.25...
-        # this can result in aliasing artifacts. In particular, it's been noticed with the Andor Sona,
-        # on the METEOR v2, with res ~2000x2000. To avoid this, we interpolate the content. The only
-        # drawback of interpolation is that it lowers the frame rate, which can be annoying when
-        # manually focusing, so we don't activate it by default.
-        if main_data.ccd.resolution.range[1][0] > wx.DisplaySize()[1] * 0.95:  # px
-            logging.debug("Activating interpolation in localization tab, as camera has resolution %s",
-                          main_data.ccd.resolution.range[1][0])
-            for v in tab_data.views.value:
-                v.interpolate_content.value = True
-
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
             (panel.btn_secom_view_all,
@@ -102,6 +90,12 @@ class LocalizationTab(Tab):
             (panel.btn_secom_view_br,
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
+        # If tool fiducial is available, it means it supports superz GUI confifuration with target sizes
+        # Enable the cryotarget overlay on all viewports that shows fiducials
+        if TOOL_FIDUCIAL in tab_data.tool.choices:
+            for vp in panel.pnl_secom_grid.viewports:
+                vp.canvas.cryotarget_fm_overlay.active.value = True
+                vp.canvas.add_world_overlay(vp.canvas.cryotarget_fm_overlay)
 
         # remove the play overlay from the top view with static streams
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)

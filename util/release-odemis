@@ -78,10 +78,10 @@ fi
 # Typically, the first version of a branch (VM.N.0) is released on the "beta"
 # channel (-proposed PPA)
 if [[ "$RELVER" =~ [2-9]\.[0-9]+\.0$ ]] ; then
-    PPA_NAME=ppa:delmic-soft/odemis-proposed
+    PPA_NAME=ssh-ppa:delmic-soft/odemis-proposed
     IS_PATCH_RELEASE="false"
 else
-    PPA_NAME=ppa:delmic-soft/odemis
+    PPA_NAME=ssh-ppa:delmic-soft/odemis
     IS_PATCH_RELEASE="true"
 fi
 

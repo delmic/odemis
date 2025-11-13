@@ -31,7 +31,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, POSITION_NAMES, SEM_IMAGING
+from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -213,6 +213,7 @@ class FibsemTab(Tab):
 
         rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rx"]
         self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
+        self.panel.ctrl_milling_angle.SetValueRange(*MILLING_RANGE)
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
         self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
@@ -418,6 +419,11 @@ class FibsemTab(Tab):
         # update the stage position buttons
         self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
         self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+
+        self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
+        self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
+        self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
+
         if posture == SEM_IMAGING:
             self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
         if posture == MILLING:
@@ -462,22 +468,12 @@ class FibsemTab(Tab):
 
     def _move_to_milling_position(self, evt: wx.Event):
         logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
-
-        if self.pm.current_posture.value != SEM_IMAGING:
-            wx.MessageBox("Switch to SEM position first", "Error", wx.OK | wx.ICON_ERROR)
-            return
-
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
         self._on_stage_pos(self.pm.stage.position.value)
 
     def _move_to_sem(self, evt: wx.Event):
-
-        if self.pm.current_posture.value != MILLING:
-            wx.MessageBox("Switch to milling position first", "Error", wx.OK | wx.ICON_ERROR)
-            return
-
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
 
