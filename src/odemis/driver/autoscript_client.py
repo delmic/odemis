@@ -1795,11 +1795,14 @@ class Stage(model.Actuator):
             "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
         }
 
-        # When raw coordinate system is selected, in theory just z should change
-        # but in practice x and y change by a fixed offset. When raw coordinate system is used,
-        # offset correction is applied (in the later part of init)
-        # such that all axes apart from z, have same values
-        self._raw_offset = {"x": 0, "y": 0}
+        # We use a "hybrid" coordinate system: the main advantage of the raw coordinate system
+        # is that the Z axis is never "linked" to the working distance. When the Z axis is linked,
+        # it's oriented in the other direction (0 is at the pole-piece, and an increase goes down),
+        # and is dependent on the SEM working distance (focus).
+        # In raw coordinates, Z always means the same thing, independent of what the user has done
+        # in the GUI. However, for the other axes, there might be an offset, but as it's convenient
+        # to show the same value as in the TFS GUI, we compensate for that offset.
+        self._raw_offset = {"x": 0, "y": 0, "rx": 0, "rz": 0}
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
                                 **kwargs)
@@ -1825,20 +1828,18 @@ class Stage(model.Actuator):
             self._pos_poll = None
 
     def _update_coordinate_system_offset(self):
-        """Calculate the offset values for raw coordinate system. The offset is the difference between the specimen (linked) and raw coordinate system."""
+        """
+        Calculate the offset values for raw coordinate system.
+        The offset is the difference between the specimen (linked) and raw coordinate system.
+        """
         self.parent.set_default_stage_coordinate_system("SPECIMEN")
         pos_linked = self._getPosition()
         self.parent.set_default_stage_coordinate_system("RAW")
         pos = self._getPosition()
         for axis in self._raw_offset.keys():
             self._raw_offset[axis] = pos_linked[axis] - pos[axis]
-        # the offset should only be in linear axes, it is not expected in rotational axes
-        if not all(pos[axis] == pos_linked[axis] for axis in ["rx", "rz"]):
-            logging.warning(
-                "Unexpected offset in rotational axes. There should be no difference between raw and linked coordinates for rotational axes. "
-                "Please check the stage configuration.")
-        logging.debug(f"The offset values in x and y are {self._raw_offset} when stage is in the raw coordinate "
-                        f"system for raw stage coordinates: {pos}, linked stage coordinates: {pos_linked}")
+        logging.debug(f"The raw coordinates offset is {self._raw_offset}. "
+                      f"Computed from raw stage coordinates: {pos}, specimen stage coordinates: {pos_linked}")
 
     def _updatePosition(self):
         """
@@ -1847,8 +1848,18 @@ class Stage(model.Actuator):
         old_pos = self.position.value
         pos = self._getPosition()
         # Apply the offset to the raw coordinates
-        pos["x"] += self._raw_offset["x"]
-        pos["y"] += self._raw_offset["y"]
+        for axis, offset in self._raw_offset.items():
+            if axis in pos:
+                pos[axis] += offset
+
+        # Make sure the full rotations are within the range (because the SEM actually reports
+        # values within -2pi -> 2pi rad)
+        for an in ("rx", "rz"):
+            rng = self.axes[an].range
+            # To handle both rotations 0->2pi and inverted: -2pi -> 0.
+            if util.almost_equal(rng[1] - rng[0], 2 * math.pi):
+                pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
+
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -1870,13 +1881,6 @@ class Stage(model.Actuator):
         pos = self.parent.get_stage_position()
         pos["rx"] = pos.pop("t")
         pos["rz"] = pos.pop("r")
-        # Make sure the full rotations are within the range (because the SEM
-        # actually allows rotation in both directions)
-        for an in ("rx", "rz"):
-            rng = self.axes[an].range
-            # To handle both rotations 0->2pi and inverted: -2pi -> 0.
-            if util.almost_equal(rng[1] - rng[0], 2 * math.pi):
-                pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
         return pos
 
     def _moveTo(self, future: CancellableFuture, pos: Dict[str, float], rel: bool = False, timeout: int = 60):
@@ -1888,10 +1892,9 @@ class Stage(model.Actuator):
                     logging.debug("Moving by shift {}".format(pos))
                 else:
                     # apply the offset to the raw coordinates
-                    if "x" in pos.keys():
-                        pos["x"] -= self._raw_offset["x"]
-                    if "y" in pos.keys():
-                        pos["y"] -= self._raw_offset["y"]
+                    for axis, offset in self._raw_offset.items():
+                        if axis in pos:
+                            pos[axis] -= offset
                     logging.debug("Moving to position {}".format(pos))
 
                 if "rx" in pos.keys():
