@@ -110,6 +110,7 @@ class CryoFeatureController(object):
         if ans == wx.ID_YES:
             self._tab_data_model.main.features.value.remove(current_feature)
             self._tab_data_model.main.currentFeature.value = None
+            self._tab.milling_task_controller.draw_milling_tasks()
 
     def _on_btn_use_current_z(self, _):
         # Use current focus to set currently selected feature
