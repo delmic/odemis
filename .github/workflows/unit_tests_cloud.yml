@@ -181,7 +181,7 @@ jobs:
       if: ${{ !cancelled() }}
       run: |
           export PYTHONPATH="$PWD/src:$PYTHONPATH"
-          python3 -m unittest --verbose src.odemis.acq.test.move_test.TestMoveUtil
+          python3 -m unittest --verbose src.odemis.acq.test.move_util_test.TestMoveUtil
 
     - name: Run tests from odemis.acq.leech
       if: ${{ !cancelled() }}
