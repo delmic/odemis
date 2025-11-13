@@ -92,6 +92,8 @@ FIB_NAME_MAP: Dict[str, str] = {
     "DtEnumDetectors": "FibDtEnumDetec",
     "CancelRecv": "CancelRecv",
     "DtGetEnabled": "FibDtGetEnabled",
+    "GetImageRot": "FibGetImageRot",
+    "SetImageRot": "FibSetImageRot",
     # Not possible to control the FIB blanker
     "ScGetBlanker": None,
     "ScSetBlanker": None,
@@ -509,16 +511,16 @@ class SEM(model.HwComponent):
                    scanner.resolution.value[1])
 
             metadata = dict(self._metadata)
+            metadata.update(scanner.getMetadata())
+            # If there is an image center set by the sample stage in the posture manager,
+            # make sure to update it with scanner translation.
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = scanner.rotation.value
-            metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
 
             scaled_shape = (scanner._shape[0] / scale[0], scanner._shape[1] / scale[1])
             scaled_trans = (pxs_pos[0] / scale[0], pxs_pos[1] / scale[1])
@@ -697,11 +699,9 @@ class Scanner(model.Emitter):
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
-        # (float) in rad => rotation of the image compared to the original axes
-        # TODO: for now it's readonly because no rotation is supported
-        self.rotation = model.FloatContinuous(0, (0, 2 * math.pi), unit="rad",
-                                              readonly=True)
-
+        rotation = math.radians(self._device_handler.GetImageRot())
+        self.rotation = model.FloatContinuous(rotation, (0, 2 * math.pi), unit="rad", setter=self._setRotation)
+        self.rotation.subscribe(self._onRotation, init=True)
         self.dwell_time_lookup = self.get_dwell_time_lookup()
         dwell_time_index = self._device_handler.ScGetSpeed()
         dwell_time = self.dwell_time_lookup[dwell_time_index]
@@ -709,7 +709,7 @@ class Scanner(model.Emitter):
         max_dwell_time = max(self.dwell_time_lookup.values())
         self.dwellTime = model.FloatContinuous(dwell_time, (min_dwell_time, max_dwell_time), unit="s",
                                                setter=self._setDwellTime)
-
+        self.dwellTime.subscribe(self._onDwellTime, init=True)
         volt = self._device_handler.HVGetVoltage()
 
         if self._device_handler.device_type == DeviceType.ELECTRON:
@@ -788,13 +788,6 @@ class Scanner(model.Emitter):
         beam_presets.add(DEFAULT_ION_PRESET)
         return beam_presets
 
-    # we share metadata with our parent
-    def updateMetadata(self, md):
-        self.parent.updateMetadata(md)
-
-    def getMetadata(self):
-        return self.parent.getMetadata()
-
     def _onHorizontalFOV(self, s):
         # Update current pixelSize and magnification
         self._updatePixelSize()
@@ -845,7 +838,7 @@ class Scanner(model.Emitter):
         return volt
 
     def _onVoltage(self, volt):
-        self.parent._metadata[model.MD_EBEAM_VOLTAGE] = volt
+        self.updateMetadata({model.MD_BEAM_VOLTAGE: volt})
 
     def _setPower(self, value):
         powers = self.power.choices
@@ -876,7 +869,13 @@ class Scanner(model.Emitter):
         return value
 
     def _onPC(self, current):
-        self.parent._metadata[model.MD_EBEAM_CURRENT] = current
+        self.updateMetadata({model.MD_BEAM_CURRENT: current})
+
+    def _onRotation(self, rotation):
+        self.updateMetadata({model.MD_ROTATION: rotation})
+
+    def _onDwellTime(self, dwellTime):
+        self.updateMetadata({model.MD_DWELL_TIME: dwellTime})
 
     def _setBeamPreset(self, preset: str) -> str:
         """
@@ -966,7 +965,7 @@ class Scanner(model.Emitter):
 
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
-        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+        self.updateMetadata({model.MD_PIXEL_SIZE: pxs_scaled})
 
     def _setScale(self, value):
         """
@@ -1027,6 +1026,16 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
 
+
+    def _setRotation(self, value: float) -> float:
+        """
+        value: Scan rotation in radians
+        """
+
+        rotation_degrees = math.degrees(value)
+        self._device_handler.SetImageRot(rotation_degrees)
+        return value
+
     def pixelToPhy(self, px_pos):
         """
         Converts a position in pixels to physical (at the current magnification)
@@ -1060,6 +1069,12 @@ class Scanner(model.Emitter):
                         new_dt = self.dwell_time_lookup[new_dt_idx]
                         self.dwellTime._value = new_dt
                         self.dwellTime.notify(new_dt)
+
+                    prev_rotation = self.rotation._value
+                    new_rotation = math.radians(self._device_handler.GetImageRot()) % (2 * math.pi)
+                    if prev_rotation != new_rotation:
+                        self.rotation._value = new_rotation
+                        self.rotation.notify(new_rotation)
 
                     if self._device_handler.device_type == DeviceType.ELECTRON:
                         # if blanker is in auto, don't change its value
