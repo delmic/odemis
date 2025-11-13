@@ -58,7 +58,8 @@ class MillingTaskPanel(wx.Panel):
 
         unsupported_parameters = ["name", "rotation",
                                   "center", "channel",
-                                  "field_of_view", "voltage"]
+                                  "field_of_view", "voltage",
+                                  "rate", "dwell_time"]
 
         for param in vars(task.milling):
             if param in unsupported_parameters:
