@@ -1258,7 +1258,6 @@ class Scanner(model.Emitter):
         """
         Read all the current settings from the SEM and reflects them on the VAs
         """
-        logging.debug("Updating SEM settings")
         try:
             if self._has_detector:
                 dwell_time = self.parent.get_dwell_time(self.channel)
@@ -1870,7 +1869,6 @@ class Stage(model.Actuator):
         """
         # We don't use the VA setters, to avoid sending back to the hardware a
         # set request
-        logging.debug("Updating SEM stage position")
         try:
             self._updatePosition()
         except Exception:
@@ -2060,7 +2058,6 @@ class Focus(model.Actuator):
         """
         # We don't use the VA setters, to avoid sending back to the hardware a
         # set request
-        logging.debug("Updating SEM focus position")
         try:
             self._updatePosition()
         except Exception:
