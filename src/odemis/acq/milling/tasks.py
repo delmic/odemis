@@ -36,10 +36,12 @@ from odemis.acq.milling.patterns import (
 class MillingSettings:
     """Represents milling settings for a single milling task"""
 
-    def __init__(self, current: float, voltage: float, field_of_view: float, mode: str = "Serial", channel: str = "ion", align: bool = True):
+    def __init__(self, current: float, voltage: float, field_of_view: float, rate: float, dwell_time: float, mode: str = "Serial", channel: str = "ion", align: bool = True):
         self.current = model.FloatContinuous(current, unit="A", range=(20e-12, 120e-9))
         self.voltage = model.FloatContinuous(voltage, unit="V", range=(0, 30e3))
         self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(50e-06, 960e-06))
+        self.rate = model.FloatContinuous(rate, unit="m^3/A/s", range=(0, 1.0))
+        self.dwell_time = model.FloatContinuous(dwell_time, unit="s", range=(0, 60))
         self.mode = model.StringEnumerated(mode, choices={"Serial", "Parallel"})
         self.channel = model.StringEnumerated(channel, choices={"ion"})
         self.align = model.BooleanVA(align) # align at the milling current
@@ -48,19 +50,24 @@ class MillingSettings:
         return {"current": self.current.value,
                 "voltage": self.voltage.value,
                 "field_of_view": self.field_of_view.value,
+                "rate": self.rate.value,
+                "dwell_time": self.dwell_time.value,
                 "mode": self.mode.value,
                 "channel": self.channel.value,
-                "align": self.align.value}
+                "align": self.align.value
+                }
 
     @staticmethod
     def from_dict(data: dict) -> "MillingSettings":
         return MillingSettings(current=data["current"],
-                                voltage=data["voltage"],
-                                field_of_view=data["field_of_view"],
-                                mode=data.get("mode", "Serial"),
-                                channel=data.get("channel", "ion"),
-                                align=data.get("align", True)
-                                )
+                               voltage=data["voltage"],
+                               field_of_view=data["field_of_view"],
+                               rate=data["rate"],
+                               dwell_time=data["dwell_time"],
+                               mode=data.get("mode", "Serial"),
+                               channel=data.get("channel", "ion"),
+                               align=data.get("align", True)
+                              )
 
     def __repr__(self):
         return f"{self.to_dict()}"
@@ -117,14 +124,21 @@ def save_milling_tasks(path: str, milling_tasks: Dict[str, MillingTaskSettings])
     with open(path, "w") as f:
         yaml.dump(mdict, f)
 
-def load_milling_tasks(path: str) -> Dict[str, MillingTaskSettings]:
+def load_milling_tasks(path: str, general_params = {}) -> Dict[str, MillingTaskSettings]:
     """Load milling tasks from a yaml file.
     :param path: path to the yaml file
+    :param general_params: general params for all the tasks
     :return: dictionary of milling tasks
     """
     milling_tasks = {}
     with open(path, "r") as f:
         yaml_file = yaml.safe_load(f)
+
+    # Add general params (like rate, dwell_time) to each task's 'milling' subdict
+    for _, task_data in yaml_file.items():
+        milling = task_data.get("milling", {})
+        milling.update(general_params)
+        task_data["milling"] = milling
 
     # convert the dictionary to Dict[str, MillingTaskSettings]
     milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in yaml_file.items()}
