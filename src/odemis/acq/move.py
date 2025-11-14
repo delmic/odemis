@@ -2104,10 +2104,55 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         if self.pre_tilt is None:
             self.pre_tilt = 0  # Standard on JEOL is no pre-tilt (ie, 0°)
 
+        if self.pre_tilt != 0:
+            raise ValueError("JEOL Posture Manager only supports pre-tilt of 0°")
+
         self.postures = [SEM_IMAGING, FM_IMAGING]
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "z"])
         self.create_sample_stage()
+
+    def _update_conversion(self,
+                           rotation: float = 0,
+                           scale: tuple = (1, 1),
+                           shear: tuple = (0, 0),
+                           ):
+        """
+        Computes transformation parameters based on the given metadata to allow conversion
+        stage-bare and sample plane.
+        NOTE: transformations are defined as sample stage -> stage bare
+        the inverse transformation is used for stage bare -> sample stage
+        :param rotation: rotation in radians from sample plane to stage (rx)
+        :param scale: scale from sample to stage
+        :param shear: shear from sample to stage
+        """
+        tf_id = numpy.eye(3)
+        # The JEOL stage convention is opposite of Odemis so inverse the direction of the XYZ axes.
+        tf_reverse = -tf_id
+
+        # Otherwise, nothing to do: there is no pre-tilt, and the stage X/Y is above the Rx axis,
+        # so no need to compensate for the tilt.
+        tf_fm = tf_reverse
+        tf_fm_inv = numpy.linalg.inv(tf_fm)
+
+        # get the scan rotation value
+        sr = self._get_scan_rotation()
+
+        # get scan rotation matrix (rz -> rx)
+        tf_sr, _= get_rotation_transforms(rz=-sr)
+        tf_sem = tf_reverse @ tf_sr
+        tf_sem_inv = numpy.linalg.inv(tf_sem)
+
+        logging.debug(f"tf_matrix: {tf_fm}, tf_sem: {tf_sem}")
+
+        # From sample-stage to stage-bare
+        self._transforms = {FM_IMAGING: tf_fm,
+                            SEM_IMAGING: tf_sem,
+                            UNKNOWN: tf_id}
+        # From stage-bare to sample-stage
+        self._inv_transforms = {FM_IMAGING: tf_fm_inv,
+                                SEM_IMAGING: tf_sem_inv,
+                                UNKNOWN: tf_id}
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
