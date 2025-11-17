@@ -1076,6 +1076,17 @@ class CryoChamberTab(Tab):
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans == wx.ID_YES
 
+    def terminate(self):
+        # Delete the current project folder if empty
+        proj_path = self.tab_data_model.main.project_path.value
+        try:
+            if os.path.isdir(proj_path) and not os.listdir(proj_path):
+                logging.debug("Deleting empty project folder %s", proj_path)
+                os.rmdir(proj_path)  # only removes empty folders
+        except Exception as ex:
+            # It might be just due to some access rights, let's not worry too much
+            logging.warning("Failed to delete project folder %s: %s", proj_path, ex)
+
     @classmethod
     def get_display_priority(cls, main_data):
         if main_data.role in ("enzel", "meteor", "mimas"):
