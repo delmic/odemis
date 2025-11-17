@@ -155,6 +155,37 @@ def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> 'Micr
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
 
+def _format_preset(voltage: float, current: float) -> str:
+    """
+    Format voltage (V) and current (A) into a string like:
+    '30 keV; 150 pA', scaling units automatically.
+    """
+
+    # Voltage: always shown in keV
+    voltage_keV = voltage / 1000
+    voltage_str = f"{voltage_keV:g} keV"
+
+    # Current: choose pA, nA, or uA
+    abs_I = abs(current)
+
+    if abs_I < 1e-9:
+        # pA
+        current_val = current * 1e12
+        unit = "pA"
+    elif abs_I < 1e-6:
+        # nA
+        current_val = current * 1e9
+        unit = "nA"
+    else:
+        # uA
+        current_val = current * 1e6
+        unit = "uA"
+
+    current_str = f"{current_val:g} {unit}"
+
+    return f"{voltage_str}; {current_str}"
+
+
 def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
     """Convert from an Odemis milling settings to a fibsemOS milling settings"""
     return FibsemMillingSettings(
@@ -162,8 +193,9 @@ def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
         milling_voltage=s.voltage.value,
         patterning_mode=s.mode.value,
         hfw=s.field_of_view.value,
-        rate=s.rate.value,                # um^3/nA/s
-        dwell_time=s.dwell_time.value     # us
+        rate=s.rate.value,                # m^3/A/s
+        dwell_time=s.dwell_time.value,    # s
+        preset=_format_preset(s.voltage.value, s.current.value)
     )
 
 # task converter
