@@ -345,7 +345,8 @@ class MillingTaskController:
     # -> workflow tab is probably easier to use for this purpose
 
     def _on_saving_position(self, tasks):
-        pos = self.pm.to_sample_stage_from_stage_position(self._tab_data.main.currentFeature.value.position.value, MILLING)
+        feature_stage_bare = self._tab_data.main.currentFeature.value.get_posture_position(MILLING)
+        pos = self.pm.to_sample_stage_from_stage_position(feature_stage_bare, MILLING)
         self.draw_milling_tasks((pos['x'], pos['y']))
 
     @call_in_wx_main
