@@ -349,15 +349,29 @@ class AutomatedMillingManager(object):
                                "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
                 logging.error(error_text)
                 raise ValueError(error_text)
-
+            
             for feature in self.features:
 
                 if feature.status.value == FEATURE_DEACTIVE:
                     logging.info(f"Skipping {feature.name.value} as it is deactivated.")
                     continue
-
-                if feature.status.value == FEATURE_ACTIVE:
+                elif feature.status.value == FEATURE_ACTIVE:
                     logging.info(f"Skipping {feature.name.value} as it is not ready for milling.")
+                    continue
+                elif status_map[workflow_task] == feature.status.value == FEATURE_ROUGH_MILLED:
+                    logging.info(f"Skipping {feature.name.value} as it was already rough milled.")
+                    continue
+                elif status_map[workflow_task] == feature.status.value == FEATURE_POLISHED:
+                    logging.info(f"Skipping {feature.name.value} as it was already polished.")
+                    continue
+
+                # get milling tasks
+                milling_tasks = get_associated_tasks(
+                    wt=workflow_task,
+                    milling_tasks=feature.milling_tasks)
+
+                if not milling_tasks:
+                    logging.info(f"Skipping {feature.name.value} as it has not tasks to mill.")
                     continue
 
                 # prefix for images
@@ -376,7 +390,7 @@ class AutomatedMillingManager(object):
                 self._align_reference_image(feature)
 
                 ############# MILLING #############
-                self._run_milling_tasks(feature, workflow_task)
+                self._run_milling_tasks(feature, milling_tasks)
 
                 ############# REFERENCE IMAGING #############
                 self._acquire_reference_images(feature)
@@ -411,12 +425,8 @@ class AutomatedMillingManager(object):
         self._future.msg = f"Moved to {feature.name.value}"
         self._future.set_progress()
 
-    def _run_milling_tasks(self, feature: CryoFeature, workflow_task: MillingWorkflowTask) -> None:
-        """Run the milling tasks for the given feature and the workflow."""
-        # get milling tasks
-        milling_tasks = get_associated_tasks(
-            wt=workflow_task,
-            milling_tasks=feature.milling_tasks)
+    def _run_milling_tasks(self, feature: CryoFeature, milling_tasks: List[MillingTaskSettings]) -> None:
+        """Run the milling tasks for the given feature."""
 
         self._future.msg = f"{feature.name.value}: Milling: {self.current_workflow}"
         self._future.set_progress()
