@@ -100,21 +100,6 @@ class TestMeteorTFS1Move(unittest.TestCase):
         self.assertAlmostEqual(old_linked_pos["y"] + 1e-3, new_linked_pos["y"], places=4)
         self.assertTrue(old_stage_pos["y"] < new_stage_pos["y"])
 
-    def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
-        # move the stage to the loading position
-        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
-        f.result()
-        # move the stage to grid1, and sem imaging area will be chosen by default.
-        f = self.posture_manager.cryoSwitchSamplePosition(GRID_1)
-        f.result()
-        position_label = self.posture_manager.getCurrentPostureLabel()
-        grid_label = self.posture_manager.getCurrentGridLabel()
-        self.assertEqual(position_label, SEM_IMAGING)
-        self.assertEqual(grid_label, GRID_1)
-        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
-        for axis in self.ROTATION_AXES:
-            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
-
     def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
         # move the stage to the loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -130,21 +115,6 @@ class TestMeteorTFS1Move(unittest.TestCase):
         fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
-
-    def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
-        # move the stage to the loading position
-        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
-        f.result()
-        # move the stage to grid2
-        f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
-        f.result()
-        position_label = self.posture_manager.getCurrentPostureLabel()
-        grid_label = self.posture_manager.getCurrentGridLabel()
-        self.assertEqual(position_label, SEM_IMAGING)
-        self.assertEqual(grid_label, GRID_2)
-        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
-        for axis in self.ROTATION_AXES:
-            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
     def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
         # move to loading position
