@@ -647,6 +647,21 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         return sr
 
+    def _set_scanner_rotation_cor(self, rotation: float):
+        """
+        Set the scanners' MD_ROTATION_COR metadata field to the provided rotation value.
+        :param rotation: rotation in radians
+        """
+        for scanner_name in ["e-beam", "ion-beam"]:
+            scanner = None
+            try:
+                scanner = model.getComponent(role=scanner_name)
+            except LookupError:
+                pass
+
+            if scanner is not None:
+                scanner.updateMetadata({model.MD_ROTATION_COR: rotation})
+
     def from_sample_stage_to_stage_movement(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Get the stage movement coordinates from the sample stage movement coordinates.
@@ -1657,6 +1672,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # Compensate for the scan rotation (around Z) when in SEM imaging, and for the pre-tilt
         # with the expectation that the stage rz is 180° opposite of the FM imaging => - pre_tilt
         sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
+        self._set_scanner_rotation_cor(sr)  # Makes sure total image rotation is 0
         tf_sr, _ = get_rotation_transforms(rx=-rotation, rz=-sr)
 
         rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
