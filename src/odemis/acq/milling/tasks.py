@@ -62,8 +62,8 @@ class MillingSettings:
         return MillingSettings(current=data["current"],
                                voltage=data["voltage"],
                                field_of_view=data["field_of_view"],
-                               rate=data["rate"],
-                               dwell_time=data["dwell_time"],
+                               rate=data.get("rate", 0),
+                               dwell_time=data.get("dwell_time", 0),
                                mode=data.get("mode", "Serial"),
                                channel=data.get("channel", "ion"),
                                align=data.get("align", True)
