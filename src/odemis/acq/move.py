@@ -1649,14 +1649,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         self._initialise_offset()
 
     def _update_conversion(self,
-                           rotation: float,
+                           pre_tilt: float,
                            ):
         """
         Computes transformation parameters based on the given metadata to allow conversion
         stage-bare and sample plane.
         NOTE: transformations are defined as sample stage -> stage bare
         the inverse transformation is used for stage bare -> sample stage
-        :param rotation: pre-tilt in radians, rotation from sample plane to stage
+        :param pre_tilt: pre-tilt in radians, rotation from sample plane to stage
         """
         tf_id = numpy.eye(3)
         tf_reverse = -tf_id  # The Tescan stage convention is opposite of Odemis so inverse the direction of the XYZ axis.
@@ -1664,20 +1664,18 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # FM imaging
         stage_md = self.stage.getMetadata()
         rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
-        rot_matrix_3d, _ = get_rotation_transforms(rx=rotation)
-        tf_tilt = self._get_tilt_transformation(rx_fm)
-        tf_fm = tf_reverse @ tf_tilt @ rot_matrix_3d
+        tf_tilt = self._get_tilt_transformation(pre_tilt, rx_fm)
+        tf_fm = tf_reverse @ tf_tilt
         tf_fm_inv = numpy.linalg.inv(tf_fm)
 
-        # Compensate for the scan rotation (around Z) when in SEM imaging, and for the pre-tilt
-        # with the expectation that the stage rz is 180° opposite of the FM imaging => - pre_tilt
+        # Compensate for the scan rotation (around Z) when in SEM imaging
         sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
         self._set_scanner_rotation_cor(sr)  # Makes sure total image rotation is 0
-        tf_sr, _ = get_rotation_transforms(rx=-rotation, rz=-sr)
+        tf_sr, _ = get_rotation_transforms(rz=-sr)
 
         rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
-        tf_tilt = self._get_tilt_transformation(rx_sem)
-        tf_sem = tf_reverse @ tf_tilt @ tf_sr
+        tf_tilt = self._get_tilt_transformation(pre_tilt, rx_sem)
+        tf_sem = tf_reverse @ tf_sr @ tf_tilt
         tf_sem_inv = numpy.linalg.inv(tf_sem)
 
         # TODO: update MILLING transformations when changing milling angle
@@ -1687,8 +1685,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                                                               pre_tilt=self.pre_tilt,
                                                               column_tilt=self.fib_column_tilt)
             # Scan rotation and pre-tilt are the same as in SEM imaging, so can reuse tf_sr
-            tf_tilt = self._get_tilt_transformation(rx_mill)
-            tf_mill = tf_reverse @ tf_tilt @ tf_sr
+            tf_tilt = self._get_tilt_transformation(pre_tilt, rx_mill)
+            tf_mill = tf_reverse @ tf_sr @ tf_tilt
         else:
             tf_mill = tf_id
 
@@ -1706,14 +1704,17 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                                 MILLING: tf_mill_inv,
                                 UNKNOWN: tf_id}
 
-    def _get_tilt_transformation(self, rx: float) -> numpy.ndarray:
+    def _get_tilt_transformation(self, pre_tilt: float, rx: float) -> numpy.ndarray:
         """
         Computes the transformation matrix based on the given tilt (rx) angle, on the Tescan stage.
         Note that this is special on Tescan because the Z axis is not perpendicular to Y when the
         stage is tilted.
-        :param rx: stage-bare tilt angle in radians
+        :param pre_tilt: stage pre-tilt angle (ie, angle between sample and stage XY plane) in radians
+        :param rx: stage-bare tilt angle (ie, angle between x and z axes) in radians
         :return: tilt transformation matrix
         """
+        # The stage rz is 180° opposite of the FM imaging => - pre_tilt
+        tf_pre_tilt, _ = get_rotation_transforms(rx=-pre_tilt)
         shear = (-math.tan(rx), 0)
         scale = (1, 1 / math.cos(rx))  # rx is always < 90°, so no division by zero
         # The shear & scale parameters are for the 2nd and 3rd axes (Y and Z) because Z stays always
@@ -1730,7 +1731,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             [0, 0, scale[1]],  # z-axis scale
         ])
 
-        tf_tilt = scale_matrix_3d @ shear_matrix_3d
+        tf_tilt = scale_matrix_3d @ shear_matrix_3d @ tf_pre_tilt
         return tf_tilt
 
     def check_calib_data(self, required_keys: set):
