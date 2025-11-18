@@ -95,7 +95,9 @@ def resolution_from_scale(comp, va, conf):
     scale_choices = binning_1d_from_2d(comp, va, conf)
     # Map to resolution
     resolution = comp.resolution.value
-    resolution_choices = {scale: f"{resolution[0] // scale[0]}x{resolution[1] // scale[1]}" for scale in scale_choices.keys()}
+    scale = comp.scale.value
+    max_res = resolution[0] * scale[0], resolution[1] * scale[1]
+    resolution_choices = {scale: f"{round(max_res[0] / scale[0]):d}x{round(max_res[1] / scale[1]):d}" for scale in scale_choices.keys()}
     return resolution_choices
 
 def binning_1d_from_2d(comp, va, conf):
