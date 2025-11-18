@@ -1675,7 +1675,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
         tf_tilt = self._get_tilt_transformation(pre_tilt, rx_sem)
-        tf_sem = tf_reverse @ tf_sr @ tf_tilt
+        tf_sem = tf_reverse @ tf_tilt @ tf_sr
         tf_sem_inv = numpy.linalg.inv(tf_sem)
 
         # TODO: update MILLING transformations when changing milling angle
@@ -1686,7 +1686,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                                                               column_tilt=self.fib_column_tilt)
             # Scan rotation and pre-tilt are the same as in SEM imaging, so can reuse tf_sr
             tf_tilt = self._get_tilt_transformation(pre_tilt, rx_mill)
-            tf_mill = tf_reverse @ tf_sr @ tf_tilt
+            tf_mill = tf_reverse @ tf_tilt @ tf_sr
         else:
             tf_mill = tf_id
 
