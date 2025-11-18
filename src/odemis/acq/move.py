@@ -1674,7 +1674,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         tf_sr, _ = get_rotation_transforms(rz=-sr)
 
         rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
-        tf_tilt = self._get_tilt_transformation(pre_tilt, rx_sem)
+        # The stage rz is 180° opposite of the FM imaging => -pre_tilt
+        tf_tilt = self._get_tilt_transformation(-pre_tilt, rx_sem)
         tf_sem = tf_reverse @ tf_tilt @ tf_sr
         tf_sem_inv = numpy.linalg.inv(tf_sem)
 
@@ -1685,7 +1686,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                                                               pre_tilt=self.pre_tilt,
                                                               column_tilt=self.fib_column_tilt)
             # Scan rotation and pre-tilt are the same as in SEM imaging, so can reuse tf_sr
-            tf_tilt = self._get_tilt_transformation(pre_tilt, rx_mill)
+            tf_tilt = self._get_tilt_transformation(-pre_tilt, rx_mill)
             tf_mill = tf_reverse @ tf_tilt @ tf_sr
         else:
             tf_mill = tf_id
@@ -1713,8 +1714,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         :param rx: stage-bare tilt angle (ie, angle between x and z axes) in radians
         :return: tilt transformation matrix
         """
-        # The stage rz is 180° opposite of the FM imaging => - pre_tilt
-        tf_pre_tilt, _ = get_rotation_transforms(rx=-pre_tilt)
+        tf_pre_tilt, _ = get_rotation_transforms(rx=pre_tilt)
         shear = (-math.tan(rx), 0)
         scale = (1, 1 / math.cos(rx))  # rx is always < 90°, so no division by zero
         # The shear & scale parameters are for the 2nd and 3rd axes (Y and Z) because Z stays always
