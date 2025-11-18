@@ -643,7 +643,7 @@ class Scanner(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
         self._device_handler = DeviceHandler(self.parent._device, device_type)
 
-        self._shape = (2048, 2048)
+        self._shape = (4096, 4096)
 
         # This is the field of view when in Tescan Software magnification = 100
         # and working distance = 0,27 m (maximum WD of Mira TC). When working

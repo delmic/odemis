@@ -30,6 +30,7 @@ import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
+from odemis.gui.conf.data import get_local_vas
 from odemis import model
 from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
@@ -130,56 +131,29 @@ class FibsemTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-
-        # TODO: get components from main_data?
-        # setup electron beam, det
-        electron_beam = model.getComponent(role="e-beam")
-        electron_det = model.getComponent(role="se-detector")
-
-        hwemtvas = set()
-        hwdetvas = set()
-
-        hwemt_vanames = ("beamPreset", "probeCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
-        hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
-        for vaname in model.getVAs(electron_beam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-        for vaname in model.getVAs(electron_det):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
+        # hwemt_vanames = ("beamPreset", "probeCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
+        # hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
 
         self.sem_stream = SEMStream(
             name="SEM",
-            detector=electron_det,
-            dataflow=electron_det.data,
-            emitter=electron_beam,
-            focuser=main_data.ebeam_focus, #electron_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
+            detector=main_data.sed,
+            dataflow=main_data.sed.data,
+            emitter=main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
+            hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
             blanker=None)
-
-        # setup ion beam, det
-        ion_beam = model.getComponent(role="ion-beam")
-        ion_det = model.getComponent(role="se-detector-ion")
-
-        hwemtvas = set()
-        hwdetvas = set()
-        for vaname in model.getVAs(ion_beam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-        for vaname in model.getVAs(ion_det):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
 
         self.fib_stream = FIBStream(
             name="FIB",
-            detector=ion_det,
-            dataflow=ion_det.data,
-            emitter=ion_beam,
+            detector=main_data.ion_sed,
+            dataflow=main_data.ion_sed.data,
+            emitter=main_data.ion_beam,
             focuser=main_data.ion_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
-        )
+            hwemtvas=get_local_vas(main_data.ion_beam, main_data.hw_settings_config) | {"accelVoltage"},
+            hwdetvas=get_local_vas(main_data.ion_sed, main_data.hw_settings_config),
+            )
+
         sem_stream_cont = self._streambar_controller.addStream(self.sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 

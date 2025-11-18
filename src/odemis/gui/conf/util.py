@@ -90,6 +90,13 @@ def resolution_from_range_plus_point(comp, va, conf):
     """ Same as resolution_from_range() but also add a 1x1 value """
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
+def resolution_from_scale(comp, va, conf):
+    """Convert from scale to resolution """
+    scale_choices = binning_1d_from_2d(comp, va, conf)
+    # Map to resolution
+    resolution = comp.resolution.value
+    resolution_choices = {scale: f"{resolution[0] // scale[0]}x{resolution[1] // scale[1]}" for scale in scale_choices.keys()}
+    return resolution_choices
 
 def binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings/scale available in one dimension

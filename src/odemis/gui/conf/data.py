@@ -876,14 +876,15 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
     "meteor" : {
         "e-beam": {
             "scale": {
-                "control_type": odemis.gui.CONTROL_NONE,
+                "label": "Resolution",
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Pixel resolution preset",
+                # means will make sure both dimensions are treated as one
+                "choices": util.resolution_from_scale,
             },
             "resolution": {
-                "label": "Resolution",
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "tooltip": "Number of pixels in the image",
-                "choices": util.resolution_from_range,
-                "accuracy": None,  # never simplify the numbers
+                "control_type": odemis.gui.CONTROL_NONE,
             },
             "probeCurrent": {
                 "label": "Beam Current",
@@ -891,6 +892,11 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "type": "float",
                 "scale": "linear",
                 "event": wx.EVT_SCROLL_CHANGED
+            },
+        },
+        "se-detector": {
+            "bpp": {
+                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
         "ion-beam": {
@@ -907,6 +913,26 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "tooltip": "Number of pixels in the image",
                 "choices": util.resolution_from_range,
                 "accuracy": None,  # never simplify the numbers
+            },
+            "rotation": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "translation": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "external": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "power": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "blanker": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+        "se-detector-ion": {
+            "bpp": {
+                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
     }
