@@ -30,6 +30,7 @@ import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
+from odemis.gui.conf.data import get_local_vas
 from odemis import model
 from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
@@ -130,56 +131,31 @@ class FibsemTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-
-        # TODO: get components from main_data?
-        # setup electron beam, det
-        electron_beam = model.getComponent(role="e-beam")
-        electron_det = model.getComponent(role="se-detector")
-
-        hwemtvas = set()
-        hwdetvas = set()
-
-        hwemt_vanames = ("probeCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
-        hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
-        for vaname in model.getVAs(electron_beam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-        for vaname in model.getVAs(electron_det):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
-
         self.sem_stream = SEMStream(
             name="SEM",
-            detector=electron_det,
-            dataflow=electron_det.data,
-            emitter=electron_beam,
-            focuser=main_data.ebeam_focus, #electron_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
+            detector=main_data.sed,
+            dataflow=main_data.sed.data,
+            emitter=main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
+            hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
             blanker=None)
 
-        # setup ion beam, det
-        ion_beam = model.getComponent(role="ion-beam")
-        ion_det = model.getComponent(role="se-detector-ion")
-
-        hwemtvas = set()
-        hwdetvas = set()
-        for vaname in model.getVAs(ion_beam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-        for vaname in model.getVAs(ion_det):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
+        hwemtvas = get_local_vas(main_data.ion_beam, main_data.hw_settings_config)
+        # Explicitly add accelVoltage in order to show it too with Tescan SEM, although it's read-only
+        if model.hasVA(main_data.ion_beam, "accelVoltage"):
+            hwemtvas.add("accelVoltage")
 
         self.fib_stream = FIBStream(
             name="FIB",
-            detector=ion_det,
-            dataflow=ion_det.data,
-            emitter=ion_beam,
+            detector=main_data.ion_sed,
+            dataflow=main_data.ion_sed.data,
+            emitter=main_data.ion_beam,
             focuser=main_data.ion_focus,
             hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
-        )
+            hwdetvas=get_local_vas(main_data.ion_sed, main_data.hw_settings_config),
+            )
+
         sem_stream_cont = self._streambar_controller.addStream(self.sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
@@ -408,7 +384,7 @@ class FibsemTab(Tab):
             self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
             self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
             self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-            ltab  = self.main_data.getTabByName("cryosecom-localization")
+            ltab = self.main_data.getTabByName("cryosecom-localization")
             if ltab:
                 ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
@@ -417,7 +393,7 @@ class FibsemTab(Tab):
             pass
 
         # update the stage position buttons
-        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
+        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)  # BTN_TOGGLE_OFF
         self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
 
         self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
@@ -425,7 +401,7 @@ class FibsemTab(Tab):
         self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
 
         if posture == SEM_IMAGING:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)  # BTN_TOGGLE_COMPLETE
         if posture == MILLING:
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
 
@@ -436,8 +412,10 @@ class FibsemTab(Tab):
         # update the metadata of the stage
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
         current_md = self.pm.stage.getMetadata()
-        self.pm.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': milling_angle,
-                                                                     "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
+        self.pm.stage.updateMetadata({
+            model.MD_FAV_MILL_POS_ACTIVE: {"rx": milling_angle,
+                                           "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
+        })
 
         md = self.pm.get_posture_orientation(MILLING)
         stage_tilt = md["rx"]
@@ -447,18 +425,20 @@ class FibsemTab(Tab):
         self._on_stage_pos(self.pm.stage.position.value)
 
         # if the tab isn't shown, we don't want to ask the user
-        if evt is None: # if the event is None, it means this is the initial update, dont ask the user
+        if evt is None:  # if the event is None, it means this is the initial update, dont ask the user
             return
 
         # changing milling angle, causes previously defined features at milling angle to be "seen" as SEM_IMAGING
         # QUERY: should we update the features to the new milling angle?
         box = wx.MessageDialog(self.main_frame,
-                            message=f"Do you want to update existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)?",
-                            caption="Update existing feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+                               message=f"Do you want to update existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)?",
+                               caption="Update existing feature positions?",
+                               style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
 
         ans = box.ShowModal()  # Waits for the window to be closed
         if ans == wx.ID_YES:
-            logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
+            logging.debug(
+                f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
             # NOTE: use stage_tilt, not milling_angle
             for feature in self.main_data.features.value:
                 milling_position = feature.get_posture_position(MILLING)
