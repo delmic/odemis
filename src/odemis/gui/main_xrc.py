@@ -9753,7 +9753,7 @@ B`\x82'''
                                       </object>
                                     </object>
                                   </object>
-                                  <flag>wxLEFT|wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                                  <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
                                   <border>82</border>
                                   <option>0</option>
                                 </object>
@@ -9798,7 +9798,7 @@ B`\x82'''
                                       </object>
                                     </object>
                                   </object>
-                                  <flag>wxLEFT|wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                                  <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
                                   <border>82</border>
                                   <option>0</option>
                                 </object>
@@ -10487,7 +10487,6 @@ B`\x82'''
                                             <style>wxGA_SMOOTH</style>
                                             <XRCED><assign_var>1</assign_var></XRCED>
                                           </object>
-                                          <flag>wxALIGN_CENTER_VERTICAL</flag>
                                         </object>
                                         <object class="spacer"><option>1</option></object>
                                       </object>
