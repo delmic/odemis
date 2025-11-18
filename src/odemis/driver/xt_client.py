@@ -2166,18 +2166,13 @@ class SEMDataFlow(model.DataFlow):
 
 STAGE_WAIT_DURATION = 20e-03  # s
 STAGE_FRACTION_TOTAL_MOVE = 0.01  # tolerance of the requested stage movement
-# The accuracy of the stage was checked using the API command .Move() with an independent
-# script on the support PC. Repeated stage movements of short steps (100 um) and long steps (1 mm) were executed
-# in x, y and z. The computed stage accuracy of the reported positions did not depend on short or large movements. It
-# showed a consistent outcome i.e. maximum absolute deviation of the current stage position from the requested position
-# was 5 um in the z axis and less than 1 um in the x and y axes.
-# Keeping the above in mind, we will become less strict and increase the stage tolerance for all the linear axes
-# to account for various edge cases and mark the stage movement as completed if the tolerances are satisfied. This
-# enables to mark the stage movements as done sooner without adding additional time for checking strict tolerances.
+# The accuracy of the stage was checked using the Move() API command. The accuracy of the movement was not dependent
+# on the step size (100µm to 1mm). In the worse cases, we read 1µm inaccuracy in X & Y, and 5µm in Z. With some margin,
+# we use 10µm tolerance to detect the stage has reached the target position.
 STAGE_TOL_LINEAR = 10e-06  # in m, minimum tolerance
 STAGE_TOL_ROTATION = 0.00436  # in radians (0.25 degrees), minimum tolerance
 # In the scenarios, where the stage movement was more than 10 percent away from the requested position after the
-# maximum waiting time, we raise an error such that the stage stops and subsequent moves are not performed.
+# maximum waiting time, we raise an error such that the caller can detect the issue.
 # When the stage moves to the requested position within this margin but still not within the above mentioned tolerances,
 # only a warning is logged and subsequent stage movements are carried out as it is considered safe.
 STAGE_FRACTION_MOVE_FAILURE = 0.1  # raise error if the current positon is more than 10% of the requested move
@@ -2406,22 +2401,28 @@ class Stage(model.Actuator):
                 current_pos = self.parent.get_stage_position()
                 movement_req = {ax: STAGE_FRACTION_TOTAL_MOVE * abs(target_pos[ax] - current_pos[ax]) for ax in
                                 target_pos.keys()}
+                orig_movement_req = {ax: abs(target_pos[ax] - orig_pos[ax]) for ax in
+                                    target_pos.keys()}
                 tol_linear = STAGE_TOL_LINEAR
                 tol_rotation = STAGE_TOL_ROTATION
                 if linear_axes_to_check:
                     movement_req_linear = [movement_req[ax] for ax in linear_axes_to_check]
+                    orig_movement_req_linear = [orig_movement_req[ax] for ax in linear_axes_to_check]
                     tol_linear = max(min(movement_req_linear), STAGE_TOL_LINEAR)  # m
-                    tol_linear_failure = max(linear_pos * STAGE_FRACTION_MOVE_FAILURE
-                                             for linear_pos in movement_req_linear)
+                    tol_linear_failure = max(max(linear_pos * STAGE_FRACTION_MOVE_FAILURE
+                                             for linear_pos in orig_movement_req_linear), 100.e-6)
 
                 if rotational_axes_to_check:
                     movement_req_rotational = [movement_req[ax] for ax in rotational_axes_to_check]
+                    orig_movement_req_rotational = [orig_movement_req[ax] for ax in rotational_axes_to_check]
                     tol_rotation = max(min(movement_req_rotational), STAGE_TOL_ROTATION)  # radians
-                    tol_rotation_failure = max(rotation_pos * STAGE_FRACTION_MOVE_FAILURE
-                                               for rotation_pos in movement_req_rotational)
+                    tol_rotation_failure = max(max(rotation_pos * STAGE_FRACTION_MOVE_FAILURE
+                                               for rotation_pos in orig_movement_req_rotational), 0.01745)  # 1 degree
 
                 axes_to_check = linear_axes_to_check | rotational_axes_to_check
                 while axes_to_check:
+
+
                     if isNearPosition(current_pos=current_pos, target_position=target_pos,
                                       axes=axes_to_check, rot_axes=rotational_axes_to_check,
                                       atol_linear=tol_linear, atol_rotation=tol_rotation):
@@ -2436,20 +2437,43 @@ class Stage(model.Actuator):
                     if time.time() > expected_end_time:
                         logging.warning("Stage position after %s s is %s instead of target pos: %s. "
                                         "Giving up waiting.", wait_stage_move, current_pos, target_pos)
-                        # Raise an error if the position is too far from the target to make sure that the stage stops
-                        # and the consecutive moves are not executed from a wrong position.
-                        if not isNearPosition(current_pos=current_pos, target_position=target_pos,
-                                              axes=linear_axes_to_check, rot_axes=rotational_axes_to_check,
-                                              atol_linear=tol_linear_failure, atol_rotation=tol_rotation_failure):
-                            raise CancelledError("Stage position move failure: current pos %s too far from "
-                                          "target pos %s", current_pos, target_pos)
+
+                        # # Raise an error if the position is too far from the target to make sure that the stage stops
+                        # # and the consecutive moves are not executed from a wrong position.
+                        # if not isNearPosition(current_pos=current_pos, target_position=target_pos,
+                        #                       axes=linear_axes_to_check, rot_axes=rotational_axes_to_check,
+                        #                       atol_linear=tol_linear_failure, atol_rotation=tol_rotation_failure):
+                        #     raise CancelledError("Stage position move failure: current pos %s too far from "
+                        #                   "target pos %s with linear and rotational failure tolerances %s m, %s rad.",
+                        #                          current_pos, target_pos, tol_linear_failure, tol_rotation_failure)
+                        failures = {}
+                        for axis in linear_axes_to_check:
+                            delta = abs(orig_pos[axis] - target_pos[axis])
+                            if delta > tol_linear_failure:
+                                failures[axis] = (delta, tol_linear_failure)
+
+                        for axis in rotational_axes_to_check:
+                            delta = abs(current_pos[axis] - target_pos[axis])
+                            if delta > tol_rotation_failure:
+                                failures[axis] = (delta, tol_rotation_failure)
+
+                        if failures:
+                            msgs = [
+                                f"{axis}: error={delta:.6f} > tol={tol:.6f}"
+                                for axis, (delta, tol) in failures.items()
+                            ]
+                            raise CancelledError(
+                                "Stage move failure. Off-target axes:\n" + "\n".join(msgs)
+                            )
+
                         break
 
                     if future._must_stop.is_set():
                         raise CancelledError()
 
-                    logging.debug("Waiting a little longer as position has not updated fully: %s != %s",
-                                  current_pos, target_pos)
+                    logging.debug("Waiting a little longer as position has not updated fully: %s != %s. "
+                                  "The linear and rotational tolerances are %s m and %s rad respectively.",
+                                  current_pos, target_pos, tol_linear, tol_rotation)
                     time.sleep(STAGE_WAIT_DURATION)
                     current_pos = self.parent.get_stage_position()
 
