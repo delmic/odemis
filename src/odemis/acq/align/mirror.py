@@ -27,6 +27,7 @@ from typing import Tuple
 
 import cv2
 import numpy
+import math
 from scipy.optimize import OptimizeResult, OptimizeWarning, minimize, minimize_scalar
 from scipy.optimize._minimize import standardize_bounds
 from scipy.optimize._optimize import (
@@ -36,6 +37,8 @@ from scipy.optimize._optimize import (
 )
 
 from odemis import model
+from odemis.util.angleres import DEFAULT_BINNING, DEFAULT_SENSOR_PIXEL_SIZE, DEFAULT_SLIT_WIDTH
+
 
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
@@ -653,9 +656,6 @@ class ParabolicMirrorAlignmentTask:
       normalized spot pixel count and intensity into a single score.
     """
     MIN_SEARCH_RANGE = 5e-6  # [μm]
-    MIN_PIXEL_COUNT = 25  # [px]
-    MAX_PIXEL_COUNT = 10000  # [px]
-    MAX_INTENSITY = 50000  # [a.u.]
 
     def __init__(
         self,
@@ -683,6 +683,8 @@ class ParabolicMirrorAlignmentTask:
         self._last_xk = numpy.zeros(3)
         self._iteration_count = 0
         self._stall_count = 0
+        self.pixel_count = model.IntContinuous(value=1, range=(1, 10000), unit="px")
+        self.intensity = model.IntContinuous(value=0, range=(0, 50000), unit="a.u.")
 
     def cancel(self, future):
         """
@@ -699,7 +701,7 @@ class ParabolicMirrorAlignmentTask:
         self._cancelled = True
         return True
 
-    def _get_spot_measurement(self) -> Tuple[int, int]:
+    def _update_spot_measurement(self) -> Tuple[int, int]:
         """
         Measure spot quality from the current camera image using contour detection.
 
@@ -708,21 +710,31 @@ class ParabolicMirrorAlignmentTask:
         2. Uses Otsu thresholding to separate signal from background
         3. Applies morphological operations to clean up the binary mask
         4. Finds the largest contour which represents the spot
-        5. Returns:
-          - spot_pixel_count: area of the largest contour in pixels (int)
-          - spot_intensity: peak pixel value from original image (int)
 
         If no contours are found, falls back to returning the full image size
 
         :raises CancelledError: if the task was cancelled.
-        :returns: (spot_pixel_count, spot_intensity)
-                  - spot_pixel_count: area of the detected spot in pixels.
-                  - spot_intensity: peak pixel value from the original image.
         """
         if self._cancelled:
             raise CancelledError("Alignment was cancelled by user")
 
         image = self._ccd.data.get(asap=False)
+
+        # Set pixel count range based on slit width and sensor properties
+        ccd_md = self._ccd.getMetadata()
+        input_slit_width = ccd_md.get(model.MD_INPUT_SLIT_WIDTH, DEFAULT_SLIT_WIDTH)
+        binning  = ccd_md.get(model.MD_BINNING, DEFAULT_BINNING)
+        sensor_pixel_size = ccd_md.get(model.MD_SENSOR_PIXEL_SIZE, DEFAULT_SENSOR_PIXEL_SIZE)
+        sensor_pixel_size = (sensor_pixel_size[0] * binning[0], sensor_pixel_size[1] * binning[1])
+        slit_width_px = (input_slit_width / sensor_pixel_size[0], input_slit_width / sensor_pixel_size[1])
+        # The spot must at least cover the slit area
+        min_pixel_count = math.ceil(slit_width_px[0]) * math.ceil(slit_width_px[1])
+        # The spot cannot be larger than the minimum image dimension area
+        max_pixel_count = math.prod(image.shape)
+        self.pixel_count.range = (min_pixel_count, max_pixel_count)
+        # Set intensity range based on image data type
+        image_iinfo = numpy.iinfo(image.dtype)
+        self.intensity.range = (image_iinfo.min, image_iinfo.max)
 
         # Slight Gaussian blur to reduce pixel noise
         # Prevents threshold from overreacting
@@ -753,7 +765,7 @@ class ParabolicMirrorAlignmentTask:
 
         if contours:
             main_contour = max(contours, key=cv2.contourArea)
-            spot_pixel_count = int(cv2.contourArea(main_contour))
+            self.pixel_count.value = int(cv2.contourArea(main_contour))
         else:
             logging.debug("No contours found, using fallback pixel count method")
             corner_size = 5  # Use a 5x5 pixel square from each corner
@@ -770,34 +782,32 @@ class ParabolicMirrorAlignmentTask:
                 )
             )
             noise = 1.3 * numpy.median(all_corners)
-            spot_pixel_count = numpy.count_nonzero(image > noise)
+            self.pixel_count.value = numpy.count_nonzero(image > noise)
 
-        spot_intensity = int(image.max())
+        self.intensity.value = int(image.max())
 
-        return spot_pixel_count, spot_intensity
-
-    def _get_score(self, pixel_count: int, intensity: int, weight: float = 0.5):
+    def _get_score(self, weight: float = 0.5):
         """
         Compute a scalar score combining normalized pixel count and intensity.
 
         The score is in [0, 1] where 0 is best. 'weight' controls the relative
         importance of pixel count vs intensity (1.0 -> only pixel count, 0.0 -> only intensity).
 
-        :param pixel_count: Measured spot pixel count (number of pixels above threshold).
-        :param intensity: Measured peak intensity.
         :param weight: Weight given to spot pixel count in [0.0, 1.0] (default 0.5).
         :returns: float
             Normalized score (lower is better).
         """
         # Normalize pixel count
         # Score is 0 for best pixel count, 1 for worst
-        area_range = float(self.MAX_PIXEL_COUNT - self.MIN_PIXEL_COUNT)
-        norm_area = (pixel_count - self.MIN_PIXEL_COUNT) / area_range
+        area_range = float(self.pixel_count.range[1] - self.pixel_count.range[0])
+        norm_area = (self.pixel_count.value - self.pixel_count.range[0]) / area_range
         norm_area = max(0.0, min(1.0, norm_area))  # Clamp to [0, 1]
 
         # Normalize intensity
         # Score is 0 for best intensity, 1 for worst
-        norm_intensity = 1.0 - (intensity / self.MAX_INTENSITY)
+        intensity_range = float(self.intensity.range[1] - self.intensity.range[0])
+        norm_intensity = (self.intensity.value - self.intensity.range[0]) / intensity_range
+        norm_intensity = 1.0 - norm_intensity  # Invert so higher intensity = lower score
         norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
 
         # Calculate weighted score
@@ -844,8 +854,8 @@ class ParabolicMirrorAlignmentTask:
         self._mirror.moveAbs({"l": l, "s": s}).result()
         self._stage.moveAbs({"z": z}).result()
 
-        pixel_count, intensity = self._get_spot_measurement()
-        score = self._get_score(pixel_count, intensity, weight)
+        self._update_spot_measurement()
+        score = self._get_score(weight)
 
         # For closed-loop feedback to the optimizer
         l_actual = self._mirror.position.value["l"]
@@ -858,7 +868,7 @@ class ParabolicMirrorAlignmentTask:
             f"l={l:.8f} → {l_actual:.8f} m, "
             f"s={s:.8f} → {s_actual:.8f} m, "
             f"z={z:.8f} → {z_actual:.8f} m | "
-            f"Score={score:.4f}, Pixels={pixel_count}, Intensity={intensity}"
+            f"Score={score:.4f}, Pixels={self.pixel_count.value}, Intensity={self.intensity.value}"
         )
 
         return score, xk_actual
@@ -878,11 +888,11 @@ class ParabolicMirrorAlignmentTask:
             raise CancelledError(f"1D alignment for {axis} was cancelled by user")
 
         hw_comp.moveAbs({axis: pos}).result()
-        _, intensity = self._get_spot_measurement()
+        self._update_spot_measurement()
 
         # Normalize intensity
         # Score is 0 for best intensity, 1 for worst
-        norm_intensity = 1.0 - (intensity / self.MAX_INTENSITY)
+        norm_intensity = 1.0 - (self.intensity.value / self.intensity.range[1])
         norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
 
         # For closed-loop feedback to the optimizer
