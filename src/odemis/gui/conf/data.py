@@ -904,15 +904,16 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "label": "Beam Preset",
                 "tooltip": "Beam Preset",
             },
-            "scale": {
+            "resolution": {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
-            "resolution": {
+            "scale": {
                 "label": "Resolution",
+                # same as binning (but accepts floats)
                 "control_type": odemis.gui.CONTROL_COMBO,
-                "tooltip": "Number of pixels in the image",
-                "choices": util.resolution_from_range,
-                "accuracy": None,  # never simplify the numbers
+                "tooltip": "Pixel resolution preset",
+                # means will make sure both dimensions are treated as one
+                "choices": util.resolution_from_scale,
             },
             "rotation": {
                 "control_type": odemis.gui.CONTROL_NONE,

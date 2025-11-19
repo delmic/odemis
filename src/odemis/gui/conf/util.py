@@ -91,16 +91,22 @@ def resolution_from_range_plus_point(comp, va, conf):
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
 def resolution_from_scale(comp, va, conf):
-    """Convert from scale to resolution """
-    scale_choices = binning_1d_from_2d(comp, va, conf)
+    """Convert from scale to resolution"""
     # Map to resolution
     resolution = comp.resolution.value
     scale = comp.scale.value
     max_res = resolution[0] * scale[0], resolution[1] * scale[1]
+    # Determine number of bins. We want 256px for the lowest axis
+    # Determine logarithmic power.
+    power = math.log2(min(max_res))
+    n_bins = 1 + power - 8  # make sure the lowest bin is 256 --> 2**8
+    n_bins = int(max(n_bins, 1))  # make sure there is at least one bin
+    scale_choices = binning_1d_from_2d(comp, va, conf, n_bins)
+
     resolution_choices = {scale: f"{round(max_res[0] / scale[0]):d}x{round(max_res[1] / scale[1]):d}" for scale in scale_choices.keys()}
     return resolution_choices
 
-def binning_1d_from_2d(comp, va, conf):
+def binning_1d_from_2d(comp, va, conf, n_bins=5):
     """ Find simple binnings/scale available in one dimension
 
     We assume pixels are always square. The binning provided by a camera is normally a 2-tuple of
@@ -132,15 +138,15 @@ def binning_1d_from_2d(comp, va, conf):
                 minbin = max(conf_rng[0], minbin)
                 maxbin = min(conf_rng[1], maxbin)
 
-            # add up to 5 binnings
+            # add up to n_bins
             b = int(math.ceil(minbin))  # in most cases, that's 1
-            for _ in range(6):
+            for _ in range(n_bins + 1):
                 # does it still make sense to add such a small binning?
                 if b > cur_val[0]:
                     nbpx = nbpx_full / (b ** 2)
                     if nbpx < MIN_RES: # too small resolution
                         break
-                    if len(choices) >= 5: # too many choices
+                    if len(choices) >= n_bins: # too many choices
                         break
 
                 if b > maxbin:

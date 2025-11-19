@@ -643,7 +643,7 @@ class Scanner(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
         self._device_handler = DeviceHandler(self.parent._device, device_type)
 
-        self._shape = (4096, 4096)
+        self._shape = (8192, 8192)
 
         # This is the field of view when in Tescan Software magnification = 100
         # and working distance = 0,27 m (maximum WD of Mira TC). When working
@@ -686,7 +686,7 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
-        resolution = (self._shape[0] // 8, self._shape[1] // 8)
+        resolution = (self._shape[0] // 16, self._shape[1] // 16)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape], setter=self._setResolution)
         self._resolution = resolution
 
