@@ -888,7 +888,17 @@ class Scanner(model.Emitter):
         if preset:
             self._device_handler.ScStopScan()
             with self.parent._acq_progress_lock:
+                # Store scan rotation, dwell time and fov so we can revert it after.
+                scan_rotation = self._device_handler.GetImageRot()
+                dwell_time = self._device_handler.ScGetSpeed()
+
+                # Set the preset
                 self._device_handler.PresetSetEx(preset)
+
+                # Somehow SharkSEM API resets the scan parameters after changing the preset.
+                # This is undesired for our use case, so restore it.
+                self._device_handler.SetImageRot(scan_rotation)
+                self._device_handler.ScSetSpeed(dwell_time)
         return preset
 
     def _setDwellTime(self, dwell_time: float):
