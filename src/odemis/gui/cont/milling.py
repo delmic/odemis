@@ -174,17 +174,21 @@ class MillingTaskController:
         self._panel.milling_task_chk_list.SetItems(self.selected_tasks.value)
         for i in range(self._panel.milling_task_chk_list.GetCount()):
             self._panel.milling_task_chk_list.Check(i)
-        self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_selected_tasks)
+        self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_selected_tasks)  ###
         self.selected_tasks.subscribe(self.draw_milling_tasks, init=True)
         # self.selected_tasks.subscribe(self._update_mill_btn, init=True)
 
-        # create the panels for the milling tasks
-        self._create_panels()
+        # update the panels for the milling tasks
+        self._update_panels()
 
         # By default, all widgets are hidden => show button + estimated time at initialization
-        self._panel.txt_milling_est_time.Show()
-        self._panel.btn_run_milling.Show()
+        self._panel.txt_milling_est_time.Hide()
+        self._panel.btn_run_milling.Hide()
         self._panel.Layout()
+
+        self._panel.txt_automated_milling_est_time.Hide()
+        self._panel.gauge_automated_milling.Hide()
+        self._panel.btn_automated_milling_cancel.Hide()
 
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
 
@@ -203,10 +207,9 @@ class MillingTaskController:
         # hide the milling button because we are using it for a workflow
         # self._panel.btn_run_milling.Hide()
 
-##########
 
     @call_in_wx_main
-    def _create_panels(self):
+    def _update_panels(self):
         if hasattr(self._panel.pnl_patterns, "_panel_sizer"):
             # self._panel.pnl_patterns._panel_sizer.Clear()
             # self._panel.pnl_patterns.Destroy()
@@ -229,11 +232,11 @@ class MillingTaskController:
             milling = task.milling
 
             # add the panel to the sizer
-            panel = MillingTaskPanel(self._panel, task=task)
+            panel = MillingTaskPanel(self._panel.pnl_patterns, task=task)
             self._panel.pnl_patterns._panel_sizer.Add(
                 panel, border=10,
                 flag=wx.EXPAND,
-                proportion=1
+                proportion=0
             )
 
             self.controls[task_name] = {}
@@ -313,6 +316,11 @@ class MillingTaskController:
 
     @call_in_wx_main
     def set_milling_tasks(self, milling_tasks: Dict[str, MillingTaskSettings]):
+        # Check if tasks actually changed to avoid the panel to flicker
+        if self.milling_tasks == milling_tasks:
+            logging.debug("Milling tasks unchanged, skipping update")
+            return
+
         self.milling_tasks = copy.deepcopy(milling_tasks)
 
         # unsubscribe from updates to the selected tasks
@@ -330,8 +338,15 @@ class MillingTaskController:
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_selected_tasks)
         self.selected_tasks.subscribe(self._on_saving_position, init=True)
 
-        self._create_panels()
+        self._update_panels()
         self._panel.Layout()
+
+        # force the scrolled parent to recompute its layout, otherwise pnl_patterns
+        # keeps the previous virtual size until the user triggers a resize
+        scrolled_parent = getattr(self._panel, "scr_win_right", None)
+        if scrolled_parent:
+            scrolled_parent.FitInside()
+            scrolled_parent.SendSizeEvent()
     # NOTE: we should add the bottom right viewport as the feature viewport, to show the saved reference image and the milling patterns
     # it's too confusing to hav the 'live' view and the 'saved' view in the same viewport
     # -> workflow tab is probably easier to use for this purpose
@@ -418,9 +433,17 @@ class MillingTaskController:
         # how to rotate the shapes?
 
     def _update_selected_tasks(self, evt: wx.Event):
-
         checked_indices = self._panel.milling_task_chk_list.GetCheckedItems()
         self.selected_tasks.value = [self._panel.milling_task_chk_list.GetString(i) for i in checked_indices]
+
+        # Update the 'Pattern' panel
+        for task_name, controls in self.controls.items():
+            panel = controls["panel"]
+            should_show = task_name in self.selected_tasks.value
+            panel.Show(should_show)
+
+        self._panel.pnl_patterns.Layout()
+        self._panel.Layout()
 
     @call_in_wx_main
     def _run_milling(self, evt: wx.Event):
@@ -495,6 +518,7 @@ class MillingTaskController:
             units.readable_time(20 * len(self.selected_tasks.value), full=False)
         ) #TODO: accurate time estimate
         self._panel.txt_milling_est_time.SetLabel(txt)
+        self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
     def _on_patterns(self, dat):
         """
@@ -533,10 +557,12 @@ class MillingTaskController:
         if not has_tasks:
             txt = "No Tasks Selected..."
             self._panel.txt_milling_est_time.SetLabel(txt)
+            self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
         if not valid_patterns:
             txt = "Patterns drawn outside image..."
             self._panel.txt_milling_est_time.SetLabel(txt)
+            self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
         if has_tasks and valid_patterns:
             self._update_milling_time()
@@ -616,14 +642,6 @@ class AutomatedMillingController:
 
     def _run_automated_milling(self, evt: wx.Event):
 
-        # hide/show/disable some widgets
-        self._panel.txt_automated_milling_est_time.Hide()
-        self._panel.txt_automated_milling_left_time.Show()
-        self._panel.gauge_automated_milling.Show()
-        self._panel.btn_automated_milling_cancel.Show()
-        self._tab_data.main.is_acquiring.value = True
-        self._tab_data.main.is_milling.value = True
-
         # filter the features list, so only the checked ones are used
         features = self._tab_data.main.features.value
         features = [f for i, f in enumerate(features) if self._panel.workflow_features_chk_list.IsChecked(i)]
@@ -640,6 +658,7 @@ class AutomatedMillingController:
         task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")
 
+        # TODO: add estimated time to the dialog, gui
         # dialog to confirm the milling
         task_names = ", ".join([t.name for t in task_list])
         ftxt = f"{len(features)} features?" if len(features) > 1 else f"{features[0].name.value}?"
@@ -650,11 +669,17 @@ class AutomatedMillingController:
             wx.YES_NO | wx.ICON_QUESTION,
         )
 
-        # TODO: add estimated time to the dialog, gui
-
         if dlg.ShowModal() == wx.ID_NO:
             self._on_automation_done(None)
             return
+
+        # hide/show/disable some widgets
+        self._panel.txt_automated_milling_est_time.Hide()
+        self._panel.txt_automated_milling_left_time.Show()
+        self._panel.gauge_automated_milling.Show()
+        self._panel.btn_automated_milling_cancel.Show()
+        self._tab_data.main.is_acquiring.value = True
+        self._tab_data.main.is_milling.value = True
 
         self.automation_future: model.ProgressiveFuture = run_automated_milling(
                                     features=features,
@@ -695,6 +720,7 @@ class AutomatedMillingController:
         Called when the acquisition process is
         done, failed or canceled
         """
+
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
         self._tab_data.main.is_milling.value = False
@@ -703,6 +729,8 @@ class AutomatedMillingController:
         self._panel.btn_automated_milling_cancel.Hide()
         self._panel.txt_automated_milling_left_time.Hide()
 
+        if not future:
+            return
         # Update the milling status text
         try:
             future.result()
