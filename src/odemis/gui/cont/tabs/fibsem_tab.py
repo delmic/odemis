@@ -418,8 +418,6 @@ class FibsemTab(Tab):
         self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
                                                  f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
 
-        self._on_stage_pos(self.pm.stage.position.value)
-
         # if the tab isn't shown, we don't want to ask the user
         if evt is None: # if the event is None, it means this is the initial update, dont ask the user
             return
