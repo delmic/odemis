@@ -96,12 +96,17 @@ def resolution_from_scale(comp, va, conf):
     resolution = comp.resolution.value
     scale = comp.scale.value
     max_res = resolution[0] * scale[0], resolution[1] * scale[1]
-    # Determine number of bins. We want 256px for the lowest axis
-    # Determine logarithmic power.
-    power = math.log2(min(max_res))
-    n_bins = 1 + power - 8  # make sure the lowest bin is 256 --> 2**8
-    n_bins = int(max(n_bins, 1))  # make sure there is at least one bin
-    scale_choices = binning_1d_from_2d(comp, va, conf, n_bins)
+
+    if hasattr(va, "choices"):
+        scale_choices = binning_1d_from_2d(comp, va, conf)
+    # If no choices are provided, resolution steps are determined in bins
+    else:
+        # Determine number of bins. We want 256px for the lowest axis
+        # Determine logarithmic power.
+        power = math.log2(min(max_res))
+        n_bins = 1 + power - 8  # make sure the lowest bin is 256 --> 2**8
+        n_bins = int(max(n_bins, 1))  # make sure there is at least one bin
+        scale_choices = binning_1d_from_2d(comp, va, conf, n_bins)
 
     resolution_choices = {scale: f"{round(max_res[0] / scale[0]):d}x{round(max_res[1] / scale[1]):d}" for scale in scale_choices.keys()}
     return resolution_choices
