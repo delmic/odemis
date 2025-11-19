@@ -55,6 +55,7 @@ class EMStream(ABC):
     pass
 
 EMStream.register(SEMStream)
+EMStream.register(StaticFIBStream)
 EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
 EMStream.register(EBICSettingsStream)
