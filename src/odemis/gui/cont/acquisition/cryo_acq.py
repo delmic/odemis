@@ -121,9 +121,7 @@ class CryoAcquiController(object):
             self._panel.txt_acquire_features_est_time.Show()
             self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
         # for "change..." button
-        self._panel.btn_cryosecom_change_file.Bind(
-            wx.EVT_BUTTON, self._on_btn_change
-        )
+        self._panel.btn_cryosecom_change_file.Bind(wx.EVT_BUTTON, self._on_btn_change)
         # for "acquire overview" button
         self._panel.btn_acquire_overview.Bind(wx.EVT_BUTTON, self._on_acquire_overview)
         # for "cancel" button
@@ -143,6 +141,7 @@ class CryoAcquiController(object):
         # to check/uncheck items (?)
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
         self._tab_data.main.features.subscribe(self._on_features_change, init=True)
+        self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
 
         if self.acqui_mode is guimod.AcquiMode.FLM:
             # for the z parameters widgets
@@ -178,8 +177,15 @@ class CryoAcquiController(object):
                 events=wx.EVT_COMMAND_ENTER,
             )
 
-        # fibsem specific acquisition settings
-        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            # "Advanced" features toggle
+            self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
+            self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
+            self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
+
+        elif self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            # fibsem specific acquisition settings
             self._panel.btn_tdct.Show(LICENCE_CORRELATION_ENABLED)
             self._panel.btn_tdct.Enable(False)
             self._panel.btn_tdct.Bind(wx.EVT_BUTTON, self._on_tdct)
@@ -187,15 +193,6 @@ class CryoAcquiController(object):
             self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
             self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
             self._panel.streams_chk_list.Hide()
-            self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
-
-        # advanced features toggle
-        if self.acqui_mode is guimod.AcquiMode.FLM:
-            self._panel.fp_automation.Show(ODEMIS_ADVANCED_FLAG)
-            self._panel.btn_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
-            self._panel.chk_use_autofocus_acquire_features.Show(ODEMIS_ADVANCED_FLAG)
-            self._panel.acquire_features_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_checked_features)
-            self._panel.acquire_features_chk_list.Bind(wx.EVT_LISTBOX, self._update_selected_feature)
 
         # refresh the GUI
         self._panel.Layout()
@@ -884,6 +881,7 @@ class CryoAcquiController(object):
         """
         self._update_acquisition_time()
 
+    @call_in_wx_main
     def _on_features_change(self, features):
         """ Called when the features are changed.
         To enable/disable the acquire features button.
