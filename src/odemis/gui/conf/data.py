@@ -883,9 +883,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 # means will make sure both dimensions are treated as one
                 "choices": util.resolution_from_scale,
             },
-            "resolution": {
-                "control_type": odemis.gui.CONTROL_NONE,
-            },
             "probeCurrent": {
                 "label": "Beam Current",
                 "control_type": odemis.gui.CONTROL_SLIDER,
@@ -893,6 +890,15 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "scale": "linear",
                 "event": wx.EVT_SCROLL_CHANGED
             },
+            "resolution": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "medianFilter": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "stigmator": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }
         },
         "se-detector": {
             "bpp": {
@@ -904,9 +910,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "label": "Beam Preset",
                 "tooltip": "Beam Preset",
             },
-            "resolution": {
-                "control_type": odemis.gui.CONTROL_NONE,
-            },
             "scale": {
                 "label": "Resolution",
                 # same as binning (but accepts floats)
@@ -914,6 +917,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "tooltip": "Pixel resolution preset",
                 # means will make sure both dimensions are treated as one
                 "choices": util.resolution_from_scale,
+            },
+            "resolution": {
+                "control_type": odemis.gui.CONTROL_NONE,
             },
             "rotation": {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -930,6 +936,12 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "blanker": {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
+            "medianFilter": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "stigmator": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }
         },
         "se-detector-ion": {
             "bpp": {
