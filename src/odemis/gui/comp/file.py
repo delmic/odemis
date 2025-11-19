@@ -57,7 +57,7 @@ class FileBrowser(wx.Panel):
                  name='fileBrowser',
                  file_path=None,
                  default_dir=None,
-                 btn_label="change..."
+                 btn_label="Change..."
         ):
         """
         clear_btn (bool): Whether to show a button to clear/remove the file selection.

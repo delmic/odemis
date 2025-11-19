@@ -1626,7 +1626,7 @@ def __init_resources():
                           <object class="sizeritem">
                             <object class="ImageTextButton" name="btn_change_file">
                               <height>16</height>
-                              <label>change…</label>
+                              <label>Change…</label>
                               <fg>#1A1A1A</fg>
                               <font>
                                 <size>9</size>
@@ -2803,7 +2803,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <object class="ImageTextButton" name="btn_cancel">
                             <height>24</height>
                             <face_colour>def</face_colour>
-                            <label>cancel</label>
+                            <label>Cancel</label>
                             <enabled>0</enabled>
                             <XRCED>
                               <assign_var>1</assign_var>
@@ -4762,7 +4762,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxALL|wxEXPAND</flag>
+							<flag>wxBOTTOM|wxEXPAND</flag>
 							<border>5</border>
 						</object>
 						<object class="sizeritem">
@@ -4779,7 +4779,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 											</font>
 										</object>
 										<flag>wxBOTTOM|wxALL</flag>
-										<border>5</border>
+										<border>10</border>
 									</object>
 									<object class="sizeritem">
 										<object class="wxGridBagSizer">
@@ -5142,7 +5142,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												</object>
 												<option>1</option>
 												<flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-												<border>7</border>
+												<border>10</border>
 											</object>
 											<object class="sizeritem">
 												<object class="ImageTextButton" name="btn_cancel">
@@ -10221,7 +10221,7 @@ B`\x82'''
                                       <object class="ImageTextButton" name="btn_cryosecom_change_file">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>change…</label>
+                                        <label>Change…</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
@@ -10330,12 +10330,12 @@ B`\x82'''
                                       <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>cancel</label>
+                                        <label>Cancel</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
                                       </object>
-                                      <flag>wxTOP</flag>
+                                      <flag>wxTOP|wxLEFT</flag>
                                       <border>12</border>
                                       <option>0</option>
                                     </object>
@@ -10691,7 +10691,7 @@ B`\x82'''
                                   <hidden>1</hidden>
                                   <height>24</height>
                                   <face_colour>def</face_colour>
-                                  <label>cancel</label>
+                                  <label>Cancel</label>
                                   <XRCED>
                                     <assign_var>1</assign_var>
                                   </XRCED>
@@ -11827,7 +11827,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_go_to_feature">
                                     <height>24</height>
-                                    <label>Go to feature</label>
+                                    <label>Go to Feature</label>
                                     <style>wxALIGN_CENTRE</style>
                                     <fg>#FFFFFF</fg>
                                     <bg>#333333</bg>
@@ -12201,7 +12201,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                       <object class="ImageTextButton" name="btn_cryosecom_change_file">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>change…</label>
+                                        <label>Change…</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
@@ -12298,7 +12298,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                       <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>cancel</label>
+                                        <label>Cancel</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
@@ -12519,7 +12519,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <hidden>1</hidden>
                               <height>24</height>
                               <face_colour>def</face_colour>
-                              <label>cancel</label>
+                              <label>Cancel</label>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
@@ -17981,7 +17981,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                                   <object class="ImageTextButton" name="btn_sparc_change_file">
                                     <height>24</height>
                                     <face_colour>def</face_colour>
-                                    <label>change…</label>
+                                    <label>Change…</label>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
