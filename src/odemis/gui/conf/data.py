@@ -265,7 +265,9 @@ HW_SETTINGS_CONFIG = {
             }),
             ("probeCurrent", {
                 "label": "Beam current",
-                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+                "event": wx.EVT_SCROLL_CHANGED,  # only affects when it's a slider
+                "scale": "log",
+                "accuracy": 3,
             }),
             ("resolution", {
                 "label": "Resolution",
@@ -273,6 +275,12 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Number of pixels in the image",
                 "choices": None,
                 "accuracy": None,  # never simplify the numbers
+            }),
+            ("horizontalFoV", {
+                "label": "HFW",
+                "tooltip": "Horizontal Field Width",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.hfw_choices,
             }),
             ("dwellTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
@@ -283,17 +291,10 @@ HW_SETTINGS_CONFIG = {
                 "accuracy": 3,
                 "event": wx.EVT_SCROLL_CHANGED
             }),
-            ("horizontalFoV", {
-                "label": "HFW",
-                "tooltip": "Horizontal Field Width",
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.hfw_choices,
-            }),
             ("scale", {
                 # same as binning (but accepts floats)
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-
         )),
     "ebeam-blanker":
         OrderedDict((
@@ -643,7 +644,7 @@ HW_SETTINGS_CONFIG = {
             }),
         )),
     "se-detector":
-        # Keep the same `contrast` and `brigtness` slider order as in the TFS UI
+        # Keep the same `contrast` and `brightness` slider order as in the TFS UI
         OrderedDict((
             ("contrast", {
                 "label": "Contrast",
@@ -673,15 +674,15 @@ HW_SETTINGS_CONFIG = {
         )),
     "se-detector-ion":
         OrderedDict((
-            ("brightness", {
-                "label": "Brightness",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "tooltip": "Brightness of the ion detector",
-            }),
             ("contrast", {
                 "label": "Contrast",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "tooltip": "Contrast of the ion detector",
+            }),
+            ("brightness", {
+                "label": "Brightness",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Brightness of the ion detector",
             }),
             ("mode", {
                 "label": "Detector Mode",
@@ -884,10 +885,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "tooltip": "Pixel resolution preset",
                 # means will make sure both dimensions are treated as one
                 "choices": util.resolution_from_scale,
-            },
-            "probeCurrent": {
-                "label": "Beam Current",
-                "event": wx.EVT_SCROLL_CHANGED,  # only affects when it's a slider
             },
             "resolution": {
                 "control_type": odemis.gui.CONTROL_NONE,

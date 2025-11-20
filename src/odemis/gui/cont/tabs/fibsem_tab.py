@@ -131,9 +131,6 @@ class FibsemTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-        # hwemt_vanames = ("beamPreset", "probeCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
-        # hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
-
         self.sem_stream = SEMStream(
             name="SEM",
             detector=main_data.sed,
@@ -144,13 +141,18 @@ class FibsemTab(Tab):
             hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
             blanker=None)
 
+        hwemtvas = get_local_vas(main_data.ion_beam, main_data.hw_settings_config)
+        # Explicitly add accelVoltage in order to show it too with Tescan SEM, although it's read-only
+        if model.hasVA(main_data.ion_beam, "accelVoltage"):
+            hwemtvas.add("accelVoltage")
+
         self.fib_stream = FIBStream(
             name="FIB",
             detector=main_data.ion_sed,
             dataflow=main_data.ion_sed.data,
             emitter=main_data.ion_beam,
             focuser=main_data.ion_focus,
-            hwemtvas=get_local_vas(main_data.ion_beam, main_data.hw_settings_config) | {"accelVoltage"},
+            hwemtvas=hwemtvas,
             hwdetvas=get_local_vas(main_data.ion_sed, main_data.hw_settings_config),
             )
 
