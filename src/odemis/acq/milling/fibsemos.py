@@ -302,6 +302,27 @@ class FibsemOSMillingTaskManager:
         :param stage: the milling stage to run"""
         ref_img = from_odemis_image(self.feature.reference_image)
         ref_img.metadata.image_settings.path = self.path
+        ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
+
+        # crop ref_img.data (DataArray) to the reduced area
+        rect = stage.alignment.rect
+        h, w = ref_img.data.shape[-2], ref_img.data.shape[-1]
+
+        # fractional -> pixel indices
+        x0 = int(rect.left * w)
+        y0 = int(rect.top * h)
+        x1 = int((rect.left + rect.width) * w)
+        y1 = int((rect.top + rect.height) * h)
+
+        # clamp to valid range just in case of rounding
+        x0 = max(0, min(w, x0))
+        x1 = max(0, min(w, x1))
+        y0 = max(0, min(h, y0))
+        y1 = max(0, min(h, y1))
+
+        # crop along the last two axes; DataArray slicing behaves like numpy
+        ref_img.data = ref_img.data[..., y0:y1, x0:x1]
+
         mill_stages(self.microscope, [stage], ref_img)
 
     def run(self):
