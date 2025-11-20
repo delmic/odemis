@@ -369,12 +369,12 @@ class FibsemTab(Tab):
         # update stage pos label
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
-        posture = self.pm.current_posture.value
+        posture = self.pm.getCurrentPostureLabel(pos)  # Cannot use current_posture as it may be not yet updated
         pos_name = POSITION_NAMES[posture]
 
         # TODO: move this to legend.py
-        r = units.readable_str(units.round_significant(rz, 3))
-        t = units.readable_str(units.round_significant(rx, 3))
+        r = units.readable_str(rz, sig=3)
+        t = units.readable_str(rx, sig=3)
         txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
 
         # update the stage position label
@@ -388,20 +388,21 @@ class FibsemTab(Tab):
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
                 ltab.view_controller.viewports[3].bottom_legend.set_stage_pos_label(txt)
         except Exception as e:
-            pass
+            logging.warning("Failed to update stage position label: %s",e)
 
         # update the stage position buttons
-        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
-        self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
-
         self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
         self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
         self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
 
         if posture == SEM_IMAGING:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
+        else:
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
         if posture == MILLING:
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+        else:
+            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
 
         self.panel.Layout()
 
@@ -443,13 +444,9 @@ class FibsemTab(Tab):
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
-        self._on_stage_pos(self.pm.stage.position.value)
-
     def _move_to_sem(self, evt: wx.Event):
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-
-        self._on_stage_pos(self.pm.stage.position.value)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
