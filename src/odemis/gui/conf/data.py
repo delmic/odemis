@@ -277,6 +277,8 @@ HW_SETTINGS_CONFIG = {
             ("dwellTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "tooltip": "Pixel integration time",
+                "range": (1e-9, 1),
+                "scale": "log",
                 "type": "float",
                 "accuracy": 3,
                 "event": wx.EVT_SCROLL_CHANGED
@@ -885,10 +887,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
             "probeCurrent": {
                 "label": "Beam Current",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "type": "float",
-                "scale": "linear",
-                "event": wx.EVT_SCROLL_CHANGED
+                "event": wx.EVT_SCROLL_CHANGED,  # only affects when it's a slider
             },
             "resolution": {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -896,9 +895,12 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "medianFilter": {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
+            "shift": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
             "stigmator": {
                 "control_type": odemis.gui.CONTROL_NONE,
-            }
+            },
         },
         "se-detector": {
             "bpp": {
@@ -939,9 +941,12 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "medianFilter": {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
+            "shift": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
             "stigmator": {
                 "control_type": odemis.gui.CONTROL_NONE,
-            }
+            },
         },
         "se-detector-ion": {
             "bpp": {
