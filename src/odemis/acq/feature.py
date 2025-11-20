@@ -318,8 +318,7 @@ class FeaturesDecoder(json.JSONDecoder):
             milling_task_json = obj.get('milling_tasks', {})
             feature = CryoFeature(name=obj['name'],
                                   stage_position=stage_position,
-                                  fm_focus_position=fm_focus_position
-                                  )
+                                  fm_focus_position=fm_focus_position)
             feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
             feature.status.value = obj['status']
             feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
@@ -355,7 +354,7 @@ def read_features(project_dir: str) -> List[CryoFeature]:
     """
     Deserialize and return the features list from the json file
     :param project_dir: directory to read the file from (typically project directory)
-    :return: list of deserialized featuers
+    :return: list of deserialized features
     """
     filename = os.path.join(project_dir, "features.json")
     if not os.path.exists(filename):

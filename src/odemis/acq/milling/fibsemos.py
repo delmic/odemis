@@ -19,11 +19,16 @@ from odemis.acq.milling.tasks import (
     MillingSettings,
     MillingTaskSettings,
 )
+from odemis.acq.feature import CryoFeature, REFERENCE_IMAGE_FILENAME
 from odemis.util import executeAsyncTask
 
 # Check if fibsemOS is available
 try:
-    from fibsem.microscopes.odemis_microscope import OdemisThermoMicroscope, OdemisTescanMicroscope
+    from fibsem.microscopes.odemis_microscope import (
+        OdemisThermoMicroscope,
+        OdemisTescanMicroscope,
+        from_odemis_image
+    )
     from fibsem.milling import (
         FibsemMillingStage,
         MillingAlignment,
@@ -36,7 +41,15 @@ try:
         RectanglePattern,
         TrenchPattern,
     )
-    from fibsem.structures import FibsemMillingSettings, Point
+    from fibsem.structures import (
+        FibsemMillingSettings,
+        Point,
+        FibsemImage,
+        FibsemImageMetadata,
+        BeamType,
+        ImageSettings,
+        MicroscopeState,
+    )
     from fibsem.utils import load_microscope_configuration
     FIBSEMOS_INSTALLED = True
 except ImportError as e:
@@ -232,11 +245,13 @@ class FibsemOSMillingTaskManager:
 
     def __init__(self, future: futures.Future,
                  tasks: List[MillingTaskSettings],
+                 feature: CryoFeature,
                  path: Optional[str] = None,
                  config_path: Path = None):
         """
         :param future: the future that will be executing the task
         :param tasks: The milling tasks to run (in order)
+        :param feature: Cryo feature for milling
         :param path: The path to save the images (optional)
         :param config_path: The path to the fibsemOS microscope configuration file
         """
@@ -245,10 +260,13 @@ class FibsemOSMillingTaskManager:
         self.microscope = create_fibsemos_microscope(config_path)
         if path is None:
             path = os.getcwd()
+        self.path = path
         self.microscope._last_imaging_settings.path = path # note: image acquisition post-milling is not yet supported via odemis
 
         # convert the tasks to milling stages
         self.milling_stages = convert_milling_tasks_to_milling_stages(tasks)
+
+        self.feature = feature
 
         self._future = future
         if future is not None:
@@ -282,7 +300,9 @@ class FibsemOSMillingTaskManager:
     def run_milling(self, stage: 'FibsemMillingStage') -> None:
         """Run the milling task via fibsemOS
         :param stage: the milling stage to run"""
-        mill_stages(self.microscope, [stage])
+        ref_img = from_odemis_image(self.feature.reference_image)
+        ref_img.metadata.image_settings.path = self.path
+        mill_stages(self.microscope, [stage], ref_img)
 
     def run(self):
         """
@@ -310,11 +330,13 @@ class FibsemOSMillingTaskManager:
 
 
 def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
+                               feature: CryoFeature,
                                path: Optional[str] = None,
                                config_path: Path = None) -> futures.Future:
     """
     Run multiple milling tasks in order via fibsemOS.
-    :param tasks: List of milling tasks to be executed in order.
+    :param tasks: List of milling tasks to be executed in order
+    :param feature: Cryo feature for milling
     :param path: The path to save the images
     :param config_path: The path to the fibsemOS microscope configuration file
     :return: ProgressiveFuture
@@ -322,7 +344,7 @@ def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
     # create milling task
-    millmng = FibsemOSMillingTaskManager(future, tasks, path, config_path)
+    millmng = FibsemOSMillingTaskManager(future, tasks, feature, path, config_path)
     # add the ability of cancelling the future during execution
     future.task_canceller = millmng.cancel
 
