@@ -122,17 +122,45 @@ class DeviceHandler:
     appropriate method on the device.
     """
     def __init__(
-        self,
-        device: sem.Sem,
-        device_type: Literal[DeviceType.ELECTRON, DeviceType.ION] = DeviceType.ELECTRON
+        self, host: str, port: int, socket_timeout: float,
+        device_type: Literal[DeviceType.ELECTRON, DeviceType.ION, None] = None
     ):
         """
-        Initializes the DeviceHandler with a TESCAN SEM controller.
+        Initializes the connection to a TESCAN server, sets socket options, and establishes
+        communication with the specified device.
 
-        :param device: the TESCAN SEM controller
+        :param host: The IP address of the TESCAN server to connect to.
+        :param port:The port on the TESCAN server to connect to.
+        :param socket_timeout: The timeout duration for the socket connection, in seconds.
+        :param device_type: The type of device to connect to. Defaults to None.
+
+        Raises:
+        HwError
+            If the connection to the TESCAN server fails, this is raised with an appropriate
+            error message.
         """
-        self.device = device
+        logging.info("Attempting to connect sockets")
+        self.device = sem.Sem()
         self.device_type = device_type
+        # Attempts to connect all sockets, but does nothing if already running
+        connection_status = self.device.connection.Connect(host, port, socket_timeout)
+        if connection_status < 0:
+            raise HwError("Failed to connect to TESCAN server '%s'. "
+                          "Check that the ip address is correct and TESCAN server "
+                          "connected to the network." % (host,))
+
+        logging.info("Connected to sockets")
+
+        # Disable Nagle's algorithm (batching data messages) and send them asap instead.
+        # This is to avoid the 200ms ceiling on data transmission.
+        self.device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.device.connection.socket_c.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        self.device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        self.device._sharksem_lock = threading.Lock()
+        self._call_lock = self.device._sharksem_lock
 
     def __getattr__(self, name: str) -> Callable[[Literal[DeviceType.ELECTRON, DeviceType.ION], Any], Any]:
         """
@@ -142,7 +170,10 @@ class DeviceHandler:
         """
         def call_and_log_func(func, args, kwargs):
             logging.debug(f"SharkSEM: Calling {func.__name__} with args: {args} and kwargs: {kwargs}")
-            return func(*args, **kwargs)
+            # Use the shared device lock to synchronize access to the SharkSEM API.
+            with self._call_lock:
+                ret = func(*args, **kwargs)
+            return ret
 
         def method(*args, **kwargs):
             """
@@ -158,14 +189,14 @@ class DeviceHandler:
                 method does not exist in the SharkSEM API.
             :raises ValueError: If an unknown device type is provided.
             """
-            if self.device_type == DeviceType.ELECTRON:
+            if self.device_type in [DeviceType.ELECTRON, None]:
                 # Try to get SEM method from device. Raises AttributeError if not existing.
                 func = getattr(self.device, name)
 
             elif self.device_type == DeviceType.ION:
-                fib_name = FIB_NAME_MAP.get(name)
+                fib_name = FIB_NAME_MAP.get(name, name)
                 if not fib_name:
-                    raise AttributeError(f"No FIB equivalent for '{name}'")
+                    logging.warning(f"No known FIB equivalent for '{name}'")
                 try:
                     func = getattr(self.device, fib_name)
                 except AttributeError:
@@ -176,26 +207,12 @@ class DeviceHandler:
             return call_and_log_func(func, args, kwargs)
         return method
 
-
-def connect_device(host: str, port: int, socket_timeout: float) -> sem.Sem:
-    logging.info("Attempting to connect sockets")
-    device = sem.Sem()
-    # Attempts to connect all sockets, but does nothing if already running
-    connection_status = device.connection.Connect(host, port, socket_timeout)
-    if connection_status < 0:
-        raise HwError("Failed to connect to TESCAN server '%s'. "
-            "Check that the ip address is correct and TESCAN server "
-            "connected to the network." % (host,))
-
-    # Disable Nagle's algorithm (batching data messages) and send them asap instead.
-    # This is to avoid the 200ms ceiling on data transmission.
-    device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    logging.info("Connected to sockets")
-    return device
+    def __del__(self):
+        try:
+            self.Disconnect()
+        except Exception:
+            # Destructors should fail silently
+            logging.debug("Could not disconnect from TESCAN server")
 
 
 class SEM(model.HwComponent):
@@ -219,7 +236,7 @@ class SEM(model.HwComponent):
         self._host = host
         self._port = port
         self._socket_timeout = 2  # Seconds. This value is a balance for responsiveness vs how much frames you lose
-        self._device = connect_device(self._host, self._port, self._socket_timeout)
+        self._device_handler = DeviceHandler(self._host, self._port, self._socket_timeout)
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
@@ -232,21 +249,11 @@ class SEM(model.HwComponent):
         self._scaled_shape = None
         self._roi = None
         self._dt = None
-
-        # If no detectors, no need to annoy the user by stopping the current scanning
-        # detector0, detector1, etc.
-        if any(n.startswith("detector") for n in children.keys()):
-            # important: stop the scanning before we start scanning or before
-            # automatic procedures, even before we configure the detectors
-            DeviceHandler(self._device, DeviceType.ELECTRON).ScStopScan()
-        # fib-detector
-        elif any(n.endswith("detector") for n in children.keys()):
-            DeviceHandler(self._device, DeviceType.ION).ScStopScan()
-
-        self._hwName = "TescanSEM (s/n: %s)" % (self._device.TcpGetDevice())
+        self._hwName = "TescanSEM (s/n: %s)" % (self._device_handler.TcpGetDevice())
         self._metadata[model.MD_HW_NAME] = self._hwName
-        self._swVersion = "SEM sw %s, protocol %s" % (self._device.TcpGetSWVersion(),
-                                                      self._device.TcpGetVersion())
+        self._swVersion = "SEM sw %s, protocol %s" % (self._device_handler.TcpGetSWVersion(),
+                                                      self._device_handler.TcpGetVersion())
+
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
         scanner_types = ["scanner", "fib-scanner"]  # All allowed scanners types
@@ -542,10 +549,6 @@ class SEM(model.HwComponent):
             dt = scanner.dwellTime.value * 1e9
             logging.debug(f"Acquiring {detector.name} image of {res} with dwell time {dt} ns")
 
-            # make sure socket settings are always set
-            self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
         with self._acq_progress_lock:
             try:
                 bpp = detector.bpp.value
@@ -579,7 +582,7 @@ class SEM(model.HwComponent):
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterwards.
         """
-        if not self._device:
+        if not self._device_handler:
             return
 
         # stop the acquisition thread
@@ -608,9 +611,8 @@ class SEM(model.HwComponent):
         if hasattr(self, "_light"):
             self._light.terminate()
 
-        self._device.Disconnect()
-        self._device = None
-
+        # Dereferenced: will clean itself up
+        self._device_handler = None
         super(SEM, self).terminate()
 
     @roattribute
@@ -650,7 +652,7 @@ class Scanner(model.Emitter):
     ):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
-        self._device_handler = DeviceHandler(self.parent._device, device_type)
+        self._device_handler = DeviceHandler(parent._host, parent._port, parent._socket_timeout, device_type)
 
         self._shape = (8192, 8192)
 
@@ -1127,6 +1129,8 @@ class Scanner(model.Emitter):
     def terminate(self):
         self._va_poll.cancel()
         self._va_poll.join(5)
+        # Dereferenced: will clean itself up
+        self._device_handler = None
 
 
 class Detector(model.Detector):
@@ -1144,6 +1148,9 @@ class Detector(model.Detector):
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._scanner = scanner
         self._device_handler = self._scanner._device_handler
+        # important: stop the scanning before we start scanning or before
+        # automatic procedures, even before we configure the detectors
+        self._device_handler.ScStopScan()
 
         self._channel = channel
         self._detector = self.get_detector_idx(detector)
@@ -1323,13 +1330,13 @@ class Stage(model.Actuator):
     moving the SEM stage with the Tescan Essence software.
     """
     def __init__(self, name, role, parent, **kwargs):
-        self._device = connect_device(parent._host, parent._port, parent._socket_timeout)
+        self._device_handler = DeviceHandler(parent._host, parent._port, parent._socket_timeout)
         self._position = {}
         axes_def = {}
         # limits are always returned as a list with min and max values in the order of x,y,z,r,t
         # the list should always return 10 values and if an axis is not motorized, limits are zero
-        axes_rng = self._device.StgGetLimits(1)  # using the soft limits parameter here
-        axes_motorized = self._device.StgGetMotorized()
+        axes_rng = self._device_handler.StgGetLimits(1)  # using the soft limits parameter here
+        axes_motorized = self._device_handler.StgGetMotorized()
 
         for num, ax in enumerate(["x", "y", "z", "rz", "rx"]):
             # axes ranges are always returned in pairs of 2 values (min, max)
@@ -1356,13 +1363,13 @@ class Stage(model.Actuator):
                 break
 
         # Demand calibrated stage
-        if self._device.StgIsCalibrated() != 1:
+        if self._device_handler.StgIsCalibrated() != 1:
             logging.warning("Stage is not calibrated. Move commands will be ignored until it has been calibrated.")
             # TODO: support doing it from Odemis, via reference()
-            # self._device.StgCalibrate()
+            # self._device_handler.StgCalibrate()
 
         # Wait for stage to be stable after calibration
-        while self._device.StgIsBusy() != 0:
+        while self._device_handler.StgIsBusy() != 0:
             # If the stage is busy (movement is in progress), current position is
             # updated approximately every 500 ms
             time.sleep(0.5)
@@ -1439,7 +1446,7 @@ class Stage(model.Actuator):
         """
         update the position VA
         """
-        x, y, z, rz, rx = self._device.StgGetPosition()
+        x, y, z, rz, rx = self._device_handler.StgGetPosition()
         self._position["x"] = -x * 1e-3
         self._position["y"] = -y * 1e-3
         self._position["z"] = -z * 1e-3
@@ -1464,7 +1471,7 @@ class Stage(model.Actuator):
         # TODO: support cancelling (= call StgStop) will be addressed in separate PR
         logging.debug("Requesting stage move to %s", pos)
 
-        x, y, z, rz, rx = self.parent._device.StgGetPosition()
+        x, y, z, rz, rx = self._device_handler.StgGetPosition()
         current_pos = {"x": x, "y": y, "z": z, "rz": rz, "rx": rx}
         req_pos = {}
 
@@ -1477,15 +1484,15 @@ class Stage(model.Actuator):
                     tescan_pos = -pos[axis] * 1e3
                     move_distance = abs(tescan_pos - current_pos[axis])
                     if move_distance < MIN_MOVE_SIZE_LIN_MM:  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
-                        tescan_pos = None
                         logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
+                        tescan_pos = None
                 # convert from radians to degrees for the rotational axes
                 elif axis in {"rz", "rx"}:
                     tescan_pos = math.degrees(pos[axis])
                     move_distance = abs(tescan_pos - current_pos[axis])
                     if move_distance < MIN_MOVE_SIZE_ROT_DEG:
-                        tescan_pos = None
                         logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
+                        tescan_pos = None
             else:
                 tescan_pos = None
             req_pos[axis] = tescan_pos
@@ -1494,18 +1501,18 @@ class Stage(model.Actuator):
 
         # always issue a move command containing values for all 5 axes so
         # there is no separate code needed for backward compatibility
-        self._device.StgMoveTo(req_pos["x"],
-                                        req_pos["y"],
-                                        req_pos["z"],
-                                        req_pos["rz"],
-                                        req_pos["rx"],
-                                        )
+        self._device_handler.StgMoveTo(req_pos["x"],
+                                       req_pos["y"],
+                                       req_pos["z"],
+                                       req_pos["rz"],
+                                       req_pos["rx"],
+                                       )
 
         # a very small delay before checking if the stage is busy
         time.sleep(0.1)
 
         # Wait until move is completed
-        while self._device.StgIsBusy():
+        while self._device_handler.StgIsBusy():
             time.sleep(0.1)
 
         logging.debug("Stage move to %s reported as completed. Checking the new stage position...", pos)
@@ -1556,10 +1563,10 @@ class Stage(model.Actuator):
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
-        self._device.StgStop()  # TODO: can be removed once move cancellation is supported
+        self._device_handler.StgStop()  # TODO: can be removed once move cancellation is supported
         # Empty the queue for the given axes
         self._executor.cancel()
-        self._device.StgStop()  # Make sure it's stopped in any case
+        self._device_handler.StgStop()  # Make sure it's stopped in any case
         logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
@@ -1570,6 +1577,8 @@ class Stage(model.Actuator):
             self._executor.shutdown()
             self._executor = None
 
+        self._device_handler = None
+
 
 class EbeamFocus(model.Actuator):
     """
@@ -1578,7 +1587,7 @@ class EbeamFocus(model.Actuator):
     between the end of the objective and the surface of the observed specimen
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
-        self._device = connect_device(parent._host, parent._port, parent._socket_timeout)
+        self._device_handler = DeviceHandler(parent._host, parent._port, parent._socket_timeout)
         assert len(axes) > 0
         if ranges is None:
             ranges = {}
@@ -1607,7 +1616,7 @@ class EbeamFocus(model.Actuator):
         """
         update the position VA
         """
-        wd = self._device.GetWD()
+        wd = self._device_handler.GetWD()
         self._position["z"] = wd * 1e-3
         # it's read-only, so we change it via _value
         pos = self._applyInversion(self._position)
@@ -1619,7 +1628,7 @@ class EbeamFocus(model.Actuator):
         """
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        self._device.SetWD(self._position["z"] * 1e03)
+        self._device_handler.SetWD(self._position["z"] * 1e03)
         # Obtain the finally reached position after move is performed.
         self._updatePosition()
         # Changing WD results to change in fov
@@ -1663,6 +1672,8 @@ class EbeamFocus(model.Actuator):
             self._executor.shutdown()
             self._executor = None
 
+        self._device_handler = None
+
 
 class ChamberView(model.DigitalCamera):
     """
@@ -1683,13 +1694,13 @@ class ChamberView(model.DigitalCamera):
         # without zoom applied so we get the maximum size of the image (1),
         # in the maximum fps (5), and compression mode 0 (must be so, according,
         # to Tescan API documentation).
-        self.parent._device.CameraEnable(0, 1, 5, 0)
+        self.parent._device_handler.CameraEnable(0, 1, 5, 0)
         # Wait for camera to be enabled
-        while (self.parent._device.CameraGetStatus(0))[0] != 1:
+        while (self.parent._device_handler.CameraGetStatus(0))[0] != 1:
             time.sleep(0.5)
         # Get a first image to determine the resolution
-        width, height, img_str = self.parent._device.FetchCameraImage(0)
-        self.parent._device.CameraDisable()
+        width, height, img_str = self.parent._device_handler.FetchCameraImage(0)
+        self.parent._device_handler.CameraDisable()
         resolution = (height, width)
         self._shape = resolution + (2 ** 8,)
         self.resolution = model.ResolutionVA(resolution, [resolution, resolution],
@@ -1708,7 +1719,7 @@ class ChamberView(model.DigitalCamera):
         return int: chamber camera status, 0 - off, 1 - on
         """
         with self.parent._acq_progress_lock:
-            status = self.parent._device.CameraGetStatus(0)  # channel 0, reserved
+            status = self.parent._device_handler.CameraGetStatus(0)  # channel 0, reserved
         return status[0]
 
     def start_flow(self, callback):
@@ -1718,7 +1729,7 @@ class ChamberView(model.DigitalCamera):
          function called for each image acquired
         """
         with self.parent._acq_progress_lock:
-            self.parent._device.CameraEnable(0, 1, 5, 0)
+            self.parent._device_handler.CameraEnable(0, 1, 5, 0)
 
         # if there is a very quick unsubscribe(), subscribe(), the previous
         # thread might still be running
@@ -1741,9 +1752,9 @@ class ChamberView(model.DigitalCamera):
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
-        # self.parent._device.CancelRecv()
+        # self.parent._device_handler.CancelRecv()
         with self.parent._acq_progress_lock:
-            self.parent._device.CameraDisable()
+            self.parent._device_handler.CameraDisable()
 
     def _acquire_thread_continuous(self, callback):
         """
@@ -1752,7 +1763,7 @@ class ChamberView(model.DigitalCamera):
         try:
             while not self.acquire_must_stop.is_set():
                 with self.parent._acq_progress_lock:
-                    width, height, img_str = self.parent._device.FetchCameraImage(0)
+                    width, height, img_str = self.parent._device_handler.FetchCameraImage(0)
                 sem_img = numpy.frombuffer(img_str, dtype=numpy.uint8)
                 sem_img.shape = (height, width)
                 logging.debug("Acquiring chamber image of %s", sem_img.shape)
@@ -1858,7 +1869,7 @@ class ChamberPressure(model.Actuator):
             4 chamber open
         """
         with self.parent._acq_progress_lock:
-            status = self.parent._device.VacGetStatus()  # channel 0, reserved
+            status = self.parent._device_handler.VacGetStatus()  # channel 0, reserved
         return status
 
     def terminate(self):
@@ -1872,7 +1883,7 @@ class ChamberPressure(model.Actuator):
         update the position VA and .pressure VA
         """
         # it's read-only, so we change it via _value
-        pos = self.parent._device.VacGetPressure(0)
+        pos = self.parent._device_handler.VacGetPressure(0)
         self.pressure._value = pos
         self.pressure.notify(pos)
 
@@ -1905,9 +1916,9 @@ class ChamberPressure(model.Actuator):
         p (float): target pressure
         """
         if p["vacuum"] == PRESSURE_VENTED:
-            self.parent._device.VacVent()
+            self.parent._device_handler.VacVent()
         else:
-            self.parent._device.VacPump()
+            self.parent._device_handler.VacPump()
 
         start = time.time()
         while not self.GetStatus() == 0:
@@ -1934,7 +1945,7 @@ class Light(model.Emitter):
         self.power = model.ListContinuous([10], ((0,), (10,)), unit="W", cls=(int, float),
                                           setter=self._setPower)
         # turn on when initializing
-        self.parent._device.ChamberLed(1)
+        self.parent._device_handler.ChamberLed(1)
         # just one band: white
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
@@ -1944,8 +1955,8 @@ class Light(model.Emitter):
         # Switch the chamber LED based on the power value (On in case of max,
         # off in case of min)
         if value[0] == self.power.range[1][0]:
-            self.parent._device.ChamberLed(1)
+            self.parent._device_handler.ChamberLed(1)
             return self.power.range[1]
         else:
-            self.parent._device.ChamberLed(0)
+            self.parent._device_handler.ChamberLed(0)
             return self.power.range[0]
