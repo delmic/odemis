@@ -33,6 +33,7 @@ import re
 import subprocess
 import threading
 import time
+from typing import Optional
 
 import wx
 
@@ -133,7 +134,7 @@ class SnapshotController(object):
 
         return tab, filepath, exporter
 
-    def snapshot_viewport(self, tab, filepath, exporter, anim):
+    def snapshot_viewport(self, tab, filepath, exporter, anim, forcemd: Optional[dict] = None):
         """ Save a snapshot of the raw image from the focused view to the
         filesystem.
 
@@ -141,6 +142,8 @@ class SnapshotController(object):
         :param filepath: (str) full path to the destination file
         :param exporter: (func) exporter to use for writing the file
         :param anim: (bool) if True will show an animation
+        :param forcemd: (dict) if given, will be added to the metadata of the saved image(s).
+                        This is useful to add metadata that is not already present in the image.
 
         When no dialog is shown, the name of the file will follow the scheme
         `date`-`time`.tiff (e.g., 20120808-154812.tiff) and it will be saved
@@ -203,6 +206,9 @@ class SnapshotController(object):
 
                     if model.MD_DESCRIPTION not in d.metadata:
                         d.metadata[model.MD_DESCRIPTION] = s.name.value
+
+                    if forcemd is not None:
+                        d.metadata.update(forcemd)
 
                     raw_images.append(d)
 
