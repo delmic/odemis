@@ -48,10 +48,11 @@ def get_license_enabled() -> dict:
         if "licence" not in config:
             config["licence"] = {}
 
-        enabled = config["licence"].get("enabled", "False") == "True"
-        fibsem_enabled = config["licence"].get("fibsem", "True") == "True"
-        milling_enabled = config["licence"].get("milling", "True") == "True"
-        correlation_enabled = config["licence"].get("correlation", "True") == "True"
+        enabled = config.getboolean("licence", "enabled", fallback=False)
+        # Sub-feature flags to disable some specific part of the odemis-advanced mode
+        fibsem_enabled = enabled and config.getboolean("licence", "fibsem", fallback=True)
+        milling_enabled = enabled and config.getboolean("licence", "milling", fallback=True)
+        correlation_enabled = enabled and config.getboolean("licence", "correlation", fallback=True)
 
         # Decode expiry date as YYYY-MM-DD
         if "expires_at" in config["licence"]:
