@@ -77,8 +77,11 @@ class ExternalAcquisition:
         self.main_data = main_data
         self.spectrometer = spec
 
-        if not issubclass(spec.hardwareTrigger.get_type(), model.HwTrigger):
-            raise ValueError(f"Spectrometer {spec.name} has not hardware trigger")
+        if (not hasattr(spec, "hardwareTrigger")
+            or not isinstance(spec.hardwareTrigger, model.EventBase)
+            or not issubclass(spec.hardwareTrigger.get_type(), model.HwTrigger)
+        ):
+            raise ValueError(f"Spectrometer {spec.name} has no hardware trigger")
 
         # Storage settings
         self.conf = get_acqui_conf()
