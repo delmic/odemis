@@ -14,12 +14,16 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import logging
-
 # If you import this module, it will try to work around some bugs in wxPython
 # by "monkey-patching" the module.
 
+import functools
+import inspect
+import logging
+
 import wx
+
+LOG_WX_CALLS = False  # Set to True to log all wx calls (can be very verbose)
 
 def fix_static_text_clipping(panel):
     # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
@@ -64,3 +68,77 @@ if "gtk3" in wx.version():
             self.Wrap(-1)  # -1 = Disable wrapping
 
     wx.StaticText.Show = ShowFixed
+
+
+def _wrap_callable(orig, name, logger):
+    @functools.wraps(orig)
+    def _wrapped(*args, **kwargs):
+        try:
+            logger.debug("CALL %s args=%s kwargs=%s", name,
+                         tuple(repr(a) for a in args),
+                         {k: repr(v) for k, v in kwargs.items()})
+        except Exception:
+            logger.debug("CALL %s (args not serializable)", name)
+        try:
+            result = orig(*args, **kwargs)
+            try:
+                logger.debug("RETURN %s -> %s", name, repr(result))
+            except Exception:
+                logger.debug("RETURN %s -> (unrepresentable)", name)
+            return result
+        except Exception:
+            logger.exception("EXCEPTION in %s", name)
+            raise
+    return _wrapped
+
+def instrument_class(cls, logger=None):
+    """Monkey-patch all callable attributes on a class to log their calls."""
+    logger = logger or logging.getLogger("wx_calls")
+    for name in dir(cls):
+        if name.startswith("_"):
+            continue
+        try:
+            attr = getattr(cls, name)
+        except Exception:
+            continue
+        if callable(attr):
+            if inspect.ismethoddescriptor(attr) or inspect.isbuiltin(attr):
+                logging.debug("Skipping wrapping of method descriptor %s.%s", cls.__name__, name)
+                continue
+
+            try:
+                wrapped = _wrap_callable(attr, f"{cls.__name__}.{name}", logger)
+                setattr(cls, name, wrapped)
+                logging.debug("Wrapped %s.%s", cls.__name__, name)
+            except Exception:
+                # Some attributes on extension types may be read-only; skip them.
+                logger.debug("Could not wrap %s.%s", cls.__name__, name)
+                continue
+
+def instrument_module(module, logger=None):
+    """Wrap top-level callables defined on a module object."""
+    logger = logger or logging.getLogger("wx_calls")
+    for name in dir(module):
+        if name.startswith("_"):
+            continue
+        try:
+            attr = getattr(module, name)
+        except Exception:
+            continue
+        if inspect.isfunction(attr) or inspect.ismethod(attr):# or callable(attr):
+            try:
+                wrapped = _wrap_callable(attr, f"{module.__name__}.{name}", logger)
+                setattr(module, name, wrapped)
+                logging.debug("Wrapped %s.%s", module.__name__, name)
+            except Exception:
+                logger.debug("Could not wrap %s.%s", module.__name__, name)
+                continue
+        elif inspect.isclass(attr):
+            try:
+                instrument_class(attr, logger)
+            except Exception:
+                logger.debug("Could not instrument class %s.%s", module.__name__, name)
+                continue
+
+if LOG_WX_CALLS:
+    instrument_module(wx)
