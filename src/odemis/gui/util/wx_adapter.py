@@ -22,6 +22,9 @@ import logging
 import wx
 
 def fix_static_text_clipping(panel):
+    if wx.VERSION[:2] >= (4, 1):
+        return  # Fixed in wxPython 4.1.0+
+
     # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
     # the StaticText's not shown at init to be initialized with a size as if
     # the font was standard size. So if the font is big, the text is cropped.
@@ -46,7 +49,7 @@ def _force_resize_static_text(root):
         elif isinstance(c, wx.Window):
             _force_resize_static_text(c)
 
-if "gtk3" in wx.version():
+if "gtk3" in wx.version() and wx.VERSION[:2] < (4, 1):
 
     # Fix StaticText on GTK3:
     # There is a bug in wxPython/GTK3 (up to 4.0.7, at least), which causes
