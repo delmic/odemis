@@ -18,11 +18,16 @@ from odemis.acq.milling.tasks import (
     MillingSettings,
     MillingTaskSettings,
 )
+from odemis.acq.feature import CryoFeature, REFERENCE_IMAGE_FILENAME
 from odemis.util import executeAsyncTask
 
 # Check if fibsemOS is available
 try:
-    from fibsem.microscopes.odemis_microscope import OdemisThermoMicroscope, OdemisTescanMicroscope
+    from fibsem.microscopes.odemis_microscope import (
+        OdemisThermoMicroscope,
+        OdemisTescanMicroscope,
+        from_odemis_image
+    )
     from fibsem.milling import (
         FibsemMillingStage,
         MillingAlignment,
@@ -35,7 +40,15 @@ try:
         RectanglePattern,
         TrenchPattern,
     )
-    from fibsem.structures import FibsemMillingSettings, Point
+    from fibsem.structures import (
+        FibsemMillingSettings,
+        Point,
+        FibsemImage,
+        FibsemImageMetadata,
+        BeamType,
+        ImageSettings,
+        MicroscopeState,
+    )
     from fibsem.utils import load_microscope_configuration
     FIBSEMOS_INSTALLED = True
 except ImportError as e:
@@ -206,7 +219,8 @@ class FibsemOSMillingTaskManager:
 
         if path is None:
             path = os.getcwd()
-        self.microscope._last_imaging_settings.path = path  # note: post-milling imaging is not yet supported via odemis
+        self.path = path
+        self.microscope._last_imaging_settings.path = path # note: image acquisition post-milling is not yet supported via odemis
 
         # per-run state (set in async_run)
         self.milling_stages: List["FibsemMillingStage"] = []
@@ -251,7 +265,9 @@ class FibsemOSMillingTaskManager:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                mill_stages(self.microscope, [stage])
+                ref_img = from_odemis_image(self.feature.reference_image)
+                ref_img.metadata.image_settings.path = self.path
+                mill_stages(self.microscope, [stage], ref_img)
 
         finally:
             with self._lock:

@@ -434,10 +434,10 @@ class AutomatedMillingManager(object):
         self._future.msg = f"{feature.name.value}: Milling: {self.current_workflow}"
         self._future.set_progress()
 
-        filename = self.get_filename(feature, "Milling-Tasks")
         if fibsemos.FIBSEMOS_INSTALLED:
             self._future.running_subf = run_milling_tasks_fibsemos(tasks=milling_tasks)
         else:
+            filename = self.get_filename(feature, "Milling-Tasks")
             self._future.running_subf = run_milling_tasks(tasks=milling_tasks,
                                                       fib_stream=self.fib_stream,
                                                       filename=filename)
