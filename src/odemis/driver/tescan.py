@@ -177,6 +177,27 @@ class DeviceHandler:
         return method
 
 
+def connect_device(host: str, port: int, socket_timeout: float) -> sem.Sem:
+    logging.info("Attempting to connect sockets")
+    device = sem.Sem()
+    # Attempts to connect all sockets, but does nothing if already running
+    connection_status = device.connection.Connect(host, port, socket_timeout)
+    if connection_status < 0:
+        raise HwError("Failed to connect to TESCAN server '%s'. "
+            "Check that the ip address is correct and TESCAN server "
+            "connected to the network." % (host,))
+
+    # Disable Nagle's algorithm (batching data messages) and send them asap instead.
+    # This is to avoid the 200ms ceiling on data transmission.
+    device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    logging.info("Connected to sockets")
+    return device
+
+
 class SEM(model.HwComponent):
     """
     This is an extension of the model.HwComponent class. It instantiates the (fib-)scanner
@@ -198,7 +219,7 @@ class SEM(model.HwComponent):
         self._host = host
         self._port = port
         self._socket_timeout = 2  # Seconds. This value is a balance for responsiveness vs how much frames you lose
-        self._connect_socket()
+        self._device = connect_device(self._host, self._port, self._socket_timeout)
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
@@ -443,25 +464,6 @@ class SEM(model.HwComponent):
                 pass
             logging.info("Acquisition thread closed")
             self._acquisition_thread = None
-
-    def _connect_socket(self):
-        logging.info("Attempting to connect sockets")
-        self._device = sem.Sem()
-        # Attempts to connect all sockets, but does nothing if already running
-        connection = self._device.connection.Connect(self._host, self._port, self._socket_timeout)
-        if connection < 0:
-            raise HwError("Failed to connect to TESCAN server '%s'. "
-                "Check that the ip address is correct and TESCAN server "
-                "connected to the network." % (self._host,))
-
-        # Disable Nagle's algorithm (batching data messages) and send them asap instead.
-        # This is to avoid the 200ms ceiling on data transmission.
-        self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self._device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self._device.connection.socket_d.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        logging.info("Connected to sockets")
 
     def _req_stop_acquisition(self):
         """
@@ -1321,12 +1323,13 @@ class Stage(model.Actuator):
     moving the SEM stage with the Tescan Essence software.
     """
     def __init__(self, name, role, parent, **kwargs):
+        self._device = connect_device(parent._host, parent._port, parent._socket_timeout)
         self._position = {}
         axes_def = {}
         # limits are always returned as a list with min and max values in the order of x,y,z,r,t
         # the list should always return 10 values and if an axis is not motorized, limits are zero
-        axes_rng = parent._device.StgGetLimits(1)  # using the soft limits parameter here
-        axes_motorized = parent._device.StgGetMotorized()
+        axes_rng = self._device.StgGetLimits(1)  # using the soft limits parameter here
+        axes_motorized = self._device.StgGetMotorized()
 
         for num, ax in enumerate(["x", "y", "z", "rz", "rx"]):
             # axes ranges are always returned in pairs of 2 values (min, max)
@@ -1353,13 +1356,13 @@ class Stage(model.Actuator):
                 break
 
         # Demand calibrated stage
-        if parent._device.StgIsCalibrated() != 1:
+        if self._device.StgIsCalibrated() != 1:
             logging.warning("Stage is not calibrated. Move commands will be ignored until it has been calibrated.")
             # TODO: support doing it from Odemis, via reference()
-            # parent._device.StgCalibrate()
+            # self._device.StgCalibrate()
 
         # Wait for stage to be stable after calibration
-        while parent._device.StgIsBusy() != 0:
+        while self._device.StgIsBusy() != 0:
             # If the stage is busy (movement is in progress), current position is
             # updated approximately every 500 ms
             time.sleep(0.5)
@@ -1378,9 +1381,7 @@ class Stage(model.Actuator):
 
     def _pollXYZ(self):
         try:
-            with self.parent._acquisition_init_lock:
-                with self.parent._acq_progress_lock:
-                    self._updatePosition()
+            self._updatePosition()
         except TypeError:
             # A TypeError is caused by one of the getters returning a None, which is an indication that the API
             # is blocked. Most of the time momentarily, so handle it gracefully.
@@ -1438,7 +1439,7 @@ class Stage(model.Actuator):
         """
         update the position VA
         """
-        x, y, z, rz, rx = self.parent._device.StgGetPosition()
+        x, y, z, rz, rx = self._device.StgGetPosition()
         self._position["x"] = -x * 1e-3
         self._position["y"] = -y * 1e-3
         self._position["z"] = -z * 1e-3
@@ -1461,61 +1462,60 @@ class Stage(model.Actuator):
         :param pos (dict[str, float]): positions of linear axes in m or rotational axes in radians
         """
         # TODO: support cancelling (= call StgStop) will be addressed in separate PR
-        with self.parent._acq_progress_lock:
-            logging.debug("Requesting stage move to %s", pos)
+        logging.debug("Requesting stage move to %s", pos)
 
-            x, y, z, rz, rx = self.parent._device.StgGetPosition()
-            current_pos = {"x": x, "y": y, "z": z, "rz": rz, "rx": rx}
-            req_pos = {}
+        x, y, z, rz, rx = self.parent._device.StgGetPosition()
+        current_pos = {"x": x, "y": y, "z": z, "rz": rz, "rx": rx}
+        req_pos = {}
 
-            for axis in {"x", "y", "z", "rz", "rx"}:
-                if axis in pos:
-                    # Convert from m to mm and invert for the linear axes
-                    # Also, per axis, check if requested move is significant enough. Otherwise, drop the request to move that axis.
-                    # This helps preventing unneeded stage movement due to anti-backlash correction.
-                    if axis in {"x", "y", "z"}:
-                        tescan_pos = -pos[axis] * 1e3
-                        move_distance = abs(tescan_pos - current_pos[axis])
-                        if move_distance < MIN_MOVE_SIZE_LIN_MM:  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
-                            tescan_pos = None
-                            logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
-                    # convert from radians to degrees for the rotational axes
-                    elif axis in {"rz", "rx"}:
-                        tescan_pos = math.degrees(pos[axis])
-                        move_distance = abs(tescan_pos - current_pos[axis])
-                        if move_distance < MIN_MOVE_SIZE_ROT_DEG:
-                            tescan_pos = None
-                            logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
-                else:
-                    tescan_pos = None
-                req_pos[axis] = tescan_pos
+        for axis in {"x", "y", "z", "rz", "rx"}:
+            if axis in pos:
+                # Convert from m to mm and invert for the linear axes
+                # Also, per axis, check if requested move is significant enough. Otherwise, drop the request to move that axis.
+                # This helps preventing unneeded stage movement due to anti-backlash correction.
+                if axis in {"x", "y", "z"}:
+                    tescan_pos = -pos[axis] * 1e3
+                    move_distance = abs(tescan_pos - current_pos[axis])
+                    if move_distance < MIN_MOVE_SIZE_LIN_MM:  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
+                        tescan_pos = None
+                        logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
+                # convert from radians to degrees for the rotational axes
+                elif axis in {"rz", "rx"}:
+                    tescan_pos = math.degrees(pos[axis])
+                    move_distance = abs(tescan_pos - current_pos[axis])
+                    if move_distance < MIN_MOVE_SIZE_ROT_DEG:
+                        tescan_pos = None
+                        logging.debug(f"Requested move in axis {axis} dropped (current: {current_pos[axis]}, requested: {tescan_pos})")
+            else:
+                tescan_pos = None
+            req_pos[axis] = tescan_pos
 
-            orig_pos = self._position
+        orig_pos = self._position
 
-            # always issue a move command containing values for all 5 axes so
-            # there is no separate code needed for backward compatibility
-            self.parent._device.StgMoveTo(req_pos["x"],
-                                          req_pos["y"],
-                                          req_pos["z"],
-                                          req_pos["rz"],
-                                          req_pos["rx"],
-                                          )
+        # always issue a move command containing values for all 5 axes so
+        # there is no separate code needed for backward compatibility
+        self._device.StgMoveTo(req_pos["x"],
+                                        req_pos["y"],
+                                        req_pos["z"],
+                                        req_pos["rz"],
+                                        req_pos["rx"],
+                                        )
 
-            # a very small delay before checking if the stage is busy
+        # a very small delay before checking if the stage is busy
+        time.sleep(0.1)
+
+        # Wait until move is completed
+        while self._device.StgIsBusy():
             time.sleep(0.1)
 
-            # Wait until move is completed
-            while self.parent._device.StgIsBusy():
-                time.sleep(0.1)
-
-            logging.debug("Stage move to %s reported as completed. Checking the new stage position...", pos)
-            self._updatePosition()
-            # In some cases, the stage fails to move to the requested position but no error is raised by the
-            # Tescan API. This check will ensure that the stage has reached the requested position within a
-            # certain tolerance otherwise it will raise an error and stop the subsequent moves from being executed,
-            # for e.g. the other stage axes or the subsequent objective stage movement will halt if one of
-            # the stage axis failed to move or did not move correctly.
-            self._checkPosition(orig_pos, pos, timeout=STAGE_WAIT_TIMEOUT)
+        logging.debug("Stage move to %s reported as completed. Checking the new stage position...", pos)
+        self._updatePosition()
+        # In some cases, the stage fails to move to the requested position but no error is raised by the
+        # Tescan API. This check will ensure that the stage has reached the requested position within a
+        # certain tolerance otherwise it will raise an error and stop the subsequent moves from being executed,
+        # for e.g. the other stage axes or the subsequent objective stage movement will halt if one of
+        # the stage axis failed to move or did not move correctly.
+        self._checkPosition(orig_pos, pos, timeout=STAGE_WAIT_TIMEOUT)
 
     def _doMoveRel(self, shift: dict):
         """
@@ -1556,10 +1556,10 @@ class Stage(model.Actuator):
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
-        self.parent._device.StgStop()  # TODO: can be removed once move cancellation is supported
+        self._device.StgStop()  # TODO: can be removed once move cancellation is supported
         # Empty the queue for the given axes
         self._executor.cancel()
-        self.parent._device.StgStop()  # Make sure it's stopped in any case
+        self._device.StgStop()  # Make sure it's stopped in any case
         logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
@@ -1578,6 +1578,7 @@ class EbeamFocus(model.Actuator):
     between the end of the objective and the surface of the observed specimen
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
+        self._device = connect_device(parent._host, parent._port, parent._socket_timeout)
         assert len(axes) > 0
         if ranges is None:
             ranges = {}
@@ -1606,7 +1607,7 @@ class EbeamFocus(model.Actuator):
         """
         update the position VA
         """
-        wd = self.parent._device.GetWD()
+        wd = self._device.GetWD()
         self._position["z"] = wd * 1e-3
         # it's read-only, so we change it via _value
         pos = self._applyInversion(self._position)
@@ -1618,10 +1619,9 @@ class EbeamFocus(model.Actuator):
         """
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        with self.parent._acq_progress_lock:
-            self.parent._device.SetWD(self._position["z"] * 1e03)
-            # Obtain the finally reached position after move is performed.
-            self._updatePosition()
+        self._device.SetWD(self._position["z"] * 1e03)
+        # Obtain the finally reached position after move is performed.
+        self._updatePosition()
         # Changing WD results to change in fov
         self.parent._scanners["scanner"]._updateHorizontalFOV()
 
