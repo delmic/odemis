@@ -1000,6 +1000,10 @@
                     </object>
                     <flag>wxALIGN_CENTRE</flag>
                   </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_auto_align">
+                    </object>
+                  </object>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
