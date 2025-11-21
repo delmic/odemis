@@ -1152,9 +1152,8 @@ class Detector(model.Detector):
 
         self._initialize_detectors()
         self._detector_names = set(self._detector_map.keys())
-        # Obtain current detector and set it as default
-        det_id = self._device_handler.DtGetSelected(self._channel)
-        det_name = [k for k, v in self._detector_map.items() if v == det_id][0]
+        # Pick first one available
+        det_name = next(iter(self._detector_names))
 
         self.type = model.StringEnumerated(
             value=det_name,
