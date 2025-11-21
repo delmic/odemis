@@ -273,7 +273,7 @@ class AnalysisTab(Tab):
             config = get_acqui_conf()
             path = config.last_path
 
-        wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
+        wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True, case_sensitive=False)
         dialog = wx.FileDialog(self.panel,
                                message="Choose a file to load",
                                defaultDir=path,
