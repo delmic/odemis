@@ -45,7 +45,7 @@ from odemis.acq.align.autofocus import (
     Sparc2AutoFocus,
     Sparc2ManualFocus,
 )
-from odemis.acq.align.mirror import parabolic_mirror_alignment
+from odemis.acq.align.mirror import parabolic_mirror_alignment, AlignmentAxis
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
 from odemis.gui.comp.settings import SettingsPanel
@@ -882,9 +882,11 @@ class Sparc2AlignTab(Tab):
         if self.auto_align_future.running():
             self.auto_align_future.cancel()
             return
+        l_align = AlignmentAxis("l", 1.5e-6, self.tab_data_model.main.mirror)
+        s_align = AlignmentAxis("s", 1.5e-6, self.tab_data_model.main.mirror)
+        z_align = AlignmentAxis("z", 2e-6, self.tab_data_model.main.stage)
         self.auto_align_future = parabolic_mirror_alignment(
-            self.tab_data_model.main.mirror,
-            self.tab_data_model.main.stage,
+            [l_align, s_align, z_align],
             self.tab_data_model.main.ccd,
             search_range=float(self.auto_align_rng.GetValue()),
             max_iter=int(self.auto_align_max_iter.GetValue()),

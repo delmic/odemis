@@ -21,13 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
+import math
 import warnings
 from concurrent.futures import CancelledError
-from typing import Tuple
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy
-import math
 from scipy.optimize import OptimizeResult, OptimizeWarning, minimize, minimize_scalar
 from scipy.optimize._minimize import standardize_bounds
 from scipy.optimize._optimize import (
@@ -37,8 +38,11 @@ from scipy.optimize._optimize import (
 )
 
 from odemis import model
-from odemis.util.angleres import DEFAULT_BINNING, DEFAULT_SENSOR_PIXEL_SIZE, DEFAULT_SLIT_WIDTH
-
+from odemis.util.angleres import (
+    DEFAULT_BINNING,
+    DEFAULT_SENSOR_PIXEL_SIZE,
+    DEFAULT_SLIT_WIDTH,
+)
 
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
@@ -596,23 +600,35 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
         result['allvecs'] = allvecs
     return result
 
+@dataclass
+class AlignmentAxis:
+    """
+    Represents a single alignment axis (e.g. mirror l/s or stage z).
+    """
+    name: str
+    min_step_size: float
+    component: model.Actuator
+    abs_bounds: Optional[Tuple[float, float]] = None
+
+    def __post_init__(self):
+        if self.name not in self.component.axes:
+            raise ValueError(f"Component '{self.component.name}' does not have axis '{self.name}'")
+        if self.min_step_size <= 0 or self.min_step_size > 0.1:
+            raise ValueError("min_step_size must be positive and less than or equal to 0.1 metres")
 
 def parabolic_mirror_alignment(
-    mirror: model.HwComponent,
-    stage: model.HwComponent,
+    axes: List[AlignmentAxis],
     ccd: model.HwComponent,
     search_range: float = 50e-6,
     max_iter: int = 100,
     stop_early: bool = True,
-    min_step_size: Tuple[float, float, float] = (1.5e-6, 1.5e-6, 2e-6)
 ) -> model.ProgressiveFuture:
     """
     Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
     (coarse per-axis scans followed by Nelder-Mead refinements) to align the
     mirror and stage based on camera measurements for SPARC.
 
-    :param mirror: Mirror actuator component to move (axes l/s).
-    :param stage: Stage actuator component to move (axis z).
+    :param axes: List of alignment axes to optimize of len 1 or 3.
     :param ccd: Camera component used to measure the spot.
     :param search_range: Initial half-range (in metres) for each
                          coarse search around the current position. Defaults to 50e-6.
@@ -634,10 +650,10 @@ def parabolic_mirror_alignment(
         returned_future.result().
     """
     f = model.ProgressiveFuture()
-    task = ParabolicMirrorAlignmentTask(mirror, stage, ccd, stop_early=stop_early)
+    task = ParabolicMirrorAlignmentTask(axes, ccd, stop_early=stop_early)
     f.task_canceller = task.cancel
     _executor.submitf(
-        f, task.align_mirror, search_range=search_range, max_iter=max_iter, min_step_size=min_step_size
+        f, task.align_mirror, search_range=search_range, max_iter=max_iter,
     )
     return f
 
@@ -659,30 +675,28 @@ class ParabolicMirrorAlignmentTask:
 
     def __init__(
         self,
-        mirror: model.HwComponent,
-        stage: model.HwComponent,
+        axes: List[AlignmentAxis],
         ccd: model.HwComponent,
         stop_early: bool = True
     ):
         """
         Initialize the alignment task.
 
-        :param mirror: (model.HwComponent) Mirror actuator component (axes 'l' and 's').
-        :param stage: (model.HwComponent) Stage actuator component (axis 'z').
+        :param axes: List of alignment axes to optimize.
         :param ccd: (model.HwComponent) Camera component providing image data.
         :param stop_early: When True the task attempts to stop the Nelder-Mead stages early
                            if progress stalls. Set to False to force the optimizers to run
                            until their normal convergence criteria or the supplied max_iter
                            budget is exhausted.
         """
-        self._mirror = mirror
-        self._stage = stage
+        self._axes = axes
         self._ccd = ccd
         self._stop_early = stop_early
         self._cancelled = False
-        self._last_xk = numpy.zeros(3)
+        self._last_xk = numpy.zeros(len(axes))
         self._iteration_count = 0
         self._stall_count = 0
+        self._rng = numpy.random.default_rng(0)  # Force the seed for reproducibility
         self.pixel_count = model.IntContinuous(value=1, range=(1, 10000), unit="px")
         self.intensity = model.IntContinuous(value=0, range=(0, 50000), unit="a.u.")
 
@@ -815,71 +829,12 @@ class ParabolicMirrorAlignmentTask:
         score = (weight * norm_area) + ((1 - weight) * norm_intensity)
         return score
 
-    def _objective_3d(
-        self,
-        xk: numpy.ndarray,
-        l_range: Tuple[float, float],
-        s_range: Tuple[float, float],
-        z_range: Tuple[float, float],
-        weight: float,
-    ):
-        """
-        Objective function for simultaneous optimization of [l, s, z].
-
-        The optimizer will pass a candidate vector xk = [l, s, z]. The method
-        enforces the supplied bounds, moves the actuators to the candidate
-        position, measures the spot and returns a scalar score (lower is better).
-
-        :param xk: Candidate [l, s, z] vector.
-        :param l_range: Allowed bounds for l as (min, max).
-        :param s_range: Allowed bounds for s as (min, max).
-        :param z_range: Allowed bounds for z as (min, max).
-        :param weight: Weight used by _get_score to combine metrics.
-        :raises CancelledError: if the task was cancelled during evaluation.
-        :raises ValueError: if xk does not have 3 elements.
-        :returns: float
-            Computed score for the candidate position.
-        """
-        if self._cancelled:
-            raise CancelledError("3D alignment was cancelled by user")
-
-        if xk.size != 3:
-            raise ValueError(f"Expected xk to have 3 elements (l, s, z), got {xk.size}")
-
-        l, s, z = xk
-        l = float(numpy.clip(l, l_range[0], l_range[1]))
-        s = float(numpy.clip(s, s_range[0], s_range[1]))
-        z = float(numpy.clip(z, z_range[0], z_range[1]))
-
-        self._mirror.moveAbs({"l": l, "s": s}).result()
-        self._stage.moveAbs({"z": z}).result()
-
-        self._update_spot_measurement()
-        score = self._get_score(weight)
-
-        # For closed-loop feedback to the optimizer
-        l_actual = self._mirror.position.value["l"]
-        s_actual = self._mirror.position.value["s"]
-        z_actual = self._stage.position.value["z"]
-        xk_actual = numpy.array([l_actual, s_actual, z_actual])
-
-        logging.debug(
-            f"Pos (target → actual): "
-            f"l={l:.8f} → {l_actual:.8f} m, "
-            f"s={s:.8f} → {s_actual:.8f} m, "
-            f"z={z:.8f} → {z_actual:.8f} m | "
-            f"Score={score:.4f}, Pixels={self.pixel_count.value}, Intensity={self.intensity.value}"
-        )
-
-        return score, xk_actual
-
-    def _objective_1d(self, pos: float, axis: str, hw_comp: model.HwComponent):
+    def _objective_1d(self, pos: float, axis: AlignmentAxis):
         """
         1D objective for optimizing hardware component's axis by maximizing intensity.
 
         :param pos: Candidate position.
-        :param axis: Axis which need to be moved to pos.
-        :param hw_comp: The HW Component containing the axis.
+        :param axis: Alignment axis to optimize.
         :raises CancelledError: if the task was cancelled.
         :returns: float
             Negative measured intensity (-intensity).
@@ -887,7 +842,7 @@ class ParabolicMirrorAlignmentTask:
         if self._cancelled:
             raise CancelledError(f"1D alignment for {axis} was cancelled by user")
 
-        hw_comp.moveAbs({axis: pos}).result()
+        axis.component.moveAbs({axis.name: pos}).result()
         self._update_spot_measurement()
 
         # Normalize intensity
@@ -896,26 +851,67 @@ class ParabolicMirrorAlignmentTask:
         norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
 
         # For closed-loop feedback to the optimizer
-        pos_actual = hw_comp.position.value[axis]
+        pos_actual = axis.component.position.value[axis.name]
 
         return norm_intensity, pos_actual
 
-    def _callback_3d(self, xk: numpy.ndarray):
+    def _objective_nd(
+        self,
+        xk: numpy.ndarray,
+        axes: List[AlignmentAxis],
+        weight: float,
+    ):
+        """
+        Objective function for simultaneous optimization of multiple axes.
+
+        The optimizer will pass a candidate vector xk. The method
+        enforces the supplied bounds, moves the actuators to the candidate
+        position, measures the spot and returns a scalar score (lower is better).
+
+        :param xk: Candidate vector.
+        :param axes: List of alignment axes corresponding to xk.
+        :param weight: Weight used by _get_score to combine metrics.
+        :raises CancelledError: if the task was cancelled during evaluation.
+        :raises ValueError: if xk does not have 3 elements.
+        :returns: float
+            Computed score for the candidate position.
+        """
+        if self._cancelled:
+            raise CancelledError("Nelder-Mead alignment was cancelled by user")
+
+        if xk.size != len(axes):
+            raise ValueError(f"Expected xk to have {len(axes)} elements, got {xk.size}")
+
+        for axis, value in zip(axes, xk):
+            axis.component.moveAbs({axis.name: value}).result()
+
+        self._update_spot_measurement()
+        score = self._get_score(weight)
+
+        # For closed-loop feedback to the optimizer
+        xk_actual = numpy.array([axis.component.position.value[axis.name] for axis in axes])
+
+        logging.debug(
+            f"Pos (target → actual): "
+            f"{xk} → {xk_actual} | "
+            f"Score={score:.4f}, Pixels={self.pixel_count.value}, Intensity={self.intensity.value}"
+        )
+
+        return score, xk_actual
+
+    def _callback_nd(self, xk: numpy.ndarray):
         """
         Optimizer callback executed after each Nelder-Mead iteration.
 
         Used for logging progress and checking cancellation state.
 
-        :param xk: (numpy.ndarray) Current simplex best point [l, s, z].
+        :param xk: (numpy.ndarray) Current simplex best point.
         :raises CancelledError: if the task was cancelled.
-        :raises ValueError: if xk does not have 3 elements.
+        :raises ValueError: if xk does not have the expected number of elements.
         :returns: None
         """
         if self._cancelled:
-            raise CancelledError("Alignment was cancelled by user")
-
-        if xk.size != 3:
-            raise ValueError(f"Expected xk to have 3 elements (l, s, z), got {xk.size}")
+            raise CancelledError("Nelder-Mead alignment was cancelled by user")
 
         if self._stop_early:
             if numpy.array_equal(self._last_xk, xk):
@@ -927,18 +923,146 @@ class ParabolicMirrorAlignmentTask:
                 raise StopIteration("Early stop: optimization stalled.")
             self._last_xk = xk
 
-        l, s, z = xk
-        logging.debug(f"Iter {self._iteration_count}: l={l:.8f} m, s={s:.8f} m, z={z:.8f} m")
+        logging.debug(f"Iter {self._iteration_count}: {xk} m")
         self._iteration_count += 1
 
-    def align_mirror(self, search_range: float, max_iter: int, min_step_size: Tuple[float, float, float]):
+    def _run_scalar(
+        self,
+        axis: AlignmentAxis,
+        search_range: float,
+        max_iter: int,
+    ) -> OptimizeResult:
         """
-        Execute the full alignment procedure.
+        Run a 1D bounded scalar optimization for the specified axis.
 
-        Performs:
-          1. 1D bounded searches for l, s and z (maximize intensity).
-          2. Two successive 3D Nelder-Mead refinements over [l, s, z] using
-             a combined score of normalized spot pixel count and intensity.
+        :param axis: Alignment axis to optimize.
+        :param search_range: Half-range (metres) for the bounded search.
+        :param max_iter: Maximum number of iterations for the optimizer.
+        :returns: OptimizeResult
+            Result of the optimization.
+        """
+        logging.debug(f"Starting scalar alignment for {axis.name} with search range {search_range} m and max iter {max_iter}")
+        x0 = axis.component.position.value[axis.name]
+        if axis.abs_bounds is None:
+            bounds = (x0 - search_range, x0 + search_range)
+        else:
+            bounds = (
+                max(axis.abs_bounds[0], x0 - search_range),
+                min(axis.abs_bounds[1], x0 + search_range)
+            )
+
+        try:
+            result = minimize_scalar(
+                fun=self._objective_1d,
+                args=(axis),
+                bounds=bounds,
+                method=_custom_minimize_scalar_bounded,
+                options={
+                    "maxiter": max_iter,
+                    "x0": x0,
+                    "min_step_size": axis.min_step_size,
+                    "rng": self._rng,
+                    "disp": 3,
+                },
+            )
+        except CancelledError:
+            logging.debug(f"Initial {axis} alignment was cancelled")
+            raise
+        except Exception:
+            logging.exception(f"Initial {axis} alignment failed")
+            raise
+
+        if result.success:
+            logging.debug(f"Initial {axis} alignment converged with result {result.x}")
+        else:
+            logging.debug(f"Initial {axis} alignment did not converge: {result.message}")
+
+        return result
+
+    def _run_nelder_mead(
+        self,
+        axes: List[AlignmentAxis],
+        search_range: float,
+        max_iter: int,
+        weight: float = 0.5,
+    ) -> OptimizeResult:
+        """
+        Run a Nelder-Mead optimization over the specified axes.
+
+        :param axes: List of alignment axes to optimize.
+        :param search_range: Half-range (metres) for the bounded search.
+        :param max_iter: Maximum number of iterations for the optimizer.
+        :param weight: Weight used by _get_score to combine metrics.
+        :returns: OptimizeResult
+            Result of the optimization.
+        """
+        logging.debug(f"Starting Nelder-Mead alignment for {[axis.name for axis in axes]} with search range {search_range} m and max iter {max_iter}")
+        initial_guess = [axis.component.position.value[axis.name] for axis in axes]
+        bounds = []
+        for axis, guess in zip(axes, initial_guess):
+            if axis.abs_bounds is None:
+                bounds.append((
+                    guess - search_range,
+                    guess + search_range
+                ))
+            else:
+                bounds.append((
+                    max(axis.abs_bounds[0], guess - search_range),
+                    min(axis.abs_bounds[1], guess + search_range)
+                ))
+        bounds = standardize_bounds(bounds, initial_guess, "nelder-mead")
+
+        result = OptimizeResult()
+        result.success = False
+        try:
+            result = minimize(
+                fun=self._objective_nd,
+                x0=numpy.array(initial_guess),
+                args=(axes, weight),
+                method=_custom_minimize_neldermead,
+                bounds=bounds,
+                callback=self._callback_nd,
+                options={
+                    "maxiter": max_iter,
+                    "adaptive": True,
+                    "disp": True,
+                    "min_step_size": numpy.array([axis.min_step_size for axis in axes]),
+                    "rng": self._rng,
+                },
+            )
+        except CancelledError:
+            logging.debug("Nelder-Mead alignment was cancelled")
+            raise
+        except StopIteration as e:
+            result.message = str(e)
+            result.nit = self._iteration_count
+        except Exception:
+            logging.exception("Nelder-Mead alignment failed")
+            raise
+        finally:
+            self._iteration_count = 0
+            self._stall_count = 0
+            self._last_xk = numpy.zeros(len(axes))
+
+        if result.success:
+            logging.debug(f"Nelder-Mead alignment converged with result {result.x}")
+        else:
+            logging.warning(f"Nelder-Mead alignment did not converge: {result.message}")
+
+        return result
+
+    def align_mirror(self, search_range: float, max_iter: int):
+        """
+        Execute the full alignment procedure. Can handle 1D or 3D optimizations.
+
+        1D alignment (single axis):
+        - Run a single 1D bounded search to maximize intensity.
+        - Run a Nelder-Mead refinement over the axis, reducing the search range.
+
+        3D alignment (three axes):
+        - Run independent 1D bounded searches for each axis to maximize intensity.
+        - Run two successive 3D Nelder-Mead refinements over all axes, reducing
+          the search range each time.
 
         The method logs progress and handles CancelledError at each stage so a
         cancellation request aborts the remaining steps cleanly.
@@ -946,248 +1070,55 @@ class ParabolicMirrorAlignmentTask:
         :param search_range: Initial half-range (metres) for coarse searches.
         :param max_iter: Total maximum iterations budget (shared between stages).
         """
-        # Initial positions
-        l0 = self._mirror.position.value["l"]
-        s0 = self._mirror.position.value["s"]
-        z0 = self._stage.position.value["z"]
-
         # Define absolute bounds that should never be exceeded
-        l_abs_bound = (l0 - search_range, l0 + search_range)
-        s_abs_bound = (s0 - search_range, s0 + search_range)
-        z_abs_bound = (z0 - search_range, z0 + search_range)
+        for axis in self._axes:
+            x0 = axis.component.position.value[axis.name]
+            axis.abs_bounds = (x0 - search_range, x0 + search_range)
 
-        rng = numpy.random.default_rng(7)
-
-        # Initial l alignment
-        try:
-            logging.debug(
-                f"Starting initial l alignment with search range: {search_range}, max iter: {max_iter}"
+        if len(self._axes) == 1:
+            axis = self._axes[0]
+            # 1D coarse scan
+            result = self._run_scalar(
+                axis,
+                search_range,
+                max_iter,
             )
-            l_result = minimize_scalar(
-                fun=self._objective_1d,
-                args=("l", self._mirror),
-                bounds=l_abs_bound,
-                method=_custom_minimize_scalar_bounded,
-                options={
-                    "maxiter": max_iter,
-                    "x0": l0,
-                    "min_step_size": min_step_size[0],
-                    "rng": rng,
-                    "disp": 3,
-                },
-            )
-        except CancelledError:
-            logging.debug("Initial l alignment was cancelled")
-            raise
-        except Exception:
-            logging.exception("Initial l alignment failed")
-            raise
 
-        if l_result.success:
-            logging.debug(f"Initial l alignment converged with result {l_result.x}")
+            max_iter -= result.nit
+            if max_iter < 1:
+                return
+
+            # Nelder-Mead refinement
+            search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+            self._run_nelder_mead(
+                [axis],
+                search_range,
+                max_iter,
+            )
+        elif len(self._axes) == 3:
+            # 1D coarse scans for each axis
+            for axis in self._axes:
+                result = self._run_scalar(
+                    axis,
+                    search_range,
+                    max_iter,
+                )
+                max_iter -= result.nit
+                if max_iter < 1:
+                    return
+
+            # Two Nelder-Mead refinements over all axes
+            for i in range(2):
+                search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+                result = self._run_nelder_mead(
+                    self._axes,
+                    search_range,
+                    max_iter,
+                    weight=0.4 if i==1 else 0.5,
+                )
+
+                max_iter -= result.nit
+                if max_iter < 1:
+                    return
         else:
-            logging.warning(f"Initial l alignment did not converge: {l_result.message}")
-
-        # Initial s alignment
-        max_iter -= l_result.nit
-        if max_iter < 1:
-            return
-
-        try:
-            logging.debug(
-                f"Starting initial s alignment with search range: {search_range}, max iter: {max_iter}"
-            )
-            s_result = minimize_scalar(
-                fun=self._objective_1d,
-                args=("s", self._mirror),
-                bounds=s_abs_bound,
-                method=_custom_minimize_scalar_bounded,
-                options={
-                    "maxiter": max_iter,
-                    "x0": s0,
-                    "min_step_size": min_step_size[1],
-                    "rng": rng,
-                    "disp": 3,
-                },
-            )
-        except CancelledError:
-            logging.debug("Initial s alignment was cancelled")
-            raise
-        except Exception:
-            logging.exception("Initial s alignment failed")
-            raise
-
-        if s_result.success:
-            logging.debug(f"Initial s alignment converged with result {s_result.x}")
-        else:
-            logging.warning(f"Initial s alignment did not converge: {s_result.message}")
-
-        # Initial z alignment
-        max_iter -= s_result.nit
-        if max_iter < 1:
-            return
-
-        try:
-            logging.debug(
-                f"Starting initial z alignment with search range: {search_range}, max iter: {max_iter}"
-            )
-            z_result = minimize_scalar(
-                fun=self._objective_1d,
-                args=("z", self._stage),
-                bounds=z_abs_bound,
-                method=_custom_minimize_scalar_bounded,
-                options={
-                    "maxiter": max_iter,
-                    "x0": z0,
-                    "min_step_size": min_step_size[2],
-                    "rng": rng,
-                    "disp": 3,
-                },
-            )
-        except CancelledError:
-            logging.debug("Initial z alignment was cancelled")
-            raise
-        except Exception:
-            logging.exception("Initial z alignment failed")
-            raise
-
-        if z_result.success:
-            logging.debug(f"Initial z alignment converged with result {z_result.x}")
-        else:
-            logging.warning(f"Initial z alignment did not converge: {z_result.message}")
-
-        # 1st l, s, z alignment
-        max_iter -= z_result.nit
-        if max_iter < 1:
-            return
-        search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
-        l0 = self._mirror.position.value["l"]
-        s0 = self._mirror.position.value["s"]
-        z0 = self._stage.position.value["z"]
-        l_range = (
-            max(l_abs_bound[0], l0 - search_range),
-            min(l_abs_bound[1], l0 + search_range)
-        )
-        s_range = (
-            max(s_abs_bound[0], s0 - search_range),
-            min(s_abs_bound[1], s0 + search_range)
-        )
-        z_range = (
-            max(z_abs_bound[0], z0 - search_range),
-            min(z_abs_bound[1], z0 + search_range)
-        )
-        # Equal weight to spot pixel count and peak intensity
-        weight = 0.5
-        initial_guess = [l0, s0, z0]
-        bounds = standardize_bounds((l_range, s_range, z_range), initial_guess, "nelder-mead")
-
-        lsz_result = OptimizeResult()
-        lsz_result.success = False
-        try:
-            logging.debug(
-                f"Starting first [l, s, z] alignment with initial guess: {initial_guess}, search range: {search_range}, max iter: {max_iter}"
-            )
-            lsz_result = minimize(
-                fun=self._objective_3d,
-                x0=initial_guess,
-                args=(l_range, s_range, z_range, weight),
-                method=_custom_minimize_neldermead,
-                bounds=bounds,
-                callback=self._callback_3d,
-                options={
-                    "maxiter": max_iter,
-                    "adaptive": True,
-                    "disp": True,
-                    "min_step_size": numpy.array(min_step_size),
-                    "rng": rng,
-                },
-            )
-        except StopIteration as e:
-            lsz_result.message = str(e)
-            lsz_result.nit = self._iteration_count
-        except CancelledError:
-            logging.debug("First [l, s, z] alignment was cancelled")
-            raise
-        except Exception:
-            logging.exception("First [l, s, z] alignment failed")
-            raise
-        finally:
-            self._iteration_count = 0
-            self._stall_count = 0
-
-        if lsz_result.success:
-            logging.debug(
-                f"First [l, s, z] alignment converged with result {lsz_result.x}"
-            )
-        else:
-            logging.debug(
-                f"First [l, s, z] alignment did not converge: {lsz_result.message}"
-            )
-
-        # 2nd l, s, z alignment
-        max_iter -= lsz_result.nit
-        if max_iter < 1:
-            return
-        search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
-        l0 = self._mirror.position.value["l"]
-        s0 = self._mirror.position.value["s"]
-        z0 = self._stage.position.value["z"]
-        l_range = (
-            max(l_abs_bound[0], l0 - search_range),
-            min(l_abs_bound[1], l0 + search_range)
-        )
-        s_range = (
-            max(s_abs_bound[0], s0 - search_range),
-            min(s_abs_bound[1], s0 + search_range)
-        )
-        z_range = (
-            max(z_abs_bound[0], z0 - search_range),
-            min(z_abs_bound[1], z0 + search_range)
-        )
-        # More weight to peak intensity than spot pixel count
-        weight = 0.4
-        initial_guess = [l0, s0, z0]
-        bounds = standardize_bounds((l_range, s_range, z_range), initial_guess, "nelder-mead")
-
-        lsz_result = OptimizeResult()
-        lsz_result.success = False
-        try:
-            logging.debug(
-                f"Starting second [l, s, z] alignment with initial guess: {initial_guess}, search range: {search_range}, max iter: {max_iter}"
-            )
-            lsz_result = minimize(
-                fun=self._objective_3d,
-                x0=initial_guess,
-                args=(l_range, s_range, z_range, weight),
-                method=_custom_minimize_neldermead,
-                bounds=bounds,
-                callback=self._callback_3d,
-                options={
-                    "maxiter": max_iter,
-                    "adaptive": True,
-                    "disp": True,
-                    "min_step_size": numpy.array(min_step_size),
-                    "rng": rng,
-                },
-            )
-        except StopIteration as e:
-            lsz_result.message = str(e)
-            lsz_result.nit = self._iteration_count
-        except CancelledError:
-            logging.debug("Second [l, s, z] alignment was cancelled")
-            raise
-        except Exception:
-            logging.exception("Second [l, s, z] alignment failed")
-            raise
-        finally:
-            self._iteration_count = 0
-            self._stall_count = 0
-
-        if lsz_result.success:
-            logging.debug(
-                f"Second [l, s, z] alignment converged with result {lsz_result.x}"
-            )
-        else:
-            logging.debug(
-                f"Second [l, s, z] alignment did not converge: {lsz_result.message}"
-            )
+            raise ValueError("Expected 1 or 3 alignment axes")
