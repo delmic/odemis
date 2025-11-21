@@ -131,7 +131,7 @@
             "dx": 40.419e-3,
             "dy": 0.268e-3,
             "b_y": -0.400216e-3,
-            "pre-tilt": 0.698132,
+            "pre-tilt": 0.698132,  # Radians (40°).
             "use_linked_sem_focus_compensation": false,
         },
         # Active tilting (T/rx) & rotation (R/rz) angles positions when switching between SEM & FM.
@@ -159,6 +159,17 @@
     init: {
         port: "/dev/fakehub", # Simulator
         # port: "/dev/ttyFTDI*",
+    },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 50.0, # ratio, (actually of the complete light path)
+        na: 0.8, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
     },
     affects: ["Camera"],
 }
