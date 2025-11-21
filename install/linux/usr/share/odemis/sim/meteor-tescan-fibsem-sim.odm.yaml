@@ -38,8 +38,10 @@
     role: se-detector,
     init: {
         channel: 0,
-        detector: "e-t",
     },
+    properties: {
+        type: "SE",
+    }
 }
 
 "EBeam Focus": {
@@ -62,87 +64,49 @@
 
     init: {
         channel: 0,
-        detector: "se",
     },
+    properties: {
+        type: "SE",
+    }
 }
 
 # With calibration values for sample stage
 "Stage": {
-    class: tmcm.TMCLController,
     role: stage-bare,
     init: {
-        port: "/dev/fake6",
-        address: null,
-        axes: ["x", "y", "z", "rx", "rz"],
-        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
-        rng: [[ -50.e-3, 50.e-3 ],
-              [ -50.e-3, 50.e-3 ],
-              [ 0, 94.e-3 ],
-              [ -0.4363323129985824, 1.0122909661567112 ],
-              [ -6.283185307179586, 6.283185307179586 ]
-        ],
-        unit: ["m", "m", "m", "rad", "rad"],
-        refproc: "Standard",
+        # By default, the Odemis tescan driver inverts the XYZ axes. So, to get
+        # exactly the same reading as in the Tescan software, we invert it back.
+        # The Odemis Posture Manager takes care of inverting the axes again for
+        # the Sample Stage, depending on the scan rotation.
+        inverted: {"x", "y", "z"},
     },
     metadata: {
         # Loading position:
-        FAV_POS_DEACTIVE: {
-            'rx': 0.0,
-            'rz': -1.0471975511965976,
-            'x': -30.e-3,
-            'y': -40.e-3,
-            'z': 45.e-3
-        },
-        # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
-        # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
-        SEM_IMAGING_RANGE: {
-            "x": [-13.e-3, 7.e-3],
-            "y": [-20.e-3, 20.e-3],
-            "z": [28.e-3, 38.e-3]  # NOTE: increased max z, since grid 1 center was outside
-        },
-        FM_IMAGING_RANGE: {
-            "x": [44.e-3, 55.e-3],
-            "y": [-23.e-3, 3.e-3],
-            "z": [28.e-3, 32.e-3]
-        },
-        # Grid centers in SEM range, at rx = FAV_SEM_POS_ACTIVE,
-        # These values are based on the expectation from the CAD model. Recalibrate for each system:
-        SAMPLE_CENTERS: {
-            "GRID 1": {
-                'x': -2.611e-3,
-                'y': -13.540e-3,
-                'z': 35.651e-3
-            },
-            "GRID 2": {
-                'x': 1.389e-3,
-                'y': -13.540e-3,
-                'z': 35.651e-3
-            }
-        },
+        # T/rx is 0°, R/rz is 300°
+        FAV_POS_DEACTIVE: {'rx': 0.0, 'rz': 5.235987756, 'x': -25.e-3, 'y': -39.e-03, 'z': 83.e-3},
+        # XYZ ranges for SEM & METEOR, Z range is based on centering a sample at the FIB/SEM coincident point
+        # at a Z coordinate of ~ -5 mm:
+        SEM_IMAGING_RANGE: {"x": [-13.e-3, 7.e-3], "y": [-70.e-3, 10.e-3], "z": [40.e-3, 57.e-3]},
+        FM_IMAGING_RANGE: {"x": [24.e-3, 55.e-3], "y": [-23.e-3, -3.e-3], "z": [40.e-3, 45.e-3]},
+        # Grid centers in SEM imaging posture, in the stage-bare coordinates
+        SAMPLE_CENTERS: {"GRID 1": {'x': 3.55653e-3, 'y': -28.66562e-3, 'z': 52.41088e-3},
+                         "GRID 2": {'x': -2.41488e-3, 'y': -29.458e-3, 'z': 52.92069e-3}},
         # Calibrated values used for the SEM/FM switching behaviour
         CALIB: {
+            "x_0": -0.00127e-3, "y_0": -0.041815e-3,
+            "b_y": 0.161158e-3, "z_ct": 5.11757e-3,
+            "dx": 40.69752e-3, "dy": 0.31244e-3,
+            "pre-tilt": 0.6981317,
             "version": "tescan_1",
-            # These three values were only present in the original meteor-tescan file.
-            "x_0": 3.577e-3,
-            "y_0": -0.164e-3,
-            "z_ct": 4.561291055e-3,
-            # The following parameters were both present at the original meteor-tescan and tfs3 file, with the exception
-            # of pre-tilt.
-            "dx": 40.419e-3,
-            "dy": 0.268e-3,
-            "b_y": -0.400216e-3,
-            "pre-tilt": 0.698132,
-            "use_linked_sem_focus_compensation": false,
         },
         # Active tilting (T/rx) & rotation (R/rz) angles positions when switching between SEM & FM.
-        # Calibrate for each system, and make sure the difference in rz between FM and SEM is exactly 180°
+        # Calibrate for each system, and make sure the difference in rz between FM and SEM should be 180°
         # The values are in radians. Please also update the values in degrees as written in the comments.
-        # Note that the rz range in the TESCAN software is between -170° and 40°
-        # Change the SEM tilt angle to a value that matches the customer's needs
-        # Note that the accuracy of the FM/SEM switch might be reduced if starting at a different angle.
-        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": -1.326450}, # 15° tilt, -76° rotation
-        FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
-        FAV_MILL_POS_ACTIVE: {"rx": 0.261799, "rz": -1.326450}, # 15° tilt, -76° rotation (same as FM)
+        FAV_FM_POS_ACTIVE: {"rx": 0.25062928, "rz": 5.20841155}, # T/rx is ~15° (14.36), R/rz is ~300° 298.42
+        FAV_SEM_POS_ACTIVE: {"rx": 0.6981317, "rz": 2.094395103}, # T/rx is 40°, R/rz is 120°
+        # MILL has the *milling angle* as rx.
+        # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
+        FAV_MILL_POS_ACTIVE: {"rx": 0.261799, "rz": 2.094395103}, # Milling angle = 15° (ie, T/rx = 20°), 120° rotation (same as SEM)
     },
 }
 
