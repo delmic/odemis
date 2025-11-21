@@ -38,8 +38,10 @@
     role: se-detector,
     init: {
         channel: 0,
-        detector: "e-t",
     },
+    properties: {
+        type: "SE",
+    }
 }
 
 "EBeam Focus": {
@@ -62,8 +64,10 @@
 
     init: {
         channel: 0,
-        detector: "se",
     },
+    properties: {
+        type: "SE",
+    }
 }
 
 # With calibration values for sample stage
