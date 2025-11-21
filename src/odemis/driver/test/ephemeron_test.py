@@ -26,13 +26,21 @@ import threading
 import time
 import unittest
 from typing import Optional
+from unittest import SkipTest
 
 import numpy
 
 from odemis import model
 from odemis.dataio import hdf5
-from odemis.driver import ephemeron, semnidaq
-from odemis.driver.ephemeron import MightyEBICSimulator
+
+# Failure to load the module typically indicate some packages are missing, but let's nicely skip the tests in such case
+driver_missing = False
+try:
+    from odemis.driver import semnidaq
+    from odemis.driver import ephemeron
+    from odemis.driver.ephemeron import MightyEBICSimulator
+except ModuleNotFoundError:
+    driver_missing = True
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -99,8 +107,9 @@ class TestMightyEBICSyncAcq(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        if sys.version_info < (3, 9):
-            raise unittest.SkipTest("ephemeron does not work for Ubuntu 20.04 or lower")
+        if driver_missing:
+            raise SkipTest("Some required driver packages are missing. Check if the semnidaq "
+                           "(python3-nidaqmx) and opcua-asyncio packages are installed.")
 
         cls.ebic = ephemeron.MightyEBIC(**KWARGS_EBIC)
 
@@ -171,8 +180,9 @@ class TestMightyEBICDetector(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        if sys.version_info < (3, 9):
-            raise unittest.SkipTest("ephemeron does not work for Ubuntu 20.04 or lower")
+        if driver_missing:
+            raise SkipTest("Some required driver packages are missing. Check if the semnidaq "
+                           "(python3-nidaqmx) and opcua-asyncio packages are installed.")
 
         cls.ebic_det = ephemeron.MightyEBIC(**KWARGS_EBIC)
         cls.acquired_data: Optional[model.DataArray] = None
