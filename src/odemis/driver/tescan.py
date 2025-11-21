@@ -889,7 +889,7 @@ class Scanner(model.Emitter):
         Set the name of the beam preset, which can be any arbitrary string. Sometimes the string contains information
         about the current and voltage, but it is not enforced by TESCAN.
         """
-        # Check if there is a non empty preset set. Currently the default at startup is an empty string.
+        # Check if there is a non-empty preset set. Currently, the default at startup is an empty string.
         if preset:
             self._device_handler.ScStopScan()
             with self.parent._acq_progress_lock:
@@ -908,10 +908,10 @@ class Scanner(model.Emitter):
 
     def _setDwellTime(self, dwell_time: float):
         """
-        Set the per pixel dwell tiem in seconds.
+        Set the per-pixel dwell time in seconds.
 
         The Tescan API only supports int's for indices while their interface supports floats (which results in an
-        interpolated speed value). We are a thus a bit limited in what we receive and send. It's only a UI issue
+        interpolated speed value). We are thus a bit limited in what we receive and send. It's only a UI issue
         though (the actual scan speed is not affected).
 
         :param dwell_time: The dwell time per pixel in seconds
@@ -1145,16 +1145,21 @@ class Detector(model.Detector):
 
         self._channel = channel
 
-        self._initialize_detectors()
-        self._detector_names = set(self._detector_map.keys())
-        # Obtain current detector and set it as default
-        det_id = self._device_handler.DtGetSelected(self._channel)
-        det_name = [k for k, v in self._detector_map.items() if v == det_id][0]
+        try:
+            self._update_detector_map()
+        except ValueError as ex:
+            logging.warning("Failed to update detector map: %s", str(ex), exc_info=True)
+        else:
+            self._detector_names = set(self._detector_map.keys())
+            # Pick first one available
+            det_name = next(iter(self._detector_names))
 
-        self.type = model.StringEnumerated(
-            value=det_name,
-            choices=self._detector_names,
-            setter=self._set_detector_type)
+            self.type = model.StringEnumerated(
+                value=det_name,
+                choices=self._detector_names,
+                setter=self._set_detector_type)
+            # Call the setter explicitly to set the initial value on the hardware as well
+            self._set_detector_type(det_name)
 
         # 8 or 16 bits image
         self.bpp = model.IntEnumerated(DEFAULT_BITDEPTH, {8, 16}, unit="bit")
@@ -1186,7 +1191,15 @@ class Detector(model.Detector):
             with self.parent._acq_progress_lock:
                 self._device_handler.DtAutoSignal(self._channel)
 
-    def _initialize_detectors(self):
+    def _update_detector_map(self):
+        """
+        Parses and updates the mapping of detector names to their corresponding IDs from the connected
+        device's raw detector data, without returning the mapping itself.
+
+        Raises:
+            ValueError: If no detectors are found on the connected device or if the detector data format
+            does not match the expected structure.
+        """
         detectors_raw = self._device_handler.DtEnumDetectors()
         if not detectors_raw:
             raise ValueError("No detectors found on the connected device")
@@ -1197,10 +1210,7 @@ class Detector(model.Detector):
             raise ValueError("No detectors found on the connected device. Unexpected format.")
         self._detector_map = {det[0]: int(det[1]) for det in detectors_tuple}
 
-    def _set_detector_type(self, det_name):
-        if det_name not in self._detector_map:
-            logging.warning(f"Detector {det_name} not found among available detectors: "
-                             f"{self._detector_names}")
+    def _set_detector_type(self, det_name: str) -> str:
         detector_id = self._detector_map[det_name]
         self._device_handler.DtSelect(self._channel, detector_id)
         return det_name

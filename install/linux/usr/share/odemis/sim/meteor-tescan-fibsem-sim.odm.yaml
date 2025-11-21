@@ -12,7 +12,7 @@
     class: tescan.SEM,
     role: fibsem,
     init: {
-        host: "192.168.2.47",
+        host: "192.168.56.101",
         port: 8300
     },
     children: {

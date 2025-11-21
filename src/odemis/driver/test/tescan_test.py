@@ -683,6 +683,21 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         max_intensity = im.max().item()
         self.assertLess(max_intensity, 65536)
 
+    def test_acquire_detectors(self):
+        if len(self.sed._detector_map) <= 1:
+            self.skipTest("Not enough detectors connected, need at least two for this test")
+
+        # Verify that acquisition with default detector works
+        self.sed.type.value = next(iter(self.sed.type.choices))
+        im = self.sed.data.get()
+        self.assertEqual(im.shape[::-1], self.size)  # Invert axes for comparison between numpy and image convention
+
+        # Now switch detector and check if we can still acquire
+        other_detectors = set(self.sed.type.choices) - {self.sed.type.value}
+        self.sed.type.value = other_detectors.pop()
+        im = self.sed.data.get()
+        self.assertEqual(im.shape[::-1], self.size)  # Invert axes for comparison between numpy and image convention
+
     def test_connection(self):
         for i in range(5):
             self.sem._reset_device()
