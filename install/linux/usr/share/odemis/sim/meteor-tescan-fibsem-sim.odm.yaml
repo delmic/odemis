@@ -12,7 +12,7 @@
     class: tescan.SEM,
     role: fibsem,
     init: {
-        host: "192.168.56.101",
+        host: "192.168.2.47",
         port: 8300
     },
     children: {
@@ -37,11 +37,10 @@
     role: se-detector,
     init: {
         channel: 0,
-        detector: "se",
     },
-#    properties: {
-#        type: "SE",
-#    },
+    properties: {
+        type: "SE",
+    }
 }
 
 "Electron-Focus": {
@@ -62,11 +61,10 @@
     role: se-detector-ion,
     init: {
         channel: 0,
-        detector: "se",
     },
-#    properties: {
-#        type: "SE",
-#    },
+    properties: {
+        type: "SE",
+    }
 }
 
 # With calibration values for sample stage

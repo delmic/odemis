@@ -49,8 +49,8 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 # However, not everything behaves exactly as on the real hardware, so beware
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": "e-t"}
-CONFIG_FIB = {"name": "sed", "role": "sed", "channel": 0, "detector": "se"}
+CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0}
+CONFIG_FIB = {"name": "sed", "role": "sed", "channel": 0}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_STG = {"name": "stg", "role": "stage"}
 CONFIG_CM = {"name": "camera", "role": "chamber-ccd"}
