@@ -25,6 +25,7 @@ import math
 import os
 import queue
 import threading
+import time
 import warnings
 from concurrent.futures import CancelledError
 from dataclasses import dataclass
@@ -1111,7 +1112,7 @@ class ParabolicMirrorAlignmentTask:
         if result.success:
             logging.debug(f"Nelder-Mead alignment converged with result {result.x}")
         else:
-            logging.warning(f"Nelder-Mead alignment did not converge: {result.message}")
+            logging.debug(f"Nelder-Mead alignment did not converge: {result.message}")
 
         return result
 
@@ -1148,11 +1149,14 @@ class ParabolicMirrorAlignmentTask:
                 self._future.n_steps = 2
                 axis = self._axes[0]
                 # 1D coarse scan
+                start = time.time()
                 result = self._run_scalar(
                     axis,
                     search_range,
                     max_iter,
                 )
+                end = time.time()
+                logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
                 self._store_last_image_metadata()
                 self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
                 self._future.current_step = 1
@@ -1164,11 +1168,14 @@ class ParabolicMirrorAlignmentTask:
 
                 # Nelder-Mead refinement
                 search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+                start = time.time()
                 self._run_nelder_mead(
                     [axis],
                     search_range,
                     max_iter,
                 )
+                end = time.time()
+                logging.debug(f"1D Nelder-Mead refinement for {axis.name} took {end - start:.2f} seconds")
                 self._store_last_image_metadata()
                 self._enqueue_save(os.path.join(path, f"1d_scan_refinement_{axis.name}.h5"), self._last_img)
                 self._future.current_step = 2
@@ -1177,11 +1184,14 @@ class ParabolicMirrorAlignmentTask:
                 self._future.n_steps = 5
                 # 1D coarse scans for each axis
                 for i, axis in enumerate(self._axes, start=1):
+                    start = time.time()
                     result = self._run_scalar(
                         axis,
                         search_range,
                         max_iter,
                     )
+                    end = time.time()
+                    logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
 
                     self._store_last_image_metadata()
                     self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
@@ -1194,12 +1204,15 @@ class ParabolicMirrorAlignmentTask:
                 # Two Nelder-Mead refinements over all axes
                 for j in range(1, 3):
                     search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+                    start = time.time()
                     result = self._run_nelder_mead(
                         self._axes,
                         search_range,
                         max_iter,
                         weight=0.4 if j==2 else 0.5,
                     )
+                    end = time.time()
+                    logging.debug(f"3D Nelder-Mead refinement {j} took {end - start:.2f} seconds")
 
                     self._store_last_image_metadata()
                     self._enqueue_save(os.path.join(path, f"3d_scan_refinement_{j}.h5"), self._last_img)
