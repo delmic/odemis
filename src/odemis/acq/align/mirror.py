@@ -50,7 +50,7 @@ from odemis.util.angleres import (
 )
 
 ROOT_PATH = os.path.expanduser("~")
-PATH_IMAGES = os.path.join(ROOT_PATH, "odemis-status", "sparc-alignment", "parabolic-mirror")
+PATH_IMAGES = os.path.join(ROOT_PATH, "odemis-status", "sparc-calibrations", "parabolic-mirror")
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
 
@@ -646,18 +646,18 @@ def parabolic_mirror_alignment(
                        if progress stalls. Set to False to force the optimizers to run
                        until their normal convergence criteria or the supplied max_iter
                        budget is exhausted.
-    :param min_step_size : Tuple[float, float, float], optional
-                           Per-axis minimum hardware step sizes (metres) for [l, s, z]. Used by
-                           probabilistic snapping to round candidate positions to discrete actuator
-                           steps. Defaults to (1.5e-6, 1.5e-6, 2e-6).
     :returns: model.ProgressiveFuture
         A future representing the background alignment task. The future's
         task_canceller is set so callers (or GUI) can cancel the running task.
         Any exception raised during alignment will be propagated when calling
-        returned_future.result().
+        returned_future.result(). It has additional attributes:
+        - n_steps: Total number of optimization steps performed.
+        - current_step: Current optimization step.
     """
     f = model.ProgressiveFuture()
-    task = ParabolicMirrorAlignmentTask(axes, ccd, stop_early=stop_early)
+    f.n_steps = 0
+    f.current_step = 0
+    task = ParabolicMirrorAlignmentTask(axes, ccd, f, stop_early=stop_early)
     f.task_canceller = task.cancel
     _executor.submitf(
         f, task.align_mirror, search_range=search_range, max_iter=max_iter,
@@ -684,13 +684,15 @@ class ParabolicMirrorAlignmentTask:
         self,
         axes: List[AlignmentAxis],
         ccd: model.HwComponent,
-        stop_early: bool = True
+        future: model.ProgressiveFuture,
+        stop_early: bool,
     ):
         """
         Initialize the alignment task.
 
         :param axes: List of alignment axes to optimize.
-        :param ccd: (model.HwComponent) Camera component providing image data.
+        :param ccd: Camera component providing image data.
+        :param future: Future representing the running task.
         :param stop_early: When True the task attempts to stop the Nelder-Mead stages early
                            if progress stalls. Set to False to force the optimizers to run
                            until their normal convergence criteria or the supplied max_iter
@@ -698,6 +700,7 @@ class ParabolicMirrorAlignmentTask:
         """
         self._axes = axes
         self._ccd = ccd
+        self._future = future
         self._stop_early = stop_early
         self._cancelled = False
         self._last_xk = numpy.zeros(len(axes))
@@ -1142,6 +1145,7 @@ class ParabolicMirrorAlignmentTask:
 
         try:
             if len(self._axes) == 1:
+                self._future.n_steps = 2
                 axis = self._axes[0]
                 # 1D coarse scan
                 result = self._run_scalar(
@@ -1151,6 +1155,8 @@ class ParabolicMirrorAlignmentTask:
                 )
                 self._store_last_image_metadata()
                 self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
+                self._future.current_step = 1
+                self._future.set_progress()
 
                 max_iter -= result.nit
                 if max_iter < 1:
@@ -1165,9 +1171,12 @@ class ParabolicMirrorAlignmentTask:
                 )
                 self._store_last_image_metadata()
                 self._enqueue_save(os.path.join(path, f"1d_scan_refinement_{axis.name}.h5"), self._last_img)
+                self._future.current_step = 2
+                self._future.set_progress()
             elif len(self._axes) == 3:
+                self._future.n_steps = 5
                 # 1D coarse scans for each axis
-                for axis in self._axes:
+                for i, axis in enumerate(self._axes, start=1):
                     result = self._run_scalar(
                         axis,
                         search_range,
@@ -1176,22 +1185,26 @@ class ParabolicMirrorAlignmentTask:
 
                     self._store_last_image_metadata()
                     self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
+                    self._future.current_step = i
+                    self._future.set_progress()
                     max_iter -= result.nit
                     if max_iter < 1:
                         return
 
                 # Two Nelder-Mead refinements over all axes
-                for i in range(2):
+                for j in range(1, 3):
                     search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
                     result = self._run_nelder_mead(
                         self._axes,
                         search_range,
                         max_iter,
-                        weight=0.4 if i==1 else 0.5,
+                        weight=0.4 if j==2 else 0.5,
                     )
 
                     self._store_last_image_metadata()
-                    self._enqueue_save(os.path.join(path, f"3d_scan_refinement_{i+1}.h5"), self._last_img)
+                    self._enqueue_save(os.path.join(path, f"3d_scan_refinement_{j}.h5"), self._last_img)
+                    self._future.current_step = i + j
+                    self._future.set_progress()
                     max_iter -= result.nit
                     if max_iter < 1:
                         return

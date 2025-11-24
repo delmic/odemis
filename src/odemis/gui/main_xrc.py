@@ -1294,6 +1294,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_lens_switch_x = xrc.XRCCTRL(self, "btn_m_lens_switch_x")
         self.btn_p_lens_switch_x = xrc.XRCCTRL(self, "btn_p_lens_switch_x")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
+        self.btn_auto_align = xrc.XRCCTRL(self, "btn_auto_align")
+        self.gauge_auto_align = xrc.XRCCTRL(self, "gauge_auto_align")
         self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
         self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
         self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
@@ -1303,7 +1305,6 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
-        self.pnl_auto_align = xrc.XRCCTRL(self, "pnl_auto_align")
         self.pnl_light_aligner = xrc.XRCCTRL(self, "pnl_light_aligner")
         self.slider_light_aligner = xrc.XRCCTRL(self, "slider_light_aligner")
         self.lbl_p_light_aligner_z = xrc.XRCCTRL(self, "lbl_p_light_aligner_z")
@@ -15477,6 +15478,48 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_auto_align">
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <label>Auto align</label>
+                          <hidden>1</hidden>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxGauge" name="gauge_auto_align">
+                          <size>-1,10</size>
+                          <range>100</range>
+                          <value>0</value>
+                          <hidden>1</hidden>
+                          <style>wxGA_SMOOTH</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>7</border>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <vgap>5</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>1</growablecols>
+                      <growablerows/>
+                    </object>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText">
@@ -15648,10 +15691,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                       <growablerows/>
                     </object>
                     <flag>wxALIGN_CENTRE</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_auto_align">
-                    </object>
                   </object>
                 </object>
                 <fg>#E5E5E5</fg>

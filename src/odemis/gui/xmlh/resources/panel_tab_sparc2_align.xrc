@@ -828,6 +828,48 @@
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_auto_align">
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <label>Auto align</label>
+                          <hidden>1</hidden>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxGauge" name="gauge_auto_align">
+                          <size>-1,10</size>
+                          <range>100</range>
+                          <value>0</value>
+                          <hidden>1</hidden>
+                          <style>wxGA_SMOOTH</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>7</border>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <vgap>5</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>1</growablecols>
+                      <growablerows/>
+                    </object>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText">
@@ -999,10 +1041,6 @@
                       <growablerows/>
                     </object>
                     <flag>wxALIGN_CENTRE</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel" name="pnl_auto_align">
-                    </object>
                   </object>
                 </object>
                 <fg>#E5E5E5</fg>
