@@ -217,6 +217,29 @@ class FibsemOSMillingTaskManager:
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
 
+    def reconfigure(self, future: model.ProgressiveFuture,
+                    tasks: List[MillingTaskSettings],
+                    feature: CryoFeature,
+                    path: Optional[str],
+                    config_path: Optional[Path]):
+        """
+        Rebind to new run parameters without reopening the microscope
+        (unless config_path changed).
+        """
+        # Recreate microscope only if config changed (optional)
+        if getattr(self, "config_path", None) != config_path:
+            self.microscope = create_fibsemos_microscope(config_path)
+            self.config_path = config_path
+
+        self._future = future
+        self.feature = feature
+        self.path = path or os.getcwd()
+        self.microscope._last_imaging_settings.path = self.path
+        self.milling_stages = convert_milling_tasks_to_milling_stages(tasks)
+
+        future.running_subf = model.InstantaneousFuture()
+        future._task_lock = threading.Lock()
+
     def cancel(self, future: futures.Future) -> bool:
         """
         Canceler of acquisition task.
@@ -271,6 +294,8 @@ class FibsemOSMillingTaskManager:
             self._future._task_state = FINISHED
 
 
+_persistent_millmng: FibsemOSMillingTaskManager | None = None
+
 def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
                                path: Optional[str] = None) -> futures.Future:
     """
@@ -279,18 +304,21 @@ def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
     :param path: The path to save the images
     :return: ProgressiveFuture
     """
+    # Reuse a single FibsemOSMillingTaskManager (single microscope connection).
+    global _persistent_millmng
+
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
     # create milling task
     millmng = FibsemOSMillingTaskManager(future, tasks, path)
     # add the ability of cancelling the future during execution
-    future.task_canceller = millmng.cancel
+    future.task_canceller = _persistent_millmng.cancel
 
     # set the progress of the future
     # (+30sec as estimate time only includes milling time, not current switching time, etc)
-    future.set_end_time(time.time() + millmng.estimate_milling_time() + 30)
+    future.set_end_time(time.time() + _persistent_millmng.estimate_milling_time() + 30)
 
     # assign the acquisition task to the future
-    executeAsyncTask(future, millmng.run)
+    executeAsyncTask(future, _persistent_millmng.run)
 
     return future
