@@ -48,7 +48,6 @@ from odemis.acq.align.autofocus import (
 from odemis.acq.align.mirror import parabolic_mirror_alignment, AlignmentAxis
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
-from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_config, get_local_vas
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
@@ -839,35 +838,11 @@ class Sparc2AlignTab(Tab):
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
         if main_data.mirror and main_data.stage and main_data.ccd:
-            self.auto_align_panel = SettingsPanel(
-                self.panel.pnl_auto_align, size=(self.panel.pnl_auto_align.Parent.Size[0], 90)
-            )
-            self.auto_align_panel.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-            _, self.auto_align_rng = self.auto_align_panel.add_float_field(
-                label_text="Search range",
-                value=50e-6,
-                conf={
-                  "min_val": 10e-6,
-                  "max_val": 100e-6,
-                  "unit": "m",
-                  "accuracy": 6,
-                  "key_step": 1e-6,
-                },
-            )
-            self.auto_align_rng.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-            _, self.auto_align_max_iter = self.auto_align_panel.add_int_field(
-                label_text="Max iterations",
-                value=200,
-                conf={
-                  "min_val": 100,
-                  "max_val": 500,
-                  "key_step": 5,
-                },
-            )
-            self.auto_align_max_iter.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-            _, self.btn_auto_align = self.auto_align_panel.add_run_btn("Auto alignment")
-            self.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
-            self.auto_align_future = model.InstantaneousFuture()
+            self.panel.btn_auto_align.Show()
+            self.panel.gauge_auto_align.Show()
+            self.panel.gauge_auto_align.SetRange(100)
+            self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
+            self.mirror_auto_align_future = model.InstantaneousFuture()
 
     def _on_btn_auto_align(self, evt):
         """
@@ -879,27 +854,38 @@ class Sparc2AlignTab(Tab):
         settings (search range and max iterations).
         The button label is updated to indicate the running/cancellable state.
         """
-        if self.auto_align_future.running():
-            self.auto_align_future.cancel()
+        if self.mirror_auto_align_future.running():
+            self.mirror_auto_align_future.cancel()
             return
+        self.panel.gauge_auto_align.SetValue(0)
         l_align = AlignmentAxis("l", 1.5e-6, self.tab_data_model.main.mirror)
         s_align = AlignmentAxis("s", 1.5e-6, self.tab_data_model.main.mirror)
         z_align = AlignmentAxis("z", 2e-6, self.tab_data_model.main.stage)
-        self.auto_align_future = parabolic_mirror_alignment(
+        self.mirror_auto_align_future = parabolic_mirror_alignment(
             [l_align, s_align, z_align],
             self.tab_data_model.main.ccd,
-            search_range=float(self.auto_align_rng.GetValue()),
-            max_iter=int(self.auto_align_max_iter.GetValue()),
         )
-        self.auto_align_future.add_done_callback(self._on_auto_align_done)
-        self.btn_auto_align.SetLabel("Cancel")
+        self.mirror_auto_align_future.add_update_callback(self._on_auto_align_update)
+        self.mirror_auto_align_future.add_done_callback(self._on_auto_align_done)
+        self.panel.btn_auto_align.SetLabel("Cancel")
+
+    def _on_auto_align_update(self, future, start, end):
+        """
+        Callback invoked when the auto-alignment task has an update.
+
+        Updates the auto-alignment progress gauge (via wx.CallAfter) to reflect
+        the current progress.
+        """
+        if hasattr(future, "current_step") and hasattr(future, "n_steps") and future.n_steps > 0:
+            logging.debug("Auto align step progress: %s / %s", future.current_step, future.n_steps)
+            wx.CallAfter(self.panel.gauge_auto_align.SetValue, int(future.current_step / future.n_steps * 100))
 
     def _on_auto_align_done(self, f):
         """
         Callback invoked when the auto-alignment task finishes.
 
         Retrieves the future result to surface any exceptions and logs the outcome.
-        Always resets the auto-alignment button label back to "Run" (via wx.CallAfter)
+        Always resets the auto-alignment button label back to "Auto align" (via wx.CallAfter)
         so the GUI returns to the idle state.
 
         :param f: (concurrent.futures.Future) Future returned by parabolic_mirror_alignment
@@ -914,7 +900,8 @@ class Sparc2AlignTab(Tab):
         except Exception:
             logging.exception("Auto alignment failed")
         finally:
-            wx.CallAfter(self.btn_auto_align.SetLabel, "Run")
+            self.mirror_auto_align_future = model.InstantaneousFuture()
+            wx.CallAfter(self.panel.btn_auto_align.SetLabel, "Auto align")
 
     def _on_fbdet1_should_update(self, should_update):
         if should_update:
