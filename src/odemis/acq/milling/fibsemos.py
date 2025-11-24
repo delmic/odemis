@@ -56,6 +56,8 @@ except ImportError as e:
     logging.warning(f"fibsemOS is not installed or not available: {e}")
     FIBSEMOS_INSTALLED = False
 
+DEFAULT_ION_IMAGING_CURRENT = 10e-12  # 10 Pa
+
 
 def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
     """Create a fibsemOS microscope instance with the current microscope configuration."""
@@ -273,6 +275,29 @@ class FibsemOSMillingTaskManager:
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
 
+    def reconfigure(self, future: model.ProgressiveFuture,
+                    tasks: List[MillingTaskSettings],
+                    feature: CryoFeature,
+                    path: Optional[str],
+                    config_path: Optional[Path]):
+        """
+        Rebind to new run parameters without reopening the microscope
+        (unless config_path changed).
+        """
+        # Recreate microscope only if config changed (optional)
+        if getattr(self, "config_path", None) != config_path:
+            self.microscope = create_fibsemos_microscope(config_path)
+            self.config_path = config_path
+
+        self._future = future
+        self.feature = feature
+        self.path = path or os.getcwd()
+        self.microscope._last_imaging_settings.path = self.path
+        self.milling_stages = convert_milling_tasks_to_milling_stages(tasks)
+
+        future.running_subf = model.InstantaneousFuture()
+        future._task_lock = threading.Lock()
+
     def cancel(self, future: futures.Future) -> bool:
         """
         Canceler of acquisition task.
@@ -303,6 +328,18 @@ class FibsemOSMillingTaskManager:
         ref_img = from_odemis_image(self.feature.reference_image)
         ref_img.metadata.image_settings.path = self.path
         ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
+
+        mic = ref_img.metadata.microscope_state
+        beam_current = DEFAULT_ION_IMAGING_CURRENT
+        if mic.ion_beam.beam_current:
+            beam_current = mic.ion_beam.beam_current
+        ion_preset = _format_preset(mic.ion_beam.voltage,
+                                    beam_current)
+        # mic.ion_beam.preset = ion_preset
+        # mic.ion_beam.beam_current = beam_current
+        ref_img.metadata.microscope_state.ion_beam.preset = ion_preset
+        ref_img.metadata.microscope_state.ion_beam.beam_current = beam_current
+        logging.debug(f"Milling reference preset {ion_preset}")
 
         # crop ref_img.data (DataArray) to the reduced area
         rect = stage.alignment.rect
@@ -350,6 +387,8 @@ class FibsemOSMillingTaskManager:
             self._future._task_state = FINISHED
 
 
+_persistent_millmng: FibsemOSMillingTaskManager | None = None
+
 def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
                                feature: CryoFeature,
                                path: Optional[str] = None,
@@ -362,18 +401,33 @@ def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
     :param config_path: The path to the fibsemOS microscope configuration file
     :return: ProgressiveFuture
     """
+    # Reuse a single FibsemOSMillingTaskManager (single microscope connection).
+    global _persistent_millmng
+
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    # create milling task
-    millmng = FibsemOSMillingTaskManager(future, tasks, feature, path, config_path)
+
+    if _persistent_millmng is None:
+        _persistent_millmng = FibsemOSMillingTaskManager(future, tasks, feature, path, config_path)
+        _persistent_millmng.config_path = config_path
+    else:
+        # Optional: check if previous milling still running
+        if getattr(_persistent_millmng._future, "_task_state", FINISHED) == RUNNING:
+            logging.warning("Previous milling still running; cancelling or ignoring.")
+        _persistent_millmng.reconfigure(future=future,
+                                        tasks=tasks,
+                                        feature=feature,
+                                        path=path,
+                                        config_path=config_path)
+
     # add the ability of cancelling the future during execution
-    future.task_canceller = millmng.cancel
+    future.task_canceller = _persistent_millmng.cancel
 
     # set the progress of the future
     # (+30sec as estimate time only includes milling time, not current switching time, etc)
-    future.set_end_time(time.time() + millmng.estimate_milling_time() + 30)
+    future.set_end_time(time.time() + _persistent_millmng.estimate_milling_time() + 30)
 
     # assign the acquisition task to the future
-    executeAsyncTask(future, millmng.run)
+    executeAsyncTask(future, _persistent_millmng.run)
 
     return future
