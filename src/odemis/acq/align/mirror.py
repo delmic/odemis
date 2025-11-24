@@ -22,9 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 import math
+import os
+import queue
+import threading
 import warnings
 from concurrent.futures import CancelledError
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 import cv2
@@ -38,12 +42,15 @@ from scipy.optimize._optimize import (
 )
 
 from odemis import model
+from odemis.dataio import hdf5
 from odemis.util.angleres import (
     DEFAULT_BINNING,
     DEFAULT_SENSOR_PIXEL_SIZE,
     DEFAULT_SLIT_WIDTH,
 )
 
+ROOT_PATH = os.path.expanduser("~")
+PATH_IMAGES = os.path.join(ROOT_PATH, "odemis-status", "sparc-alignment", "parabolic-mirror")
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
 
 
@@ -696,9 +703,12 @@ class ParabolicMirrorAlignmentTask:
         self._last_xk = numpy.zeros(len(axes))
         self._iteration_count = 0
         self._stall_count = 0
+        self._last_img = None
         self._rng = numpy.random.default_rng(0)  # Force the seed for reproducibility
         self.pixel_count = model.IntContinuous(value=1, range=(1, 10000), unit="px")
         self.intensity = model.IntContinuous(value=0, range=(0, 50000), unit="a.u.")
+        self._save_queue = queue.Queue()
+        self._save_thread = threading.Thread(target=self._saving_thread, daemon=True)
 
     def cancel(self, future):
         """
@@ -714,6 +724,53 @@ class ParabolicMirrorAlignmentTask:
         """
         self._cancelled = True
         return True
+
+    def _enqueue_save(self, filepath: str, raw_data: model.DataArray):
+        """
+        Enqueue raw data to be saved in the background saving thread.
+        :param filepath: Path to save the HDF5 file.
+        :param raw_data: Raw data to save.
+        """
+        self._save_queue.put((filepath, raw_data))
+
+    def _stop_saving_thread(self):
+        """
+        Stop the background saving thread.
+        """
+        self._save_queue.put((None, None))
+        self._save_thread.join(5)
+
+    def _saving_thread(self):
+        """
+        Background thread method that saves raw data to HDF5 files.
+        """
+        try:
+            while True:
+                filepath, raw_data = self._save_queue.get()
+                if filepath is None and raw_data is None:
+                    break
+                logging.info("Saving data %s in thread", filepath)
+                hdf5.export(filepath, raw_data)
+                self._save_queue.task_done()
+        except Exception:
+            logging.exception("Failure in the saving thread")
+        finally:
+            logging.debug("Saving thread done")
+
+    def _store_last_image_metadata(self):
+        """
+        Store the current actuator positions in the last image's metadata.
+        """
+        extra_md = {}
+        for axis in self._axes:
+            pos = axis.component.position.value[axis.name]
+            extra_md[axis.name] = pos
+        self._last_img.metadata.update({model.MD_EXTRA_SETTINGS: extra_md})
+        # Remove any metadata related to AR & Spectrometry to be able to view the image in Odemis Viewer
+        for k in (model.MD_AR_POLE, model.MD_AR_MIRROR_BOTTOM, model.MD_AR_MIRROR_TOP,
+                  model.MD_AR_FOCUS_DISTANCE, model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
+                  model.MD_AR_XMAX, model.MD_ROTATION, model.MD_WL_LIST):
+            self._last_img.metadata.pop(k, None)
 
     def _update_spot_measurement(self) -> Tuple[int, int]:
         """
@@ -733,6 +790,7 @@ class ParabolicMirrorAlignmentTask:
             raise CancelledError("Alignment was cancelled by user")
 
         image = self._ccd.data.get(asap=False)
+        self._last_img = image  # Store for potentially saving it at the end of the optimization
 
         # Set pixel count range based on slit width and sensor properties
         ccd_md = self._ccd.getMetadata()
@@ -941,7 +999,8 @@ class ParabolicMirrorAlignmentTask:
         :returns: OptimizeResult
             Result of the optimization.
         """
-        logging.debug(f"Starting scalar alignment for {axis.name} with search range {search_range} m and max iter {max_iter}")
+        logging.debug(f"Starting scalar alignment for {axis.name}"
+                      f" with search range {search_range} m and max iter {max_iter}")
         x0 = axis.component.position.value[axis.name]
         if axis.abs_bounds is None:
             bounds = (x0 - search_range, x0 + search_range)
@@ -996,7 +1055,9 @@ class ParabolicMirrorAlignmentTask:
         :returns: OptimizeResult
             Result of the optimization.
         """
-        logging.debug(f"Starting Nelder-Mead alignment for {[axis.name for axis in axes]} with search range {search_range} m and max iter {max_iter}")
+        logging.debug(
+            f"Starting Nelder-Mead alignment for {[axis.name for axis in axes]}"
+            f" with search range {search_range} m and max iter {max_iter}")
         initial_guess = [axis.component.position.value[axis.name] for axis in axes]
         bounds = []
         for axis, guess in zip(axes, initial_guess):
@@ -1075,50 +1136,66 @@ class ParabolicMirrorAlignmentTask:
             x0 = axis.component.position.value[axis.name]
             axis.abs_bounds = (x0 - search_range, x0 + search_range)
 
-        if len(self._axes) == 1:
-            axis = self._axes[0]
-            # 1D coarse scan
-            result = self._run_scalar(
-                axis,
-                search_range,
-                max_iter,
-            )
+        path = os.path.join(PATH_IMAGES, datetime.now().strftime("%Y%m%d-%H%M%S"))
+        os.makedirs(path, exist_ok=True)
+        self._save_thread.start()
 
-            max_iter -= result.nit
-            if max_iter < 1:
-                return
-
-            # Nelder-Mead refinement
-            search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
-            self._run_nelder_mead(
-                [axis],
-                search_range,
-                max_iter,
-            )
-        elif len(self._axes) == 3:
-            # 1D coarse scans for each axis
-            for axis in self._axes:
+        try:
+            if len(self._axes) == 1:
+                axis = self._axes[0]
+                # 1D coarse scan
                 result = self._run_scalar(
                     axis,
                     search_range,
                     max_iter,
                 )
+                self._store_last_image_metadata()
+                self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
+
                 max_iter -= result.nit
                 if max_iter < 1:
                     return
 
-            # Two Nelder-Mead refinements over all axes
-            for i in range(2):
+                # Nelder-Mead refinement
                 search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
-                result = self._run_nelder_mead(
-                    self._axes,
+                self._run_nelder_mead(
+                    [axis],
                     search_range,
                     max_iter,
-                    weight=0.4 if i==1 else 0.5,
                 )
+                self._store_last_image_metadata()
+                self._enqueue_save(os.path.join(path, f"1d_scan_refinement_{axis.name}.h5"), self._last_img)
+            elif len(self._axes) == 3:
+                # 1D coarse scans for each axis
+                for axis in self._axes:
+                    result = self._run_scalar(
+                        axis,
+                        search_range,
+                        max_iter,
+                    )
 
-                max_iter -= result.nit
-                if max_iter < 1:
-                    return
-        else:
-            raise ValueError("Expected 1 or 3 alignment axes")
+                    self._store_last_image_metadata()
+                    self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
+                    max_iter -= result.nit
+                    if max_iter < 1:
+                        return
+
+                # Two Nelder-Mead refinements over all axes
+                for i in range(2):
+                    search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+                    result = self._run_nelder_mead(
+                        self._axes,
+                        search_range,
+                        max_iter,
+                        weight=0.4 if i==1 else 0.5,
+                    )
+
+                    self._store_last_image_metadata()
+                    self._enqueue_save(os.path.join(path, f"3d_scan_refinement_{i+1}.h5"), self._last_img)
+                    max_iter -= result.nit
+                    if max_iter < 1:
+                        return
+            else:
+                raise ValueError("Expected 1 or 3 alignment axes")
+        finally:
+            self._stop_saving_thread()
