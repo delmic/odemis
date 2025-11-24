@@ -5,7 +5,7 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from odemis import model
 from odemis.acq.milling.patterns import (
@@ -42,9 +42,11 @@ except ImportError as e:
     logging.warning(f"fibsemOS is not installed or not available: {e}")
     FIBSEMOS_INSTALLED = False
 
+_persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
+
 
 def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
-    """Create a fibsemOS microscope instance with the current microscope configuration."""
+    """Create and return a fibsemOS Thermo microscope instance."""
 
     # TODO: extract the rest of the required metadata
 
@@ -66,7 +68,7 @@ def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
     return microscope
 
 def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
-    """Create a fibsemOS Tescan microscope instance with the current microscope configuration."""
+    """Create, connect, and return a fibsemOS Tescan microscope instance."""
 
     # TODO: Extract the rest of the required metadata
 
@@ -96,8 +98,8 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
 
     return microscope
 
-def create_fibsemos_microscope() -> 'OdemisThermoMicroscope | OdemisTescanMicroscope':
-    """Create a fibsemOS microscope instance with the current microscope configuration.
+def create_fibsemos_microscope() -> Union['OdemisThermoMicroscope', 'OdemisTescanMicroscope']:
+    """Create and return a fibsemOS microscope instance matching the detected stage version.
     """
     stage_bare = model.getComponent(role="stage-bare")
     stage_md = stage_bare.getMetadata()
@@ -126,6 +128,7 @@ def convert_pattern_to_fibsemos(p: MillingPatternParameters) -> 'BasePattern':
         raise NotImplementedError(f"Conversion not implemented for pattern type: {type(p)}")
 
 def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePattern':
+    """Convert an Odemis rectangle pattern to a fibsemOS RectanglePattern."""
     return RectanglePattern(
         width=p.width.value,
         height=p.height.value,
@@ -136,6 +139,7 @@ def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePatte
     )
 
 def _convert_trench_pattern(p: TrenchPatternParameters) -> 'TrenchPattern':
+    """Convert an Odemis trench pattern to a fibsemOS TrenchPattern."""
     return TrenchPattern(
         width=p.width.value,
         upper_trench_height=p.height.value,
@@ -146,6 +150,7 @@ def _convert_trench_pattern(p: TrenchPatternParameters) -> 'TrenchPattern':
     )
 
 def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> 'MicroExpansionPattern':
+    """Convert an Odemis microexpansion pattern to a fibsemOS MicroExpansionPattern."""
     return MicroExpansionPattern(
         width=p.width.value,
         height=p.height.value,
@@ -155,7 +160,7 @@ def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> 'Micr
     )
 
 def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
-    """Convert from an Odemis milling settings to a fibsemOS milling settings"""
+    """Convert Odemis milling settings to fibsemOS milling settings."""
     return FibsemMillingSettings(
         milling_current=s.current.value,
         milling_voltage=s.voltage.value,
@@ -165,9 +170,7 @@ def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
 
 # task converter
 def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingStage':
-    """Convert from an Odemis milling task to a fibsemOS milling stage.
-    A fibsemOS milling stage is roughly equivalent to an Odemis milling task.
-    """
+    """Convert a single Odemis milling task to a fibsemOS milling stage."""
     s = convert_milling_settings(task.milling)
     p = convert_pattern_to_fibsemos(task.patterns[0])
     a = MillingAlignment(enabled=task.milling.align.value)
@@ -181,9 +184,7 @@ def convert_task_to_milling_stage(task: MillingTaskSettings) -> 'FibsemMillingSt
     return milling_stage
 
 def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSettings]) -> List['FibsemMillingStage']:
-    """Convert from Odemis milling tasks to fibsemOS milling stages.
-    An fibsemOS milling stage is roughly equivalent to an Odemis milling task.
-    """
+    """Convert a list of Odemis milling tasks to fibsemOS milling stages."""
     milling_stages = []
 
     for task in milling_tasks:
@@ -193,104 +194,105 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
     return milling_stages
 
 class FibsemOSMillingTaskManager:
-    """This class manages running milling tasks via fibsemOS."""
+    """Manage running milling tasks via fibsemOS using a persistent microscope connection."""
 
-    def __init__(self, future: futures.Future,
-                 tasks: List[MillingTaskSettings],
-                 path: Optional[str] = None):
-        """
-        :param future: the future that will be executing the task
-        :param tasks: The milling tasks to run (in order)
-        :param path: The path to save the images (optional)
-        """
+    def __init__(self, path: Optional[str] = None):
+        """Initialize the manager and establish the fibsemOS microscope connection."""
         # create microscope connection
         self.microscope = create_fibsemos_microscope()
+        self._lock = threading.Lock()
+        self._active = False
+        self._cancel_requested = False
+
         if path is None:
             path = os.getcwd()
-        self.microscope._last_imaging_settings.path = path # note: image acquisition post-milling is not yet supported via odemis
+        self.microscope._last_imaging_settings.path = path  # note: post-milling imaging is not yet supported via odemis
 
-        # convert the tasks to milling stages
-        self.milling_stages = convert_milling_tasks_to_milling_stages(tasks)
-
-        self._future = future
-        if future is not None:
-            self._future.running_subf = model.InstantaneousFuture()
-            self._future._task_lock = threading.Lock()
+        # per-run state (set in async_run)
+        self.milling_stages: List["FibsemMillingStage"] = []
+        self._future: Optional[futures.Future] = None
 
     def cancel(self, future: futures.Future) -> bool:
-        """
-        Canceler of acquisition task.
-        :param future: the future that will be executing the task
-        :return: True if it successfully cancelled (stopped) the future
-        """
+        """Request cancellation of the current milling run."""
         logging.debug("Canceling milling procedure...")
-
-        with future._task_lock:
-            if future._task_state == FINISHED:
+        with self._lock:
+            if not self._active:
                 return False
-            future._task_state = CANCELLED
-            future.running_subf.cancel()
+            if self._cancel_requested:
+                return True
+            self._cancel_requested = True
+        # Do not hold the lock during potentially blocking calls
+        subf = getattr(future, "running_subf", None)
+        if subf is not None:
+            subf.cancel()
+        try:
             self.microscope.stop_milling()
+        finally:
             logging.debug("Milling procedure cancelled.")
         return True
 
     def estimate_milling_time(self) -> float:
-        """
-        Estimates the milling time for the given patterns.
-        :return: (float > 0): the estimated time is in seconds
-        """
+        """Estimate the total milling time for the currently configured stages (seconds)."""
         return estimate_total_milling_time(self.milling_stages)
 
-    def run_milling(self, stage: 'FibsemMillingStage') -> None:
-        """Run the milling task via fibsemOS
-        :param stage: the milling stage to run"""
-        mill_stages(self.microscope, [stage])
+    def _run(self):
+        """Internal worker that performs the milling stages sequentially."""
+        future = self._future
+        if future is None:
+            # Should never happen if async_run configured correctly, but don't use assert.
+            with self._lock:
+                self._active = False
+            raise RuntimeError("Internal error: milling run started without an associated future.")
 
-    def run(self):
-        """
-        The main function of the task class, which will be called by the future asynchronously
-        """
-        self._future._task_state = RUNNING
-
-        # TODO: connect the progress signal
         try:
             for stage in self.milling_stages:
-                with self._future._task_lock:
-                    if self._future._task_state == CANCELLED:
+                with self._lock:
+                    if self._cancel_requested:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                self.run_milling(stage=stage)
-        except CancelledError:
-            logging.debug("Stopping because milling was cancelled")
-            raise
-        except Exception:
-            logging.exception("The milling failed")
-            raise
+                mill_stages(self.microscope, [stage])
+
         finally:
-            self._future._task_state = FINISHED
+            with self._lock:
+                self._active = False
+                self._cancel_requested = False
+
+    def async_run(self, *, future: futures.Future, tasks: List[MillingTaskSettings], path: Optional[str] = None) -> futures.Future:
+        """Prepare and start a milling run asynchronously (one run at a time)."""
+        if path is None:
+            path = os.getcwd()
+
+        milling_stages = convert_milling_tasks_to_milling_stages(tasks)
+        end_time = time.time() + estimate_total_milling_time(milling_stages) + 30
+
+        with self._lock:
+            if self._active:
+                raise RuntimeError("A fibsemOS milling session is already running.")
+            self._active = True
+            self._cancel_requested = False
+            self.microscope._last_imaging_settings.path = path
+            self.milling_stages = milling_stages
+            self._future = future
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future.task_canceller = self.cancel
+            # +30 s as estimate time only includes milling time, not current switching time, etc
+            self._future.set_end_time(end_time)
+
+            try:
+                executeAsyncTask(self._future, self._run)
+            except Exception:
+                self._active = False
+                raise
+        return self._future
 
 
-def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings],
-                               path: Optional[str] = None) -> futures.Future:
-    """
-    Run multiple milling tasks in order via fibsemOS.
-    :param tasks: List of milling tasks to be executed in order.
-    :param path: The path to save the images
-    :return: ProgressiveFuture
-    """
-    # Create a progressive future with running sub future
+def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], path: Optional[str] = None) -> futures.Future:
+    """Run the given milling tasks asynchronously using a persistent fibsemOS manager."""
+    global _persistent_millmng
+
+    if _persistent_millmng is None:
+        _persistent_millmng = FibsemOSMillingTaskManager()
+
     future = model.ProgressiveFuture()
-    # create milling task
-    millmng = FibsemOSMillingTaskManager(future, tasks, path)
-    # add the ability of cancelling the future during execution
-    future.task_canceller = millmng.cancel
-
-    # set the progress of the future
-    # (+30sec as estimate time only includes milling time, not current switching time, etc)
-    future.set_end_time(time.time() + millmng.estimate_milling_time() + 30)
-
-    # assign the acquisition task to the future
-    executeAsyncTask(future, millmng.run)
-
-    return future
+    return _persistent_millmng.async_run(future=future, tasks=tasks, path=path)
