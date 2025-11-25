@@ -65,11 +65,7 @@ from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import AxisConnector, VigilantAttributeConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
-from odemis.gui.win.acquisition import (
-    LoadProjectFileDialog,
-    SelectFileDialog,
-    ShowChamberFileDialog,
-)
+from odemis.gui.win.acquisition import LoadProjectFileDialog, ShowChamberFileDialog
 from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
 from odemis.util.dataio import data_to_static_streams
