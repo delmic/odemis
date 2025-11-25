@@ -349,7 +349,7 @@ class AutomatedMillingManager(object):
                                "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
                 logging.error(error_text)
                 raise ValueError(error_text)
-            
+
             for feature in self.features:
 
                 if feature.status.value == FEATURE_DEACTIVE:
@@ -363,6 +363,9 @@ class AutomatedMillingManager(object):
                     continue
                 elif status_map[workflow_task] == feature.status.value == FEATURE_POLISHED:
                     logging.info(f"Skipping {feature.name.value} as it was already polished.")
+                    continue
+                elif workflow_task == MillingWorkflowTask.RoughMilling and feature.status.value == FEATURE_POLISHED:
+                    logging.info(f"Skipping {feature.name.value} as it was already rough milled and polished.")
                     continue
 
                 # get milling tasks
