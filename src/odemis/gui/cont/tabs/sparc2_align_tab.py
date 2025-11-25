@@ -825,6 +825,25 @@ class Sparc2AlignTab(Tab):
         if main_data.brightlight_ext:
             main_data.brightlight_ext.power.value = main_data.brightlight_ext.power.range[0]
 
+        # Mirror auto-alignment
+        if main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
+            mirror_md = main_data.mirror.getMetadata()
+            calib = mirror_md.get(model.MD_CALIB, {})
+            if "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib:
+                # hidden by default in xrc file
+                self.panel.lbl_step_size_z.Show(True)
+                self.panel.slider_stage.Show(True)
+                self.panel.lbl_pz.Show(True)
+                self.panel.btn_p_stage_z.Show(True)
+                self.panel.btn_m_stage_z.Show(True)
+                self.panel.lbl_mz.Show(True)
+                self.panel.btn_auto_align.Show(True)
+                self.panel.gauge_auto_align.Show(True)
+                self.panel.gauge_auto_align.SetRange(100)
+                self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
+                self._mirror_auto_align_future = model.InstantaneousFuture()
+                logging.debug("Mirror auto-alignment enabled.")
+
         # Bind moving buttons & keys
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
@@ -839,18 +858,6 @@ class Sparc2AlignTab(Tab):
         # TODO: Have a warning text to indicate there is no background image?
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
-        self.panel.btn_auto_align.Enable(False)
-        if main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
-            mirror_md = main_data.mirror.getMetadata()
-            calib = mirror_md.get(model.MD_CALIB, {})
-            if "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib:
-                self.panel.btn_auto_align.Show(True)  # hidden by default in xrc file
-                self.panel.btn_auto_align.Enable(True)
-                self.panel.gauge_auto_align.Show(True)  # hidden by default in xrc file
-                self.panel.gauge_auto_align.SetRange(100)
-                self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
-                self.mirror_auto_align_future = model.InstantaneousFuture()
-                logging.debug("Mirror auto-alignment enabled.")
 
     def _on_btn_auto_align(self, evt):
         """
@@ -862,8 +869,8 @@ class Sparc2AlignTab(Tab):
         settings (search range and max iterations).
         The button label is updated to indicate the running/cancellable state.
         """
-        if self.mirror_auto_align_future.running():
-            self.mirror_auto_align_future.cancel()
+        if self._mirror_auto_align_future.running():
+            self._mirror_auto_align_future.cancel()
             return
         self.panel.gauge_auto_align.SetValue(0)
         mirror_md = self.tab_data_model.main.mirror.getMetadata()
@@ -884,12 +891,12 @@ class Sparc2AlignTab(Tab):
         l_align = AlignmentAxis("l", min_step_size["l"], self.tab_data_model.main.mirror)
         s_align = AlignmentAxis("s", min_step_size["s"], self.tab_data_model.main.mirror)
         z_align = AlignmentAxis("z", min_step_size["z"], self.tab_data_model.main.stage)
-        self.mirror_auto_align_future = parabolic_mirror_alignment(
+        self._mirror_auto_align_future = parabolic_mirror_alignment(
             [l_align, s_align, z_align],  # the order matters
             self.tab_data_model.main.ccd,
         )
-        self.mirror_auto_align_future.add_update_callback(self._on_auto_align_update)
-        self.mirror_auto_align_future.add_done_callback(self._on_auto_align_done)
+        self._mirror_auto_align_future.add_update_callback(self._on_auto_align_update)
+        self._mirror_auto_align_future.add_done_callback(self._on_auto_align_done)
         self.panel.btn_auto_align.SetLabel("Cancel")
 
     def _on_auto_align_update(self, future, start, end):
@@ -923,7 +930,7 @@ class Sparc2AlignTab(Tab):
         except Exception:
             logging.exception("Auto alignment failed")
         finally:
-            self.mirror_auto_align_future = model.InstantaneousFuture()
+            self._mirror_auto_align_future = model.InstantaneousFuture()
             wx.CallAfter(self.panel.btn_auto_align.SetLabel, "Auto align")
 
     def _on_fbdet1_should_update(self, should_update):
