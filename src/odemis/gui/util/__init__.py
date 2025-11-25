@@ -25,6 +25,7 @@ import os.path
 import subprocess
 import sys
 from functools import wraps
+from typing import Dict, List, Tuple, Optional
 
 import wx
 from decorator import decorator
@@ -220,22 +221,34 @@ def get_picture_folder() -> str:
     # fall-back to HOME
     return get_home_folder()
 
+# Technically, the case sensitivity depends on the file system, but in practice, it
+# is mostly linked to the OS: Windows and macOS are case-insensitive, the rest not.
+OS_IS_CASE_SENSITIVE = not ((os.name == "nt") or (sys.platform.startswith('darwin')))
 
-def formats_to_wildcards(formats2ext, include_all=False, include_any=False, suffix=" files"):
+
+def formats_to_wildcards(formats2ext: Dict[str, List[str]],
+                         include_all: bool = False,
+                         include_any: bool = False,
+                         suffix: str=" files",
+                         case_sensitive: bool = True
+                         ) -> Tuple[str, List[Optional[str]]]:
     """Convert formats into wildcards string compatible with wx.FileDialog()
-
-    formats2ext (dict (unicodes -> list of unicodes)): format names and lists of
-        their possible extensions.
-    include_all (boolean): If True, also include as first wildcards for all the formats
-    include_any (boolean): If True, also include as last the *.* wildcards
-
-    returns (tuple (unicode, list of unicodes)): wildcards, name of the format
-        in the same order as in the wildcards (or None if all/any format)
+    :param formats2ext: format names and lists of their possible extensions.
+    :param include_all: If True, also include as first wildcards for all the formats
+    :param include_any: If True, also include as last the *.* wildcards
+    :param suffix: Suffix to add to each format name in the wildcards
+    :param case_sensitive: If False, add upper-case extensions as well (only if OS is case-sensitive)
+    :returns:
+        * wildcards
+        * name of the format(s) in the same order as in the wildcards (or None if all/any format)
     """
     formats = []
     wildcards = []
     for fmt, extensions in formats2ext.items():
-        ext_wildcards = ";".join(["*" + e for e in extensions])
+        star_ext = ["*" + e for e in extensions]
+        if not case_sensitive and OS_IS_CASE_SENSITIVE:
+            star_ext += ["*" + e.upper() for e in extensions]
+        ext_wildcards = ";".join(star_ext)
         wildcard = "%s%s (%s)|%s" % (fmt, suffix, ext_wildcards, ext_wildcards)
         formats.append(fmt)
         wildcards.append(wildcard)
@@ -244,6 +257,8 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False, suff
         fmt_wildcards = []
         for extensions in formats2ext.values():
             fmt_wildcards.append(";".join(["*" + e for e in extensions]))
+            if not case_sensitive and OS_IS_CASE_SENSITIVE:
+                fmt_wildcards.append(";".join(["*" + e.upper() for e in extensions]))
         ext_wildcards = ";".join(fmt_wildcards)
         wildcard = "All supported files (%s)|%s" % (ext_wildcards, ext_wildcards)
         wildcards.insert(0, wildcard)
