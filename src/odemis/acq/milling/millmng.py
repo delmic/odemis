@@ -489,14 +489,22 @@ class AutomatedMillingManager(object):
 
     def _acquire_reference_images(self, feature: CryoFeature) -> None:
         self.check_cancelled()
-
-        self._future.msg = f"{feature.name.value}: Acquiring Reference Images"
+        self._future.msg = f"{feature.name.value}: acquiring reference images"
         self._future.set_progress()
 
-        # acquire images
-        self._future.running_subf = acquire([self.sem_stream, self.fib_stream])
-        data, ex = self._future.running_subf.result()
-        sem_image, fib_image = data
+        # acquire FIB image first
+        self._future.running_subf = acquire([self.fib_stream])
+        data, _ = self._future.running_subf.result()
+        fib_image = data[0]
+
+        # small delay
+        time.sleep(2)  # TODO: Check whether the SEM shutter has been retracted instead of waiting
+        self.check_cancelled()
+
+        # acquire SEM image
+        self._future.running_subf = acquire([self.sem_stream])
+        data, _ = self._future.running_subf.result()
+        sem_image = data[0]
 
         # save images
         sem_filename = self.get_filename(feature, "Finished-SEM")
