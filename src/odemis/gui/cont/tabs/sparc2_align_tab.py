@@ -1423,6 +1423,7 @@ class Sparc2AlignTab(Tab):
             pages.append("doc/sparc2_lens.html")
         elif mode == "mirror-align":
             pages.append("doc/sparc2_mirror.html")
+            pages.append("doc/sparc2_mirror_auto_alignment.html")
         elif mode == "lens2-align":
             pages.append("doc/sparc2_lens_switch.html")
         elif mode == "center-align":
