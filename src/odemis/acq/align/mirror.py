@@ -630,6 +630,7 @@ def parabolic_mirror_alignment(
     search_range: float = 50e-6,
     max_iter: int = 100,
     stop_early: bool = True,
+    save_images: bool = True,
 ) -> model.ProgressiveFuture:
     """
     Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
@@ -647,6 +648,7 @@ def parabolic_mirror_alignment(
                        if progress stalls. Set to False to force the optimizers to run
                        until their normal convergence criteria or the supplied max_iter
                        budget is exhausted.
+    :param save_images: When True, save alignment step images.
     :returns: model.ProgressiveFuture
         A future representing the background alignment task. The future's
         task_canceller is set so callers (or GUI) can cancel the running task.
@@ -658,7 +660,7 @@ def parabolic_mirror_alignment(
     f = model.ProgressiveFuture()
     f.n_steps = 0
     f.current_step = 0
-    task = ParabolicMirrorAlignmentTask(axes, ccd, f, stop_early=stop_early)
+    task = ParabolicMirrorAlignmentTask(axes, ccd, f, stop_early=stop_early, save_images=save_images)
     f.task_canceller = task.cancel
     _executor.submitf(
         f, task.align_mirror, search_range=search_range, max_iter=max_iter,
@@ -687,6 +689,7 @@ class ParabolicMirrorAlignmentTask:
         ccd: model.HwComponent,
         future: model.ProgressiveFuture,
         stop_early: bool,
+        save_images: bool,
     ):
         """
         Initialize the alignment task.
@@ -698,6 +701,7 @@ class ParabolicMirrorAlignmentTask:
                            if progress stalls. Set to False to force the optimizers to run
                            until their normal convergence criteria or the supplied max_iter
                            budget is exhausted.
+        :param save_images: When True, save alignment step images.
         """
         self._axes = axes
         self._ccd = ccd
@@ -711,6 +715,7 @@ class ParabolicMirrorAlignmentTask:
         self._rng = numpy.random.default_rng(0)  # Force the seed for reproducibility
         self.pixel_count = model.IntContinuous(value=1, range=(1, 10000), unit="px")
         self.intensity = model.IntContinuous(value=0, range=(0, 50000), unit="a.u.")
+        self._save_images = save_images
         self._save_queue = queue.Queue()
         self._save_thread = threading.Thread(target=self._saving_thread, daemon=True)
 
@@ -1140,9 +1145,10 @@ class ParabolicMirrorAlignmentTask:
             x0 = axis.component.position.value[axis.name]
             axis.abs_bounds = (x0 - search_range, x0 + search_range)
 
-        path = os.path.join(PATH_IMAGES, datetime.now().strftime("%Y%m%d-%H%M%S"))
-        os.makedirs(path, exist_ok=True)
-        self._save_thread.start()
+        if self._save_images:
+            path = os.path.join(PATH_IMAGES, datetime.now().strftime("%Y%m%d-%H%M%S"))
+            os.makedirs(path, exist_ok=True)
+            self._save_thread.start()
 
         try:
             if len(self._axes) == 1:
@@ -1157,8 +1163,9 @@ class ParabolicMirrorAlignmentTask:
                 )
                 end = time.time()
                 logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
-                self._store_last_image_metadata()
-                self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
+                if self._save_images:
+                    self._store_last_image_metadata()
+                    self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
                 self._future.current_step = 1
                 self._future.set_progress()
 
@@ -1176,8 +1183,9 @@ class ParabolicMirrorAlignmentTask:
                 )
                 end = time.time()
                 logging.debug(f"1D Nelder-Mead refinement for {axis.name} took {end - start:.2f} seconds")
-                self._store_last_image_metadata()
-                self._enqueue_save(os.path.join(path, f"1d_scan_refinement_{axis.name}.h5"), self._last_img)
+                if self._save_images:
+                    self._store_last_image_metadata()
+                    self._enqueue_save(os.path.join(path, f"1d_scan_refinement_{axis.name}.h5"), self._last_img)
                 self._future.current_step = 2
                 self._future.set_progress()
             elif len(self._axes) == 3:
@@ -1193,8 +1201,9 @@ class ParabolicMirrorAlignmentTask:
                     end = time.time()
                     logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
 
-                    self._store_last_image_metadata()
-                    self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
+                    if self._save_images:
+                        self._store_last_image_metadata()
+                        self._enqueue_save(os.path.join(path, f"1d_scan_coarse_{axis.name}.h5"), self._last_img)
                     self._future.current_step = i
                     self._future.set_progress()
                     max_iter -= result.nit
@@ -1214,8 +1223,9 @@ class ParabolicMirrorAlignmentTask:
                     end = time.time()
                     logging.debug(f"3D Nelder-Mead refinement {j} took {end - start:.2f} seconds")
 
-                    self._store_last_image_metadata()
-                    self._enqueue_save(os.path.join(path, f"3d_scan_refinement_{j}.h5"), self._last_img)
+                    if self._save_images:
+                        self._store_last_image_metadata()
+                        self._enqueue_save(os.path.join(path, f"3d_scan_refinement_{j}.h5"), self._last_img)
                     self._future.current_step = i + j
                     self._future.set_progress()
                     max_iter -= result.nit
@@ -1224,4 +1234,5 @@ class ParabolicMirrorAlignmentTask:
             else:
                 raise ValueError("Expected 1 or 3 alignment axes")
         finally:
-            self._stop_saving_thread()
+            if self._save_images:
+                self._stop_saving_thread()
