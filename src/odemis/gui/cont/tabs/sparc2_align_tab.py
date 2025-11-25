@@ -61,6 +61,8 @@ from odemis.gui.util.widgets import AxisConnector, ProgressiveFutureConnector
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.util import almost_equal, driver, limit_invocation, spot, units
 
+EBEAM_WD_LIMIT = 200e-6  # 200 microns
+
 
 class Sparc2AlignTab(Tab):
     """
@@ -837,12 +839,18 @@ class Sparc2AlignTab(Tab):
         # TODO: Have a warning text to indicate there is no background image?
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
-        if main_data.mirror and main_data.stage and main_data.ccd:
-            self.panel.btn_auto_align.Show()
-            self.panel.gauge_auto_align.Show()
-            self.panel.gauge_auto_align.SetRange(100)
-            self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
-            self.mirror_auto_align_future = model.InstantaneousFuture()
+        self.panel.btn_auto_align.Enable(False)
+        if main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
+            mirror_md = main_data.mirror.getMetadata()
+            calib = mirror_md.get(model.MD_CALIB, {})
+            if "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib:
+                self.panel.btn_auto_align.Show(True)  # hidden by default in xrc file
+                self.panel.btn_auto_align.Enable(True)
+                self.panel.gauge_auto_align.Show(True)  # hidden by default in xrc file
+                self.panel.gauge_auto_align.SetRange(100)
+                self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
+                self.mirror_auto_align_future = model.InstantaneousFuture()
+                logging.debug("Mirror auto-alignment enabled.")
 
     def _on_btn_auto_align(self, evt):
         """
@@ -858,11 +866,26 @@ class Sparc2AlignTab(Tab):
             self.mirror_auto_align_future.cancel()
             return
         self.panel.gauge_auto_align.SetValue(0)
-        l_align = AlignmentAxis("l", 1.5e-6, self.tab_data_model.main.mirror)
-        s_align = AlignmentAxis("s", 1.5e-6, self.tab_data_model.main.mirror)
-        z_align = AlignmentAxis("z", 2e-6, self.tab_data_model.main.stage)
+        mirror_md = self.tab_data_model.main.mirror.getMetadata()
+        calib = mirror_md[model.MD_CALIB]
+        min_step_size = calib["auto_align_min_step_size"]
+        calib_ebeam_wd = calib["ebeam_working_distance"]
+        actual_ebeam_wd = self.tab_data_model.main.ebeam_focus.position.value["z"]
+        # Give a warning message and return if the ebeam working distance differs too much from the calibrated value
+        if abs(calib_ebeam_wd - actual_ebeam_wd) > EBEAM_WD_LIMIT:
+            wx.MessageBox(
+                "The electron beam working distance (%.3f mm) differs more than (%.3f) mm from the "
+                "calibrated value (%.3f mm). Cannot perform auto-alignment."
+                % (actual_ebeam_wd * 1e3, EBEAM_WD_LIMIT * 1e3, calib_ebeam_wd * 1e3),
+                "Auto-alignment warning",
+                wx.OK | wx.ICON_WARNING,
+            )
+            return
+        l_align = AlignmentAxis("l", min_step_size["l"], self.tab_data_model.main.mirror)
+        s_align = AlignmentAxis("s", min_step_size["s"], self.tab_data_model.main.mirror)
+        z_align = AlignmentAxis("z", min_step_size["z"], self.tab_data_model.main.stage)
         self.mirror_auto_align_future = parabolic_mirror_alignment(
-            [l_align, s_align, z_align],
+            [l_align, s_align, z_align],  # the order matters
             self.tab_data_model.main.ccd,
         )
         self.mirror_auto_align_future.add_update_callback(self._on_auto_align_update)
