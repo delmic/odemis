@@ -27,7 +27,7 @@ import threading
 from abc import abstractmethod
 from concurrent.futures import CancelledError, Future
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-from typing import Dict, Union, Iterable, Optional, Sequence
+from typing import Dict, Union, Iterable, Optional, Sequence, List, Tuple
 
 import numpy
 import scipy
@@ -2243,17 +2243,51 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         :param future: cancellable future of the move
         :param target_posture: target posture
         """
-        if target_posture not in POSITION_NAMES:
+        try:
+            target_name = POSITION_NAMES[target_posture]
+        except KeyError:
             raise ValueError(f"Unknown target '{target_posture}'")
 
-        # Move stage directly (the JEOL software takes care of the safety aspects)
-        target_position = self.getTargetPosition(target_posture)
-        self._run_sub_move(future, self.stage, target_position)
+        try:
+            # To hold the ordered sub moves list
+            sub_moves: List[Tuple[model.Actuator, Dict[str, float]]] = []  # series of component + position
+            current_name = POSITION_NAMES[self.current_posture.value]
 
-        with future._task_lock:
-            if future._task_state == CANCELLED:
-                raise CancelledError()
-            future._task_state = FINISHED
+            target_position = self.getTargetPosition(target_posture)  # raises an exception if move is unsupported
+
+            if target_posture in (GRID_1, GRID_2):
+                sub_moves.append((self.stage, target_position))
+            else:  # posture switch (LOADING, SEM_IMAGING, FM_IMAGING)
+                focus_md = self.focus.getMetadata()
+                focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
+                focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
+
+                # Park the focuser for safety
+                if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                    sub_moves.append((self.focus, focus_deactive))
+
+                # Move stage directly (the JEOL software takes care of the safety aspects)
+                sub_moves.append((self.stage, target_position))
+
+                if target_posture == FM_IMAGING:
+                    # Engage the focuser as last move
+                    sub_moves.append((self.focus, focus_active))
+
+            # run the moves
+            logging.info("Moving from position %s to position %s.", current_name, target_name)
+            for component, sub_move in sub_moves:
+                self._run_sub_move(future, component, sub_move)
+
+        except CancelledError:
+            logging.info("CryoSwitchSamplePosition cancelled.")
+        except Exception:
+            logging.exception("Failure to move to %s position.", target_name)
+            raise
+        finally:
+            with future._task_lock:
+                if future._task_state == CANCELLED:
+                    raise CancelledError()
+                future._task_state = FINISHED
 
     def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from stage bare to chamber coordinates.
