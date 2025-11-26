@@ -32,6 +32,7 @@ from numpy.testing import assert_array_almost_equal
 import odemis
 from odemis import model
 from odemis.acq.align.mirror import (
+    AlignmentAxis,
     _custom_minimize_neldermead,
     _custom_minimize_scalar_bounded,
     _MaxFuncCallError,
@@ -68,7 +69,8 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        testing.stop_backend()
+        # testing.stop_backend()
+        pass
 
     def setUp(self):
         self.stage.moveAbs({"z": self.aligned_pos["z"]}).result()
@@ -76,12 +78,12 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
             {"x": self.aligned_pos["x"], "y": self.aligned_pos["y"]}
         ).result()
 
-    def test_alignment_success_rate(self):
-        """Require at least 70% of random misalignments to realign successfully."""
+    def test_3d_alignment_success_rate(self):
+        """Require at least 80% of random misalignments to realign successfully."""
         n_tests = 10
         rng = 30e-6  # ±30 µm range
         success_threshold = 15000  # Minimum acceptable intensity
-        min_pass_rate = 0.7  # Require 70% success
+        min_pass_rate = 0.8  # Require 80% success
 
         passed = 0
 
@@ -102,14 +104,16 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
             self.stage.moveRel({"z": dz}).result()
             time.sleep(1)
 
+            l_align = AlignmentAxis("l", 0.5e-6, self.mirror)
+            s_align = AlignmentAxis("s", 0.5e-6, self.mirror)
+            z_align = AlignmentAxis("z", 0.5e-6, self.stage)
+
             # Run alignment
             f = parabolic_mirror_alignment(
-                self.mirror,
-                self.stage,
+                [l_align, s_align, z_align],
                 self.ccd,
-                max_iter=100,
                 stop_early=False,
-                min_step_size=(1e-6, 1e-6, 1e-6),
+                save_images=False,
             )
             try:
                 f.result()
@@ -136,14 +140,81 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
         # Compute success rate
         pass_rate = passed / n_tests
         logging.info(
-            f"Alignment success rate: {pass_rate*100:.1f}% ({passed}/{n_tests})"
+            f"3D alignment success rate: {pass_rate*100:.1f}% ({passed}/{n_tests})"
         )
 
         # Final assertion
         self.assertGreaterEqual(
             pass_rate,
             min_pass_rate,
-            f"Alignment success rate below {min_pass_rate*100:.0f}% ({pass_rate*100:.1f}%)",
+            f"3D alignment success rate below {min_pass_rate*100:.0f}% ({pass_rate*100:.1f}%)",
+        )
+
+    def test_1d_alignment_success_rate(self):
+        """Require at least 90% of random misalignments to realign successfully."""
+        n_tests = 10
+        rng = 30e-6  # ±30 µm range
+        success_threshold = 15000  # Minimum acceptable intensity
+        min_pass_rate = 0.9  # Require 90% success
+
+        passed = 0
+
+        random.seed(25)
+
+        for i in range(n_tests):
+            dz = random.uniform(-rng, rng)
+
+            logging.info(
+                f"[{i+1:02d}/{n_tests}] Testing misalignment: "
+                f"dz={dz:.1e}"
+            )
+
+            # Apply misalignment
+            self.stage.moveRel({"z": dz}).result()
+            time.sleep(1)
+
+            z_align = AlignmentAxis("z", 0.5e-6, self.stage)
+
+            # Run alignment
+            f = parabolic_mirror_alignment(
+                [z_align],
+                self.ccd,
+                stop_early=False,
+                save_images=False,
+            )
+            try:
+                f.result()
+            except CancelledError:
+                logging.warning(f"Alignment cancelled for dz={dz}")
+                continue
+
+            # Evaluate final intensity
+            img = self.ccd.data.get(asap=False)
+            intensity = int(img.max())
+            logging.info(f"Final intensity = {intensity:.1f}")
+
+            if intensity >= success_threshold:
+                passed += 1
+            else:
+                logging.warning(
+                    f"Low intensity ({intensity:.1f}) for dz={dz:.1e}"
+                )
+
+            # Reset for next test
+            self.setUp()
+            time.sleep(1)
+
+        # Compute success rate
+        pass_rate = passed / n_tests
+        logging.info(
+            f"1D alignment success rate: {pass_rate*100:.1f}% ({passed}/{n_tests})"
+        )
+
+        # Final assertion
+        self.assertGreaterEqual(
+            pass_rate,
+            min_pass_rate,
+            f"1D alignment success rate below {min_pass_rate*100:.0f}% ({pass_rate*100:.1f}%)",
         )
 
 
