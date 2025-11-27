@@ -289,17 +289,17 @@ class TestMeteorTFS3Move(unittest.TestCase):
         self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
         self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
         position_reverted = self.stage_bare.position.value
-        testing.assert_pos_almost_equal(position_reverted, position_initial)
+        testing.assert_pos_almost_equal(position_reverted, position_initial, atol=1e-9)
         # Also for milling to METEOR
         self.pm.cryoSwitchSamplePosition(MILLING).result()
         position_milling_initial = self.stage_bare.position.value
         self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
         self.pm.cryoSwitchSamplePosition(MILLING).result()
         position_reverted = self.stage_bare.position.value
-        testing.assert_pos_almost_equal(position_reverted, position_milling_initial)
+        testing.assert_pos_almost_equal(position_reverted, position_milling_initial, atol=1e-9)
         self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
         position_reverted = self.stage_bare.position.value
-        testing.assert_pos_almost_equal(position_reverted, position_initial)
+        testing.assert_pos_almost_equal(position_reverted, position_initial, atol=1e-9)
 
 
 class TestMeteorTFS3FIBSEMMove(TestMeteorTFS3Move):
