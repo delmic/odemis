@@ -37,7 +37,6 @@ import numpy
 from scipy.optimize import OptimizeResult, OptimizeWarning, minimize, minimize_scalar
 from scipy.optimize._minimize import standardize_bounds
 from scipy.optimize._optimize import (
-    _check_unknown_options,
     _MaxFuncCallError,
     _status_message,
 )
@@ -176,7 +175,6 @@ def _custom_minimize_scalar_bounded(func, bounds, x0, min_step_size=None,
         Absolute error in solution 'xopt' acceptable for convergence.
 
     """
-    _check_unknown_options(unknown_options)
     maxfun = maxiter
     # Test bounds are of correct form
     if len(bounds) != 2:
@@ -311,7 +309,7 @@ def _custom_minimize_scalar_bounded(func, bounds, x0, min_step_size=None,
 def _custom_minimize_neldermead(func, x0, args=(), callback=None,
                                 maxiter=None, maxfev=None, disp=False,
                                 return_all=False, initial_simplex=None,
-                                xatol=1e-4, fatol=1e-3, adaptive=False, bounds=None,
+                                xatol=1e-4, fatol=1e-4, adaptive=False, bounds=None,
                                 min_step_size=None, rng=None,
                                 **unknown_options):
     """
@@ -402,7 +400,6 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
             xatol = unknown_options['xtol']
         unknown_options.pop('xtol')
 
-    _check_unknown_options(unknown_options)
     maxfun = maxfev
     retall = return_all
 
@@ -682,6 +679,7 @@ class ParabolicMirrorAlignmentTask:
       normalized spot pixel count and intensity into a single score.
     """
     MIN_SEARCH_RANGE = 5e-6  # [μm]
+    MAX_PIXEL_COUNT = 10000  # [px]
 
     def __init__(
         self,
@@ -713,8 +711,13 @@ class ParabolicMirrorAlignmentTask:
         self._stall_count = 0
         self._last_img = None
         self._rng = numpy.random.default_rng(0)  # Force the seed for reproducibility
-        self.pixel_count = model.IntContinuous(value=1, range=(1, 10000), unit="px")
-        self.intensity = model.IntContinuous(value=0, range=(0, 50000), unit="a.u.")
+        self.pixel_count = model.IntContinuous(value=1, range=(1, self.MAX_PIXEL_COUNT), unit="px")
+        uint16_iinfo = numpy.iinfo(numpy.uint16)
+        self.intensity = model.IntContinuous(
+            value=uint16_iinfo.min,
+            range=(uint16_iinfo.min, uint16_iinfo.max),
+            unit="a.u."
+        )
         self._save_images = save_images
         self._save_queue = queue.Queue()
         self._save_thread = threading.Thread(target=self._saving_thread, daemon=True)
@@ -810,9 +813,7 @@ class ParabolicMirrorAlignmentTask:
         slit_width_px = (input_slit_width / sensor_pixel_size[0], input_slit_width / sensor_pixel_size[1])
         # The spot must at least cover the slit area
         min_pixel_count = math.ceil(slit_width_px[0]) * math.ceil(slit_width_px[1])
-        # The spot cannot be larger than the minimum image dimension area
-        max_pixel_count = math.prod(image.shape)
-        self.pixel_count.range = (min_pixel_count, max_pixel_count)
+        self.pixel_count.range = (min_pixel_count, self.MAX_PIXEL_COUNT)
         # Set intensity range based on image data type
         image_iinfo = numpy.iinfo(image.dtype)
         self.intensity.range = (image_iinfo.min, image_iinfo.max)
@@ -846,7 +847,8 @@ class ParabolicMirrorAlignmentTask:
 
         if contours:
             main_contour = max(contours, key=cv2.contourArea)
-            self.pixel_count.value = int(cv2.contourArea(main_contour))
+            count = self.pixel_count.clip(int(cv2.contourArea(main_contour)))
+            self.pixel_count.value = count
         else:
             logging.debug("No contours found, using fallback pixel count method")
             corner_size = 5  # Use a 5x5 pixel square from each corner
@@ -863,9 +865,11 @@ class ParabolicMirrorAlignmentTask:
                 )
             )
             noise = 1.3 * numpy.median(all_corners)
-            self.pixel_count.value = numpy.count_nonzero(image > noise)
+            count = self.pixel_count.clip(numpy.count_nonzero(image > noise))
+            self.pixel_count.value = count
 
-        self.intensity.value = int(image.max())
+        intensity = self.intensity.clip(int(image.max()))
+        self.intensity.value = intensity
 
     def _get_score(self, weight: float = 0.5):
         """
@@ -1009,6 +1013,7 @@ class ParabolicMirrorAlignmentTask:
             Result of the optimization.
         """
         logging.debug(f"Starting scalar alignment for {axis.name}"
+                      f" min step size {axis.min_step_size} abs bounds {axis.abs_bounds}"
                       f" with search range {search_range} m and max iter {max_iter}")
         x0 = axis.component.position.value[axis.name]
         if axis.abs_bounds is None:
@@ -1034,16 +1039,16 @@ class ParabolicMirrorAlignmentTask:
                 },
             )
         except CancelledError:
-            logging.debug(f"Initial {axis} alignment was cancelled")
+            logging.debug(f"Initial {axis.name} alignment was cancelled")
             raise
         except Exception:
-            logging.exception(f"Initial {axis} alignment failed")
+            logging.exception(f"Initial {axis.name} alignment failed")
             raise
 
         if result.success:
-            logging.debug(f"Initial {axis} alignment converged with result {result.x}")
+            logging.debug(f"Initial {axis.name} alignment converged with result {result.x}")
         else:
-            logging.debug(f"Initial {axis} alignment did not converge: {result.message}")
+            logging.debug(f"Initial {axis.name} alignment did not converge: {result.message}")
 
         return result
 
@@ -1066,6 +1071,8 @@ class ParabolicMirrorAlignmentTask:
         """
         logging.debug(
             f"Starting Nelder-Mead alignment for {[axis.name for axis in axes]}"
+            f" min step size {[axis.min_step_size for axis in axes]}"
+            f" abs bounds {[axis.abs_bounds for axis in axes]}"
             f" with search range {search_range} m and max iter {max_iter}")
         initial_guess = [axis.component.position.value[axis.name] for axis in axes]
         bounds = []

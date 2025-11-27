@@ -880,14 +880,19 @@ class Sparc2AlignTab(Tab):
         actual_ebeam_wd = self.tab_data_model.main.ebeam_focus.position.value["z"]
         # Give a warning message and return if the ebeam working distance differs too much from the calibrated value
         if abs(calib_ebeam_wd - actual_ebeam_wd) > EBEAM_WD_LIMIT:
-            wx.MessageBox(
-                "The electron beam working distance (%.3f mm) differs more than (%.3f) mm from the "
-                "calibrated value (%.3f mm). Cannot perform auto-alignment."
+            dlg = wx.MessageDialog(
+                None,
+                "The electron beam working distance %.3f mm differs more than %.3f mm from the "
+                "calibrated value %.3f mm.\n\n"
+                "Do you want to continue with auto-alignment?"
                 % (actual_ebeam_wd * 1e3, EBEAM_WD_LIMIT * 1e3, calib_ebeam_wd * 1e3),
                 "Auto-alignment warning",
-                wx.OK | wx.ICON_WARNING,
+                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
             )
-            return
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result != wx.ID_YES:
+                return
         l_align = AlignmentAxis("l", min_step_size["l"], self.tab_data_model.main.mirror)
         s_align = AlignmentAxis("s", min_step_size["s"], self.tab_data_model.main.mirror)
         z_align = AlignmentAxis("z", min_step_size["z"], self.tab_data_model.main.stage)
