@@ -69,8 +69,7 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # testing.stop_backend()
-        pass
+        testing.stop_backend()
 
     def setUp(self):
         self.stage.moveAbs({"z": self.aligned_pos["z"]}).result()
@@ -84,6 +83,7 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
         rng = 30e-6  # ±30 µm range
         success_threshold = 15000  # Minimum acceptable intensity
         min_pass_rate = 0.8  # Require 80% success
+        failed_run_warn = []
 
         passed = 0
 
@@ -129,9 +129,7 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
             if intensity >= success_threshold:
                 passed += 1
             else:
-                logging.warning(
-                    f"Low intensity ({intensity:.1f}) for dl={dl:.1e}, ds={ds:.1e}, dz={dz:.1e}"
-                )
+                failed_run_warn.append(f"Low intensity ({intensity:.1f}) for dl={dl:.1e}, ds={ds:.1e}, dz={dz:.1e}")
 
             # Reset for next test
             self.setUp()
@@ -142,6 +140,8 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
         logging.info(
             f"3D alignment success rate: {pass_rate*100:.1f}% ({passed}/{n_tests})"
         )
+        for warn in failed_run_warn:
+            logging.warning(warn)
 
         # Final assertion
         self.assertGreaterEqual(
@@ -156,6 +156,7 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
         rng = 30e-6  # ±30 µm range
         success_threshold = 15000  # Minimum acceptable intensity
         min_pass_rate = 0.9  # Require 90% success
+        failed_run_warn = []
 
         passed = 0
 
@@ -196,9 +197,7 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
             if intensity >= success_threshold:
                 passed += 1
             else:
-                logging.warning(
-                    f"Low intensity ({intensity:.1f}) for dz={dz:.1e}"
-                )
+                failed_run_warn.append(f"Low intensity ({intensity:.1f}) for dz={dz:.1e}")
 
             # Reset for next test
             self.setUp()
@@ -209,6 +208,8 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
         logging.info(
             f"1D alignment success rate: {pass_rate*100:.1f}% ({passed}/{n_tests})"
         )
+        for warn in failed_run_warn:
+            logging.warning(warn)
 
         # Final assertion
         self.assertGreaterEqual(
