@@ -2581,6 +2581,39 @@ class TestTiffIO(unittest.TestCase):
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
 
+    def test_convert_jeol_to_odemis_metadata(self):
+
+        # open example image
+        JEOL_FILENAME = os.path.join(os.path.dirname(__file__), "jeol_example_sem.tif")
+        data = tiff.open_data(JEOL_FILENAME)
+
+        # assert data
+        self.assertIsInstance(data, tiff.AcquisitionDataTIFF)
+        self.assertEqual(len(data.content), 1)
+        self.assertEqual(data.content[0].shape, (960, 1280))
+        self.assertEqual(data.content[0].dtype, numpy.uint8)
+
+        # assert metadata
+        md = {
+            model.MD_ACQ_DATE: 1763642534.0,
+            model.MD_HW_NAME: "4700F",
+            model.MD_PIXEL_SIZE: (1.984375e-6, 1.984375e-6),
+            model.MD_BEAM_VOLTAGE: 5000.0,
+            model.MD_DESCRIPTION: os.path.basename(JEOL_FILENAME).replace(".tif", ""),
+        }
+
+        for key, value in md.items():
+            self.assertIn(key, data.content[0].metadata)
+
+            if key in [model.MD_PIXEL_SIZE, model.MD_POS]: # array equal
+                numpy.testing.assert_array_equal(value, data.content[0].metadata[key])
+            elif key in [model.MD_DWELL_TIME]:
+                numpy.testing.assert_almost_equal(value, data.content[0].metadata[key])
+            else:
+                self.assertEqual(value, data.content[0].metadata[key])
+
+
+
 PYRAMID_FILENAME = "test-pyramid.ome.tiff"
 class TestTileRead(unittest.TestCase):
 
