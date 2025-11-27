@@ -33,7 +33,12 @@ import weakref
 from typing import List, Literal, Callable, Any, Dict, Tuple, Union
 
 import numpy
-from tescansharksem import sem
+
+try:
+    from tescansharksem import sem
+# Make sure to handle old (delmic-only) name for the API, up to v3.1.0.
+except ModuleNotFoundError:
+    from tescan import sem
 
 from odemis import model, util
 from odemis.model import (HwError, isasync, CancellableThreadPoolExecutor,
