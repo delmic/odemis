@@ -1,9 +1,13 @@
 import copy
+import itertools
 import logging
 import os
 
 import wx
 from typing import Dict, List
+
+from odemis import model
+
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -13,6 +17,9 @@ from odemis.acq.feature import (
     CryoFeature,
     get_feature_position_at_posture,
     save_features,
+    FIBFMCorrelationData,
+    Target,
+    TargetType,
 )
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.move import (
@@ -322,6 +329,8 @@ class CryoFeatureController(object):
         self._update_feature_cmb_list()
 
         if feature is None:
+            self._tab_data_model.main.currentTarget.value = None
+            self._tab_data_model.main.targets = model.ListVA()
             self._enable_feature_ctrls(False)
             return
 
@@ -340,6 +349,40 @@ class CryoFeatureController(object):
                                                                        ctrl_2_va=self._on_cmb_feature_status_change,
                                                                        va_2_ctrl=self._on_feature_status)
 
+        correlation_data = self._tab_data_model.main.currentFeature.value.correlation_data
+        # Check if the correlation data is already present in the current feature
+        # If present, load the streams and targets accordingly,
+        # otherwise, initialize the correlation data
+        if correlation_data:
+            self.correlation_target = correlation_data
+
+            # Load the target
+            targets = []
+            if self.correlation_target.fm_fiducials:
+                targets.append(self.correlation_target.fm_fiducials)
+            stage_pos = feature.get_posture_position(FM_IMAGING)
+            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=FM_IMAGING)
+            feature_focus = feature.fm_focus_position.value
+
+            poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
+                         z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
+                         index=1, fm_focus_position=feature_focus["z"], superz_focus=feature.superz_focus)
+            targets.append([poi])
+            if self.correlation_target.fib_fiducials:
+                targets.append(self.correlation_target.fib_fiducials)
+            if self.correlation_target.fib_surface_fiducial:
+                targets.append([self.correlation_target.fib_surface_fiducial])
+
+            # flatten the list of lists
+            targets = list(
+                itertools.chain.from_iterable([x] if not isinstance(x, list) else x for x in targets))
+            self._tab_data_model.main.targets.value = targets
+            self._tab_data_model.main.currentTarget.value = targets[0] if targets else None
+        else:
+            self._tab_data_model.main.currentFeature.value.correlation_data = FIBFMCorrelationData()
+            self._tab_data_model.main.currentTarget.value = None
+            self._tab_data_model.main.targets = model.ListVA()
+
         # TODO: check, it seems that sometimes the EVT_TEXT_ENTER is first received
         # by the VAC, before the widget itself, which prevents getting the right value.
         if self.acqui_mode is guimod.AcquiMode.FLM:
@@ -352,7 +395,6 @@ class CryoFeatureController(object):
         # if FIBSEM mode, and milling tasks are available, re-draw
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._tab.milling_task_controller.set_milling_tasks(feature.milling_tasks)
-            # self._panel.Layout()
 
     def _on_feature_focus_pos(self, fm_focus_position: dict):
         # Set the feature Z ctrl with the focus position
