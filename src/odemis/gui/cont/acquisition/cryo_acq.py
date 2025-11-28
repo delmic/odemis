@@ -134,6 +134,9 @@ class CryoAcquiController(object):
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
 
         self._zlevels: Dict[Stream, List[float]] = {}
+        # When zstack_error is set to a string, it contains the error message to show, explaining
+        # why a z-stack cannot be done.
+        self._zstack_error: Optional[str] = None
 
         # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
@@ -653,6 +656,7 @@ class CryoAcquiController(object):
             return
 
         # estimate the total time for acquiring at features
+        can_acquire = not self._tab_data.main.is_acquiring.value
         features = self._get_selected_features()
         if not features:
             txt = "No features selected."
