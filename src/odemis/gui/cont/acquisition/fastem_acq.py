@@ -41,7 +41,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import wx
 
 from odemis import dataio, model
-from odemis.acq import align, fastem, stream
+from odemis.acq import align, fastem, stream, fastem_conf
 from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, ROASkipped, estimate_acquisition_time
@@ -187,6 +187,7 @@ class FastEMOverviewAcquiController(object):
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self.overview_acq_data = {}
+        self._overlap = fastem_conf.OVERVIEW_OVERLAP
 
         # Link acquire/cancel buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -361,6 +362,7 @@ class FastEMOverviewAcquiController(object):
                 self._main_data_model.stage,
                 scintillator.shape.get_bbox(),
                 dwell_time=self._dwell_time_ctrl.GetValue(),
+                overlap=self._overlap,
             )
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = "Estimated time is {}."
@@ -448,7 +450,8 @@ class FastEMOverviewAcquiController(object):
         region = current_sample.scintillators[num].shape.get_region()
         try:
             f = fastem.acquireTiledArea(
-                self._tab_data_model.semStream, self._main_data_model.stage, region
+                self._tab_data_model.semStream, self._main_data_model.stage, region,
+                overlap=self._overlap,
             )
             f.add_done_callback(partial(self.on_acquisition_done, num=num))
             acq_futures[f] = f.start_time - f.end_time
@@ -569,6 +572,7 @@ class FastEMSingleBeamAcquiController(object):
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
+        self._overlap = fastem_conf.TOA_OVERLAP
 
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -769,6 +773,7 @@ class FastEMSingleBeamAcquiController(object):
                     data[TOAColumnNames.DWELL_TIME.value] * 1e-6,  # [s]
                     scanner_conf,
                     reference_stage=True if idx == 0 else False,  # Only reference the stage before the first TOA acquisition
+                    overlap=self._overlap,
                 )
 
                 # Add a callback to set the next TOA settings

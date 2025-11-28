@@ -43,7 +43,7 @@ import odemis.acq.stream as acqstream
 from odemis import model, util
 from odemis.acq import fastem_conf, stitching
 from odemis.acq.align.fastem import align, estimate_calibration_time
-from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
+from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod, WEAVER_COLLAGE
 from odemis.acq.stream import SEMStream
 from odemis.util import TimeoutError, transform
 from odemis.util.driver import guessActuatorMoveDuration
@@ -789,12 +789,7 @@ class AcquisitionTask(object):
 ########################################################################################################################
 # Overview image acquisition
 
-# Fixed settings
-# FIXME: in theory the precision of the stage should be better, update this value when the stage precision has improved
-STAGE_PRECISION = 29e-6  # m, acceptable precision of the stage position, is used to determine the overview overlap
-
-
-def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True, live_stream=None):
+def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True, live_stream=None, overlap=0.1):
     """
     Start an overview acquisition task for a given region.
 
@@ -811,6 +806,7 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     :param reference_stage: (bool) If True, the stage will be referenced before the acquisition.
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
+    :param overlap: (0 < float < 1) The overlap ratio between tiles.
 
     :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
              It returns the complete DataArray.
@@ -847,12 +843,12 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf, reference_stage)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf, reference_stage, overlap)
 
     return f
 
 
-def acquireTiledArea(stream, stage, region, live_stream=None):
+def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01):
     """
     Start an overview acquisition task for a given region.
 
@@ -867,6 +863,7 @@ def acquireTiledArea(stream, stage, region, live_stream=None):
         of the overview region in the sample carrier coordinate system.
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
+    :param overlap: (0 < float < 1) The overlap ratio between tiles.
 
     :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
              It returns the complete DataArray.
@@ -903,18 +900,18 @@ def acquireTiledArea(stream, stage, region, live_stream=None):
     # overwrites the scanner configuration from overview mode to liveview mode.
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
-    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, region)
+    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, region, overlap)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream, overlap=overlap)
 
     return f
 
 
-def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
+def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None, overlap=0.01):
     """
     Estimate the time needed to acquire a full overview image. Calculate the
     number of tiles needed for the requested area based on set dwell time and
@@ -932,6 +929,7 @@ def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
         of the overview region in the sample carrier coordinate system.
     :param dwell_time: (float) A user input dwell time to be used instead of the stream emitter's dwell time
         for acquisition time calculation.
+    :param overlap: (0 < float < 1) The overlap ratio between tiles.
 
     :return: The estimated total acquisition time for the overview image in seconds.
     """
@@ -977,11 +975,6 @@ def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
     # Total stage movement time
     stage_time = time_x + time_y
 
-    # The stage movement precision is quite good (just a few pixels). The stage's
-    # position reading is much better, and we can assume it's below a pixel.
-    # So as long as we are sure there is some overlap, the tiles will be positioned
-    # correctly and without gap.
-    overlap = STAGE_PRECISION / fov_value
     # Estimate stitching time based on number of pixels in the overlapping part
     max_pxs = res[0] * res[1]
     stitch_time = (nx * ny * max_pxs * overlap) / 1e8  # 1e8 is stitching speed
@@ -1004,7 +997,7 @@ class OverviewAcquisition(object):
         self._sub_future.cancel()
         return True
 
-    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True):
+    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True, overlap=0.01):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
@@ -1016,6 +1009,7 @@ class OverviewAcquisition(object):
                to build up live the whole acquisition. NOT SUPPORTED YET.
         :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
         :param reference_stage: (bool) If True, reference the stage axes x and y before starting the acquisition.
+        :param overlap: (0 < float < 1) The overlap ratio between tiles.
 
         :returns: (DataArray) The complete overview image.
         """
@@ -1035,19 +1029,14 @@ class OverviewAcquisition(object):
 
         fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE, conf=scanner_conf)
 
-        # The stage movement precision is quite good (just a few pixels). The stage's
-        # position reading is much better, and we can assume it's below a pixel.
-        # So as long as we are sure there is some overlap, the tiles will be positioned
-        # correctly and without gap.
-        overlap = STAGE_PRECISION / stream.emitter.horizontalFoV.value
-        logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
+        logging.debug("Overlap is %s%%", overlap * 100)
 
         def _pass_future_progress(sub_f, start, end):
             self._future.set_progress(end=end)
 
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
-                                                      focusing_method=FocusingMethod.NONE)
+                                                      focusing_method=FocusingMethod.NONE, weaver=WEAVER_COLLAGE)
         self._sub_future.add_update_callback(_pass_future_progress)
 
         das = []

@@ -29,7 +29,7 @@ from scipy.ndimage import binary_fill_holes
 from shapely.geometry import Polygon, box
 
 from odemis import model
-from odemis.acq.fastem import STAGE_PRECISION
+from odemis.acq import fastem_conf
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
@@ -333,7 +333,7 @@ class FastEMTOA(FastEMROABase):
         :param name: (str) Name of the TOA.
         :param slice_index: (int) The slice index of the tiled overview acquisition.
         """
-        overlap = STAGE_PRECISION / hfw
+        overlap = fastem_conf.TOA_OVERLAP
         super().__init__(shape, main_data, overlap, name, slice_index)
         self._area_size = (0, 0)
         self._xmin = None
@@ -416,8 +416,6 @@ class FastEMTOA(FastEMROABase):
 
     def _on_hfw(self, hfw):
         """Callback function on HFW change."""
-        # Update the overlap based on the new HFW value
-        self.overlap = STAGE_PRECISION / hfw
         # Update the field of view (FoV) based on the new HFW value
         self._fov = (hfw * self._pxs_cor[0], hfw * self._pxs_cor[1] * self.res.value[1] / self.res.value[0])
 

@@ -31,6 +31,8 @@ from odemis import model
 
 SINGLE_BEAM_ROTATION_DEFAULT = 0  # [rad]
 MULTI_BEAM_ROTATION_DEFAULT = 0  # [rad]
+OVERVIEW_OVERLAP = 0.01  # overview images are only used for navigation, so a small overlap is sufficient
+TOA_OVERLAP = 0.1  # 10% overlap for TOA tiles to allow for stitching
 
 OVERVIEW_MODE = 0
 LIVESTREAM_MODE = 1
