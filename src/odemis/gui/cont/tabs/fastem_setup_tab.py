@@ -539,10 +539,7 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.enable(enable)
         self.sem_stream_cont.stream_panel.enable(enable)
         self.overview_acq_controller.overview_acq_panel.Enable(enable)
-        self.btn_optical_autofocus.Enable(enable)
-        self.btn_sem_autofocus.Enable(enable)
-        self.btn_autobc.Enable(enable)
-        self.btn_autostigmation.Enable(enable)
+        self._enable_calibration_buttons(enable)
         if mode:
             self.sem_stream_cont.pauseStream()
             self.sem_stream_cont.pause()
