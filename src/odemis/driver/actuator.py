@@ -1041,6 +1041,12 @@ class AntiBacklashActuator(model.Actuator):
                     f.result(timeout=0.01)
                 except futures.TimeoutError:
                     pass  # Keep waiting for end of move
+                except Exception:
+                    with self._shifted_lock:
+                        # revert the shifted status as the move failed
+                        for a in axes:
+                            self._shifted[a] = False
+                    raise
                 else:
                     done = True
 
@@ -1081,6 +1087,12 @@ class AntiBacklashActuator(model.Actuator):
                     f.result(timeout=0.01)
                 except futures.TimeoutError:
                     pass  # Keep waiting for end of move
+                except Exception:
+                    with self._shifted_lock:
+                        # revert the shifted status as the move failed
+                        for a in axes:
+                            self._shifted[a] = False
+                    raise
                 else:
                     done = True
 
