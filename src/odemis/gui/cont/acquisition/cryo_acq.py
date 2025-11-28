@@ -285,9 +285,6 @@ class CryoAcquiController(object):
         # store the focuser position
         self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
 
-        # the acquisition is started
-        self._tab_data.main.is_acquiring.value = True
-
         # NOTE: acquisition manager expects all streams to be paused before starting.
         # this cannot be done in the is_acquiring callback as it can be delayed
         # until after the acquisition starts
@@ -298,10 +295,10 @@ class CryoAcquiController(object):
 
         # acquire the data
         if self._zStackActive.value:
+            # Can fail if the parameters are invalid
             self._on_zstack()  # update the zlevels with the current focus position
             self._acq_future = acqmng.acquireZStack(
                 acq_streams, self._zlevels, self._tab_data.main.settings_obs)
-
         else:  # no zstack
             self._acq_future = acqmng.acquire(
                 acq_streams, self._tab_data.main.settings_obs)
@@ -315,6 +312,9 @@ class CryoAcquiController(object):
             label=self._panel.txt_cryosecom_left_time,
             full=False,
         )
+
+        # the acquisition is started
+        self._tab_data.main.is_acquiring.value = True
 
         self._acq_future.add_done_callback(self._on_acquisition_done)
         self._panel.Layout()
@@ -363,9 +363,6 @@ class CryoAcquiController(object):
         """Acquire at the features using the current imaging settings."""
         # store the focuser position
         self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
-
-        # the acquisition is started
-        self._tab_data.main.is_acquiring.value = True
 
         # NOTE: acquisition manager expects all streams to be paused before starting.
         # this cannot be done in the is_acquiring callback as it can be delayed
@@ -424,6 +421,9 @@ class CryoAcquiController(object):
             label=self._panel.txt_cryosecom_left_time,
             full=False,
         )
+
+        # the acquisition is started
+        self._tab_data.main.is_acquiring.value = True
 
         self._acq_future.add_done_callback(self._on_feature_acquisition_done)
         self._panel.Layout()
@@ -620,12 +620,10 @@ class CryoAcquiController(object):
         # update the zlevels dictionary with the added/removed stream
         self._on_zstack()
 
-
     def _get_acq_time(self) -> float:
         """Calculate the estimated acquisition time."""
         if not self._zStackActive.value:  # if no zstack
             acq_time = acqmng.estimateTime(self._acquiStreams.value)
-
         else:  # if zstack
             acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
 
@@ -635,14 +633,21 @@ class CryoAcquiController(object):
     @wxlimit_invocation(1)  # max 1/s
     def _update_acquisition_time(self):
         """
-        Updates the estimated time
-        required for acquisition
+        Updates the estimated time required for acquisition
         """
         acq_time = self._get_acq_time()
 
-        # display the time on the GUI
-        txt = "Estimated time: {}.".format(units.readable_time(acq_time, full=False))
+        can_acquire = not self._tab_data.main.is_acquiring.value
+        if self._zStackActive.value and self._zstack_error:
+            # Cannot acquire due to z-stack error
+            txt = self._zstack_error
+            can_acquire = False
+        else:
+            # display the time on the GUI
+            txt = "Estimated time: {}.".format(units.readable_time(acq_time, full=False))
+
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
+        self._panel.btn_cryosecom_acquire.Enable(can_acquire)
 
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             return
@@ -650,12 +655,18 @@ class CryoAcquiController(object):
         # estimate the total time for acquiring at features
         features = self._get_selected_features()
         if not features:
-            self._panel.txt_acquire_features_est_time.SetLabel("No features selected.")
-            return
+            txt = "No features selected."
+            can_acquire = False
+        elif self._zStackActive.value and self._zstack_error:
+            txt = self._zstack_error
+            can_acquire = False
+        else:
+            est_time = round(acq_time * len(features))
+            est_time_readable = units.readable_time(est_time, full=False)
+            txt = f"Estimated time: {est_time_readable}"
 
-        est_time = round(acq_time * len(features))
-        est_time_readable = units.readable_time(est_time, full=False)
-        self._panel.txt_acquire_features_est_time.SetLabel(f"Estimated time: {est_time_readable}")
+        self._panel.txt_acquire_features_est_time.SetLabel(txt)
+        self._panel.btn_acquire_features.Enable(can_acquire)
 
     @call_in_wx_main
     def _on_stream_wavelength(self, _=None):
@@ -714,14 +725,21 @@ class CryoAcquiController(object):
         if not self._zStackActive.value:
             return
 
-        levels = generate_zlevels(self._tab_data.main.focus,
-                                  (self._tab_data.zMin.value, self._tab_data.zMax.value),
-                                  self._tab_data.zStep.value)
-
-        # Only use zstack for the optical streams (not SEM), as that's the ones
-        # the user is interested in on the METEOR/ENZEL.
-        self._zlevels = {s: levels for s in self._acquiStreams.value
-                         if isinstance(s, (FluoStream, BrightfieldStream))}
+        try:
+            levels = generate_zlevels(self._tab_data.main.focus,
+                                      (self._tab_data.zMin.value, self._tab_data.zMax.value),
+                                      self._tab_data.zStep.value)
+        except (ValueError, IndexError, ZeroDivisionError, KeyError) as ex:
+            # This is usually due to invalid z-stack parameters => forbid acquiring
+            logging.warning("Could not generate z-levels for z-stack: %s", ex)
+            self._zlevels = {}
+            self._zstack_error = "Invalid z-stack parameters"
+        else:
+            self._zstack_error = None
+            # Only use zstack for the optical streams (not SEM), as that's the ones
+            # the user is interested in on the METEOR/ENZEL.
+            self._zlevels = {s: levels for s in self._acquiStreams.value
+                             if isinstance(s, (FluoStream, BrightfieldStream))}
 
         # update the time, taking the zstack into account
         self._update_acquisition_time()
