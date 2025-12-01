@@ -78,11 +78,11 @@ class TestParabolicMirrorAlignment(unittest.TestCase):
         ).result()
 
     def test_3d_alignment_success_rate(self):
-        """Require at least 80% of random misalignments to realign successfully."""
+        """Require at least 90% of random misalignments to realign successfully."""
         n_tests = 10
         rng = 30e-6  # ±30 µm range
         success_threshold = 15000  # Minimum acceptable intensity
-        min_pass_rate = 0.8  # Require 80% success
+        min_pass_rate = 0.9  # Require 90% success
         failed_run_warn = []
 
         passed = 0
