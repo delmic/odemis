@@ -2050,7 +2050,7 @@ class Focus(model.Actuator):
         update the position VA
         """
         z = self.parent.get_working_distance(self.channel)
-        if self.position.value["z"] != z:
+        if self.position.value.get("z") != z:
             logging.debug("Updating %s position to %s for channel %s", self.name, z, self.channel)
         self.position._set_value({"z": z}, force_write=True)
 
