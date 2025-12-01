@@ -640,6 +640,10 @@ class Spot:
         intensity : model.IntContinuous
             Peak pixel intensity (arbitrary units). Initial value and range are
             derived from the image dtype (uint16).
+        major_axis : model.IntContinuous
+            Major axis (in pixels) of an ellipse fitted to the detected spot.
+            A smaller major axis indicates a tighter focus and is considered
+            better.
 
         """
         # Minimize pixel count, penalize objective function by limiting a reasonable max value
@@ -656,6 +660,8 @@ class Spot:
             ),  # atleast 10% of uint16 min
             unit="a.u.",
         )
+        # Minimize ellipse major axis, penalize objective function by limting a reasonable max value
+        self.major_axis = model.IntContinuous(1, range=(1, 256), unit="px")
 
 
 class SpotQualityMetric(IntEnum):
@@ -674,11 +680,15 @@ class SpotQualityMetric(IntEnum):
         Combined metric that normalizes both pixel count and intensity and
         produces a weighted sum. The relative importance of the two components
         is controlled by the 'weight' parameter passed to the scoring routine.
+    MAJOR_AXIS
+        Metric based on the fitted ellipse major axis (in pixels). A smaller
+        major axis indicates a tighter focus and is considered better.
 
     """
     PIXEL_COUNT = 1
     INTENSITY = 2
     PIXEL_COUNT_AND_INTENSITY = 3
+    MAJOR_AXIS = 4
 
 
 def parabolic_mirror_alignment(
@@ -731,12 +741,14 @@ class ParabolicMirrorAlignmentTask:
 
     The task implements a multi-stage procedure to align mirror (l, s) and
     stage (z) actuators by evaluating image-based spot quality metrics and
-    minimizing a scalar objective that combines spot pixel count and peak intensity.
+    minimizing a scalar objective based on either spot fitted ellipse's
+    major axis or combined spot pixel count and peak intensity.
 
     The alignment procedure consists of:
     - Independent 1D bounded searches for l, s and z (maximize intensity).
-    - Two successive 3D Nelder-Mead refinements over [l, s, z] combining
-      normalized spot pixel count and intensity into a single score.
+    - Two successive 3D Nelder-Mead refinements over [l, s, z], first
+      refinement making use of spot fitted ellipse's major axis and second
+      combining normalized spot pixel count and intensity into a single score.
     """
     MIN_SEARCH_RANGE = 5e-6  # [μm]
 
@@ -870,6 +882,7 @@ class ParabolicMirrorAlignmentTask:
         # Set intensity range based on image data type
         image_iinfo = numpy.iinfo(image.dtype)
         self.spot.intensity.range = (int(image_iinfo.min * 0.1), image_iinfo.max)
+        self.spot.major_axis.range = (1, min(image.shape))
 
         # Slight Gaussian blur to reduce pixel noise
         # Prevents threshold from overreacting
@@ -902,6 +915,13 @@ class ParabolicMirrorAlignmentTask:
             main_contour = max(contours, key=cv2.contourArea)
             count = self.spot.pixel_count.clip(int(cv2.contourArea(main_contour)))
             self.spot.pixel_count.value = count
+            if len(main_contour) >= 5:
+                ellipse = cv2.fitEllipse(main_contour)
+                (_, _), (minor_axis, major_axis), _ = ellipse
+                minor_axis, major_axis = sorted((minor_axis, major_axis))
+                self.spot.major_axis.value = self.spot.major_axis.clip(math.ceil(major_axis))
+            else:
+                self.spot.major_axis.value = self.spot.major_axis.clip(math.ceil(numpy.sqrt(count)))
         else:
             logging.debug("No contours found, using fallback pixel count method")
             corner_size = 5  # Use a 5x5 pixel square from each corner
@@ -920,6 +940,7 @@ class ParabolicMirrorAlignmentTask:
             noise = 1.3 * numpy.median(all_corners)
             count = numpy.count_nonzero(image > noise)
             self.spot.pixel_count.value = self.spot.pixel_count.clip(count)
+            self.spot.major_axis.value = self.spot.major_axis.clip(math.ceil(numpy.sqrt(count)))
 
         self.spot.intensity.value = self.spot.intensity.clip(int(image.max()))
 
@@ -959,6 +980,8 @@ class ParabolicMirrorAlignmentTask:
             # Calculate weighted score
             # This is the single value the optimizer will try to minimize
             score = (weight * norm_area) + ((1 - weight) * norm_intensity)
+        if quality_metric == SpotQualityMetric.MAJOR_AXIS:
+            score = self.spot.major_axis.value / self.spot.major_axis.range[1]
 
         return score
 
@@ -1024,7 +1047,8 @@ class ParabolicMirrorAlignmentTask:
         logging.debug(
             f"Pos (target → actual): "
             f"{xk} → {xk_actual} | "
-            f"Score={score:.4f}, Pixels={self.spot.pixel_count.value}, Intensity={self.spot.intensity.value}"
+            f"Score={score:.4f}, Pixels={self.spot.pixel_count.value}, Intensity={self.spot.intensity.value}, "
+            f"Major axis={self.spot.major_axis.value}"
         )
 
         return score, xk_actual
@@ -1288,10 +1312,7 @@ class ParabolicMirrorAlignmentTask:
                 for j in range(1, 3):
                     search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
                     if j == 1:
-                        objective_kwargs = {
-                            "quality_metric": SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY,
-                            "weight": 0.5
-                        }
+                        objective_kwargs = {"quality_metric": SpotQualityMetric.MAJOR_AXIS}
                     else:
                         objective_kwargs = {
                             "quality_metric": SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY,
