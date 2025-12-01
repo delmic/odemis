@@ -30,16 +30,14 @@ import warnings
 from concurrent.futures import CancelledError
 from dataclasses import dataclass
 from datetime import datetime
+from enum import IntEnum
 from typing import List, Optional, Tuple
 
 import cv2
 import numpy
 from scipy.optimize import OptimizeResult, OptimizeWarning, minimize, minimize_scalar
 from scipy.optimize._minimize import standardize_bounds
-from scipy.optimize._optimize import (
-    _MaxFuncCallError,
-    _status_message,
-)
+from scipy.optimize._optimize import _MaxFuncCallError, _status_message
 
 from odemis import model
 from odemis.dataio import hdf5
@@ -605,11 +603,13 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
         result['allvecs'] = allvecs
     return result
 
+
 @dataclass
 class AlignmentAxis:
     """
     Represents a single alignment axis (e.g. mirror l/s or stage z).
     """
+
     name: str
     min_step_size: float
     component: model.Actuator
@@ -620,6 +620,66 @@ class AlignmentAxis:
             raise ValueError(f"Component '{self.component.name}' does not have axis '{self.name}'")
         if self.min_step_size <= 0 or self.min_step_size > 0.1:
             raise ValueError("min_step_size must be positive and less than or equal to 0.1 metres")
+
+
+class Spot:
+    """Container for measured spot properties used by the alignment objective."""
+    MAX_PIXEL_COUNT = 10000  # [px]
+
+    def __init__(self):
+        """
+        Attributes
+        ----------
+        MAX_PIXEL_COUNT : int (class)
+            A sensible upper bound for detected spot area in pixels. Used to
+            initialise the pixel_count range and to cap unrealistic detections.
+        pixel_count : model.IntContinuous
+            Detected spot area in pixels. Range is initialised to (1, MAX_PIXEL_COUNT)
+            and updated dynamically in _update_spot_measurement based on camera and
+            slit geometry.
+        intensity : model.IntContinuous
+            Peak pixel intensity (arbitrary units). Initial value and range are
+            derived from the image dtype (uint16).
+
+        """
+        # Minimize pixel count, penalize objective function by limiting a reasonable max value
+        self.pixel_count = model.IntContinuous(
+            value=1, range=(1, self.MAX_PIXEL_COUNT), unit="px"
+        )
+        uint16_iinfo = numpy.iinfo(numpy.uint16)
+        # Maximize intensity, penalize objective function by limiting a reasonable min value
+        self.intensity = model.IntContinuous(
+            value=int(uint16_iinfo.min * 0.1),
+            range=(
+                (uint16_iinfo.min * 0.1),
+                uint16_iinfo.max,
+            ),  # atleast 10% of uint16 min
+            unit="a.u.",
+        )
+
+
+class SpotQualityMetric(IntEnum):
+    """
+    Enumeration of spot-quality metrics used to compute the scalar alignment score.
+
+    Members
+    -------
+    PIXEL_COUNT
+        Metric that uses only the detected spot area (pixel count). Smaller area
+        is considered better.
+    INTENSITY
+        Metric that uses only the measured peak intensity. Higher intensity is
+        considered better.
+    PIXEL_COUNT_AND_INTENSITY
+        Combined metric that normalizes both pixel count and intensity and
+        produces a weighted sum. The relative importance of the two components
+        is controlled by the 'weight' parameter passed to the scoring routine.
+
+    """
+    PIXEL_COUNT = 1
+    INTENSITY = 2
+    PIXEL_COUNT_AND_INTENSITY = 3
+
 
 def parabolic_mirror_alignment(
     axes: List[AlignmentAxis],
@@ -679,7 +739,6 @@ class ParabolicMirrorAlignmentTask:
       normalized spot pixel count and intensity into a single score.
     """
     MIN_SEARCH_RANGE = 5e-6  # [μm]
-    MAX_PIXEL_COUNT = 10000  # [px]
 
     def __init__(
         self,
@@ -711,13 +770,7 @@ class ParabolicMirrorAlignmentTask:
         self._stall_count = 0
         self._last_img = None
         self._rng = numpy.random.default_rng(0)  # Force the seed for reproducibility
-        self.pixel_count = model.IntContinuous(value=1, range=(1, self.MAX_PIXEL_COUNT), unit="px")
-        uint16_iinfo = numpy.iinfo(numpy.uint16)
-        self.intensity = model.IntContinuous(
-            value=uint16_iinfo.min,
-            range=(uint16_iinfo.min, uint16_iinfo.max),
-            unit="a.u."
-        )
+        self.spot = Spot()
         self._save_images = save_images
         self._save_queue = queue.Queue()
         self._save_thread = threading.Thread(target=self._saving_thread, daemon=True)
@@ -813,10 +866,10 @@ class ParabolicMirrorAlignmentTask:
         slit_width_px = (input_slit_width / sensor_pixel_size[0], input_slit_width / sensor_pixel_size[1])
         # The spot must at least cover the slit area
         min_pixel_count = math.ceil(slit_width_px[0]) * math.ceil(slit_width_px[1])
-        self.pixel_count.range = (min_pixel_count, self.MAX_PIXEL_COUNT)
+        self.spot.pixel_count.range = (min_pixel_count, self.spot.MAX_PIXEL_COUNT)
         # Set intensity range based on image data type
         image_iinfo = numpy.iinfo(image.dtype)
-        self.intensity.range = (image_iinfo.min, image_iinfo.max)
+        self.spot.intensity.range = (int(image_iinfo.min * 0.1), image_iinfo.max)
 
         # Slight Gaussian blur to reduce pixel noise
         # Prevents threshold from overreacting
@@ -847,8 +900,8 @@ class ParabolicMirrorAlignmentTask:
 
         if contours:
             main_contour = max(contours, key=cv2.contourArea)
-            count = self.pixel_count.clip(int(cv2.contourArea(main_contour)))
-            self.pixel_count.value = count
+            count = self.spot.pixel_count.clip(int(cv2.contourArea(main_contour)))
+            self.spot.pixel_count.value = count
         else:
             logging.debug("No contours found, using fallback pixel count method")
             corner_size = 5  # Use a 5x5 pixel square from each corner
@@ -865,42 +918,51 @@ class ParabolicMirrorAlignmentTask:
                 )
             )
             noise = 1.3 * numpy.median(all_corners)
-            count = self.pixel_count.clip(numpy.count_nonzero(image > noise))
-            self.pixel_count.value = count
+            count = numpy.count_nonzero(image > noise)
+            self.spot.pixel_count.value = self.spot.pixel_count.clip(count)
 
-        intensity = self.intensity.clip(int(image.max()))
-        self.intensity.value = intensity
+        self.spot.intensity.value = self.spot.intensity.clip(int(image.max()))
 
-    def _get_score(self, weight: float = 0.5):
+    def _get_score(self, **kwargs):
         """
-        Compute a scalar score combining normalized pixel count and intensity.
+        Compute a scalar score based on SpotQualityMetric.
 
-        The score is in [0, 1] where 0 is best. 'weight' controls the relative
-        importance of pixel count vs intensity (1.0 -> only pixel count, 0.0 -> only intensity).
+        The score is in [0, 1] where 0 is best.
 
-        :param weight: Weight given to spot pixel count in [0.0, 1.0] (default 0.5).
+        :param kwargs:
+            - 'quality_metric' controls how the score should be calculated
+            - 'weight' controls the relative importance of pixel count vs intensity
+               (1.0 -> only pixel count, 0.0 -> only intensity).
         :returns: float
-            Normalized score (lower is better).
+            Score (lower is better).
         """
-        # Normalize pixel count
-        # Score is 0 for best pixel count, 1 for worst
-        area_range = float(self.pixel_count.range[1] - self.pixel_count.range[0])
-        norm_area = (self.pixel_count.value - self.pixel_count.range[0]) / area_range
-        norm_area = max(0.0, min(1.0, norm_area))  # Clamp to [0, 1]
+        score = 1.0
+        quality_metric = kwargs.get("quality_metric", SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY)
+        weight = kwargs.get("weight", 0.5)
 
-        # Normalize intensity
-        # Score is 0 for best intensity, 1 for worst
-        intensity_range = float(self.intensity.range[1] - self.intensity.range[0])
-        norm_intensity = (self.intensity.value - self.intensity.range[0]) / intensity_range
-        norm_intensity = 1.0 - norm_intensity  # Invert so higher intensity = lower score
-        norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
+        if quality_metric in (SpotQualityMetric.PIXEL_COUNT, SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY):
+            # Normalize pixel count
+            # Score is 0 for best pixel count, 1 for worst
+            area_range = float(self.spot.pixel_count.range[1] - self.spot.pixel_count.range[0])
+            norm_area = (self.spot.pixel_count.value - self.spot.pixel_count.range[0]) / area_range
+            norm_area = max(0.0, min(1.0, norm_area))  # Clamp to [0, 1]
+            score = norm_area
+        if quality_metric in (SpotQualityMetric.INTENSITY, SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY):
+            # Normalize intensity
+            # Score is 0 for best intensity, 1 for worst
+            intensity_range = float(self.spot.intensity.range[1] - self.spot.intensity.range[0])
+            norm_intensity = (self.spot.intensity.value - self.spot.intensity.range[0]) / intensity_range
+            norm_intensity = 1.0 - norm_intensity  # Invert so higher intensity = lower score
+            norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
+            score = norm_intensity
+        if quality_metric == SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY:
+            # Calculate weighted score
+            # This is the single value the optimizer will try to minimize
+            score = (weight * norm_area) + ((1 - weight) * norm_intensity)
 
-        # Calculate weighted score
-        # This is the single value the optimizer will try to minimize
-        score = (weight * norm_area) + ((1 - weight) * norm_intensity)
         return score
 
-    def _objective_1d(self, pos: float, axis: AlignmentAxis):
+    def _objective_1d(self, pos: float, axis: AlignmentAxis, objective_kwargs: dict):
         """
         1D objective for optimizing hardware component's axis by maximizing intensity.
 
@@ -914,23 +976,20 @@ class ParabolicMirrorAlignmentTask:
             raise CancelledError(f"1D alignment for {axis} was cancelled by user")
 
         axis.component.moveAbs({axis.name: pos}).result()
-        self._update_spot_measurement()
 
-        # Normalize intensity
-        # Score is 0 for best intensity, 1 for worst
-        norm_intensity = 1.0 - (self.intensity.value / self.intensity.range[1])
-        norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
+        self._update_spot_measurement()
+        score = self._get_score(**objective_kwargs)
 
         # For closed-loop feedback to the optimizer
         pos_actual = axis.component.position.value[axis.name]
 
-        return norm_intensity, pos_actual
+        return score, pos_actual
 
     def _objective_nd(
         self,
         xk: numpy.ndarray,
         axes: List[AlignmentAxis],
-        weight: float,
+        objective_kwargs: dict
     ):
         """
         Objective function for simultaneous optimization of multiple axes.
@@ -957,7 +1016,7 @@ class ParabolicMirrorAlignmentTask:
             axis.component.moveAbs({axis.name: value}).result()
 
         self._update_spot_measurement()
-        score = self._get_score(weight)
+        score = self._get_score(**objective_kwargs)
 
         # For closed-loop feedback to the optimizer
         xk_actual = numpy.array([axis.component.position.value[axis.name] for axis in axes])
@@ -965,7 +1024,7 @@ class ParabolicMirrorAlignmentTask:
         logging.debug(
             f"Pos (target → actual): "
             f"{xk} → {xk_actual} | "
-            f"Score={score:.4f}, Pixels={self.pixel_count.value}, Intensity={self.intensity.value}"
+            f"Score={score:.4f}, Pixels={self.spot.pixel_count.value}, Intensity={self.spot.intensity.value}"
         )
 
         return score, xk_actual
@@ -1002,6 +1061,7 @@ class ParabolicMirrorAlignmentTask:
         axis: AlignmentAxis,
         search_range: float,
         max_iter: int,
+        objective_kwargs: dict,
     ) -> OptimizeResult:
         """
         Run a 1D bounded scalar optimization for the specified axis.
@@ -1027,7 +1087,7 @@ class ParabolicMirrorAlignmentTask:
         try:
             result = minimize_scalar(
                 fun=self._objective_1d,
-                args=(axis),
+                args=(axis, objective_kwargs),
                 bounds=bounds,
                 method=_custom_minimize_scalar_bounded,
                 options={
@@ -1046,7 +1106,7 @@ class ParabolicMirrorAlignmentTask:
             raise
 
         if result.success:
-            logging.debug(f"Initial {axis.name} alignment converged with result {result.x}")
+            logging.debug(f"Initial {axis.name} alignment converged with result {result.x} {result.fun}")
         else:
             logging.debug(f"Initial {axis.name} alignment did not converge: {result.message}")
 
@@ -1057,7 +1117,7 @@ class ParabolicMirrorAlignmentTask:
         axes: List[AlignmentAxis],
         search_range: float,
         max_iter: int,
-        weight: float = 0.5,
+        objective_kwargs: dict,
     ) -> OptimizeResult:
         """
         Run a Nelder-Mead optimization over the specified axes.
@@ -1095,7 +1155,7 @@ class ParabolicMirrorAlignmentTask:
             result = minimize(
                 fun=self._objective_nd,
                 x0=numpy.array(initial_guess),
-                args=(axes, weight),
+                args=(axes, objective_kwargs),
                 method=_custom_minimize_neldermead,
                 bounds=bounds,
                 callback=self._callback_nd,
@@ -1122,7 +1182,7 @@ class ParabolicMirrorAlignmentTask:
             self._last_xk = numpy.zeros(len(axes))
 
         if result.success:
-            logging.debug(f"Nelder-Mead alignment converged with result {result.x}")
+            logging.debug(f"Nelder-Mead alignment converged with result {result.x} {result.fun}")
         else:
             logging.debug(f"Nelder-Mead alignment did not converge: {result.message}")
 
@@ -1167,7 +1227,9 @@ class ParabolicMirrorAlignmentTask:
                     axis,
                     search_range,
                     max_iter,
+                    objective_kwargs={"quality_metric": SpotQualityMetric.INTENSITY},
                 )
+                axis.component.moveAbs({axis.name: result.x}).result()
                 end = time.time()
                 logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
                 if self._save_images:
@@ -1181,13 +1243,15 @@ class ParabolicMirrorAlignmentTask:
                     return
 
                 # Nelder-Mead refinement
-                search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+                search_range = self.MIN_SEARCH_RANGE
                 start = time.time()
-                self._run_nelder_mead(
+                result = self._run_nelder_mead(
                     [axis],
                     search_range,
                     max_iter,
+                    objective_kwargs={"quality_metric": SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY, "weight": 0.5},
                 )
+                axis.component.moveAbs({axis.name: result.x[0]}).result()
                 end = time.time()
                 logging.debug(f"1D Nelder-Mead refinement for {axis.name} took {end - start:.2f} seconds")
                 if self._save_images:
@@ -1204,7 +1268,10 @@ class ParabolicMirrorAlignmentTask:
                         axis,
                         search_range,
                         max_iter,
+                        objective_kwargs={"quality_metric": SpotQualityMetric.INTENSITY},
                     )
+                    if axis.name == "z":
+                        axis.component.moveAbs({axis.name: result.x}).result()
                     end = time.time()
                     logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
 
@@ -1220,13 +1287,25 @@ class ParabolicMirrorAlignmentTask:
                 # Two Nelder-Mead refinements over all axes
                 for j in range(1, 3):
                     search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
+                    if j == 1:
+                        objective_kwargs = {
+                            "quality_metric": SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY,
+                            "weight": 0.5
+                        }
+                    else:
+                        objective_kwargs = {
+                            "quality_metric": SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY,
+                            "weight": 0.4
+                        }
                     start = time.time()
                     result = self._run_nelder_mead(
                         self._axes,
                         search_range,
                         max_iter,
-                        weight=0.4 if j==2 else 0.5,
+                        objective_kwargs,
                     )
+                    for k, axis in enumerate(self._axes):
+                        axis.component.moveAbs({axis.name: result.x[k]}).result()
                     end = time.time()
                     logging.debug(f"3D Nelder-Mead refinement {j} took {end - start:.2f} seconds")
 
