@@ -1893,6 +1893,7 @@ class FastEMCalibrationController:
             fs = {}
             total_t = 0
             scintillator_num = int(focussed_view.name.value)
+            self.cancelled_calib.clear()
             self.failed_calib = None
             calib_names = []
 
