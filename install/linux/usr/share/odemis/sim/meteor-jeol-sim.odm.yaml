@@ -199,7 +199,7 @@
         # Loading position to retract lens
         FAV_POS_DEACTIVE: {'z': -11.5e-3},
         # Initial active position (close from the sample, but not too close, for safety)
-        FAV_POS_ACTIVE: {'z': -1e-3}
+        FAV_POS_ACTIVE: {'z': -1.0e-3}
     },
     affects: ["Camera"],
 }

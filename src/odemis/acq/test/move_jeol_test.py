@@ -51,6 +51,22 @@ class TestMeteorJeol1Move(unittest.TestCase):
         # get the stage components
         cls.stage_bare = model.getComponent(role="stage-bare")
         cls.stage = cls.posture_manager.sample_stage
+        # get the focus component used by the optical path (sim config provides role 'focus')
+        cls.focus = model.getComponent(role="focus")
+
+    def _check_focus_position(self, fav_pos):
+        """Check that the focus actuator is at the favourite position specified by fav_key.
+
+        :param fav_pos: either model.MD_FAV_POS_ACTIVE or model.MD_FAV_POS_DEACTIVE.
+        This raises a unittest failure if the metadata is missing or the z position
+        does not match within 1e-4 (places=4).
+        """
+        focus_md = self.focus.getMetadata()
+        fav = focus_md.get(fav_pos)
+        self.assertIsNotNone(fav, f"Missing metadata {fav_pos} on focus component")
+        # Ensure metadata contains z
+        self.assertIn("z", fav, f"Favourite metadata {fav_pos} missing 'z' entry")
+        self.assertAlmostEqual(self.focus.position.value["z"], fav["z"], places=4)
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
         # Check the instantiation of correct posture manager
@@ -69,6 +85,8 @@ class TestMeteorJeol1Move(unittest.TestCase):
         sem_angles = self.stage_bare.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], sem_angles[axis], places=4)
+        # focus should be parked (deactivated) when in SEM imaging
+        self._check_focus_position(model.MD_FAV_POS_DEACTIVE)
 
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
@@ -85,7 +103,11 @@ class TestMeteorJeol1Move(unittest.TestCase):
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], fm_angles[axis], places=4)
 
-        # move in the same imaging mode using linked YZ stage
+        # focus should be at the active favourite position when in FM imaging
+        self._check_focus_position(model.MD_FAV_POS_ACTIVE)
+
+        # move using sample stage: it should be directly passed on to stage-bare, as X&Y are always
+        # in the sample stage plane on the JEOL stage, with only being inverted.
         old_raw_pos = self.stage_bare.position.value
         old_sample_pos = self.stage.position.value
         self.stage.moveRel({"y": 1e-3}).result()
@@ -93,7 +115,7 @@ class TestMeteorJeol1Move(unittest.TestCase):
         new_sample_pos = self.stage.position.value
 
         self.assertAlmostEqual(old_sample_pos["y"] + 1e-3, new_sample_pos["y"], places=4)
-        self.assertTrue(old_raw_pos["y"] < new_raw_pos["y"])
+        self.assertAlmostEqual(old_raw_pos["y"] - 1e-3, new_raw_pos["y"], places=4)
 
     def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
         # move the stage to the loading position
@@ -110,6 +132,8 @@ class TestMeteorJeol1Move(unittest.TestCase):
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], fm_angles[axis], places=4)
+        # focus should be at the active favourite position when in FM imaging
+        self._check_focus_position(model.MD_FAV_POS_ACTIVE)
 
     def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
         # move to loading position
@@ -179,6 +203,8 @@ class TestMeteorJeol1Move(unittest.TestCase):
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], fm_angles[axis], places=4)
+        # focus should be at the active favourite position when in FM imaging
+        self._check_focus_position(model.MD_FAV_POS_ACTIVE)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_area(self):
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -246,6 +272,8 @@ class TestMeteorJeol1Move(unittest.TestCase):
         sem_angles = self.stage_bare.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], sem_angles[axis], places=4)
+        # focus should be parked (deactivated) when in SEM imaging
+        self._check_focus_position(model.MD_FAV_POS_DEACTIVE)
 
     def test_unknown_label_at_initialization(self):
         arbitrary_position = {"x": 0.0, "y": 0.01, "z": 0.85e-3}
