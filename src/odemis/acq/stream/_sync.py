@@ -1477,7 +1477,7 @@ class SEMMDStream(MultipleDetectorStream):
                             leech_np: List[Optional[int]]) -> Tuple[int, int]:
         """
         Get the next rectangle to scan, based on the leeches and the live update period.
-        :param rep: total number of pixels to scan (y, x)
+        :param rep: total number of pixels to scan (x, y)
         :param acq_num: number of pixels scanned so far
         :param px_time: time to acquire one pixel
         :param leech_np: number of pixels to scan before the next run of each leech.
@@ -1485,23 +1485,16 @@ class SEMMDStream(MultipleDetectorStream):
         :return: shape in pixels of the rectangle to scan (y, x)
         """
         tot_num = rep[0] * rep[1]
-        # When is the next (ie, soonest) leech?
-        npixels2scan = min([np for np in leech_np if np is not None] + [tot_num - acq_num])
+        # Block size is the minimum of:
+        # * when is the next (ie, soonest) leech (in pixels)
+        # * when to be paused for the live update (converted from s to pixels)
+        # * the whole remaining acquisition (in pixels)
+        live_period_px = self._live_update_period / px_time
+        n_px_live_period = max(1, round(live_period_px * 1.5))  # add 50% to not make it a little loose
+        npixels2scan = min([np for np in leech_np if np is not None] + [n_px_live_period, tot_num - acq_num])
         n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), acq_num, npixels2scan)
 
-        # If it's too long, relative to the live update period, then cut in roughly equal parts
-        live_period_px = int(self._live_update_period // px_time + 1)
-        if npixels2scan > live_period_px * 1.5:
-            nb_cuts = round(npixels2scan / live_period_px)
-            # Only scan rectangular blocks of pixels which start at the beginning of a row
-            assert n_y >= 1 and n_x >= 1
-            if n_y == 1:  # n_y == 1 -> 1 line, or less -> cut in sub lines
-                n_x = max(1, n_x // nb_cuts)
-            else:  # n_y > 1 -> large blocks -> just cut in sub lines
-                n_y = max(1, n_y // nb_cuts)
-            logging.debug("Live period should be in %d pixels, rounding to %d parts of %d x %d pixels",
-                          live_period_px, nb_cuts, n_y, n_x)
-
+        logging.debug("Next acquisition block is %d x %d = %d pixels", n_x, n_y, n_x * n_y)
         return n_y, n_x
 
     def _runAcquisition(self, future) -> Tuple[List[model.DataArray], Optional[Exception]]:
@@ -1821,7 +1814,7 @@ class SEMMDStream(MultipleDetectorStream):
                 n_y, n_x = self._get_next_rectangle(rep, spots_sum, px_time, leech_np)
                 npixels2scan = n_x * n_y
 
-                px_idx = (spots_sum // rep[0], spots_sum % rep[0])  # current pixel index
+                px_idx = (spots_sum // rep[0], spots_sum % rep[0])  # current pixel index (Y, X)
                 acq_rect = (px_idx[1], px_idx[0], px_idx[1] + n_x - 1, px_idx[0] + n_y - 1)
                 self._update_live_area(acq_rect, in_progress=True)
 
@@ -1843,12 +1836,12 @@ class SEMMDStream(MultipleDetectorStream):
 
                 # Pick the points from the full scan vector that needs to be scanned in this iteration
                 if n_y == 1:  # single line, or smaller => no flyback => no need to use the margin
-                    next_px_flat = margin + px_idx[0] + px_idx[1] * (rep[0] + margin)
+                    next_px_flat = margin + px_idx[1] + px_idx[0] * (rep[0] + margin)
                     scan_vector = pos_flat[next_px_flat:next_px_flat + npixels2scan]
                     scan_margin = 0
                 else:  # multiple lines, so we should keep the margin
                     scan_vector_len = npixels2scan + margin * n_y
-                    next_px_flat = px_idx[0] + px_idx[1] * (rep[0] + margin)
+                    next_px_flat = px_idx[1] + px_idx[0] * (rep[0] + margin)
                     scan_vector = pos_flat[next_px_flat:next_px_flat + scan_vector_len]
                     scan_margin = margin
 
