@@ -36,7 +36,7 @@ from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
     FG_COLOUR_BLIND_PINK,
-    conf,
+    conf, FG_COLOUR_BLIND_YELLOW,
 )
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
@@ -781,6 +781,30 @@ class FastEMMainGUIData(MainGUIData):
                         # overlay location right on init
                         xmin += 10 * sz[0]
                         xmax += 10 * sz[0]
+                    calibration.region = FastEMROC(name=str(number),
+                                                   scintillator_number=int(scintillator_number),
+                                                   coordinates=(xmin, ymin, xmax, ymax), colour=colour)
+                    scintillator.calibrations[calibration_name] = calibration
+                for i, focus_pos in enumerate((
+                        (-100, 10),
+                        (-100, 100),
+                        (-100, -100),
+                        (10, -100),
+                        (10, 100),
+                        (10, 10),
+                        (100, 10),
+                        (100, 100),
+                        (100, -100),
+                )):
+                    calibration_name = f"focus_map_{i}"
+                    calibration = FastEMCalibration(name=calibration_name)
+                    number = 1
+                    colour = FG_COLOUR_BLIND_YELLOW
+                    calibration.sequence.value = calib_1_calibrations
+                    xmin = position[0] - 0.5 * sz[0] + focus_pos[0] * sz[0]
+                    xmax = position[0] + 0.5 * sz[0] + focus_pos[0] * sz[0]
+                    ymin = position[1] + 0.5 * sz[1] + focus_pos[1] * sz[1]
+                    ymax =  position[1] - 0.5 * sz[1] + focus_pos[1] * sz[1]
                     calibration.region = FastEMROC(name=str(number),
                                                    scintillator_number=int(scintillator_number),
                                                    coordinates=(xmin, ymin, xmax, ymax), colour=colour)
