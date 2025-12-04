@@ -2201,5 +2201,122 @@ class TestImageProjection(unittest.TestCase):
         expected = [0, 0, 256, 223]
         self.assertEqual(apply_zoom_on_image_coordinates(rect, z), expected)
 
+class TestProjectYXC2RGB8(unittest.TestCase):
+    """Tests for projectYXC2RGB8 to match the style of DataArray2RGB tests."""
+
+    def test_rgb_uint8(self):
+        # RGB uint8 should be a fast path when irange covers 0..255
+        shape = (2000, 3000, 3)
+        src = numpy.zeros(shape, dtype=numpy.uint8) + 128
+        src[0, 0] = [0, 0, 0]
+        src[0, 1] = [255, 255, 255]
+
+        out = img.projectYXC2RGB8(src, irange=(0, 255))
+        self.assertEqual(out.shape, shape)
+        self.assertEqual(out.dtype, numpy.uint8)
+        numpy.testing.assert_array_equal(out[0, 0], [0, 0, 0])
+        numpy.testing.assert_array_equal(out[0, 1], [255, 255, 255])
+        # mid value should be preserved as grey
+        numpy.testing.assert_array_equal(out[1, 1], [128, 128, 128])
+
+    def test_rgba_uint8(self):
+        # RGBA uint8 should preserve alpha channel and shape
+        shape = (2, 2, 4)
+        src = numpy.zeros(shape, dtype=numpy.uint8)
+        # set RGB and alpha to distinct values
+        src[0, 0] = [0, 0, 0, 0]
+        src[0, 1] = [255, 0, 0, 128]
+        src[1, 0] = [0, 255, 0, 64]
+        src[1, 1] = [0, 0, 255, 255]
+
+        out = img.projectYXC2RGB8(src, irange=(0, 255))
+        self.assertEqual(out.shape, shape)
+        self.assertEqual(out.dtype, numpy.uint8)
+        # RGB channels should be preserved and alpha kept as-is
+        numpy.testing.assert_array_equal(out[0, 0], [0, 0, 0, 0])
+        numpy.testing.assert_array_equal(out[0, 1], [255, 0, 0, 128])
+        numpy.testing.assert_array_equal(out[1, 0], [0, 255, 0, 64])
+        numpy.testing.assert_array_equal(out[1, 1], [0, 0, 255, 255])
+
+    def test_rgb_uint16(self):
+        # RGB uint16 should be rescaled to 0..255 according to irange
+        shape = (2, 2, 3)
+        src = numpy.zeros(shape, dtype=numpy.uint16) + 32767
+        src[0, 0] = [0, 0, 0]
+        src[0, 1] = [65535, 65535, 65535]
+        src[1, 0] = [1000, 2000, 3000]
+        src[1, 1] = [32767, 32767, 32767]
+
+        out = img.projectYXC2RGB8(src, irange=(0, 65535))
+        self.assertEqual(out.shape, shape)
+        self.assertEqual(out.dtype, numpy.uint8)
+        numpy.testing.assert_array_equal(out[0, 0], [0, 0, 0])
+        numpy.testing.assert_array_equal(out[0, 1], [255, 255, 255])
+        # mid-point value may map to 127 or 128 depending on rounding; accept both
+        mid = out[1, 1, 0]
+        self.assertIn(mid, (127, 128))
+
+    def test_tint(self):
+        # Test that tint argument applies color correctly
+        # Tint multiplies each RGB channel by tint_value/255
+        shape = (2, 2, 3)
+        src = numpy.zeros(shape, dtype=numpy.uint8)
+        src[0, 0] = [0, 0, 0]  # black
+        src[0, 1] = [255, 255, 255]  # white
+        src[1, 0] = [128, 128, 128]  # grey
+        src[1, 1] = [255, 0, 0]  # red
+
+        # Apply a red tint (255, 0, 0) - keeps only red channel
+        out = img.projectYXC2RGB8(src, irange=(0, 255), tint=(255, 0, 0))
+
+        # Make sure the src wasn't modified
+        numpy.testing.assert_array_equal(src[0, 1], [255, 255, 255])
+
+        self.assertEqual(out.shape, shape)
+        self.assertEqual(out.dtype, numpy.uint8)
+        # black stays black
+        numpy.testing.assert_array_equal(out[0, 0], [0, 0, 0])
+        # white becomes red (255*1, 255*0, 255*0)
+        numpy.testing.assert_array_equal(out[0, 1], [255, 0, 0])
+        # grey becomes dark red (128*1, 128*0, 128*0)
+        numpy.testing.assert_array_equal(out[1, 0], [128, 0, 0])
+        # red stays red (255*1, 0*0, 0*0)
+        numpy.testing.assert_array_equal(out[1, 1], [255, 0, 0])
+
+        # Apply a cyan tint (0, 255, 255) - removes red channel
+        out = img.projectYXC2RGB8(src, irange=(0, 255), tint=(0, 255, 255))
+        self.assertEqual(out.shape, shape)
+        self.assertEqual(out.dtype, numpy.uint8)
+        # black stays black
+        numpy.testing.assert_array_equal(out[0, 0], [0, 0, 0])
+        # white becomes cyan (255*0, 255*1, 255*1)
+        numpy.testing.assert_array_equal(out[0, 1], [0, 255, 255])
+        # grey becomes dark cyan (128*0, 128*1, 128*1)
+        numpy.testing.assert_array_equal(out[1, 0], [0, 128, 128])
+        # red becomes black (255*0, 0*1, 0*1)
+        numpy.testing.assert_array_equal(out[1, 1], [0, 0, 0])
+
+    def test_tint_rgba(self):
+        # Test that tint doesn't affect alpha channel
+        shape = (2, 2, 4)
+        src = numpy.zeros(shape, dtype=numpy.uint8)
+        src[0, 0] = [0, 0, 0, 0]  # transparent black
+        src[0, 1] = [255, 255, 255, 128]  # semi-transparent white
+        src[1, 0] = [128, 128, 128, 64]  # low-alpha grey
+        src[1, 1] = [255, 0, 0, 255]  # opaque red
+
+        # Apply a green tint (0, 255, 0) - keeps only green channel for RGB
+        out = img.projectYXC2RGB8(src, irange=(0, 255), tint=(0, 255, 0))
+        self.assertEqual(out.shape, shape)
+        self.assertEqual(out.dtype, numpy.uint8)
+        # Alpha channels should be preserved, RGB channels tinted
+        numpy.testing.assert_array_equal(out[0, 0], [0, 0, 0, 0])
+        # white becomes green (255*0, 255*1, 255*0), alpha preserved
+        numpy.testing.assert_array_equal(out[0, 1], [0, 255, 0, 128])
+        # grey becomes dark green (128*0, 128*1, 128*0), alpha preserved
+        numpy.testing.assert_array_equal(out[1, 0], [0, 128, 0, 64])
+        # red becomes black (255*0, 0*1, 0*0), alpha preserved
+        numpy.testing.assert_array_equal(out[1, 1], [0, 0, 0, 255])
+
 if __name__ == "__main__":
     unittest.main()
