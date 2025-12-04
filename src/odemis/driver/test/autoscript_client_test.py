@@ -844,7 +844,7 @@ class TestMicroscope(unittest.TestCase):
         md = image.metadata
         self.assertEqual(md[model.MD_DATA_FILTER], f"median-filter:{median_filter}")
 
-        req_keys = [model.MD_BEAM_DWELL_TIME, model.MD_BEAM_SCAN_ROTATION,
+        req_keys = [model.MD_BEAM_DWELL_TIME, model.MD_ROTATION,
                     model.MD_BEAM_VOLTAGE, model.MD_BEAM_CURRENT, model.MD_BEAM_SHIFT,
                     model.MD_BEAM_FIELD_OF_VIEW, model.MD_ACQ_TYPE, model.MD_ACQ_DATE]
         self.assertTrue(all(k in md for k in req_keys))
