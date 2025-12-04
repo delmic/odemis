@@ -578,7 +578,8 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # get the scan rotation value
         sr = self._get_scan_rotation()
-
+        if sr != 0:
+            self._set_scanner_rotation_cor(sr)  # Makes sure total image rotation is 0
         # TODO: also need shear and scale for SEM_IMAGING and MILLING postures, each different.
         # TODO: update MILLING transformations when changing milling angle
         # get scan rotation matrix (rz -> rx)
