@@ -30,6 +30,7 @@ import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
+from odemis.gui.conf.data import get_local_vas
 from odemis import model
 from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
@@ -130,56 +131,31 @@ class FibsemTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-
-        # TODO: get components from main_data?
-        # setup electron beam, det
-        electron_beam = model.getComponent(role="e-beam")
-        electron_det = model.getComponent(role="se-detector")
-
-        hwemtvas = set()
-        hwdetvas = set()
-
-        hwemt_vanames = ("probeCurrent", "accelVoltage", "resolution", "dwellTime", "horizontalFoV")
-        hwdet_vanames = ("brightness", "contrast", "detector_mode", "detector_type")
-        for vaname in model.getVAs(electron_beam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-        for vaname in model.getVAs(electron_det):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
-
         self.sem_stream = SEMStream(
             name="SEM",
-            detector=electron_det,
-            dataflow=electron_det.data,
-            emitter=electron_beam,
-            focuser=main_data.ebeam_focus, #electron_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
+            detector=main_data.sed,
+            dataflow=main_data.sed.data,
+            emitter=main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
+            hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
             blanker=None)
 
-        # setup ion beam, det
-        ion_beam = model.getComponent(role="ion-beam")
-        ion_det = model.getComponent(role="se-detector-ion")
-
-        hwemtvas = set()
-        hwdetvas = set()
-        for vaname in model.getVAs(ion_beam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-        for vaname in model.getVAs(ion_det):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
+        hwemtvas = get_local_vas(main_data.ion_beam, main_data.hw_settings_config)
+        # Explicitly add accelVoltage in order to show it too with Tescan SEM, although it's read-only
+        if model.hasVA(main_data.ion_beam, "accelVoltage"):
+            hwemtvas.add("accelVoltage")
 
         self.fib_stream = FIBStream(
             name="FIB",
-            detector=ion_det,
-            dataflow=ion_det.data,
-            emitter=ion_beam,
+            detector=main_data.ion_sed,
+            dataflow=main_data.ion_sed.data,
+            emitter=main_data.ion_beam,
             focuser=main_data.ion_focus,
             hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
-        )
+            hwdetvas=get_local_vas(main_data.ion_sed, main_data.hw_settings_config),
+            )
+
         sem_stream_cont = self._streambar_controller.addStream(self.sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
@@ -395,12 +371,12 @@ class FibsemTab(Tab):
         # update stage pos label
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
-        posture = self.pm.current_posture.value
+        posture = self.pm.getCurrentPostureLabel(pos)  # Cannot use current_posture as it may be not yet updated
         pos_name = POSITION_NAMES[posture]
 
         # TODO: move this to legend.py
-        r = units.readable_str(units.round_significant(rz, 3))
-        t = units.readable_str(units.round_significant(rx, 3))
+        r = units.readable_str(rz, sig=3)
+        t = units.readable_str(rx, sig=3)
         txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
 
         # update the stage position label
@@ -414,20 +390,21 @@ class FibsemTab(Tab):
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
                 ltab.view_controller.viewports[3].bottom_legend.set_stage_pos_label(txt)
         except Exception as e:
-            pass
+            logging.warning("Failed to update stage position label: %s",e)
 
         # update the stage position buttons
-        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF) # BTN_TOGGLE_OFF
-        self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
-
         self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
         self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
         self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
 
         if posture == SEM_IMAGING:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE) # BTN_TOGGLE_COMPLETE
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
+        else:
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
         if posture == MILLING:
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+        else:
+            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
 
         self.panel.Layout()
 
@@ -443,8 +420,6 @@ class FibsemTab(Tab):
         stage_tilt = md["rx"]
         self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
                                                  f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
-
-        self._on_stage_pos(self.pm.stage.position.value)
 
         # if the tab isn't shown, we don't want to ask the user
         if evt is None: # if the event is None, it means this is the initial update, dont ask the user
@@ -471,13 +446,9 @@ class FibsemTab(Tab):
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
-        self._on_stage_pos(self.pm.stage.position.value)
-
     def _move_to_sem(self, evt: wx.Event):
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-
-        self._on_stage_pos(self.pm.stage.position.value)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
