@@ -33,7 +33,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TextIO, Any, Dict
 
 import libtiff.libtiff_ctypes as T  # for the constant names
 import numpy
@@ -197,13 +197,14 @@ def _GetFieldDefault(tfile, tag, default=None):
 resunit_to_m = {T.RESUNIT_INCH: 0.0254, T.RESUNIT_CENTIMETER: 0.01}
 
 
-def _readTiffTag(tfile):
+def _readTiffTag(filename: str, tfile) -> Dict[str, Any]:
     """
     Reads the tiff tags of the current page and convert them into metadata
     It tries to do the reverse of _convertToTiffTag(). Support for other
     metadata and other ways to encode metadata is best-effort only.
-    tfile (TIFF): the opened tiff file
-    return (dict of tag -> value): the metadata of a DataArray
+    :param filename: the path of the TIFF file
+    :param tfile (TIFF): the opened tiff file
+    :return: the metadata for use in a DataArray (dict of tag -> value)
     """
     md = {}
 
@@ -264,6 +265,7 @@ def _readTiffTag(tfile):
             md.update(_convert_thermo_fisher_to_odemis_metadata(tfs_md))
         except Exception as e:
             logging.info(f"Failed to parse ThermoFisher metadata: {e}")
+            tfs_md = None
 
     # parse zeiss metadata
     zmd = tfile.GetField(TIFFTAG_ZEISS_MD_1, ignore_undefined_tag=True)
@@ -275,6 +277,7 @@ def _readTiffTag(tfile):
             md.update(_convert_zeiss_to_odemis_metadata(zmd))
         except Exception as e:
             logging.info(f"Failed to parse Zeiss metadata: {e}")
+            zmd = None
 
     # parse tescan metadata
     tescan_md = tfile.GetField(TIFFTAG_TESCAN_MD)
@@ -283,6 +286,7 @@ def _readTiffTag(tfile):
             md.update(_convert_tescan_to_odemis_metadata(tescan_md))
         except Exception as e:
             logging.info(f"Failed to parse Tescan metadata: {e}", exc_info=True)
+            tescan_md = None
 
     # parse fibsemos metadata
     fibsemos_md = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
@@ -292,6 +296,128 @@ def _readTiffTag(tfile):
             md.update(_convert_fibsemos_to_odemis_metadata(omd))
         except Exception as e:
             logging.debug(f"Failed to parse fibsemOS metadata: {e}")
+            fibsemos_md = None
+
+    # Parse the JEOL metadata. As it's contained in a generic .txt file, we only do it when no other
+    # metadata is found.
+    if not any((tfs_md, zmd, tescan_md, fibsemos_md)):
+        try:
+            # exchange the extension to .txt
+            jeol_md_filepath = os.path.splitext(filename)[0] + ".txt"
+            if os.path.isfile(jeol_md_filepath):
+                with open(jeol_md_filepath, "r", encoding="utf-8", errors="ignore") as f:
+                    jeol_md = _parse_jeol_metadata(f)
+                md.update(_convert_jeol_to_odemis_metadata(tfile, jeol_md))
+
+        except Exception as e:
+            logging.debug(f"Failed to parse JEOL metadata: {e}")
+
+    return md
+
+
+def _parse_jeol_metadata(md_file: TextIO) -> Dict[str, str]:
+    """
+    Parses the JEOL metadata from a text block.
+    :param md_file: the file-like object containing the JEOL metadata
+    :return: a dict with each metadata key (without the first $) and value
+    """
+    # The JEOL metadata file looks like:
+    # $CM_FORMAT JEOL/EO
+    # $CM_VERSION 1.0
+    # $CM_DATE 2025-11-27  (but sometimes 2025/11/27)
+    # $CM_TIME 13:39:21
+    # $CM_MAG 36.672
+    # $$SM_WD_CORRECT 0
+    # $$SM_MIX_IMAGE
+    # Note: all lines start with a $. There are no empty lines.
+    md = {}
+    for line in md_file.readlines():
+        line = line.rstrip("\r\n")
+        if line.startswith("$"):
+            tokens = line[1:].split(" ", 1)
+            # it can return just 1 token, if no space => it's not a good line
+            if len(tokens) == 2:
+                key, value = tokens
+                md[key] = value
+            else:
+                logging.debug(f"JEOL metadata line not parsed: {line}")
+        else:
+            raise IOError(f"Metadata file doesn't look like a JEOL metadata (starts with {line[:10]})")
+
+    return md
+
+
+def _convert_jeol_to_odemis_metadata(tfile, jeol_md: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Converts JEOL metadata to Odemis metadata.
+    :param tfile: the opened TIFF file, which contains the image data
+    :param jeol_md: the JEOL metadata as parsed from the text file
+    :return: the Odemis metadata (dict of tag -> value)
+    """
+    # Check the "CM_VERSION" to ensure it's a JEOL metadata file
+    if "CM_VERSION" not in jeol_md:
+        return {}
+
+    logging.debug("Parsing JEOL metadata with format %s version %s",
+                  jeol_md.get("CM_FORMAT", "unknown"), jeol_md["CM_VERSION"])
+
+    md = {}
+    if "CM_DATE" in jeol_md and "CM_TIME" in jeol_md:
+        cm_date = jeol_md["CM_DATE"]
+        cm_time = jeol_md["CM_TIME"]
+        try:
+            # As the date can be with / or - separators, we normalize to -
+            dt_str = f"{cm_date.replace('/', '-')} {cm_time}"
+            dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            md[model.MD_ACQ_DATE] = dt.timestamp()
+        except (OverflowError, ValueError):
+            logging.debug("Failed to parse JEOL date '%s %s'", cm_date, cm_time)
+
+    if "CM_MAG" in jeol_md:
+        try:
+            md[model.MD_LENS_MAG] = float(jeol_md["CM_MAG"])
+        except ValueError:
+            logging.debug("Failed to parse JEOL magnification '%s'", jeol_md["CM_MAG"])
+
+    # There is (often) no metadata about pixel size. However, there is sometimes a CM_FIELD_OF_VIEW,
+    # defined like "1.067mm 0.800mm", and sometimes defined just as "1.067 0.800mm".
+    # Using the image size (in pixels) we can compute the pixel size.
+    # If the FoV is missing, guess it by using the magnification + 0.127 mm base HFW at mag 1.
+    fov_x = None
+    if "CM_FIELD_OF_VIEW" in jeol_md:
+        try:
+            tokens = jeol_md["CM_FIELD_OF_VIEW"].split(" ")
+            if len(tokens) == 2:
+                fov_x_str, fov_y_str = tokens
+                fov_x = float(fov_x_str.replace("mm", "")) * 1e-3  # in m
+        except (ValueError, ZeroDivisionError) as ex:
+            logging.debug("Failed to parse JEOL field of view '%s': %s", jeol_md["CM_FIELD_OF_VIEW"], ex)
+
+    if fov_x is None and model.MD_LENS_MAG in md:
+        mag = md[model.MD_LENS_MAG]
+        try:
+            hfw_no_mag = 0.128  # m, theoretical horizontal field-of-view at mag 1 (defined by JEOL)
+            fov_x = hfw_no_mag / mag
+        except ZeroDivisionError as ex:
+            logging.debug("Failed to compute JEOL field of view from magnification %s: %s", mag, ex)
+
+    # Guess pixel size from FOV and image resolution
+    if fov_x is not None:
+        width_px = tfile.GetField(T.TIFFTAG_IMAGEWIDTH)
+        pxs = fov_x / width_px
+        md[model.MD_PIXEL_SIZE] = (pxs, pxs)  # assume it's always square pixels
+
+    if "CM_INSTRUMENT" in jeol_md:
+        md[model.MD_HW_NAME] = jeol_md["CM_INSTRUMENT"]
+
+    if "CM_ACCEL_VOLT" in jeol_md:
+        try:
+            md[model.MD_BEAM_VOLTAGE] = float(jeol_md["CM_ACCEL_VOLT"]) * 1000  # kV -> V
+        except ValueError as ex:
+            logging.debug("Failed to parse JEOL acceleration voltage '%s': %s", jeol_md["CM_ACCEL_VOLT"], ex)
+
+    # It also contains the stage position, but the format varies, with CM_STAGE_POS, CM_STAGE_POSITION,
+    # and CM_STAGE_* (in mm). So for now we skip it.
 
     return md
 
@@ -2498,7 +2624,7 @@ class AcquisitionDataTIFF(AcquisitionData):
             data, thumbnails = self._getAllOMEDataArrayShadows(filename, tiff_file)
         except ValueError as ex:
             logging.info("Failed to use the OME data (%s), will use standard TIFF", ex)
-            data, thumbnails = self._getAllDataArrayShadows(tiff_file, self._lock)
+            data, thumbnails = self._getAllDataArrayShadows(filename, tiff_file, self._lock)
 
         # In case we open a basic TIFF file not generated by Odemis, this is a
         # very common "corner case": only one image, and no metadata. At least,
@@ -2508,7 +2634,7 @@ class AcquisitionDataTIFF(AcquisitionData):
 
         AcquisitionData.__init__(self, tuple(data), tuple(thumbnails))
 
-    def _getAllDataArrayShadows(self, tfile, lock):
+    def _getAllDataArrayShadows(self, filename: str, tfile, lock):
         """
         Create the all DataArrayShadows for the given TIFF file
         tfile (tiff handle): Handle for the TIFF file
@@ -2524,7 +2650,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         thumbnails = []
         # iterates all the directories of the TIFF file
         for dir_index in self._iterDirectories(tfile):
-            das, is_thumb = self._createDataArrayShadows(tfile, dir_index, lock)
+            das, is_thumb = self._createDataArrayShadows(filename, tfile, dir_index, lock)
             if is_thumb:
                 data.append(None)
                 thumbnails.append(das)
@@ -2592,14 +2718,14 @@ class AcquisitionDataTIFF(AcquisitionData):
                     continue
 
                 # TODO: we could have a separate lock per file?
-                d, t = self._getAllDataArrayShadows(stfile, self._lock)
+                d, t = self._getAllDataArrayShadows(sfn, stfile, self._lock)
                 data.extend(d)
                 thumbnails.extend(t)
                 uuids_read[u] = sfn
 
             if not data:
                 # Nothing loading (not even the current file) => load this file
-                data, thumbnails = self._getAllDataArrayShadows(tfile, self._lock)
+                data, thumbnails = self._getAllDataArrayShadows(filename, tfile, self._lock)
 
             _updateMDFromOME(omeroot, data)
             data = AcquisitionDataTIFF._foldArrayShadowsFromOME(omeroot, data)
@@ -2702,7 +2828,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         raise LookupError("No OME XML data found")
 
     @staticmethod
-    def _createDataArrayShadows(tfile, dir_index, lock):
+    def _createDataArrayShadows(filename: str, tfile, dir_index, lock):
         """
         Create the DataArrayShadow from the TIFF metadata for the current directory
         tfile (tiff handle): Handle for the TIFF file
@@ -2722,7 +2848,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         if samples_pp is None:  # default is 1
             samples_pp = 1
 
-        md = _readTiffTag(tfile)  # reads tag of the current image
+        md = _readTiffTag(filename, tfile)  # reads tag of the current image
 
         shape = (height, width)
         if samples_pp > 1:
