@@ -1326,7 +1326,7 @@ class FixedPositionsActuator(model.Actuator):
     """
 
     def __init__(self, name, role, dependencies, axis_name, positions, cycle=None,
-                 inverted=None, **kwargs):
+                 ref_start=None, inverted=None, **kwargs):
         """
         name (string)
         role (string)
@@ -1334,6 +1334,9 @@ class FixedPositionsActuator(model.Actuator):
         axis_name (str): axis name in the dependency actuator
         positions (set or dict value -> str): positions where the actuator is allowed to move
         cycle (float): if not None, it means the actuator does a cyclic move and this value represents a full cycle
+        ref_start (float or None): Value close to reference switch from where to start referencing.
+          Used to optimize run time when referencing.
+          The default value (None) is the cycle / number of positions.
         """
         if inverted:
             raise ValueError("Axes shouldn't be inverted")
@@ -1360,10 +1363,17 @@ class FixedPositionsActuator(model.Actuator):
             raise ValueError("Dependency %s is not an actuator." % dep.name)
 
         if cycle is not None:
-            # just an offset to reference switch position
-            self._offset = self._cycle / len(self._positions)
+            if ref_start is None:
+                # The reference switch is typically at 0, so a little after that is often a good
+                # starting point (assuming the referencing goes towards negative direction).
+                self._ref_start = self._cycle / len(self._positions)
+            else:
+                self._ref_start = ref_start
             if not all(0 <= p < cycle for p in positions.keys()):
                 raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
+        else:
+            if ref_start is not None:
+                raise ValueError("ref_start can only be specified if cycle is specified.")
 
         ac = dep.axes[axis_name]
         axes = {axis: model.Axis(choices=positions, unit=ac.unit)}  # TODO: allow the user to override the unit?
@@ -1470,30 +1480,24 @@ class FixedPositionsActuator(model.Actuator):
                 move = {self._caxis: req_pos}
                 self._dependency.moveAbs(move).result()
             else:
-                # Optimize by moving through the closest way
                 cur_pos = self._dependency.position.value[self._caxis]
-                vector1 = req_pos - cur_pos
-                mod1 = vector1 % self._cycle
-                vector2 = cur_pos - req_pos
-                mod2 = vector2 % self._cycle
-                if abs(mod1) < abs(mod2):
-                    self._move_sum += mod1
-                    if self._move_sum >= self._cycle:
-                        # Once we are about to complete a full cycle, reference again
-                        # to get rid of accumulated error
-                        self._move_sum = 0
-                        # move to the reference switch
-                        move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
-                        self._dependency.moveRel({self._caxis: move_to_ref}).result()
-                        self._dependency.reference({self._caxis}).result()
-                        move = {self._caxis: req_pos}
-                    else:
-                        move = {self._caxis: mod1}
-                else:
-                    move = {self._caxis: -mod2}
-                    self._move_sum -= mod2
 
-                self._dependency.moveRel(move).result()
+                # After moving more than the equivalent of a full cycle, reference again to get rid
+                # of accumulated error.
+                if self._move_sum >= self._cycle:
+                    logging.debug("Re-referencing axis %s (-> %s) after moving %s",
+                                  self._axis, self._caxis, self._move_sum)
+                    # Move near the reference switch, using the shortest way, to save a bit of time
+                    shift = util.rot_shortest_move(cur_pos, self._ref_start, self._cycle)
+                    self._dependency.moveRel({self._caxis: shift}).result()
+                    self._dependency.reference({self._caxis}).result()
+                    self._move_sum = 0
+                    cur_pos = self._dependency.position.value[self._caxis]
+
+                # Optimize by moving through the closest way
+                shift = util.rot_shortest_move(cur_pos, req_pos, self._cycle)
+                self._move_sum += abs(shift)
+                self._dependency.moveRel({self._caxis: shift}).result()
 
             # after successful movement store the actual position reached by the dependency
             cur_pos = self._dependency.position.value[self._caxis]
@@ -1505,6 +1509,7 @@ class FixedPositionsActuator(model.Actuator):
         logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
         f = self._dependency.reference({self._caxis})
         f.result()
+        self._move_sum = 0
 
         # If we just did homing and ended up to an unsupported position, move to
         # the nearest supported position
