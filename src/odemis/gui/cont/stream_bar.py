@@ -1679,7 +1679,7 @@ class SparcStreamsController(StreamBarController):
 
         main_data = self._main_data_model
 
-        detvas = get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config)
+        detvas = get_local_vas(main_data.ccd, main_data.hw_settings_config)
 
         if main_data.ccd.exposureTime.range[1] < 3600:  # 1h
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
@@ -1694,7 +1694,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             analyzer=main_data.pol_analyzer,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm,
+            opm=main_data.opm,
             axis_map=axes,
             # TODO: add a focuser for the SPARCv2?
             detvas=detvas,
@@ -1723,9 +1723,9 @@ class SparcStreamsController(StreamBarController):
                 main_data.ebic.data,
                 main_data.ebeam,
                 main_data.sed.data,
-                focuser=self._main_data_model.ebeam_focus,
+                focuser=main_data.ebeam_focus,
                 emtvas={"dwellTime"},
-                detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
+                detvas=get_local_vas(main_data.ebic, main_data.hw_settings_config),
             )
         else:
             ebic_stream = acqstream.EBICSettingsStream(
@@ -1734,9 +1734,9 @@ class SparcStreamsController(StreamBarController):
                 main_data.ebic.data,
                 main_data.ebeam,
                 sstage=main_data.scan_stage,
-                focuser=self._main_data_model.ebeam_focus,
+                focuser=main_data.ebeam_focus,
                 emtvas={"dwellTime"},
-                detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
+                detvas=get_local_vas(main_data.ebic, main_data.hw_settings_config),
             )
 
         # Create the equivalent MDStream
@@ -1771,11 +1771,11 @@ class SparcStreamsController(StreamBarController):
             main_data.cld.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
-            focuser=self._main_data_model.ebeam_focus,
-            opm=self._main_data_model.opm,
+            focuser=main_data.ebeam_focus,
+            opm=main_data.opm,
             axis_map=axes,
             emtvas={"dwellTime"},
-            detvas=get_local_vas(main_data.cld, self._main_data_model.hw_settings_config),
+            detvas=get_local_vas(main_data.cld, main_data.hw_settings_config),
         )
 
         # Special "safety" feature to avoid having a too high gain at start
@@ -1839,10 +1839,10 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             main_data.light,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm,
+            opm=main_data.opm,
             axis_map=axes,
-            # emtvas=get_local_vas(main_data.ebeam, self._main_data_model.hw_settings_config), # no need
-            detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
+            # emtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config), # no need
+            detvas=get_local_vas(detector, main_data.hw_settings_config),
         )
         self._set_default_spectrum_axes(spec_stream)
 
@@ -1860,7 +1860,7 @@ class SparcStreamsController(StreamBarController):
         """
         main_data = self._main_data_model
 
-        detvas = get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config)
+        detvas = get_local_vas(main_data.ccd, main_data.hw_settings_config)
         # For ek acquisition we use a horizontal and a vertical binning
         # which are instantiated in the AngularSpectrumSettingsStream.
         # Removes binning from local (GUI) VAs to use a vertical and horizontal binning
@@ -1890,7 +1890,7 @@ class SparcStreamsController(StreamBarController):
             spectrograph,
             analyzer=main_data.pol_analyzer,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm,
+            opm=main_data.opm,
             axis_map=axes,
             detvas=detvas,
         )
@@ -1909,7 +1909,7 @@ class SparcStreamsController(StreamBarController):
 
         main_data = self._main_data_model
 
-        detvas = get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config)
+        detvas = get_local_vas(main_data.streak_ccd, main_data.hw_settings_config)
 
         if main_data.streak_ccd.exposureTime.range[1] < 86400:  # 24h
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
@@ -1940,10 +1940,10 @@ class SparcStreamsController(StreamBarController):
             main_data.streak_unit,
             main_data.streak_delay,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm,
+            opm=main_data.opm,
             axis_map=axes,
             detvas=detvas,
-            streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
+            streak_unit_vas=get_local_vas(main_data.streak_unit, main_data.hw_settings_config))
         self._set_default_spectrum_axes(ts_stream)
         # For safety, always start with the shutter closed.
         if model.hasVA(ts_stream, "detShutter"):
@@ -1984,10 +1984,10 @@ class SparcStreamsController(StreamBarController):
             main_data.monochromator.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm,
+            opm=main_data.opm,
             axis_map=axes,
             emtvas={"dwellTime"},
-            detvas=get_local_vas(main_data.monochromator, self._main_data_model.hw_settings_config),
+            detvas=get_local_vas(main_data.monochromator, main_data.hw_settings_config),
         )
         self._set_default_spectrum_axes(monoch_stream)
 
@@ -2031,9 +2031,9 @@ class SparcStreamsController(StreamBarController):
             main_data.time_correlator,
             main_data.time_correlator.data,
             main_data.ebeam,
-            opm=self._main_data_model.opm,
+            opm=main_data.opm,
             axis_map=axes,
-            detvas=get_local_vas(main_data.time_correlator, self._main_data_model.hw_settings_config)
+            detvas=get_local_vas(main_data.time_correlator, main_data.hw_settings_config)
         )
 
         # Create the equivalent MDStream
