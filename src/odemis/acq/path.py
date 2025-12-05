@@ -192,6 +192,8 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # Can affect in case the time-correlator is placed as output of the spectrograph
+                 'slit-in-big': {'x': 'off'},  # closed
                 }),
             'mirror-align': (r"ccd.*",  # Also used for lens alignment
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
