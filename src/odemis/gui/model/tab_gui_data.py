@@ -406,22 +406,32 @@ class CryoLocalizationGUIData(CryoGUIData):
             if not stig_calib:
                 logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
             else:
-                for key, subdict in stig_calib.items():
-                    if 'angle' in subdict:
-                        tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE, TOOL_FIDUCIAL}
-                        target_sizes = frozenset(stig_calib.keys())
-                        self.fiducial_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
-                        self.poi_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
-                    else:
-                        angles = frozenset(stig_calib.keys())
-                        rng = main.stigmator.axes["rz"].range
-                        for a in angles:
-                            if not rng[0] <= a <= rng[1]:
-                                raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+                # stig_calib keys are based on target sizes or angles, if with target sizes then it is valid
+                # if angle is the key within the subdictionary, then the metadata keys depend on target sizes
+                valid_keys = all(True if 'angle' in subdict else False for key, subdict in stig_calib.items())
+                if not valid_keys:
+                    # Modify the stig_calib to add the angle info within the values of the keys. The keys
+                    # are the target sizes, so we need to create new random keys for the angle stigmator calibration
+                    angles = frozenset(stig_calib.keys())
+                    updated_stig_calib = {}
+                    target_size = 0
+                    rng = main.stigmator.axes["rz"].range
+                    for a in angles:
+                        if not rng[0] <= a <= rng[1]:
+                            raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+                        target_size += 100.e-6
+                        updated_stig_calib[target_size] = stig_calib[a]
+                        updated_stig_calib[target_size]['angle'] = a
+                    stig.updateMetadata({model.MD_CALIB:updated_stig_calib})
+                    stig_md = stig.getMetadata()
+                    stig_calib = stig_md.get(model.MD_CALIB, None)
+                    logging.warning("Random target sizes have been created for the stigmator calibration: %s",
+                                    stig_calib.keys())
 
-                        self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
-
-                    break
+                tools = {TOOL_NONE, TOOL_RULER, TOOL_FEATURE, TOOL_FIDUCIAL}
+                target_sizes = frozenset(stig_calib.keys())
+                self.fiducial_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
+                self.poi_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
 
         # Update the tool selection with the new tool list
         self.tool.choices = tools

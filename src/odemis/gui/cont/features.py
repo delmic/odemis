@@ -7,7 +7,6 @@ import wx
 from typing import Dict, List
 
 from odemis import model
-
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -366,7 +365,7 @@ class CryoFeatureController(object):
 
             poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
                          z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
-                         index=1, fm_focus_position=feature_focus["z"], superz_focus=feature.superz_focus)
+                         index=1, fm_focus_position=feature_focus["z"], superz_focused=feature.superz_focused)
             targets.append([poi])
             if self.correlation_target.fib_fiducials:
                 targets.append(self.correlation_target.fib_fiducials)
