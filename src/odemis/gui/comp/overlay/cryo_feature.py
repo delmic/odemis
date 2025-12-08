@@ -343,12 +343,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             # Show proper feature icon based on selected feature + status
             try:
                 if feature is self.tab_data.main.currentFeature.value:
-                    if feature.superz_focus == False:
+                    if feature.superz_focused == False:
                         set_icon(self._feature_icons_selected["superz_defocus"])
                     else:
                         set_icon(self._feature_icons_selected[feature.status.value])
                 else:
-                    if feature.superz_focus == False:
+                    if feature.superz_focused == False:
                         set_icon(self._feature_icons["superz_defocus"])
                     else:
                         set_icon(self._feature_icons[feature.status.value])
@@ -612,7 +612,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                     set_icon(self._feature_icons[target.type.value], target.type.value)
                 elif target is self.tab_data.main.currentTarget.value:
                     # Correct label positions such that label is outside the icon display
-                    if target.superz_focus == False:  # can be None, True, False
+                    if target.superz_focused == False:  # can be None, True, False
                         set_icon(self._feature_icons_selected["superz_defocus"])
                     else:
                         set_icon(self._feature_icons_selected[target.type.value], target.type.value)
@@ -626,8 +626,9 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                     set_icon(self._feature_icons_selected["FiducialPair"], target.type.value)
                     self._label.text = target.index.value
                     self._label.pos = (bpos[0] + 15, bpos[1] + 15)
+                    self._label.draw(ctx)
                 else:
-                    if target.superz_focus == False:  # can be None, True, False
+                    if target.superz_focused == False:  # can be None, True, False
                         set_icon(self._feature_icons["superz_defocus"])
                     else:
                         set_icon(self._feature_icons[target.type.value], target.type.value)

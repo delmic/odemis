@@ -29,7 +29,7 @@ of microscope images.
 import logging
 import math
 from concurrent.futures._base import CancelledError
-from typing import List
+from typing import List, Optional
 
 import wx
 
@@ -74,7 +74,7 @@ class CryoZLocalizationController(object):
             self._stigmator.moveAbs({"rz": 0})
 
         # If the hardware doesn't support for Z localization, hide everything and don't control anything
-        if not hasattr(tab_data, "stigmatorAngle") and not hasattr(tab_data, "fiducial_size") and not hasattr(tab_data, "poi_size"):
+        if not hasattr(tab_data, "fiducial_size"):
             self._panel.btn_z_localization.Hide()
             self._panel.lbl_z_localization.Hide()
             self._panel.lbl_stigmator_angle.Hide()
@@ -100,85 +100,47 @@ class CryoZLocalizationController(object):
         self._panel.menu_localization_streams.Bind(wx.EVT_BUTTON, self._create_stream_menu)
         self._tab_data.streams.subscribe(self._on_streams, init=True)
 
-        tool =  self._tab_data.tool if hasattr(self._tab_data, "tool") else None
-        self._localization = None
-        if tool and TOOL_FIDUCIAL in tool.choices:
-            # Z localization with superZ manager with target and poi sizes
-            self._localization = self._start_z_manager
-            self._panel.lbl_stigmator_angle.Hide()
-            self._panel.cmb_stigmator_angle.Hide()
-            self._panel.Layout()
+        # targets va attributes (name..etc) connectors
+        self._target_z_va_connector = None
+        # Z localization with superZ manager with target and poi sizes
+        self._localization = self._measure_z_multi_targets
+        self._panel.lbl_stigmator_angle.Hide()
+        self._panel.cmb_stigmator_angle.Hide()
+        self._panel.Layout()
 
-            # targets va attributes (name..etc) connectors
-            self._target_z_va_connector = None
+        self._panel.btn_z_localization.Bind(wx.EVT_BUTTON, self._on_z_localization)
+        self._localization_btn_label = self._panel.btn_z_localization.GetLabel()
+        self._panel.btn_delete_target.Bind(wx.EVT_BUTTON, self._on_delete_target)
+        self._panel.cmb_targets.Bind(wx.EVT_COMBOBOX, self._on_cmb_targets_change)
+        self._panel.btn_go_to_target.Bind(wx.EVT_BUTTON, self._on_btn_go_to_target)
+        self._panel.btn_use_current_target_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_target_z)
 
-            self._panel.btn_z_localization.Bind(wx.EVT_BUTTON, self._on_z_localization)
-            self._localization_btn_label = self._panel.btn_z_localization.GetLabel()
-            self._panel.btn_delete_target.Bind(wx.EVT_BUTTON, self._on_delete_target)
-            self._panel.cmb_targets.Bind(wx.EVT_COMBOBOX, self._on_cmb_targets_change)
-            self._panel.btn_go_to_target.Bind(wx.EVT_BUTTON, self._on_btn_go_to_target)
-            self._panel.btn_use_current_target_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_target_z)
+        # Fill the combobox with the available target sizes
+        for size in sorted(tab_data.fiducial_size.choices):
+            size_str = units.readable_str(size, unit="m")
+            self._panel.cmb_fiducial_size.Append(size_str, size)
 
-            # Fill the combobox with the available target sizes
-            for size in sorted(tab_data.fiducial_size.choices):
-                size_str = units.readable_str(size, unit="m")
-                self._panel.cmb_fiducial_size.Append(size_str, size)
+        for size in sorted(tab_data.poi_size.choices):
+            size_str = units.readable_str(size, unit="m")
+            self._panel.cmb_poi_size.Append(size_str, size)
 
-            for size in sorted(tab_data.poi_size.choices):
-                size_str = units.readable_str(size, unit="m")
-                self._panel.cmb_poi_size.Append(size_str, size)
+        self._cmb_vac_fiducial_size = VigilantAttributeConnector(
+            va=self._tab_data.fiducial_size,
+            value_ctrl=self._panel.cmb_fiducial_size,
+            events=wx.EVT_COMBOBOX,
+            va_2_ctrl=self._cmb_fiducial_size_set,
+            ctrl_2_va=self._cmb_fiducial_size_get
+        )
 
-            self._cmb_vac_fiducial_size = VigilantAttributeConnector(
-                va=self._tab_data.fiducial_size,
-                value_ctrl=self._panel.cmb_fiducial_size,
-                events=wx.EVT_COMBOBOX,
-                va_2_ctrl=self._cmb_fiducial_size_set,
-                ctrl_2_va=self._cmb_fiducial_size_get
-            )
+        self._cmb_vac_poi_size = VigilantAttributeConnector(
+            va=self._tab_data.poi_size,
+            value_ctrl=self._panel.cmb_poi_size,
+            events=wx.EVT_COMBOBOX,
+            va_2_ctrl=self._cmb_poi_size_set,
+            ctrl_2_va=self._cmb_poi_size_get
+        )
 
-            self._cmb_vac_poi_size = VigilantAttributeConnector(
-                va=self._tab_data.poi_size,
-                value_ctrl=self._panel.cmb_poi_size,
-                events=wx.EVT_COMBOBOX,
-                va_2_ctrl=self._cmb_poi_size_set,
-                ctrl_2_va=self._cmb_poi_size_get
-            )
-
-        else:
-            # Z localization with stigmator angle only
-            self._localization = self._start_z_localization
-            self._panel.lbl_fiducial_size.Hide()
-            self._panel.cmb_fiducial_size.Hide()
-            self._panel.lbl_poi_size.Hide()
-            self._panel.cmb_poi_size.Hide()
-            self._panel.btn_delete_target.Hide()
-            self._panel.cmb_targets.Hide()
-            self._panel.btn_go_to_target.Hide()
-            self._panel.lbl_target_z.Hide()
-            self._panel.ctrl_target_z.Hide()
-            self._panel.btn_use_current_target_z.Hide()
-            self._panel.Layout()
-
-            # Connect the button and combobox
-            self._panel.btn_z_localization.Bind(wx.EVT_BUTTON, self._on_z_localization)
-            self._localization_btn_label = self._panel.btn_z_localization.GetLabel()
-
-            # Fill the combobox with the available stigmator angles
-            for angle in sorted(tab_data.stigmatorAngle.choices):
-                angle_str = units.to_string_pretty(math.degrees(angle), 3, "°")
-                self._panel.cmb_stigmator_angle.Append(angle_str, angle)
-
-            self._cmb_vac = VigilantAttributeConnector(
-                va=self._tab_data.stigmatorAngle,
-                value_ctrl=self._panel.cmb_stigmator_angle,
-                events=wx.EVT_COMBOBOX,
-                va_2_ctrl=self._cmb_stig_angle_set,
-                ctrl_2_va=self._cmb_stig_angle_get
-            )
-            self._acq_future_connector = None  # ProgressiveFutureConnector, if running
-
-        # To check if a target is selected
-        self.current_target_coordinate_subscription = False
+        self._subscribed_target = None  # Track which target we're subscribed to
         self._tab_data.main.targets.subscribe(self._on_targets_changes)
         self._tab_data.main.currentTarget.subscribe(self._on_current_target_changes)
 
@@ -238,7 +200,7 @@ class CryoZLocalizationController(object):
         Change the current target display based on the dropdown selection.
         """
         index = self._panel.cmb_targets.GetSelection()
-        if index == -1:
+        if index == wx.NOT_FOUND:
             logging.warning("cmb_targets selection = -1.")
             return
         selected_target = self._panel.cmb_targets.GetClientData(index)
@@ -259,8 +221,6 @@ class CryoZLocalizationController(object):
         # move focus only if we are in FM imaging posture
         if current_posture == FM_IMAGING:
             self._tab_data.main.focus.moveAbs(fm_focus_position)
-
-        return
 
     def _on_btn_use_current_target_z(self, evt) -> None:
         """
@@ -319,11 +279,15 @@ class CryoZLocalizationController(object):
         for vp in self._viewports:
             vp.canvas.update_drawing()
 
+        # Unsubscribe from the previous target if any
+        if self._subscribed_target is not None:
+            self._subscribed_target.coordinates.unsubscribe(self._on_current_coordinates_changes)
+
         # Update the text display of the current target
         if target is None:
             self._enable_target_ctrls(False)
             return
-        elif target and (target.type.value == TargetType.Fiducial) and not self.current_target_coordinate_subscription:
+        elif target and (target.type.value == TargetType.Fiducial):
             self._enable_target_ctrls(True)
             self._target_z_va_connector = VigilantAttributeConnector(target.coordinates,
                                                                       self._panel.ctrl_target_z,
@@ -331,12 +295,8 @@ class CryoZLocalizationController(object):
                                                                       ctrl_2_va=self._on_ctrl_target_z_change,
                                                                       va_2_ctrl=self._on_target_focus_pos)
 
-            self._tab_data.main.currentTarget.value.coordinates.unsubscribe(self._on_current_coordinates_changes)
-            self._tab_data.main.currentTarget.value.coordinates.subscribe(self._on_current_coordinates_changes,
-                                                                                init=True)
-
-            # subscribe only once
-            self.current_target_coordinate_subscription = True
+            target.coordinates.subscribe(self._on_current_coordinates_changes, init=True)
+            self._subscribed_target = target
 
     @call_in_wx_main
     def _on_current_coordinates_changes(self, coordinates: ListVA) -> None:
@@ -344,8 +304,6 @@ class CryoZLocalizationController(object):
         Update the coordinates of the current target in the grid and update the correlation result.
         :param coordinates: the coordinates of the current target
         """
-        self.current_target_coordinate_subscription = False
-
         self._update_target_cmb_list()
 
         # Update the correlation target
@@ -372,10 +330,10 @@ class CryoZLocalizationController(object):
         for vp in self._viewports:
             vp.canvas.update_drawing()
 
-    def _cmb_stig_angle_get(self) -> float:
+    def _cmb_stig_angle_get(self) -> Optional[float]:
         """
         Get the current angle based on the dropdown selection.
-        :return: angle in radians
+        :return: angle in radians or None
         """
         i = self._panel.cmb_stigmator_angle.GetSelection()
         if i == wx.NOT_FOUND:
@@ -395,10 +353,10 @@ class CryoZLocalizationController(object):
         else:
             logging.warning("Combobox stigmator angle has no value %s", value)
 
-    def _cmb_fiducial_size_get(self) -> float:
+    def _cmb_fiducial_size_get(self) -> Optional[float]:
         """
         Get the current fiducial size based on the dropdown selection.
-        :return: size in meters
+        :return: size in meters or None
         """
         i = self._panel.cmb_fiducial_size.GetSelection()
         if i == wx.NOT_FOUND:
@@ -422,10 +380,10 @@ class CryoZLocalizationController(object):
         else:
             logging.warning("Combobox fiducial size has no value %s", value)
 
-    def _cmb_poi_size_get(self) -> float:
+    def _cmb_poi_size_get(self) -> Optional[float]:
         """
         Get the current poi size based on the dropdown selection.
-        :return: size in meters
+        :return: size in meters or None
         """
         i = self._panel.cmb_poi_size.GetSelection()
         if i == wx.NOT_FOUND:
@@ -438,6 +396,7 @@ class CryoZLocalizationController(object):
         """
         Set the current poi size based on the dropdown selection.
         :param value: Value to set in meters
+        :return: None
         """
         ctrl = self._panel.cmb_poi_size
         for i in range(ctrl.GetCount()):
@@ -462,14 +421,14 @@ class CryoZLocalizationController(object):
         # * Localization process is running
         # * TODO: there is a FluoStream
         has_feature = self._tab_data.main.currentFeature.value is not None
-        correlation_data = self._tab_data.main.currentFeature.value.correlation_data if self._tab_data.main.currentFeature.value else None
-        self._panel.cmb_targets.Clear()
         # Check if the correlation data is already present in the current feature
         # and load the streams and targets accordingly, if not then initialize the correlation data
         if TOOL_FIDUCIAL in self._tab_data.tool.choices:
             tb = self._panel.secom_toolbar
             if has_feature:
                 feature = self._tab_data.main.currentFeature.value
+                correlation_data = self._tab_data.main.currentFeature.value.correlation_data
+                self._panel.cmb_targets.Clear()
                 streams = self._tab_data.streams.value
                 if feature.superz_stream_name:
                     self._selected_stream = next((s for s in streams if isinstance(s, FluoStream) and
@@ -484,7 +443,7 @@ class CryoZLocalizationController(object):
                     self.correlation_target = self._tab_data.main.currentFeature.value.correlation_data
                     tb.enable_button(TOOL_FIDUCIAL, True)
 
-            elif not has_feature:
+            else:
                 self.correlation_target = None
                 tb.enable_button(TOOL_FIDUCIAL, False)
 
@@ -495,9 +454,12 @@ class CryoZLocalizationController(object):
         # While running the localization method
         # button turns in cancel button
         is_running = not self._acq_future.done()
-
-        self._panel.btn_z_localization.Enable(has_feature and not is_acquiring or is_running)
-        self._enable_target_ctrls(has_feature and not is_acquiring and not is_running)
+        # The Locate Z button is enabled when there is a feature and enabled when it is
+        # localizing as a Cancel button, provided there is no image is being acquired
+        self._panel.btn_z_localization.Enable(has_feature and ((not is_acquiring) or is_running))
+        # The interface for target control is active when there is a feature and no processes
+        # like acquisition or localization are running
+        self._enable_target_ctrls(has_feature and (not is_acquiring) and (not is_running))
 
     def _on_streams(self, streams) -> None:
         """ Ensure that the selected stream is still valid when the list of streams is changed """
@@ -547,14 +509,17 @@ class CryoZLocalizationController(object):
         # If localization is running, cancel it, otherwise start one
         if self._acq_future.done():
             # Depending on the configuration, start one of the two localization methods
-            self._localization()
+            self._measure_z_multi_targets()
         else:
             self._acq_future.cancel()
 
-    def _start_z_manager(self):
+    def _measure_z_multi_targets(self):
         """
-        Called on button press, to start the localization that includes superZ manager with fiducials and poi.
-        Used as one alternative of "self._localization" method.
+        Called on button press, to start the localization fiducials and pois.  The pois and fiducials are taken
+        from the current feature correlation data.
+
+        Note: One poi is used for the localization. The current feature location is used as the location the
+         point of interest (poi).
         """
         s = self._selected_stream
         if s is None:
@@ -588,28 +553,27 @@ class CryoZLocalizationController(object):
         poi_size = self._tab_data.poi_size.value
         fiducial_size = self._tab_data.fiducial_size.value
         correlation_data = self._tab_data.main.currentFeature.value.correlation_data
-        pois = [Target(x= pos["x"],y= pos["y"],
-                     z= feature.fm_focus_position.value["z"],
+        pois = [Target(x= pos["x"],y=pos["y"],
+                     z=feature.fm_focus_position.value["z"],
                      name="POI-1",
                      index=1,
                      type=TargetType.PointOfInterest,
-                     fm_focus_position = feature.fm_focus_position.value["z"])]
+                     fm_focus_position=feature.fm_focus_position.value["z"])]
         fiducials = getattr(correlation_data, "fm_fiducials", [])
-        self._acq_future = z_localization.superz_manager(stigmator=self._stigmator, focus= self._focus,
-                                                         poi_size=poi_size, stream=s,
-                                                         pois=pois, fiducials=fiducials,
-                                                         fiducial_size=fiducial_size)
+        self._acq_future = z_localization.measure_z_multi_targets(stigmator=self._stigmator, focus= self._focus,
+                                                         stream=s, poi_size=poi_size,
+                                                         pois=pois, fiducial_size=fiducial_size, fiducials=fiducials)
         self._panel.btn_z_localization.SetLabel("Cancel")
 
         self._acq_future_connector = ProgressiveFutureConnector(self._acq_future,
                                                                 self._panel.gauge_z_localization)
 
-        self._acq_future.add_done_callback(self._on_superz_manager_done)
+        self._acq_future.add_done_callback(self._on_measure_z_multi_targets_done)
 
     @call_in_wx_main
-    def _on_superz_manager_done(self, f):
+    def _on_measure_z_multi_targets_done(self, f):
         """
-        Called when _start_z_manager is completed (can also happen if cancelled or failed)
+        Called when _measure_z_multi_targets is completed (can also happen if cancelled or failed)
         """
         try:
             self._panel.btn_z_localization.Enable(True)
@@ -625,7 +589,7 @@ class CryoZLocalizationController(object):
                 elif target.type.value == TargetType.PointOfInterest:
                     # update feature focus position
                     feature.fm_focus_position.value = {"z": target.coordinates.value[2]}
-                    feature.superz_focus = target.superz_focus
+                    feature.superz_focused = target.superz_focused
 
             self._panel.cmb_targets.Clear()
             self._tab_data.main.targets.value = targets
@@ -634,92 +598,6 @@ class CryoZLocalizationController(object):
                 logging.debug("Feature located at %s + %s m", old_focus,
                               feature.fm_focus_position.value["z"] - old_focus)
                 self._tab_data.main.focus.moveAbs({"z": feature.fm_focus_position.value["z"]})
-                # Don't wait for it to be complete, the user will notice anyway
-        except CancelledError:
-            logging.debug("Z localization cancelled")
-        finally:
-            self._panel.btn_z_localization.Enable()
-            self._panel.gauge_z_localization.Hide()
-            self._panel.lbl_z_localization.Show()
-            self._tab_data.main.is_acquiring.value = False
-            self._tab.streambar_controller.resume()
-            self._panel.Layout()
-
-    def _start_z_localization(self):
-        """
-        Called on button press, to start the localization based on stigmator angle only.
-        Used as one alternative of "self._localization" method.
-        """
-        s = self._selected_stream
-        if s is None:
-            raise ValueError("No FM stream available to acquire a image of the the feature")
-
-        # The button is disabled when no feature is selected, but better check
-        feature = self._tab_data.main.currentFeature.value
-        if feature is None:
-            raise ValueError("Select a feature first to specify the Z localization in X/Y")
-        if self._tab_data.main.posture_manager.current_posture.value != FM_IMAGING:
-            raise ValueError("The current posture is not FM imaging, cannot do Z localization")
-        stage_pos = feature.get_posture_position(FM_IMAGING)
-        pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(stage_pos)
-
-        # Disable the GUI and show the progress bar
-        self._tab.streambar_controller.pauseStreams()
-        self._tab.streambar_controller.pause()
-
-        self._panel.lbl_z_localization.Hide()
-        self._panel.gauge_z_localization.Show()
-        self._tab_data.main.is_acquiring.value = True
-        self._panel.Layout()
-
-        # Store the acquisition somewhere, for debugging purposes
-        acq_conf = conf.get_acqui_conf()
-        fn = create_filename(acq_conf.pj_last_path, "{datelng}-{timelng}-superz", ".ome.tiff")
-        assert fn.endswith(".ome.tiff")
-
-        # The angles of stigmatorAngle should come from MD_CALIB, so it's relatively safe
-        angle = self._tab_data.stigmatorAngle.value
-
-        self._acq_future = z_localization.measure_z(self._stigmator, angle, (pos["x"], pos["y"]), s, logpath=fn)
-        self._panel.btn_z_localization.SetLabel("Cancel")
-
-        self._acq_future_connector = ProgressiveFutureConnector(self._acq_future,
-                                                                self._panel.gauge_z_localization)
-
-        self._acq_future.add_done_callback(self._on_measure_z_done)
-
-    @call_in_wx_main
-    def _on_measure_z_done(self, f):
-        """
-        Called when measure_z() is completed (can also happen if cancelled or failed)
-        """
-        try:
-            self._panel.btn_z_localization.Enable(True)
-            self._panel.btn_z_localization.SetLabel(self._localization_btn_label)
-
-            zshift, warning = f.result()
-
-            # focus position: the base for the shift computed by the z localization
-            zpos_acq = self._tab_data.main.focus.position.value["z"]
-
-            logging.debug("Feature located at %s + %s m", zpos_acq, zshift)
-            zpos = zpos_acq + zshift
-
-            # Sanity check: typically, the Z localization is for localization within a few µm.
-            if abs(zshift) > 100e-6:
-                warning = 7
-
-            # Update the feature Z pos, and move there
-            feature = self._tab_data.main.currentFeature.value
-            feature.fm_focus_position.value = {"z": zpos}
-            if warning:
-                # Update the Z pos, but do not move there.
-                logging.warning("Z pos shift detected of %s, but not going there as it had warning %s", zshift, warning)
-                popup.show_message(self._tab.main_frame, "Z localization unreliable",
-                                   "The Z localization could not locate the depth with sufficient certainty.",
-                                   level=logging.WARNING)
-            else:
-                f = self._tab_data.main.focus.moveAbs({"z": zpos})
                 # Don't wait for it to be complete, the user will notice anyway
         except CancelledError:
             logging.debug("Z localization cancelled")

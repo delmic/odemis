@@ -7,7 +7,6 @@ import wx
 from typing import Dict, List
 
 from odemis import model
-
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -330,7 +329,7 @@ class CryoFeatureController(object):
 
         if feature is None:
             self._tab_data_model.main.currentTarget.value = None
-            self._tab_data_model.main.targets = model.ListVA()
+            self._tab_data_model.main.targets.value = []
             self._enable_feature_ctrls(False)
             return
 
@@ -366,7 +365,7 @@ class CryoFeatureController(object):
 
             poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
                          z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
-                         index=1, fm_focus_position=feature_focus["z"], superz_focus=feature.superz_focus)
+                         index=1, fm_focus_position=feature_focus["z"], superz_focused=feature.superz_focused)
             targets.append([poi])
             if self.correlation_target.fib_fiducials:
                 targets.append(self.correlation_target.fib_fiducials)
@@ -381,7 +380,7 @@ class CryoFeatureController(object):
         else:
             self._tab_data_model.main.currentFeature.value.correlation_data = FIBFMCorrelationData()
             self._tab_data_model.main.currentTarget.value = None
-            self._tab_data_model.main.targets = model.ListVA()
+            self._tab_data_model.main.targets.value = []
 
         # TODO: check, it seems that sometimes the EVT_TEXT_ENTER is first received
         # by the VAC, before the widget itself, which prevents getting the right value.

@@ -26,7 +26,7 @@ import re
 import threading
 import time
 from enum import Enum
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple
 
 import numpy
 import wx
@@ -34,10 +34,10 @@ import wx
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 
-from odemis import model
+from odemis import model, util
 from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_stack, run_tdct_correlation
 from odemis.acq.feature import save_features, FIBFMCorrelationData, Target, TargetType
-from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream
+from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream, FluoStream
 from odemis.gui import conf
 from odemis.gui.model import CryoGUIData
 from odemis.gui.util import call_in_wx_main
@@ -46,7 +46,6 @@ from odemis.util.dataio import data_to_static_streams
 from odemis.util.interpolation import interpolate_z_stack
 from odemis.util.units import readable_str
 
-OLD_INTERPOLATION = False
 # create an enum with column labels and position
 class GridColumns(Enum):
     Type = 0  # Column for "type"
@@ -60,8 +59,60 @@ GRID_PRECISION = 2  # Number of decimal places to display in the grid
 # Regex search pattern to distinguish between FIB and FM target. These targets can
 # have the same type of Fiducials but there is a prefix in the name to distinguish them.
 FIDUCIAL_PATTERN = r"^[^-]+-"
-REFRACTIVE_SCALE = 0.495  # Refractive index scale factor of the medium (water) for Z correction
+REFRACTIVE_SCALE = 0.495
 
+# Both functions getPixel3DCoordinates(args*, kwargs*) and getPhysical3DCoordinates(args*, kwargs*) need special
+# conditions to convert between physical and pixel coordinate systems in order for multipoint correlation to operate.
+# For coordinate conversions, we assume the pixels in 3D are isosymmetric
+# i.e. size in pixel[0]=pixel[1]=pixel[2].
+
+def getPixel3DCoordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = True) \
+        -> Optional[Tuple[float, float, float]]:
+    """
+    Translate 3D physical coordinates into 3D pixel coordinates. The z coordinate is computed assuming iso-voxel
+    between x, y and z.
+    :param stream: Stream which is used as reference for coordinate conversion
+    :param p_pos: the position in physical coordinates (m). x and y are the sample position, z is the focus position
+    :param check_bbox: if True, the function will return None if the position is outside of the image
+    :returns: (x, y, z) in pixel coordinates or None if it's outside of the image. No boundary check is done
+    """
+    pixel_pos = stream.getPixelCoordinates(p_pos[:2], check_bbox=check_bbox)
+    # pixel_pos_c is None if the position is checked and found to be outside the boundary box
+    if pixel_pos is None:
+        return None
+
+    raw = stream.raw[0]
+    md = stream._find_metadata(raw.metadata)
+    pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+    # For multipoint correlation, we assume that the pixel size in x is the same as in y
+    if not util.almost_equal(pxs[0], pxs[1], atol=1e-9):
+        logging.warning("Pixel size in x and y are not equal while computing pixel coordinates")
+
+    # Z position is found by taking into account MD_POS and subtracting it from the physical coordinates.
+    # Pixel value used for Z enforces the iso-voxel condition between x, y and z. It is not the real pixel value in z.
+    tpos = md.get(model.MD_POS, (0, 0, 0))
+    tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
+    z = (p_pos[2] - tpos_z) / pxs[1]
+    pixel_pos = (pixel_pos[0], pixel_pos[1], z)
+    return pixel_pos
+
+def getPhysical3DCoordinates(stream: FluoStream, pixel_pos: Tuple[float, float, float])\
+                             -> Optional[Tuple[float, float, float]]:
+    """
+    Translate 3D pixel coordinates into 3D physical coordinates. The z coordinate is computed assuming iso-voxel
+    between x, y and z.
+    :param stream: Stream which is used as reference for coordinate conversion
+    :param pixel_pos: the position in pixel coordinates (x, y, z)
+    :returns: the position in physical coordinates (x, y, z) in meters
+    """
+    p_pos = stream.getPhysicalCoordinates(pixel_pos[:2])
+    raw = stream.raw[0]
+    md = stream._find_metadata(raw.metadata)
+    pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[0:2]
+    tpos = md.get(model.MD_POS, (0, 0, 0))
+    tpos_z = tpos[2] if len(tpos) >= 3 else 0.0
+    p_pos_z = pixel_pos[2] * pxs[1] + tpos_z
+    return (p_pos[0], p_pos[1], p_pos_z)
 
 def update_feature_correlation_target(correlation_target: FIBFMCorrelationData,
                                       tab_data: CryoGUIData) -> FIBFMCorrelationData:
@@ -77,6 +128,7 @@ def update_feature_correlation_target(correlation_target: FIBFMCorrelationData,
     fib_fiducials = []
     fm_fiducials = []
     correlation_target.fm_pois = []
+    correlation_target.fib_surface_fiducial = None
     for target in tab_data.main.targets.value:
         if target.type.value == TargetType.FibFiducial:
             fib_fiducials.append(target)
@@ -169,7 +221,6 @@ class CorrelationPointsController:
         for stream in self._tab_data_model.main.currentFeature.value.streams.value:
             if isinstance(stream, StaticFluoStream) and hasattr(stream, "zIndex"):
                 streams_list.append(StaticFluoStream(stream.name.value, stream.raw[0]))
-
 
         self.streams_list = streams_list
         self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data
@@ -416,11 +467,11 @@ class CorrelationPointsController:
             fib_coords.append(fib_coord)
         fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
         for fm_coord in self.correlation_target.fm_fiducials:
-            fm_coord_px = self.correlation_target.fm_streams[0].getPixel3DCoordinates(fm_coord.coordinates.value)
+            fm_coord_px = getPixel3DCoordinates(self.correlation_target.fm_streams[0], fm_coord.coordinates.value)
             fm_coords.append(fm_coord_px)
         fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
         poi_coord = self.correlation_target.fm_pois[0]
-        poi_coord_px = self.correlation_target.fm_streams[0].getPixel3DCoordinates(poi_coord.coordinates.value)
+        poi_coord_px = getPixel3DCoordinates(self.correlation_target.fm_streams[0], poi_coord.coordinates.value)
         poi_coords.append(poi_coord_px)
         poi_coords = numpy.array(poi_coords, dtype=numpy.float32)
         # Run the correlation
@@ -449,7 +500,6 @@ class CorrelationPointsController:
                                       index=1,
                                       fm_focus_position=0)
         if self.correlation_target.fib_surface_fiducial:
-
             edge = self.correlation_target.fib_surface_fiducial.coordinates.value
             # Explanation of not including the milling angle in the correction:
             # The Z correction is applied based on the distance from the surface fiducial to the projected POI
@@ -457,6 +507,7 @@ class CorrelationPointsController:
             # of sample plane is sufficient to calculate the Z correction.
             correction = (projected_poi_target.coordinates.value[1] - edge[1]) * REFRACTIVE_SCALE
             projected_poi_target.coordinates.value[1] += correction
+
         self._tab_data_model.projected_points.append(projected_poi_target)
         self.correlation_target.fib_projected_pois = [projected_poi_target]
 
@@ -601,7 +652,7 @@ class CorrelationPointsController:
                 elif col_name == GridColumns.Z.name and (
                         self._tab_data_model.main.currentTarget.value.type.value != TargetType.FibFiducial):
                     self._tab_data_model.main.currentTarget.value.coordinates.value[2] = \
-                    self.correlation_target.fm_streams[0].getPhysical3DCoordinates((x, y, float(new_value)))[2]
+                    getPhysical3DCoordinates(self.correlation_target.fm_streams[0], (x, y, float(new_value)))[2]
             except ValueError:
                 wx.MessageBox("X, Y, Z values must be a float!", "Invalid Input", wx.OK | wx.ICON_ERROR)
                 event.Veto()  # Prevent the change
@@ -640,7 +691,7 @@ class CorrelationPointsController:
 
         # Refine z should be disabled with Super Z module
         if self.refinez_active and (target.type.value in self.grid_targets):
-            if target and (TargetType.FibFiducial == target.type.value):
+            if TargetType.FibFiducial == target.type.value:
                 self.z_targeting_btn.Enable(False)
             else:
                 self.z_targeting_btn.Enable(True)
@@ -677,7 +728,7 @@ class CorrelationPointsController:
                     pixel_coords = self.correlation_target.fib_stream.getPixelCoordinates(
                         (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                 else:
-                    pixel_coords = self.correlation_target.fm_streams[0].getPixel3DCoordinates(target.coordinates.value)
+                    pixel_coords = getPixel3DCoordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
                     if (self.grid.GetCellValue(row,
                                                GridColumns.Z.value)) != f"{pixel_coords[2]:.{GRID_PRECISION}f}":
                         temp_check = True
@@ -719,8 +770,7 @@ class CorrelationPointsController:
                         (target.coordinates.value[0], target.coordinates.value[1]), check_bbox=False)
                     self.grid.SetCellValue(current_row_count, GridColumns.Z.value, "")
                 else:
-                    pixel_coords = self.correlation_target.fm_streams[0].getPixel3DCoordinates(
-                        target.coordinates.value)
+                    pixel_coords = getPixel3DCoordinates(self.correlation_target.fm_streams[0], target.coordinates.value)
                     self.grid.SetCellValue(current_row_count, GridColumns.Z.value,
                                            f"{pixel_coords[2]:.{GRID_PRECISION}f}")
                 # Set x and y position in the grid
@@ -754,14 +804,18 @@ class CorrelationPointsController:
                 return
 
             coords = self._tab_data_model.main.currentTarget.value.coordinates.value
-            pixel_coords = self.correlation_target.fm_streams[0].getPixel3DCoordinates(coords)
-            das = [interpolate_z_stack(da=stream_projection.stream.raw[0][:,int(pixel_coords[1]):int(pixel_coords[1])+1,
-                   int(pixel_coords[0]):int(pixel_coords[0])+1], method="linear")
+            pixel_coords = getPixel3DCoordinates(self.correlation_target.fm_streams[0], coords)
+            das = [interpolate_z_stack(da=stream_projection.stream.raw[0]
+                                       [:,
+                                       int(pixel_coords[1]):int(pixel_coords[1])+1,
+                                       int(pixel_coords[0]):int(pixel_coords[0])+1],
+                                       method="linear")
                    for stream_projection in streams_projections]
 
-            z = float(get_optimized_z_gauss(das,int(0),int(0),coords[2]))
-            self._tab_data_model.main.currentTarget.value.coordinates.value[2] = self.correlation_target.fm_streams[0].getPhysical3DCoordinates((pixel_coords[0],
-                                                                                pixel_coords[1], z))[2]
+            z = float(get_optimized_z_gauss(das, int(0), int(0), coords[2]))
+            # z physical coordinate
+            z_p = getPhysical3DCoordinates(self.correlation_target.fm_streams[0], (pixel_coords[0],pixel_coords[1], z))[2]
+            self._tab_data_model.main.currentTarget.value.coordinates.value[2] = z_p
 
     def _reorder_grid(self) -> None:
         """

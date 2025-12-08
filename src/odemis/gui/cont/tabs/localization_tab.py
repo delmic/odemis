@@ -90,7 +90,7 @@ class LocalizationTab(Tab):
             (panel.btn_secom_view_br,
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
-        # If tool fiducial is available, it means it supports superz GUI confifuration with target sizes
+        # If tool fiducial is available, it means it supports superz GUI configuration with target sizes
         # Enable the cryotarget overlay on all viewports that shows fiducials
         if TOOL_FIDUCIAL in tab_data.tool.choices:
             for vp in panel.pnl_secom_grid.viewports:
