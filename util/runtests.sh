@@ -170,7 +170,7 @@ for f in $testfiles; do
           elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
               echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
               echo "FAILED $f was killed after $MAXTIME s" >> "$TIMEOUTSUMMARY"
-          elif [ "$status" -ne 0 ]; then
+          elif [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then  # 1 is normal failure and will be reported in the summary
               echo "FAILED $f failed with status code $status" >> "$TESTLOG"
               echo "FAILED $f failed with status code $status" >> "$ERRORSUMMARY"
           fi
@@ -180,7 +180,7 @@ for f in $testfiles; do
               echo "ERROR $f timed out after $MAXTIME s" >> "$TESTLOG"
           elif [ "$status" -eq 137 ] || [ "$status" -eq 143 ]; then
               echo "FAILED $f was killed after $MAXTIME s" >> "$TESTLOG"
-          elif [ "$status" -ne 0 ]; then
+          elif [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then  # 1 is normal failure and will be reported in the summary
               echo "FAILED $f failed with status code $status" >> "$TESTLOG"
           fi
         fi
