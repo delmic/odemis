@@ -2,4 +2,5 @@ install/linux/etc/logrotate.d/odemisd etc/logrotate.d/
 install/linux/etc/sudoers.d/odemis etc/sudoers.d/
 install/linux/usr/share/bash-completion/completions/odemis-cli usr/share/bash-completion/completions/
 install/linux/usr/share/bash-completion/completions/odemis-convert usr/share/bash-completion/completions/
+install/linux/usr/share/fish/vendor_completions.d/odemis.fish usr/share/fish/vendor_completions.d/
 install/linux/usr/share/dbus-1/services/org.freedesktop.Notifications.service usr/share/dbus-1/services/

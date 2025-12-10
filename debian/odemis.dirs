@@ -1,4 +1,5 @@
 etc/sudoers.d
 etc/logrotate.d
 usr/share/bash-completion/completions
+usr/share/fish/vendor_completions.d
 usr/lib/odemis/plugins
