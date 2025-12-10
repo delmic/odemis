@@ -2166,8 +2166,18 @@ class SEMDataFlow(model.DataFlow):
 
 STAGE_WAIT_DURATION = 20e-03  # s
 STAGE_FRACTION_TOTAL_MOVE = 0.01  # tolerance of the requested stage movement
-STAGE_TOL_LINEAR = 1e-06  # in m, minimum tolerance
+# The accuracy of the stage was checked using the Move() API command. The accuracy of the movement was not dependent
+# on the step size (100µm to 1mm). In the worse cases, we read 1µm inaccuracy in X & Y, and 5µm in Z. With some margin,
+# we use 10µm tolerance to detect the stage has reached the target position.
+STAGE_TOL_LINEAR = 10e-06  # in m, minimum tolerance
 STAGE_TOL_ROTATION = 0.00436  # in radians (0.25 degrees), minimum tolerance
+# In the scenarios, where the stage movement was more than 10 percent away from the requested position after the
+# maximum waiting time, we raise an error such that the caller can detect the issue.
+# When the stage moves to the requested position within this margin but still not within the above mentioned tolerances,
+# only a warning is logged and subsequent stage movements are carried out as it is considered safe.
+STAGE_FRACTION_MOVE_FAILURE = 0.1  # raise error if the current positon is more than 10% of the requested move
+STAGE_TOL_LINEAR_FAILURE = 100e-06  # in m, minimum tolerance for detecting failure
+STAGE_TOL_ROTATION_FAILURE = 0.01745  # in radians (1 degrees), minimum tolerance for detecting failure
 
 
 class Stage(model.Actuator):
@@ -2398,10 +2408,16 @@ class Stage(model.Actuator):
                 if linear_axes_to_check:
                     movement_req_linear = [movement_req[ax] for ax in linear_axes_to_check]
                     tol_linear = max(min(movement_req_linear), STAGE_TOL_LINEAR)  # m
+                    tol_lin_failure_per_axis = {ax: max(abs(target_pos[ax] - orig_pos[ax]) *
+                                                STAGE_FRACTION_MOVE_FAILURE, STAGE_TOL_LINEAR_FAILURE)
+                                                for ax in linear_axes_to_check}
 
                 if rotational_axes_to_check:
                     movement_req_rotational = [movement_req[ax] for ax in rotational_axes_to_check]
                     tol_rotation = max(min(movement_req_rotational), STAGE_TOL_ROTATION)  # radians
+                    tol_rot_failure_per_axis = {ax: max(abs(target_pos[ax] - orig_pos[ax]) *
+                                                STAGE_FRACTION_MOVE_FAILURE, STAGE_TOL_ROTATION_FAILURE)
+                                                for ax in rotational_axes_to_check}
 
                 axes_to_check = linear_axes_to_check | rotational_axes_to_check
                 while axes_to_check:
@@ -2419,13 +2435,31 @@ class Stage(model.Actuator):
                     if time.time() > expected_end_time:
                         logging.warning("Stage position after %s s is %s instead of target pos: %s. "
                                         "Giving up waiting.", wait_stage_move, current_pos, target_pos)
+
+                        # Raise an error if the stage ended-up too far from the requested position
+                        failures = {}
+                        for axis in linear_axes_to_check:
+                            delta = abs(current_pos[axis] - target_pos[axis])
+                            if delta > tol_lin_failure_per_axis[axis]:
+                                failures[axis] = (delta, tol_lin_failure_per_axis[axis])
+
+                        for axis in rotational_axes_to_check:
+                            delta = abs(current_pos[axis] - target_pos[axis])
+                            if delta > tol_rot_failure_per_axis[axis]:
+                                failures[axis] = (delta, tol_rot_failure_per_axis[axis])
+
+                        if failures:
+                            msgs = [f"{axis}: error={delta:.6f} > tol={tol:.6f}" for axis, (delta, tol) in failures.items()]
+                            raise TimeoutError("Stage move failure. Off-target axes: " + ", ".join(msgs))
+
                         break
 
                     if future._must_stop.is_set():
                         raise CancelledError()
 
-                    logging.debug("Waiting a little longer as position has not updated fully: %s != %s",
-                                  current_pos, target_pos)
+                    logging.debug("Waiting a little longer as position has not updated fully: %s != %s. "
+                                  "The linear and rotational tolerances are %s m and %s rad respectively.",
+                                  current_pos, target_pos, tol_linear, tol_rotation)
                     time.sleep(STAGE_WAIT_DURATION)
                     current_pos = self.parent.get_stage_position()
 
