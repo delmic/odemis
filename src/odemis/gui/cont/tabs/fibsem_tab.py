@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import math
+from concurrent.futures import CancelledError
+
 import numpy
 
 import wx
@@ -183,7 +185,7 @@ class FibsemTab(Tab):
         self.pm = self.tab_data_model.main.posture_manager
         panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
 
-        # TODO: replace with current_posture?
+        self._posture_switch_future = model.InstantaneousFuture()
         self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
         self.panel = panel
 
@@ -193,8 +195,8 @@ class FibsemTab(Tab):
         self.panel.ctrl_milling_angle.SetValueRange(*numpy.round(numpy.rad2deg(MILLING_RANGE)).astype(int))
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
         self._update_milling_angle(None)
-        self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
-        self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
+        self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_posture)
+        self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem_posture)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
     @call_in_wx_main
@@ -395,20 +397,21 @@ class FibsemTab(Tab):
             logging.warning("Failed to update stage position label: %s",e)
 
         # update the stage position buttons
-        self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
-        self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
-        self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
+        if self._posture_switch_future.done():
+            self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
+            self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
+            self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
 
-        if posture == SEM_IMAGING:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
-        else:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
-        if posture == MILLING:
-            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
-        else:
-            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+            if posture == SEM_IMAGING:
+                self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
+            else:
+                self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
+            if posture == MILLING:
+                self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+            else:
+                self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
 
-        self.panel.Layout()
+            self.panel.Layout()
 
     def _update_milling_angle(self, evt: wx.Event):
         # Check if already at milling posture
@@ -447,26 +450,32 @@ class FibsemTab(Tab):
             # clicking it, but still want to show progress, we set the progress state of the button manually.
             # self.panel.btn_switch_milling.SetProgressState()
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_PROGRESS)
-            self._move_to_milling_position(None)
+            self._move_to_milling_posture(None)
 
-    def _move_to_milling_position(self, evt: wx.Event):
-        f = self.pm.cryoSwitchSamplePosition(MILLING)
+    def _move_to_milling_posture(self, evt: wx.Event):
+        self._posture_switch_future = self.pm.cryoSwitchSamplePosition(MILLING)
 
         # Do NOT call f.result(). Instead, add a callback:
-        f.add_done_callback(self._on_milling_move_complete)
+        self._posture_switch_future.add_done_callback(self._on_milling_move_complete)
 
-    def _move_to_sem(self, evt: wx.Event):
-        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.add_done_callback(self._on_sem_move_complete)
+    def _move_to_sem_posture(self, evt: wx.Event):
+        self._posture_switch_future = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        self._posture_switch_future.add_done_callback(self._on_sem_move_complete)
 
     @call_in_wx_main
     def _on_milling_move_complete(self, future):
-        # This runs in a background thread, so we must push updates back to the UI thread
-        self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+        try:
+            future.result()
+        except CancelledError:
+            logging.info("Posture switch was cancelled")
+        except Exception:
+            logging.exception("Failed to switch posture")
+
+        self._on_stage_pos(self.pm.stage.position.value)
 
     @call_in_wx_main
     def _on_sem_move_complete(self, future):
-        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
+        self._on_stage_pos(self.pm.stage.position.value)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
