@@ -22,14 +22,15 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN)
+from odemis.acq.move import (FM_IMAGING, MILLING, SEM_IMAGING, UNKNOWN)
 from odemis.acq.test.move_tfs1_test import TestMeteorTFS1Move
+from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
+METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-sim.odm.yaml"
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
@@ -121,6 +122,37 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         zshift = self.posture_manager._transformFromChamberToStage(shift)
         self.assertAlmostEqual(zshift["x"], shift["x"], places=5)
         self.assertAlmostEqual(zshift["z"], shift["z"], places=5)
+
+    def test_milling_angle_stable_pos(self):
+        sample_stage = self.posture_manager.sample_stage
+        # Set default milling angle
+        # milling_angle = math.radians(15)
+        # current_md = self.stage.getMetadata()
+        # self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': milling_angle,
+        #                                                           "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
+        # Transform to milling posture
+        self.posture_manager.cryoSwitchSamplePosition(MILLING).result()
+        # Take note of sample stage pos
+        initial_sample_stage_pos = sample_stage.position.value
+        # Switch to SEM posture
+        self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        # Compare sample stage pos to previous pos
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        # Switch back to milling posture
+        self.posture_manager.cryoSwitchSamplePosition(MILLING).result()
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        # Now change milling angle to check stability; sample stage pos should remain the same.
+        milling_angle = math.radians(30)
+        current_md = self.stage.getMetadata()
+        self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': milling_angle,
+                                                                  "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
+        # Switch to SEM posture
+        self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        # Compare sample stage pos to previous pos
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        # Switch back to milling posture
+        self.posture_manager.cryoSwitchSamplePosition(MILLING).result()
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
 
 
 if __name__ == "__main__":
