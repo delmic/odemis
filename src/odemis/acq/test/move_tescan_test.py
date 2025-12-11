@@ -24,7 +24,7 @@ from odemis.util import testing
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, MILLING, SEM_IMAGING, UNKNOWN)
+from odemis.acq.move import (FM_IMAGING, LOADING, MILLING, SEM_IMAGING, UNKNOWN)
 from odemis.acq.test.move_tfs1_test import TestMeteorTFS1Move
 from odemis.util import testing
 
@@ -166,14 +166,12 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         self.assertAlmostEqual(zshift["z"], shift["z"], places=5)
 
     def test_milling_angle_stable_pos(self):
-        sample_stage = self.posture_manager.sample_stage
-        # Set default milling angle
-        # milling_angle = math.radians(15)
-        # current_md = self.stage.getMetadata()
-        # self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {'rx': milling_angle,
-        #                                                           "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}})
+        # Make sure to start from a valid position
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         # Transform to milling posture
         self.posture_manager.cryoSwitchSamplePosition(MILLING).result()
+        # Store shorthand for sample stage
+        sample_stage = self.posture_manager.sample_stage
         # Take note of sample stage pos
         initial_sample_stage_pos = sample_stage.position.value
         # Switch to SEM posture

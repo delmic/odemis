@@ -759,6 +759,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         logging.info(f"Position Posture: {POSITION_NAMES[position_posture]}, Target Posture: {POSITION_NAMES[posture]}")
 
+        # The milling angle can change, so we should handle the MILLING --> MILLING posture switch differently.
         if posture != MILLING and position_posture == posture:
             return pos
 
