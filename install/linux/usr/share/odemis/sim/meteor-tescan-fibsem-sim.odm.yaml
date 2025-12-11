@@ -12,7 +12,7 @@
     class: tescan.SEM,
     role: fibsem,
     init: {
-        host: "192.168.56.101",
+        host: "192.168.2.47",
         port: 8300
     },
     children: {
@@ -40,7 +40,6 @@
         channel: 0,
     },
     properties: {
-        type: "SE",
     }
 }
 
@@ -66,7 +65,6 @@
         channel: 0,
     },
     properties: {
-        type: "SE",
     }
 }
 
@@ -86,7 +84,7 @@
         FAV_POS_DEACTIVE: {'rx': 0.0, 'rz': 5.235987756, 'x': -25.e-3, 'y': -39.e-03, 'z': 83.e-3},
         # XYZ ranges for SEM & METEOR, Z range is based on centering a sample at the FIB/SEM coincident point
         # at a Z coordinate of ~ -5 mm:
-        SEM_IMAGING_RANGE: {"x": [-13.e-3, 7.e-3], "y": [-70.e-3, 10.e-3], "z": [40.e-3, 57.e-3]},
+        SEM_IMAGING_RANGE: {"x": [-13.e-3, 7.e-3], "y": [-70.e-3, 10.e-3], "z": [40.e-3, 70.e-3]},
         FM_IMAGING_RANGE: {"x": [24.e-3, 55.e-3], "y": [-23.e-3, -3.e-3], "z": [40.e-3, 45.e-3]},
         # Grid centers in SEM imaging posture, in the stage-bare coordinates
         SAMPLE_CENTERS: {"GRID 1": {'x': 3.55653e-3, 'y': -28.66562e-3, 'z': 52.41088e-3},
