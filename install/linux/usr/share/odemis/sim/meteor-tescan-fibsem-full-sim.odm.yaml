@@ -35,8 +35,9 @@
 "EBeam Scanner": {
     role: e-beam,
     init: {},
-    affects: ["SE Detector"],
+    affects: ["EBeam Detector"],
 }
+
 "EBeam Detector": {
     role: se-detector,
     init: {},
@@ -52,7 +53,7 @@
 "Ion Scanner": {
     role: ion-beam,
     init: {},
-    affects: ["SE Detector"],
+    affects: ["Ion Detector"],
 }
 
 "Ion Detector": {
@@ -131,11 +132,11 @@
         # Note that the rz range in the TESCAN software is between -170° and 40°
         # Change the SEM tilt angle to a value that matches the customer's needs
         # Note that the accuracy of the FM/SEM switch might be reduced if starting at a different angle.
-        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": -1.326450}, # 15° tilt, -76° rotation
+        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": 4.9567353}, # 15° tilt, 284° rotation
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
         # MILL has the *milling angle* as rx.
         # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
-        FAV_MILL_POS_ACTIVE: {"rx": 0.174532925, "rz": -1.326450}, # Milling angle = 10°, -76° rotation
+        FAV_MILL_POS_ACTIVE: {"rx": 0.174532925, "rz": 4.9567353}, # Milling angle = 10°, 284° rotation
     },
 }
 
@@ -149,7 +150,17 @@
     affects: ["Camera"],
 }
 
-# Normally a IDS uEye or Zyla
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 50.0, # ratio, (actually of the complete light path)
+        na: 0.8, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"],
+}
+
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 "Camera": {
@@ -174,25 +185,26 @@
     class: tmcm.TMCLController,
     role: null,
     init: {
-        port: "/dev/fake6", # Simulator
-        address: null, # Simulator
-        axes: ["fw"],
-        ustepsize: [1.227184e-6], # [rad/µstep]
-        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
-        unit: ["rad"],
+        port: "/dev/fake6",
+        address: null,
+        axes: ["fw", "stig"],
+        ustepsize: [3.2724923e-4, 3.2724923e-4],  # [rad/µstep]
+        rng: [[-14.0, 7.0], [-7.0, 14.0]],  # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad", "rad"],
         refproc: "Standard",
-        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        refswitch: {"fw": 0, "stig": 4}, # digital output used to switch on/off sensor
         inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
     },
 }
 
-"AntiBacklash for Filter Wheel": {
+"AntiBacklash Actuators": {
     class: actuator.AntiBacklashActuator,
     role: null,
     init: {
         backlash: {
             # Force every move to always finish in the same direction
             "fw": 50.e-3,  # rad
+            "stig": 20.e-3,  # rad
         },
     },
     dependencies: {"slave": "Optical Actuators"},
@@ -201,20 +213,49 @@
 "Filter Wheel": {
     class: actuator.FixedPositionsActuator,
     role: filter,
-    dependencies: {"band": "AntiBacklash for Filter Wheel"},
+    dependencies: {"band": "AntiBacklash Actuators"},
     init: {
         axis_name: "fw",
         positions: {
              # pos (rad) -> m,m
-             0.08: [414.e-9, 450.e-9], # FF01-432/36
-             0.865398: [500.e-9, 530.e-9], # FF01-515/30
-             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
-             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
-             3.2215924: "pass-through", # empty slot
+             0.85: "pass-through", # Slot 1: always empty
+             1.897197551: [414.e-9, 450.e-9], # Slot 2: FF01-432/36
+             2.944395102: [500.e-9, 530.e-9], # Slot 3: FF01-515/30
+             # 3.991592653: [0.e-9, 0.e-9], # Slot 4: Spare position for custom filter: specify the band(s) if a filter is present
+             5.038790204: [579.5e-9, 610.5e-9], # Slot 5: FF01-595/31
+             6.085987755: [663.e-9, 733.e-9], # Slot 6: FF02-698/70
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
     affects: ["Camera"],
+}
+
+"Stigmator": {
+    class: actuator.RotationActuator,
+    role: stigmator,
+    affects: ["Camera"],
+    dependencies: {"rz": "AntiBacklash Actuators"},
+    init: {
+        axis_name: "stig",
+        cycle: 6.283185, # rad
+#        ref_start: null, # rad, value to where start the referencing, default is to start at 5% of cycle
+        ref_frequency: null, # Disable auto referencing. Use a number (eg 5) to automatically reference after N moves
+    },
+    metadata: {
+        POS_COR: -2.62486607383, # rad, adjustment needed for 0 = no astigmatism
+        # SuperZ calibration
+        CALIB: {
+            200.e-9: {
+                angle: 0.1309,
+                x: {a: -0.011214230270591402, b: 0.03581851396840028, c: 1215.384506512626,  d: 370.0567109324832,  w0: 11.765876020198268},
+                y: {a: 0.26798558796593386, b: 0.055348037953943205, c: 532.5800366796377,  d: 419.5479939702831, w0: 11.913803945482204},
+                feature_angle: 1.3028,  # rad
+                upsample_factor: 5,
+                z_least_confusion: 8.746549309861972e-07,  # m
+                z_calibration_range: [-8.746549309861972e-07, 7.625345069013803e-06]   # m
+            }
+        },
+    },
 }
 
 # CLS3252dsc-1
