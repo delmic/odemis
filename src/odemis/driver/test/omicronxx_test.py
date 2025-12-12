@@ -15,11 +15,12 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-from odemis.driver import omicronxx
 import os
 import time
 import unittest
-from unittest.case import skip
+from typing import Any, List
+
+from odemis.driver import omicronxx
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -36,6 +37,27 @@ elif os.name == "nt":
 else:
     MXXPORTS = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
     HUBPORT = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
+
+
+class CountingUSBAccesser:
+    """
+    A wrapper for USB accessor that counts the number of commands sent.
+    """
+    def __init__(self, wrapped: omicronxx.USBAccesser) -> None:
+        """
+        Initialize the counting accessor.
+
+        :param wrapped: The original USB accessor to be decorated.
+        """
+        self._wrapped: omicronxx.USBAccesser = wrapped
+        self.count = 0
+
+    def sendCommand(self, com: str) -> str:
+        self.count += 1
+        return self._wrapped.sendCommand(com)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._wrapped, item)
 
 
 class TestStatic(unittest.TestCase):
@@ -92,6 +114,43 @@ class BaseGenericxX:
 
             self.dev.power.value[i] = 0.0
             self.assertEqual(self.dev.power.value[i], 0.0)
+
+    def test_intensity_optimized(self):
+        """
+        Check that setting intensity of a single channel does not generate too many commands (ie, not
+        send commands for other channels).
+        """
+        # Set all channels off
+        self.dev.power.value = self.dev.power.range[0]
+
+        counter = CountingUSBAccesser(self.dev._master.acc)
+        self.dev._master.acc = counter
+        for d in self.dev._devices:
+            counter = CountingUSBAccesser(d.acc)
+            d.acc = counter
+
+        def get_number_commands() -> int:
+            return counter.count + sum(d.acc.count for d in self.dev._devices)
+
+        try:
+            # Set channel 0 to 10%
+            self.dev.power.value[0] = self.dev.power.range[1][0] * 0.1
+            len_turn_on = get_number_commands()
+            self.assertLessEqual(len_turn_on, 4)  # 1 command to set master power + 3 to turn on the channel
+
+            # Set channel 0 to 20%
+            self.dev.power.value[0] = self.dev.power.range[1][0] * 0.2
+            len_change = get_number_commands()
+            self.assertLessEqual(len_change - len_turn_on, 1)  # 1 command to change channel intensity
+
+            # Set all channels off
+            self.dev.power.value = self.dev.power.range[0]
+            len_turn_off = get_number_commands()
+            self.assertLessEqual(len_turn_off - len_change, 4)  # 1 command to disable master power + 3 to turn off the channel
+        finally:
+            self.dev._master.acc = counter._wrapped
+            for d in self.dev._devices:
+                d.acc = d.acc._wrapped
 
 
 class TestMultixX(BaseGenericxX, unittest.TestCase):
