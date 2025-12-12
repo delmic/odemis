@@ -19,18 +19,21 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import math
-import threading
-from builtins import str
-import queue
 import logging
-import numpy
-from odemis import model, util, dataio
-from odemis.model import oneway
+import math
 import os
-from scipy import ndimage
+import queue
+import threading
 import time
+from builtins import str
+
+import numpy
 from PIL import Image, ImageDraw, ImageFont
+from scipy import ndimage
+
+from odemis import dataio, model, util
+from odemis.model import oneway
+from odemis.util.synthetic import ParabolicMirrorRayTracer
 
 ERROR_STATE_FILE = "simcam-hw.error"
 
@@ -150,6 +153,32 @@ class Camera(model.DigitalCamera):
             logging.info("Will not simulate focus")
             self._focus = None
 
+        # Simulated image generator based on ray tracing for a parabola mirror system with a lens and camera (SPARC2)
+        # Requires a mirror with 'x', 'y' and stage with 'z' axes
+        try:
+            mirror = dependencies["mirror"]
+            required_axes = ("x", "y", "z")
+            if not (
+                isinstance(mirror, model.ComponentBase)
+                and hasattr(mirror, "axes")
+                and isinstance(mirror.axes, dict)
+                and all(axis in mirror.axes for axis in required_axes)
+            ):
+                raise ValueError("mirror %s must be a Component with 'x', 'y' and 'z' axes" % (mirror))
+
+            mirror_md = mirror.getMetadata()
+            good_pos = mirror_md[model.MD_FAV_POS_ACTIVE]
+            if not all(axis in good_pos for axis in required_axes):
+                raise ValueError(f"mirror metadata {model.MD_FAV_POS_ACTIVE} must contain 'x', 'y', and 'z' keys")
+
+            self._img_simulator = ParabolicMirrorRayTracer(good_pos)
+            self._mirror = mirror
+            logging.debug("Will simulate ray traced images using mirror %s", mirror.name)
+        except (TypeError, KeyError):
+            logging.info("Will not simulate ray traced images")
+            self._img_simulator = None
+            self._mirror = None
+
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
         self.data = SimpleDataFlow(self)
@@ -258,7 +287,19 @@ class Camera(model.DigitalCamera):
             logging.debug("Sleeping extra %g s, for simulating event", extra_time)
             time.sleep(extra_time)
 
-        gen_img = self._simulate()
+        if self._img_simulator and self._mirror:
+            sim_img = self._img_simulator.simulate(self._mirror.position.value)
+            # Add some noise
+            mx = sim_img.max()
+            sim_img += numpy.random.randint(0, max(mx // 100, 10), sim_img.shape, dtype=sim_img.dtype)
+            # Clip, but faster than clip() on big array.
+            # There can still be some overflow, but let's just consider this "strong noise"
+            sim_img[sim_img > mx] = mx
+            gen_img = model.DataArray(sim_img)
+        else:
+            # Default simulation if simulated image generator is not available
+            gen_img = self._simulate()
+
         metadata = gen_img.metadata.copy()  # MD of image
         metadata.update(self._metadata)  # MD of camera
 
