@@ -17,78 +17,73 @@
     },
     children: {
         stage: "Stage",
-        scanner: "EBeam Scanner",
-        detector0: "EBeam Detector",
-        focus: "EBeam Focus",
-        fib-scanner: "Ion Scanner",
-        fib-detector: "Ion Detector",
-        light: "Chamber Light"
+        scanner: "Electron-Beam",
+        detector0: "Electron-Detector",
+        focus: "Electron-Focus",
+        fib-scanner: "Ion-Beam",
+        fib-detector: "Ion-Detector",
+        #light: "Chamber Light"
     }
 }
 
-"EBeam Scanner": {
-    # Internal child of Tescan, so no class
+"Electron-Beam": {
     role: e-beam,
     init: {
-        fov_range: [196.e-9, 25586.e-6]
+        fov_range: [200.e-9, 6600.e-6]
     },
 }
 
-"EBeam Detector": {
+"Electron-Detector": {
     role: se-detector,
-    init: {
-        channel: 0,
-        detector: "e-t",
-    },
-}
-
-"EBeam Focus": {
-    role: ebeam-focus,
-    init: {axes: [z]},
-    affects: ["EBeam Scanner"]
-}
-
-# FIB specific components
-"Ion Scanner": {
-    role: ion-beam,
-
-    init: {
-        fov_range: [196.e-9, 25586.e-6]
-    },
-}
-
-"Ion Detector": {
-    role: se-detector-ion,
-
     init: {
         channel: 0,
         detector: "se",
     },
+#    properties: {
+#        type: "SE",
+#    },
+}
+
+"Electron-Focus": {
+    role: ebeam-focus,
+    init: {axes: [z]},
+    affects: ["Electron-Beam"]
+}
+
+# FIB specific components
+"Ion-Beam": {
+    role: ion-beam,
+    init: {
+        fov_range: [196.e-9, 25586.e-6]
+    },
+}
+
+"Ion-Detector": {
+    role: se-detector-ion,
+    init: {
+        channel: 0,
+        detector: "se",
+    },
+#    properties: {
+#        type: "SE",
+#    },
 }
 
 # With calibration values for sample stage
 "Stage": {
-    class: tmcm.TMCLController,
     role: stage-bare,
     init: {
-        port: "/dev/fake6",
-        address: null,
-        axes: ["x", "y", "z", "rx", "rz"],
-        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
-        rng: [[ -50.e-3, 50.e-3 ],
-              [ -50.e-3, 50.e-3 ],
-              [ 0, 94.e-3 ],
-              [ -0.4363323129985824, 1.0122909661567112 ],
-              [ -6.283185307179586, 6.283185307179586 ]
-        ],
-        unit: ["m", "m", "m", "rad", "rad"],
-        refproc: "Standard",
+        # By default, the Odemis tescan driver inverts the XYZ axes. So, to get
+        # exactly the same reading as in the Tescan software, we invert it back.
+        # The Odemis Posture Manager takes care of inverting the axes again for
+        # the Sample Stage, depending on the scan rotation.
+        inverted: {"x", "y", "z"},
     },
     metadata: {
         # Loading position:
         FAV_POS_DEACTIVE: {
             'rx': 0.0,
-            'rz': -1.0471975511965976,
+            'rz': 4.9567353,
             'x': -30.e-3,
             'y': -40.e-03,
             'z': 45.e-3
@@ -122,16 +117,13 @@
         # Calibrated values used for the SEM/FM switching behaviour
         CALIB: {
             "version": "tescan_1",
-            # These three values were only present in the original meteor-tescan file.
             "x_0": 3.577e-3,
             "y_0": -0.164e-3,
             "z_ct": 4.561291055e-3,
-            # The following parameters were both present at the original meteor-tescan and tfs3 file, with the exception
-            # of pre-tilt.
             "dx": 40.419e-3,
             "dy": 0.268e-3,
             "b_y": -0.400216e-3,
-            "pre-tilt": 0.698132,
+            "pre-tilt": 0.698132,  # Radians (40°).
             "use_linked_sem_focus_compensation": false,
         },
         # Active tilting (T/rx) & rotation (R/rz) angles positions when switching between SEM & FM.
@@ -140,17 +132,12 @@
         # Note that the rz range in the TESCAN software is between -170° and 40°
         # Change the SEM tilt angle to a value that matches the customer's needs
         # Note that the accuracy of the FM/SEM switch might be reduced if starting at a different angle.
-        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": -1.326450}, # 15° tilt, -76° rotation
+        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": 4.9567353}, # 15° tilt, 284° rotation
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
-        FAV_MILL_POS_ACTIVE: {"rx": 0.261799, "rz": -1.326450}, # 15° tilt, -76° rotation (same as FM)
+        # MILL has the *milling angle* as rx.
+        # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
+        FAV_MILL_POS_ACTIVE: {"rx": 0.174532925, "rz": 4.9567353}, # Milling angle = 10°, 284° rotation
     },
-}
-
-# (IR) light for the SEM chamber
-"Chamber Light": {
-    role: chamber-light,
-    init: {},
-    affects: ["Chamber Cam"],
 }
 
 "Light Source": {
@@ -163,36 +150,17 @@
     affects: ["Camera"],
 }
 
-"Linked YZ": {
-    class: actuator.ConvertStage,
-    role: null,
-    dependencies: {
-        "under": "Stage"
-    },
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
     init: {
-        axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)0.4663076582 1.103377919
-        rotation: 0.523598775, # rad , 30° (should be equal to the pre-tilt angle of the shuttle being used) NOTE:
-        shear: [-0.4663076582, 0], # [-tan(rx_fm), 0], where rx_fm is equal to rx in FAV_FM_POS_ACTIVE 0.2679491924311227
-        scale: [1, 1.103377919] # [1, 1/cos(rx_fm)], where rx_fm is equal to rx in FAV_FM_POS_ACTIVE 1.035276180410083
-        #inverted: ["z"],
+        mag: 50.0, # ratio, (actually of the complete light path)
+        na: 0.8, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
     },
+    affects: ["Camera"],
 }
 
-"Meteor Stage": {
-    class: actuator.MultiplexActuator,
-    role: stage,
-    dependencies: { "x": "Stage", "y": "Linked YZ", "z": "Linked YZ"},
-    init: {
-        axes_map: { "x": "x", "y": "x", "z": "y"},
-    },
-    affects: ["Camera", "EBeam Scanner"],
-    metadata: {
-        # Should match exactly the FM imaging range metadata for the "Stage" component!
-        POS_ACTIVE_RANGE: {"x": [-44.e-3, -24.e-3], "y": [-0.04, 0.04]}
-    },
-}
-
-# Normally a IDS uEye or Zyla
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 "Camera": {
@@ -220,7 +188,7 @@
         port: "/dev/fake6", # Simulator
         address: null, # Simulator
         axes: ["fw"],
-        ustepsize: [1.227184e-6], # [rad/µstep]
+        ustepsize: [3.2724923e-4], # [rad/µstep]
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
         refproc: "Standard",
