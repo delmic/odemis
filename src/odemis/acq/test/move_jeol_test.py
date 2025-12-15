@@ -17,6 +17,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import os
+import sys
 import unittest
 
 import odemis
@@ -34,6 +35,8 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 METEOR_JEOL1_CONFIG = CONFIG_PATH + "sim/meteor-jeol-sim.odm.yaml"
 
 
+# Check using the python version, because that's easier than checking the OS version
+@unittest.skipIf(sys.version_info < (3, 10), "odemis-jeol driver does not work for Ubuntu 20.04 or lower")
 class TestMeteorJeol1Move(unittest.TestCase):
     """
     Test the MeteorPostureManager functions for JEOL 1
