@@ -238,18 +238,18 @@ class ToolBar(wx.Panel):
         self.orientation = kwargs['style'] & (wx.VERTICAL | wx.HORIZONTAL)  # mask other bits
         if self.orientation == (wx.VERTICAL | wx.HORIZONTAL):
             main_sizer = wx.BoxSizer(wx.VERTICAL)
-            first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bigger_top.png"))
-            second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bigger_bottom.png"))
+            first_bmp = img.getBitmap("menu/side_menu_bigger_top.png")
+            second_bmp = img.getBitmap("menu/side_menu_bigger_bottom.png")
             self.btn_sizer = wx.GridBagSizer()
         elif self.orientation == wx.VERTICAL:
             main_sizer = wx.BoxSizer(wx.VERTICAL)
-            first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_top.png"))
-            second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bottom.png"))
+            first_bmp = img.getBitmap("menu/side_menu_top.png")
+            second_bmp = img.getBitmap("menu/side_menu_bottom.png")
             self.btn_sizer = wx.BoxSizer(wx.VERTICAL)
         else:  # self.orientation == wx.HORIZONTAL:
             main_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_left.png"))
-            second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_right.png"))
+            first_bmp = img.getBitmap("menu/side_menu_left.png")
+            second_bmp = img.getBitmap("menu/side_menu_right.png")
             self.btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Set the main sizer that will contain the elements that will form
@@ -257,7 +257,7 @@ class ToolBar(wx.Panel):
         self.SetSizer(main_sizer)
 
         # Add the left or top image
-        main_sizer.Add(first_bmp)
+        main_sizer.Add(wx.StaticBitmap(self, -1, first_bmp))
 
         # Create a panel that will hold the actual buttons
         self.btn_panel = wx.Panel(self, -1)
@@ -267,12 +267,14 @@ class ToolBar(wx.Panel):
         # Add the button panel to the toolbar
         main_sizer.Add(self.btn_panel)
 
-        main_sizer.Add(second_bmp)
+        main_sizer.Add(wx.StaticBitmap(self, -1, second_bmp))
 
-        if self.orientation == (wx.VERTICAL | wx.HORIZONTAL) or self.orientation == wx.VERTICAL:
-            main_sizer.SetItemMinSize(self.btn_panel, first_bmp.Bitmap.Width, -1)
+        if self.orientation & wx.VERTICAL:
+            # Note: using the size on the loaded bitmap means we get it without scaling (in case of High DPI),
+            # which allows to pass it directly in DIP (display independent pixels).
+            main_sizer.SetItemMinSize(self.btn_panel, first_bmp.Width, -1)
         else:
-            main_sizer.SetItemMinSize(self.btn_panel, -1, first_bmp.Bitmap.Height)
+            main_sizer.SetItemMinSize(self.btn_panel, -1, first_bmp.Height)
 
         self._buttons = {}
 
