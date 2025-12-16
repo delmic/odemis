@@ -689,6 +689,7 @@ class SpotQualityMetric(IntEnum):
     INTENSITY = 2
     PIXEL_COUNT_AND_INTENSITY = 3
     MAJOR_AXIS = 4
+    MAJOR_AXIS_AND_INTENSITY = 5
 
 
 def parabolic_mirror_alignment(
@@ -968,7 +969,8 @@ class ParabolicMirrorAlignmentTask:
             norm_area = (self.spot.pixel_count.value - self.spot.pixel_count.range[0]) / area_range
             norm_area = max(0.0, min(1.0, norm_area))  # Clamp to [0, 1]
             score = norm_area
-        if quality_metric in (SpotQualityMetric.INTENSITY, SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY):
+        if quality_metric in (SpotQualityMetric.INTENSITY,
+                              SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY, SpotQualityMetric.MAJOR_AXIS_AND_INTENSITY):
             # Normalize intensity
             # Score is 0 for best intensity, 1 for worst
             intensity_range = float(self.spot.intensity.range[1] - self.spot.intensity.range[0])
@@ -976,12 +978,18 @@ class ParabolicMirrorAlignmentTask:
             norm_intensity = 1.0 - norm_intensity  # Invert so higher intensity = lower score
             norm_intensity = max(0.0, min(1.0, norm_intensity))  # Clamp to [0, 1]
             score = norm_intensity
+        if quality_metric in (SpotQualityMetric.MAJOR_AXIS, SpotQualityMetric.MAJOR_AXIS_AND_INTENSITY):
+            # Normalize major axis
+            # Score is 0 for best major axis, 1 for worst
+            norm_major_axis = self.spot.major_axis.value / self.spot.major_axis.range[1]
+            norm_major_axis = max(0.0, min(1.0, norm_major_axis))  # Clamp to [0, 1]
+            score = norm_major_axis
         if quality_metric == SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY:
             # Calculate weighted score
             # This is the single value the optimizer will try to minimize
             score = (weight * norm_area) + ((1 - weight) * norm_intensity)
-        if quality_metric == SpotQualityMetric.MAJOR_AXIS:
-            score = self.spot.major_axis.value / self.spot.major_axis.range[1]
+        if quality_metric == SpotQualityMetric.MAJOR_AXIS_AND_INTENSITY:
+            score = (weight * norm_major_axis) + ((1 - weight) * norm_intensity)
 
         return score
 
@@ -1293,7 +1301,7 @@ class ParabolicMirrorAlignmentTask:
                         max_iter,
                         objective_kwargs={"quality_metric": SpotQualityMetric.INTENSITY},
                     )
-                    if axis.name == "z":
+                    if result.success:
                         axis.component.moveAbs({axis.name: result.x}).result()
                     end = time.time()
                     logging.debug(f"1D coarse scan for {axis.name} took {end - start:.2f} seconds")
@@ -1309,13 +1317,14 @@ class ParabolicMirrorAlignmentTask:
 
                 # Two Nelder-Mead refinements over all axes
                 for j in range(1, 3):
-                    search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
                     if j == 1:
+                        search_range = max(self.MIN_SEARCH_RANGE, search_range / 2)
                         objective_kwargs = {"quality_metric": SpotQualityMetric.MAJOR_AXIS}
                     else:
+                        search_range = self.MIN_SEARCH_RANGE
                         objective_kwargs = {
-                            "quality_metric": SpotQualityMetric.PIXEL_COUNT_AND_INTENSITY,
-                            "weight": 0.4
+                            "quality_metric": SpotQualityMetric.MAJOR_AXIS_AND_INTENSITY,
+                            "weight": 0.5
                         }
                     start = time.time()
                     result = self._run_nelder_mead(
@@ -1324,8 +1333,6 @@ class ParabolicMirrorAlignmentTask:
                         max_iter,
                         objective_kwargs,
                     )
-                    for k, axis in enumerate(self._axes):
-                        axis.component.moveAbs({axis.name: result.x[k]}).result()
                     end = time.time()
                     logging.debug(f"3D Nelder-Mead refinement {j} took {end - start:.2f} seconds")
 
