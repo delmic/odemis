@@ -265,7 +265,9 @@ HW_SETTINGS_CONFIG = {
             }),
             ("probeCurrent", {
                 "label": "Beam current",
-                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+                "event": wx.EVT_SCROLL_CHANGED,  # only affects when it's a slider
+                "scale": "log",
+                "accuracy": 3,
             }),
             ("resolution", {
                 "label": "Resolution",
@@ -274,24 +276,25 @@ HW_SETTINGS_CONFIG = {
                 "choices": None,
                 "accuracy": None,  # never simplify the numbers
             }),
-            ("dwellTime", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "tooltip": "Pixel integration time",
-                "type": "float",
-                "accuracy": 3,
-                "event": wx.EVT_SCROLL_CHANGED
-            }),
             ("horizontalFoV", {
                 "label": "HFW",
                 "tooltip": "Horizontal Field Width",
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.hfw_choices,
             }),
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Pixel integration time",
+                "range": (1e-9, 1),
+                "scale": "log",
+                "type": "float",
+                "accuracy": 3,
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
             ("scale", {
                 # same as binning (but accepts floats)
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-
         )),
     "ebeam-blanker":
         OrderedDict((
@@ -641,7 +644,7 @@ HW_SETTINGS_CONFIG = {
             }),
         )),
     "se-detector":
-        # Keep the same `contrast` and `brigtness` slider order as in the TFS UI
+        # Keep the same `contrast` and `brightness` slider order as in the TFS UI
         OrderedDict((
             ("contrast", {
                 "label": "Contrast",
@@ -671,15 +674,15 @@ HW_SETTINGS_CONFIG = {
         )),
     "se-detector-ion":
         OrderedDict((
-            ("brightness", {
-                "label": "Brightness",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "tooltip": "Brightness of the ion detector",
-            }),
             ("contrast", {
                 "label": "Contrast",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "tooltip": "Contrast of the ion detector",
+            }),
+            ("brightness", {
+                "label": "Brightness",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Brightness of the ion detector",
             }),
             ("mode", {
                 "label": "Detector Mode",
@@ -876,21 +879,75 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
     "meteor" : {
         "e-beam": {
             "scale": {
-                "control_type": odemis.gui.CONTROL_NONE,
+                "label": "Resolution",
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Pixel resolution preset",
+                # means will make sure both dimensions are treated as one
+                "choices": util.resolution_from_scale,
             },
             "resolution": {
-                "label": "Resolution",
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "tooltip": "Number of pixels in the image",
-                "choices": None,
-                "accuracy": None,  # never simplify the numbers
+                "control_type": odemis.gui.CONTROL_NONE,
             },
-            "probeCurrent": {
-                "label": "Beam Current",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "type": "float",
-                "scale": "linear",
-                "event": wx.EVT_SCROLL_CHANGED
+            "medianFilter": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "shift": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "stigmator": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+        "se-detector": {
+            "bpp": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+        "ion-beam": {
+            "beamPreset": {
+                "label": "Beam Preset",
+                "tooltip": "Beam Preset",
+            },
+            "scale": {
+                "label": "Resolution",
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Pixel resolution preset",
+                # means will make sure both dimensions are treated as one
+                "choices": util.resolution_from_scale,
+            },
+            "resolution": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "rotation": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "translation": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "external": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "power": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "blanker": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "medianFilter": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "shift": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "stigmator": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+        "se-detector-ion": {
+            "bpp": {
+                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
     }
