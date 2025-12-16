@@ -1027,6 +1027,10 @@ class CryoChamberTab(Tab):
                 elif ans == wx.ID_YES:
                     logging.debug("loading project")
                     ret = self._load_project_data(None)
+                else:  # Closed the window
+                    # The user cannot be bothered => create a new project automatically
+                    self._create_new_dir()
+                    ret = True
 
                 # break if the user successfully created or loaded a project
                 if ret:
