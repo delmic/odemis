@@ -19,18 +19,21 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import math
-import threading
-from builtins import str
-import queue
 import logging
-import numpy
-from odemis import model, util, dataio
-from odemis.model import oneway
+import math
 import os
-from scipy import ndimage
+import queue
+import threading
 import time
+from builtins import str
+
+import numpy
 from PIL import Image, ImageDraw, ImageFont
+from scipy import ndimage
+
+from odemis import dataio, model, util
+from odemis.model import oneway
+from odemis.util.synthetic import ParabolicMirrorRayTracer
 
 ERROR_STATE_FILE = "simcam-hw.error"
 
@@ -149,6 +152,32 @@ class Camera(model.DigitalCamera):
         except (TypeError, KeyError):
             logging.info("Will not simulate focus")
             self._focus = None
+
+        # Simulated image generator based on ray tracing for a parabola mirror system with a lens and camera (SPARC2)
+        # Requires a mirror with 'x', 'y' and stage with 'z' axes
+        try:
+            mirror = dependencies["mirror"]
+            required_axes = ("x", "y", "z")
+            if not (
+                isinstance(mirror, model.ComponentBase)
+                and hasattr(mirror, "axes")
+                and isinstance(mirror.axes, dict)
+                and all(axis in mirror.axes for axis in required_axes)
+            ):
+                raise ValueError("mirror %s must be a Component with 'x', 'y' and 'z' axes" % (mirror))
+
+            mirror_md = mirror.getMetadata()
+            good_pos = mirror_md[model.MD_FAV_POS_ACTIVE]
+            if not all(axis in good_pos for axis in required_axes):
+                raise ValueError(f"mirror metadata {model.MD_FAV_POS_ACTIVE} must contain 'x', 'y', and 'z' keys")
+
+            self._img_simulator = ParabolicMirrorRayTracer(good_pos)
+            self._mirror = mirror
+            logging.debug("Will simulate ray traced images using mirror %s", mirror.name)
+        except (TypeError, KeyError):
+            logging.info("Will not simulate ray traced images")
+            self._img_simulator = None
+            self._mirror = None
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
@@ -334,49 +363,55 @@ class Camera(model.DigitalCamera):
 
     def _simulate(self):
         """
-        Processes the fake image based on the translation, resolution and
+        Simulate the image based on the current settings of the camera.
+        If a mirror is defined, use ray tracing to simulate the image.
+        Otherwise, processes the fake image based on the translation, resolution and
         current drift.
         """
         binning = self.binning.value
         res = self.resolution.value
         trans = self.translation.value
         center = self._img_res[0] / 2, self._img_res[1] / 2
-
-        # Extra translation to simulate stage movement
-        pos = self._metadata.get(model.MD_POS, (0, 0))
         pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
-        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
-        stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
 
-        # First and last index (eg, 0 -> 255)
-        ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
-                center[1] + trans[1] + stage_shift[1] - (res[1] / 2) * binning[1],
-                center[0] + trans[0] + stage_shift[0] + ((res[0] / 2) - 1) * binning[0],
-                center[1] + trans[1] + stage_shift[1] + ((res[1] / 2) - 1) * binning[1]
-                ]
-        # If the shift caused the image to go out of bounds, limit it
-        if ltrb[0] < 0:
-            ltrb[0] = 0
-        elif ltrb[2] > self._img_res[0] - 1:
-            ltrb[0] -= ltrb[2] - (self._img_res[0] - 1)
-        if ltrb[1] < 0:
-            ltrb[1] = 0
-        elif ltrb[3] > self._img_res[1] - 1:
-            ltrb[1] -= ltrb[3] - (self._img_res[1] - 1)
+        if self._mirror:
+            eff_pixel_size = [p * b for p, b in zip(pixel_size, binning)]
+            self._img_simulator.resolution.value = res
+            self._img_simulator.pixel_size.value = eff_pixel_size
+            sim_img = self._img_simulator.simulate(self._mirror.position.value)
+            self._img = model.DataArray(sim_img, self._img.metadata)
+            sim_img = self._img.copy()
+        else:
+            # Extra translation to simulate stage movement
+            pos = self._metadata.get(model.MD_POS, (0, 0))
+            pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
+            stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
 
-        ltrb = [round(v) for v in ltrb]  # Smooth out floating point errors
+            # First and last index (eg, 0 -> 255)
+            ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
+                    center[1] + trans[1] + stage_shift[1] - (res[1] / 2) * binning[1],
+                    center[0] + trans[0] + stage_shift[0] + ((res[0] / 2) - 1) * binning[0],
+                    center[1] + trans[1] + stage_shift[1] + ((res[1] / 2) - 1) * binning[1]
+                    ]
+            # If the shift caused the image to go out of bounds, limit it
+            if ltrb[0] < 0:
+                ltrb[0] = 0
+            elif ltrb[2] > self._img_res[0] - 1:
+                ltrb[0] -= ltrb[2] - (self._img_res[0] - 1)
+            if ltrb[1] < 0:
+                ltrb[1] = 0
+            elif ltrb[3] > self._img_res[1] - 1:
+                ltrb[1] -= ltrb[3] - (self._img_res[1] - 1)
 
-        if not (ltrb[0] >= 0 and ltrb[1] >= 0):
-            raise IndexError(f"Unexpected range {ltrb} with {center}, {trans}, {stage_shift}, {binning} for res {self._img_res}")
+            ltrb = [round(v) for v in ltrb]  # Smooth out floating point errors
 
-        # compute each row and column that will be included
-        # TODO: Could use something more hardwarish like that:
-        # data0 = data0.reshape(shape[0]//b0, b0, shape[1]//b1, b1).mean(3).mean(1)
-        # (or use sum, to simulate binning)
-        # Alternatively, it could use just [lt:lt+res:binning]
-        coord = ([int(round(ltrb[0] + i * binning[0])) for i in range(res[0])],
-                 [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
-        sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
+            if not (ltrb[0] >= 0 and ltrb[1] >= 0):
+                raise IndexError(f"Unexpected range {ltrb} with {center}, {trans}, {stage_shift}, {binning} for res {self._img_res}")
+
+            # Compute the pixel indices for each row and column to extract from the source image, accounting for binning.
+            coord = ([int(round(ltrb[0] + i * binning[0])) for i in range(res[0])],
+                     [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
+            sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
 
         # Add some noise
         mx = self._img.max()

@@ -25,12 +25,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # software, or for testing.
 
 import logging
-from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 import os
 import random
 import time
 from collections.abc import Iterable
+
+
+from odemis import model, util
+from odemis.model import CancellableThreadPoolExecutor, HwError, isasync
 
 
 class Light(model.Emitter):
