@@ -70,6 +70,11 @@ class SparcAcquiController(object):
         self._interlockTriggered = False  # local/private bool to track interlock status
         self._ebeam_blanker = None
 
+        # _interlock_blocks_acquisition is used to adjust the behaviour when the interlock is opened.
+        # * True => acquisition is forbidden when interlock is triggered
+        # * False => acquisition is allowed, but a warning is shown
+        self._interlock_blocks_acquisition = True
+
         if model.hasVA(self._main_data_model.light, "interlockTriggered"):
             # subscribe to the VA and initialize the warning status
             self._main_data_model.light.interlockTriggered.subscribe(self.on_interlock_change, init=True)
@@ -94,6 +99,10 @@ class SparcAcquiController(object):
             if model.hasVA(self._main_data_model.ebeam_gun_exciter, "interlockTriggered"):
                 self._main_data_model.ebeam_gun_exciter.interlockTriggered.subscribe(self.on_interlock_change,
                                                                                      init=True)
+                # On a e-beam gun exciter, the interlock opened just means it's not going to emit electrons,
+                # but it's still safe to acquire images. Maybe the user just has increased the current,
+                # the e-beam is always on. So we don't block acquisition in that case.
+                self._interlock_blocks_acquisition = False
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -303,7 +312,7 @@ class SparcAcquiController(object):
         lvl = None  # icon status shown
 
         can_acquire = True
-        if self._interlockTriggered:
+        if self._interlockTriggered and self._interlock_blocks_acquisition:
             txt = "Laser interlock triggered."
             lvl = logging.WARN
             can_acquire = False
