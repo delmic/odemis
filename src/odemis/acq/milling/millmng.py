@@ -389,9 +389,6 @@ class AutomatedMillingManager(object):
                 ############# STAGE MOVEMENT #############
                 self._move_to_milling_position(feature)
 
-                ############# ALIGNMENT #############
-                self._align_reference_image(feature)
-
                 ############# MILLING #############
                 self._run_milling_tasks(feature, milling_tasks)
 
