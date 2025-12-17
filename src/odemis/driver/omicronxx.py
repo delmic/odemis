@@ -646,6 +646,7 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
         self.power = model.ListContinuous(value=[0.0] * len(self._devices),
                                           range=(tuple([0.0] * len(self._devices)), tuple(max_power),),
                                           unit="W", cls=(int, float),)
+        self._current_power = tuple(self.power.value)
         self.power.subscribe(self._updatePower)
 
         # info on what device is which wavelength
@@ -659,6 +660,9 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
                 raise HwError("Failed to power on the master device, check the interlock.")
 
         # make sure everything is off (turning on the HUB will turn on the lights)
+        # Trick: as _updateIntensities() only sends commands for the difference, pretend that everything
+        # was at max power before (while it's actually off).
+        self._current_power = self.power.range[1]
         self._updateIntensities(self.power.value)
 
         # set SW version
@@ -685,11 +689,12 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
         super(GenericxX, self).terminate()
 
     def _updateIntensities(self, power):
-        # TODO: compare to the previous (known) state, and only send commands for
-        # the difference, to save some time (each command takes ~5 ms)
+        # Compare to the previous (known) state, and only send commands for
+        # the difference, to save some time (each command takes ~15 ms)
         # set the actual values
+        current_all_off = all(p == 0 for p in self._current_power)
         all_off = all(p == 0 for p in power)
-        if not all_off and self._master:
+        if not all_off and self._master and current_all_off:
             # On the LedHUB, when the master goes from off to on, all the
             # devices are turned on too. In theory, as the level has been set to
             # 0, it's not an issue... but some (non-properly calibrated) lights
@@ -697,12 +702,18 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
             # them in stand-by, so that the light cannot be emitting anyway.
             self._master.LightOn()
 
-        for d, p in zip(self._devices, power):
-            p = min(p, d.max_power)
-            if p > 0:
-                d.LightOn()
-                d.setLightPower(p / d.max_power)
-                d.activate(True)
+        for d, cp, tp in zip(self._devices, self._current_power, power):
+            cp = min(cp, d.max_power)
+            tp = min(tp, d.max_power)
+            if cp == tp:
+                continue  # no change
+            if tp > 0:
+                if cp == 0:
+                    # from off to on => need to first turn the light on
+                    d.LightOn()
+                d.setLightPower(tp / d.max_power)
+                if cp == 0:
+                    d.activate(True)
             else:
                 d.activate(False)
                 # In theory, not need to turn light off as the stand-by does it,
@@ -710,14 +721,16 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
                 d.LightOff()
                 d.setLightPower(0)
 
-        if all_off and self._master:
+        # Store for next time
+        self._current_power = tuple(power)
+
+        if all_off and self._master and not current_all_off:
             # On the LedHUB, it's necessary to turn off the master to get the
             # "emission" status led off.
             self._master.LightOff()
 
     def _updatePower(self, value):
         self._updateIntensities(value)
-
 
 
 class MultixX(GenericxX):
