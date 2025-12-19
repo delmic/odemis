@@ -187,7 +187,7 @@ class FibsemTab(Tab):
         self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
         self.panel = panel
 
-        rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rx"]
+        rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["mill_angle"]
         self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
         self.panel.ctrl_milling_angle.SetValueRange(*MILLING_RANGE)
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
@@ -413,7 +413,7 @@ class FibsemTab(Tab):
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
         current_md = self.pm.stage.getMetadata()
         self.pm.stage.updateMetadata({
-            model.MD_FAV_MILL_POS_ACTIVE: {"rx": milling_angle,
+            model.MD_FAV_MILL_POS_ACTIVE: {"mill_angle": milling_angle,
                                            "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
         })
 
