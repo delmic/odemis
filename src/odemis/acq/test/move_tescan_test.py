@@ -20,6 +20,8 @@ import math
 import os
 import unittest
 
+from odemis.util import testing
+
 import odemis
 from odemis import model
 from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN)
@@ -39,9 +41,23 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
     MIC_CONFIG = METEOR_TESCAN1_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
 
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test case with Tescan 1 configuration"""
+        super().setUpClass()
+        cls.stage_bare_md = cls.stage.getMetadata()
+
+    def setUp(self):
+        super().setUp()
+        # reset stage-bare metadata, so that even if a test modifies it, the next test starts fresh
+        self.stage.updateMetadata(self.stage_bare_md)
+
     def test_switching_consistency(self):
         """Test if switching to and from sem results in the same stage coordinates"""
+
         # Update the stage metadata according to the example
+        # Note: this works for switching posture because the metadata is re-read every time in cryoSwitchSamplePosition()
+        # However, for moving along the sample stage, this would not be sufficient, as the transformations are cached.
         self.stage.updateMetadata({model.MD_CALIB: {"x_0": 1.77472e-03, "y_0": -0.05993e-03, "b_y": -0.297e-03,
                                                     "z_ct": 4.774e-03, "dx": -40.1e-03, "dy": 0.157e-03,
                                                     "version": "tescan_1"}})
@@ -85,6 +101,32 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
             self.assertEqual(SEM_IMAGING, current_imaging_mode)
             for axis in sem_position.keys():
                 self.assertAlmostEqual(sem_position[axis], current_stage_position[axis], places=4)
+
+    def test_rel_move_fm_posture(self):
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+        # relative moves in sample stage coordinates
+        sample_stage_moves = [
+            {"x": 10e-6, "y": 0},
+            {"x": 0, "y": 10e-6},
+        ]
+        # corresponding stage-bare relative moves (based on "ground truth" tested on hardware)
+        stage_bare_moves = [
+            {"x": 10e-6, "y": 0, "z": 0},
+            {"x": 0, "y": 5.9e-6, "z": 6.7e-6},  # 40° pre-tilt
+        ]
+        for m_sample, m_bare in zip(sample_stage_moves, stage_bare_moves):
+            old_bare_pos = self.stage.position.value
+            self.linked_stage.moveRel(m_sample).result()
+            new_bare_pos = self.stage.position.value
+
+            exp_bare_pos = old_bare_pos.copy()
+            for axis in m_bare.keys():
+                exp_bare_pos[axis] += m_bare[axis]
+            testing.assert_pos_almost_equal(new_bare_pos, exp_bare_pos, atol=1e-6)
 
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""

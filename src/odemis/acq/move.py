@@ -636,7 +636,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             ebeam = model.getComponent(role='e-beam')
             ion_beam = model.getComponent(role='ion-beam')
         except LookupError:
-            logging.warning("e-beam and/or ion-beam not available, scan rotation assumed to 0°")
+            logging.info("e-beam and/or ion-beam not available, scan rotation assumed to 0°")
             return 0
 
         # check if e-beam and ion-beam have the same rotation
@@ -1661,17 +1661,22 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         tf_id = numpy.eye(3)
         tf_reverse = -tf_id  # The Tescan stage convention is opposite of Odemis so inverse the direction of the XYZ axis.
 
+        # Compensate for the scan rotation (around Z)
+        sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
+        self._set_scanner_rotation_cor(sr)  # Makes sure total image rotation is 0
+        tf_sr, _ = get_rotation_transforms(rz=-sr)
+
         # FM imaging
         stage_md = self.stage.getMetadata()
         rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
         tf_tilt = self._get_tilt_transformation(pre_tilt, rx_fm)
-        tf_fm = tf_reverse @ tf_tilt
+        # The stage rz is 180° opposite of the SEM imaging, which compensates for the stage convention to
+        # be opposite of Odemis. So no need to "reverse" the XYZ axes.
+        # Only the other hand, although the scan rotation has no direct effect on the FM image, in
+        # practice, the camera image is also "transposed" to match the SEM image orientation, in the
+        # microscope file. So also need to apply the scan rotation here.
+        tf_fm = tf_tilt @ tf_sr
         tf_fm_inv = numpy.linalg.inv(tf_fm)
-
-        # Compensate for the scan rotation (around Z) when in SEM imaging
-        sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
-        self._set_scanner_rotation_cor(sr)  # Makes sure total image rotation is 0
-        tf_sr, _ = get_rotation_transforms(rz=-sr)
 
         rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
         # The stage rz is 180° opposite of the FM imaging => -pre_tilt
