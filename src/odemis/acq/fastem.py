@@ -30,6 +30,7 @@ from typing import Optional
 from concurrent.futures import CancelledError
 
 import numpy
+from shapely.geometry import Polygon
 
 try:
     from fastem_calibrations import util as fastem_util
@@ -789,7 +790,7 @@ class AcquisitionTask(object):
 ########################################################################################################################
 # Overview image acquisition
 
-def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True, live_stream=None, overlap=0.1):
+def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True, live_stream=None, overlap=0.1, centered_acq=True):
     """
     Start an overview acquisition task for a given region.
 
@@ -807,6 +808,8 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
     :param overlap: (0 < float < 1) The overlap ratio between tiles.
+    :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
+        If False, the acquisition starts at the top-left corner of the area.
 
     :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
              It returns the complete DataArray.
@@ -843,12 +846,12 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf, reference_stage, overlap)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf, reference_stage, overlap, centered_acq)
 
     return f
 
 
-def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01):
+def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01, centered_acq=True):
     """
     Start an overview acquisition task for a given region.
 
@@ -864,6 +867,8 @@ def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01):
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
     :param overlap: (0 < float < 1) The overlap ratio between tiles.
+    :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
+        If False, the acquisition starts at the top-left corner of the area.
 
     :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
              It returns the complete DataArray.
@@ -906,7 +911,8 @@ def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01):
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream, overlap=overlap)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream, overlap=overlap,
+                      centered_acq=centered_acq)
 
     return f
 
@@ -997,7 +1003,7 @@ class OverviewAcquisition(object):
         self._sub_future.cancel()
         return True
 
-    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True, overlap=0.01):
+    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True, overlap=0.01, centered_acq=True):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
@@ -1010,6 +1016,8 @@ class OverviewAcquisition(object):
         :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
         :param reference_stage: (bool) If True, reference the stage axes x and y before starting the acquisition.
         :param overlap: (0 < float < 1) The overlap ratio between tiles.
+        :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
+            If False, the acquisition starts at the top-left corner of the area.
 
         :returns: (DataArray) The complete overview image.
         """
@@ -1036,7 +1044,8 @@ class OverviewAcquisition(object):
 
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
-                                                      focusing_method=FocusingMethod.NONE, weaver=WEAVER_COLLAGE)
+                                                      focusing_method=FocusingMethod.NONE, weaver=WEAVER_COLLAGE,
+                                                      centered_acq=centered_acq)
         self._sub_future.add_update_callback(_pass_future_progress)
 
         das = []

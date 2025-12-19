@@ -451,7 +451,7 @@ class FastEMOverviewAcquiController(object):
         try:
             f = fastem.acquireTiledArea(
                 self._tab_data_model.semStream, self._main_data_model.stage, region,
-                overlap=self._overlap,
+                overlap=self._overlap, centered_acq=True,
             )
             f.add_done_callback(partial(self.on_acquisition_done, num=num))
             acq_futures[f] = f.start_time - f.end_time
@@ -774,6 +774,7 @@ class FastEMSingleBeamAcquiController(object):
                     scanner_conf,
                     reference_stage=True if idx == 0 else False,  # Only reference the stage before the first TOA acquisition
                     overlap=self._overlap,
+                    centered_acq=False,
                 )
 
                 # Add a callback to set the next TOA settings
