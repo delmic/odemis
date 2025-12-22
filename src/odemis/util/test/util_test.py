@@ -25,6 +25,7 @@ import time
 import unittest
 import weakref
 from functools import partial
+from typing import List, Tuple
 
 import numpy.random
 
@@ -36,7 +37,7 @@ from odemis.util import (
     limit_invocation,
     perpendicular_distance,
     timeout,
-    to_str_escape, BackgroundWorker,
+    to_str_escape, BackgroundWorker, rotate_rect, testing, UNDEFINED_ROI,
 )
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -569,6 +570,138 @@ class ExpandRectTestCase(unittest.TestCase):
         expected_rect = (0, -2, 15, 12)
         self.assertEqual(expanded_rect, expected_rect, "Failed to get correct output for rectangle %s with "
                                                        "expanded rectangle %s" % (expanded_rect, expected_rect))
+
+
+class RotateRectTestCase(unittest.TestCase):
+    def _rotate_point(self, pt: Tuple, center: Tuple, angle: float):
+        x, y = pt
+        cx, cy = center
+        x -= cx
+        y -= cy
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        x_new = x * cos_a - y * sin_a
+        y_new = x * sin_a + y * cos_a
+        return (x_new + cx, y_new + cy)
+
+    def _assert_corners_equal(self, expected: List[Tuple], actual:List[Tuple]):
+        assert len(expected) == len(actual)
+        for e, a in zip(expected, actual):
+            self.assertAlmostEqual(e[0], a[0])
+            self.assertAlmostEqual(e[1], a[1])
+
+    def test_rotate_no_angle_returns_same_corners(self):
+        rect = (0.0, 0.0, 2.0, 1.0)
+        corners = rotate_rect(rect, 0.0)
+        expected = [(0.0, 0.0), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0)]
+        self._assert_corners_equal(expected, corners)
+
+    def test_rotate_pi_over_2_about_center(self):
+        rect = (0.0, 0.0, 2.0, 1.0)
+        angle = math.pi / 2
+        # center computed by rotate_rect when center is None
+        cx = (rect[0] + rect[2]) / 2.0
+        cy = (rect[1] + rect[3]) / 2.0
+        corners_in = [(rect[0], rect[1]), (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3])]
+        expected = [self._rotate_point(pt, (cx, cy), angle) for pt in corners_in]
+        actual = rotate_rect(rect, angle, None)
+        self._assert_corners_equal(expected, actual)
+
+    def test_rotate_custom_center(self):
+        rect = (-1.0, -1.0, 1.0, 1.0)
+        angle = math.pi / 4  # 45 degrees
+        center = (2.0, 0.5)
+        corners_in = [(rect[0], rect[1]), (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3])]
+        expected = [self._rotate_point(pt, center, angle) for pt in corners_in]
+        actual = rotate_rect(rect, angle, center)
+        self._assert_corners_equal(expected, actual)
+
+    def test_rotate_negative_angle(self):
+        rect = (0.0, 0.0, 3.0, 2.0)
+        angle = -math.pi / 3  # -60 degrees
+        cx = (rect[0] + rect[2]) / 2.0
+        cy = (rect[1] + rect[3]) / 2.0
+        corners_in = [(rect[0], rect[1]), (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3])]
+        expected = [self._rotate_point(pt, (cx, cy), angle) for pt in corners_in]
+        actual = rotate_rect(rect, angle, None)
+        self._assert_corners_equal(expected, actual)
+
+
+class SeparateRectRotationTestCase(unittest.TestCase):
+    def test_axis_aligned_no_rotation(self):
+        rect = (0.0, 0.0, 2.0, 1.0)
+        corners = rotate_rect(rect, 0.0)
+        res_rect, res_angle = util.separate_rect_rotation(corners)
+        # Check recovered rectangle coordinates
+        testing.assert_tuple_almost_equal(rect, res_rect)
+        # angle should be zero (allowing equivalent rotations)
+        self.assertAlmostEqual(res_angle, 0.0)
+
+    def test_axis_aligned_no_rotation_neg(self):
+        rect = (-20.0, -20.0, 20.0, 20.0)
+        corners = rotate_rect(rect, 0.0)
+        res_rect, res_angle = util.separate_rect_rotation(corners)
+        # Check recovered rectangle coordinates
+        testing.assert_tuple_almost_equal(rect, res_rect)
+        # angle should be zero (allowing equivalent rotations)
+        self.assertAlmostEqual(res_angle, 0.0)
+
+    def test_rotated_pi_over_4_about_center(self):
+        rect = (-1.0, -1.0, 1.0, 1.0)
+        angle = math.pi / 4
+        corners = rotate_rect(rect, angle)
+        res_rect, res_angle = util.separate_rect_rotation(corners)
+        # Check recovered rectangle coordinates
+        testing.assert_tuple_almost_equal(rect, res_rect)
+        # Angle must match (modulo 2*pi)
+        self.assertAlmostEqual(res_angle, angle)
+
+        # Reconstruct and ensure corner sets match (order-insensitive)
+        recon = rotate_rect(res_rect, res_angle)
+        for v_expected, v_actual in zip(corners, recon):
+            testing.assert_tuple_almost_equal(v_expected, v_actual)
+
+    def test_negative_angle(self):
+        rect = (0.0, 0.0, 3.0, 2.0)
+        angle = -math.pi / 3
+        corners = rotate_rect(rect, angle)
+        res_rect, res_angle = util.separate_rect_rotation(corners)
+        # Check recovered rectangle coordinates
+        testing.assert_tuple_almost_equal(rect, res_rect)
+
+        # Angle must match (modulo 2*pi) and be positive
+        self.assertGreater(res_angle, 0)
+        self.assertTrue(util.rot_almost_equal(res_angle, angle))
+
+        # Reconstruct and ensure corner sets match (order-insensitive)
+        recon = rotate_rect(res_rect, res_angle)
+        for v_expected, v_actual in zip(corners, recon):
+            testing.assert_tuple_almost_equal(v_expected, v_actual)
+
+    def test_1d_vert_rectangle(self):
+        """
+        Test estimating rotation of a 1D rectangle (width=0)
+        """
+        rect = (0.0, 0.0, 0.0, 2.0)
+        for angle in (math.pi / 2, math.pi, -math.pi / 3):
+            corners = rotate_rect(rect, angle)
+            res_rect, res_angle = util.separate_rect_rotation(corners)
+            # Check recovered rectangle coordinates
+            testing.assert_tuple_almost_equal(rect, res_rect)
+
+            # Angle must match (modulo 2*pi) and be positive
+            self.assertGreater(res_angle, 0)
+            self.assertTrue(util.rot_almost_equal(res_angle, angle))
+
+            # Reconstruct and ensure corner sets match (order-insensitive)
+            recon = rotate_rect(res_rect, res_angle)
+            for v_expected, v_actual in zip(corners, recon):
+                testing.assert_tuple_almost_equal(v_expected, v_actual)
+
+    def test_undefined_roi(self):
+        corners = [(2, 3)] * 4
+        res_rect, res_angle = util.separate_rect_rotation(corners)
+        self.assertEqual(res_rect, UNDEFINED_ROI)
 
 
 class GetPolygonBBoxTestCase(unittest.TestCase):

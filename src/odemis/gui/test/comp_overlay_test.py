@@ -31,13 +31,14 @@ from builtins import range
 
 import numpy
 import wx
+from odemis.acq import stream
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
-from odemis import model
+from odemis import model, util
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
@@ -60,17 +61,16 @@ from odemis.gui.comp.overlay.spectrum_line_select import LineSelectOverlay, \
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
-from odemis.gui.comp.overlay.view_select import ViewSelectOverlay
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
 from odemis.gui.model import (TOOL_LABEL, TOOL_LINE, TOOL_POINT, TOOL_RULER,
                               FeatureOverviewView)
 from odemis.gui.util.img import wxImage2NDImage
-from odemis.util import mock
+from odemis.util import mock, testing
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
 from odemis.util.testing import (assert_array_not_equal,
-                                 assert_pos_not_almost_equal)
+                                 assert_pos_not_almost_equal, assert_tuple_almost_equal)
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -367,18 +367,6 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-    def test_view_select_overlay(self):
-        test.goto_manual()
-        # Create and add a miccanvas
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-
-        vsol = ViewSelectOverlay(cnvs)
-        vsol.active.value = True
-        cnvs.add_view_overlay(vsol)
-        # cnvs.current_mode = guimodel.TOOL_ZOOM
-        test.gui_loop()
-
     def test_marking_line_overlay(self):
         cnvs = miccanvas.TwoDPlotCanvas(self.panel)
         mlol = cnvs.markline_overlay
@@ -631,8 +619,9 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit="rad")
 
-        rsol = RepetitionSelectOverlay(cnvs)
+        rsol = RepetitionSelectOverlay(cnvs, rotation=rotation)
         rsol.active.value = True
         cnvs.add_world_overlay(rsol)
         cnvs.scale = 400
@@ -640,12 +629,14 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
         wroi = [-0.1, 0.3, 0.2, 0.4]  # in m
-        rsol.set_physical_sel(wroi)
+        corners = util.rotate_rect(wroi, 0)
+        rsol.set_physical_sel(corners)
+        cnvs.update_drawing()
         test.gui_loop()
-        wroi_back = rsol.get_physical_sel()
+        corners_back = rsol.get_physical_sel()
 
-        for o, b in zip(wroi, wroi_back):
-            self.assertAlmostEqual(o, b, msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
+        for o, b in zip(corners, corners_back):
+            testing.assert_tuple_almost_equal(o, b)
 
         rsol.repetition = (3, 2)
         rsol.fill = RepetitionSelectOverlay.FILL_POINT
@@ -657,7 +648,8 @@ class OverlayTestCase(test.GuiTestCase):
         # cnvs.update_drawing()
         test.gui_loop(2)
 
-        rsol.set_physical_sel((-0.1, -0.3, 0.4, 0.4))
+        corners = util.rotate_rect((-0.1, -0.3, 0.4, 0.4), 0)
+        rsol.set_physical_sel(corners)
         rsol.repetition = (50, 80)
         rsol.fill = RepetitionSelectOverlay.FILL_GRID
 
@@ -680,7 +672,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop(2)
 
         tol = TextViewOverlay(cnvs)
-        tol.add_label("Right click to toggle tool")
+        tol.add_label("Right click to toggle tool active")
         cnvs.add_view_overlay(tol)
 
         def toggle(evt):
@@ -693,22 +685,24 @@ class OverlayTestCase(test.GuiTestCase):
 
     def test_roa_select_overlay_va(self):
 
+        self.frame.SetSize((800, 600))
         sem = simsem.SimSEM(**CONFIG_SEM)
         for child in sem.children.value:
             if child.name == CONFIG_SCANNER["name"]:
                 ebeam = child
         # Simulate a stage move
-        ebeam.updateMetadata({model.MD_POS: (1e-3, -0.2e-3)})
+        ebeam.updateMetadata({model.MD_POS: (0.1e-3, -0.02e-3)})
 
         # but it should be a simple miccanvas
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         roa = model.TupleVA(UNDEFINED_ROI)
-        rsol = RepetitionSelectOverlay(cnvs, roa=roa, scanner=ebeam)
+        rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit="rad")
+        rsol = RepetitionSelectOverlay(cnvs, roa=roa, scanner=ebeam, rotation=rotation)
         rsol.active.value = True
         cnvs.add_world_overlay(rsol)
-        cnvs.scale = 100000
+        cnvs.scale = 2_000_000
         cnvs.update_drawing()
 
         # Undefined ROA => sel = None
@@ -721,22 +715,37 @@ class OverlayTestCase(test.GuiTestCase):
         # Expect the whole SEM FoV
         fov = compute_scanner_fov(ebeam)
         ebeam_rect = get_fov_rect(ebeam, fov)
+        ebeam_corners = util.rotate_rect(ebeam_rect, 0)
         roi_back = rsol.get_physical_sel()
 
-        for o, b in zip(ebeam_rect, roi_back):
-            self.assertAlmostEqual(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_rect, roi_back))
+        for o, b in zip(ebeam_corners, roi_back):
+            assert_tuple_almost_equal(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_corners, roi_back))
 
-        # Hald the FoV
+        # Half the FoV
         roa.value = (0.25, 0.25, 0.75, 0.75)
         test.gui_loop(0.1)
-        # Expect the whole SEM FoV
+        # Expect the half SEM FoV
         fov = compute_scanner_fov(ebeam)
         fov = (fov[0] / 2, fov[1] / 2)
         ebeam_rect = get_fov_rect(ebeam, fov)
+        ebeam_corners = util.rotate_rect(ebeam_rect, 0)
         roi_back = rsol.get_physical_sel()
 
-        for o, b in zip(ebeam_rect, roi_back):
-            self.assertAlmostEqual(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_rect, roi_back))
+        for o, b in zip(ebeam_corners, roi_back):
+            assert_tuple_almost_equal(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_corners, roi_back))
+
+        # With some rotation (but no clipping)
+        rotation.value = 0.1  # rad
+        test.gui_loop(0.1)
+        # Expect the half SEM FoV, with a little bit of rotation
+        fov = compute_scanner_fov(ebeam)
+        fov = (fov[0] / 2, fov[1] / 2)
+        ebeam_rect = get_fov_rect(ebeam, fov)
+        ebeam_corners = util.rotate_rect(ebeam_rect, 0.1)
+        roi_back = rsol.get_physical_sel()
+
+        for o, b in zip(ebeam_corners, roi_back):
+            assert_tuple_almost_equal(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_corners, roi_back))
 
         test.gui_loop()
 
@@ -771,7 +780,22 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
         self.assertIsNone(sol.p_pos, None)
 
+    def _create_spectrum_stream(self) -> stream.StaticSpectrumStream:
+        """ Create a very simple static spectrum stream for testing overlays """
+        data = numpy.ones((251, 1, 1, 19, 17), dtype="uint16")
+        # spectrum metadata
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
+        md = {
+            model.MD_PIXEL_SIZE: (10e-6, 10e-6),  # m/px
+            model.MD_POS: (0.1e-6, -0.2e-6),  # m
+            model.MD_ROTATION: 0.3,  # rad
+            model.MD_WL_LIST: wld,
+        }
+        spec_da = model.DataArray(data, md)
+        return stream.StaticSpectrumStream("test", spec_da)
+
     def test_pixel_select_overlay(self):
+        specs = self._create_spectrum_stream()
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         tab_mod = self.create_simple_tab_model()
@@ -789,7 +813,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(psol)
 
-        psol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        psol.set_stream(specs)
         width_va = model.IntVA(1)
 
         psol.connect_selection(model.TupleVA(), width_va)
@@ -828,6 +852,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Bind(wx.EVT_KEY_UP, on_key)
 
     def test_spectrum_line_select_overlay(self):
+        specs = self._create_spectrum_stream()
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         tab_mod = self.create_simple_tab_model()
@@ -842,7 +867,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(slol)
 
-        slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        slol.set_stream(specs)
         width_va = model.IntVA(1)
         line_va = model.TupleVA(((None, None), (None, None)))
         slol.connect_selection(line_va, width_va)

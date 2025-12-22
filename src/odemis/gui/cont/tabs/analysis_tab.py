@@ -434,27 +434,18 @@ class AnalysisTab(Tab):
             # We need a clean way to connect the overlays
 
             spec_stream = spec_streams[0]
-            sraw = spec_stream.raw[0]
-
-            # We need to get the dimensions so we can determine the
-            # resolution. Remember that in numpy notation, the
-            # number of rows (is vertical size), comes first. So we
-            # need to 'swap' the values to get the (x,y) resolution.
-            height, width = sraw.shape[-2], sraw.shape[-1]
-            pixel_width = sraw.metadata.get(model.MD_PIXEL_SIZE, (100e-9, 100e-9))[0]
-            center_position = sraw.metadata.get(model.MD_POS, (0, 0))
 
             # Set the PointOverlay values for each viewport
             for viewport in self.view_controller.viewports:
                 if hasattr(viewport.canvas, "pixel_overlay"):
                     ol = viewport.canvas.pixel_overlay
-                    ol.set_data_properties(pixel_width, center_position, (width, height))
+                    ol.set_stream(spec_stream)
                     ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
 
                 # TODO: to be done by the MicroscopeViewport or DblMicroscopeCanvas (for each stream with a selected_line)
                 if hasattr(viewport.canvas, "line_overlay") and hasattr(spec_stream, "selected_line"):
                     ol = viewport.canvas.line_overlay
-                    ol.set_data_properties(pixel_width, center_position, (width, height))
+                    ol.set_stream(spec_stream)
                     ol.connect_selection(
                         spec_stream.selected_line,
                         spec_stream.selectionWidth,
