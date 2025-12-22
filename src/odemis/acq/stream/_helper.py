@@ -141,6 +141,8 @@ class RepetitionStream(LiveStream):
         self.pixelSize = model.FloatContinuous(pxs, range=(0, 1), unit="m",
                                                setter=self._setPixelSize)
 
+        self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit="rad")
+
         # fuzzy scanning avoids aliasing by sub-scanning each region of a pixel
         # Note: some subclasses for which it doesn't make sense will remove it
         self.fuzzing = model.BooleanVA(False)
@@ -379,8 +381,7 @@ class RepetitionStream(LiveStream):
 
     def _fitROI(self, roi):
         """
-        Ensure that a ROI fits within its bounds. If not, it will move it or
-        reduce it.
+        Ensure that a ROI fits within its bounds (ie, 0 -> 1). If not, it will move it or reduce it.
         roi (4 floats)
         return (4 floats)
         """
@@ -482,6 +483,8 @@ class RepetitionStream(LiveStream):
                    roi_center[1] - roi_size[1] / 2,
                    roi_center[0] + roi_size[0] / 2,
                    roi_center[1] + roi_size[1] / 2)
+            # Make sure the RoI is still within range (could go slightly out of bounds due to floating point errors)
+            roi = [min(max(0, v), 1) for v in roi]
             phy_size = (spxs[0] * sshape[0], spxs[1] * sshape[1])  # max physical ROI
             pxs = sq_pxs * phy_size[0] / eratio
 
@@ -2056,9 +2059,6 @@ class ScannedTemporalSettingsStream(CCDSettingsStream):
 
         # typical user wants density much lower than SEM
         self.pixelSize.value *= 30
-
-        # Fuzzing not supported (yet)
-        del self.fuzzing
 
         # scan stage is not (yet?) handled by SEMTemporalMDStreams
         del self.useScanStage

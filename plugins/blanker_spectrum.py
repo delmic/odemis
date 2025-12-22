@@ -47,7 +47,7 @@ class BlSpectrumSettingsStream(SpectrumSettingsStream):
         control whether the blanker is enabled (True), disabled (False), or automatically enabled whenever a
         scanning takes place (None).
         """
-        super(BlSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
         self._blanker = blanker
 
         # Background file name: a str (the full path) or None (no background)
@@ -55,7 +55,7 @@ class BlSpectrumSettingsStream(SpectrumSettingsStream):
 
     def _prepare_opm(self):
         self._activateBlanker()
-        return super(BlSpectrumSettingsStream, self)._prepare_opm()
+        return super()._prepare_opm()
 
     def _activateBlanker(self):
         try:
@@ -66,15 +66,18 @@ class BlSpectrumSettingsStream(SpectrumSettingsStream):
         except Exception:
             logging.exception("Failed to activate the blanker")
 
-    def _unlinkHwAxes(self):
-        super(BlSpectrumSettingsStream, self)._unlinkHwAxes()
+    def _resetBlanker(self):
         try:
             # In case the blanker is set to False by the user, it remains False.
             if self._blanker and self._blanker.value:
                 logging.debug("Resetting the blanker to auto")
                 self._blanker.value = None
         except Exception:
-            logging.exception("Failed to set the blanker tp automatic mode")
+            logging.exception("Failed to set the blanker to automatic mode")
+
+    def _unlinkHwAxes(self):
+        super()._unlinkHwAxes()
+        self._resetBlanker()
 
     def onBackgroundFile(self, fn: str) -> str:
 
@@ -143,16 +146,14 @@ class BlSEMSpectrumMDStream(SEMSpectrumMDStream):
     """
     Same as the normal SEMSpectrumMDStream, but honors the extra options of BlSpectrumSettingsStream.
     """
-
-    def _adjustHardwareSettings(self):
-        self._sccd._activateBlanker()
-        return SEMSpectrumMDStream._adjustHardwareSettings(self)
-
     def _runAcquisition(self, future):
         try:
-            return super(BlSEMSpectrumMDStream, self)._runAcquisition(future)
+            # The SEMCCDAcquirer.prepare_hardware() forces the blanker off, only if it's None.
+            # So we set it to True here, and reset it afterwards.
+            self._sccd._activateBlanker()
+            return super()._runAcquisition(future)
         finally:
-            self._sccd._unlinkHwAxes()
+            self._sccd._resetBlanker()
 
 
 LIVE_STREAM_CONFIG = OrderedDict((
@@ -181,12 +182,12 @@ LIVE_STREAM_CONFIG = OrderedDict((
 
 class BlExtraPlugin(Plugin):
     name = "Force blanker on during spectrum acquisition"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = "Éric Piel, Victoria Mavrikopoulou"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):
-        super(BlExtraPlugin, self).__init__(microscope, main_app)
+        super().__init__(microscope, main_app)
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):

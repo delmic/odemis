@@ -196,19 +196,10 @@ class LASEMSpectrumMDStream(SEMSpectrumMDStream):
         finally:
             self._sccd._unlinkHwAxes()
 
-    def _assembleFinalData(self, n, data):
-        super()._assembleFinalData(n, data)
-
-        # In case there are several similar streams, add the polarization to the
-        # stream name to make it easier to differentiate them.
-        if self._analyzer and self._polarization.value != MD_POL_NONE:
-            da = self._raw[n]
-            da.metadata[MD_DESCRIPTION] += " (%s)" % (self._polarization.value,)
-
 
 class SpecExtraPlugin(Plugin):
     name = "Large area spectrum stream"
-    __version__ = "1.2"
+    __version__ = "1.3"
     __author__ = "Éric Piel"
     __license__ = "GPLv2"
 

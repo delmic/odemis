@@ -41,6 +41,8 @@ from concurrent.futures._base import CancelledError
 import copy
 import logging
 import math
+from typing import Tuple
+
 import numpy
 from odemis import dataio, model, util, gui
 from odemis.acq import leech, acqmng
@@ -282,6 +284,7 @@ class SECOMCLSettingsStream(acqstream.CCDSettingsStream):
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, float),
                                          setter=self._setROI)
+        self.rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit="rad", readonly=True)
 
         # Start with pixel size to fit 1024 px, as it's typically a sane value
         # for the user (and adjust for the hardware).
@@ -596,11 +599,12 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         # Return something, but not the data to avoid data being cached.
         return model.DataArray(numpy.array([0]))
 
-    def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
+    def _assembleLiveData(self, n, raw_data, px_idx, px_pos,
+                          rep: Tuple[int, int], pol_idx: int):
         if n != self._ccd_idx:
             return super()._assembleLiveData(n, raw_data, px_idx, px_pos, rep, pol_idx)
 
-        # For other streams (CL) don't do a live update
+        # For other streams (CL) don't do a live update (as it's directly stored in a file).
         return
 
     def _assembleFinalData(self, n, data):
@@ -685,7 +689,7 @@ class CLAcqPlugin(Plugin):
     spots on the sample along a grid. Can also be used as a plugin.
     """
     name = "CL acquisition for SECOM"
-    __version__ = "2.1"
+    __version__ = "2.3"
     __author__ = "Éric Piel, Lennard Voortman, Sabrina Rossberger"
     __license__ = "Public domain"
 
@@ -735,15 +739,16 @@ class CLAcqPlugin(Plugin):
         :param microscope: (Microscope or None) The main back-end component.
         :param main_app: (wx.App) The main GUI component.
         """
-        super(CLAcqPlugin, self).__init__(microscope, main_app)
+        super().__init__(microscope, main_app)
 
         # Can only be used with a microscope
         if not microscope:
             return
         else:
-            # Check which stream the microscope supports
+            # Typically it's supposed to run on a SECOM, but let's be "open-minded", and
+            # just check that all required components are there.
             self.main_data = self.main_app.main_data
-            if not (self.main_data.ccd and self.main_data.ebeam):
+            if not (self.main_data.ccd and self.main_data.ebeam and self.main_data.sed):
                 return
 
         self.exposureTime = self.main_data.ccd.exposureTime
