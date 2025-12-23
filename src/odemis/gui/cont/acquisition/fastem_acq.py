@@ -757,6 +757,22 @@ class FastEMSingleBeamAcquiController(object):
         is_set_first_roa_settings = False
         project_names = list(self.project_toas.keys())
 
+        pre_calibrations = [
+            Calibrations.OPTICAL_AUTOFOCUS,
+            Calibrations.IMAGE_TRANSLATION_PREALIGN,
+        ]
+
+        autostig_period = self.autostig_period.GetValue()
+        if autostig_period == 0:
+            autostig_period = math.inf
+        autofocus_period = self.autofocus_period.GetValue()
+        if autofocus_period == 0:
+            autofocus_period = math.inf
+        logging.debug(
+            f"Will run autostigmation every {autostig_period} sections "
+            f"and autofocus every {autofocus_period} sections."
+        )
+
         flattened_toas = []  # List of tuples: (immersion, toa, data, window)
         for project_name in project_names:
             immersion = self.main_tab_data.project_settings_data.value[project_name][IMMERSION]
@@ -784,6 +800,12 @@ class FastEMSingleBeamAcquiController(object):
                     "horizontalFoV": toa.hfw.value,   # Horizontal field of view (HFW) for the TOA, user selected
                     "resolution": toa.res.value,  # Resolution in pixels (width, height), user selected
                 }
+                pre_calib = pre_calibrations.copy()
+                if idx > 0:
+                    if idx % autostig_period == 0:
+                        pre_calib.append(Calibrations.AUTOSTIGMATION)
+                    if idx % autofocus_period == 0:
+                        pre_calib.append(Calibrations.SEM_AUTOFOCUS)
 
                 current_user = self._main_data_model.current_user.value
                 save_dir = os.path.join(
@@ -804,6 +826,15 @@ class FastEMSingleBeamAcquiController(object):
                     scanner_conf,
                     reference_stage=True if idx == 0 else False,  # Only reference the stage before the first TOA acquisition
                     file_pattern=file_pattern,
+                    pre_calibrations=pre_calib,
+                    scanner=self._main_data_model.ebeam,
+                    multibeam=self._main_data_model.multibeam,
+                    descanner=self._main_data_model.descanner,
+                    detector=self._main_data_model.mppc,
+                    ccd=self._main_data_model.ccd,
+                    beamshift=self._main_data_model.beamshift,
+                    se_detector=self._main_data_model.sed,
+                    ebeam_focus=self._main_data_model.ebeam_focus,
                     overlap=self._overlap,
                     centered_acq=False,
                 )
@@ -1365,8 +1396,6 @@ class FastEMMultiBeamAcquiController(object):
                 window.status_text.SetLabelText("Open")
                 window.Layout()
                 pre_calib = pre_calibrations.copy()
-                if idx == 0:
-                    pass
                 if idx > 0:
                     if idx % autostig_period == 0:
                         pre_calib.append(Calibrations.AUTOSTIGMATION)

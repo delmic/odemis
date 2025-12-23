@@ -791,7 +791,11 @@ class AcquisitionTask(object):
 # Overview image acquisition
 
 def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True,
-                                   live_stream=None, file_pattern=None, overlap=0.1, centered_acq=True):
+                                   live_stream=None, file_pattern=None, pre_calibrations=None,
+                                   scanner=None, multibeam=None, descanner=None, detector=None,
+                                   ccd=None, beamshift=None, se_detector=None, ebeam_focus=None,
+                                   overlap=0.1, centered_acq=True
+                                   ):
     """
     Start an overview acquisition task for a given region.
 
@@ -810,6 +814,16 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
         to build up live the whole acquisition. NOT SUPPORTED YET.
     :param file_pattern: (str or None): Directory + filepattern where to save the overview acquisition tiles.
         If None, the tiles are not saved.
+    :param pre_calibrations: (list[Calibrations] or None): List of calibrations to run before the acquisition.
+        If None, no pre-calibrations are run.
+    :param scanner: (Scanner) The ebeam scanner.
+    :param multibeam: (MultiBeam) The multiprobe component.
+    :param descanner: (Descanner) The descanner component.
+    :param detector: (MultiProbeDetector) The multiprobe detector component.
+    :param ccd: (CCD) The diagnostic camera component.
+    :param beamshift: (BeamShift) The beamshift component.
+    :param se_detector: (SEDetector) The secondary electron detector component.
+    :param ebeam_focus: (EBeamFocus) The ebeam focus component.
     :param overlap: (0 < float < 1) The overlap ratio between tiles.
     :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
         If False, the acquisition starts at the top-left corner of the area.
@@ -850,7 +864,8 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
     _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf,
-                      reference_stage, file_pattern, overlap, centered_acq)
+                      reference_stage, file_pattern, pre_calibrations, scanner, multibeam, descanner, detector,
+                                   ccd, beamshift, se_detector, ebeam_focus, overlap, centered_acq)
 
     return f
 
@@ -1008,20 +1023,33 @@ class OverviewAcquisition(object):
         return True
 
     def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True, file_pattern=None,
-            overlap=0.01, centered_acq=True):
+            pre_calibrations=None, scanner=None, multibeam=None, descanner=None, detector=None, ccd=None,
+            beamshift=None, se_detector=None, ebeam_focus=None, overlap=0.01, centered_acq=True):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
         :param stream: (SEMstream) The stream used for the acquisition.
         :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
             The x and y axes are aligned with the x and y axes of the ebeam scanner.
-        :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region.
+        :param area: Either:
+            - (Tuple[float, float, float, float]) Bounding box as (xmin, ymin, xmax, ymax)
+            - (List[Tuple[float, float]]) List of (x, y) points defining a polygon
         :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
                to build up live the whole acquisition. NOT SUPPORTED YET.
         :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
         :param reference_stage: (bool) If True, reference the stage axes x and y before starting the acquisition.
         :param file_pattern: (str or None): Directory + filepattern where to save the overview acquisition tiles.
             If None, the tiles are not saved.
+        :param pre_calibrations: (list[Calibrations] or None): List of calibrations to run before the acquisition.
+            If None, no pre-calibrations are run.
+        :param scanner: (Scanner) The ebeam scanner.
+        :param multibeam: (MultiBeam) The multiprobe component.
+        :param descanner: (Descanner) The descanner component.
+        :param detector: (MultiProbeDetector) The multiprobe detector component.
+        :param ccd: (CCD) The diagnostic camera component.
+        :param beamshift: (BeamShift) The beamshift component.
+        :param se_detector: (SEDetector) The secondary electron detector component.
+        :param ebeam_focus: (EBeamFocus) The ebeam focus component.
         :param overlap: (0 < float < 1) The overlap ratio between tiles.
         :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
             If False, the acquisition starts at the top-left corner of the area.
@@ -1041,6 +1069,45 @@ class OverviewAcquisition(object):
         # Get the current immersion mode value before configuring the scanner.
         # This value is set back after acquireTiledArea future's result.
         current_immersion_mode = stream.emitter.immersion.value
+
+        if pre_calibrations:
+            if not all([scanner, multibeam, descanner, detector, ccd, beamshift, se_detector, ebeam_focus]):
+                raise ValueError("To run pre-calibrations, all components need to be provided: "
+                                 "scanner, multibeam, descanner, detector, ccd, beamshift, se_detector, ebeam_focus")
+            # Move the stage such that the pre-calibrations are done to the left of the top left field,
+            # outside the region of acquisition to limit beam damage.
+            fov = stream.emitter.horizontalFoV.value
+            logging.debug("Start pre-calibration.")
+            xmin, _, _, ymax = Polygon(area).bounds
+            try:
+                for i in range(3):  # try running the pre-calibrations 3 times
+                    # area is xmin, ymin, xmax, ymax, move to the left of xmin and above ymax
+                    pos = {'x': xmin - fov / 2 - i * 0.2 * fov,
+                           'y': ymax + fov / 2 + i * 0.2 * fov}
+                    f = stage.moveAbs(pos)
+                    f.result()
+
+                    logging.debug(f"Will run pre-calibrations at 'x': {pos['x']}, "
+                                  f"'y': {pos['y']}")
+                    try:
+                        _pre_calibrations_future = align(scanner, multibeam,
+                                                         descanner, detector,
+                                                         stage, ccd,
+                                                         beamshift, None,  # no need for the detector rotator
+                                                         se_detector, ebeam_focus,
+                                                         calibrations=pre_calibrations)
+                        _pre_calibrations_future.result()  # wait for the calibrations to be finished
+                        break  # if it successfully ran, do not try again
+                    except CancelledError:
+                        logging.debug("Cancelled acquisition pre-calibrations.")
+                        raise
+                    except Exception as err:
+                        logging.warning(f"Pre-calibration failed with error {err}, "
+                                        f"will try again at a slightly different position.")
+            except Exception as e:
+                logging.error(f"Pre-calibrations for overview acquisition failed: {e}")
+
+            logging.debug("Finish pre-calibrations.")
 
         fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE, conf=scanner_conf)
 
