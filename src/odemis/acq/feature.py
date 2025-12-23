@@ -149,7 +149,9 @@ class CryoFeature(object):
                  stage_position: Dict[str, float],
                  fm_focus_position: Dict[str, float],
                  streams: Optional[List[Stream]] = None,
-                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None, correlation_data=None):
+                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None,
+                 correlation_data = None,
+                 general_params = {}):
         """
         :param name: (string) the feature name
         :param stage_position: (dict) the stage position of the feature (stage-bare)
@@ -165,7 +167,7 @@ class CryoFeature(object):
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
         if milling_tasks is None:
-            milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+            milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH, general_params)
         self.milling_tasks: Dict[str, MillingTaskSettings] = milling_tasks
 
         self.status = model.StringVA(FEATURE_ACTIVE)

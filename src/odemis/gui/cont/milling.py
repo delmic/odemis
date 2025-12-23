@@ -44,13 +44,15 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling import millmng, DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
+from odemis.acq.milling import fibsemos
+from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
-from odemis.gui.conf import get_acqui_conf
+from odemis.gui.conf import get_acqui_conf, get_milling_conf
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
@@ -151,10 +153,16 @@ class MillingTaskController:
         self.canvas = self.viewport.canvas  # fib canvas
 
         self.pm = self._tab_data.main.posture_manager
-        self.conf = get_acqui_conf()
+        self.acqui_conf = get_acqui_conf()
+        self.milling_conf = get_milling_conf()
 
+        # general milling parameters applicable to all the milling tasks
+        general_params = {
+            "rate": self.milling_conf.rate,
+            "dwell_time": self.milling_conf.dwell_time
+        }
         # load the milling tasks
-        self.milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH) # TODO: move to main_data
+        self.milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH, general_params) # TODO: move to main_data
         self._default_milling_tasks = copy.deepcopy(self.milling_tasks)
         self.allow_milling_pattern_move = True
 
@@ -438,8 +446,11 @@ class MillingTaskController:
 
         # run the milling tasks
         tasks = [task for task_name, task in self.milling_tasks.items() if task_name in self.selected_tasks.value]
-        self._mill_future = millmng.run_milling_tasks(tasks=tasks,
-                                                      fib_stream=self._tab.fib_stream)
+
+        if fibsemos.FIBSEMOS_INSTALLED:
+            self._mill_future = run_milling_tasks_fibsemos(tasks=tasks, config_path=self.milling_conf.config_path)
+        else:
+            self._mill_future = millmng.run_milling_tasks(tasks=tasks, fib_stream=self._tab.fib_stream)
 
         # link the milling gauge to the milling future
         self._gauge_future_conn = ProgressiveFutureConnector(
@@ -525,7 +536,7 @@ class MillingTaskController:
         self._panel.btn_run_milling.Enable(milling_enabled)
 
         if not has_tasks:
-            txt = "No Tasks Selected..."
+            txt = "No tasks selected..."
             self._panel.txt_milling_est_time.SetLabel(txt)
 
         if not valid_patterns:
@@ -547,8 +558,8 @@ class AutomatedMillingController:
         self._panel = tab_panel
         self._tab = tab
 
-        from odemis.gui.conf import get_acqui_conf
-        self.conf = get_acqui_conf()
+        self.acqui_conf = get_acqui_conf()
+        self.milling_conf = get_milling_conf()
 
         # automated milling tasks
         self.task_list = [MillingWorkflowTask.RoughMilling, MillingWorkflowTask.Polishing]
@@ -587,7 +598,6 @@ class AutomatedMillingController:
             wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
 
     def _update_feature_status(self, feature: CryoFeature):
-
         self._update_features(self._tab_data.main.features.value)
 
     @call_in_wx_main
@@ -629,7 +639,7 @@ class AutomatedMillingController:
 
         # tmp: add the path to the features, as it's not saved in the feature
         for feature in features:
-            feature.path = os.path.join(self.conf.pj_last_path, feature.name.value)
+            feature.path = os.path.join(self.acqui_conf.pj_last_path, feature.name.value)
 
         task_list = [t for i, t in enumerate(self.task_list) if self._panel.workflow_task_chk_list.IsChecked(i)]
         logging.info(f"Running automated milling for tasks: {task_list}")
@@ -656,6 +666,7 @@ class AutomatedMillingController:
                                     sem_stream=sem_stream,
                                     fib_stream=fib_stream,
                                     task_list=task_list,
+                                    config_path=self.milling_conf.config_path
                                     )
 
         # link the milling gauge to the milling future

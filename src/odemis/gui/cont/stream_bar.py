@@ -36,7 +36,7 @@ import odemis.acq.stream as acqstream
 import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
-from odemis.acq.stream import StaticSEMStream, StaticStream
+from odemis.acq.stream import StaticSEMStream, StaticFIBStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
@@ -2283,7 +2283,7 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         # Remove the panels, and indirectly it will clear the view
         v = self._feature_view
         for sc in self.stream_controllers.copy():
-            if not isinstance(sc.stream, StaticSEMStream):
+            if not isinstance(sc.stream, StaticFIBStream):
                 logging.warning("Unexpected non static stream: %s", sc.stream)
                 continue
             # Leave the overview streams

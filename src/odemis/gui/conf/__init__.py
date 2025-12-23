@@ -30,6 +30,7 @@ CONF_GENERAL = None
 CONF_ACQUI = None
 CONF_CHAMB = None
 CONF_CALIB = None
+CONF_MILLING = None
 
 
 def get_general_conf():
@@ -38,6 +39,7 @@ def get_general_conf():
         from .file import GeneralConfig
         CONF_GENERAL = GeneralConfig()
     return CONF_GENERAL
+
 
 def get_chamber_conf():
     """ Return the Chamber config object and create/read it first if it does not yet exist """
@@ -58,9 +60,18 @@ def get_acqui_conf():
 
 
 def get_calib_conf():
-    """ Return the calibration config object and create/read it first if it does not yet exist """
+    """ Return the Calibration config object and create/read it first if it does not yet exist """
     global CONF_CALIB
     if not CONF_CALIB:
         from .file import CalibrationConfig
         CONF_CALIB = CalibrationConfig()
     return CONF_CALIB
+
+
+def get_milling_conf():
+    """ Return the Milling config object and create/read it first if it does not yet exist """
+    global CONF_MILLING
+    if not CONF_MILLING:
+        from .file import MillingConfig
+        CONF_MILLING = MillingConfig()
+    return CONF_MILLING

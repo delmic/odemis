@@ -209,5 +209,43 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
             else:
                 self.assertAlmostEqual(o, b)
 
+
+class MillingConfigTest(ConfigTest, unittest.TestCase):
+
+    conf_class = gui.conf.file.MillingConfig
+
+    def test_simple(self):
+        conf = gui.conf.get_milling_conf()
+        self.assertIsInstance(conf.rate, float)
+        self.assertIsInstance(conf.dwell_time, float)
+        self.assertIsInstance(conf.config_path, str)
+
+    def test_save(self):
+        conf = gui.conf.get_milling_conf()
+        conf.rate = 2e-8
+        conf.dwell_time = 2e-6
+        conf.config_path = "test-config.yaml"
+
+        # reset
+        del conf
+        gui.conf.CONF_MILLING = None
+
+        conf = gui.conf.get_milling_conf()
+        self.assertAlmostEqual(conf.rate, 2e-8)
+        self.assertAlmostEqual(conf.dwell_time, 2e-6)
+        self.assertEqual(conf.config_path, "test-config.yaml")
+
+    def test_default(self):
+        try:
+            os.remove(self.filename)
+        except OSError:
+            pass
+
+        conf = gui.conf.get_milling_conf()
+        self.assertAlmostEqual(conf.rate, 1e-8)
+        self.assertAlmostEqual(conf.dwell_time, 1e-6)
+        self.assertEqual(conf.config_path, "microscope-configuration.yaml")
+
+
 if __name__ == "__main__":
     unittest.main()

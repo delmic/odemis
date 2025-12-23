@@ -48,7 +48,16 @@ class MillingTaskTestCase(unittest.TestCase):
         field_of_view = 400e-6
         mode = "Serial"
         channel = "ion"
-        milling_settings = MillingSettings(current, voltage, field_of_view, mode, channel)
+
+        milling_settings = MillingSettings(
+            current=current,
+            voltage=voltage,
+            field_of_view=field_of_view,
+            rate=0.0,
+            dwell_time=0.0,
+            mode=mode,
+            channel=channel,
+        )
 
         self.assertEqual(milling_settings.current.value, current)
         self.assertEqual(milling_settings.voltage.value, voltage)
@@ -71,7 +80,15 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(milling_settings_from_dict.channel.value, channel)
 
     def test_milling_task_settings(self):
-        milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
+        milling_settings = MillingSettings(
+            current=100e-9,
+            voltage=30e3,
+            field_of_view=400e-6,
+            rate=0.0,
+            dwell_time=0.0,
+            mode="Serial",
+            channel="ion",
+        )
         trench_pattern = TrenchPatternParameters(1e-6, 1e-6, 100e-9, 1e-6, (0, 0))
 
         milling_task_settings = MillingTaskSettings(milling_settings, [trench_pattern], "Milling Task")
@@ -105,11 +122,27 @@ class MillingTaskTestCase(unittest.TestCase):
         self.assertEqual(milling_task_settings_from_dict.patterns[0].center.value, trench_pattern.center.value)
 
     def test_save_load_task_settings(self):
-        milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
+        milling_settings = MillingSettings(
+            current=100e-9,
+            voltage=30e3,
+            field_of_view=400e-6,
+            rate=0.0,
+            dwell_time=0.0,
+            mode="Serial",
+            channel="ion",
+        )
         trench_pattern = TrenchPatternParameters(10e-6, 3e-6, 100e-9, 2e-6, (0, 0))
         trench_task_settings = MillingTaskSettings(milling_settings, [trench_pattern], "Trench")
 
-        milling_settings = MillingSettings(100e-9, 30e3, 400e-6, "Serial", "ion")
+        milling_settings = MillingSettings(
+            current=100e-9,
+            voltage=30e3,
+            field_of_view=400e-6,
+            rate=0.0,
+            dwell_time=0.0,
+            mode="Serial",
+            channel="ion",
+        )
         microexpansion_pattern = MicroexpansionPatternParameters(1e-6, 10e-6, 100e-9, 10e-6, (0, 0))
         microexpansion_task_settings = MillingTaskSettings(milling_settings, [microexpansion_pattern], "Microexpansion")
 
