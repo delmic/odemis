@@ -1529,7 +1529,7 @@ class Detector(model.Detector):
 
                     md = self._scanner._metadata.copy()
                     md[model.MD_BEAM_DWELL_TIME] = self._scanner.dwellTime.value
-                    md[model.MD_BEAM_SCAN_ROTATION] = self._scanner.rotation.value
+                    md[model.MD_ROTATION] = self._scanner.rotation.value
                     md[model.MD_BEAM_VOLTAGE] = self._scanner.accelVoltage.value
                     md[model.MD_BEAM_CURRENT] = self._scanner.probeCurrent.value
                     md[model.MD_BEAM_SHIFT] = self._scanner.shift.value
