@@ -48,7 +48,7 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import CryoZLocalizationController
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS
+from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
 
@@ -90,6 +90,12 @@ class LocalizationTab(Tab):
             (panel.btn_secom_view_br,
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
         ])
+        # If tool fiducial is available, it means it supports superz GUI confifuration with target sizes
+        # Enable the cryotarget overlay on all viewports that shows fiducials
+        if TOOL_FIDUCIAL in tab_data.tool.choices:
+            for vp in panel.pnl_secom_grid.viewports:
+                vp.canvas.cryotarget_fm_overlay.active.value = True
+                vp.canvas.add_world_overlay(vp.canvas.cryotarget_fm_overlay)
 
         # remove the play overlay from the top view with static streams
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)

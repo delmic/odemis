@@ -37,6 +37,7 @@ from wx.lib.imageutils import stepColour
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.model as guimodel
+from odemis.acq.feature import TargetType
 from odemis.gui.model.main_gui_data import (
     Scintillator,
 )
@@ -52,8 +53,7 @@ from odemis.gui.comp.canvas import (
     BitmapCanvas,
 )
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
-from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, \
-    CryoCorrelationFmPointsOverlay, CryoCorrelationFibPointsOverlay
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay, CryoCorrelationPointsOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMScintillatorOverlay
@@ -274,9 +274,19 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.add_world_overlay(self.cryofeature_overlay)
             self.cryofeature_overlay.active.value = True
 
-        if guimodel.TOOL_FIDUCIAL in tools_possible:
-            self.cryotarget_fm_overlay = CryoCorrelationFmPointsOverlay(self, tab_data)
-            self.cryotarget_fib_overlay = CryoCorrelationFibPointsOverlay(self, tab_data)
+        if (guimodel.TOOL_FIDUCIAL in tools_possible) and (guimodel.TOOL_REGION_OF_INTEREST in tools_possible):
+            self.cryotarget_fm_overlay = CryoCorrelationPointsOverlay(self, tab_data,
+                                                                      allowed_targets=(TargetType.PointOfInterest,
+                                                                                       TargetType.Fiducial))
+            self.cryotarget_fib_overlay = CryoCorrelationPointsOverlay(self, tab_data,
+                                                                       allowed_targets=(TargetType.FibFiducial,
+                                                                                        TargetType.ProjectedPOI,
+                                                                                        TargetType.ProjectedFiducial,
+                                                                                        TargetType.SurfaceFiducial))
+
+        if (guimodel.TOOL_FIDUCIAL in tools_possible) and (guimodel.TOOL_REGION_OF_INTEREST not in tools_possible):
+            self.cryotarget_fm_overlay = CryoCorrelationPointsOverlay(self, tab_data,
+                                                                      allowed_targets=(TargetType.Fiducial,))
 
         tab_data.tool.subscribe(self._on_tool, init=True)
 

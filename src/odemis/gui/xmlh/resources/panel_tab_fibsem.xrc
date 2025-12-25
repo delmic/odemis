@@ -869,14 +869,6 @@
                                     </XRCED>
                                   </object>
                                 </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText" name="txt_tdct">
-                                    <fg>#E5E5E5</fg>
-                                    <hidden>1</hidden>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
                                 <orient>wxHORIZONTAL</orient>
                                 <flag>wxTOP</flag>
                                 <border>17</border>
