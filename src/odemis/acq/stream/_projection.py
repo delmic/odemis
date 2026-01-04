@@ -1074,21 +1074,19 @@ class RGBSpatialProjection(RGBProjection):
         tint = self.stream.tint.value
 
         if dims in ("CYX", "YXC") and tile.shape[ci] in (3, 4):  # is RGB?
+            irange = self.stream._getDisplayIRange()
             # Take the RGB data as-is, just needs to make sure it's in the right order
             tile = img.ensureYXC(tile)
-            if isinstance(tint, tuple):  # Tint not white => adjust the RGB channels
-                if tint != (255, 255, 255):
-                    tile = tile.copy()
-                    # Explicitly only use the first 3 values, to leave the alpha channel as-is
-                    numpy.multiply(tile[..., 0:3], numpy.asarray(tint) / 255, out=tile[..., 0:3], casting="unsafe")
-            else:
+            if not isinstance(tint, tuple):
                 logging.warning("Tuple Tint expected: got %s", tint)
+                tint = (255, 255, 255)
+            rgb = img.projectYXC2RGB8(tile, irange, tint)
 
-            tile.flags.writeable = False
             # merge and ensures all the needed metadata is there
-            tile.metadata = self.stream._find_metadata(tile.metadata)
-            tile.metadata[model.MD_DIMS] = "YXC"  # RGB format
-            return tile
+            md = self.stream._find_metadata(tile.metadata)
+            md[model.MD_DIMS] = "YXC"  # RGB format
+            rgb = model.DataArray(rgb, md)
+            return rgb
         elif dims in ("ZYX",) and model.hasVA(self.stream, "zIndex"):
             if model.hasVA(self.stream, "max_projection") and self.stream.max_projection.value:
                 tile = img.max_intensity_projection(tile, axis=0)
