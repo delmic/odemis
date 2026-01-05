@@ -80,6 +80,7 @@ from odemis.util import units
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 OVERVIEW_IMAGES_DIR = os.path.join(get_picture_folder(), "Overview images")
+TOA_IMAGES_DIR = os.path.join(get_picture_folder(), "TOA images")
 BRIGHTNESS = "Brightness"
 CONTRAST = "Contrast"
 OVERVIEW_IMAGE = "Overview image"
@@ -548,7 +549,24 @@ class FastEMSingleBeamAcquiController(object):
 
         # Setup the controls
         self.acq_panel = SettingsPanel(
-            self._tab_panel.pnl_acq, size=(400, 40)
+            self._tab_panel.pnl_acq, size=(400, 140)
+        )
+
+        autostig_lbl, self.autostig_period = self.acq_panel.add_int_field(
+            "Autostigmation period", value=0,
+            pos_col=2, span=(1, 1), conf={"min_val": 0, "max_val": 1000}
+        )
+        autostig_lbl.SetToolTip(
+            "Period for which to run autostigmation, if the value is 5 it should run for "
+            "TOAs with index 0, 5, 10, etc."
+        )
+        autofocus_lbl, self.autofocus_period = self.acq_panel.add_int_field(
+            "Autofocus period", value=0,
+            pos_col=2, span=(1, 1), conf={"min_val": 0, "max_val": 1000}
+        )
+        autofocus_lbl.SetToolTip(
+            "Period for which to run autofocus, if the value is 5 it should run for "
+            "TOAs with index 0, 5, 10, etc."
         )
         chk_ebeam_off_lbl, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
             "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
@@ -744,10 +762,10 @@ class FastEMSingleBeamAcquiController(object):
             immersion = self.main_tab_data.project_settings_data.value[project_name][IMMERSION]
             toas = self.project_toas[project_name]
             for toa_tuple in toas:
-                flattened_toas.append((immersion, *toa_tuple))
+                flattened_toas.append((immersion, *toa_tuple, project_name))
 
         # Create a list of futures for each TOA
-        for idx, (immersion, toa, data, window) in enumerate(flattened_toas):
+        for idx, (immersion, toa, data, window, project_name) in enumerate(flattened_toas):
             try:
                 if not is_set_first_roa_settings:
                     self._main_data_model.ebeam.dwellTime.value = data[TOAColumnNames.DWELL_TIME.value] * 1e-6  # [s]
@@ -766,6 +784,18 @@ class FastEMSingleBeamAcquiController(object):
                     "horizontalFoV": toa.hfw.value,   # Horizontal field of view (HFW) for the TOA, user selected
                     "resolution": toa.res.value,  # Resolution in pixels (width, height), user selected
                 }
+
+                current_user = self._main_data_model.current_user.value
+                save_dir = os.path.join(
+                    TOA_IMAGES_DIR,
+                    current_user,
+                    project_name,
+                    f"{toa.name.value}_{toa.slice_index.value}-{time.strftime('%Y%m%d-%H%M')}")
+                os.makedirs(save_dir, exist_ok=True)
+                file_pattern = os.path.join(save_dir, f"{toa.name.value}_{toa.slice_index.value}.ome.tiff")
+
+                logging.debug(f"Will acquire TOA '{toa.name.value}' with file pattern '{file_pattern}'.")
+
                 f = fastem.acquireNonRectangularTiledArea(
                     toa,
                     self._tab_data_model.semStream,
@@ -773,6 +803,7 @@ class FastEMSingleBeamAcquiController(object):
                     data[TOAColumnNames.DWELL_TIME.value] * 1e-6,  # [s]
                     scanner_conf,
                     reference_stage=True if idx == 0 else False,  # Only reference the stage before the first TOA acquisition
+                    file_pattern=file_pattern,
                     overlap=self._overlap,
                     centered_acq=False,
                 )
@@ -785,7 +816,7 @@ class FastEMSingleBeamAcquiController(object):
                     f.add_done_callback(set_next_roa_settings_callback)
 
                 toa_sub_callback = partial(
-                    self.on_toa_acquisition_done, toa=toa, window=window
+                    self.on_toa_acquisition_done, toa=toa, window=window, save_dir=save_dir,
                 )
                 self._on_toa_acquisition_done_sub_callback[toa] = toa_sub_callback
                 f.add_done_callback(toa_sub_callback)
@@ -825,13 +856,14 @@ class FastEMSingleBeamAcquiController(object):
             logging.exception("Failed to set next TOA settings")
 
     @call_in_wx_main
-    def on_toa_acquisition_done(self, future, toa, window):
+    def on_toa_acquisition_done(self, future, toa, window, save_dir):
         """
         Callback called when a TOA acquisition is finished (either successfully,
         cancelled or failed)
         :future: (ProgressiveFuture) the future of the acquisition.
         :param toa: (FastEMTOA) the TOA object.
         :param window: (NodeWindow) the window of the TOA.
+        :param save_dir: (str) directory where this TOA’s images are stored.
         """
         def on_visibility_btn(evt):
             btn = evt.GetEventObject()
@@ -868,11 +900,8 @@ class FastEMSingleBeamAcquiController(object):
 
         # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
         current_sample = self._main_data_model.current_sample.value
-        current_user = self._main_data_model.current_user.value
         if current_sample:
-            user_dir = os.path.join(OVERVIEW_IMAGES_DIR, current_user)
-            os.makedirs(user_dir, exist_ok=True)
-            fn = os.path.join(user_dir, f"fastem_{id(toa.shape)}.ome.tiff")
+            fn = os.path.join(save_dir, f"{toa.name.value}_{toa.slice_index.value}.ome.tiff")
             dataio.tiff.export(fn, da, pyramid=True)
             da = open_acquisition(fn)
             s = data_to_static_streams(da)[0]
