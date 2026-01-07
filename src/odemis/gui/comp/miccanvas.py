@@ -70,7 +70,7 @@ from odemis.gui.comp.overlay.polar import PolarOverlay
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
-from odemis.gui.comp.overlay.shapes import ShapesOverlay
+from odemis.gui.comp.overlay.shapes import ShapesOverlay, EditableShape
 from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
@@ -1831,6 +1831,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.bg_world_overlay = None
         self.is_ctrl_down = False
         self.is_shape_tool_active = False
+        self.roc_overlay = None
 
     def add_background_overlay(self, scintillator: Scintillator):
         """
@@ -1860,12 +1861,12 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        roc_overlay = FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
-        self.add_world_overlay(roc_overlay)
+        self.roc_overlay = FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
+        self.add_world_overlay(self.roc_overlay)
         # Always activate after creating, otherwise the code to select the region in
         # FastEMROCOverlay.on_left_up will never be called.
-        roc_overlay.active.value = True
-        return roc_overlay
+        self.roc_overlay.active.value = True
+        return self.roc_overlay
 
     @call_in_wx_main
     def expand_view(self):
@@ -1971,6 +1972,18 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
             self.add_world_overlay(polygon_overlay)
             self.shapes_overlay.append(polygon_overlay)
 
+        if guimodel.TOOL_ROI in tab_data.tool.choices:
+            editing_overlay = ShapesOverlay(
+                cnvs=self,
+                shape_cls=EditableShape,
+                tool=guimodel.TOOL_ROI,
+                shapes_va=tab_data.shapes,
+                shape_to_copy_va=tab_data.shape_to_copy,
+                shape_creation_allowed=False,
+            )
+            self.add_world_overlay(editing_overlay)
+            self.shapes_overlay.append(editing_overlay)
+
         self._tab_data_model.tool.subscribe(self._on_shape_tool, init=True)
         self._tab_data_model.focussedView.subscribe(self._on_focussed_view)
 
@@ -1986,7 +1999,9 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
             guimodel.TOOL_RECTANGLE,
             guimodel.TOOL_ELLIPSE,
             guimodel.TOOL_POLYGON,
+            guimodel.TOOL_ROI,
         )
+        self.roc_overlay.active.value = not self.is_shape_tool_active
         is_view_focussed = self.view == self._tab_data_model.focussedView.value
         for shape_overlay in self.shapes_overlay:
             shape_overlay.active.value = (
