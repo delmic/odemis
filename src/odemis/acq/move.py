@@ -835,6 +835,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         return self._transformFromSEMToMilling(sem_pos)
 
 
+# Minimum stage bare z height required to switch between FM and SEM postures
+Z_LOW = 0.028  # m, safe value provided by TFS on a Hydra Bio CX system which should also be compatible on other systems
+
+
 class MeteorTFS1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
         super().__init__(microscope)
@@ -1030,10 +1034,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             except KeyError:
                 raise ValueError(f"Unknown target '{target}'")
 
-            # get the meta data
+            # get the metadata
             focus_md = self.focus.getMetadata()
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
+
             # To hold the ordered sub moves list
             sub_moves = []  # list of tuples (component, position)
 
@@ -1072,32 +1077,55 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
 
-                if (type(self) == MeteorTFS1PostureManager
-                    and current_label == SEM_IMAGING and target == FM_IMAGING
-                   ):
-                    # NOTE: with TFS1, no distinction was made between SEM and MILL positions, and these
-                    # were dynamically updated based on the current SEM position when switching to FM,
-                    # and used to restore the same position when switching back from FM -> SEM.
-                    # From TFS3, there is a separate MILLING position, so the SEM position has really a
-                    # fixed rotation and tilt.
-                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_pos['rx'],
-                                                                             'rz': current_pos['rz']}})
-                elif (type(self) == MeteorTFS3PostureManager
-                      and current_label in [SEM_IMAGING, MILLING, FIB_IMAGING]
+                if (type(self) == MeteorTFS1PostureManager):
+                    if current_label == SEM_IMAGING and target == FM_IMAGING:
+                        # NOTE: with TFS1, no distinction was made between SEM and MILL positions, and these
+                        # were dynamically updated based on the current SEM position when switching to FM,
+                        # and used to restore the same position when switching back from FM -> SEM.
+                        # From TFS3, there is a separate MILLING position, so the SEM position has really a
+                        # fixed rotation and tilt.
+                        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_pos['rx'],
+                                                                                 'rz': current_pos['rz']}})
+                    # Move translation axes, then rotational ones
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                    sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+
+                elif (type(self) == MeteorTFS3PostureManager):
+                    stage_md = self.stage.getMetadata()
+                    md_calib = stage_md[model.MD_CALIB]
+                    z_low = md_calib.get("z_low", Z_LOW)  # safe z to achieve before switching to SEM posture
+
+                    if (current_label in [SEM_IMAGING, MILLING, FIB_IMAGING]
                       and target == FM_IMAGING
                      ):
-                    # Store the Z position, for recovery when going back to SEM.
-                    # We record it by computing its projection in FM sample coordinates, without the fixed plane
-                    # correction. As Z is the same for SEM, Milling or FIB, and it's fine to just use SEM to Meteor
-                    # for all occasions.
-                    target_pos_unfixed = self._transformFromSEMToMeteor(current_pos, fix_fm_plane=False)
-                    sample_stage_pos = self.to_sample_stage_from_stage_position(target_pos_unfixed, posture=FM_IMAGING)
-                    sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
-                    self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
+                        # Store the Z position, for recovery when going back to SEM.
+                        # We record it by computing its projection in FM sample coordinates, without the fixed plane
+                        # correction. As Z is the same for SEM, Milling or FIB, and it's fine to just use SEM to Meteor
+                        # for all occasions.
+                        target_pos_unfixed = self._transformFromSEMToMeteor(current_pos, fix_fm_plane=False)
+                        sample_stage_pos = self.to_sample_stage_from_stage_position(target_pos_unfixed, posture=FM_IMAGING)
+                        sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
+                        self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
+                        # Stage switching based on Hydra Bio TFS assessment
+                        # move lower than 28 mm (z_low)
+                        # move r and t
+                        # move x and y
+                        # move all to final position (outside if else block to take other switching postures combinations)
+                        sub_moves.append((self.stage, {"z": z_low}))
+                        sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                        sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
 
-                # Move translation axes, then rotational ones
-                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                    elif (current_label == FM_IMAGING
+                        and target in [SEM_IMAGING, MILLING, FIB_IMAGING]):
+                        # Stage switching based on Hydra Bio TFS assessment
+                        # If current z is more than safe value, move it to safe z value else skip it.
+                        # move x and y
+                        # move all to final position (outside if else block to take other switching postures combinations)
+                        if current_pos["z"] > z_low:
+                            sub_moves.append((self.stage, {"z": z_low}))
+                        sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+
+                    sub_moves.append((self.stage, target_pos))
 
                 if target == FM_IMAGING:
                     # Engage the focuser
