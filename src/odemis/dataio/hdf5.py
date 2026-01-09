@@ -726,6 +726,7 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "ExcitationWavelength", model.MD_IN_WL, converter=float)
         read_metadata(pdgroup, i, md, "EmissionWavelength", model.MD_OUT_WL, converter=float)
         read_metadata(pdgroup, i, md, "Magnification", model.MD_LENS_MAG, converter=float)
+        read_metadata(pdgroup, i, md, "LightPower", model.MD_LIGHT_POWER, converter=float)
 
         # Our extended metadata
         read_metadata(pdgroup, i, md, "Baseline", model.MD_BASELINE, converter=float)
@@ -955,6 +956,11 @@ def _add_image_metadata(group, image, mds):
     gp["Magnification"] = [1.0 if m is None else m for m in mags]
     state = [ST_INVALID if v is None else ST_REPORTED for v in mags]
     _h5svi_set_state(gp["Magnification"], state)
+
+    powers = [md.get(model.MD_LIGHT_POWER) for md in mds]
+    gp["LightPower"] = [0.0 if p is None else p for p in powers]
+    state = [ST_INVALID if v is None else ST_REPORTED for v in powers]
+    _h5svi_set_state(gp["LightPower"], state)
 
     ofts = [md.get(model.MD_BASELINE) for md in mds]
     gp["Baseline"] = [0.0 if m is None else m for m in ofts]
