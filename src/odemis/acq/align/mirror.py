@@ -60,6 +60,9 @@ def _wrap_closed_loop_function(function, args, maxfun):
     - Enforces the 'maxfun' (maxfev) limit.
     - Validates that the function returns the expected tuple: (score, position_vector).
     - Passes the full tuple back to the optimizer.
+
+    Reference: scipy.optimize._minimize._wrap_scalar_function_maxfun_validation
+
     """
     ncalls = [0]
     if function is None:
@@ -89,7 +92,12 @@ def _wrap_closed_loop_function(function, args, maxfun):
     return ncalls, function_wrapper
 
 
-def _probabilistic_snap_to_grid(x, x0, min_step_size=None, rng=None):
+def _probabilistic_snap_to_grid(
+        x: numpy.ndarray,
+        x0: numpy.ndarray,
+        min_step_size: Optional[numpy.ndarray] = None,
+        rng: Optional[numpy.random.Generator] = None
+    ):
     """
     Probabilistically snap positions to a hardware step grid.
 
@@ -105,7 +113,7 @@ def _probabilistic_snap_to_grid(x, x0, min_step_size=None, rng=None):
     If 'min_step_size' is 'None' the input 'x' is returned unchanged.
 
     :param x: Position(s) to snap.
-    :param x0: Grid origin. Broadcastable to 'x'.
+    :param x0: Grid origin. Must be broadcastable to 'x' according to NumPy broadcasting rules.
     :param min_step_size: Per-axis minimum step size in same units as 'x' or 'None' to disable snapping.
     :param rng: Random number generator to use. If 'None', a new 'numpy.random.default_rng()' is created.
     :return: Snapped position(s) with same shape as 'x'.
@@ -171,6 +179,12 @@ def _custom_minimize_scalar_bounded(func, bounds, x0, min_step_size=None,
             3 : logging.debug iteration results.
     xatol : float
         Absolute error in solution 'xopt' acceptable for convergence.
+
+    Reference: scipy.optimize._minimize._minimize_scalar_bounded
+    Customizations (see # Modification comment in code):
+    - Bounds checking and clipping of 'x0' and candidate 'x' values.
+    - Probabilistic snapping to grid to adhere to hardware step sizes.
+    - Objective function must return a tuple (fval, x_actual) to make it closed-loop.
 
     """
     maxfun = maxiter
@@ -375,6 +389,11 @@ def _custom_minimize_neldermead(func, x0, args=(), callback=None,
        Implementing the Nelder-Mead simplex algorithm with adaptive
        parameters. 2012. Computational Optimization and Applications.
        51:1, pp. 259-277
+    .. scipy.optimize._minimize._minimize_neldermead
+
+    Customizations (see # Modification comment in code):
+    - Probabilistic snapping to grid to adhere to hardware step sizes.
+    - Objective function must return a tuple (fval, x_actual) to make it closed-loop.
 
     """
     if 'ftol' in unknown_options:
@@ -751,7 +770,7 @@ class ParabolicMirrorAlignmentTask:
       refinement making use of spot fitted ellipse's major axis and second
       combining normalized spot pixel count and intensity into a single score.
     """
-    MIN_SEARCH_RANGE = 5e-6  # [μm]
+    MIN_SEARCH_RANGE = 5e-6  # [m]
 
     def __init__(
         self,
@@ -887,6 +906,8 @@ class ParabolicMirrorAlignmentTask:
 
         # Slight Gaussian blur to reduce pixel noise
         # Prevents threshold from overreacting
+        # ksize is (7, 7), sigmaX is 0, sigmaY is 0 (default)
+        # If both sigmas are zeros, they are computed from ksize.width and ksize.height
         blurred = cv2.GaussianBlur(image, (7, 7), 0)
         image_norm = cv2.normalize(blurred, None, 0, 255, cv2.NORM_MINMAX)
         image_uint8 = image_norm.astype(numpy.uint8)

@@ -467,12 +467,13 @@ class TestWrapClosedLoopFunction(unittest.TestCase):
 
         def func_check_copy(x, original_id):
             # Check that wrapped passes a copy, not the original
-            self.assertNotEqual(id(x), original_id[0])
+            self.assertNotEqual(id(x), original_id)
             return 1.0, x
 
         x_input = numpy.array([1.0, 2.0, 3.0])
+        original_id = id(x_input)
         _, wrapped = _wrap_closed_loop_function(
-            func_check_copy, (([id(x_input)],),), 10
+            func_check_copy, (original_id,), 10
         )
 
         wrapped(x_input)
