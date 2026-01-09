@@ -287,7 +287,7 @@ class CryoZLocalizationController(object):
         if target is None:
             self._enable_target_ctrls(False)
             return
-        elif target and (target.type.value == TargetType.Fiducial):
+        elif target.type.value == TargetType.Fiducial:
             self._enable_target_ctrls(True)
             self._target_z_va_connector = VigilantAttributeConnector(target.coordinates,
                                                                       self._panel.ctrl_target_z,
@@ -508,7 +508,6 @@ class CryoZLocalizationController(object):
         """Start or cancel the localization method when the button is clicked"""
         # If localization is running, cancel it, otherwise start one
         if self._acq_future.done():
-            # Depending on the configuration, start one of the two localization methods
             self._measure_z_multi_targets()
         else:
             self._acq_future.cancel()

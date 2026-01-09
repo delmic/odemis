@@ -343,12 +343,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             # Show proper feature icon based on selected feature + status
             try:
                 if feature is self.tab_data.main.currentFeature.value:
-                    if feature.superz_focused == False:
+                    if feature.superz_focused is False:
                         set_icon(self._feature_icons_selected["superz_defocus"])
                     else:
                         set_icon(self._feature_icons_selected[feature.status.value])
                 else:
-                    if feature.superz_focused == False:
+                    if feature.superz_focused is False:
                         set_icon(self._feature_icons["superz_defocus"])
                     else:
                         set_icon(self._feature_icons[feature.status.value])
@@ -494,7 +494,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             if self._mode == MODE_EDIT_POI and TargetType.PointOfInterest in self.allowed_targets:
                 # Check for existing poi in order to change the position or introduce a new poi.
-                # Note" only one poi can be added and not multiple pois.
+                # Note only one poi can be added and not multiple pois.
                 existing_poi = next((target for target in self.tab_data.main.targets.value if target.type.value == TargetType.PointOfInterest), None)
                 if existing_poi:
                     self.tab_data.main.currentTarget.value = existing_poi
@@ -504,7 +504,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.PointOfInterest)
             elif self._mode == MODE_EDIT_REFRACTIVE_INDEX and TargetType.SurfaceFiducial in self.allowed_targets:
-                # Check for existing surface fidcuial in order to change the position or introduce a new one.
+                # Check for existing surface fiducial in order to change the position or introduce a new one.
                 existing_surface = next((target for target in self.tab_data.main.targets.value if target.type.value == TargetType.SurfaceFiducial), None)
                 # if check_existing_surface:
                 if existing_surface:
@@ -577,7 +577,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
         for target in self.tab_data.main.targets.value:
             if target.type.value in self.allowed_targets:
                 coordinates = target.coordinates.value
-                fvsp = self.cnvs.phys_to_view(coordinates, offset)
+                fvsp = self.cnvs.phys_to_view(coordinates[0:2], offset)
                 if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                     return target
 

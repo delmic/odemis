@@ -66,7 +66,7 @@ REFRACTIVE_SCALE = 0.495
 # For coordinate conversions, we assume the pixels in 3D are isosymmetric
 # i.e. size in pixel[0]=pixel[1]=pixel[2].
 
-def getPixel3DCoordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = True) \
+def getPixel3DCoordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False) \
         -> Optional[Tuple[float, float, float]]:
     """
     Translate 3D physical coordinates into 3D pixel coordinates. The z coordinate is computed assuming iso-voxel
@@ -812,9 +812,9 @@ class CorrelationPointsController:
                                        method="linear")
                    for stream_projection in streams_projections]
 
-            z = float(get_optimized_z_gauss(das, int(0), int(0), coords[2]))
-            # z physical coordinate
-            z_p = getPhysical3DCoordinates(self.correlation_target.fm_streams[0], (pixel_coords[0],pixel_coords[1], z))[2]
+            z = float(get_optimized_z_gauss(das, int(0), int(0), int(pixel_coords[2])))
+            z_p = getPhysical3DCoordinates(self.correlation_target.fm_streams[0],
+                                 (pixel_coords[0],pixel_coords[1], z))[2]
             self._tab_data_model.main.currentTarget.value.coordinates.value[2] = z_p
 
     def _reorder_grid(self) -> None:

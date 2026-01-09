@@ -34,7 +34,7 @@ from odemis.acq.feature import Target, TargetType
 from odemis.acq.stream import FluoStream
 from odemis.model import ProgressiveFuture
 import time
-from typing import Tuple, Optional, List
+from typing import Optional, List
 
 from odemis.util.filename import create_filename
 
@@ -371,7 +371,10 @@ def _run_measure_z_multi_targets(f: ProgressiveFuture, stigmator, focus,
 
     finally:
         stigmator.moveAbs({"rz": 0}).result(timeout=600)
-        f._task_state = FINISHED
+        with f._task_lock:
+            if f._task_state == CANCELLED:
+                raise CancelledError()
+            f._task_state = FINISHED
 
 def _cancel_localization(future) -> bool:
     """
