@@ -456,7 +456,7 @@ class Stage(GenericComponent):
 
         axes_dict = {}
         for a in axes:
-            d = {}
+            d = {"unit": "m"}
             if a in ranges:
                 d["range"] = ranges[a]
             elif a in choices:
