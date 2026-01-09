@@ -514,6 +514,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
                      model.MD_LENS_MAG: 1200,  # ratio
+                     model.MD_LIGHT_POWER: 0.5,  # W
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake spec",
@@ -561,6 +562,8 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
             if model.MD_LENS_MAG in md:
                 self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            if model.MD_LIGHT_POWER in md:
+                self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
 
             # None of the images are using light => no MD_IN_WL
             self.assertFalse(model.MD_IN_WL in im.metadata,
@@ -656,6 +659,8 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
             if model.MD_LENS_MAG in md:
                 self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            if model.MD_LIGHT_POWER in md:
+                self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
 
             # None of the images are using light => no MD_IN_WL
             self.assertFalse(model.MD_IN_WL in im.metadata,
@@ -767,6 +772,8 @@ class TestHDF5IO(unittest.TestCase):
             # Check the metadata stays the same, when the metadata was present
             if model.MD_LENS_MAG in md:
                 self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            if model.MD_LIGHT_POWER in md:
+                self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
             if model.MD_AR_POLE in md:
                 self.assertEqual(im.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
             if model.MD_AR_MIRROR_TOP in md:
@@ -896,6 +903,8 @@ class TestHDF5IO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_AR_PARABOLA_F], md[model.MD_AR_PARABOLA_F])
             if model.MD_LENS_MAG in md:
                 self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            if model.MD_LIGHT_POWER in md:
+                self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
             if model.MD_EBEAM_CURRENT in md:
                 self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT], md[model.MD_EBEAM_CURRENT])
             if model.MD_EBEAM_VOLTAGE in md:
@@ -1415,6 +1424,8 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
             if model.MD_LENS_MAG in md:
                 self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            if model.MD_LIGHT_POWER in md:
+                self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
 
             # None of the images are using light => no MD_IN_WL
             self.assertFalse(model.MD_IN_WL in im.metadata,
