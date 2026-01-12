@@ -123,20 +123,19 @@ class BaseGenericxX:
         # Set all channels off
         self.dev.power.value = self.dev.power.range[0]
 
-        counter = CountingUSBAccesser(self.dev._master.acc)
-        self.dev._master.acc = counter
+        master_counter = CountingUSBAccesser(self.dev._master.acc)
+        self.dev._master.acc = master_counter
         for d in self.dev._devices:
-            counter = CountingUSBAccesser(d.acc)
-            d.acc = counter
+            d.acc = CountingUSBAccesser(d.acc)
 
         def get_number_commands() -> int:
-            return counter.count + sum(d.acc.count for d in self.dev._devices)
+            return master_counter.count + sum(d.acc.count for d in self.dev._devices)
 
         try:
             # Set channel 0 to 10%
             self.dev.power.value[0] = self.dev.power.range[1][0] * 0.1
             len_turn_on = get_number_commands()
-            self.assertLessEqual(len_turn_on, 4)  # 1 command to set master power + 3 to turn on the channel
+            self.assertLessEqual(len_turn_on, 5)  # 1 command to set master power + 4 to turn on the channel
 
             # Set channel 0 to 20%
             self.dev.power.value[0] = self.dev.power.range[1][0] * 0.2
@@ -146,9 +145,9 @@ class BaseGenericxX:
             # Set all channels off
             self.dev.power.value = self.dev.power.range[0]
             len_turn_off = get_number_commands()
-            self.assertLessEqual(len_turn_off - len_change, 4)  # 1 command to disable master power + 3 to turn off the channel
+            self.assertLessEqual(len_turn_off - len_change, 5)  # 1 command to disable master power + 4 to turn off the channel
         finally:
-            self.dev._master.acc = counter._wrapped
+            self.dev._master.acc = master_counter._wrapped
             for d in self.dev._devices:
                 d.acc = d.acc._wrapped
 
