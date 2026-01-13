@@ -76,6 +76,7 @@ FIB_NAME_MAP: Dict[str, str] = {
     "GUISetScanning": "FibGUISetScan",
     "GUIGetScanning": "FibGUIGetScan",
     "DtSelect": "FibDtSelect",
+    "DtGetSelected": "FibDtGetSelect",
     "DtEnable": "FibDtEnable",
     "DtAutoSignal": "FibDtAutoSig",  # Channel (int), Dwell (float): dwell time with unit ns
     "HVGetVoltage": "FibHVGetVoltage",  # V
@@ -510,7 +511,6 @@ class SEM(model.HwComponent):
         with self._acquisition_init_lock:
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
-            pxs = scanner.pixelSize.value  # m/px
 
             pxs_pos = scanner.translation.value
             scale = scanner.scale.value
@@ -889,7 +889,7 @@ class Scanner(model.Emitter):
         Set the name of the beam preset, which can be any arbitrary string. Sometimes the string contains information
         about the current and voltage, but it is not enforced by TESCAN.
         """
-        # Check if there is a non empty preset set. Currently the default at startup is an empty string.
+        # Check if there is a non-empty preset set. Currently, the default at startup is an empty string.
         if preset:
             self._device_handler.ScStopScan()
             with self.parent._acq_progress_lock:
@@ -908,10 +908,10 @@ class Scanner(model.Emitter):
 
     def _setDwellTime(self, dwell_time: float):
         """
-        Set the per pixel dwell tiem in seconds.
+        Set the per-pixel dwell time in seconds.
 
         The Tescan API only supports int's for indices while their interface supports floats (which results in an
-        interpolated speed value). We are a thus a bit limited in what we receive and send. It's only a UI issue
+        interpolated speed value). We are thus a bit limited in what we receive and send. It's only a UI issue
         though (the actual scan speed is not affected).
 
         :param dwell_time: The dwell time per pixel in seconds
@@ -1133,7 +1133,7 @@ class Detector(model.Detector):
     of the SEM. It sets up a Dataflow and notifies it every time that an SEM image
     is captured.
     """
-    def __init__(self, name, role, parent, channel, detector, scanner, **kwargs):
+    def __init__(self, name, role, parent, channel, scanner, **kwargs):
         """
         channel (0<= int): input channel from which to read
         detector (0<= int): detector index
@@ -1144,8 +1144,22 @@ class Detector(model.Detector):
         self._device_handler = self._scanner._device_handler
 
         self._channel = channel
-        self._detector = self.get_detector_idx(detector)
-        self._device_handler.DtSelect(self._channel, self._detector)
+
+        try:
+            self._update_detector_map()
+        except ValueError as ex:
+            logging.warning("Failed to update detector map: %s", str(ex), exc_info=True)
+        else:
+            self._detector_names = set(self._detector_map.keys())
+            # Pick first one available
+            det_name = next(iter(self._detector_names))
+
+            self.type = model.StringEnumerated(
+                value=det_name,
+                choices=self._detector_names,
+                setter=self._set_detector_type)
+            # Call the setter explicitly to set the initial value on the hardware as well
+            self._set_detector_type(det_name)
 
         # 8 or 16 bits image
         self.bpp = model.IntEnumerated(DEFAULT_BITDEPTH, {8, 16}, unit="bit")
@@ -1159,42 +1173,9 @@ class Detector(model.Detector):
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
 
-    def get_detector_idx(self, detector: Union[int, str]) -> int:
-        """Get the index of the detector by int (do nothing) or by name (match with Tescan's available detectors).
-
-        :param detector: the detector index or the name of the detector
-        :returns: the detector's index on the Tescan hardware
-        """
-        detector_idx = None
-        if isinstance(detector, int):
-            detector_idx = detector
-        elif isinstance(detector, str):
-            # Obtain the available detectors. An example of such a string:
-            # "det.0.name=MD\ndet.0.detector=1\ndet.0.ADCinput=0\ndet.1.name=E-T\ndet.1.detector=4\ndet.1.ADCinput=1\n
-            available_detectors = self._device_handler.DtEnumDetectors()
-            # First find the enumeration index for the desired detector (by name)
-            enum_idx_for_name = re.findall(rf"det.([0-9])+.name={detector.lower()}", available_detectors.lower())
-            if enum_idx_for_name:
-                enum_idx_for_name = enum_idx_for_name[0]  # There should only one captured group
-                # Now find the corresponding detector idx (which is not the same as the enumeration index!).
-                det_idx_for_name = re.findall(rf"det.{enum_idx_for_name}.detector=([0-9]+)", available_detectors)
-                if det_idx_for_name:
-                    detector_idx = int(det_idx_for_name[0])
-
-        if detector_idx:
-            return detector_idx
-        else:
-            raise ValueError(
-                f"The 'detector' parameter from the config ({detector}) does not match an available detector"
-            )
-
     @roattribute
     def channel(self):
         return self._channel
-
-    @roattribute
-    def detector(self):
-        return self._detector
 
     @isasync
     def applyAutoContrastBrightness(self):
@@ -1209,6 +1190,30 @@ class Detector(model.Detector):
         with self.parent._acquisition_init_lock:
             with self.parent._acq_progress_lock:
                 self._device_handler.DtAutoSignal(self._channel)
+
+    def _update_detector_map(self):
+        """
+        Parses and updates the mapping of detector names to their corresponding IDs from the connected
+        device's raw detector data, without returning the mapping itself.
+
+        Raises:
+            ValueError: If no detectors are found on the connected device or if the detector data format
+            does not match the expected structure.
+        """
+        detectors_raw = self._device_handler.DtEnumDetectors()
+        if not detectors_raw:
+            raise ValueError("No detectors found on the connected device")
+        # Tescan has different formats for different systems.
+        # The det/name format is used on the Solaris and Amber.
+        detectors_tuple = re.findall(r'det\.\d+\.name=(.*?)\ndet\.\d+\.detector=(\d+)', detectors_raw)
+        if not detectors_tuple:
+            raise ValueError("No detectors found on the connected device. Unexpected format.")
+        self._detector_map = {det[0]: int(det[1]) for det in detectors_tuple}
+
+    def _set_detector_type(self, det_name: str) -> str:
+        detector_id = self._detector_map[det_name]
+        self._device_handler.DtSelect(self._channel, detector_id)
+        return det_name
 
     def terminate(self):
         self._device_handler.DtEnable(self._channel, 0, self.bpp.value)

@@ -37,11 +37,10 @@
     role: se-detector,
     init: {
         channel: 0,
-        detector: "se",
     },
-#    properties: {
-#        type: "SE",
-#    },
+    properties: {
+        type: "SE",
+    }
 }
 
 "Electron-Focus": {
@@ -62,11 +61,10 @@
     role: se-detector-ion,
     init: {
         channel: 0,
-        detector: "se",
     },
-#    properties: {
-#        type: "SE",
-#    },
+    properties: {
+        type: "SE",
+    }
 }
 
 # With calibration values for sample stage

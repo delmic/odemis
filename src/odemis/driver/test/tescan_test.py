@@ -49,8 +49,8 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 # However, not everything behaves exactly as on the real hardware, so beware
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": "e-t"}
-CONFIG_FIB = {"name": "sed", "role": "sed", "channel": 0, "detector": "se"}
+CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0}
+CONFIG_FIB = {"name": "sed", "role": "sed", "channel": 0}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_STG = {"name": "stg", "role": "stage"}
 CONFIG_CM = {"name": "camera", "role": "chamber-ccd"}
@@ -682,6 +682,21 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
         self.assertEqual(im.dtype, "uint16")
         max_intensity = im.max().item()
         self.assertLess(max_intensity, 65536)
+
+    def test_acquire_detectors(self):
+        if len(self.sed._detector_map) <= 1:
+            self.skipTest("Not enough detectors connected, need at least two for this test")
+
+        # Verify that acquisition with default detector works
+        self.sed.type.value = next(iter(self.sed.type.choices))
+        im = self.sed.data.get()
+        self.assertEqual(im.shape[::-1], self.size)  # Invert axes for comparison between numpy and image convention
+
+        # Now switch detector and check if we can still acquire
+        other_detectors = set(self.sed.type.choices) - {self.sed.type.value}
+        self.sed.type.value = other_detectors.pop()
+        im = self.sed.data.get()
+        self.assertEqual(im.shape[::-1], self.size)  # Invert axes for comparison between numpy and image convention
 
     def test_connection(self):
         for i in range(5):
