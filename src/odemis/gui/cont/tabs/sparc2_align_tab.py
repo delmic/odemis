@@ -314,7 +314,7 @@ class Sparc2AlignTab(Tab):
                         None,
                         acq_type=model.MD_AT_ALIGN_OVERLAY,
                     )
-                    self._ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
+                    self._ccd_stream_spot_snapshot.auto_bc_outliers.value = 0.001  # %, to highlight the spot
                     self._stream_controller.addStream(
                         self._ccd_stream_spot_snapshot, add_to_view=self.panel.vp_align_light.view, visible=False
                     )
@@ -326,7 +326,6 @@ class Sparc2AlignTab(Tab):
                         None,
                         acq_type=model.MD_AT_ALIGN_OVERLAY,
                     )
-                    self._ccd_stream_ar_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
                     self._stream_controller.addStream(
                         self._ccd_stream_ar_snapshot, add_to_view=self.panel.vp_align_light_ar.view, visible=False
                     )
@@ -1254,7 +1253,11 @@ class Sparc2AlignTab(Tab):
                     # Even though the stream will be paused by now,
                     # the raw should still contain the last obtained image,
                     # due to order: detector pauses -> emitter pauses.
-                    self._ccd_stream_spot_snapshot.update(self._ccd_stream.raw[0])
+                    spot_snapshot_raw = self._ccd_stream.raw[0]
+                    spot_snapshot_raw.metadata[model.MD_POS] = (0, 0)  # Same as live streams
+                    spot_snapshot_raw.metadata[model.MD_ROTATION] = 0
+                    self._ccd_stream_spot_snapshot.update(spot_snapshot_raw)
+                    self._ccd_stream_spot_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
             self.tab_data_model.focussedView.value = self.panel.vp_align_light.view
             # The spot stream is automatically stopped through `_on_ccd_stream_play`.
             self._ccd_stream_light.should_update.value = True
@@ -1292,7 +1295,11 @@ class Sparc2AlignTab(Tab):
             if not self._ccd_stream_center.raw:
                 logging.warning('Activate "CENTERING" mode first to display the CL Spot overlay stream')
             else:
-                self._ccd_stream_ar_snapshot.update(self._ccd_stream_center.raw[0])
+                ar_snapshot_raw = self._ccd_stream_center.raw[0]
+                ar_snapshot_raw.metadata[model.MD_POS] = (0, 0)  # Same as live streams
+                ar_snapshot_raw.metadata[model.MD_ROTATION] = 0
+                self._ccd_stream_ar_snapshot.update(ar_snapshot_raw)
+                self._ccd_stream_ar_snapshot.tint.value = odemis.gui.CL_STREAM_SNAPSHOT_COLOR
 
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
