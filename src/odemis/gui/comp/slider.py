@@ -226,6 +226,10 @@ class Slider(BaseSlider):
         self.min_value = min_val
         self.max_value = max_val
 
+        if scale == "log" and min_val <= 0:
+            logging.debug("Log scale must be strictly positive (range: %s, %s), switching to cubic", min_val, max_val)
+            scale = "cubic" # log scale cannot have 0 in range
+
         # event.GetX() position or Horizontal position across Panel
         self.x = 0
         # position of the drag handle within the slider, ranging from 0 to
