@@ -339,6 +339,23 @@ class MeteorPostureManager(MicroscopePostureManager):
         # In this case, MD_CALIB["SEM-Eucentric-Focus"] specifies the fixed focus position to use.
         self.use_linked_sem_focus_compensation: bool = md_calib.get("use_linked_sem_focus_compensation", False)
 
+        # Upgrade path MD_FAV_MILL_POS_ACTIVE["rx"] -> ["mill_angle"]
+        # Can be deleted once all installations microscope files have been updated.
+        # In Odemis v3.7, MD_FAV_MILL_POS_ACTIVE used the "rx" key to refer to the milling angle.
+        # From Odemis v3.8 onwards, the "mill_angle" key is used instead.
+        # As now, the "rx" angle is not used, we know the precense of a "rx" key indicates it's a
+        # legacy config. So we automatically convert it here, and it will stay as-is for as long as the
+        # back-end runs.
+        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
+            mill_md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
+            if "rx" in mill_md:
+                if "mill_angle" in mill_md:
+                    raise ValueError("stage-bare metadata FAV_MILL_POS_ACTIVE contains both 'rx' and "
+                                     "'mill_angle' keys. Only 'mill_angle' should be provided.")
+                logging.info("Upgrading stage metadata %s: converting 'rx' to 'mill_angle'", model.MD_FAV_MILL_POS_ACTIVE)
+                mill_md["mill_angle"] = mill_md.pop("rx")
+                self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_md})
+
         # current posture va
         self.current_posture = model.VigilantAttribute(UNKNOWN)
         self.stage.position.subscribe(self._update_posture, init=True)
@@ -489,7 +506,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             return stage_md[model.MD_FAV_FIB_POS_ACTIVE]
         elif posture == MILLING:
             md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
-            rx = calculate_stage_tilt_from_milling_angle(milling_angle=md["rx"],
+            rx = calculate_stage_tilt_from_milling_angle(milling_angle=md["mill_angle"],
                                                         pre_tilt=self.pre_tilt,
                                                         column_tilt=self.fib_column_tilt)
             return {"rx": rx, "rz": md["rz"]}
@@ -743,7 +760,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
     def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
-        Transforms the stage position from sem imaging to milling position"
+        Transforms the stage position from sem imaging to milling position
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
@@ -1690,7 +1707,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # TODO: update MILLING transformations when changing milling angle
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
-            rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["rx"],
+            rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["mill_angle"],
                                                               pre_tilt=self.pre_tilt,
                                                               column_tilt=self.fib_column_tilt)
             # Scan rotation and pre-tilt are the same as in SEM imaging, so can reuse tf_sr
@@ -1909,12 +1926,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Define values that are used more than once
         rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
-        # NOTE: mill_pos_active uses the "rx" key to refer to the milling angle (the angle between the ion beam and the sample plane)
-        # not the actual Rx (the tilt with regard to the SEM column axis)!
-        # TODO MD_FAV_MILL_POS_ACTIVE["rx"] should be renamed for better clarity to something like "milling_angle"
-        mill_angle = mill_pos_active.pop("rx")
+        mill_angle = mill_pos_active.pop("mill_angle")
         rx_mill = calculate_stage_tilt_from_milling_angle(mill_angle, pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
-        mill_pos_active["rx"] = rx_mill # update the computed rx based on the milling angle, see the note above
+        mill_pos_active["rx"] = rx_mill  # update the computed rx based on the milling angle
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]
@@ -1958,7 +1972,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Define values that are used more than once
         rx_sem = sem_pos_active["rx"]
-        rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["rx"], pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
+        rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["mill_angle"],
+                                                          pre_tilt=self.pre_tilt, column_tilt=self.fib_column_tilt)
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]
@@ -2053,11 +2068,11 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
                 if current_posture == MILLING:
                     # Store current milling angle, to go back to that same position next time
-                    rx_milling = calculate_milling_angle_from_stage_tilt(current_pos["rx"],
+                    mill_angle = calculate_milling_angle_from_stage_tilt(current_pos["rx"],
                                             pre_tilt=self.pre_tilt,
                                             column_tilt=self.fib_column_tilt)
                     mill_pos_active = self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]
-                    mill_pos_active["rx"] = rx_milling
+                    mill_pos_active["mill_angle"] = mill_angle
                     self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_pos_active})
                     # TODO: update transformation matrices for milling (at the moment the milling angle is changed)
 

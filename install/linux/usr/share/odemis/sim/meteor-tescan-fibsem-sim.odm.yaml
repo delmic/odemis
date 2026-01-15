@@ -132,9 +132,8 @@
         # Note that the accuracy of the FM/SEM switch might be reduced if starting at a different angle.
         FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": 4.9567353}, # 15° tilt, 284° rotation
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
-        # MILL has the *milling angle* as rx.
         # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
-        FAV_MILL_POS_ACTIVE: {"rx": 0.174532925, "rz": 4.9567353}, # Milling angle = 10°, 284° rotation
+        FAV_MILL_POS_ACTIVE: {"mill_angle": 0.174532925, "rz": 4.9567353}, # Milling angle = 10°, 284° rotation
     },
 }
 
