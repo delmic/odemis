@@ -541,6 +541,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         Set the milling angle of the stage
         :param angle: (float) milling angle in radians
         """
+        if model.MD_FAV_MILL_POS_ACTIVE not in self.stage.getMetadata():
+            logging.warning("Trying to set a milling angle on a system that was not configured for milling")
+            return angle
         rotations = {'rx': angle, 'rz': self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
         self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: rotations})
         return angle
