@@ -38,6 +38,8 @@ from odemis import dataio, model
 from odemis.acq import stream
 from odemis.acq.stitching import (
     REGISTER_GLOBAL_SHIFT,
+    REGISTER_IDENTITY,
+    WEAVER_COLLAGE,
     WEAVER_COLLAGE_REVERSE,
     WEAVER_MEAN,
     acquireTiledArea,
@@ -82,7 +84,6 @@ class TileAcqPlugin(Plugin):
         ("overlap", {
             "tooltip": "Approximate amount of overlapping area between tiles",
         }),
-
         ("filename", {
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
@@ -90,6 +91,15 @@ class TileAcqPlugin(Plugin):
         }),
         ("stitch", {
             "tooltip": "Use all the tiles to create a large-scale image at the end of the acquisition",
+        }),
+        ("weaver", {
+            "label": "Weaving method",
+            "control_type": odemis.gui.CONTROL_COMBO,
+            "tooltip": "Mean: Overlapping pixels in the final image are averaged across tiles\n"
+                       "Collage: Pastes tiles at their center positions, assuming uniform pixel"
+                       " sizes and ignoring rotation/skew.\n"
+                       "Collage (reverse order): Similar to Collage, but fills only empty regions"
+                       " with new tiles to preserve higher-quality overlaps from first-time imaging.",
         }),
         ("expectedDuration", {
         }),
@@ -130,6 +140,13 @@ class TileAcqPlugin(Plugin):
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
+        weaver_choices = {
+            WEAVER_MEAN: "Mean",
+            WEAVER_COLLAGE: "Collage",
+            WEAVER_COLLAGE_REVERSE: "Collage (reverse order)",
+        }
+        self.weaver = model.VAEnumerated(WEAVER_MEAN, choices=weaver_choices)
+        self.register = REGISTER_GLOBAL_SHIFT
 
         # Allow to running fine alignment procedure, only on SECOM and DELPHI
         self.fineAlign = model.BooleanVA(False)
@@ -144,10 +161,10 @@ class TileAcqPlugin(Plugin):
         # by these systems. To mediate this, we use the collage_reverse weaver that
         # only shows the overlap region of the tile that was imaged first.
         if self.microscope.role in ("secom", "delphi"):
-            self.weaver = WEAVER_COLLAGE_REVERSE
+            self.weaver.value = WEAVER_COLLAGE_REVERSE
             logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
         else:
-            self.weaver = WEAVER_MEAN
+            self.weaver.value = WEAVER_MEAN
             logging.info("Using weaving method WEAVER_MEAN.")
 
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
@@ -159,11 +176,13 @@ class TileAcqPlugin(Plugin):
         self.nx.subscribe(self._update_total_area)
         self.ny.subscribe(self._update_total_area)
         self.overlap.subscribe(self._update_total_area)
+        self.weaver.subscribe(self._on_weaver_change)
 
         # Warn if memory will be exhausted
         self.nx.subscribe(self._memory_check)
         self.ny.subscribe(self._memory_check)
         self.stitch.subscribe(self._memory_check)
+        self.weaver.subscribe(self._memory_check)
 
     def _can_fine_align(self, streams):
         """
@@ -228,6 +247,12 @@ class TileAcqPlugin(Plugin):
                             entry.value_ctrl.Enable(False)
                         break
 
+    def _on_weaver_change(self, weaver):
+        if weaver == WEAVER_COLLAGE:
+            self.register = REGISTER_IDENTITY
+        else:
+            self.register = REGISTER_GLOBAL_SHIFT
+
     def _unsubscribe_vas(self):
         ss = self._get_live_streams()
 
@@ -263,8 +288,8 @@ class TileAcqPlugin(Plugin):
                 region,
                 overlap=overlap_frac,
                 settings_obs=self.main_app.main_data.settings_obs,
-                weaver=self.weaver if self.stitch.value else None,
-                registrar=REGISTER_GLOBAL_SHIFT if self.stitch.value else None,
+                weaver=self.weaver.value if self.stitch.value else None,
+                registrar=self.register if self.stitch.value else None,
                 overlay_stream=overlay_stream,
                 sfov=self._guess_smallest_fov(),
             )
@@ -543,8 +568,8 @@ class TileAcqPlugin(Plugin):
                 region,
                 overlap=overlap_frac,
                 settings_obs=self.main_app.main_data.settings_obs,
-                weaver=self.weaver if self.stitch.value else None,
-                registrar=REGISTER_GLOBAL_SHIFT if self.stitch.value else None,
+                weaver=self.weaver.value if self.stitch.value else None,
+                registrar=self.register if self.stitch.value else None,
                 overlay_stream=overlay_stream,
                 sfov=self._guess_smallest_fov(),
             )
@@ -631,8 +656,8 @@ class TileAcqPlugin(Plugin):
                 overlap=overlap_frac,
                 settings_obs=main_data.settings_obs,
                 log_path=fn,
-                weaver=self.weaver if self.stitch.value else None,
-                registrar=REGISTER_GLOBAL_SHIFT if self.stitch.value else None,
+                weaver=self.weaver.value if self.stitch.value else None,
+                registrar=self.register if self.stitch.value else None,
                 overlay_stream=overlay_stream,
                 sfov=self._guess_smallest_fov(),
             )
