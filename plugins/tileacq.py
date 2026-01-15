@@ -135,7 +135,7 @@ class TileAcqPlugin(Plugin):
 
         self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
         self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
-        self.overlap = model.FloatContinuous(20, (1, 80), unit="%")
+        self.overlap = model.FloatContinuous(20, (0, 80), unit="%")
         self.filename = model.StringVA("a.ome.tiff")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
