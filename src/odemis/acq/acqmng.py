@@ -486,7 +486,6 @@ class AcquisitionTask(object):
     def __init__(self, streams, future, settings_obs=None):
         self._future = future
         self._settings_obs = settings_obs
-
         # order the streams for optimal acquisition
         self._streams = sorted(streams, key=_weight_stream, reverse=True)
 
@@ -615,13 +614,14 @@ class AcquisitionTask(object):
             self._current_future = None
 
         # Update metadata using OverlayStream (if there was one)
-        self._adjust_metadata(raw_images)
+        self.adjust_metadata(raw_images)
 
         # merge all the raw data (= list of DataArrays) into one long list
         ret = sum(raw_images.values(), [])
         return ret, exp
 
-    def _adjust_metadata(self, raw_data):
+    @staticmethod
+    def adjust_metadata(raw_data):
         """
         Update/adjust the metadata of the raw data received based on global
         information.
