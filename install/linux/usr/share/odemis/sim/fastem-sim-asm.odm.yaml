@@ -20,8 +20,7 @@ FASTEM-sim: {
 
 "SEM": {
     class: xt_client.SEM,
-    # TODO remove role when children components are all implemented
-    role: sem-api,
+    role: null,
     init: {
         address: "PYRO:Microscope@localhost:4242",
     },
@@ -376,8 +375,6 @@ FASTEM-sim: {
 }
 
 # diagnostic detector to monitor the multiprobe pattern
-# TODO this is now a static image and does not simulate any scanning movement
-# executed with the SAM
 "Diagnostic Camera": {
     class: simcam.Camera,
     role: diagnostic-ccd,
