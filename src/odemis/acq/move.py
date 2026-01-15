@@ -332,13 +332,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         md_calib = stage_md.get(model.MD_CALIB, {})
         self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
         self.fib_column_tilt = TFS_FIB_COLUMN_TILT
-        # Initialize the milling angle. If not specified in the config, set it to 0
-        milling_angle = stage_md.get(model.MD_FAV_MILL_POS_ACTIVE, None)
-        milling_angle = milling_angle["rx"] if milling_angle else 0
-        self.milling_angle = model.FloatContinuous(
-            milling_angle, (MILLING_RANGE[0], MILLING_RANGE[1]), unit="rad", setter=self._set_milling_angle
-        )
-
         # use_linked_sem_focus_compensation: when True, the SEM focus is restored to the eucentric
         # focus when moving the stage. This is done on TFS systems to compensate
         # for the SEM focus changing when the stage is moved in Z (due to stage linking).
@@ -361,6 +354,13 @@ class MeteorPostureManager(MicroscopePostureManager):
                 logging.info("Upgrading stage metadata %s: converting 'rx' to 'mill_angle'", model.MD_FAV_MILL_POS_ACTIVE)
                 mill_md["mill_angle"] = mill_md.pop("rx")
                 self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_md})
+
+        # Initialize the milling angle. If not specified in the config, set it to 0
+        milling_angle = stage_md.get(model.MD_FAV_MILL_POS_ACTIVE, None)
+        milling_angle = milling_angle["mill_angle"] if milling_angle else 0
+        self.milling_angle = model.FloatContinuous(
+            milling_angle, (MILLING_RANGE[0], MILLING_RANGE[1]), unit="rad", setter=self._set_milling_angle
+        )
 
         # current posture va
         self.current_posture = model.VigilantAttribute(UNKNOWN)
@@ -544,7 +544,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         if model.MD_FAV_MILL_POS_ACTIVE not in self.stage.getMetadata():
             logging.warning("Trying to set a milling angle on a system that was not configured for milling")
             return angle
-        rotations = {'rx': angle, 'rz': self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
+        rotations = {'mill_angle': angle, 'rz': self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
         self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: rotations})
         return angle
 
