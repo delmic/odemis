@@ -86,9 +86,9 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     The selected rectangle can be manipulated by dragging its edges or rotating it.
 
     """
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0), show_selection_points: bool = True):
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, show_selection_points: bool = True):
         EditableShape.__init__(self, cnvs)
-        RectangleEditingMixin.__init__(self, colour, center)
+        RectangleEditingMixin.__init__(self, colour)
         # RectangleOverlay has attributes and methods of the "WorldOverlay" interface.
         # However, WorldOverlay's __init__() is not called here because mouse events
         # (such as EVT_LEFT_DOWN, EVT_LEFT_UP, etc.) are managed by ShapesOverlay's canvas.
@@ -109,23 +109,23 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             text="",
             pos=(0, 0),
             font_size=12,
-            flip=True,
+            flip=False,
             align=wx.ALIGN_RIGHT,
             colour=(1.0, 1.0, 1.0),  # default to white
             opacity=1.0,
             deg=None,
-            background=None
+            background=(0, 0, 0),  # black
         )
         self._side2_label = Label(
             text="",
             pos=(0, 0),
             font_size=12,
-            flip=True,
+            flip=False,
             align=wx.ALIGN_RIGHT,
             colour=(1.0, 1.0, 1.0),  # default to white
             opacity=1.0,
             deg=None,
-            background=None
+            background=(0, 0, 0),  # black
         )
         # Label for the rotation angle of the rectangle
         # Call draw_rotation_label to use it
@@ -138,7 +138,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             colour=(1.0, 1.0, 1.0),  # default to white
             opacity=1.0,
             deg=None,
-            background=None
+            background=(0, 0, 0),  # black
         )
         self._name_label = Label(
             text=self.name.value,
@@ -355,7 +355,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                         len(self.points.value) == 0
                     ):  # that's different from RectangleEditingMixin
                         # Create new selection
-                        self.start_selection()
+                        self.start_creation()
                 elif hover == gui.HOVER_SELECTION:
                     # Clicked inside selection or near line, so start dragging
                     self.start_drag()
@@ -426,51 +426,48 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             self.p_point3: b_point3,
             self.p_point4: b_point4,
         }
-        p_xmin_ymin = min(points.keys(), key=lambda p: (p.x + p.y))
-        p_xmax_ymin = max(points.keys(), key=lambda p: (p.x - p.y))
-        p_xmax_ymax = max(points.keys(), key=lambda p: (p.x + p.y))
+        # Find the 3 corners we need to compute the side lengths and angles
+        all_points = set(points.keys())
+        if len(all_points) < 4:
+            return  # Cannot compute side lengths if points are not unique
+        p_xmin_ymin = min(all_points, key=lambda p: (p.x, p.y))  # bottom left
+        all_points.remove(p_xmin_ymin)  # Make sure we don't pick it again
+        p_xmax_ymax = max(all_points, key=lambda p: math.dist(p, p_xmin_ymin))  # top right -> furthest away from bottom left
+        all_points.remove(p_xmax_ymax)
+        p_xmax_ymin = min(all_points, key=lambda p: (-p.x, p.y))  # bottom right
+
         b_xmin_ymin = points[p_xmin_ymin]
         b_xmax_ymin = points[p_xmax_ymin]
         b_xmax_ymax = points[p_xmax_ymax]
 
-        side1_length = math.sqrt(
-            (p_xmax_ymin.x - p_xmin_ymin.x) ** 2 + (p_xmax_ymin.y - p_xmin_ymin.y) ** 2
-        )
-        side1_length = units.readable_str(side1_length, "m", sig=2)
-        side1_angle = math.atan2(
-            (b_xmin_ymin.y - b_xmax_ymin.y), (b_xmin_ymin.x - b_xmax_ymin.x)
-        )
+        side1_length = math.dist(p_xmin_ymin, p_xmax_ymin)
+        side1_angle = math.atan2((b_xmax_ymin.y - b_xmin_ymin.y), (b_xmax_ymin.x - b_xmin_ymin.x))
 
-        side2_length = math.sqrt(
-            (p_xmax_ymin.x - p_xmax_ymax.x) ** 2 + (p_xmax_ymin.y - p_xmax_ymax.y) ** 2
-        )
-        side2_length = units.readable_str(side2_length, "m", sig=2)
-        side2_angle = math.atan2(
-            (b_xmax_ymax.y - b_xmax_ymin.y), (b_xmax_ymax.x - b_xmax_ymin.x)
-        )
+        side2_length = math.dist(p_xmax_ymax, p_xmax_ymin)
+        side2_angle = math.atan2((b_xmax_ymax.y - b_xmax_ymin.y), (b_xmax_ymax.x - b_xmax_ymin.x))
 
+        # Shift the label a bit away from the rectangle, perpendicular to the side
+        shift_v = Vec(20, 10).rotate(side1_angle, (0, 0))
         self._side1_label.pos = Vec(
-            (b_xmax_ymin.x + b_xmin_ymin.x) / 2 + 8,
-            (b_xmax_ymin.y + b_xmin_ymin.y) / 2 + 8,
+            (b_xmax_ymin.x + b_xmin_ymin.x) / 2 + shift_v.x,
+            (b_xmax_ymin.y + b_xmin_ymin.y) / 2 + shift_v.y,
         )
-        self._side1_label.text = side1_length
-        self._side1_label.background = (0, 0, 0)  # black
+        self._side1_label.text = units.readable_str(side1_length, "m", sig=3)
         self._side1_label.deg = math.degrees(side1_angle)
         self._side1_label.draw(ctx)
 
+        shift_v = Vec(20, 10).rotate(side2_angle, (0, 0))
         self._side2_label.pos = Vec(
-            (b_xmax_ymax.x + b_xmax_ymin.x) / 2 + 8,
-            (b_xmax_ymax.y + b_xmax_ymin.y) / 2 + 8,
+            (b_xmax_ymax.x + b_xmax_ymin.x) / 2 + shift_v.x,
+            (b_xmax_ymax.y + b_xmax_ymin.y) / 2 + shift_v.y,
         )
-        self._side2_label.text = side2_length
-        self._side2_label.background = (0, 0, 0)  # black
+        self._side2_label.text = units.readable_str(side2_length, "m", sig=3)
         self._side2_label.deg = math.degrees(side2_angle)
         self._side2_label.draw(ctx)
 
     def draw_rotation_label(self, ctx):
-        self._rotation_label.text = units.readable_str(math.degrees(self.rotation), "°", sig=4)
+        self._rotation_label.text = f"{round(math.degrees(self.rotation))}°"
         self._rotation_label.pos = self.cnvs.view_to_buffer(self.v_center)
-        self._rotation_label.background = (0, 0, 0)  # black
         self._rotation_label.draw(ctx)
 
     def draw_edges(self, ctx, b_point1: Vec, b_point2: Vec, b_point3: Vec, b_point4: Vec):

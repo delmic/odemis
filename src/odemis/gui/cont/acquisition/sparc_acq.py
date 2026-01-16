@@ -36,7 +36,7 @@ from concurrent.futures._base import CancelledError
 
 import wx
 
-from odemis import model, dataio
+from odemis import model, dataio, util
 from odemis.acq import acqmng, stream
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
     TemporalSpectrumSettingsStream, AngularSpectrumSettingsStream
@@ -138,7 +138,7 @@ class SparcAcquiController(object):
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
 
-        self._roa = tab_data.semStream.roi
+        self._roa = tab_data.roa
 
         # Listen to change of streams to update the acquisition time
         self._prev_streams = set()  # set of streams already listened to
@@ -155,6 +155,10 @@ class SparcAcquiController(object):
         tab_data.driftCorrector.dwellTime.subscribe(self._onAnyVA)
 
         self._roa.subscribe(self._onROA, init=True)
+        if tab_data.roa_rotation is not None:
+            # Rotation doesn't change the acquisition time, but might cause the RoA to be outside the FoV,
+            # in which case the acquisition should be disabled.
+            tab_data.roa_rotation.subscribe(self._onROA)
 
         # Listen to preparation state
         self._main_data_model.is_preparing.subscribe(self.on_preparation)
@@ -295,21 +299,35 @@ class SparcAcquiController(object):
         if self._main_data_model.is_acquiring.value:
             return
 
+        txt = None
         lvl = None  # icon status shown
 
+        can_acquire = True
         if self._interlockTriggered:
             txt = "Laser interlock triggered."
             lvl = logging.WARN
+            can_acquire = False
         elif self._main_data_model.is_preparing.value:
             txt = "Optical path is being reconfigured…"
             self._ellipsis_animator = EllipsisAnimator(txt, self.lbl_acqestimate)
             self._ellipsis_animator.start()
             lvl = logging.INFO
+            can_acquire = False
         elif self._roa.value == UNDEFINED_ROI:
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
             lvl = logging.WARN
-        else:
+            can_acquire = False
+        elif self._tab_data_model.roa_rotation:
+            # Check the RoA is entirely inside the FoV by checking that every corner of the RoA
+            # is inside the FoV (ie, between 0 and 1)
+            rot_roa = util.rotate_rect(self._roa.value, self._tab_data_model.roa_rotation.value)
+            if not all(0 <= x <= 1 and 0 <= y <= 1 for x, y in rot_roa):
+                txt = "Region of acquisition out of bounds due to rotation"
+                lvl = logging.WARN
+                can_acquire = False
+
+        if txt is None:  # No special message => show estimated time
             streams = self._tab_data_model.acquisitionStreams
 
             has_folds = len(streams) > len(acqmng.foldStreams(streams))
@@ -321,10 +339,7 @@ class SparcAcquiController(object):
             txt = "Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
 
-        # check if the acquire button needs enabling or disabling
-        self.btn_acquire.Enable(self._roa.value != UNDEFINED_ROI and
-                                not self._main_data_model.is_preparing.value and
-                                not self._interlockTriggered)
+        self.btn_acquire.Enable(can_acquire)
 
         logging.debug("Updating status message %s, with level %s", txt, lvl)
         self.lbl_acqestimate.SetLabel(txt)
