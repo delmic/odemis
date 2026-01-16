@@ -19,6 +19,8 @@
     You should have received a copy of the GNU General Public License along with
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import os
+
 from odemis.gui import img, BG_COLOUR_MAIN
 from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb, \
     frgb_to_wxcol
@@ -59,6 +61,11 @@ class FoldPanelBar(wx.Panel):
         SCROLLBAR_WIDTH = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
 
         assert isinstance(parent, wx.ScrolledWindow)
+        # Workaround for wxWidgets bug on Wayland, where sometimes the window is not repainted after
+        # scrolling, which causes visual artifacts (content appears at the wrong position).
+        session_type = os.environ.get("XDG_SESSION_TYPE", "")
+        if session_type == "wayland":
+            parent.Bind(wx.EVT_SCROLLWIN, self._on_scroll)
 
     def on_caption_press(self, evt):
         if evt.get_fold_status():
@@ -80,6 +87,12 @@ class FoldPanelBar(wx.Panel):
 
     def OnSize(self, evt):
         self.SetSize(self.Parent.GetVirtualSize())
+        evt.Skip()
+
+    def _on_scroll(self, evt):
+        # A forced refresh works around the visual artifacts which happen sometimes (on Wayland)
+        # when scrolling with the mouse wheel.
+        self.Refresh()
         evt.Skip()
 
     ##############################
