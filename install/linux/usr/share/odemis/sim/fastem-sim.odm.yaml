@@ -124,8 +124,6 @@ FASTEM-sim: {
         # be opposite of the image axes, so that the center of the image corresponds
         # to the stage position.
         rotation: 3.141592653589793,  # rad (= 180°) won't be changed
-        # TODO: also add a shift between the origin of the stage-bare (at the middle of the carrier)
-        #  and the physical origin of the sample carrier (at the bottom left of the 1st scintillator)  -> translation
     },
 }
 
@@ -154,7 +152,6 @@ FASTEM-sim: {
 
 # Sample stage in multiprobe coordinate system:
 # Allows to move the stage in the same coordinate system as the multiprobe.
-# TODO check this
 #   A positive x movement moves a feature on the single field image to the right/left.
 #   A positive y movement moves a feature on the single field image to the top/bottom.
 # The X/Y axes are aligned with the X/Y axes of the multiprobe (or scan direction of
@@ -265,8 +262,6 @@ FASTEM-sim: {
 }
 
 # diagnostic detector to monitor the multiprobe pattern
-# TODO this is now a static image and does not simulate any scanning movement
-# executed with the SAM
 "Diagnostic Camera": {
     class: simcam.Camera,
     role: diagnostic-ccd,
