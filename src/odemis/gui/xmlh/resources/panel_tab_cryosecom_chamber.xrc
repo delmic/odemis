@@ -94,7 +94,7 @@
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxALL|wxEXPAND</flag>
+							<flag>wxBOTTOM|wxEXPAND</flag>
 							<border>5</border>
 						</object>
 						<object class="sizeritem">
@@ -111,7 +111,7 @@
 											</font>
 										</object>
 										<flag>wxBOTTOM|wxALL</flag>
-										<border>5</border>
+										<border>10</border>
 									</object>
 									<object class="sizeritem">
 										<object class="wxGridBagSizer">
@@ -474,7 +474,7 @@
 												</object>
 												<option>1</option>
 												<flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-												<border>7</border>
+												<border>10</border>
 											</object>
 											<object class="sizeritem">
 												<object class="ImageTextButton" name="btn_cancel">
