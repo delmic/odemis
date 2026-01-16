@@ -53,7 +53,7 @@ from odemis.util.img import assembleZCube
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-def acquire(streams, settings_obs=None):
+def acquire(streams, settings_obs=None, adjust_md=True):
     """ Start an acquisition task for the given streams.
 
     It will decide in which order the stream must be acquired.
@@ -64,6 +64,7 @@ def acquire(streams, settings_obs=None):
     :param streams: [Stream] the streams to acquire
     :param settings_obs: [SettingsObserver or None] class that contains a list of all VAs
         that should be saved as metadata
+    :param adjust_md: (bool) whether to adjust the metadata of the acquired data
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a tuple:
@@ -75,7 +76,7 @@ def acquire(streams, settings_obs=None):
     future = model.ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(streams, future, settings_obs)
+    task = AcquisitionTask(streams, future, settings_obs, adjust_md)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # connect the future to the task and run in a thread
@@ -483,10 +484,10 @@ def sortStreams(streams):
 
 class AcquisitionTask(object):
 
-    def __init__(self, streams, future, settings_obs=None):
+    def __init__(self, streams, future, settings_obs=None, adjust_md=True):
         self._future = future
         self._settings_obs = settings_obs
-
+        self._adjust_md = adjust_md
         # order the streams for optimal acquisition
         self._streams = sorted(streams, key=_weight_stream, reverse=True)
 
@@ -614,14 +615,16 @@ class AcquisitionTask(object):
             self._current_stream = None
             self._current_future = None
 
-        # Update metadata using OverlayStream (if there was one)
-        self._adjust_metadata(raw_images)
+        if self._adjust_md:
+            # Update metadata using OverlayStream (if there was one)
+            self.adjust_metadata(raw_images)
 
         # merge all the raw data (= list of DataArrays) into one long list
         ret = sum(raw_images.values(), [])
         return ret, exp
 
-    def _adjust_metadata(self, raw_data):
+    @staticmethod
+    def adjust_metadata(raw_data):
         """
         Update/adjust the metadata of the raw data received based on global
         information.
