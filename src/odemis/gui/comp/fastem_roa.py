@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import logging
 import math
 import threading
 from abc import ABCMeta, abstractmethod
@@ -29,7 +30,7 @@ from scipy.ndimage import binary_fill_holes
 from shapely.geometry import Polygon, box
 
 from odemis import model
-from odemis.acq.fastem import STAGE_PRECISION
+from odemis.acq import fastem_conf
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
@@ -333,7 +334,7 @@ class FastEMTOA(FastEMROABase):
         :param name: (str) Name of the TOA.
         :param slice_index: (int) The slice index of the tiled overview acquisition.
         """
-        overlap = STAGE_PRECISION / hfw
+        overlap = fastem_conf.TOA_OVERLAP
         super().__init__(shape, main_data, overlap, name, slice_index)
         self._area_size = (0, 0)
         self._xmin = None
@@ -416,8 +417,6 @@ class FastEMTOA(FastEMROABase):
 
     def _on_hfw(self, hfw):
         """Callback function on HFW change."""
-        # Update the overlap based on the new HFW value
-        self.overlap = STAGE_PRECISION / hfw
         # Update the field of view (FoV) based on the new HFW value
         self._fov = (hfw * self._pxs_cor[0], hfw * self._pxs_cor[1] * self.res.value[1] / self.res.value[0])
 
@@ -505,7 +504,7 @@ class FastEMTOA(FastEMROABase):
 
         # Round up the number of tiles needed. With a twist: if we'd need less
         # than 1% of a tile extra, round down. This handles floating point
-        # errors and other manual rounding when when the requested area size is
+        # errors and other manual rounding when the requested area size is
         # exactly a multiple of the FoV.
         area_size = [(s - f * 0.01) if s > f else s
                      for s, f in zip(self._area_size, reliable_fov)]
@@ -518,13 +517,6 @@ class FastEMTOA(FastEMROABase):
         # 2. Increase the overlap (and keep the total area)
         # We pick alternative 1 (no real reason)
         xmin, ymin, xmax, ymax = self.polygon_shape.bounds
-        center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
-        total_size = (
-            nx * reliable_fov[0] + self._fov[0] * self.overlap,
-            ny * reliable_fov[1] + self._fov[1] * self.overlap,
-        )
-        xmin = center[0] - total_size[0] / 2
-        ymax = center[1] + total_size[1] / 2
         self._xmin = xmin
         self._ymax = ymax
 
@@ -579,7 +571,8 @@ class FastEMTOA(FastEMROABase):
         # Iterate through each field index to compute the bounding rectangles
         for col, row in self.field_indices:
             start_pos_x = self._xmin + col * c_grid_width
-            start_pos_y = self._ymax - (row + 1) * r_grid_width
+            # subtract overlap because start pos is exactly at the top-left corner of the field
+            start_pos_y = self._ymax - (row + 1) * r_grid_width - self._fov[1] * self.overlap
             end_pos_x = start_pos_x + self._fov[0]
             end_pos_y = start_pos_y + self._fov[1]
             p_start_pos = Vec(start_pos_x, start_pos_y)

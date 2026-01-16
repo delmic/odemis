@@ -105,7 +105,7 @@ class TiledAcquisitionTask(object):
 
     def __init__(self, streams, stage, region, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 focus_points=None, focus_range=None):
+                 focus_points=None, focus_range=None, centered_acq=True):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -127,6 +127,10 @@ class TiledAcquisitionTask(object):
            If MAX_INTENSITY_PROJECTION is used, zlevels must be provided too.
         :param focus_points: (list of tuples) list of focus points corresponding to the known (x, y, z) at good focus.
               If None, the focus will not be adjusted based on the stage position.
+        :param focus_range: (tuple) tuple defining the focus range for good focus.
+        :param centered_acq: (bool) If True, center the acquisition area on the given region; any extra area is added
+            symmetrically to all sides of the bounding box. If False, the top-left of the acquisition area is aligned
+            with the top-left of the bounding box.
         """
         self._future = future
         self._streams = streams
@@ -136,6 +140,7 @@ class TiledAcquisitionTask(object):
         # Average time taken for each tile acquisition
         self.average_acquisition_time = None
         self._overlap = overlap
+        self._centered_acq = centered_acq
         self._polygon = None
         if future is not None:
             self._future.running_subf: future.Future = model.InstantaneousFuture()
@@ -319,26 +324,29 @@ class TiledAcquisitionTask(object):
 
         # Round up the number of tiles needed. With a twist: if we'd need less
         # than 1% of a tile extra, round down. This handles floating point
-        # errors and other manual rounding when when the requested area size is
+        # errors and other manual rounding when the requested area size is
         # exactly a multiple of the FoV.
         area_size = [(s - f * 0.01) if s > f else s
                      for s, f in zip(self._area_size, reliable_fov)]
         nx = math.ceil(area_size[0] / reliable_fov[0])
         ny = math.ceil(area_size[1] / reliable_fov[1])
 
-        # We have a little bit more tiles than needed, we then have two choices
+        # If we have a little bit more tiles than needed, we have two choices
         # on how to spread them:
         # 1. Increase the total area acquired (and keep the overlap)
         # 2. Increase the overlap (and keep the total area)
         # We pick alternative 1 (no real reason)
         xmin, ymin, xmax, ymax = self._polygon.bounds
-        center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
-        total_size = (
-            nx * reliable_fov[0] + self._sfov[0] * self._overlap,
-            ny * reliable_fov[1] + self._sfov[1] * self._overlap,
-        )
-        xmin = center[0] - total_size[0] / 2
-        ymax = center[1] + total_size[1] / 2
+
+        if self._centered_acq:
+            # Ensure extra acquisition area is symmetric around the center of the acquisition
+            center = ((xmin + xmax) / 2, (ymin + ymax) / 2)
+            total_size = (
+                nx * reliable_fov[0] + self._sfov[0] * self._overlap,
+                ny * reliable_fov[1] + self._sfov[1] * self._overlap,
+            )
+            xmin = center[0] - total_size[0] / 2
+            ymax = center[1] + total_size[1] / 2
 
         # Create an empty grid for storing intersected tiles
         # An intersected tile is any tile in the grid that intersects with (or falls within) the given polygon
@@ -377,10 +385,16 @@ class TiledAcquisitionTask(object):
         tile_indices = list(zip(cols.tolist(), rows.tolist()))
 
         # Calculate the starting position (top-left of the grid)
-        starting_position = {
-            "x": xmin + reliable_fov[0] / 2,
-            "y": ymax - reliable_fov[1] / 2
-        }
+        if self._centered_acq:
+            starting_position = {
+                "x": xmin + reliable_fov[0] / 2,
+                "y": ymax - reliable_fov[1] / 2
+            }
+        else:
+            starting_position = {
+                "x": xmin + self._sfov[0] / 2,
+                "y": ymax - self._sfov[1] / 2
+            }
 
         return starting_position, tile_indices
 
@@ -1056,7 +1070,7 @@ def estimateTiledAcquisitionMemory(*args, **kwargs):
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                      registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                     focus_points=None, focus_range=None):
+                     focus_points=None, focus_range=None, centered_acq=True):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -1073,7 +1087,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     # Create a tiled acquisition task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points, focus_range=focus_range)
+                                focus_points=focus_points, focus_range=focus_range, centered_acq=centered_acq)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()

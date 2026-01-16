@@ -9263,7 +9263,7 @@ B`\x82'''
                           <object class="wxPanel" name="pnl_acq">
                             <bg>#333333</bg>
                             <fg>#7F7F7F</fg>
-                            <size>400,40</size>
+                            <size>400,140</size>
                             <flag>wxTOP|wxEXPAND</flag>
                             <option>1</option>
                           </object>
