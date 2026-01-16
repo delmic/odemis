@@ -1,3 +1,4 @@
+import os
 import subprocess
 import threading
 import time
@@ -6,9 +7,12 @@ from unittest import mock
 
 import notify2
 
-from odemis.acq.test.stream_test import SECOM_CONFIG
+import odemis
 from odemis.odemisd.start import find_window, main
 from odemis.util import testing
+
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 
 
 class StartTestCase(unittest.TestCase):
