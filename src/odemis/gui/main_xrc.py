@@ -869,6 +869,18 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.txt_tdct = xrc.XRCCTRL(self, "txt_tdct")
         self.fp_acquired = xrc.XRCCTRL(self, "fp_acquired")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
+        self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
+        self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
+        self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
+        self.workflow_features_chk_list = xrc.XRCCTRL(self, "workflow_features_chk_list")
+        self.workflow_task_chk_list = xrc.XRCCTRL(self, "workflow_task_chk_list")
+        self.btn_run_automated_milling = xrc.XRCCTRL(self, "btn_run_automated_milling")
+        self.txt_automated_milling_est_time = xrc.XRCCTRL(self, "txt_automated_milling_est_time")
+        self.sizer_automated_milling_row = xrc.XRCCTRL(self, "sizer_automated_milling_row")
+        self.gauge_automated_milling = xrc.XRCCTRL(self, "gauge_automated_milling")
+        self.txt_automated_milling_left_time = xrc.XRCCTRL(self, "txt_automated_milling_left_time")
+        self.btn_automated_milling_cancel = xrc.XRCCTRL(self, "btn_automated_milling_cancel")
+        self.txt_automated_milling_status = xrc.XRCCTRL(self, "txt_automated_milling_status")
         self.fp_milling = xrc.XRCCTRL(self, "fp_milling")
         self.pnl_milling = xrc.XRCCTRL(self, "pnl_milling")
         self.milling_flex_grid_sizer = xrc.XRCCTRL(self, "milling_flex_grid_sizer")
@@ -880,17 +892,6 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.btn_milling_cancel = xrc.XRCCTRL(self, "btn_milling_cancel")
         self.pnl_milling_settings = xrc.XRCCTRL(self, "pnl_milling_settings")
         self.pnl_patterns = xrc.XRCCTRL(self, "pnl_patterns")
-        self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
-        self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
-        self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
-        self.workflow_features_chk_list = xrc.XRCCTRL(self, "workflow_features_chk_list")
-        self.workflow_task_chk_list = xrc.XRCCTRL(self, "workflow_task_chk_list")
-        self.btn_run_automated_milling = xrc.XRCCTRL(self, "btn_run_automated_milling")
-        self.txt_automated_milling_est_time = xrc.XRCCTRL(self, "txt_automated_milling_est_time")
-        self.gauge_automated_milling = xrc.XRCCTRL(self, "gauge_automated_milling")
-        self.txt_automated_milling_left_time = xrc.XRCCTRL(self, "txt_automated_milling_left_time")
-        self.btn_automated_milling_cancel = xrc.XRCCTRL(self, "btn_automated_milling_cancel")
-        self.txt_automated_milling_status = xrc.XRCCTRL(self, "txt_automated_milling_status")
 
 
 
@@ -1626,7 +1627,7 @@ def __init_resources():
                           <object class="sizeritem">
                             <object class="ImageTextButton" name="btn_change_file">
                               <height>16</height>
-                              <label>Change…</label>
+                              <label>change…</label>
                               <fg>#1A1A1A</fg>
                               <font>
                                 <size>9</size>
@@ -2803,7 +2804,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <object class="ImageTextButton" name="btn_cancel">
                             <height>24</height>
                             <face_colour>def</face_colour>
-                            <label>Cancel</label>
+                            <label>cancel</label>
                             <enabled>0</enabled>
                             <XRCED>
                               <assign_var>1</assign_var>
@@ -9978,10 +9979,6 @@ B`\x82'''
                             </object>
                           </object>
                       </object>
-
-                      
-
-                      
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -10371,49 +10368,46 @@ B`\x82'''
                                 <flag>wxALL|wxEXPAND</flag>
                                 <border>10</border>
                               </object>
-                              <object class="sizeritem">
-                                <object class="wxPanel">
-                                  <bg>#333333</bg>
-                                  <object class="wxBoxSizer">
-                                    <orient>wxHORIZONTAL</orient>
                                     <object class="sizeritem">
                                       <object class="ImageTextButton" name="btn_acquire_overview">
                                         <height>48</height>
                                         <face_colour>def</face_colour>
                                         <label>ACQUIRE OVERVIEW</label>
                                         <font>
-                                          <size>12</size>
+                                  <size>14</size>
                                           <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                         </font>
                                         <style>wxALIGN_CENTRE</style>
-                                        <XRCED><assign_var>1</assign_var></XRCED>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
                                       </object>
-                                      <flag>wxEXPAND|wxALL</flag>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
                                       <border>10</border>
-                                      <option>1</option>
                                     </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
                                     <object class="sizeritem">
                                       <object class="ImageTextButton" name="btn_tdct">
                                         <height>48</height>
                                         <face_colour>def</face_colour>
-                                        <label>CORRELATE FIB/FM</label>
+                                    <label>Correlate FIB/FM</label>
                                         <font>
-                                          <size>12</size>
+                                      <size>14</size>
                                           <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                         </font>
                                         <style>wxALIGN_CENTRE</style>
-                                        <XRCED><assign_var>1</assign_var></XRCED>
-                                      </object>
-                                      <flag>wxEXPAND|wxALL</flag>
-                                      <border>10</border>
-                                      <option>1</option>
-                                    </object>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
                                   </object>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxStaticText" name="txt_tdct">
                                     <fg>#E5E5E5</fg>
                                     <hidden>1</hidden>
+                                    <XRCED><assign_var>1</assign_var></XRCED>
                                   </object>
                                   <flag>wxLEFT</flag>
                                   <border>10</border>
@@ -10422,6 +10416,11 @@ B`\x82'''
                                 <flag>wxTOP</flag>
                                 <border>17</border>
                               </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+
                             <orient>wxVERTICAL</orient>
                           </object>
                           <size>400,-1</size>
@@ -11831,8 +11830,10 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                     <style>wxALIGN_CENTRE</style>
                                     <fg>#FFFFFF</fg>
                                     <bg>#333333</bg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
                                   </object>
-
                                   <!-- Control layout in parent sizer -->
                                   <minsize>120,24</minsize>
                                   <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
@@ -12201,7 +12202,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                       <object class="ImageTextButton" name="btn_cryosecom_change_file">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>Change…</label>
+                                        <label>change…</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
@@ -12298,7 +12299,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                       <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>Cancel</label>
+                                        <label>cancel</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
@@ -12519,7 +12520,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                               <hidden>1</hidden>
                               <height>24</height>
                               <face_colour>def</face_colour>
-                              <label>Cancel</label>
+                              <label>cancel</label>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
@@ -17981,7 +17982,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                                   <object class="ImageTextButton" name="btn_sparc_change_file">
                                     <height>24</height>
                                     <face_colour>def</face_colour>
-                                    <label>Change…</label>
+                                    <label>change…</label>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>

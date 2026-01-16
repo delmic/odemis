@@ -374,7 +374,7 @@ class AutomatedMillingManager(object):
                     milling_tasks=feature.milling_tasks)
 
                 if not milling_tasks:
-                    logging.info(f"Skipping {feature.name.value} as it has not tasks to mill.")
+                    logging.info(f"Skipping {feature.name.value} as it has no tasks to mill.")
                     continue
 
                 # prefix for images
