@@ -178,10 +178,6 @@ class CryoAcquiController(object):
                 events=wx.EVT_COMMAND_ENTER,
             )
 
-        self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
-        self._tab_data.main.features.subscribe(self._on_features_change, init=True)
-        self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
-
         # fibsem specific acquisition settings
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._panel.btn_tdct.Show(LICENCE_CORRELATION_ENABLED)
