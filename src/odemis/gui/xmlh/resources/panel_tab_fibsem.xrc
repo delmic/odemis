@@ -977,7 +977,7 @@
                               </object>
                               <object class="sizeritem">
                                 <object class="ImageTextButton" name="btn_run_automated_milling">
-                                  <icon>../../img/icon/ico_sem.png</icon>
+                                  <icon>../../img/icon/ico_milling.png</icon>
                                   <height>48</height>
                                   <face_colour>blue</face_colour>
                                   <label>MILL</label>
@@ -1113,7 +1113,7 @@
                               <object class="sizeritem">
                                 <object class="ImageTextButton" name="btn_run_milling">
                                   <hidden>1</hidden>
-                                  <icon>../../img/icon/ico_sem.png</icon>
+                                  <icon>../../img/icon/ico_milling.png</icon>
                                   <height>48</height>
                                   <face_colour>blue</face_colour>
                                   <label>MILL</label>

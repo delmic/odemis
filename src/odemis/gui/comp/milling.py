@@ -122,10 +122,6 @@ class MillingTaskPanel(wx.Panel):
         if isinstance(val, model.FloatContinuous):
             value_ctrl = UnitFloatCtrl(self._panel, value=val.value,
                                         style=wx.NO_BORDER, **conf)
-            value_ctrl.Bind(wx.EVT_KILL_FOCUS,
-                lambda evt, ctrl=value_ctrl: ctrl.GetEventHandler().ProcessEvent(
-                    wx.CommandEvent(wx.EVT_COMMAND_ENTER.typeId, ctrl.GetId())
-                ))
         if isinstance(val, model.BooleanVA):
             value_ctrl = wx.CheckBox(self._panel, **conf)
             value_ctrl.SetValue(val.value)

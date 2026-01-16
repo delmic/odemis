@@ -174,7 +174,7 @@ class MillingTaskController:
         self._panel.milling_task_chk_list.SetItems(self.selected_tasks.value)
         for i in range(self._panel.milling_task_chk_list.GetCount()):
             self._panel.milling_task_chk_list.Check(i)
-        self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_selected_tasks)  ###
+        self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._update_selected_tasks)
         self.selected_tasks.subscribe(self.draw_milling_tasks, init=True)
         # self.selected_tasks.subscribe(self._update_mill_btn, init=True)
 
@@ -440,7 +440,6 @@ class MillingTaskController:
     def _update_selected_tasks(self, evt: wx.Event):
         checked_indices = self._panel.milling_task_chk_list.GetCheckedItems()
         self.selected_tasks.value = [self._panel.milling_task_chk_list.GetString(i) for i in checked_indices]
-
         # Update the 'Pattern' panel
         for task_name, controls in self.controls.items():
             panel = controls["panel"]
