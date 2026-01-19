@@ -115,6 +115,10 @@
         na: 0.85, # ratio, numerical aperture
         ri: 1.0, # ratio, refractive index
     },
+    metadata: {
+        # Refractive index mismatch correction factor
+        RIM_COR : 0.495,  # generally for 50x lens use 0.495, 100x0.9 na use 0.6
+    },
     affects: ["Camera"]
 }
 
