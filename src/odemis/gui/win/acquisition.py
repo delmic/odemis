@@ -42,7 +42,8 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   get_zstack_levels)
 from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
-                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
+                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream, StaticFIBStream,
+                               StaticFluoStream, StaticSEMStream)
 from odemis.gui.comp import buttons
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
@@ -1376,11 +1377,11 @@ class CorrelationDialog(xrcfr_correlation):
         vpv = collections.OrderedDict([
             (viewports[0], # focused view
              {"name": "FLM view",
-              "stream_classes": OpticalStream,
+              "stream_classes": StaticFluoStream,
               }),
             (viewports[1],
              {"name": "FIB view",
-              "stream_classes": EMStream,
+              "stream_classes": (StaticSEMStream, StaticFIBStream),
               }),])
         return vpv
 
