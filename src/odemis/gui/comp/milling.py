@@ -10,8 +10,7 @@ class MillingTaskPanel(wx.Panel):
     """Panel for Milling Settings"""
 
     def __init__(self, parent, task: MillingTaskSettings):
-
-        wx.Panel.__init__(self, parent=parent.pnl_patterns, name=task.name)
+        super().__init__(parent=parent, name=task.name)
         self._parent = parent
         self.SetForegroundColour(gui.FG_COLOUR_EDIT)
         self.SetBackgroundColour(gui.BG_COLOUR_MAIN)
@@ -19,28 +18,25 @@ class MillingTaskPanel(wx.Panel):
         self.main_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self.main_sizer)
 
-        self.gb_sizer = wx.GridBagSizer()
-        self.num_rows = 0
-
-        self.task = task
-
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
-
-        # Add a simple sizer so we can create padding for the panel
-        # border_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.main_sizer.Add(self.gb_sizer, border=5, flag=wx.ALL | wx.EXPAND, proportion=1)
-
-        # self._panel.SetSizer(border_sizer)
-
         self._panel.SetBackgroundColour(gui.BG_COLOUR_MAIN)
         self._panel.SetForegroundColour(gui.FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
-        self._panel.Show(True)
-        self.main_sizer.Add(self._panel, 0, wx.EXPAND)
+        self.gb_sizer = wx.GridBagSizer()
+        self._panel.SetSizer(self.gb_sizer)
+
+        self.main_sizer.Add(self._panel, 1, wx.ALL | wx.EXPAND, 5)
+
+        self.num_rows = 0
+        self.task = task
 
         # header
-        self._add_side_label(task.name) # TODO: migrate to header
+        title = self._add_side_label(task.name)
+        font = title.GetFont()
+        font.SetWeight(wx.FONTWEIGHT_BOLD)
+        font.SetPointSize(font.GetPointSize() + 1)
+        title.SetFont(font)
         self.num_rows += 1
 
         # map of control fields
@@ -48,8 +44,8 @@ class MillingTaskPanel(wx.Panel):
 
         CONFIG = {
             "current": {"label": "Current", "accuracy": 2, "unit": "A"},
-            "align": {"label": "Align at Milling Current"},
-            "mode": {"label": "Milling Mode"},
+            "align": {"label": "Align at milling current"},
+            "mode": {"label": "Milling mode"},
             "width": {"label": "Width", "accuracy": 2, "unit": "m"},
             "height": {"label": "Height", "accuracy": 2, "unit": "m"},
             "depth": {"label": "Depth", "accuracy": 2, "unit": "m"},
@@ -58,7 +54,8 @@ class MillingTaskPanel(wx.Panel):
 
         unsupported_parameters = ["name", "rotation",
                                   "center", "channel",
-                                  "field_of_view", "voltage"]
+                                  "field_of_view", "voltage",
+                                  "rate", "dwell_time"]
 
         for param in vars(task.milling):
             if param in unsupported_parameters:
@@ -105,6 +102,12 @@ class MillingTaskPanel(wx.Panel):
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                         flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                         border=5)
+        # row height for milling pattern propeties controls
+        row_height = 18
+        # column width for milling pattern properties controls
+        min_col_width = 120
+        self.gb_sizer.SetItemMinSize(value_ctrl, min_col_width, row_height)
+        self.gb_sizer.SetItemMinSize(lbl_ctrl, min_col_width, row_height)
 
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)

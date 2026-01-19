@@ -868,6 +868,18 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.btn_tdct = xrc.XRCCTRL(self, "btn_tdct")
         self.fp_acquired = xrc.XRCCTRL(self, "fp_acquired")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
+        self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
+        self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
+        self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
+        self.workflow_features_chk_list = xrc.XRCCTRL(self, "workflow_features_chk_list")
+        self.workflow_task_chk_list = xrc.XRCCTRL(self, "workflow_task_chk_list")
+        self.btn_run_automated_milling = xrc.XRCCTRL(self, "btn_run_automated_milling")
+        self.txt_automated_milling_est_time = xrc.XRCCTRL(self, "txt_automated_milling_est_time")
+        self.sizer_automated_milling_row = xrc.XRCCTRL(self, "sizer_automated_milling_row")
+        self.gauge_automated_milling = xrc.XRCCTRL(self, "gauge_automated_milling")
+        self.txt_automated_milling_left_time = xrc.XRCCTRL(self, "txt_automated_milling_left_time")
+        self.btn_automated_milling_cancel = xrc.XRCCTRL(self, "btn_automated_milling_cancel")
+        self.txt_automated_milling_status = xrc.XRCCTRL(self, "txt_automated_milling_status")
         self.fp_milling = xrc.XRCCTRL(self, "fp_milling")
         self.pnl_milling = xrc.XRCCTRL(self, "pnl_milling")
         self.milling_flex_grid_sizer = xrc.XRCCTRL(self, "milling_flex_grid_sizer")
@@ -879,17 +891,6 @@ class xrcpnl_tab_fibsem(wx.Panel):
         self.btn_milling_cancel = xrc.XRCCTRL(self, "btn_milling_cancel")
         self.pnl_milling_settings = xrc.XRCCTRL(self, "pnl_milling_settings")
         self.pnl_patterns = xrc.XRCCTRL(self, "pnl_patterns")
-        self.fp_automation = xrc.XRCCTRL(self, "fp_automation")
-        self.pnl_automation = xrc.XRCCTRL(self, "pnl_automation")
-        self.automation_sizer = xrc.XRCCTRL(self, "automation_sizer")
-        self.workflow_features_chk_list = xrc.XRCCTRL(self, "workflow_features_chk_list")
-        self.workflow_task_chk_list = xrc.XRCCTRL(self, "workflow_task_chk_list")
-        self.btn_run_automated_milling = xrc.XRCCTRL(self, "btn_run_automated_milling")
-        self.txt_automated_milling_est_time = xrc.XRCCTRL(self, "txt_automated_milling_est_time")
-        self.gauge_automated_milling = xrc.XRCCTRL(self, "gauge_automated_milling")
-        self.txt_automated_milling_left_time = xrc.XRCCTRL(self, "txt_automated_milling_left_time")
-        self.btn_automated_milling_cancel = xrc.XRCCTRL(self, "btn_automated_milling_cancel")
-        self.txt_automated_milling_status = xrc.XRCCTRL(self, "txt_automated_milling_status")
 
 
 
@@ -4732,7 +4733,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxALL|wxEXPAND</flag>
+							<flag>wxBOTTOM|wxEXPAND</flag>
 							<border>5</border>
 						</object>
 						<object class="sizeritem">
@@ -4749,7 +4750,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 											</font>
 										</object>
 										<flag>wxBOTTOM|wxALL</flag>
-										<border>5</border>
+										<border>10</border>
 									</object>
 									<object class="sizeritem">
 										<object class="wxGridBagSizer">
@@ -5112,7 +5113,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												</object>
 												<option>1</option>
 												<flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-												<border>7</border>
+												<border>10</border>
 											</object>
 											<object class="sizeritem">
 												<object class="ImageTextButton" name="btn_cancel">
@@ -9720,26 +9721,40 @@ B`\x82'''
                                   <object class="ImageButton" name="btn_delete_feature">
                                     <icon>______img_icon_ico_trash_png</icon>
                                     <height>16</height>
+                                    <fg>#FFFFFF</fg>
+                                    <bg>#333333</bg>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="OwnerDrawnComboBox" name="cmb_features">
-                                    <size>145,20</size>
+                                    <size>156,20</size>
                                     <fg>#2FA7D4</fg>
                                     <bg>#333333</bg>
                                     <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
                                   </object>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_create_move_feature">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Create/Move</label>
-                                    <style>wxALIGN_CENTRE</style>
+                                  <object class="wxPanel">
+                                    <size>120,24</size>
+                                    <object class="wxBoxSizer">
+                                      <orient>wxHORIZONTAL</orient>
+                                      <object class="sizeritem">
+                                        <object class="ImageTextButton" name="btn_create_move_feature">
+                                          <height>24</height>
+                                          <label>Create / Move</label>
+                                          <style>wxALIGN_CENTRE</style>
+                                          <fg>#FFFFFF</fg>
+                                          <bg>#333333</bg>
+                                        </object>
+                                        <flag>wxALIGN_CENTER</flag>
+                                        <option>1</option>
+                                      </object>
+                                    </object>
                                   </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>52</border>
+                                  <flag>wxLEFT|wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                                  <border>82</border>
+                                  <option>0</option>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
@@ -9756,7 +9771,7 @@ B`\x82'''
                                 </object>
                                 <object class="sizeritem">
                                   <object class="OwnerDrawnComboBox" name="cmb_feature_status">
-                                    <size>122,16</size>
+                                    <size>133,16</size>
                                     <fg>#2FA7D4</fg>
                                     <bg>#333333</bg>
                                     <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
@@ -9765,17 +9780,26 @@ B`\x82'''
                                   <border>10</border>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_go_to_feature">
-                                    <height>24</height>
-                                    <label>Go to feature</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <bg>#000000</bg>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
+                                  <object class="wxPanel">
+                                    <size>120,24</size>
+                                    <object class="wxBoxSizer">
+                                      <orient>wxHORIZONTAL</orient>
+                                      <object class="sizeritem">
+                                        <object class="ImageTextButton" name="btn_go_to_feature">
+                                          <height>24</height>
+                                          <label>Go to Feature</label>
+                                          <style>wxALIGN_CENTRE</style>
+                                          <fg>#FFFFFF</fg>
+                                          <bg>#333333</bg>
+                                        </object>
+                                        <flag>wxALIGN_CENTER</flag>
+                                        <option>1</option>
+                                      </object>
+                                    </object>
                                   </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>52</border>
+                                  <flag>wxLEFT|wxALIGN_RIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                                  <border>82</border>
+                                  <option>0</option>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
@@ -9788,22 +9812,24 @@ B`\x82'''
                                   <object class="ImageTextButton" name="btn_feature_save_position">
                                   <icon>______img_icon_ico_save_png</icon>
                                     <height>48</height>
+                                    <size>180,48</size>
                                     <face_colour>blue</face_colour>
                                     <label>SAVE POSITION</label>
                                     <fg>#FFFFFF</fg>
+                                    <bg>#333333</bg>
                                     <font>
                                       <size>12</size>
                                       <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                     </font>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
-                                  <flag>wxALL wxEXPAND</flag>
-                                  <border>10</border>
+                                  <flag>wxALL|wxEXPAND</flag>
+                                  <border>5</border>
                                 </object>
                               <orient>wxHORIZONTAL</orient>
                               </object>
-                              <flag>wxLEFT|wxTOP</flag>
-                              <border>10</border>
+                              <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
                             </object>
                             <flag>wxALIGN_RIGHT</flag>
                             <orient>wxVERTICAL</orient>
@@ -9828,63 +9854,60 @@ B`\x82'''
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
-                              <object class="wxGridBagSizer">
-                                <object class="sizeritem">
-                                  <object class="ProgressRadioButton" name="btn_switch_sem_imaging">
-                                    <icon>______img_icon_ico_sem_png</icon>
-                                    <icon_progress>______img_icon_ico_sem_orange_png</icon_progress>
-                                    <icon_on>______img_icon_ico_sem_green_png</icon_on>
-                                    <height>48</height>
-                                    <face_colour>def</face_colour>
-                                    <label>SEM IMAGING</label>
-                                    <fg>#1A1A1A</fg>
-                                    <font>
-                                      <size>11</size>
-                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                    </font>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <hidden>0</hidden>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
+                              <object class="sizeritem">
+                                <object class="wxBoxSizer">
+                                  <orient>wxHORIZONTAL</orient>
+                                  <object class="sizeritem">
+                                    <object class="ProgressRadioButton" name="btn_switch_sem_imaging">
+                                      <icon>______img_icon_ico_sem_png</icon>
+                                      <icon_progress>______img_icon_ico_sem_orange_png</icon_progress>
+                                      <icon_on>______img_icon_ico_sem_green_png</icon_on>
+                                      <height>48</height>
+                                      <face_colour>def</face_colour>
+                                      <label>SEM IMAGING</label>
+                                      <fg>#1A1A1A</fg>
+                                      <font>
+                                        <size>11</size>
+                                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                      </font>
+                                      <style>wxALIGN_CENTRE</style>
+                                      <hidden>0</hidden>
+                                      <XRCED><assign_var>1</assign_var></XRCED>
+                                    </object>
+                                    <flag>wxEXPAND|wxALL</flag>
+                                    <border>10</border>
+                                    <option>1</option>
                                   </object>
-                                  <flag>wxALL|wxEXPAND</flag>
-                                  <border>10</border>
-                                  <cellpos>0,0</cellpos>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ProgressRadioButton" name="btn_switch_milling">
-                                    <icon>______img_icon_ico_milling_png</icon>
-                                    <icon_progress>______img_icon_ico_milling_orange_png</icon_progress>
-                                    <icon_on>______img_icon_ico_milling_green_png</icon_on>
-                                    <height>48</height>
-                                    <face_colour>def</face_colour>
-                                    <label>MILLING</label>
-                                    <fg>#1A1A1A</fg>
-                                    <font>
-                                      <size>11</size>
-                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                    </font>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <hidden>0</hidden>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
+                                  <object class="sizeritem">
+                                    <object class="ProgressRadioButton" name="btn_switch_milling">
+                                      <icon>______img_icon_ico_milling_png</icon>
+                                      <icon_progress>______img_icon_ico_milling_orange_png</icon_progress>
+                                      <icon_on>______img_icon_ico_milling_green_png</icon_on>
+                                      <height>48</height>
+                                      <face_colour>def</face_colour>
+                                      <label>MILLING</label>
+                                      <fg>#1A1A1A</fg>
+                                      <font>
+                                        <size>11</size>
+                                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                      </font>
+                                      <style>wxALIGN_CENTRE</style>
+                                      <hidden>0</hidden>
+                                      <XRCED><assign_var>1</assign_var></XRCED>
+                                    </object>
+                                    <flag>wxEXPAND|wxALL</flag>
+                                    <border>10</border>
+                                    <option>1</option>
                                   </object>
-                                  <flag>wxALL|wxEXPAND</flag>
-                                  <border>10</border>
-                                  <cellpos>0,1</cellpos>
                                 </object>
-                                <vgap>5</vgap>
-                                <hgap>20</hgap>
+                                <flag>wxEXPAND</flag>
+                                <option>1</option>
                               </object>
-                            </object>
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
                                     <object class="wxStaticText" name="lbl_milling_angle">
-                                      <label>Milling Angle</label>
+                                      <label>Milling angle</label>
                                       <fg>#BFBFBF</fg>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -9894,8 +9917,8 @@ B`\x82'''
                                         <encoding>UTF-8</encoding>
                                       </font>
                                     </object>
-                                    <flag>wxTOP|wxLEFT</flag>
-                                    <border>25</border>
+                                    <flag>wxLEFT|wxBOTTOM</flag>
+                                    <border>10</border>
                                   </object>
                                   <object class="sizeritem">
                                     <object class="UnitFloatCtrl" name="ctrl_milling_angle">
@@ -9916,8 +9939,8 @@ B`\x82'''
                                       </XRCED>
                                     </object>
                                     <orient>wxEXPAND</orient>
-                                    <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
-                                    <border>25</border>
+                                    <flag>wxLEFT|wxBOTTOM</flag>
+                                    <border>10</border>
                                   </object>
                                   <orient>wxHORIZONTAL</orient>
                                 </object>
@@ -10125,17 +10148,15 @@ B`\x82'''
                             </object> -->
                             <object class="sizeritem">
                               <object class="wxCheckBox" name="chkbox_save_acquisition">
-                                <label>Auto Save Acquisition</label>
+                                <label>Auto save acquisition</label>
                                 <fg>#E5E5E5</fg>
                                 <checked>0</checked>
-                                <flag>wxTOP</flag>
-                                <border>25</border>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
-                                <flag>wxALL|wxEXPAND</flag>
                               </object>
-                              <border>25</border>
+                              <flag>wxALL|wxEXPAND</flag>
+                              <border>10</border>
                             </object>
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
@@ -10167,7 +10188,7 @@ B`\x82'''
                                       <object class="ImageTextButton" name="btn_cryosecom_change_file">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>change…</label>
+                                        <label>Change…</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
@@ -10192,25 +10213,37 @@ B`\x82'''
                             </object>
                             <object class="sizeritem">
                               <object class="wxFlexGridSizer">
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_cryosecom_acquire">
-                                    <icon>______img_icon_ico_acqui_png</icon>
-                                    <height>48</height>
-                                    <face_colour>blue</face_colour>
-                                    <label>ACQUIRE</label>
-                                    <fg>#FFFFFF</fg>
-                                    <font>
-                                      <size>15</size>
-                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                    </font>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
+                              <object class="sizeritem">
+                                <object class="wxPanel">
+                                  <size>200,48</size>
+                                  <bg>#333333</bg>
+                                  <object class="wxBoxSizer">
+                                    <orient>wxHORIZONTAL</orient>
+                                    <object class="sizeritem">
+                                      <object class="ImageTextButton" name="btn_cryosecom_acquire">
+                                        <icon>______img_icon_ico_acqui_png</icon>
+                                        <height>48</height>
+                                        <face_colour>blue</face_colour>
+                                        <label>ACQUIRE</label>
+                                        <fg>#FFFFFF</fg>
+                                        <font>
+                                          <size>15</size>
+                                          <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxALIGN_CENTER</flag>
+                                      <option>1</option>
+                                    </object>
                                   </object>
-                                  <flag>wxALL|wxEXPAND</flag>
-                                  <border>2</border>
                                 </object>
+                                <option>0</option>
+                                <flag>wxALL|wxALIGN_CENTER_VERTICAL</flag>
+                                <border>2</border>
+                              </object>
                                 <object class="sizeritem">
                                   <object class="wxBoxSizer">
                                     <object class="sizeritem">
@@ -10264,12 +10297,12 @@ B`\x82'''
                                       <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
-                                        <label>cancel</label>
+                                        <label>Cancel</label>
                                         <XRCED>
                                           <assign_var>1</assign_var>
                                         </XRCED>
                                       </object>
-                                      <flag>wxTOP</flag>
+                                      <flag>wxTOP|wxLEFT</flag>
                                       <border>12</border>
                                       <option>0</option>
                                     </object>
@@ -10305,36 +10338,36 @@ B`\x82'''
                                 <flag>wxALL|wxEXPAND</flag>
                                 <border>10</border>
                               </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_acquire_overview">
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>ACQUIRE OVERVIEW</label>
-                                <font>
+                                    <object class="sizeritem">
+                                      <object class="ImageTextButton" name="btn_acquire_overview">
+                                        <height>48</height>
+                                        <face_colour>def</face_colour>
+                                        <label>ACQUIRE OVERVIEW</label>
+                                        <font>
                                   <size>14</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
+                                          <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
-                              </object>
+                                      </object>
                               <option>0</option>
                               <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                              <border>10</border>
-                            </object>
+                                      <border>10</border>
+                                    </object>
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_tdct">
-                                    <height>48</height>
-                                    <face_colour>def</face_colour>
+                                    <object class="sizeritem">
+                                      <object class="ImageTextButton" name="btn_tdct">
+                                        <height>48</height>
+                                        <face_colour>def</face_colour>
                                     <label>Correlate FIB/FM</label>
-                                    <font>
+                                        <font>
                                       <size>14</size>
-                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                    </font>
-                                    <style>wxALIGN_CENTRE</style>
+                                          <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                        </font>
+                                        <style>wxALIGN_CENTRE</style>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
@@ -10373,11 +10406,156 @@ B`\x82'''
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem" name="fp_milling">
+                      <object class="FoldPanelItem" name="fp_automation">
                         <label>MILLING</label>
-                        <object class="wxPanel" name="pnl_milling">
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <object class="wxPanel" name="pnl_automation">
                           <fg>#1A1A1A</fg>
                           <bg>#555555</bg>
+                            <object class="wxBoxSizer" name="automation_sizer">
+                              <object class="sizeritem">
+                                <object class="wxCheckListBox" name="workflow_features_chk_list">
+                                  <content/>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                </object>
+                                <option>1</option>
+                                <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxCheckListBox" name="workflow_task_chk_list">
+                                  <content/>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                </object>
+                                <option>1</option>
+                                <flag>wxRIGHT|wxLEFT|wxTOP|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="ImageTextButton" name="btn_run_automated_milling">
+                                  <icon>______img_icon_ico_milling_png</icon>
+                                  <height>48</height>
+                                  <face_colour>blue</face_colour>
+                                  <label>MILL</label>
+                                  <fg>#FFFFFF</fg>
+                                  <font>
+                                    <size>15</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <style>wxALIGN_CENTRE</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="txt_automated_milling_est_time">
+                                  <label>Estimated time ...</label>
+                                  <fg>#E5E5E5</fg>
+                                </object>
+                                <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <!-- Add a gauge, a label and a cancel button to a boxsizer below -->
+                              <object class="sizeritem">
+                                <object class="wxBoxSizer" name="sizer_automated_milling_row">
+                                  <orient>wxHORIZONTAL</orient>
+
+                                  <object class="sizeritem">
+                                    <object class="wxPanel">
+                                      <size>200,8</size>
+                                      <object class="wxBoxSizer">
+                                        <orient>wxVERTICAL</orient>
+                                        <object class="spacer"><option>1</option></object>
+                                        <object class="sizeritem">
+                                          <object class="wxGauge" name="gauge_automated_milling">
+                                            <size>200,8</size>
+                                            <range>100</range>
+                                            <value>0</value>
+                                            <style>wxGA_SMOOTH</style>
+                                            <XRCED><assign_var>1</assign_var></XRCED>
+                                          </object>
+                                          <flag>wxALIGN_CENTER_VERTICAL</flag>
+                                        </object>
+                                        <object class="spacer"><option>1</option></object>
+                                      </object>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                                    <border>10</border>
+                                  </object>
+
+                                  <object class="sizeritem">
+                                    <object class="wxPanel">
+                                      <size>80,24</size>
+                                      <object class="wxBoxSizer">
+                                        <orient>wxHORIZONTAL</orient>
+                                        <object class="sizeritem">
+                                          <object class="wxStaticText" name="txt_automated_milling_left_time">
+                                            <label/>
+                                            <fg>#E5E5E5</fg>
+                                          </object>
+                                          <flag>wxALIGN_CENTER</flag>
+                                          <option>1</option>
+                                        </object>
+                                      </object>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT|wxTOP|wxALIGN_CENTER_VERTICAL</flag>
+                                    <border>10</border>
+                                  </object>
+
+                                  <object class="sizeritem">
+                                    <object class="ImageTextButton" name="btn_automated_milling_cancel">
+                                      <height>24</height>
+                                      <face_colour>def</face_colour>
+                                      <label>Cancel</label>
+                                      <XRCED><assign_var>1</assign_var></XRCED>
+                                    </object>
+                                    <flag>wxLEFT|wxRIGHT|wxTOP|wxALIGN_CENTER_VERTICAL</flag>
+                                    <border>10</border>
+                                  </object>
+
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>0</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="txt_automated_milling_status">
+                                  <label/>
+                                  <fg>#E5E5E5</fg>
+                                </object>
+                                <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
+                                <border>10</border>
+                              </object>
+                              <orient>wxVERTICAL</orient>
+                              <flag>wxEXPAND</flag>
+                              <border>20</border>
+                            </object>
+                          <flag>wxEXPAND</flag>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          </object>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+
+                      <object class="FoldPanelItem" name="fp_milling">
+                        <label>PATTERNS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <object class="wxPanel" name="pnl_milling">
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
                             <object class="wxBoxSizer" name="milling_flex_grid_sizer">
                               <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
@@ -10392,10 +10570,13 @@ B`\x82'''
                               <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
                               <border>10</border>
                             </object>
+                            <object class="spacer">
+                              <size>0,10</size> <!-- width,height -->
+                            </object>
                               <object class="sizeritem">
                                 <object class="ImageTextButton" name="btn_run_milling">
                                   <hidden>1</hidden>
-                                  <icon>______img_icon_ico_sem_png</icon>
+                                  <icon>______img_icon_ico_milling_png</icon>
                                   <height>48</height>
                                   <face_colour>blue</face_colour>
                                   <label>MILL</label>
@@ -10470,7 +10651,7 @@ B`\x82'''
                                   <hidden>1</hidden>
                                   <height>24</height>
                                   <face_colour>def</face_colour>
-                                  <label>cancel</label>
+                                  <label>Cancel</label>
                                   <XRCED>
                                     <assign_var>1</assign_var>
                                   </XRCED>
@@ -10506,119 +10687,6 @@ B`\x82'''
                           </XRCED>
                           <flag>wxEXPAND</flag>
                         </object>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_automation">
-                        <label>AUTOMATION</label>
-                        <object class="wxPanel" name="pnl_automation">
-                          <fg>#1A1A1A</fg>
-                          <bg>#555555</bg>
-                            <object class="wxBoxSizer" name="automation_sizer">
-                              <object class="sizeritem">
-                                <object class="wxCheckListBox" name="workflow_features_chk_list">
-                                  <content/>
-                                  <font>
-                                    <size>10</size>
-                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                  </font>
-                                </object>
-                                <option>1</option>
-                                <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxCheckListBox" name="workflow_task_chk_list">
-                                  <content/>
-                                  <font>
-                                    <size>10</size>
-                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                  </font>
-                                </object>
-                                <option>1</option>
-                                <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="ImageTextButton" name="btn_run_automated_milling">
-                                  <icon>______img_icon_ico_sem_png</icon>
-                                  <height>48</height>
-                                  <face_colour>blue</face_colour>
-                                  <label>RUN AUTOMATED MILLING</label>
-                                  <fg>#FFFFFF</fg>
-                                  <font>
-                                    <size>15</size>
-                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                  </font>
-                                  <style>wxALIGN_CENTRE</style>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxALL|wxEXPAND</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="txt_automated_milling_est_time">
-                                  <label>Estimated time ...</label>
-                                  <fg>#E5E5E5</fg>
-                                </object>
-                              </object>
-                              <!-- Add a gauge, a label and a cancel button to a boxsizer below -->
-                              <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <object class="sizeritem">
-                                    <object class="wxGauge" name="gauge_automated_milling">
-                                      <!-- <size>-1,10</size> -->
-                                      <range>100</range>
-                                      <value>0</value>
-                                      <style>wxGA_SMOOTH</style>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
-                                    </object>
-                                    <border>10</border>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="wxStaticText" name="txt_automated_milling_left_time">
-                                      <label/>
-                                      <fg>#E5E5E5</fg>
-                                      <border>10</border>
-                                    </object>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="ImageTextButton" name="btn_automated_milling_cancel">
-                                      <height>24</height>
-                                      <face_colour>def</face_colour>
-                                      <label>Cancel</label>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
-                                      </object>
-                                    <border>10</border>
-                                  </object>
-                                <flag>wxALL|wxEXPAND</flag>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="txt_automated_milling_status">
-                                  <label/>
-                                  <fg>#E5E5E5</fg>
-                                  <border>10</border>
-                                </object>
-                                <flag>wxALL|wxEXPAND</flag>
-                              </object>
-                              <orient>wxVERTICAL</orient>
-                              <flag>wxEXPAND</flag>
-                              <border>20</border>
-                            </object>
-                          <flag>wxEXPAND</flag>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          </object>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -11683,12 +11751,15 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_create_move_feature">
                                     <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Create/Move</label>
+                                    <fg>#FFFFFF</fg>
+                                    <bg>#333333</bg>
+                                    <label>Create / Move</label>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
-                                  <flag>wxLEFT</flag>
+                                  <minsize>120,24</minsize>
+                                  <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
                                   <border>52</border>
+                                  <option>0</option>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
@@ -11716,15 +11787,19 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_go_to_feature">
                                     <height>24</height>
-                                    <label>Go to feature</label>
+                                    <label>Go to Feature</label>
                                     <style>wxALIGN_CENTRE</style>
-                                    <bg>#000000</bg>
+                                    <fg>#FFFFFF</fg>
+                                    <bg>#333333</bg>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
-                                  <flag>wxLEFT</flag>
+                                  <!-- Control layout in parent sizer -->
+                                  <minsize>120,24</minsize>
+                                  <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
                                   <border>52</border>
+                                  <option>0</option>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>

@@ -263,12 +263,15 @@
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_create_move_feature">
                                     <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Create/Move</label>
+                                    <fg>#FFFFFF</fg>
+                                    <bg>#333333</bg>
+                                    <label>Create / Move</label>
                                     <style>wxALIGN_CENTRE</style>
                                   </object>
-                                  <flag>wxLEFT</flag>
+                                  <minsize>120,24</minsize>
+                                  <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
                                   <border>52</border>
+                                  <option>0</option>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
@@ -296,15 +299,19 @@
                                 <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_go_to_feature">
                                     <height>24</height>
-                                    <label>Go to feature</label>
+                                    <label>Go to Feature</label>
                                     <style>wxALIGN_CENTRE</style>
-                                    <bg>#000000</bg>
+                                    <fg>#FFFFFF</fg>
+                                    <bg>#333333</bg>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
-                                  <flag>wxLEFT</flag>
+                                  <!-- Control layout in parent sizer -->
+                                  <minsize>120,24</minsize>
+                                  <flag>wxLEFT|wxALIGN_CENTER_VERTICAL</flag>
                                   <border>52</border>
+                                  <option>0</option>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
