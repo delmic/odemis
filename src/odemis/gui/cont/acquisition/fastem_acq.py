@@ -548,7 +548,7 @@ class FastEMSingleBeamAcquiController(object):
             self._tab_panel.pnl_acq, size=(400, 40)
         )
         chk_ebeam_off_lbl, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
-            "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
+            "Turn off e-beam after acquisition", value=False, pos_col=2, span=(1, 1)
         )
         chk_ebeam_off_lbl.SetToolTip(
             "Automatically turned off the e-beam after acquisition is complete."
@@ -983,7 +983,7 @@ class FastEMMultiBeamAcquiController(object):
             "and continue the acquisition for subsequent ROAs."
         )
         chk_ebeam_off_lbl, self.chk_ebeam_off = self.acq_panel.add_checkbox_control(
-            "Turn off e-beam after acquisition", value=True, pos_col=2, span=(1, 1)
+            "Turn off e-beam after acquisition", value=False, pos_col=2, span=(1, 1)
         )
         chk_ebeam_off_lbl.SetToolTip(
             "Automatically turned off the e-beam after acquisition is complete."
