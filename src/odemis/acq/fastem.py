@@ -30,6 +30,7 @@ from typing import Optional
 from concurrent.futures import CancelledError
 
 import numpy
+from shapely.geometry import Polygon
 
 try:
     from fastem_calibrations import util as fastem_util
@@ -43,7 +44,7 @@ import odemis.acq.stream as acqstream
 from odemis import model, util
 from odemis.acq import fastem_conf, stitching
 from odemis.acq.align.fastem import align, estimate_calibration_time
-from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
+from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod, WEAVER_COLLAGE
 from odemis.acq.stream import SEMStream
 from odemis.util import TimeoutError, transform
 from odemis.util.driver import guessActuatorMoveDuration
@@ -789,12 +790,12 @@ class AcquisitionTask(object):
 ########################################################################################################################
 # Overview image acquisition
 
-# Fixed settings
-# FIXME: in theory the precision of the stage should be better, update this value when the stage precision has improved
-STAGE_PRECISION = 29e-6  # m, acceptable precision of the stage position, is used to determine the overview overlap
-
-
-def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True, live_stream=None):
+def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_conf, reference_stage=True,
+                                   live_stream=None, file_pattern=None, pre_calibrations=None,
+                                   scanner=None, multibeam=None, descanner=None, detector=None,
+                                   ccd=None, beamshift=None, se_detector=None, ebeam_focus=None,
+                                   overlap=0.1, centered_acq=True
+                                   ):
     """
     Start an overview acquisition task for a given region.
 
@@ -811,6 +812,21 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     :param reference_stage: (bool) If True, the stage will be referenced before the acquisition.
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
+    :param file_pattern: (str or None): Directory + filepattern where to save the overview acquisition tiles.
+        If None, the tiles are not saved.
+    :param pre_calibrations: (list[Calibrations] or None): List of calibrations to run before the acquisition.
+        If None, no pre-calibrations are run.
+    :param scanner: (Scanner) The ebeam scanner.
+    :param multibeam: (MultiBeam) The multiprobe component.
+    :param descanner: (Descanner) The descanner component.
+    :param detector: (MultiProbeDetector) The multiprobe detector component.
+    :param ccd: (CCD) The diagnostic camera component.
+    :param beamshift: (BeamShift) The beamshift component.
+    :param se_detector: (SEDetector) The secondary electron detector component.
+    :param ebeam_focus: (EBeamFocus) The ebeam focus component.
+    :param overlap: (0 < float < 1) The overlap ratio between tiles.
+    :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
+        If False, the acquisition starts at the top-left corner of the area.
 
     :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
              It returns the complete DataArray.
@@ -847,12 +863,14 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf, reference_stage)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, toa.shape.points.value, live_stream, scanner_conf,
+                      reference_stage, file_pattern, pre_calibrations, scanner, multibeam, descanner, detector,
+                                   ccd, beamshift, se_detector, ebeam_focus, overlap, centered_acq)
 
     return f
 
 
-def acquireTiledArea(stream, stage, region, live_stream=None):
+def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01, centered_acq=True):
     """
     Start an overview acquisition task for a given region.
 
@@ -867,6 +885,9 @@ def acquireTiledArea(stream, stage, region, live_stream=None):
         of the overview region in the sample carrier coordinate system.
     :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
         to build up live the whole acquisition. NOT SUPPORTED YET.
+    :param overlap: (0 < float < 1) The overlap ratio between tiles.
+    :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
+        If False, the acquisition starts at the top-left corner of the area.
 
     :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
              It returns the complete DataArray.
@@ -903,18 +924,19 @@ def acquireTiledArea(stream, stage, region, live_stream=None):
     # overwrites the scanner configuration from overview mode to liveview mode.
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
-    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, region)
+    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, region, overlap)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition(future=f)
-    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, region, live_stream, overlap=overlap,
+                      centered_acq=centered_acq)
 
     return f
 
 
-def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
+def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None, overlap=0.01):
     """
     Estimate the time needed to acquire a full overview image. Calculate the
     number of tiles needed for the requested area based on set dwell time and
@@ -932,6 +954,7 @@ def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
         of the overview region in the sample carrier coordinate system.
     :param dwell_time: (float) A user input dwell time to be used instead of the stream emitter's dwell time
         for acquisition time calculation.
+    :param overlap: (0 < float < 1) The overlap ratio between tiles.
 
     :return: The estimated total acquisition time for the overview image in seconds.
     """
@@ -977,11 +1000,6 @@ def estimateTiledAcquisitionTime(stream, stage, region, dwell_time=None):
     # Total stage movement time
     stage_time = time_x + time_y
 
-    # The stage movement precision is quite good (just a few pixels). The stage's
-    # position reading is much better, and we can assume it's below a pixel.
-    # So as long as we are sure there is some overlap, the tiles will be positioned
-    # correctly and without gap.
-    overlap = STAGE_PRECISION / fov_value
     # Estimate stitching time based on number of pixels in the overlapping part
     max_pxs = res[0] * res[1]
     stitch_time = (nx * ny * max_pxs * overlap) / 1e8  # 1e8 is stitching speed
@@ -1004,18 +1022,37 @@ class OverviewAcquisition(object):
         self._sub_future.cancel()
         return True
 
-    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True):
+    def run(self, stream, stage, area, live_stream, scanner_conf=None, reference_stage=True, file_pattern=None,
+            pre_calibrations=None, scanner=None, multibeam=None, descanner=None, detector=None, ccd=None,
+            beamshift=None, se_detector=None, ebeam_focus=None, overlap=0.01, centered_acq=True):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
         :param stream: (SEMstream) The stream used for the acquisition.
         :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
             The x and y axes are aligned with the x and y axes of the ebeam scanner.
-        :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region.
+        :param area: Either:
+            - (Tuple[float, float, float, float]) Bounding box as (xmin, ymin, xmax, ymax)
+            - (List[Tuple[float, float]]) List of (x, y) points defining a polygon
         :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
                to build up live the whole acquisition. NOT SUPPORTED YET.
         :param scanner_conf: (dict) The scanner configuration to be used for the acquisition.
         :param reference_stage: (bool) If True, reference the stage axes x and y before starting the acquisition.
+        :param file_pattern: (str or None): Directory + filepattern where to save the overview acquisition tiles.
+            If None, the tiles are not saved.
+        :param pre_calibrations: (list[Calibrations] or None): List of calibrations to run before the acquisition.
+            If None, no pre-calibrations are run.
+        :param scanner: (Scanner) The ebeam scanner.
+        :param multibeam: (MultiBeam) The multiprobe component.
+        :param descanner: (Descanner) The descanner component.
+        :param detector: (MultiProbeDetector) The multiprobe detector component.
+        :param ccd: (CCD) The diagnostic camera component.
+        :param beamshift: (BeamShift) The beamshift component.
+        :param se_detector: (SEDetector) The secondary electron detector component.
+        :param ebeam_focus: (EBeamFocus) The ebeam focus component.
+        :param overlap: (0 < float < 1) The overlap ratio between tiles.
+        :param centered_acq: (bool) If True, the acquisition is centered around the area coordinates.
+            If False, the acquisition starts at the top-left corner of the area.
 
         :returns: (DataArray) The complete overview image.
         """
@@ -1033,21 +1070,56 @@ class OverviewAcquisition(object):
         # This value is set back after acquireTiledArea future's result.
         current_immersion_mode = stream.emitter.immersion.value
 
+        if pre_calibrations:
+            if not all([scanner, multibeam, descanner, detector, ccd, beamshift, se_detector, ebeam_focus]):
+                raise ValueError("To run pre-calibrations, all components need to be provided: "
+                                 "scanner, multibeam, descanner, detector, ccd, beamshift, se_detector, ebeam_focus")
+            # Move the stage such that the pre-calibrations are done to the left of the top left field,
+            # outside the region of acquisition to limit beam damage.
+            fov = stream.emitter.horizontalFoV.value
+            logging.debug("Start pre-calibration.")
+            xmin, _, _, ymax = Polygon(area).bounds
+            try:
+                for i in range(3):  # try running the pre-calibrations 3 times
+                    # area is xmin, ymin, xmax, ymax, move to the left of xmin and above ymax
+                    pos = {'x': xmin - fov / 2 - i * 0.2 * fov,
+                           'y': ymax + fov / 2 + i * 0.2 * fov}
+                    f = stage.moveAbs(pos)
+                    f.result()
+
+                    logging.debug(f"Will run pre-calibrations at 'x': {pos['x']}, "
+                                  f"'y': {pos['y']}")
+                    try:
+                        _pre_calibrations_future = align(scanner, multibeam,
+                                                         descanner, detector,
+                                                         stage, ccd,
+                                                         beamshift, None,  # no need for the detector rotator
+                                                         se_detector, ebeam_focus,
+                                                         calibrations=pre_calibrations)
+                        _pre_calibrations_future.result()  # wait for the calibrations to be finished
+                        break  # if it successfully ran, do not try again
+                    except CancelledError:
+                        logging.debug("Cancelled acquisition pre-calibrations.")
+                        raise
+                    except Exception as err:
+                        logging.warning(f"Pre-calibration failed with error {err}, "
+                                        f"will try again at a slightly different position.")
+            except Exception as e:
+                logging.error(f"Pre-calibrations for overview acquisition failed: {e}")
+
+            logging.debug("Finish pre-calibrations.")
+
         fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE, conf=scanner_conf)
 
-        # The stage movement precision is quite good (just a few pixels). The stage's
-        # position reading is much better, and we can assume it's below a pixel.
-        # So as long as we are sure there is some overlap, the tiles will be positioned
-        # correctly and without gap.
-        overlap = STAGE_PRECISION / stream.emitter.horizontalFoV.value
-        logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
+        logging.debug("Overlap is %s%%", overlap * 100)
 
         def _pass_future_progress(sub_f, start, end):
             self._future.set_progress(end=end)
 
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
-                                                      focusing_method=FocusingMethod.NONE)
+                                                      focusing_method=FocusingMethod.NONE, weaver=WEAVER_COLLAGE,
+                                                      log_path=file_pattern, centered_acq=centered_acq)
         self._sub_future.add_update_callback(_pass_future_progress)
 
         das = []

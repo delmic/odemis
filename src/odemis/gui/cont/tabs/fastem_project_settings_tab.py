@@ -25,7 +25,6 @@ import logging
 import wx
 
 import odemis.gui.model as guimod
-from odemis.acq.fastem import STAGE_PRECISION
 from odemis.gui import BG_COLOUR_LEGEND, BG_COLOUR_MAIN, BG_COLOUR_SEPARATOR, img
 from odemis.gui.comp.fastem_user_settings_panel import (
     CONTROL_CONFIG,
@@ -232,7 +231,9 @@ class FastEMProjectSettingsTab(Tab):
         )
         hfw_unit = self.tab_data.main.ebeam.horizontalFoV.unit
         hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
-        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c > STAGE_PRECISION]
+        # At 4 µm HFW the minimal pixel size is ~1 nm which is reasonable for FastEM use-cases; filter out smaller HFWs
+        hfw_cut_off = 4e-6
+        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c >= hfw_cut_off]
         self._immersion_mode_hfw_choices[init_immersion] = (
             hfw_choices_formatted,
             choices_si_prefix,
@@ -243,7 +244,8 @@ class FastEMProjectSettingsTab(Tab):
             None, self.tab_data.main.ebeam.horizontalFoV, None
         )
         hfw_choices_formatted, choices_si_prefix = format_choices(horizontal_fw_choices)
-        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c > STAGE_PRECISION]
+        # At 4 µm HFW the minimal pixel size is ~1 nm which is reasonable for FastEM use-cases; filter out smaller HFWs
+        hfw_choices_formatted = [(c, f) for c, f in hfw_choices_formatted if c >= hfw_cut_off]
         self._immersion_mode_hfw_choices[not init_immersion] = (
             hfw_choices_formatted,
             choices_si_prefix,
