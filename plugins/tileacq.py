@@ -58,6 +58,7 @@ from odemis.acq.stream import (
 )
 from odemis.dataio import get_available_formats
 from odemis.gui.comp import popup
+from odemis.gui.comp.stream_panel import OPT_BTN_REMOVE, OPT_BTN_SHOW
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import AcquisitionDialog, Plugin
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
@@ -410,8 +411,7 @@ class TileAcqPlugin(Plugin):
                                 "Acquire a large area by acquiring the streams multiple "
                                 "times over a grid.")
         self._dlg = dlg
-        # don't allow adding/removing streams
-        self._dlg.streambar_controller.to_static_mode()
+        sp_options = OPT_BTN_REMOVE | OPT_BTN_SHOW
 
         dlg.addSettings(self, self.vaconf)
         for s in ss:
@@ -419,9 +419,9 @@ class TileAcqPlugin(Plugin):
                 # TODO: instead of hard-coding the list, a way to detect the type
                 # of live image?
                 logging.info("Not showing stream %s, for which the live image is not spatial", s)
-                dlg.addStream(s, index=None)
+                dlg.addStream(s, index=None, sp_options=sp_options)
             else:
-                dlg.addStream(s, index=0)
+                dlg.addStream(s, index=0, sp_options=sp_options)
 
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
@@ -431,6 +431,9 @@ class TileAcqPlugin(Plugin):
         dlg.view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         dlg.view.stream_tree.flat.subscribe(self._update_total_area, init=True)
         dlg.view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
+        dlg.hidden_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
+        dlg.hidden_view.stream_tree.flat.subscribe(self._update_total_area, init=True)
+        dlg.hidden_view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
 
         # Default fineAlign to True if it's possible
         # Use live streams to make the decision since visible streams might not be initialized yet
