@@ -67,13 +67,14 @@ class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
     def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None,
-                 sb_ctrl=None):
+                 sb_ctrl=None, sp_options=None):
         """
         view (MicroscopeView or None): Link stream to a view. If view is None, the stream
         will be linked to the focused view. Passing a view to the controller ensures
         that the visibility button functions correctly when multiple views are present.
         sb_ctrl (StreamBarController or None): the StreamBarController which (typically)
           created this StreamController. Only needed for ROA repetition display.
+        sp_options: (int or None) combination of OPT_* values for the StreamPanel or None for default.
         """
 
         self.stream = stream
@@ -83,25 +84,26 @@ class StreamController(object):
 
         self._stream_config = data.get_stream_settings_config().get(type(stream), {})
 
-        options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
+        if sp_options is None:
+            sp_options = OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE
         # Add tint/colormap option if there is a tint VA and adjust based on the stream type
         if hasattr(stream, "tint"):
-            options |= OPT_BTN_TINT
+            sp_options |= OPT_BTN_TINT
             if isinstance(stream, acqstream.RGBStream):
-                options |= OPT_NO_COLORMAPS
+                sp_options |= OPT_NO_COLORMAPS
             # (Temporal)SpectrumStreams *with spectrum data* accept the FIT_TO_RGB option
             if isinstance(stream, acqstream.SpectrumStream) and stream.raw[0].shape[0] > 1:
-                options |= OPT_FIT_RGB
+                sp_options |= OPT_FIT_RGB
 
         # Allow changing the name of dyes (aka FluoStreams)
         if isinstance(stream, acqstream.FluoStream):
-            options |= OPT_NAME_EDIT
+            sp_options |= OPT_NAME_EDIT
 
         # Special display for spectrum (aka SpectrumStream)
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
-            options |= OPT_BTN_PEAK
+            sp_options |= OPT_BTN_PEAK
 
-        self.stream_panel = StreamPanel(stream_bar, stream, options)
+        self.stream_panel = StreamPanel(stream_bar, stream, sp_options)
         self.tab_data_model = tab_data_model
 
         # To update the local resolution without hardware feedback
