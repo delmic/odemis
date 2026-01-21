@@ -45,6 +45,7 @@ try:
         Point,
         FibsemImage,
         FibsemImageMetadata,
+        FibsemRectangle,
         BeamType,
         ImageSettings,
         MicroscopeState,
@@ -56,6 +57,47 @@ except ImportError as e:
     FIBSEMOS_INSTALLED = False
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
+
+
+def _get_reference_image(feature: CryoFeature) -> model.DataArray:
+    """Get the in-memory reference image for a feature or raise."""
+
+    if feature.reference_image is None:
+        logging.error(
+            "Missing reference image for feature '%s' (path=%s). "
+            "This feature was likely loaded from disk without hydrating reference_image.",
+            feature.name.value,
+            getattr(feature, "path", None),
+        )
+        raise ValueError("Missing feature.reference_image.")
+    return feature.reference_image
+
+
+def _crop_to_reduced_area(ref_img: 'FibsemImage', rect: 'FibsemRectangle') -> 'FibsemImage':
+    """Crop a fibsemOS image to the provided reduced-area rectangle.
+
+    :param ref_img: The image to crop.
+    :param rect: Rectangle with fractional coordinates (left, top, width, height).
+    :return: The same image instance with cropped data.
+    """
+
+    h, w = ref_img.data.shape[-2], ref_img.data.shape[-1]
+
+    # fractional to pixel indices
+    x0 = int(rect.left * w)
+    y0 = int(rect.top * h)
+    x1 = int((rect.left + rect.width) * w)
+    y1 = int((rect.top + rect.height) * h)
+
+    # clamp to valid range just in case of rounding
+    x0 = max(0, min(w, x0))
+    x1 = max(0, min(w, x1))
+    y0 = max(0, min(h, y0))
+    y1 = max(0, min(h, y1))
+
+    # crop along the last two axes, DataArray slicing behaves like numpy
+    ref_img.data = ref_img.data[..., y0:y1, x0:x1]
+    return ref_img
 
 
 def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
@@ -112,8 +154,7 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
     return microscope
 
 def create_fibsemos_microscope() -> Union['OdemisThermoMicroscope', 'OdemisTescanMicroscope']:
-    """Create and return a fibsemOS microscope instance matching the detected stage version.
-    """
+    """Create and return a fibsemOS microscope instance matching the detected stage version."""
     stage_bare = model.getComponent(role="stage-bare")
     stage_md = stage_bare.getMetadata()
     md_calib = stage_md.get(model.MD_CALIB, {})
@@ -260,28 +301,11 @@ class FibsemOSMillingTaskManager:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                ref_img = from_odemis_image(self.feature.reference_image)
+                ref_img = from_odemis_image(_get_reference_image(self.feature))
                 ref_img.metadata.image_settings.path = self.path
                 ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
 
-                # crop ref_img.data (DataArray) to the reduced area
-                rect = stage.alignment.rect
-                h, w = ref_img.data.shape[-2], ref_img.data.shape[-1]
-
-                # fractional -> pixel indices
-                x0 = int(rect.left * w)
-                y0 = int(rect.top * h)
-                x1 = int((rect.left + rect.width) * w)
-                y1 = int((rect.top + rect.height) * h)
-
-                # clamp to valid range just in case of rounding
-                x0 = max(0, min(w, x0))
-                x1 = max(0, min(w, x1))
-                y0 = max(0, min(h, y0))
-                y1 = max(0, min(h, y1))
-
-                # crop along the last two axes; DataArray slicing behaves like numpy
-                ref_img.data = ref_img.data[..., y0:y1, x0:x1]
+                ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
 
                 mill_stages(self.microscope, [stage], ref_img)
 
@@ -327,7 +351,15 @@ class FibsemOSMillingTaskManager:
 
 
 def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], feature: CryoFeature, path: Optional[str] = None) -> futures.Future:
-    """Run the given milling tasks asynchronously using a persistent fibsemOS manager."""
+    """Run milling tasks asynchronously via fibsemOS.
+
+    :param tasks: Milling tasks to execute (converted to fibsemOS stages and run in order).
+    :param feature: Feature providing the in-memory reference image used for alignment.
+        Must have ``feature.reference_image`` set.
+    :param path: Directory where acquired reference images will be stored.
+        Defaults to the current working directory.
+    :return: A progressive future for progress reporting and cancellation.
+    """
     global _persistent_millmng
 
     if _persistent_millmng is None:
