@@ -209,18 +209,13 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
 class FibsemOSMillingTaskManager:
     """Manage running milling tasks via fibsemOS using a persistent microscope connection."""
 
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self):
         """Initialize the manager and establish the fibsemOS microscope connection."""
         # create microscope connection
         self.microscope = create_fibsemos_microscope()
         self._lock = threading.Lock()
         self._active = False
         self._cancel_requested = False
-
-        if path is None:
-            path = os.getcwd()
-        self.path = path
-        self.microscope._last_imaging_settings.path = path # note: image acquisition post-milling is not yet supported via odemis
 
         # per-run state (set in async_run)
         self.milling_stages: List["FibsemMillingStage"] = []
@@ -295,7 +290,12 @@ class FibsemOSMillingTaskManager:
                 self._active = False
                 self._cancel_requested = False
 
-    def async_run(self, *, future: futures.Future, tasks: List[MillingTaskSettings], path: Optional[str] = None) -> futures.Future:
+    def async_run(self,
+                  *,
+                  future: futures.Future,
+                  tasks: List[MillingTaskSettings],
+                  feature: CryoFeature,
+                  path: Optional[str] = None) -> futures.Future:
         """Prepare and start a milling run asynchronously (one run at a time)."""
         if path is None:
             path = os.getcwd()
@@ -310,6 +310,8 @@ class FibsemOSMillingTaskManager:
             self._cancel_requested = False
             self.microscope._last_imaging_settings.path = path
             self.milling_stages = milling_stages
+            self.path = path
+            self.feature = feature
             self._future = future
             self._future.running_subf = model.InstantaneousFuture()
             self._future.task_canceller = self.cancel
@@ -324,7 +326,7 @@ class FibsemOSMillingTaskManager:
         return self._future
 
 
-def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], path: Optional[str] = None) -> futures.Future:
+def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], feature: CryoFeature, path: Optional[str] = None) -> futures.Future:
     """Run the given milling tasks asynchronously using a persistent fibsemOS manager."""
     global _persistent_millmng
 
@@ -332,4 +334,4 @@ def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], path: Optional[
         _persistent_millmng = FibsemOSMillingTaskManager()
 
     future = model.ProgressiveFuture()
-    return _persistent_millmng.async_run(future=future, tasks=tasks, path=path)
+    return _persistent_millmng.async_run(future=future, tasks=tasks, feature=feature, path=path)
