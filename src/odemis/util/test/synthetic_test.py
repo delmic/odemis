@@ -42,7 +42,7 @@ class TestParabolicMirrorRayTracer(unittest.TestCase):
 
         # Check type, shape, and dtype of the output image
         self.assertIsInstance(initial_img, numpy.ndarray)
-        self.assertEqual(initial_img.shape, (self.tracer.z_bins, self.tracer.y_bins))
+        self.assertEqual(initial_img.shape, (self.tracer.resolution.value[1], self.tracer.resolution.value[0]))
         self.assertEqual(initial_img.dtype, numpy.uint16)
 
         # Check that the image is not empty/blank, indicating a successful trace
