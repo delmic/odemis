@@ -26,7 +26,7 @@ import numpy
 import odemis
 from odemis import model
 from odemis.acq.move import (FM_IMAGING, GRID_1, MILLING, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
-                             MeteorTFS3PostureManager, LOADING)
+                             MeteorTFS3PostureManager, LOADING, GRID_2)
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.driver import isNearPosition
@@ -177,6 +177,38 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
             self.assertTrue(isNearPosition(new_pos, abs_pos,
                                                   axes={"x", "y", "z"}))
+
+    def test_sample_stage_invariance(self):
+        """
+        Check the same position on the sample, for all posture results in the same sample stage coordinates
+        """
+        stage_md = self.stage_bare.getMetadata()
+
+        # Grid positions are defined in the stage bare coordinates, on the SEM_IMAGING posture
+        # They only contain the linear axes (x, y, z, m).
+        # The rotation axes are defined on MD_FAV_SEM_POS_ACTIVE.
+        sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+        sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        # "arbitrary" positions on the SEM posture in stage bare coordinates
+        pos_bares = [sem_grid1_pos, sem_grid2_pos]
+
+        for pos_bare in pos_bares:
+            pos_sample_ref = None
+            for posture in self.pm.postures:
+                # Convert the SEM position the same position in the other posture
+                pos_bare_switched = self.pm.to_posture(pos_bare, posture)
+                # Convert to sample stage coordinates
+                pos_sample = self.pm.to_sample_stage_from_stage_position(pos_bare_switched, posture)
+                logging.debug("Position %s in posture %s: %s",  pos_bare, POSITION_NAMES[posture], pos_sample)
+
+                if pos_sample_ref is None:
+                    pos_sample_ref = pos_sample
+                else:
+                    testing.assert_pos_almost_equal(pos_sample, pos_sample_ref, atol=1e-6)
 
 
     def test_scan_rotation(self):
