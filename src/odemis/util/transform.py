@@ -1299,6 +1299,7 @@ class RigidTransform(SimilarityTransform):
     def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
         return _optimal_rotation(x, y)
 
+
 def get_rotation_transforms(rx: float = 0, ry: float = 0, rz: float = 0) -> Tuple[numpy.ndarray, numpy.ndarray]:
     """
     Get the transformation matrix (and inverse) for the given set of rotations (around x, y, z).

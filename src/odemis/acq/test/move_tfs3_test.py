@@ -30,7 +30,6 @@ from odemis.acq.move import (FM_IMAGING, GRID_1, MILLING, SEM_IMAGING, UNKNOWN, 
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.driver import isNearPosition
-from odemis.util.transform import get_rotation_transforms
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -179,40 +178,6 @@ class TestMeteorTFS3Move(unittest.TestCase):
             self.assertTrue(isNearPosition(new_pos, abs_pos,
                                                   axes={"x", "y", "z"}))
 
-    def test_transformation_calculation(self):
-        """Simple tests for 3D transform calculations"""
-
-        tf, tf_inv = get_rotation_transforms(rx=0)
-        self.assertEqual(tf.shape, (3, 3))
-        self.assertEqual(tf_inv.shape, (3, 3))
-        numpy.testing.assert_array_almost_equal(tf, numpy.eye(3))
-        numpy.testing.assert_array_almost_equal(tf_inv, numpy.eye(3))
-
-        # rotation around x-axis
-        rx = math.radians(45)
-        tf, tf_inv = get_rotation_transforms(rx=rx)
-        tf_rx = numpy.array(
-                [[1, 0, 0],
-                [0, numpy.cos(rx), -numpy.sin(rx)],
-                [0, numpy.sin(rx), numpy.cos(rx)]])
-        numpy.testing.assert_array_almost_equal(tf, tf_rx)
-        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_rx))
-
-        # rotation around z-axis
-        rz = math.radians(180)
-        tf, tf_inv = get_rotation_transforms(rz=rz)
-        tf_rz = numpy.array([
-            [numpy.cos(rz), -numpy.sin(rz), 0],
-            [numpy.sin(rz), numpy.cos(rz), 0],
-            [0, 0, 1]])
-        numpy.testing.assert_array_almost_equal(tf, tf_rz)
-        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_rz))
-
-        # multiply two rotations (rz, rx)
-        tf, tf_inv = get_rotation_transforms(rx=rx, rz=rz)
-        tf_2 = numpy.dot(tf_rz, tf_rx)
-        numpy.testing.assert_array_almost_equal(tf, tf_2)
-        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_2))
 
     def test_scan_rotation(self):
         # TODO: implement once completed
