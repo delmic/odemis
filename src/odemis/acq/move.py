@@ -1664,6 +1664,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             comp = model.getComponent(name="Linked YZ")
             self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
 
+        # Get shutter VA if available on the e-beam scanner
+        self.shutter = None
+        try:
+            scanner = model.getComponent(role='e-beam')
+            self.shutter = getattr(scanner, 'shutter', None)
+        except LookupError:
+            pass
+
         # Y/Z axes are not perpendicular. The angle depends on rx (if rx==0°, they are perpendicular)
         # To compensate for this, we use shear and scale.
         stage_md = self.stage.getMetadata()
@@ -2124,6 +2132,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'z'}, target_pos)))  # Move the final Z
 
                 if target == FM_IMAGING:
+                    if self.shutter is not None:
+                        logging.info("Retracting shutter before engaging the objective for FM imaging")
+                        self.shutter.value = False  # False = retracted (open), blocking call
                     # Engage the focuser as last move
                     sub_moves.append((self.focus, focus_active))
             else:
@@ -2133,6 +2144,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             logging.info("Moving from position %s to position %s.",current_name, target_name)
             for component, sub_move in sub_moves:
                 self._run_sub_move(future, component, sub_move)
+
+            # Handle shutter when transitioning to MILLING and SEM imaging positions, coming from FM.
+            # We rely on Tescan's automatic shutter control, that acts when the imaging mode changes.
+            # TODO: later extend for FIB_IMAGING
+            if target in [MILLING, SEM_IMAGING] and current_posture == FM_IMAGING and self.shutter is not None:
+                if self.shutter.value is False:
+                    logging.info("Setting shutter to automatic for transition from FM imaging")
+                    self.shutter.value = None  # None = automatic
 
         except CancelledError:
             logging.info("CryoSwitchSamplePosition cancelled.")

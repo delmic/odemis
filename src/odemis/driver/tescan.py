@@ -59,6 +59,8 @@ DEFAULT_ION_PRESET = ""
 MIN_MOVE_SIZE_LIN_MM = 10e-6  # 10e-9 m (delmic) --> 10e-6 mm (tescan)
 MIN_MOVE_SIZE_ROT_DEG = 0.05
 
+SHUTTER_TYPE_SEM = 1  # Value for the SEM shutter type on all TESCAN systems.
+
 class DeviceType(Enum):
     ELECTRON = "electron"
     ION = "ion"
@@ -69,6 +71,7 @@ DEFAULT_BITDEPTH = 16
 class CancelledError(Exception):
     """Data receive was cancelled"""
     pass
+
 
 # Maps canonical method names (SEM) to FIB equivalents.
 # These methods are present in TESCAN's SharkSEM API.
@@ -210,10 +213,12 @@ class DeviceHandler:
 
     def __del__(self):
         try:
-            self.Disconnect()
+            # Bypass the logging wrapper by directly calling the device's Disconnect method
+            # to avoid logging errors during interpreter shutdown
+            self.device.connection.Disconnect()
         except Exception:
-            # Destructors should fail silently
-            logging.debug("Could not disconnect from TESCAN server")
+            # Silently ignore all other errors during cleanup
+            pass
 
 
 class SEM(model.HwComponent):
@@ -758,6 +763,37 @@ class Scanner(model.Emitter):
             bmode = self._device_handler.ScGetBlanker(1)
             blanked = (bmode != 0)
             self.blanker = model.BooleanVA(blanked, setter=self._setBlanker)
+
+            # Lock to protect shutter access between polling and setter
+            self._shutter_lock = threading.Lock()
+
+            # Initialize shutter control
+            self._original_shutter_mode = None
+            try:
+                # Get shutter ID from type using ShutterEnum
+                shutter_id = self._get_shutter_id_by_type(SHUTTER_TYPE_SEM)
+                self._shutter_id = shutter_id
+
+                # Read current position and mode to create VA
+                shutter_mode = self._device_handler.ShutterGetMode(shutter_id)
+                self._original_shutter_mode = shutter_mode
+                shutter_pos = self._device_handler.ShutterGet(shutter_id)
+
+                # Convert to VA value: mode 1 (auto) → None, mode 0 with pos 0 → True, pos 1 → False
+                if shutter_mode == 1:
+                    va_value = None
+                else:
+                    va_value = True if shutter_pos == 0 else False
+
+                self.shutter = model.VAEnumerated(
+                    va_value,
+                    choices={False: 'retracted', True: 'protecting', None: 'auto'},
+                    setter=self._set_shutter_position
+                )
+            except HwError as e:
+                logging.warning(f"No SEM shutter found: {e}")
+            except Exception as e:
+                logging.exception(f"Unexpected error during shutter initialization: {e}")
         if self._device_handler.device_type == DeviceType.ION:
             # NOTE: workaround for check in SecomStateController (which is a generic controller, contrary to it's name)
             self.blanker = model.VAEnumerated(None, choices={None})
@@ -798,6 +834,34 @@ class Scanner(model.Emitter):
         # obtained directly via the API.
         beam_presets.add(DEFAULT_ION_PRESET)
         return beam_presets
+
+    def _get_shutter_id_by_type(self, shutter_type: int) -> int:
+        """
+        Find the shutter ID for a given shutter type by parsing ShutterEnum output.
+
+        :param shutter_type: The shutter type to search for (e.g., 1 for SEM).
+        :return: The shutter ID corresponding to the given type.
+        :raises HwError: If no shutter with the specified type is found.
+        """
+        enum_str = self._device_handler.ShutterEnum()
+        logging.debug(f"ShutterEnum output: {enum_str}")
+
+        # Parse the enumeration string to find shutters
+        # Expected format: "shutter.0.name=... shutter.0.id=... shutter.0.type=..."
+        import re
+        for match in re.finditer(r'shutter\.(\d+)\.type=(\d+)', enum_str):
+            shutter_index = int(match.group(1))
+            shutter_type_found = int(match.group(2))
+
+            if shutter_type_found == shutter_type:
+                # Extract the ID for this shutter
+                id_match = re.search(rf'shutter\.{shutter_index}\.id=(\d+)', enum_str)
+                if id_match:
+                    shutter_id = int(id_match.group(1))
+                    logging.debug(f"Found shutter type {shutter_type} at ID {shutter_id}")
+                    return shutter_id
+
+        raise HwError(f"No shutter with type {shutter_type} found in ShutterEnum output: {enum_str}")
 
     def _onHorizontalFOV(self, s):
         # Update current pixelSize and magnification
@@ -968,6 +1032,54 @@ class Scanner(model.Emitter):
         # So there is not need to wait explicitly after changing the value.
         return external
 
+    def _set_shutter_position(self, value: Union[bool, None]) -> Union[bool, None]:
+        """
+        Set shutter position to protecting, retracted, or auto mode.
+        Blocks until shutter physically reaches the target position (max 20s).
+
+        Note: Acquires _shutter_lock to prevent polling from overwriting the
+        desired value while we wait for the hardware to actually move.
+
+        :param value: True (protecting), False (retracted), or None (auto)
+        :return: The set value
+        :raises HwError: if API call fails or timeout waiting for position
+        """
+        with self._shutter_lock:
+            if value is None:
+                # Switch to auto mode (no need to wait for position)
+                result = self._device_handler.ShutterSetMode(self._shutter_id, 1)
+                if result != 0:
+                    raise HwError(f"Failed to set the shutter mode: {result}")
+            else:
+                # Manual mode: ensure we're in manual mode first
+                result = self._device_handler.ShutterSetMode(self._shutter_id, 0)
+                if result != 0:
+                    raise HwError(f"Failed to set the shutter mode: {result}")
+
+                # Set position: True (protecting) → 0 (closed), False (retracted) → 1 (open)
+                shutter_pos = 0 if value else 1
+                result = self._device_handler.ShutterSet(self._shutter_id, shutter_pos)
+                if result != 0:
+                    raise HwError(f"Failed to set the shutter position: {result}")
+
+                # Wait for shutter to physically reach the target position
+                # (polling is blocked by the lock we're holding)
+                start_time = time.time()
+                timeout = 20  # seconds
+                logging.debug(f"Waiting for shutter to reach position {shutter_pos}")
+
+                while time.time() - start_time < timeout:
+                    current_pos = self._device_handler.ShutterGet(self._shutter_id)
+                    if current_pos == shutter_pos:
+                        logging.debug(f"Shutter reached target position {shutter_pos}")
+                        break
+                    time.sleep(0.2)  # Poll frequently while holding lock
+                else:
+                    # Timeout occurred
+                    raise HwError(f"Shutter failed to reach position {shutter_pos} within {timeout}s")
+
+        return value
+
     def _onScale(self, s):
         self._updatePixelSize()
 
@@ -1115,6 +1227,23 @@ class Scanner(model.Emitter):
                             self.probeCurrent._value = new_pc
                             self.probeCurrent.notify(new_pc)
 
+                        # Poll shutter status if available
+                        if hasattr(self, 'shutter'):
+                            with self._shutter_lock:
+                                shutter_mode = self._device_handler.ShutterGetMode(self._shutter_id)
+                                if shutter_mode == 1:
+                                    # Auto mode
+                                    new_shutter = None
+                                else:
+                                    # Manual mode: read position
+                                    shutter_pos = self._device_handler.ShutterGet(self._shutter_id)
+                                    # Convert: 0 → True (protecting), 1 → False (retracted), 2 (moving) → False (worst case)
+                                    new_shutter = True if shutter_pos == 0 else False
+
+                                if new_shutter != self.shutter._value:
+                                    self.shutter._value = new_shutter
+                                    self.shutter.notify(new_shutter)
+
                     new_ext = bool(self._device_handler.ScGetExternal())
                     if new_ext != self.external._value:
                         self.external._value = new_ext
@@ -1129,6 +1258,7 @@ class Scanner(model.Emitter):
     def terminate(self):
         self._va_poll.cancel()
         self._va_poll.join(5)
+
         # Dereferenced: will clean itself up
         self._device_handler = None
 

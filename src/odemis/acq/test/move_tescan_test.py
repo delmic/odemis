@@ -23,7 +23,7 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN, MicroscopePostureManager, LOADING)
+from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN, MicroscopePostureManager, MeteorTescan1PostureManager, LOADING, MILLING)
 from odemis.acq.test.move_tfs1_test import TestMeteorTFS1Move
 from odemis.acq.test.move_tfs3_test import TestMeteorTFS3Move
 from odemis.util import testing
@@ -32,15 +32,21 @@ logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
-METEOR_TESCAN1_FIBSEM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-sim.odm.yaml"
+METEOR_TESCAN1_HW_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
+METEOR_TESCAN1_SIM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-sim.odm.yaml"
+
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
     """
     Test the MeteorPostureManager functions for Tescan 1
     """
-    MIC_CONFIG = METEOR_TESCAN1_CONFIG
+    if TEST_NOHW:
+        MIC_CONFIG = METEOR_TESCAN1_SIM_CONFIG
+    else:
+        MIC_CONFIG = METEOR_TESCAN1_HW_CONFIG
+
     ROTATION_AXES = {'rx', 'rz'}
 
     @classmethod
@@ -168,14 +174,18 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
 
 
 class TestMeteorTescan1FibsemMove(TestMeteorTFS3Move):
-    MIC_CONFIG = METEOR_TESCAN1_FIBSEM_CONFIG
+    if TEST_NOHW:
+        MIC_CONFIG = METEOR_TESCAN1_SIM_CONFIG
+    else:
+        MIC_CONFIG = METEOR_TESCAN1_HW_CONFIG
+
     ROTATION_AXES = {'rx', 'rz'}
 
     @classmethod
     def setUpClass(cls):
         testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
-        cls.pm = MicroscopePostureManager(microscope=cls.microscope)
+        cls.pm : MeteorTescan1PostureManager = MicroscopePostureManager(microscope=cls.microscope)
 
         # get the stage components
         cls.stage_bare = model.getComponent(role="stage-bare")
@@ -235,6 +245,28 @@ class TestMeteorTescan1FibsemMove(TestMeteorTFS3Move):
             for axis in m_bare.keys():
                 exp_bare_pos[axis] += m_bare[axis]
             testing.assert_pos_almost_equal(new_bare_pos, exp_bare_pos, atol=1e-6)
+
+    def test_fm_shutter_control(self):
+        """Test shutter state changes during FM mode transitions."""
+        if self.pm.shutter is None:
+            self.skipTest("Shutter not available")
+
+        # Move to safe start position
+        self.pm.cryoSwitchSamplePosition(LOADING).result()
+
+        # Ensure shutter is engaged before engaging the objective, to make it more interesting
+        self.pm.shutter.value = True  # True = engaged (closed)
+        # Move to FM_IMAGING and check shutter is retracted
+        self.pm.cryoSwitchSamplePosition(FM_IMAGING).result()
+        self.assertEqual(self.pm.shutter.value, False, "Shutter should be retracted for FM")
+
+        # Move to MILLING and check shutter is in auto mode
+        self.pm.cryoSwitchSamplePosition(MILLING).result()
+        self.assertEqual(self.pm.shutter.value, None, "Shutter should be in auto mode")
+
+        # Move back to SEM_IMAGING and check shutter mode is unaltered (auto)
+        self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        self.assertEqual(self.pm.shutter.value, None, "Shutter should remain in auto mode for SEM")
 
 if __name__ == "__main__":
     unittest.main()
