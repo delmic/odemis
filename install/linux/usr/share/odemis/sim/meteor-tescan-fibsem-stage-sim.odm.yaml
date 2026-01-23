@@ -1,0 +1,294 @@
+# This microscope file uses simplified simulated stage and not the realistic one.
+# The acquisition happens through the Tescan SEM & FIB.
+
+"METEOR-FIBSEM-Sim": {
+    class: Microscope,
+    role: meteor,
+}
+
+# Connects to Tescan FIBSEM via SharkSEM
+"Tescan FIBSEM": {
+    class: tescan.SEM,
+    role: fibsem,
+    init: {
+        host: "192.168.2.51",
+        port: 8300
+    },
+    children: {
+        scanner: "Electron-Beam",
+        detector0: "Electron-Detector",
+        focus: "Electron-Focus",
+        fib-scanner: "Ion-Beam",
+        fib-detector: "Ion-Detector",
+        #light: "Chamber Light"
+    }
+}
+
+
+"Electron-Beam": {
+    role: e-beam,
+    init: {
+        fov_range: [200.e-9, 6600.e-6]
+    },
+}
+
+"Electron-Detector": {
+    role: se-detector,
+    init: {
+        channel: 0,
+    },
+    properties: {
+        type: "SE",
+    }
+}
+
+"Electron-Focus": {
+    role: ebeam-focus,
+    init: {axes: [z]},
+    affects: ["Electron-Beam"]
+}
+
+# FIB specific components
+"Ion-Beam": {
+    role: ion-beam,
+    init: {
+        fov_range: [196.e-9, 25586.e-6]
+    },
+}
+
+"Ion-Detector": {
+    role: se-detector-ion,
+    init: {
+        channel: 0,
+    },
+    properties: {
+        type: "SE",
+    }
+}
+
+# With calibration values for sample stage
+"Stage": {
+    class: tmcm.TMCLController,
+    role: stage-bare,
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["x", "y", "z", "rx", "rz"],
+        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
+        rng: [[ -50.e-3, 50.e-3 ],
+              [ -50.e-3, 50.e-3 ],
+              [ 0, 94.e-3 ],
+              [ -0.4363323129985824, 1.0122909661567112 ],
+              [ 0, 6.283185307179586 ]
+        ],
+        unit: ["m", "m", "m", "rad", "rad"],
+        refproc: "Standard",
+    },
+    metadata: {
+        # Loading position:
+        FAV_POS_DEACTIVE: {
+            'rx': 0.0,
+            'rz': 0.0,
+            'x': 0.0,
+            'y': 0.0,
+            'z': 0.0,
+        },
+        # XYZ ranges for SEM & METEOR (FM imaging range should perfectly match the POS_ACTIVE_RANGE metadata of the "Meteor Stage" component!),
+        # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
+        SEM_IMAGING_RANGE: {
+            "x": [-13.e-3, 7.e-3],
+            "y": [-20.e-3, 20.e-3],
+            "z": [28.e-3, 38.e-3]  # NOTE: increased max z, since grid 1 center was outside
+        },
+        FM_IMAGING_RANGE: {
+            "x": [44.e-3, 55.e-3],
+            "y": [-23.e-3, 3.e-3],
+            "z": [28.e-3, 32.e-3]
+        },
+        # Grid centers in SEM range, at rx = FAV_SEM_POS_ACTIVE,
+        # These values are based on the expectation from the CAD model. Recalibrate for each system:
+        SAMPLE_CENTERS: {
+            "GRID 1": {
+                'x': -2.611e-3,
+                'y': -13.540e-3,
+                'z': 35.651e-3
+            },
+            "GRID 2": {
+                'x': 1.389e-3,
+                'y': -13.540e-3,
+                'z': 35.651e-3
+            }
+        },
+        # Calibrated values used for the SEM/FM switching behaviour
+        CALIB: {
+            "version": "tescan_1",
+            "x_0": 3.577e-3,
+            "y_0": -0.164e-3,
+            "z_ct": 4.561291055e-3,
+            "dx": 40.419e-3,
+            "dy": 0.268e-3,
+            "b_y": -0.400216e-3,
+            "pre-tilt": 0.698132,  # Radians (40°).
+            "use_linked_sem_focus_compensation": false,
+        },
+        # Active tilting (T/rx) & rotation (R/rz) angles positions when switching between SEM & FM.
+        # Calibrate for each system, and make sure the difference in rz between FM and SEM is exactly 180°
+        # The values are in radians. Please also update the values in degrees as written in the comments.
+        # Note that the rz range in the TESCAN software is between -170° and 40°
+        # Change the SEM tilt angle to a value that matches the customer's needs
+        # Note that the accuracy of the FM/SEM switch might be reduced if starting at a different angle.
+        FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": 4.9567353}, # 15° tilt, 284° rotation
+        FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
+        # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
+        FAV_MILL_POS_ACTIVE: {"mill_angle": 0.174532925, "rz": 4.9567353}, # Milling angle = 10°, 284° rotation
+    },
+}
+
+"Light Source": {
+    class: omicronxx.HubxX,
+    role: light,
+    init: {
+        port: "/dev/fakehub", # Simulator
+        # port: "/dev/ttyFTDI*",
+    },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 50.0, # ratio, (actually of the complete light path)
+        na: 0.8, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"],
+}
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Camera": {
+    class: simcam.Camera,
+    role: ccd,
+    dependencies: {focus: "Optical Focus"},
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
+         ROTATION: -0.099484,  # [rad] (=-5.7°)
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["fw", "stig"],
+        ustepsize: [3.2724923e-4, 3.2724923e-4],  # [rad/µstep]
+        rng: [[-14.0, 7.0], [-7.0, 14.0]],  # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad", "rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0, "stig": 4}, # digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"AntiBacklash Actuators": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+            "stig": 20.e-3,  # rad
+        },
+    },
+    dependencies: {"slave": "Optical Actuators"},
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "AntiBacklash Actuators"},
+    init: {
+        axis_name: "fw",
+        positions: {
+             # pos (rad) -> m,m
+             0.85: "pass-through", # Slot 1: always empty
+             1.897197551: [414.e-9, 450.e-9], # Slot 2: FF01-432/36
+             2.944395102: [500.e-9, 530.e-9], # Slot 3: FF01-515/30
+             # 3.991592653: [0.e-9, 0.e-9], # Slot 4: Spare position for custom filter: specify the band(s) if a filter is present
+             5.038790204: [579.5e-9, 610.5e-9], # Slot 5: FF01-595/31
+             6.085987755: [663.e-9, 733.e-9], # Slot 6: FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    affects: ["Camera"],
+}
+
+"Stigmator": {
+    class: actuator.RotationActuator,
+    role: stigmator,
+    affects: ["Camera"],
+    dependencies: {"rz": "AntiBacklash Actuators"},
+    init: {
+        axis_name: "stig",
+        cycle: 6.283185, # rad
+#        ref_start: null, # rad, value to where start the referencing, default is to start at 5% of cycle
+        ref_frequency: null, # Disable auto referencing. Use a number (eg 5) to automatically reference after N moves
+    },
+    metadata: {
+        POS_COR: -2.62486607383, # rad, adjustment needed for 0 = no astigmatism
+        # SuperZ calibration
+        CALIB: {
+            200.e-9: {
+                angle: 0.1309,
+                x: {a: -0.011214230270591402, b: 0.03581851396840028, c: 1215.384506512626,  d: 370.0567109324832,  w0: 11.765876020198268},
+                y: {a: 0.26798558796593386, b: 0.055348037953943205, c: 532.5800366796377,  d: 419.5479939702831, w0: 11.913803945482204},
+                feature_angle: 1.3028,  # rad
+                upsample_factor: 5,
+                z_least_confusion: 8.746549309861972e-07,  # m
+                z_calibration_range: [-8.746549309861972e-07, 7.625345069013803e-06]   # m
+            }
+        },
+    },
+}
+
+# CLS3252dsc-1
+"Optical Focus": {
+    class: smaract.MCS2,
+    role: focus,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        # TODO: check speed/accel
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-15.e-3, 5.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -11.5e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': 1.69e-3}
+    },
+    affects: ["Camera"],
+}
