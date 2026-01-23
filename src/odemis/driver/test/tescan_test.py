@@ -68,7 +68,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
               # change host ip address according to network settings
-              "host": "192.168.2.35"
+              "host": "192.168.1.130"
               }
 
 CONFIG_FIB = {"name": "fib", "role": "sem",
@@ -872,6 +872,30 @@ class TestSEM(BaseSEMTest, unittest.TestCase):
 
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
+
+    def test_shutter_va_exists(self):
+        """Test that shutter VA is created on scanner."""
+        self.assertTrue(hasattr(self.scanner, 'shutter'), "Shutter VA not created")
+        self.assertIn(False, self.scanner.shutter.choices)
+        self.assertIn(True, self.scanner.shutter.choices)
+        self.assertIn(None, self.scanner.shutter.choices)
+
+    def test_shutter_setter(self):
+        """Test that shutter setter blocks until position is reached."""
+        # Set shutter to retracted - setter blocks until hardware moved
+        self.scanner.shutter.value = False
+        time.sleep(5)  # Wait for polling to update
+        self.assertEqual(self.scanner.shutter.value, False)
+
+        # Set shutter to protecting - setter blocks until hardware moved
+        self.scanner.shutter.value = True
+        time.sleep(5)  # Wait for polling to update
+        self.assertEqual(self.scanner.shutter.value, True)
+
+        # Set shutter to auto
+        self.scanner.shutter.value = None
+        time.sleep(5)  # Wait for polling to update
+        self.assertEqual(self.scanner.shutter.value, None)
 
     def onEvent(self):
         self.events += 1

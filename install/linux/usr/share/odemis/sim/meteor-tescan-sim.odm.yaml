@@ -73,7 +73,7 @@
     init: {
         axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
         rotation: 0.698131700, # rad , 40° (should be equal to the pre-tilt angle of the shuttle being used)
-        shear: [-0.2679491924311227, 0],# (-math.tan(angle = math.radians(15)), 0), angle is same as rx in FAV_FM_POS_ACTIVE
+        shear: [-0.2679491924311227, 0], # (-math.tan(angle = math.radians(15)), 0), angle is same as rx in FAV_FM_POS_ACTIVE
         scale: [1, 1.035276180410083] # (1, 1 / math.cos(angle = math.radians(15))), angle is same as rx in FAV_FM_POS_ACTIVE
     },
 }
