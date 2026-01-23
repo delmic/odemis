@@ -49,7 +49,10 @@ class TestMeteorTFS1Move(unittest.TestCase):
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")
-        cls.linked_stage = model.getComponent(role="stage")
+        try:
+            cls.linked_stage = model.getComponent(role="stage")
+        except LookupError:
+            cls.linked_stage = None
 
         # get the metadata
         stage_md = cls.stage.getMetadata()

@@ -1634,6 +1634,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             comp = model.getComponent(name="Linked YZ")
             self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
 
+        # Get shutter VA if available on the e-beam scanner
+        self.shutter = None
+        try:
+            scanner = model.getComponent(role='e-beam')
+            self.shutter = getattr(scanner, 'shutter', None)
+        except LookupError:
+            pass
+
         # Y/Z axes are not perpendicular. The angle depends on rx (if rx==0°, they are perpendicular)
         # To compensate for this, we use shear and scale.
         stage_md = self.stage.getMetadata()
@@ -2094,6 +2102,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'z'}, target_pos)))  # Move the final Z
 
                 if target == FM_IMAGING:
+                    if self.shutter is not None:
+                        logging.info("Retracting shutter before engaging the objective for FM imaging")
+                        self.shutter.value = False  # False = retracted (open)
                     # Engage the focuser as last move
                     sub_moves.append((self.focus, focus_active))
             else:
@@ -2103,6 +2114,23 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             logging.info("Moving from position %s to position %s.",current_name, target_name)
             for component, sub_move in sub_moves:
                 self._run_sub_move(future, component, sub_move)
+
+            # Protect shutter when transitioning to MILLING to prevent damage from FIB
+            # TODO: later extend for FIB_IMAGING
+            if target == MILLING and current_posture != MILLING and self.shutter is not None:
+                if isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                    logging.info("Protecting shutter before milling transition")
+                    self.shutter.value = True  # True = protecting (closed)
+                else:
+                    logging.error("Focus not parked before milling transition. Shutter cannot be engaged.")
+
+            # Retract shutter after returning to SEM_IMAGING (after focus is safely parked)
+            if target == SEM_IMAGING and self.shutter is not None:
+                if isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                    logging.info("Retracting shutter for SEM imaging")
+                    self.shutter.value = False  # False = retracted (open)
+                else:
+                    raise ValueError("Focus not safely retracted before SEM shutter retraction")
 
         except CancelledError:
             logging.info("CryoSwitchSamplePosition cancelled.")
