@@ -22,8 +22,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import math
-import numpy
+from typing import Dict
 
+import numpy
 import wx
 
 import odemis.gui.cont.acquisition as acqcont
@@ -356,10 +357,10 @@ class FibsemTab(Tab):
         active_canvas.on_left_down(evt)
 
     @call_in_wx_main
-    def _on_stage_pos(self, pos):
+    def _on_stage_pos(self, pos: Dict[str, float]) -> None:
         """
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
-        :param pos: (dict str->float or None) updated position of the stage
+        :param pos: updated position of the stage (with rx and rz in radians)
         """
         guiutil.enable_tab_on_stage_position(
             button=self.button,
@@ -371,12 +372,12 @@ class FibsemTab(Tab):
         # update stage pos label
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
-        posture = self.pm.current_posture.value
+        posture = self.pm.getCurrentPostureLabel(pos)  # Cannot use current_posture as it may be not yet updated
         pos_name = POSITION_NAMES[posture]
 
         # TODO: move this to legend.py
-        r = units.readable_str(units.round_significant(rz, 3))
-        t = units.readable_str(units.round_significant(rx, 3))
+        r = units.readable_str(rz, sig=3)
+        t = units.readable_str(rx, sig=3)
         txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
 
         # update the stage position label
@@ -390,20 +391,21 @@ class FibsemTab(Tab):
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
                 ltab.view_controller.viewports[3].bottom_legend.set_stage_pos_label(txt)
         except Exception as e:
-            pass
+            logging.warning("Failed to update stage position label: %s", e)
 
         # update the stage position buttons
-        self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)  # BTN_TOGGLE_OFF
-        self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
-
         self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
         self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
         self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
 
         if posture == SEM_IMAGING:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)  # BTN_TOGGLE_COMPLETE
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
+        else:
+            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
         if posture == MILLING:
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+        else:
+            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
 
         self.panel.Layout()
 
@@ -446,18 +448,14 @@ class FibsemTab(Tab):
                     milling_position["rx"] = stage_tilt
                     feature.set_posture_position(MILLING, milling_position)
 
-    def _move_to_milling_position(self, evt: wx.Event):
+    def _move_to_milling_position(self, evt: wx.Event) -> None:
         logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
         f = self.pm.cryoSwitchSamplePosition(MILLING)
         f.result()
 
-        self._on_stage_pos(self.pm.stage.position.value)
-
-    def _move_to_sem(self, evt: wx.Event):
+    def _move_to_sem(self, evt: wx.Event) -> None:
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-
-        self._on_stage_pos(self.pm.stage.position.value)
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)
