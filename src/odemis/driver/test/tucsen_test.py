@@ -22,13 +22,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 import os
+import time
 import unittest
 
 from cam_test_abs import VirtualTestCam, VirtualStaticTestCam
 from odemis.driver import tucsen
 
 logging.basicConfig(level=logging.DEBUG,
-                    format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s",
+                    format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s",
                     force=True  # Overwrite the default logging set by importing other module (Py 3.8+)
                     )
 
@@ -45,6 +46,38 @@ if TEST_NOHW:
 class StaticTestTUCam(VirtualStaticTestCam, unittest.TestCase):
     camera_type = tucsen.TUCam
     camera_kwargs = KWARGS
+
+
+class TestCallBack(unittest.TestCase):
+    """
+    Test the TUCam callback mechanism.
+    """
+
+    def on_frame(self, array):
+        self._call_counts += 1
+        logging.debug(f"Callback received frame of shape {array.shape} and dtype {array.dtype}")
+
+    def test_callback_registration(self):
+        if TEST_NOHW:
+            dll = tucsen.FakeTUCamDLL()
+        else:
+            dll = tucsen.TUCamDLL()
+        dll.open_camera(0)
+        dll.set_exposure_time(0.5)
+
+        self._call_counts = 0
+        dll.register_data_callback(self.on_frame)
+        logging.debug("Starting capture for callback test...")
+        dll.start_capture()
+
+        time.sleep(3)
+        dll.end_capture()
+        dll.register_data_callback(None)
+
+        self.assertGreaterEqual(self._call_counts, 3, "Callback was not called during capture")
+
+        dll.close_camera()
+        dll.TUCAM_Api_Uninit()
 
 
 # Inheritance order is important for setUp, tearDown
