@@ -59,7 +59,7 @@ GRID_PRECISION = 2  # Number of decimal places to display in the grid
 # Regex search pattern to distinguish between FIB and FM target. These targets can
 # have the same type of Fiducials but there is a prefix in the name to distinguish them.
 FIDUCIAL_PATTERN = r"^[^-]+-"
-REFRACTIVE_SCALE = 0.495
+RIM_COR_DEFAULT = 0.495  # See MD_RIM_COR. This value works fine for 50x objectives, which are common
 
 # Both functions getPixel3DCoordinates(args*, kwargs*) and getPhysical3DCoordinates(args*, kwargs*) need special
 # conditions to convert between physical and pixel coordinate systems in order for multipoint correlation to operate.
@@ -168,6 +168,8 @@ class CorrelationPointsController:
         self._viewports = frame.pnl_correlation_grid.viewports
         self.grid_targets = (TargetType.PointOfInterest, TargetType.Fiducial, TargetType.FibFiducial)
 
+        lens_md = self._main_data_model.lens.getMetadata()
+        self.refractive_scale = lens_md.get(model.MD_RIM_COR, RIM_COR_DEFAULT)
         self._panel.fp_correlation_streams.Show(True)
 
         # Access the correlation points table (wxListCtrl)
@@ -505,7 +507,7 @@ class CorrelationPointsController:
             # The Z correction is applied based on the distance from the surface fiducial to the projected POI
             # which already takes into account the tilted sample plane. Therefore, the distance in Y direction
             # of sample plane is sufficient to calculate the Z correction.
-            correction = (projected_poi_target.coordinates.value[1] - edge[1]) * REFRACTIVE_SCALE
+            correction = (projected_poi_target.coordinates.value[1] - edge[1]) * self.refractive_scale
             projected_poi_target.coordinates.value[1] += correction
 
         self._tab_data_model.projected_points.append(projected_poi_target)
