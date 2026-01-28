@@ -4,7 +4,7 @@
 # To rebuild just the cython modules, use these commands:
 # sudo apt-get install python-setuptools cython
 # python3 setup.py build_ext --inplace
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize # Warning: must be _after_ setup import
 import glob
 import os
@@ -117,6 +117,16 @@ else:
     scripts = []
     sys.stderr.write("Warning: Platform %s not supported" % sys.platform)
 
+# Cython extensions
+extensions = [
+    Extension(
+        "odemis.util.img_fast",
+        [os.path.join("src", "odemis", "util", "img_fast.pyx")],
+        define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+        include_dirs=[numpy.get_include()]
+    )
+]
+
 dist = setup(name='Odemis',
              version=VERSION,
              description='Open Delmic Microscope Software',
@@ -138,10 +148,9 @@ dist = setup(name='Odemis',
                            'odemis.driver': ["*.tiff", "*.h5", "*.eds"],
                            'odemis.acq.milling': ["*.yaml"],
                           },
-             ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx")), language_level=3),
+             ext_modules=cythonize(extensions, language_level="3"),
              scripts=scripts,
              data_files=data_files,  # not officially in setuptools, but works as for distutils
-             include_dirs=[numpy.get_include()],
             )
 
 if ROOT and dist is not None:

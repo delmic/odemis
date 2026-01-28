@@ -26,6 +26,7 @@ cimport numpy
 ctypedef numpy.uint16_t uint16_t
 
 # nogil allows multi-threading but prevents use of any Python objects or call
+# TODO: from cython 3.0 (Ubuntu 24.04) add "noexcept" next to nogil for better optimisation
 @cython.cdivision(True)
 cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t irange1,
                          int* tint, numpy.uint8_t* ret) nogil:
