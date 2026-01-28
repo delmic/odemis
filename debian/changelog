@@ -1,3 +1,16 @@
+odemis (3.7.6-1) focal; urgency=medium
+
+  * New version: 3.7.6
+  * Main bug fixes and improvements:
+   - driver xt_client: Reduce waiting time after a move (METEOR/SPARC)
+   - driver autoscript: also handle raw coordinate offset on rotation axes (METEOR)
+   - driver omicronxx: optimize speed when changing the light intensity (METEOR/SECOM)
+   - FixedPositionsActuator: optimize move duration when referencing is needed (METEOR)
+   - Fix GUI toolbar incorrect positioning when screen has High DPI scaling
+   - CLI: add auto-completion script for fish shell
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 28 Jan 2026 09:07:17 +0100
+
 odemis (3.7.5-1) focal; urgency=medium
 
   * New version: 3.7.5
