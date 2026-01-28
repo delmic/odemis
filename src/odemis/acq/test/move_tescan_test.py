@@ -24,7 +24,7 @@ from odemis.util import testing
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN)
+from odemis.acq.move import (FM_IMAGING, LOADING, MILLING, SEM_IMAGING, UNKNOWN)
 from odemis.acq.test.move_tfs1_test import TestMeteorTFS1Move
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -32,6 +32,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
+METEOR_TESCAN1_SHUTTER_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-stage-sim.odm.yaml"
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
@@ -163,6 +164,47 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         zshift = self.posture_manager._transformFromChamberToStage(shift)
         self.assertAlmostEqual(zshift["x"], shift["x"], places=5)
         self.assertAlmostEqual(zshift["z"], shift["z"], places=5)
+
+
+class TestMeteorTescan1ShutterMove(TestMeteorTFS1Move):
+    """
+    Test the MeteorPostureManager functions for the Tescan 1 shutter.
+    """
+    MIC_CONFIG = METEOR_TESCAN1_SHUTTER_CONFIG
+    ROTATION_AXES = {'rx', 'rz'}
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test case with Tescan 1 configuration"""
+        super().setUpClass()
+        cls.stage_bare_md = cls.stage.getMetadata()
+
+    def setUp(self):
+        super().setUp()
+        # reset stage-bare metadata, so that even if a test modifies it, the next test starts fresh
+        self.stage.updateMetadata(self.stage_bare_md)
+
+    def test_fm_shutter_control(self):
+        """Test shutter state changes during FM mode transitions."""
+        if self.posture_manager.shutter is None:
+            self.skipTest("Shutter not available")
+
+        # Move to safe start position
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
+
+        # Ensure shutter is engaged before engaging the objective, to make it more interesting
+        self.posture_manager.shutter.value = True  # True = engaged (closed)
+        # Move to FM_IMAGING and check shutter is retracted
+        self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
+        self.assertEqual(self.posture_manager.shutter.value, False, "Shutter should be retracted for FM")
+
+        # Move to MILLING and check shutter is in the protecting state
+        self.posture_manager.cryoSwitchSamplePosition(MILLING).result()
+        self.assertEqual(self.posture_manager.shutter.value, True, "Shutter should be protecting for milling")
+
+        # Move back to SEM_IMAGING and check shutter is retracted
+        self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        self.assertEqual(self.posture_manager.shutter.value, False, "Shutter should be retracted for SEM")
 
 
 if __name__ == "__main__":
