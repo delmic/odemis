@@ -43,7 +43,7 @@ import time
 import webbrowser
 import wx
 import zipfile
-from typing import List
+from typing import List, Optional
 
 logging.getLogger().setLevel(logging.DEBUG)
 DEFAULT_CONFIG = {"LOGLEVEL": "1", 'CONFIGPATH': '/usr/share/odemis'}
@@ -281,6 +281,45 @@ class OdemisBugreporter(object):
             command = ["timeout", "%f" % timeout] + command
         return self._executor.submit(subprocess.check_output, command)
 
+    def _get_last_model_dir_from_log(self, logfile: str) -> Optional[str]:
+        """
+        Parse the log file to find the last model instantiation file and return its directory.
+        :param logfile: Path to the log file
+        :return: Directory path of the last model file, or None if not found
+        """
+        if not os.path.exists(logfile):
+            logging.debug("Log file %s does not exist", logfile)
+            return None
+
+        try:
+            # Use grep to find all lines with model instantiation
+            result = subprocess.check_output(['grep', 'model instantiation file is:', logfile],
+                                             stderr=subprocess.DEVNULL)
+            log_lines = result.decode('utf-8', errors='ignore').splitlines()
+
+            if not log_lines:
+                logging.debug("No model instantiation found in log file")
+                return None
+
+            # Take the last matching line
+            last_line = log_lines[-1]
+            match = re.search(r'model instantiation file is:\s+(/.+\.odm\.yaml)', last_line)
+            if match:
+                model_path = match.group(1).strip()
+                model_dir = os.path.dirname(model_path)
+                logging.debug("Found last model directory: %s", model_dir)
+                return model_dir
+
+            logging.debug("No model path found in last matching line")
+            return None
+        except subprocess.CalledProcessError:
+            # grep returns non-zero exit code when no matches found
+            logging.debug("No model instantiation found in log file")
+            return None
+        except Exception as ex:
+            logging.warning("Failed to parse log file %s: %s", logfile, ex)
+            return None
+
     def compress_files(self):
         """
         Compresses the relevant files to a zip archive which is saved in /home.
@@ -322,12 +361,28 @@ class OdemisBugreporter(object):
                 except Exception as ex:
                     logging.warning("Failed to run model selector: %s", ex)
 
-            # Also pick every potential microscope model
-            models.update(glob(os.path.join(odemis_config['CONFIGPATH'], '*.odm.yaml')))
-            # Hardware configuration files are also useful
-            models.update(glob(os.path.join(odemis_config['CONFIGPATH'], '*.tsv')))
-
+            # Add the specifically selected model files to the root level
             files.extend(models)
+
+            # Collect microscope model files from CONFIGPATH (to be saved in subfolder)
+            config_model_files = set()
+            config_path = odemis_config.get('CONFIGPATH', None)
+            if config_path and os.path.isdir(config_path):
+                config_model_files.update(glob(os.path.join(config_path, '*.odm.yaml')))
+                # Hardware configuration files are also useful
+                config_model_files.update(glob(os.path.join(config_path, '*.tsv')))
+
+            # Collect files from the directory of the last model actually used (to be saved in subfolder)
+            last_model_files = set()
+            logfile = odemis_config.get('LOGFILE', LOGFILE_BACKEND)
+            last_model_dir = self._get_last_model_dir_from_log(logfile)
+            if last_model_dir and os.path.isdir(last_model_dir):
+                if config_path and last_model_dir == config_path:
+                    logging.debug("Last model directory is the same as CONFIGPATH, already added")
+                else:
+                    logging.debug("Adding model files from last used model directory: %s", last_model_dir)
+                    last_model_files.update(glob(os.path.join(last_model_dir, '*.odm.yaml')))
+                    last_model_files.update(glob(os.path.join(last_model_dir, '*.tsv')))
 
             # Add the latest overlay-report if it's possibly related (ie, less than a day old)
             overlay_reps = glob(os.path.join(home_dir, 'odemis-overlay-report', '*'))
@@ -392,6 +447,7 @@ class OdemisBugreporter(object):
                     except Exception as ex:
                         logging.warning("Cannot save %s status: %s", fn, ex)
 
+                # Add regular files and directories at root level
                 for f in files:
                     if os.path.isfile(f):
                         logging.debug("Adding file %s", f)
@@ -409,6 +465,24 @@ class OdemisBugreporter(object):
                                 archive.write(full_path, full_path[len(dirnamef) + 1:])
                     else:
                         logging.warning("Bugreporter could not find file %s", f)
+
+                # Add config model files to config-mic-files subfolder
+                for f in config_model_files:
+                    if os.path.isfile(f):
+                        arcname = os.path.join("config-mic-files", os.path.basename(f))
+                        logging.debug("Adding config model file %s as %s", f, arcname)
+                        archive.write(f, arcname)
+                    else:
+                        logging.warning("Bugreporter could not find config model file %s", f)
+
+                # Add last model files to last-mic-files subfolder
+                for f in last_model_files:
+                    if os.path.isfile(f):
+                        arcname = os.path.join("last-mic-files", os.path.basename(f))
+                        logging.debug("Adding last model file %s as %s", f, arcname)
+                        archive.write(f, arcname)
+                    else:
+                        logging.warning("Bugreporter could not find last model file %s", f)
         except Exception:
             logging.exception("Failed to store bug report")
             raise
