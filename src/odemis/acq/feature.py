@@ -353,7 +353,7 @@ def read_features(project_dir: str) -> List[CryoFeature]:
     """
     Deserialize and return the features list from the json file
     :param project_dir: directory to read the file from (typically project directory)
-    :return: list of deserialized featuers
+    :return: list of deserialized features
     """
     filename = os.path.join(project_dir, "features.json")
     if not os.path.exists(filename):

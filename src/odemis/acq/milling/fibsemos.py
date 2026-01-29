@@ -18,11 +18,16 @@ from odemis.acq.milling.tasks import (
     MillingSettings,
     MillingTaskSettings,
 )
+from odemis.acq.feature import CryoFeature, REFERENCE_IMAGE_FILENAME
 from odemis.util import executeAsyncTask
 
 # Check if fibsemOS is available
 try:
-    from fibsem.microscopes.odemis_microscope import OdemisThermoMicroscope, OdemisTescanMicroscope
+    from fibsem.microscopes.odemis_microscope import (
+        OdemisThermoMicroscope,
+        OdemisTescanMicroscope,
+        from_odemis_image
+    )
     from fibsem.milling import (
         FibsemMillingStage,
         MillingAlignment,
@@ -35,7 +40,16 @@ try:
         RectanglePattern,
         TrenchPattern,
     )
-    from fibsem.structures import FibsemMillingSettings, Point
+    from fibsem.structures import (
+        FibsemMillingSettings,
+        Point,
+        FibsemImage,
+        FibsemImageMetadata,
+        FibsemRectangle,
+        BeamType,
+        ImageSettings,
+        MicroscopeState,
+    )
     from fibsem.utils import load_microscope_configuration
     FIBSEMOS_INSTALLED = True
 except ImportError as e:
@@ -43,6 +57,47 @@ except ImportError as e:
     FIBSEMOS_INSTALLED = False
 
 _persistent_millmng: Optional["FibsemOSMillingTaskManager"] = None
+
+
+def _get_reference_image(feature: CryoFeature) -> model.DataArray:
+    """Get the in-memory reference image for a feature or raise."""
+
+    if feature.reference_image is None:
+        logging.error(
+            "Missing reference image for feature '%s' (path=%s). "
+            "This feature was likely loaded from disk without hydrating reference_image.",
+            feature.name.value,
+            getattr(feature, "path", None),
+        )
+        raise ValueError("Missing feature.reference_image.")
+    return feature.reference_image
+
+
+def _crop_to_reduced_area(ref_img: 'FibsemImage', rect: 'FibsemRectangle') -> 'FibsemImage':
+    """Crop a fibsemOS image to the provided reduced-area rectangle.
+
+    :param ref_img: The image to crop.
+    :param rect: Rectangle with fractional coordinates (left, top, width, height).
+    :return: The same image instance with cropped data.
+    """
+
+    h, w = ref_img.data.shape[-2], ref_img.data.shape[-1]
+
+    # fractional to pixel indices
+    x0 = int(rect.left * w)
+    y0 = int(rect.top * h)
+    x1 = int((rect.left + rect.width) * w)
+    y1 = int((rect.top + rect.height) * h)
+
+    # clamp to valid range just in case of rounding
+    x0 = max(0, min(w, x0))
+    x1 = max(0, min(w, x1))
+    y0 = max(0, min(h, y0))
+    y1 = max(0, min(h, y1))
+
+    # crop along the last two axes, DataArray slicing behaves like numpy
+    ref_img.data = ref_img.data[..., y0:y1, x0:x1]
+    return ref_img
 
 
 def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
@@ -99,8 +154,7 @@ def create_fibsemos_tescan_microscope() -> 'OdemisTescanMicroscope':
     return microscope
 
 def create_fibsemos_microscope() -> Union['OdemisThermoMicroscope', 'OdemisTescanMicroscope']:
-    """Create and return a fibsemOS microscope instance matching the detected stage version.
-    """
+    """Create and return a fibsemOS microscope instance matching the detected stage version."""
     stage_bare = model.getComponent(role="stage-bare")
     stage_md = stage_bare.getMetadata()
     md_calib = stage_md.get(model.MD_CALIB, {})
@@ -196,17 +250,13 @@ def convert_milling_tasks_to_milling_stages(milling_tasks: List[MillingTaskSetti
 class FibsemOSMillingTaskManager:
     """Manage running milling tasks via fibsemOS using a persistent microscope connection."""
 
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self):
         """Initialize the manager and establish the fibsemOS microscope connection."""
         # create microscope connection
         self.microscope = create_fibsemos_microscope()
         self._lock = threading.Lock()
         self._active = False
         self._cancel_requested = False
-
-        if path is None:
-            path = os.getcwd()
-        self.microscope._last_imaging_settings.path = path  # note: post-milling imaging is not yet supported via odemis
 
         # per-run state (set in async_run)
         self.milling_stages: List["FibsemMillingStage"] = []
@@ -251,14 +301,25 @@ class FibsemOSMillingTaskManager:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                mill_stages(self.microscope, [stage])
+                ref_img = from_odemis_image(_get_reference_image(self.feature))
+                ref_img.metadata.image_settings.path = self.path
+                ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
+
+                ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
+
+                mill_stages(self.microscope, [stage], ref_img)
 
         finally:
             with self._lock:
                 self._active = False
                 self._cancel_requested = False
 
-    def async_run(self, *, future: futures.Future, tasks: List[MillingTaskSettings], path: Optional[str] = None) -> futures.Future:
+    def async_run(self,
+                  *,
+                  future: futures.Future,
+                  tasks: List[MillingTaskSettings],
+                  feature: CryoFeature,
+                  path: Optional[str] = None) -> futures.Future:
         """Prepare and start a milling run asynchronously (one run at a time)."""
         if path is None:
             path = os.getcwd()
@@ -273,6 +334,8 @@ class FibsemOSMillingTaskManager:
             self._cancel_requested = False
             self.microscope._last_imaging_settings.path = path
             self.milling_stages = milling_stages
+            self.path = path
+            self.feature = feature
             self._future = future
             self._future.running_subf = model.InstantaneousFuture()
             self._future.task_canceller = self.cancel
@@ -287,12 +350,20 @@ class FibsemOSMillingTaskManager:
         return self._future
 
 
-def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], path: Optional[str] = None) -> futures.Future:
-    """Run the given milling tasks asynchronously using a persistent fibsemOS manager."""
+def run_milling_tasks_fibsemos(tasks: List[MillingTaskSettings], feature: CryoFeature, path: Optional[str] = None) -> futures.Future:
+    """Run milling tasks asynchronously via fibsemOS.
+
+    :param tasks: Milling tasks to execute (converted to fibsemOS stages and run in order).
+    :param feature: Feature providing the in-memory reference image used for alignment.
+        Must have ``feature.reference_image`` set.
+    :param path: Directory where acquired reference images will be stored.
+        Defaults to the current working directory.
+    :return: A progressive future for progress reporting and cancellation.
+    """
     global _persistent_millmng
 
     if _persistent_millmng is None:
         _persistent_millmng = FibsemOSMillingTaskManager()
 
     future = model.ProgressiveFuture()
-    return _persistent_millmng.async_run(future=future, tasks=tasks, path=path)
+    return _persistent_millmng.async_run(future=future, tasks=tasks, feature=feature, path=path)
