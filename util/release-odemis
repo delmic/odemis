@@ -117,7 +117,7 @@ if [[ $answer =~ ^[nN].* ]]; then
     exit 2
 fi
 git archive --prefix=odemis/ -o ../odemis_${RELVER}.orig.tar.gz HEAD || exit 1
-debuild -S || exit 1
+debuild -S -d || exit 1
 
 dput ${PPA_NAME} ../odemis_${PVERSION}_source.changes
 
@@ -125,7 +125,7 @@ dput ${PPA_NAME} ../odemis_${PVERSION}_source.changes
 # Just add to debian changelog
 dch -D jammy -v ${PVERSION}jammy1 "Rebuild for jammy"
 
-debuild -S || exit 1
+debuild -S -d || exit 1
 # Immediately drop the changes
 git reset --hard HEAD
 
@@ -135,7 +135,7 @@ dput ${PPA_NAME} ../odemis_${PVERSION}jammy1_source.changes
 # Just add to debian changelog
 dch -D noble -v ${PVERSION}noble1 "Rebuild for noble"
 
-debuild -S || exit 1
+debuild -S -d || exit 1
 # Immediately drop the changes
 git reset --hard HEAD
 
