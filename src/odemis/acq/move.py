@@ -544,54 +544,30 @@ class MeteorPostureManager(MicroscopePostureManager):
             self,
             axes: Sequence[str],
             rotation: float = 0,
-            scale: tuple = (1, 1),
-            translation: tuple = (0, 0),
-            shear: tuple = (0, 0),
     ):
         """
         Initializes the transformation parameters that allows conversion between stage-bare and sample plane.
         :param axes: stage axes which are used to calculate transformation parameters
         :param rotation: rotation in radians from sample plane to stage
-        :param scale: scale from sample to stage
-        :param translation: translation from sample to stage
-        :param shear: shear from sample to stage
         """
         self._axes_dep = {"x": axes[0], "y": axes[1]}  # TODO: Should be called y, z... or even better: also take x as first axis
-        self._update_conversion(rotation, scale, shear)
+        self._update_conversion(rotation)
         self._initialise_offset()
 
     def _update_conversion(self,
                            rotation: float = 0,
-                           scale: tuple = (1, 1),
-                           shear: tuple = (0, 0),
                            ):
         """
         Computes transformation parameters based on the given metadata to allow conversion
         stage-bare and sample plane.
         NOTE: transformations are defined as sample stage -> stage bare
         the inverse transformation is used for stage bare -> sample stage
-        :param rotation: rotation in radians from sample plane to stage (rx)
-        :param scale: scale from sample to stage
-        :param shear: shear from sample to stage
+        :param rotation: rotation in radians from sample plane to stage (pre-tilt)
         """
-        # The shear & scale parameters are for the 2nd and 3rd axes (y and z) in FM imaging
-        shear_matrix_3d = numpy.array([
-            [1, 0, 0],         # x-axis remains unaffected
-            [0, 1, shear[0]],  # y-axis shear
-            [0, shear[1], 1],  # z-axis shear
-        ])
+        stage_md = self.stage.getMetadata()
 
-        scale_matrix_3d = numpy.array([
-            [1, 0, 0],  # x-axis remains unaffected
-            [0, scale[0], 0],  # y-axis scale
-            [0, 0, scale[1]],  # z-axis scale
-        ])
-
-        # FM imaging
-        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
-        rot_matrix_3d, rot_matrix_3d_inv = get_rotation_transforms(rx=rotation)
-        tf = scale_matrix_3d @ shear_matrix_3d @ rot_matrix_3d
-        tf_inv = numpy.linalg.inv(tf)
+        # FM imaging: compensate for the pre-tilt
+        tf, tf_inv = get_rotation_transforms(rx=rotation)
 
         # get the scan rotation value
         sr = self._get_scan_rotation()
@@ -599,7 +575,6 @@ class MeteorPostureManager(MicroscopePostureManager):
             # Making sure the image will look 'normal' (not rotated) in the UI. This works by setting MD_ROTATION_COR,
             # which is to be subtracted from MD_ROTATION (set on the image).
             self._set_scanner_rotation_cor(sr)
-        # TODO: also need shear and scale for SEM_IMAGING and MILLING postures, each different.
         # TODO: update MILLING transformations when changing milling angle
         # get scan rotation matrix (rz -> rx)
         tf_sr, tf_inv_sr = get_rotation_transforms(rx=rotation, rz=sr)
@@ -2184,8 +2159,6 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
 
     def _update_conversion(self,
                            rotation: float = 0,
-                           scale: tuple = (1, 1),
-                           shear: tuple = (0, 0),
                            ):
         """
         Computes transformation parameters based on the given metadata to allow conversion
@@ -2193,8 +2166,6 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         NOTE: transformations are defined as sample stage -> stage bare
         the inverse transformation is used for stage bare -> sample stage
         :param rotation: rotation in radians from sample plane to stage (rx)
-        :param scale: scale from sample to stage
-        :param shear: shear from sample to stage
         """
         tf_id = numpy.eye(3)
         # The JEOL stage convention is opposite of Odemis so invert the direction of the XYZ axes.
