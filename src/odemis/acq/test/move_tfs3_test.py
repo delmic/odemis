@@ -25,8 +25,8 @@ import numpy
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, GRID_1,MILLING, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
-                             MeteorTFS3PostureManager)
+from odemis.acq.move import (FM_IMAGING, GRID_1, MILLING, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
+                             MeteorTFS3PostureManager, LOADING)
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.driver import isNearPosition
@@ -62,12 +62,19 @@ class TestMeteorTFS3Move(unittest.TestCase):
         cls.stage_grid_centers = cls.stage_md[model.MD_SAMPLE_CENTERS]
         cls.stage_loading = cls.stage_md[model.MD_FAV_POS_DEACTIVE]
 
-    def test_switching_movements(self):
-        """Test switching between different postures and check that the 3D transformations work as expected"""
+    def setUp(self):
+        # reset to a known posture before each test
         if self.pm.current_posture.value == UNKNOWN:
-            f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
+            logging.info("Test setup: posture is UNKNOWN, resetting to SEM_IMAGING")
+            # Reset to loading position before each test
+            f = self.pm.cryoSwitchSamplePosition(LOADING)
+            f.result()
+            # From loading, going to SEM IMAGING will use GRID 1 as base position
+            f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
             f.result()
 
+    def test_switching_movements(self):
+        """Test switching between different postures and check that the 3D transformations work as expected"""
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
 
@@ -86,12 +93,12 @@ class TestMeteorTFS3Move(unittest.TestCase):
     def test_to_posture(self):
         """Test that posture projection is the same as moving to the posture"""
 
-        # first move back to grid-1 to make sure we are in a known position
-        f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
-        f.result()
-
         # move to SEM imaging posture
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+
+        # first move back to grid-1 to make sure we are in a known position
+        f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
         f.result()
 
         # Check that getCurrentPostureLabel() with a given stage-bare position returns the expected posture
@@ -121,21 +128,22 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
     def test_sample_stage_movement(self):
         """Test sample stage movements in different postures match the expected movements"""
-
+        # move to SEM/GRID 1
+        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
         f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
         f.result()
 
         dx, dy = 50e-6, 50e-6
-        self.pm.use_3d_transforms = True
-        for posture in [FM_IMAGING, SEM_IMAGING]:
+        for posture in [SEM_IMAGING, FM_IMAGING]:
 
-            if self.pm.current_posture.value is not posture:
+            if self.pm.current_posture.value != posture:
                 f = self.pm.cryoSwitchSamplePosition(posture)
                 f.result()
 
             f = self.pm.cryoSwitchSamplePosition(GRID_1)
             f.result()
-            time.sleep(2) # simulated stage moves too fast, needs time to update
+            time.sleep(0.1) # simulated stage moves too fast, needs time to update
 
             # test relative movement
             init_ss_pos = self.stage.position.value
@@ -143,7 +151,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
             f = self.stage.moveRel({"x": dx, "y": dy})
             f.result()
-            time.sleep(2)
+            time.sleep(0.1)
 
             new_pos = self.stage.position.value
             new_sb_pos = self.stage_bare.position.value
@@ -155,7 +163,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
             # test absolute movement
             f = self.pm.cryoSwitchSamplePosition(GRID_1)
             f.result()
-            time.sleep(2) # simulated stage moves too fast, needs time to update
+            time.sleep(0.1) # simulated stage moves too fast, needs time to update
 
             abs_pos = init_ss_pos.copy()
             abs_pos["x"] += dx
@@ -163,7 +171,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
 
             f = self.stage.moveAbs(abs_pos)
             f.result()
-            time.sleep(2)
+            time.sleep(0.1)
 
             new_pos = self.stage.position.value
             new_sb_pos = self.stage_bare.position.value
@@ -216,7 +224,7 @@ class TestMeteorTFS3Move(unittest.TestCase):
         # go to sem imaging
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        time.sleep(2)
+        time.sleep(0.1)
 
         # calculate the vertical shift in chamber coordinates
         shift = {"x": 100e-6, "z": 50e-6}
