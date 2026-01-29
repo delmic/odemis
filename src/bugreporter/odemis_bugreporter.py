@@ -324,6 +324,8 @@ class OdemisBugreporter(object):
 
             # Also pick every potential microscope model
             models.update(glob(os.path.join(odemis_config['CONFIGPATH'], '*.odm.yaml')))
+            # Hardware configuration files are also useful
+            models.update(glob(os.path.join(odemis_config['CONFIGPATH'], '*.tsv')))
 
             files.extend(models)
 
