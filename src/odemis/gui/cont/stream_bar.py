@@ -482,7 +482,8 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, add_to_view=False, visible=True, play=None, stream_cont_cls=StreamController):
+    def _add_stream(self, stream, add_to_view=False, visible=True, play=None, stream_cont_cls=StreamController,
+                    sp_options=None):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
@@ -496,6 +497,7 @@ class StreamBarController(object):
             play (None or boolean): If True, immediately start it, if False, let it stopped, and if
                 None, only play if already a stream is playing.
             stream_cont_cls: The stream controller class.
+            sp_options: (int or None) combination of OPT_* values for the StreamPanel or None for default.
 
         Returns:
             (StreamController or Stream): the stream controller or stream (if visible is False) that
@@ -554,13 +556,14 @@ class StreamBarController(object):
                                                 static=self.static_mode,
                                                 view=linked_view,
                                                 cls=stream_cont_cls,
+                                                sp_options=sp_options,
                                                 )
             return stream_cont
         else:
             return stream
 
     def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False,
-                         view=None, cls=StreamController):
+                         view=None, cls=StreamController, sp_options=None):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
@@ -568,7 +571,7 @@ class StreamBarController(object):
         """
 
         stream_cont = cls(self._stream_bar, stream, self._tab_data_model,
-                                       show_panel, view, sb_ctrl=self)
+                          show_panel, view, sb_ctrl=self, sp_options=sp_options)
 
         if locked:
             stream_cont.to_locked_mode()
