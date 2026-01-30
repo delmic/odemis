@@ -85,7 +85,7 @@ class BackendContainer(model.Container):
         # TODO: have an argument to ask for disabling parallel start? same as create_sub_containers?
 
         # parse the instantiation file
-        logging.debug("model instantiation file is: %s", self._model.name)
+        logging.debug("model instantiation file is: %s", os.path.abspath(self._model.name))
         try:
             self._instantiator = modelgen.Instantiator(model_file, settings_file, self,
                                                        create_sub_containers, dry_run, strict_children)
