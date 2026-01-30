@@ -43,6 +43,7 @@ import odemis.gui as gui
 import odemis.util as util
 import odemis.util.conversion as conversion
 from odemis import model
+from odemis.acq.stream import Stream
 from odemis.gui import EVT_BUFFER_SIZE
 from odemis.model import BooleanVA, TupleVA
 from odemis.util.raster import point_in_polygon
@@ -55,6 +56,21 @@ class EdgeBoundingBox:
         self.t = t  # top, ymin
         self.b = b  # bottom, ymax
         self.index = index  # Index of the edge, default None for a non-vertex edge
+
+
+def cairo_polygon(ctx: cairo.Context, points: List[Tuple[float, float]]) -> None:
+    """
+    Trace a polygon in the given cairo context
+    :param ctx: the cairo context to draw in
+    :param points: list of (x, y) points. The last point is automatically connected to the first
+    """
+    if not points:
+        return
+
+    ctx.move_to(*points[0])
+    for p in points[1:]:
+        ctx.line_to(*p)
+    ctx.close_path()
 
 
 class Label(object):
@@ -285,29 +301,32 @@ class Vec(tuple):
         else:
             return super(Vec, cls).__new__(cls, tuple(a))
 
-    def __add__(self, a):
+    def __add__(self, a: 'Vec') -> 'Vec':
         # TODO: check lengths are compatible.
         return Vec(x + y for x, y in zip(self, a))
 
-    def __sub__(self, a):
+    def __sub__(self, a: 'Vec') -> 'Vec':
         # TODO: check lengths are compatible.
         return Vec(x - y for x, y in zip(self, a))
 
-    def __mul__(self, c):
+    def __mul__(self, c: float) -> 'Vec':
         return Vec(x * c for x in self)
 
-    def __rmul__(self, c):
+    def __rmul__(self, c: float) -> 'Vec':
         return Vec(c * x for x in self)
 
+    def __truediv__(self, c: float) -> 'Vec':
+        return Vec(x / c for x in self)
+
     @property
-    def x(self):
+    def x(self) -> float:
         return self[0]
 
     @property
-    def y(self):
+    def y(self) -> float:
         return self[1]
 
-    def rotate(self, angle: float, center: Tuple[float, float]):
+    def rotate(self, angle: float, center: Tuple[float, float]) -> 'Vec':
         """
         Rotate the vector by an angle around the center.
 
@@ -1052,9 +1071,6 @@ class SelectionMixin(DragMixin):
         """ Return the size of the selection in view pixels """
         return self.get_width(), self.get_height()
 
-    def contains_selection(self):
-        return None not in (self.select_v_start_pos, self.select_v_end_pos)
-
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
 
@@ -1127,11 +1143,23 @@ class RectangleEditingMixin(DragMixin):
         |                |
         4 -------------- 3
 
+    There are 4 editing modes:
+    * CREATE: Create a new rectangle by dragging from point 1 to point 3. Rotation is *always* 0.
+    * EDIT: Edit the rectangle by dragging one of its edges or points. Rotation is kept as-is,
+      even if a point is dragged on the other side.
+    * DRAG: Drag the rectangle around by dragging inside the rectangle. Rotation is kept as-is.
+    * ROTATION: Rotate the rectangle by dragging the rotation point. Rotation is updated.
     """
 
     hover_margin = 10  # px
 
-    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+    def __init__(self, colour=gui.SELECTION_COLOUR, can_rotate: bool=True):
+        """
+        :param colour: line colour of the rectangle
+        :param can_rotate: If True, allow the user to rotate the rectangle. Note that even if this
+          is False, it's still possible to set a rotated rectangle programmatically. The user will
+          not be able to change the rotation.
+        """
 
         DragMixin.__init__(self)
 
@@ -1159,28 +1187,33 @@ class RectangleEditingMixin(DragMixin):
 
         self.colour = conversion.hex_to_frgba(colour)
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
-        self.v_center = Vec(center)
-        self.rotation = 0  # radians
+
+        self.can_rotate = can_rotate
+        # Rotation angle is the angle between the X axis and the segment of point 1 -> 2.
+        # (so rotation == 0 rad means aligned with the x axis and in the same direction)
+        self.rotation = 0.0  # radians
+        self.v_center = Vec(0, 0)  # Center of the rectangle, used as rotation point
         # The rotation point in view coordinates
         # Hovering over this point's bounding box will result in the hover selection
         # as gui.HOVER_ROTATION. This will enable start_rotation and update_rotation methods
-        self.v_rotation = Vec(center)
+        self.v_rotation = Vec(0, 0)
 
     # #### selection methods  #####
-    # start_selection starts creation of the rectangle with diagonal points v_point1 and v_point3
-    # update_selection upon dragging updates the diagonal v_point3 and assigns v_point2 and v_point4
+    # start_creation starts creation of the rectangle with diagonal points v_point1 and v_point3
+    # update_creation upon dragging updates the diagonal v_point3 and assigns v_point2 and v_point4
     # stop_selection ends the current creation of rectangle
     # clear_selection resets the rectangle creation
 
-    def start_selection(self):
-        """ Start a new selection """
+    def start_creation(self):
+        """ Start a new rectangle. Always with rotation 0. """
 
         logging.debug("Starting selection")
 
         self.selection_mode = SEL_MODE_CREATE
         self.v_point1 = self.v_point3 = self.drag_v_start_pos
+        self.rotation = 0
 
-    def update_selection(self):
+    def update_creation(self):
         """ Update the selection to reflect the given mouse position """
         self.v_point3 = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
         self.v_point2 = Vec(self.v_point3.x, self.v_point1.y)
@@ -1188,20 +1221,25 @@ class RectangleEditingMixin(DragMixin):
 
     def stop_selection(self):
         """ End the creation of the current selection """
-
         logging.debug("Stopping selection")
 
         if self.v_point1 == self.v_point3:
-            logging.debug("Selection too small")
+            logging.debug("Selection too small, marking it empty")
             self.clear_selection()
         else:
+            # Do not update the rotation here, it should be kept as-is, but make sure the points
+            # are in the correct order (which might not be the case if the user dragged a edge or point
+            # on the other side of the rectangle)
+            self._reorder_rectangle_points()
             self._calc_edges()
             self.selection_mode = SEL_MODE_NONE
             self.edit_hover = None
 
     def clear_selection(self):
-        """ Clear the selection """
-        logging.debug("Clearing selections")
+        """
+        Reset the rectangle selection to nothing.
+        """
+        logging.debug("Clearing selection")
 
         DragMixin.clear_drag(self)
 
@@ -1279,32 +1317,48 @@ class RectangleEditingMixin(DragMixin):
                     self.v_point4 = Vec(util.project_point_on_line(self.v_point4, slope, intercept))
                     self.v_point3 = Vec(util.project_point_on_line(self.v_point3, slope, intercept))
 
-    def stop_edit(self):
-        """ End the selection edit """
-        self.stop_selection()
-
     # #### END edit methods  #####
 
     # #### drag methods  #####
 
     def start_rotation(self):
+        """
+        Start editing the rotation of the rectangle.
+        Called when the user presses the mouse button down while hovering over the rotation point.
+        """
         self._calc_center()
-        dx = self.v_center.x - self.drag_v_start_pos.x
-        dy = self.v_center.y - self.drag_v_start_pos.y
-        self.rotation = math.atan2(dy, dx) % (2 * math.pi)
+        self._calc_rotation()
         self.selection_mode = SEL_MODE_ROTATION
 
     def update_rotation(self):
-        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
-        dx = self.v_center.x - current_pos.x
-        dy = self.v_center.y - current_pos.y
-        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
-        diff_angle = current_rotation - self.rotation
+        """
+        Recomputes the rectangle based on the current mouse position.
+        Called when the user moves the mouse while dragging the rotation knob.
+        """
+        # The rotation knob is always at the same angle as the point1, so we can use it to know the
+        # previous rotation angle.
+        prev_rot = self._get_point_angle(self.v_point1)
+        knob_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        new_rot = self._get_point_angle(knob_pos)
+        diff_angle = new_rot - prev_rot
         self.v_point1 = self.v_point1.rotate(diff_angle, self.v_center)
         self.v_point2 = self.v_point2.rotate(diff_angle, self.v_center)
         self.v_point3 = self.v_point3.rotate(diff_angle, self.v_center)
         self.v_point4 = self.v_point4.rotate(diff_angle, self.v_center)
-        self.rotation = current_rotation
+        self._calc_rotation()
+
+        # If Ctrl is pressed, snap to 45 degree increments
+        if wx.GetKeyState(wx.WXK_CONTROL):
+            # Round to nearest 45 degrees (pi/4 radians)
+            increment = math.pi / 4
+            rounded_rotation = round(self.rotation / increment) * increment
+            snap_diff = rounded_rotation - self.rotation
+            # Apply the snapping rotation
+            self.v_point1 = self.v_point1.rotate(snap_diff, self.v_center)
+            self.v_point2 = self.v_point2.rotate(snap_diff, self.v_center)
+            self.v_point3 = self.v_point3.rotate(snap_diff, self.v_center)
+            self.v_point4 = self.v_point4.rotate(snap_diff, self.v_center)
+            self._calc_rotation()
 
     def _set_rotation(self, target_rotation: float):
         """
@@ -1312,9 +1366,14 @@ class RectangleEditingMixin(DragMixin):
 
         :param target_rotation: The target rotation angle in radians.
         """
-        target_rotation = target_rotation % (2 * math.pi)
+        target_rotation %= 2 * math.pi
+
+        if not self.v_point1 or not self.v_point3:
+            self.rotation = target_rotation
+            return
+
         self._calc_center()
-        self._calc_rotation()
+        self._calc_rotation()  # Make sure self.rotation contains the previous rotation
         diff_angle = (target_rotation - self.rotation) % (2 * math.pi)
         self.v_point1 = self.v_point1.rotate(diff_angle, self.v_center)
         self.v_point2 = self.v_point2.rotate(diff_angle, self.v_center)
@@ -1350,7 +1409,8 @@ class RectangleEditingMixin(DragMixin):
         compared to the last time this method was called
 
         """
-
+        # Note: if the canvas is resized, in theory, shiftscale could be the same, but in practice,
+        # in Odemis, every canvas resize also changes the scale, so this is not an issue.
         if self._last_shiftscale != shiftscale:
             logging.debug("Updating view position of selection %s", shiftscale)
             self._last_shiftscale = shiftscale
@@ -1359,38 +1419,52 @@ class RectangleEditingMixin(DragMixin):
             self.v_point3 = Vec(self.cnvs.buffer_to_view(b_point3))
             self.v_point4 = Vec(self.cnvs.buffer_to_view(b_point4))
 
+            self._calc_edges()
+
     def _calc_center(self):
         """Calculate the center of selection."""
         if self.v_point1 and self.v_point3:
-            center_x = (self.v_point1.x + self.v_point3.x) / 2
-            center_y = (self.v_point1.y + self.v_point3.y) / 2
-            self.v_center = Vec(center_x, center_y)
+            self.v_center = (self.v_point1 + self.v_point3) / 2
 
     def _calc_rotation(self):
-        if self.v_point1 and self.v_center:
-            dx = self.v_center.x - self.v_point1.x
-            dy = self.v_center.y - self.v_point1.y
-            self.rotation = math.atan2(dy, dx) % (2 * math.pi)
+        if not (self.v_point1 and self.v_point2):
+            return
+
+        v = self.v_point2 - self.v_point1
+        self.rotation = math.atan2(v.y, v.x) % (2 * math.pi)
+
+    def _get_point_angle(self, point: Vec) -> float:
+        """ Get the angle of a point with respect to the center of the rectangle (.v_center)
+        :param point: The point for which to compute the angle
+        :return: The angle in radians
+        """
+        if self.v_center:
+            dx = point.x - self.v_center.x
+            dy = point.y - self.v_center.y
+            return math.atan2(dy, dx) % (2 * math.pi)
+        else:
+            return 0.0
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
 
         if self.v_point1 and self.v_point2 and self.v_point3 and self.v_point4:
             self._calc_center()
-            self._calc_rotation()
-            angle = math.atan2(self.v_point1.y - self.v_center.y, self.v_point1.x - self.v_center.x)
+            angle = self._get_point_angle(self.v_point1)
             self.v_rotation = Vec(
                 self.v_point1.x + 2 * self.hover_margin * math.cos(angle),
                 self.v_point1.y + 2 * self.hover_margin * math.sin(angle),
             )
-            rotation = [
-                EdgeBoundingBox(
-                    l=self.v_rotation.x - self.hover_margin,
-                    r=self.v_rotation.x + self.hover_margin,
-                    t=self.v_rotation.y - self.hover_margin,
-                    b=self.v_rotation.y + self.hover_margin,
-                )
-            ]
+            if self.can_rotate:
+                rotation = [
+                    EdgeBoundingBox(
+                        l=self.v_rotation.x - self.hover_margin,
+                        r=self.v_rotation.x + self.hover_margin,
+                        t=self.v_rotation.y - self.hover_margin,
+                        b=self.v_rotation.y + self.hover_margin,
+                    )
+                ]
+                self.v_edges[gui.HOVER_ROTATION] = rotation
 
             midpoints = [
                 EdgeBoundingBox(
@@ -1422,6 +1496,7 @@ class RectangleEditingMixin(DragMixin):
                     b=(self.v_point4.y + self.v_point1.y) / 2 + self.hover_margin,
                 ),
             ]
+            self.v_edges[gui.HOVER_LINE] = midpoints
 
             vertices = [
                 EdgeBoundingBox(
@@ -1453,16 +1528,35 @@ class RectangleEditingMixin(DragMixin):
                     b=self.v_point4.y + self.hover_margin,
                 ),
             ]
+            self.v_edges[gui.HOVER_EDGE] = vertices
 
-            self.v_edges.update(
-                {
-                    gui.HOVER_ROTATION: rotation,
-                    gui.HOVER_LINE: midpoints,
-                    gui.HOVER_EDGE: vertices
-                }
-            )
+    def _reorder_rectangle_points(self) -> None:
+        """
+        Re-order .v_point1 ... v_point4 rectangle points, so that v_point1 is the top-left point
+         (min, min) and the other points are in clockwise order.
+        Note .rotation is assumed to be correct and is not changed.
 
-    def update_hover_direction(self, idx):
+        1 -------------- 2
+        |                |
+        |                |
+        |                |
+        4 -------------- 3
+        """
+        point1 = self.v_point1
+        point3 = self.v_point3
+
+        # Convert the points to unrotated space
+        center = (point1 + point3) / 2
+        point1_a = point1.rotate(-self.rotation, center)
+        point3_a = point3.rotate(-self.rotation, center)
+
+        # Normalize the rectangle in unrotated space
+        rect = util.normalize_rect((point1_a.x, point1_a.y, point3_a.x, point3_a.y))
+        points = util.rotate_rect(rect, self.rotation, center)
+        points = [Vec(p) for p in points]
+        self.v_point1, self.v_point2, self.v_point3, self.v_point4 = points
+
+    def get_edit_cursor_direction(self, idx):
         if idx == 1:
             point1 = self.v_point1
             point2 = self.v_point2
@@ -1475,6 +1569,9 @@ class RectangleEditingMixin(DragMixin):
         elif idx == 4:
             point1 = self.v_point4
             point2 = self.v_point1
+        else:
+            raise ValueError(f"Invalid point index {idx}")
+
         dx = abs(point1.x - point2.x)
         dy = abs(point1.y - point2.y)
         return gui.HOVER_DIRECTION_EW if dy > dx else gui.HOVER_DIRECTION_NS
@@ -1498,7 +1595,7 @@ class RectangleEditingMixin(DragMixin):
                 for edge in edges:
                     if edge.l < vx < edge.r and edge.t < vy < edge.b:
                         if hover == gui.HOVER_LINE:
-                            self.hover_direction = self.update_hover_direction(edge.index)
+                            self.hover_direction = self.get_edit_cursor_direction(edge.index)
                         return hover, edge.index
 
             # If the cursor position is inside the rectangle
@@ -1518,33 +1615,21 @@ class RectangleEditingMixin(DragMixin):
         if self.left_dragging:
             hover, idx = self.get_hover(self.drag_v_start_pos)
 
+            # Each of the functions update selection_mode to the corresponding value
             if not hover:
                 # Clicked outside selection, so create new selection
-                self.start_selection()
+                self.start_creation()
             elif hover == gui.HOVER_SELECTION:
                 # Clicked inside selection or near line, so start dragging
                 self.start_drag()
             elif hover == gui.HOVER_ROTATION:
                 # Clicked on the rotation point
                 self.start_rotation()
-            else:
+            elif hover in (gui.HOVER_LINE, gui.HOVER_EDGE):
                 # Clicked on an edit point (e.g. an edge or start or end point), so edit
                 self.start_edit(hover, idx)
-
-    def _on_left_up(self, evt):
-        """ Call this method from the 'on_left_up' method of super classes"""
-
-        DragMixin._on_left_up(self, evt)
-
-        # IMPORTANT: The check for selection clearing includes the left drag attribute for the
-        # following reason: When the (test) window was maximized by double clicking on the title bar
-        # of the window, the second 'mouse up' event would be processed by the overlay, causing it
-        # to clear any selection. Check for `left_dragging` makes sure that the mouse up is always
-        # paired with on of our own mouse downs.
-        if self.selection_mode == SEL_MODE_NONE and self.left_dragging:
-            self.clear_selection()
-        else:  # Editing an existing selection
-            self.stop_selection()
+            else:
+                logging.warning("Unhandled hover type: %s", hover)
 
     def _on_motion(self, evt):
 
@@ -1554,7 +1639,7 @@ class RectangleEditingMixin(DragMixin):
 
         if self.selection_mode:
             if self.selection_mode == SEL_MODE_CREATE:
-                self.update_selection()
+                self.update_creation()
             elif self.selection_mode == SEL_MODE_EDIT:
                 self.update_edit()
             elif self.selection_mode == SEL_MODE_DRAG:
@@ -1565,6 +1650,21 @@ class RectangleEditingMixin(DragMixin):
             self.cnvs.Refresh()
 
         # Cursor manipulation should be done in superclasses
+
+    def _on_left_up(self, evt):
+        """ Call this method from the 'on_left_up' method of super classes"""
+
+        DragMixin._on_left_up(self, evt)
+
+        # IMPORTANT: The check for selection clearing includes the left drag attribute for the
+        # following reason: When the (test) window was maximized by double-clicking on the title bar
+        # of the window, the second 'mouse up' event would be processed by the overlay, causing it
+        # to clear any selection. Check for `left_dragging` makes sure that the mouse up is always
+        # paired with one of our own mouse downs.
+        if self.selection_mode == SEL_MODE_NONE and self.left_dragging:
+            self.clear_selection()
+        else:  # Editing an existing selection
+            self.stop_selection()
 
 
 class LineEditingMixin(ClickMixin, DragMixin):
@@ -1685,6 +1785,16 @@ class LineEditingMixin(ClickMixin, DragMixin):
         diff_angle = current_rotation - self.rotation
         self.rotate_v_points(diff_angle)
         self.rotation = current_rotation
+
+        # If Ctrl is pressed, snap to 45 degree increments
+        if wx.GetKeyState(wx.WXK_CONTROL):
+            # Round to nearest 45 degrees (pi/4 radians)
+            increment = math.pi / 4
+            rounded_rotation = round(self.rotation / increment) * increment
+            snap_diff = rounded_rotation - self.rotation
+            # Apply the snapping rotation
+            self.rotate_v_points(snap_diff)
+            self.rotation = rounded_rotation
 
     def _set_rotation(self, target_rotation: float):
         """
@@ -1879,113 +1989,83 @@ class PixelDataMixin(object):
         self._mouse_vpos = None
 
         # External values
+        self._stream: Optional[Stream] = None
         self._data_resolution = None  # Resolution of the pixel data (int, int)
-        self._data_mpp = None  # size of one pixel in meters
+        self._phys_pxs = None  # Physical size of the pixels (float, float) in meters
+        self._rotation = 0.0  # rad
 
         # Calculated values
-        self._pixel_data_p_rect = None  # ltbr physical coordinates
         self._pixel_pos = None  # position of the current pixel (int, int)
 
-    def set_data_properties(self, mpp, physical_center, resolution):
-        """ Set the values needed for mapping mouse positions to data pixel coordinates
-
-        :param mpp: (float) Size of the data pixels in meters
-        :param physical_center: (float, float) The center of the pixel data in physical coordinates
-        :param resolution: (int, int) The width and height of the pixel data
-
+    def set_stream(self, stream: Stream) -> None:
+        """ Set the data stream to use for pixel coordinate transformations
+        :param stream: The Stream to show, which must already contain data.
         """
-
-        self._data_resolution = Vec(resolution)
-
-        # We calculate the physical size of the data: width/height
-        p_size = self._data_resolution * mpp
-
-        # Get the top left corner of the pixel data
-        # Remember that in physical coordinates, up is positive!
-        p_center = Vec(physical_center)
-
-        self._pixel_data_p_rect = (
-            p_center.x - p_size.x / 2.0,
-            p_center.y - p_size.y / 2.0,
-            p_center.x + p_size.x / 2.0,
-            p_center.y + p_size.y / 2.0,
-        )
-
-        logging.debug("Physical center of spectrum data: %s", physical_center)
-
-        self._data_mpp = mpp
+        self._stream = stream
+        raw = stream.raw[0]
+        self._data_resolution = Vec(raw.shape[-1:-3:-1])  # CTZYX -> XY
+        md = stream._find_metadata(raw.metadata)
+        pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))[0:2]
+        self._phys_pxs = pxs
+        self._rotation = md.get(model.MD_ROTATION, 0.0)
 
     @property
     def data_properties_are_set(self):
-        return None not in (self._data_resolution, self._pixel_data_p_rect, self._data_mpp)
+        return (self._data_resolution is not None)
 
     def _on_motion(self, evt):
         self._mouse_vpos = Vec(evt.Position)
 
-    def is_over_pixel_data(self, v_pos=None):
+    def is_over_pixel_data(self, v_pos: Optional[Tuple[int, int]]=None) -> bool:
         """ Check if the mouse cursor is over an area containing pixel data """
 
         if self._mouse_vpos or v_pos:
             offset = self.cnvs.get_half_buffer_size()
             p_pos = self.cnvs.view_to_phys(self._mouse_vpos or v_pos, offset)
-            return (self._pixel_data_p_rect[0] < p_pos[0] < self._pixel_data_p_rect[2] and
-                    self._pixel_data_p_rect[1] < p_pos[1] < self._pixel_data_p_rect[3])
+            px_pos = self._stream.getPixelCoordinates(p_pos)  # None if outside the bounding-box
+            return (px_pos is not None)
 
         return False
 
-    def view_to_data_pixel(self, v_pos):
+    def view_to_data_pixel(self, v_pos: Tuple[int, int]) -> Tuple[int, int]:
         """ Translate a view coordinate into a data pixel coordinate
 
         The data pixel coordinates have their 0,0 origin at the top left.
 
         """
-
-        # The offset, in pixels, to the center of the physical coordinates
         offset = self.cnvs.get_half_buffer_size()
         p_pos = self.cnvs.view_to_phys(v_pos, offset)
+        px_pos = self._stream.getPixelCoordinates(p_pos, check_bbox=False)
+        return int(px_pos[0]), int(px_pos[1])
 
-        # Calculate the distance to the left bottom in physical units
-        dist = (p_pos[0] - self._pixel_data_p_rect[0],
-                - (p_pos[1] - self._pixel_data_p_rect[3]))
-
-        # Calculate and return the data pixel, (0,0) is top left.
-        return int(dist[0] / self._data_mpp), int(dist[1] / self._data_mpp)
-
-    def data_pixel_to_view(self, data_pixel):
+    def data_pixel_to_view(self, px_pos: Tuple[int, int]) -> Tuple[int, int]:
         """ Return the view coordinates of the center of the given pixel """
-
-        p_x = self._pixel_data_p_rect[0] + (data_pixel[0] + 0.5) * self._data_mpp
-        p_y = self._pixel_data_p_rect[3] - (data_pixel[1] + 0.5) * self._data_mpp
+        p_pos = self._stream.getPhysicalCoordinates((px_pos[0] + 0.5, px_pos[1] + 0.5))
         offset = self.cnvs.get_half_buffer_size()
+        return self.cnvs.phys_to_view(p_pos, offset)
 
-        return self.cnvs.phys_to_view((p_x, p_y), offset)
-
-    def pixel_to_rect(self, pixel, scale):
+    def pixel_to_rect(self, px_pos: Tuple[int, int], scale: float
+                      ) -> List[Tuple[float, float]]:
         """ Return a rectangle, in buffer coordinates, describing the given data pixel
 
-        :param pixel: (int, int) The pixel position
-        :param scale: (float) The scale to draw the pixel at.
-        :return: (top, left, width, height) in px
-
-        *NOTE*
-
-        The return type is structured like it is, because Cairo's rectangle drawing routine likes
-        them in this form (top, left, width, height).
-
+        :param px_pos: The pixel position (index)
+        :param scale: The scale to draw the pixel at.
+        :return: The rectangle as 4 corners (x, y)
         """
-        # The whole thing is weird, because although the Y in physical coordinates
-        # is going up (instead of down for the buffer), each pixel is displayed
-        # from top to bottom. So the first line (ie, index 0) is at the lowest Y.
-
-        # First we calculate the position of the bottom left in buffer pixels
-        p_left_bot = (self._pixel_data_p_rect[0] + pixel[0] * self._data_mpp,
-                      self._pixel_data_p_rect[3] - (pixel[1] * self._data_mpp))
+        # First compute the center, as it is at the center of rotation, so unaffected by rotation
+        p_center = self._stream.getPhysicalCoordinates((px_pos[0] + 0.5, px_pos[1] + 0.5))
+        p_left_bot = (p_center[0] - self._phys_pxs[0] / 2, p_center[1] + self._phys_pxs[1] / 2)
 
         offset = self.cnvs.get_half_buffer_size()
         b_top_left = self.cnvs.phys_to_buffer(p_left_bot, offset)
-        b_pixel_size = (self._data_mpp * scale + 0.5, self._data_mpp * scale + 0.5)
+        b_pixel_size = (self._phys_pxs[0] * scale, self._phys_pxs[1] * scale)
 
-        return b_top_left + b_pixel_size
+        # Convert to ltbr
+        rect = (b_top_left[0], b_top_left[1],
+                b_top_left[0] + b_pixel_size[0], b_top_left[1] + b_pixel_size[1])
+        # Convert to 4 corners, with rotation
+        corners = util.rotate_rect(rect, -self._rotation)  # negative rotation because physical Y is up
+        return corners
 
 
 class ViewOverlay(Overlay):

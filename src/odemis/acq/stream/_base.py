@@ -1260,8 +1260,10 @@ class Stream(object):
         """
         Translate physical coordinates into data pixel coordinates
         :param p_pos: the position in physical coordinates (m)
-        :param check_bbox: if True, the function will return None if the position is outside of the image
-        :returns: the position in pixel coordinates or None if it's outside of the image and check_boundary is True
+        :param check_bbox: if True, the function will return None if the position is outside the image
+        :returns: the position in pixel coordinates, as float, going from +(0, 0) for the top-left of
+        the pixel to +(1.0, 1.0) for the bottom-right of the pixel. So you can use int() to get the pixel index.
+        It returns None if it's outside the image and check_bbox is True
         """
         if not self.raw:
             raise LookupError("Stream has no data")
@@ -1295,7 +1297,8 @@ class Stream(object):
     def getPhysicalCoordinates(self, pixel_pos: Tuple[float, float]) -> Optional[Tuple[float, float]]:
         """
         Translate pixel coordinates into physical coordinates in meters.
-        :param pixel_pos: the position in pixel coordinates (x, y)
+        :param pixel_pos: the position in pixel coordinates (x, y). It's in float, so that it goes
+        from +(0, 0) for the top-left of the pixel to +(1.0, 1.0) for the bottom-right of the pixel.
         :returns: the position in physical coordinates (x, y) in meters
         :raises LookupError: if the stream has no data
         """

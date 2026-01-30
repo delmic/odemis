@@ -892,6 +892,7 @@ class CLAcqPlugin(Plugin):
         }
 
         dlg._dmodel.roa = self._secom_cl_stream.roi  # region of acquisition selected (x_tl, y_tl, x_br, y_br)
+        dlg._dmodel.roa_rotation = None  # no rotation supported
         dlg._dmodel.fovComp = self.main_data.ebeam  # size (x, y) of sem image for given magnification
         dlg._dmodel.driftCorrector = self._driftCorrector
         dlg.viewport_l.canvas.view = None

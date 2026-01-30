@@ -631,6 +631,12 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # It is set at start-up by the tab controller.
         self.roa = None
 
+        # RoA can be rotated if the e-beam (scanner) supports vector scanning
+        if main.ebeam and model.hasVA(main.ebeam, "scanPath"):
+            self.roa_rotation = model.FloatContinuous(0, range=(0, 2 * math.pi), unit="rad")
+        else:
+            self.roa_rotation = None  # Indicates no rotation possible
+
         # The Spot SEM stream, used to control spot mode.
         # It is set at start-up by the tab controller.
         self.spotStream = None
