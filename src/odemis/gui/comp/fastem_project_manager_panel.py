@@ -56,7 +56,7 @@ from odemis.gui.cont.tabs.fastem_project_sections_tab import (
 )
 from odemis.gui.cont.tabs.fastem_project_settings_tab import FastEMProjectSettingsTab
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
-from odemis.gui.model import TOOL_ELLIPSE, TOOL_NONE, TOOL_POLYGON, TOOL_RECTANGLE
+from odemis.gui.model import TOOL_ELLIPSE, TOOL_NONE, TOOL_POLYGON, TOOL_RECTANGLE, TOOL_ROI
 from odemis.gui.util import call_in_wx_main
 from odemis.util import units
 from odemis.util.conversion import hex_to_frgba, hex_to_rgb
@@ -877,10 +877,12 @@ class FastEMProjectManagerPanel:
         self.toolbar.enable_button(TOOL_RECTANGLE, enable)
         self.toolbar.enable_button(TOOL_ELLIPSE, enable)
         self.toolbar.enable_button(TOOL_POLYGON, enable)
+        self.toolbar.enable_button(TOOL_ROI, enable)
         if not enable and self.tab_data.tool.value in (
             TOOL_RECTANGLE,
             TOOL_ELLIPSE,
             TOOL_POLYGON,
+            TOOL_ROI,
         ):
             self.tab_data.tool.value = TOOL_NONE
 

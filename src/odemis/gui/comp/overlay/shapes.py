@@ -27,8 +27,8 @@ from typing import Deque, List, Optional, Tuple, Union
 
 import numpy
 import scipy
-from scipy.spatial import cKDTree
 import wx
+from scipy.spatial import cKDTree
 from shapely.geometry import Point, Polygon
 
 from odemis import model, util
@@ -184,6 +184,7 @@ class ShapesOverlay(WorldOverlay):
         tool_va=None,
         shapes_va=None,
         shape_to_copy_va=None,
+        shape_creation_allowed=True,
     ):
         """
         :param cnvs: canvas for the overlay.
@@ -194,6 +195,8 @@ class ShapesOverlay(WorldOverlay):
             If None, the user should externally implement a method to activate the ShapesOverlay.
         :param shapes_va: Possibility to pass a shared VA whose value is the list of all shapes.
         :param shape_to_copy_va: Possibility to pass a shared VA whose value is the shape to copy object.
+        :param shape_creation_allowed: (bool) If True, new shapes can be created. If False, only existing
+            shapes can be selected and edited.
         """
         if not issubclass(shape_cls, EditableShape):
             raise ValueError("Not a subclass of EditableShape!")
@@ -218,6 +221,7 @@ class ShapesOverlay(WorldOverlay):
         self._undo_action = False
         self._redo_action = False
         self.is_ctrl_down = False
+        self.shape_creation_allowed = shape_creation_allowed
         if tool:
             self.tool = tool
             if tool_va:
@@ -366,10 +370,11 @@ class ShapesOverlay(WorldOverlay):
             # New or previously created shape
             else:
                 self._selected_shape = self._get_shape(evt.Position)
-                if self._selected_shape is None:
+                if self.shape_creation_allowed:
                     self._selected_shape = self._create_new_shape()
                     self._is_new_shape = True
-                self._selected_shape.on_left_down(evt)
+                if self._selected_shape:
+                    self._selected_shape.on_left_down(evt)
                 self._deselect_shapes()
         WorldOverlay.on_left_down(self, evt)
 
@@ -439,6 +444,8 @@ class ShapesOverlay(WorldOverlay):
                 if not self._undo_stack or self._undo_stack[-1] != shape_state:
                     self._undo_stack.append(shape_state)
                     self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
+            if self._selected_shape.is_created.value and self.shape_creation_allowed:
+                self._selected_shape = None
         else:
             WorldOverlay.on_left_up(self, evt)
 
@@ -464,6 +471,8 @@ class ShapesOverlay(WorldOverlay):
                 if not self._undo_stack or self._undo_stack[-1] != shape_state:
                     self._undo_stack.append(shape_state)
                     self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
+            if self._selected_shape.is_created.value and self.shape_creation_allowed:
+                self._selected_shape = None
         else:
             WorldOverlay.on_right_up(self, evt)
 

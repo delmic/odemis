@@ -45,6 +45,7 @@ from odemis.gui.model import (
     TOOL_NONE,
     TOOL_POLYGON,
     TOOL_RECTANGLE,
+    TOOL_ROI,
     TOOL_RULER,
     TOOL_VIEW_LAYOUT,
     VIEW_LAYOUT_DYNAMIC,
@@ -93,6 +94,7 @@ class FastEMMainTab(Tab):
             TOOL_VIEW_LAYOUT,
             TOOL_CURSOR,
             TOOL_EXPAND,
+            TOOL_ROI,
         }
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
@@ -188,6 +190,7 @@ class FastEMMainTab(Tab):
         self.tb.add_tool(TOOL_RECTANGLE, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_ELLIPSE, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_POLYGON, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_ROI, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_VIEW_LAYOUT, self._on_tool_view_layout)
         self.view_layout_btn = self.tb.get_button(TOOL_VIEW_LAYOUT)
         self.cursor_btn = self.tb.get_button(TOOL_CURSOR)
@@ -244,7 +247,7 @@ class FastEMMainTab(Tab):
             logging.info("Requested to expand the view but not able to")
 
     def _on_tool(self, tool):
-        if tool in (TOOL_ELLIPSE, TOOL_RECTANGLE, TOOL_POLYGON, TOOL_RULER):
+        if tool in (TOOL_ELLIPSE, TOOL_RECTANGLE, TOOL_POLYGON, TOOL_RULER, TOOL_ROI):
             self.cursor_btn.SetToggle(False)
         else:
             self.cursor_btn.SetToggle(True)
