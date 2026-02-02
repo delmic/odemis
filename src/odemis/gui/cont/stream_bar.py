@@ -1278,6 +1278,33 @@ class SecomStreamsController(StreamBarController):
 
         return self._add_stream(stream, **kwargs)
 
+    def _add_fluo_streams_actions(self) -> None:
+        """
+        Create the compatible "add stream" actions if a fluorescent microscope is present.
+        """
+        if (
+                self._main_data_model.light and
+                self._main_data_model.light_filter and
+                self._main_data_model.ccd
+        ):
+            def fluor_capable():
+                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                       guimodel.CHAMBER_UNKNOWN}
+                view = self._tab_data_model.focussedView.value
+                compatible = view.is_compatible(acqstream.FluoStream)
+                return enabled and compatible
+
+            # Add most recently used settings from a JSON file
+            if self.stream_settings.config_data:
+                acq_names = sorted(self.stream_settings.entries)
+                for label in acq_names:
+                    display_label = self._get_unique_action_name(label, "Filtered colour")
+                    call_label = functools.partial(self._addFluoWithSettings, label, display_label)
+                    self.add_action(display_label, call_label, fluor_capable)
+            else:
+                # Add default preset option if no old setting is available
+                self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.
 
@@ -1291,30 +1318,7 @@ class SecomStreamsController(StreamBarController):
         # or optical button is disabled)
 
         # First: Fluorescent stream (for dyes)
-        if (
-                self._main_data_model.light and
-                self._main_data_model.light_filter and
-                self._main_data_model.ccd
-        ):
-            def fluor_capable():
-                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                       guimodel.CHAMBER_UNKNOWN}
-                view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(acqstream.FluoStream)
-                return enabled and compatible
-
-            # TODO: how to know it's _fluorescent_ microscope?
-            # => multiple source? filter?
-            # Add most recently used settings from a JSON file
-            if self.stream_settings.config_data:
-                acq_names = sorted(self.stream_settings.entries)
-                for label in acq_names:
-                    display_label = self._get_unique_action_name(label, "Filtered colour")
-                    call_label = functools.partial(self._addFluoWithSettings, label, display_label)
-                    self.add_action(display_label, call_label, fluor_capable)
-            else:
-                # Add default preset option if no old setting is available
-                self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+        self._add_fluo_streams_actions()
 
         # Bright-field & Dark-field are almost identical but for the emitter
         def brightfield_capable():
@@ -2080,6 +2084,14 @@ class CryoStreamsController(SecomStreamsController):
             self._prev_view.stream_tree.flat.unsubscribe(self._on_visible_streams)
         view.stream_tree.flat.subscribe(self._on_visible_streams, init=True)
         self._prev_view = view
+
+    def _createAddStreamActions(self):
+        """ Create the compatible "add stream" actions according to the current microscope.
+
+        To be executed only once, at initialisation.
+        """
+        # For METEOR: only Fluorescent stream (for dyes)
+        self._add_fluo_streams_actions()
 
 
 class CryoAcquiredStreamsController(CryoStreamsController):
