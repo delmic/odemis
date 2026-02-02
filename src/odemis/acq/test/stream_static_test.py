@@ -1386,6 +1386,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         line = numpy.linspace(0, 255, num_cols, dtype=dtype)
         column = numpy.linspace(0, 255, num_rows, dtype=dtype)
 
+        # Create a gradient, with red horizontally, and green vertically. Blue is 0 everywhere.
         # each row has values from 0 to 255, linearly distributed
         arr[:, :, 0] = numpy.tile(line, (num_rows, 1))
         # each column has values from 0 to 255, linearly distributed
@@ -1413,7 +1414,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # change both .rect and .mpp at the same time, to the same values
         # that are set on Stream constructor
         pj.rect.value = full_image_rect  # full image
-        pj.mpp.value = pj.mpp.range[1]  # maximum zoom level
+        pj.mpp.value = pj.mpp.range[1]  # minimum zoom level
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.2)
@@ -1422,13 +1423,14 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value), 2)
         self.assertEqual(len(pj.image.value[0]), 1)
         # top-left pixel of the left tile
-        numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
-        # top-right pixel of the left tile
-        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[0][0][0, 255, :])
+        numpy.testing.assert_allclose([0, 0, 0], pj.image.value[0][0][0, 0, :])
+        # top-right pixel of the left tile (which is little bit more half-way as the tile is 256px,
+        # this covers more than the half the 375 px at minimum zoom -> 255*256/375 ~ 174, depending on the rounding)
+        numpy.testing.assert_allclose([174, 0, 0], pj.image.value[0][0][0, 255, :], atol=1)
         # bottom-left pixel of the left tile
-        numpy.testing.assert_array_equal([0, 254, 0], pj.image.value[0][0][249, 0, :])
+        numpy.testing.assert_allclose([0, 255, 0], pj.image.value[0][0][249, 0, :], atol=1)
         # bottom-right pixel of the right tile
-        numpy.testing.assert_array_equal([254, 254, 0], pj.image.value[1][0][249, 117, :])
+        numpy.testing.assert_allclose([255, 255, 0], pj.image.value[1][0][249, 117, :], atol=1)
 
         # really small rect on the center, the tile is in the cache
         pj.rect.value = (POS[0], POS[1], POS[0] + 0.00001, POS[1] + 0.00001)
@@ -1440,11 +1442,11 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value), 1)
         self.assertEqual(len(pj.image.value[0]), 1)
         # top-left pixel of the only tile
-        numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
+        numpy.testing.assert_allclose([0, 0, 0], pj.image.value[0][0][0, 0, :], atol=1)
         # top-right pixel of the only tile
-        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[0][0][0, 255, :])
+        numpy.testing.assert_allclose([174, 0, 0], pj.image.value[0][0][0, 255, :], atol=1)
         # bottom-left pixel of the only tile
-        numpy.testing.assert_array_equal([0, 254, 0], pj.image.value[0][0][249, 0, :])
+        numpy.testing.assert_allclose([0, 255, 0], pj.image.value[0][0][249, 0, :], atol=1)
 
         # Now, just the tiny rect again, but at the minimum mpp (= fully zoomed in)
         # => should just need one new tile
@@ -1457,13 +1459,13 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value), 1)
         self.assertEqual(len(pj.image.value[0]), 1)
         # top-left pixel of the only tile
-        numpy.testing.assert_array_equal([108, 97, 0], pj.image.value[0][0][0, 0, :])
+        numpy.testing.assert_allclose([108, 97, 0], pj.image.value[0][0][0, 0, :], atol=1)
         # top-right pixel of the only tile
-        numpy.testing.assert_array_equal([130, 97, 0], pj.image.value[0][0][0, 255, :])
+        numpy.testing.assert_allclose([130, 97, 0], pj.image.value[0][0][0, 255, :], atol=1)
         # bottom-left pixel of the only tile
-        numpy.testing.assert_array_equal([108, 130, 0], pj.image.value[0][0][255, 0, :])
+        numpy.testing.assert_allclose([108, 130, 0], pj.image.value[0][0][255, 0, :], atol=1)
         # bottom-right pixel of the only tile
-        numpy.testing.assert_array_equal([130, 130, 0], pj.image.value[0][0][255, 255, :])
+        numpy.testing.assert_allclose([130, 130, 0], pj.image.value[0][0][255, 255, :], atol=1)
 
         # changing .rect and .mpp simultaneously
         # Note: the recommended way is to first change mpp and then rect, as it
@@ -1489,11 +1491,11 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value[0]), 1)
 
         # top-left pixel of the left tile
-        numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
+        numpy.testing.assert_allclose([0, 0, 0], pj.image.value[0][0][0, 0, :], atol=1)
         # bottom-right pixel of the left tile
-        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[0][0][0, 255, :])
-        # bottom-right pixel of right right
-        numpy.testing.assert_array_equal([254, 254, 0], pj.image.value[1][0][249, 117, :])
+        numpy.testing.assert_allclose([174, 0, 0], pj.image.value[0][0][0, 255, :], atol=1)
+        # bottom-right pixel of right tile
+        numpy.testing.assert_allclose([255, 255, 0], pj.image.value[1][0][249, 117, :], atol=1)
 
         read_tiles = []  # reset, to keep the numbers simple
 
@@ -1513,13 +1515,13 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value), 3)
         self.assertEqual(len(pj.image.value[0]), 2)
         # top-left pixel of a center tile
-        numpy.testing.assert_array_equal([87, 0, 0], pj.image.value[1][0][0, 0, :])
+        numpy.testing.assert_allclose([88, 0, 0], pj.image.value[1][0][0, 0, :], atol=1)
         # top-right pixel of a center tile
-        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[1][0][0, 255, :])
+        numpy.testing.assert_allclose([174, 0, 0], pj.image.value[1][0][0, 255, :], atol=1)
         # bottom-left pixel of a center tile
-        numpy.testing.assert_array_equal([87, 130, 0], pj.image.value[1][0][255, 0, :])
+        numpy.testing.assert_allclose([88, 130, 0], pj.image.value[1][0][255, 0, :], atol=1)
         # bottom pixel of a center tile
-        numpy.testing.assert_array_equal([173, 130, 0], pj.image.value[1][0][255, 255, :])
+        numpy.testing.assert_allclose([174, 130, 0], pj.image.value[1][0][255, 255, :], atol=1)
 
         delta = [d / 8 for d in dfr]
         # this rect is 1/8 the size of the full image, in the center of the image
@@ -1532,18 +1534,18 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
 
-        # reads 4 tiles from the disk, no tile is cached becase the zoom changed
+        # reads 4 tiles from the disk, no tile is cached because the zoom changed
         self.assertEqual(10, len(read_tiles))
         self.assertEqual(len(pj.image.value), 2)
         self.assertEqual(len(pj.image.value[0]), 2)
         # top-left pixel of the top-left tile
-        numpy.testing.assert_array_equal([108, 97, 0], pj.image.value[0][0][0, 0, :])
+        numpy.testing.assert_allclose([108, 97, 0], pj.image.value[0][0][0, 0, :], atol=1)
         # top-right pixel of top-left tile
-        numpy.testing.assert_array_equal([130, 97, 0], pj.image.value[0][0][0, 255, :])
+        numpy.testing.assert_allclose([130, 97, 0], pj.image.value[0][0][0, 255, :], atol=1)
         # bottom-left pixel of top-left tile
-        numpy.testing.assert_array_equal([108, 130, 0], pj.image.value[0][0][255, 0, :])
+        numpy.testing.assert_allclose([108, 130, 0], pj.image.value[0][0][255, 0, :], atol=1)
         # bottom pixel of top-left tile
-        numpy.testing.assert_array_equal([130, 130, 0], pj.image.value[0][0][255, 255, :])
+        numpy.testing.assert_allclose([130, 130, 0], pj.image.value[0][0][255, 255, :], atol=1)
 
         # get the old function back to the class
         tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOldSZ
