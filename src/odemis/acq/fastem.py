@@ -46,7 +46,7 @@ from odemis.acq import fastem_conf, stitching
 from odemis.acq.align.fastem import align, estimate_calibration_time
 from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod, WEAVER_COLLAGE
 from odemis.acq.stream import SEMStream
-from odemis.util import TimeoutError, transform
+from odemis.util import TimeoutError, transform, linalg
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.registration import estimate_grid_orientation_from_img
 from odemis.util.transform import SimilarityTransform, to_physical_space
@@ -161,7 +161,8 @@ def estimate_acquisition_time(roa, pre_calibrations=None, acq_dwell_time: Option
 
 def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
             se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
-            spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, acq_dwell_time: Optional[float] = None):
+            spot_grid_thresh=0.5, blank_beam=True, stop_acq_on_failure=True, acq_dwell_time: Optional[float] = None,
+            focus_mapping=False):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -199,6 +200,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
     :param stop_acq_on_failure: (bool) If true the acquisition will be stopped based on the raised exception,
         if false the acquisition will be skipped on failure.
     :param acq_dwell_time: (float or None) The acquisition dwell time.
+    :param focus_mapping: (bool) True if optical focus should be corrected based on the focus map during acquisition.
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
                 (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
@@ -213,7 +215,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
                            se_detector, ebeam_focus, roa, path, username, pre_calibrations, save_full_cells,
-                           settings_obs, spot_grid_thresh, blank_beam, stop_acq_on_failure, f)
+                           settings_obs, spot_grid_thresh, blank_beam, stop_acq_on_failure, focus_mapping, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -232,7 +234,7 @@ class AcquisitionTask(object):
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, se_detector,
                  ebeam_focus, roa, path, username, pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh,
-                 blank_beam, stop_acq_on_failure, future):
+                 blank_beam, stop_acq_on_failure, focus_mapping, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -267,6 +269,7 @@ class AcquisitionTask(object):
             un-blanked during stage moves.
         :param stop_acq_on_failure: (bool) If true the acquisition will be stopped based on the raised exception,
             if false the acquisition will be skipped on failure.
+        :param focus_mapping: (bool) True if optical focus should be corrected based on the focus map during acquisition
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
                             (model.DataArray): The acquisition data, which depends on the value of the
@@ -298,6 +301,8 @@ class AcquisitionTask(object):
         self._blank_beam = blank_beam
         self._stop_acq_on_failure = stop_acq_on_failure
         self._total_roa_time = 0
+        self._correct_focus = focus_mapping
+        self._focus_plane = None
         # flag which when set to True can be used to force returns the run() function and skip the acquisition
         self._skip_roa_acq = False
         if isinstance(future, model.ProgressiveFuture):
@@ -365,10 +370,20 @@ class AcquisitionTask(object):
         self._detector.updateMetadata({model.MD_SLICE_IDX: self._roa.slice_index.value})
         self._detector.updateMetadata({model.MD_USER: self._username})
 
+        if self._correct_focus:
+            # The focus is corrected based on a plane fitted through focus points, during calibration 1
+            # The metadata should look like: {'gamma': -4.29e-05, 'normal': (1.7e-16, -7.99e-17, -1)}
+            self._focus_plane = self._stage.getMetadata().get(model.MD_CALIB, {}).get("focus_plane", None)
+            if not self._focus_plane:
+                raise ValueError("Focus plane not found in stage MD_CALIB metadata, run Calibration 1.")
+
         # No need to set the start time of the future: it's automatically done when setting its state to running.
         logging.info(
             "Starting acquisition of ROA %s, with expected duration of %f s, %s by %s fields and overlap %s.",
-            self._roa.shape.name.value, self._total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1,
+            self._roa.shape.name.value,
+            self._total_roa_time,
+            self._roa.field_indices[-1][0] + 1,
+            self._roa.field_indices[-1][1] + 1,
             self._roa.overlap,
         )
 
@@ -671,10 +686,19 @@ class AcquisitionTask(object):
     def move_stage_to_next_tile(self):
         """Move the stage to the next tile (field image) position."""
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
+        if self._correct_focus:
+            # Calculate the focus position based on the planar fit through focus positions
+            point_on_plane = (0, 0, self._focus_plane["gamma"])  # where the plane intersects with the z-axis
+            # move back to original position, but on the focus plane
+            z = linalg.get_z_pos_on_plane(pos_hor, pos_vert, point_on_plane, self._focus_plane["normal"])
+            new_pos = {"x": pos_hor, "y": pos_vert, "z": z}
+            logging.debug(f"Moving to scan-stage position x: {pos_hor}, y: {pos_vert}, z: {z}")
+        else:
+            new_pos = {"x": pos_hor, "y": pos_vert}
+            logging.debug(f"Moving to scan-stage position x: {pos_hor}, y: {pos_vert}")
 
-        logging.debug(f"Moving to scan-stage position x: {pos_hor}, y: {pos_vert}")
         t = time.time()
-        self._stage_scan.moveAbsSync({'x': pos_hor, 'y': pos_vert})  # move the stage
+        self._stage_scan.moveAbsSync(new_pos)  # move the stage
         logging.debug(f"Actual time for stage movement: {time.time() - t} s")
         stage_pos = self._stage_scan.position.value
         diff_x = stage_pos["x"] - pos_hor
