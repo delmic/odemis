@@ -156,6 +156,9 @@ class MetadataUpdater(model.Component):
         return bool: True if will actually update the affected component,
                      False if the affect is not supported (here)
         """
+        if self._mic.role == "meteor":
+            logging.warning("Stage on METEOR is deprecated, not using it for the MD_POS")
+            return False
 
         # we need to keep the information on the detector to update
         def updateStagePos(pos, comp_affected=comp_affected):
