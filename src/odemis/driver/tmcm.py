@@ -38,6 +38,7 @@ import struct
 import threading
 from collections import OrderedDict
 from concurrent.futures import CancelledError
+from typing import Dict
 
 try:
     import canopen
@@ -443,6 +444,7 @@ class TMCLController(model.Actuator):
         # Add digital output axes
         self._do_axes = do_axes or {}
         self._led_prot_do = led_prot_do or {}
+        self._expected_do_pos: Dict[str, float] = {}  # DO positions, as requested by the user
         for channel, (an, hpos, lpos, dur) in self._do_axes.items():
             if an in self._name_to_axis or an in self._name_to_do_axis:
                 raise ValueError("Axis %s specified multiple times" % an)
@@ -450,12 +452,19 @@ class TMCLController(model.Actuator):
                 raise ValueError("Axis %s duration %s should be in seconds" % (an, dur))
             axes_def[an] = model.Axis(choices={lpos, hpos})
             self._name_to_do_axis[an] = channel
+            self._expected_do_pos[an] = lpos  # Always set to low at init via call to _releaseRefSwitch() just after
 
         for channel, pos in self._led_prot_do.items():
             if channel not in self._do_axes:
                 raise ValueError("led_prot_do channel %s is not specified as a do-axis" % channel)
             if pos not in self._do_axes[channel][1:3]:
                 raise ValueError("led_prot_do of channel %d has position %s, not in do_axes" % (channel, pos))
+
+        if self._led_prot_do:
+            # Add a VA to allow forcing the LED protection on
+            # If it's False: normal operation, the protection is activated during referencing
+            # If it's True: the protection is always active
+            self.protection = model.BooleanVA(False, setter=self._set_protection)
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -479,7 +488,7 @@ class TMCLController(model.Actuator):
                 logging.warning("Acceleration of axis %s is null, most probably due to a bad hardware configuration", n)
 
         # Check state of refswitch on startup
-        self._expected_do_pos = {}  # do positions before referencing, will be reset after refswitch is released
+        # Use _refswitch_lock to access this attribute
         self._leds_on = any(self.GetIO(2, rs) for rs in self._refswitch.values())
         if self._leds_on:
             logging.debug("Refswitch is on during initialization, releasing refswitch for all axes.")
@@ -1450,30 +1459,65 @@ class TMCLController(model.Actuator):
             gparam = 128 + axis
             self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
 
+    def _switch_led_prot(self, protected: bool) -> None:
+        """
+        Blocks until the move duration is passed, and will update .position based on the actual
+        state of the DO axes.
+        Must be called with _refswitch_lock held.
+        :param protected: If True, force the shutters closed. If False, set them
+          to the expected position (if _leds_on is False).
+        """
+        tsleep = 0  # max transition period for all shutters
+        if protected:
+            logging.debug("Forcing the protection active")
+            for channel, val in self._led_prot_do.items():
+                do_an, hpos, lpos, dur = self._do_axes[channel]
+                # If the shutter is already in the right position, no need to wait for it to move
+                if self.position.value[do_an] == val:
+                    logging.debug("Shutter on axis %s already in protected position", do_an)
+                else:
+                    tsleep = max(tsleep, dur)
+                # Set the DO to the "protected" position even if the position reports it's already
+                # there to be really sure. It's very fast anyway.
+                self.SetIO(2, channel, val == hpos)
+        else:
+            # Set the shutter in the "right" position:
+            # if _leds_on is False, set to the expected position
+            # if _leds_on is True, leave them closed (ie, do nothing)
+            if not self._leds_on:
+                # Set digital axis outputs to latest requested value
+                for an, val in self._expected_do_pos.items():
+                    channel = self._name_to_do_axis[an]
+                    if channel not in self._led_prot_do:
+                        continue
+                    _, hpos, lpos, dur = self._do_axes[channel]
+                    if self.position.value[an] == val:
+                        logging.debug("Shutter on axis %s already in protected position", an)
+                    else:
+                        tsleep = max(tsleep, dur)
+                    self.SetIO(2, channel, val == hpos)
+
+        time.sleep(tsleep)
+        self._updatePosition(axes={})
+
+    def _set_protection(self, protected: bool) -> bool:
+        if self.protection.value == protected:
+            return protected  # no change
+
+        with self._refswitch_lock:
+            self._switch_led_prot(protected)
+
+        return protected
+
     def _requestRefSwitch(self, axis):
         refswitch = self._refswitch.get(axis)
         if refswitch is None:
             return
 
         with self._refswitch_lock:
-            # Set _leds_on attribute before closing shutters to make sure they are not
-            # opened again in a concurrent thread
-            leds_were_on = self._leds_on
-            self._leds_on = True  # do this before closing shutters
-            # Close shutters
-            tsleep = 0  # max transition period for all shutters
-            for channel, val in self._led_prot_do.items():
-                do_an, hpos, lpos, dur = self._do_axes[channel]
-                if not leds_were_on:
-                    self._expected_do_pos[do_an] = self.position.value[do_an]
-                # TODO: ideally, for each DO, we should know when was the last time it
-                # was set, and if it's been set to the requested value for long
-                # enough, we don't need to do the extra sleep
-                self.SetIO(2, channel, val == hpos)
-                tsleep = max(tsleep, dur)
-
-            time.sleep(tsleep)
-            self._updatePosition()
+            self._leds_on = True
+            # Activate protection (ie, force the shutters closed)
+            self._switch_led_prot(protected=True)
 
             self._active_refswitchs.add(axis)
             logging.debug("Activating ref switch power line %d (for axis %d)", refswitch, axis)
@@ -1510,15 +1554,8 @@ class TMCLController(model.Actuator):
                 logging.debug("Leaving ref switch power line %d active", refswitch)
 
             # Set digital axis outputs to latest requested value
-            if not self._leds_on:
-                tsleep = 0  # max transition period for all shutters
-                for an, val in self._expected_do_pos.items():
-                    channel = self._name_to_do_axis[an]
-                    _, hpos, lpos, dur = self._do_axes[channel]
-                    self.SetIO(2, channel, val == hpos)
-                    tsleep = max(tsleep, dur)
-                time.sleep(tsleep)
-                self._updatePosition()
+            if not hasattr(self, "protection") or not self.protection.value:
+                self._switch_led_prot(protected=False)
 
     def _startReferencingStd(self, axis):
         """
@@ -1951,15 +1988,16 @@ class TMCLController(model.Actuator):
                 # Check if it's a digital output
                 if an in self._name_to_do_axis:
                     channel = self._name_to_do_axis[an]
-                    _, hpos, lpos, dur = self._do_axes[channel]
-                    with self._refswitch_lock:  # don't start do move at the same time as referencing
-                        if self._leds_on and channel in self._led_prot_do:
-                            # don't move protected do axis now if leds are on, schedule for later
-                            self._expected_do_pos[an] = v
+                    with self._refswitch_lock:
+                        self._expected_do_pos[an] = v  # Update user-requested position
+                        if channel in self._led_prot_do and (self.protection.value or self._leds_on):
+                            # Don't move a protecting DO axes if leds are on, they will be moved
+                            # once the protection is turned off.
                             if v != self._led_prot_do[channel]:
                                 logging.info("Referencing LEDs are on, move on axis %s to %s will be delayed.", an, v)
                         else:
                             # otherwise allow change
+                            _, hpos, lpos, dur = self._do_axes[channel]
                             logging.info("Setting digital output on channel %s to %s." % (channel, v == hpos))
                             self.SetIO(2, channel, v == hpos)
                             moving_do_axes.add(channel)
