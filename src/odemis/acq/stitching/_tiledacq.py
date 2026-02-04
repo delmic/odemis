@@ -1021,7 +1021,8 @@ class TiledAcquisitionTask(object):
 
         return das
 
-    def _stitchTiles(self, da_list):
+    @staticmethod
+    def stitchTiles(da_list, registrar, weaver):
         """
         Stitch the acquired tiles to create a complete view of the required total area
         :return: (list of DataArrays): a stitched data for each stream acquisition
@@ -1031,22 +1032,22 @@ class TiledAcquisitionTask(object):
 
         # TODO: Do this registration step in a separate thread while acquiring
         try:
-            das_registered = register(da_list, method=self._registrar)
+            das_registered = register(da_list, method=registrar)
         except ValueError as exp:
-            logging.warning("Registration with %s failed %s. Retrying with identity registrar.", self._registrar, exp)
+            logging.warning("Registration with %s failed %s. Retrying with identity registrar.", registrar, exp)
             das_registered = register(da_list, method=REGISTER_IDENTITY)
 
-        logging.info("Using weaving method %s.", self._weaver)
+        logging.info("Using weaving method %s.", weaver)
         # Weave every stream
         if isinstance(das_registered[0], tuple):
             for s in range(len(das_registered[0])):
                 streams = []
                 for da in das_registered:
                     streams.append(da[s])
-                da = weave(streams, self._weaver)
+                da = weave(streams, weaver)
                 st_data.append(da)
         else:
-            da = weave(das_registered, self._weaver)
+            da = weave(das_registered, weaver)
             st_data.append(da)
         return st_data
 
@@ -1074,7 +1075,7 @@ class TiledAcquisitionTask(object):
                     logging.info("Acquisition completed, now stitching...")
                     # Stitch the acquired tiles
                     self._future.set_progress(end=self.estimateTime(0) + time.time())
-                    st_data = self._stitchTiles(da_list)
+                    st_data = self.stitchTiles(da_list, self._registrar, self._weaver)
 
             if self._future._task_state == CANCELLED:
                 raise CancelledError()
