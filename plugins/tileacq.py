@@ -23,19 +23,26 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 '''
 
+import csv
 import logging
 import math
 import os
+import threading
 import time
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError
-from typing import Any, Dict, Tuple
+from enum import Enum
+from typing import Any, Dict, List, Tuple
 
+import numpy
 import wx
+from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+from shapely.geometry import MultiPoint, Point
 
 import odemis.gui
 from odemis import dataio, model
 from odemis.acq import stream
+from odemis.acq.acqmng import AcquisitionTask
 from odemis.acq.stitching import (
     REGISTER_GLOBAL_SHIFT,
     REGISTER_IDENTITY,
@@ -43,8 +50,6 @@ from odemis.acq.stitching import (
     WEAVER_COLLAGE_REVERSE,
     WEAVER_MEAN,
     acquireTiledArea,
-    estimateTiledAcquisitionMemory,
-    estimateTiledAcquisitionTime,
 )
 from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
 from odemis.acq.stream import (
@@ -62,7 +67,29 @@ from odemis.gui.comp.stream_panel import OPT_BTN_REMOVE, OPT_BTN_SHOW
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import AcquisitionDialog, Plugin
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
+from odemis.model import CancellableThreadPoolExecutor
 from odemis.util import dataio as udataio
+
+try:
+    from sparc_calibrations.parabolic_mirror_alignment import (
+        AlignmentAxis,
+        ParabolicMirrorAlignmentTask,
+    )
+    sparc_calib_available = True
+except ImportError as err:
+    sparc_calib_available = False
+    logging.info("sparc_calibrations module not available, mirror z alignment not possible: %s", err)
+
+
+class TileMode(Enum):
+    STANDARD = "Standard (X × Y grid)"
+    CUSTOM = "Custom (from tsv file with mirror alignment)"
+
+
+class TileColumnNames(Enum):
+    NUMBER = "Tile Number"
+    POSX = "Stage Position.X [m]"
+    POSY = "Stage Position.Y [m]"
 
 
 class TileAcqPlugin(Plugin):
@@ -74,6 +101,12 @@ class TileAcqPlugin(Plugin):
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
+        ("tile_mode", {
+            "label": "Tile mode",
+            "control_type": odemis.gui.CONTROL_COMBO,
+            "tooltip": "Standard: Regular grid of X × Y tiles\n"
+                       "Custom: Load tile positions from external file",
+        }),
         ("nx", {
             "label": "Tiles X",
             "control_type": odemis.gui.CONTROL_INT,  # no slider
@@ -81,6 +114,12 @@ class TileAcqPlugin(Plugin):
         ("ny", {
             "label": "Tiles Y",
             "control_type": odemis.gui.CONTROL_INT,  # no slider
+        }),
+        ("tiles_file", {
+            "label": "Tiles file",
+            "tooltip": "TSV file with tile positions (x, y in meters)",
+            "control_type": odemis.gui.CONTROL_OPEN_FILE,
+            "wildcard": formats_to_wildcards({"TSV": [".tsv"]})[0],
         }),
         ("overlap", {
             "tooltip": "Approximate amount of overlapping area between tiles",
@@ -134,10 +173,28 @@ class TileAcqPlugin(Plugin):
 
         self._ovrl_stream = None  # stream for fine alignment
 
+        self._executor = None
+        mirror_align_possible = False
+        if microscope.role == "sparc2":
+            if main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
+                mirror_md = main_data.mirror.getMetadata()
+                calib = mirror_md.get(model.MD_CALIB, {})
+                mirror_align_calib = "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib
+                mirror_align_possible = mirror_align_calib and sparc_calib_available
+
+        tile_mode_choices = {
+            TileMode.STANDARD.name: TileMode.STANDARD.value,
+        }
+        if mirror_align_possible:
+            tile_mode_choices[TileMode.CUSTOM.name] = TileMode.CUSTOM.value
+            self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+        self.tile_mode = model.VAEnumerated(TileMode.STANDARD.name, choices=tile_mode_choices)
         self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
         self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
         self.overlap = model.FloatContinuous(0.2, (0., 0.8))
         self.filename = model.StringVA("a.ome.tiff")
+        self.tiles_file = model.StringVA("")
+        self.tile_map: Dict[int, Tuple[float, float]] = {}
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
@@ -147,7 +204,7 @@ class TileAcqPlugin(Plugin):
             WEAVER_COLLAGE_REVERSE: "Collage (reverse order)",
         }
         self.weaver = model.VAEnumerated(WEAVER_MEAN, choices=weaver_choices)
-        self.register = REGISTER_GLOBAL_SHIFT
+        self.registrar = REGISTER_GLOBAL_SHIFT
 
         # Allow to running fine alignment procedure, only on SECOM and DELPHI
         self.fineAlign = model.BooleanVA(False)
@@ -171,19 +228,27 @@ class TileAcqPlugin(Plugin):
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
         # of the ROI and linearly interpolate)
 
-        self.nx.subscribe(self._update_exp_dur)
-        self.ny.subscribe(self._update_exp_dur)
-        self.fineAlign.subscribe(self._update_exp_dur)
         self.nx.subscribe(self._update_total_area)
-        self.ny.subscribe(self._update_total_area)
-        self.overlap.subscribe(self._update_total_area)
-        self.weaver.subscribe(self._on_weaver_change)
-
-        # Warn if memory will be exhausted
+        self.nx.subscribe(self._update_exp_dur)
         self.nx.subscribe(self._memory_check)
+
+        self.ny.subscribe(self._update_total_area)
+        self.ny.subscribe(self._update_exp_dur)
         self.ny.subscribe(self._memory_check)
+
+        self.overlap.subscribe(self._update_total_area)
+
+        self.fineAlign.subscribe(self._update_exp_dur)
+
         self.stitch.subscribe(self._memory_check)
+
+        self.weaver.subscribe(self._on_weaver_change)
+        self.weaver.subscribe(self._update_exp_dur)
         self.weaver.subscribe(self._memory_check)
+
+        self.tile_mode.subscribe(self._on_tile_mode_change)
+
+        self.tiles_file.subscribe(self._on_tile_file_change)
 
     def _can_fine_align(self, streams):
         """
@@ -226,6 +291,60 @@ class TileAcqPlugin(Plugin):
             "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
 
+    def _on_tile_mode_change(self, mode):
+        """Show/hide relevant controls based on tile mode"""
+        if not self._dlg:
+            return
+
+        if mode == TileMode.CUSTOM.name:
+            self.overlap.value = 0
+
+        for entry in self._dlg.setting_controller.entries:
+            if hasattr(entry, "vigilattr"):
+                # Show grid controls only in standard mode
+                if entry.vigilattr in (self.nx, self.ny, self.overlap):
+                    entry.lbl_ctrl.Show(mode == TileMode.STANDARD.name)
+                    entry.value_ctrl.Show(mode == TileMode.STANDARD.name)
+                # Show file control only in custom mode
+                if entry.vigilattr is self.tiles_file:
+                    entry.lbl_ctrl.Show(mode == TileMode.CUSTOM.name)
+                    entry.value_ctrl.Show(mode == TileMode.CUSTOM.name)
+        self._update_total_area(None)
+        self._update_exp_dur(None)
+        self._memory_check(None)
+        wx.CallAfter(self._dlg.setting_controller.panel.Layout)
+
+    def _on_tile_file_change(self, filepath: str):
+        """
+        """
+        self.tile_map.clear()
+        try:
+            with open(filepath, 'r', encoding='utf-8-sig', newline='') as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                for row in reader:
+                    logging.debug(row)
+                    # Skip empty rows
+                    if not row:
+                        continue
+
+                    try:
+                        # Parse the columns
+                        tile_num = int(row[TileColumnNames.NUMBER.value].strip())
+                        x = float(row[TileColumnNames.POSX.value].strip())
+                        y = float(row[TileColumnNames.POSY.value].strip())
+
+                        self.main_app.main_data.stage._checkMoveAbs({"x": x, "y" : y})
+                        self.tile_map[tile_num] = (x, y)
+
+                    except (ValueError, KeyError):
+                        logging.debug(f"Not able to process row {row}")
+                        continue
+            self._update_total_area(None)
+            self._update_exp_dur(None)
+            self._memory_check(None)
+        except Exception:
+            logging.exception("Failed to load tile positions from %s", filepath)
+
     def _on_streams_change(self, _=None):
         ss = self._get_visible_streams()
         # Subscribe to all relevant setting changes
@@ -251,9 +370,9 @@ class TileAcqPlugin(Plugin):
     def _on_weaver_change(self, weaver):
         # For WEAVER_COLLAGE, use REGISTER_IDENTITY, which is the fastest and stiches the tiles based on the stage positions
         if weaver == WEAVER_COLLAGE:
-            self.register = REGISTER_IDENTITY
+            self.registrar = REGISTER_IDENTITY
         else:
-            self.register = REGISTER_GLOBAL_SHIFT
+            self.registrar = REGISTER_GLOBAL_SHIFT
 
     def _unsubscribe_vas(self):
         ss = self._get_live_streams()
@@ -283,17 +402,20 @@ class TileAcqPlugin(Plugin):
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
                 overlay_stream = self._ovrl_stream
 
-            tat = estimateTiledAcquisitionTime(
+            task = TiledAcquisitionTask(
                 stitch_ss,
                 self.main_app.main_data.stage,
                 region,
                 overlap=self.overlap.value,
                 settings_obs=self.main_app.main_data.settings_obs,
                 weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register if self.stitch.value else None,
+                registrar=self.registrar if self.stitch.value else None,
                 overlay_stream=overlay_stream,
                 sfov=self._guess_smallest_fov(),
             )
+            if self.tile_mode.value == TileMode.CUSTOM.name:
+                task._number_of_tiles = len(self.tile_map)
+            tat = task.estimateTime()
         except (ValueError, AttributeError):
             # No streams or cannot compute FoV
             logging.debug("Cannot compute expected acquisition duration")
@@ -310,22 +432,34 @@ class TileAcqPlugin(Plugin):
         """
         Called when VA that affects the total area is changed
         """
-        # Find the stream with the smallest FoV
-        try:
-            fov = self._guess_smallest_fov()
-        except ValueError as ex:
-            logging.debug("Cannot compute total area: %s", ex)
-            return
+        if self.tile_mode.value == TileMode.STANDARD.name:
+            # Find the stream with the smallest FoV
+            try:
+                fov = self._guess_smallest_fov()
+            except ValueError as ex:
+                logging.debug("Cannot compute total area: %s", ex)
+                return
 
-        # * number of tiles - overlap
-        nx = self.nx.value
-        ny = self.ny.value
-        logging.debug("Updating total area based on FoV = %s m x (%d x %d)", fov, nx, ny)
-        ta = (fov[0] * (nx - (nx - 1) * self.overlap.value),
-              fov[1] * (ny - (ny - 1) * self.overlap.value))
+            # * number of tiles - overlap
+            nx = self.nx.value
+            ny = self.ny.value
+            logging.debug("Updating total area based on FoV = %s m x (%d x %d)", fov, nx, ny)
+            ta = (fov[0] * (nx - (nx - 1) * self.overlap.value / 100),
+                fov[1] * (ny - (ny - 1) * self.overlap.value / 100))
 
-        # Use _set_value as it's read only
-        self.totalArea._set_value(ta, force_write=True)
+            # Use _set_value as it's read only
+            self.totalArea._set_value(ta, force_write=True)
+        elif self.tile_mode.value == TileMode.CUSTOM.name:
+            area = (0, 0)
+            if self.tile_map:
+                coords = list(self.tile_map.values())
+
+                xs, ys = zip(*coords)
+                xmin, xmax = min(xs), max(xs)
+                ymin, ymax = min(ys), max(ys)
+                area = (xmax - xmin, ymax - ymin)
+
+            self.totalArea._set_value(area, force_write=True)
 
     def _set_nx(self, nx):
         """
@@ -448,6 +582,7 @@ class TileAcqPlugin(Plugin):
         # value is within range, and will automatically reduce it if necessary.
         self.nx.value = self.nx.value
         self.ny.value = self.ny.value
+        self.tile_mode._set_value(self.tile_mode.value, must_notify=True)
         self._memory_check()
 
         # TODO: disable "acquire" button if no stream selected.
@@ -565,17 +700,20 @@ class TileAcqPlugin(Plugin):
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
                 overlay_stream = self._ovrl_stream
 
-            mem_sufficient, mem_est = estimateTiledAcquisitionMemory(
+            task = TiledAcquisitionTask(
                 stitch_ss,
                 self.main_app.main_data.stage,
                 region,
                 overlap=self.overlap.value,
                 settings_obs=self.main_app.main_data.settings_obs,
                 weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register if self.stitch.value else None,
+                registrar=self.registrar if self.stitch.value else None,
                 overlay_stream=overlay_stream,
                 sfov=self._guess_smallest_fov(),
             )
+            if self.tile_mode.value == TileMode.CUSTOM.name:
+                task._number_of_tiles = len(self.tile_map)
+            mem_sufficient, mem_est = task.estimateMemory()
         except (ValueError, AttributeError):
             # No streams or cannot compute FoV
             mem_sufficient = True
@@ -610,6 +748,360 @@ class TileAcqPlugin(Plugin):
         ymin = ymax - reliable_fov[1] * self.ny.value
 
         return (xmin, ymin, xmax, ymax)
+
+    def _generate_triangulation_points(self, max_dist: float) -> List[Tuple[float, float]]:
+        """
+        Generates survey points for the Z-Map.
+        - If shape is a Point or Line (Area=0): Returns the Centroid.
+        - If shape is a Polygon (Area>0): Returns grid points strictly inside the polygon.
+        """
+        if not self.tile_map:
+            return []
+
+        coords = list(self.tile_map.values())
+
+        # Convex Hull wraps the points.
+        # It returns a Point, LineString, or Polygon.
+        geom = MultiPoint(coords).convex_hull
+
+        # CASE 1: Point or Line (Area is 0)
+        # As requested: just return the midpoint.
+        if geom.area == 0:
+            return [(geom.centroid.x, geom.centroid.y)]
+
+        # CASE 2: Valid Polygon (Area > 0)
+        # Generate the grid strictly inside.
+        minx, miny, maxx, maxy = geom.bounds
+
+        # Use arange for fixed steps.
+        x_arr = numpy.arange(minx, maxx, max_dist)
+        y_arr = numpy.arange(miny, maxy, max_dist)
+
+        valid_points = []
+        for px in x_arr:
+            for py in y_arr:
+                # .contains is strict (points on the edge are False).
+                # Use .intersects or buffer if you want edge points,
+                # but usually strict inside is safer for microscope limits.
+                if geom.contains(Point(px, py)):
+                    valid_points.append((px, py))
+
+        # Fallback: If the grid was too coarse and missed the polygon entirely
+        # (e.g., a thin diagonal polygon between grid points), add the centroid.
+        if not valid_points:
+            valid_points.append((geom.centroid.x, geom.centroid.y))
+
+        return valid_points
+
+    def _perform_z_survey_point(
+        self,
+        tile_pos: Dict,
+    ) -> model.ProgressiveFuture:
+        """
+        Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
+        (coarse per-axis scans followed by Nelder-Mead refinements) to align the
+        mirror and stage based on camera measurements for SPARC.
+
+        :param axes: List of alignment axes to optimize of len 1 or 3.
+        :param ccd: Camera component used to measure the spot.
+        :param search_range: Initial half-range (in metres) for each
+                            coarse search around the current position. Defaults to 50e-6.
+        :param max_iter: Maximum number of optimizer iterations.
+                        This value is passed to the underlying scipy
+                        optimizers to limit work. Defaults to 100.
+        :param stop_early: When True the task attempts to stop the Nelder-Mead stages early
+                        if progress stalls. Set to False to force the optimizers to run
+                        until their normal convergence criteria or the supplied max_iter
+                        budget is exhausted.
+        :param save_images: When True, save alignment step images.
+        :returns: model.ProgressiveFuture
+            A future representing the background alignment task. The future's
+            task_canceller is set so callers (or GUI) can cancel the running task.
+            Any exception raised during alignment will be propagated when calling
+            returned_future.result(). It has additional attributes:
+            - n_steps: Total number of optimization steps performed.
+            - current_step: Current optimization step.
+        """
+        main_data = self.main_app.main_data
+        mirror_md = main_data.mirror.getMetadata()
+        min_step_size = mirror_md[model.MD_CALIB]["auto_align_min_step_size"]
+        ebeam_wd_calib = mirror_md[model.MD_CALIB]["ebeam_working_distance"]
+        current_ebeam_wd = main_data.ebeam_focus.position.value["z"]
+        current_stage_z = main_data.stage.position.value["z"]
+        wd_delta = ebeam_wd_calib - current_ebeam_wd
+        good_z = current_stage_z + wd_delta
+
+        if main_data.lens:
+            focus_dist = main_data.lens.focusDistance.value
+        else:
+            focus_dist = 500e-6  # [m]
+
+        z_min = good_z - focus_dist * 0.3
+        z_max = good_z + focus_dist
+        safe_z = focus_dist * 0.5
+        z_align = AlignmentAxis("z", min_step_size["z"], main_data.stage, abs_bounds=(z_min, z_max))
+
+        def do_move(f_tile_pos, stage, tile_pos, safe_z):
+            f_tile_pos.running_subf_z = stage.moveRel({"z": safe_z})
+            f_tile_pos.running_subf_z.result()
+            f_tile_pos.running_subf_xy = stage.moveAbs(tile_pos)
+            f_tile_pos.running_subf_xy.result()
+
+        def do_z_align(f_tile_pos, z_align_task, search_range, max_iter):
+            f_tile_pos.result()  # Wait for move to complete
+            try:
+                z_align_task.align_mirror(search_range=search_range, max_iter=max_iter)
+            except StopIteration:
+                logging.debug("StopIteration raised, continue with other tile acquisition")
+
+        futures = {}
+        # Move tile position
+        f_tile_pos = model.ProgressiveFuture()
+        futures[f_tile_pos] = 5
+
+        def cancel_move(future):
+            if hasattr(future, "running_subf_z"):
+                logging.debug("Cancelling tile z move.")
+                future.running_subf_z.cancel()
+            if hasattr(future, "running_subf_xy"):
+                logging.debug("Cancelling tile xy move.")
+                future.running_subf_xy.cancel()
+
+        f_tile_pos.task_canceller = cancel_move
+
+        # Z-align task - waits for move to complete
+        f_z_align = model.ProgressiveFuture()
+        f_z_align.n_steps = 0
+        f_z_align.current_step = 0
+        z_align_task = ParabolicMirrorAlignmentTask([z_align], main_data.ccd, f_z_align, stop_early=True, save_images=True)
+        f_z_align.task_canceller = z_align_task.cancel
+        futures[f_z_align] = 30
+
+        # Submit all tasks to plugin executor - they'll run sequentially
+        self._executor.submitf(f_tile_pos, do_move, f_tile_pos, main_data.stage, tile_pos, safe_z)
+        self._executor.submitf(f_z_align, do_z_align, f_tile_pos, z_align_task, focus_dist * 0.8, 50)
+
+        # Return a BatchFuture that tracks all three operations
+        future = model.ProgressiveBatchFuture(futures)
+        return future
+
+    def _custom_tiled_target_z_acquisition(
+        self,
+        tile_pos: Dict,
+        streams,
+        tile_path,
+        da_list,
+        target_z,
+    ) -> model.ProgressiveFuture:
+        """
+        Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
+        (coarse per-axis scans followed by Nelder-Mead refinements) to align the
+        mirror and stage based on camera measurements for SPARC.
+
+        :param axes: List of alignment axes to optimize of len 1 or 3.
+        :param ccd: Camera component used to measure the spot.
+        :param search_range: Initial half-range (in metres) for each
+                            coarse search around the current position. Defaults to 50e-6.
+        :param max_iter: Maximum number of optimizer iterations.
+                        This value is passed to the underlying scipy
+                        optimizers to limit work. Defaults to 100.
+        :param stop_early: When True the task attempts to stop the Nelder-Mead stages early
+                        if progress stalls. Set to False to force the optimizers to run
+                        until their normal convergence criteria or the supplied max_iter
+                        budget is exhausted.
+        :param save_images: When True, save alignment step images.
+        :returns: model.ProgressiveFuture
+            A future representing the background alignment task. The future's
+            task_canceller is set so callers (or GUI) can cancel the running task.
+            Any exception raised during alignment will be propagated when calling
+            returned_future.result(). It has additional attributes:
+            - n_steps: Total number of optimization steps performed.
+            - current_step: Current optimization step.
+        """
+        main_data = self.main_app.main_data
+
+        if main_data.lens:
+            focus_dist = main_data.lens.focusDistance.value
+        else:
+            focus_dist = 500e-6  # [m]
+
+        safe_z = focus_dist * 0.5
+
+        def do_move(f_tile_pos, stage, tile_pos, safe_z, target_z):
+            f_tile_pos.running_subf_z = stage.moveRel({"z": safe_z})
+            f_tile_pos.running_subf_z.result()
+            f_tile_pos.running_subf_xy = stage.moveAbs(tile_pos)
+            f_tile_pos.running_subf_xy.result()
+            f_tile_pos.running_subf_target_z = stage.moveAbs({"z": target_z})
+            f_tile_pos.running_subf_target_z.result()
+
+        def save_tile(tile_path, da):
+            exporter = dataio.find_fittest_converter(tile_path)
+            logging.debug("Will save data of tile %s", tile_path)
+            exporter.export(tile_path, da)
+
+        def do_tile_acq(f_tile_pos, tile_acq_task, tile_path, da_list):
+            f_tile_pos.result()  # Wait for z-align to complete
+            try:
+                das, e = tile_acq_task.run()
+                if e:
+                    logging.warning(f"Acquisition for tile {tile_path} partially failed: {e}")
+                da = das[0]  # return first da
+                da_list.append(da)
+                threading.Thread(target=save_tile, args=(tile_path, da)).start()
+            except IndexError:
+                raise IndexError(f"Failure in acquiring tile {tile_path}.")
+
+        futures = {}
+        # Move tile position
+        f_tile_pos = model.ProgressiveFuture()
+        futures[f_tile_pos] = 5
+
+        def cancel_move(future):
+            if hasattr(future, "running_subf_z"):
+                logging.debug("Cancelling tile z move.")
+                future.running_subf_z.cancel()
+            if hasattr(future, "running_subf_xy"):
+                logging.debug("Cancelling tile xy move.")
+                future.running_subf_xy.cancel()
+            if hasattr(future, "running_subf_target_z"):
+                logging.debug("Cancelling tile z move.")
+                future.running_subf_target_z.cancel()
+
+        f_tile_pos.task_canceller = cancel_move
+
+        # Tile acquisition task - waits for z-align to complete
+        f_tile_acq = model.ProgressiveFuture()
+        tile_acq_task = AcquisitionTask(streams, f_tile_acq, main_data.settings_obs)
+        f_tile_acq.task_canceller = tile_acq_task.cancel
+        futures[f_tile_acq] = 5
+
+        # Submit all tasks to plugin executor - they'll run sequentially
+        self._executor.submitf(f_tile_pos, do_move, f_tile_pos, main_data.stage, tile_pos, safe_z, target_z)
+        self._executor.submitf(f_tile_acq, do_tile_acq, f_tile_pos, tile_acq_task, tile_path, da_list)
+
+        # Return a BatchFuture that tracks all three operations
+        future = model.ProgressiveBatchFuture(futures)
+        return future
+
+    def _custom_tiled_acquisition(
+        self,
+        tile_pos: Dict,
+        streams,
+        tile_path,
+        da_list,
+    ) -> model.ProgressiveFuture:
+        """
+        Starts a ParabolicMirrorAlignmentTask that performs a multi-stage optimization
+        (coarse per-axis scans followed by Nelder-Mead refinements) to align the
+        mirror and stage based on camera measurements for SPARC.
+
+        :param axes: List of alignment axes to optimize of len 1 or 3.
+        :param ccd: Camera component used to measure the spot.
+        :param search_range: Initial half-range (in metres) for each
+                            coarse search around the current position. Defaults to 50e-6.
+        :param max_iter: Maximum number of optimizer iterations.
+                        This value is passed to the underlying scipy
+                        optimizers to limit work. Defaults to 100.
+        :param stop_early: When True the task attempts to stop the Nelder-Mead stages early
+                        if progress stalls. Set to False to force the optimizers to run
+                        until their normal convergence criteria or the supplied max_iter
+                        budget is exhausted.
+        :param save_images: When True, save alignment step images.
+        :returns: model.ProgressiveFuture
+            A future representing the background alignment task. The future's
+            task_canceller is set so callers (or GUI) can cancel the running task.
+            Any exception raised during alignment will be propagated when calling
+            returned_future.result(). It has additional attributes:
+            - n_steps: Total number of optimization steps performed.
+            - current_step: Current optimization step.
+        """
+        main_data = self.main_app.main_data
+        mirror_md = main_data.mirror.getMetadata()
+        min_step_size = mirror_md[model.MD_CALIB]["auto_align_min_step_size"]
+        ebeam_wd_calib = mirror_md[model.MD_CALIB]["ebeam_working_distance"]
+        current_ebeam_wd = main_data.ebeam_focus.position.value["z"]
+        current_stage_z = main_data.stage.position.value["z"]
+        wd_delta = ebeam_wd_calib - current_ebeam_wd
+        good_z = current_stage_z + wd_delta
+
+        if main_data.lens:
+            focus_dist = main_data.lens.focusDistance.value
+        else:
+            focus_dist = 500e-6  # [m]
+
+        z_min = good_z - focus_dist * 0.3
+        z_max = good_z + focus_dist
+        safe_z = focus_dist * 0.5
+        z_align = AlignmentAxis("z", min_step_size["z"], main_data.stage, abs_bounds=(z_min, z_max))
+
+        def do_move(f_tile_pos, stage, tile_pos, safe_z):
+            f_tile_pos.running_subf_z = stage.moveRel({"z": safe_z})
+            f_tile_pos.running_subf_z.result()
+            f_tile_pos.running_subf_xy = stage.moveAbs(tile_pos)
+            f_tile_pos.running_subf_xy.result()
+
+        def do_z_align(f_tile_pos, z_align_task, search_range, max_iter):
+            f_tile_pos.result()  # Wait for move to complete
+            try:
+                z_align_task.align_mirror(search_range=search_range, max_iter=max_iter)
+            except StopIteration:
+                logging.debug("StopIteration raised, continue with other tile acquisition")
+
+        def save_tile(tile_path, da):
+            exporter = dataio.find_fittest_converter(tile_path)
+            logging.debug("Will save data of tile %s", tile_path)
+            exporter.export(tile_path, da)
+
+        def do_tile_acq(f_z_align, tile_acq_task, tile_path, da_list):
+            f_z_align.result()  # Wait for z-align to complete
+            try:
+                das, e = tile_acq_task.run()
+                if e:
+                    logging.warning(f"Acquisition for tile {tile_path} partially failed: {e}")
+                da = das[0]  # return first da
+                da_list.append(da)
+                threading.Thread(target=save_tile, args=(tile_path, da)).start()
+            except IndexError:
+                raise IndexError(f"Failure in acquiring tile {tile_path}.")
+
+        futures = {}
+        # Move tile position
+        f_tile_pos = model.ProgressiveFuture()
+        futures[f_tile_pos] = 5
+
+        def cancel_move(future):
+            if hasattr(future, "running_subf_z"):
+                logging.debug("Cancelling tile z move.")
+                future.running_subf_z.cancel()
+            if hasattr(future, "running_subf_xy"):
+                logging.debug("Cancelling tile xy move.")
+                future.running_subf_xy.cancel()
+
+        f_tile_pos.task_canceller = cancel_move
+
+        # Z-align task - waits for move to complete
+        f_z_align = model.ProgressiveFuture()
+        f_z_align.n_steps = 0
+        f_z_align.current_step = 0
+        z_align_task = ParabolicMirrorAlignmentTask([z_align], main_data.ccd, f_z_align, stop_early=True, save_images=True)
+        f_z_align.task_canceller = z_align_task.cancel
+        futures[f_z_align] = 30
+
+        # Tile acquisition task - waits for z-align to complete
+        f_tile_acq = model.ProgressiveFuture()
+        tile_acq_task = AcquisitionTask(streams, f_tile_acq, main_data.settings_obs)
+        f_tile_acq.task_canceller = tile_acq_task.cancel
+        futures[f_tile_acq] = 5
+
+        # Submit all tasks to plugin executor - they'll run sequentially
+        self._executor.submitf(f_tile_pos, do_move, f_tile_pos, main_data.stage, tile_pos, safe_z)
+        self._executor.submitf(f_z_align, do_z_align, f_tile_pos, z_align_task, focus_dist * 0.8, 50)
+        self._executor.submitf(f_tile_acq, do_tile_acq, f_z_align, tile_acq_task, tile_path, da_list)
+
+        # Return a BatchFuture that tracks all three operations
+        future = model.ProgressiveBatchFuture(futures)
+        return future
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
@@ -648,25 +1140,103 @@ class TileAcqPlugin(Plugin):
                     s.emitter.external.value = True
 
             # Start the tiled acquisition task
-            region = self._get_region(orig_pos)
-            ft = acquireTiledArea(
-                stitch_ss,
-                main_data.stage,
-                region,
-                overlap=self.overlap.value,
-                settings_obs=main_data.settings_obs,
-                log_path=fn,
-                weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register if self.stitch.value else None,
-                overlay_stream=overlay_stream,
-                sfov=self._guess_smallest_fov(),
-                batch_acquire_streams=True,
-            )
+            if self.tile_mode.value == TileMode.CUSTOM.name:
+                if not self.tile_map:
+                    logging.warning("No tile positions loaded for tiled acquisition.")
+                    dlg.resumeSettings()
+                    return
+                USE_Z_MAP_INTERPOLATION = False
 
-            dlg.showProgress(ft)
+                da_list = []
+                if USE_Z_MAP_INTERPOLATION:
+                    known_points = [] # (x, y)
+                    known_z = []      # z
+                    survey_points = self._generate_triangulation_points(max_dist=30.e-6)
+                    for i, survey_point in enumerate(survey_points, start=1):
+                        self._dlg.setAcquisitionInfo(f"Measuring survey point {i}/{len(survey_points)} at position {survey_point}")
+                        ft  = self._perform_z_survey_point({"x": survey_point[0], "y": survey_point[1]})
+                        dlg.showProgress(ft)
+                        ft.result()
 
-            # Wait for the acquisition and stitching to complete
-            st_data = ft.result()
+                        measured_z = main_data.stage.position.value["z"]
+                        known_z.append(measured_z)
+                        known_points.append(survey_point)
+                    if len(known_points) >= 3:
+                        # Linear interpolation inside hull, Nearest outside hull (using a lambda wrapper)
+                        lin_interp = LinearNDInterpolator(known_points, known_z)
+                        near_interp = NearestNDInterpolator(known_points, known_z)
+
+                        def z_interpolator(x, y):
+                            val = lin_interp(x, y)
+                            if numpy.isnan(val):
+                                return near_interp(x, y)
+                            return val.item()
+                    elif len(known_points) > 0:
+                        # Fallback for < 3 points
+                        near_interp = NearestNDInterpolator(known_points, known_z)
+                        z_interpolator = lambda x, y: near_interp(x, y)
+                    else:
+                        logging.error("Z-Map generation failed (no valid points). Aborting.")
+                        return
+
+                    for tile_num, tile_pos in self.tile_map.items():
+                        self._dlg.setAcquisitionInfo(f"Acquiring tile {tile_num} at position {tile_pos}")
+                        fn_tile = "%s-%d-%.3f-%.3f%s" % (fn_bs, tile_num, tile_pos[0] * 1e6, tile_pos[1] * 1e6, fn_ext)
+                        tile_path = os.path.join(log_dir, fn_tile)
+                        target_z = float(z_interpolator(tile_pos[0], tile_pos[1]))
+                        ft = self._custom_tiled_target_z_acquisition(
+                            {"x": tile_pos[0], "y": tile_pos[1]},
+                            stitch_ss,
+                            tile_path,
+                            da_list,
+                            target_z,
+                        )
+
+                        # Wait for this tile to complete before moving to next tile
+                        dlg.showProgress(ft)
+                        ft.result()
+                else:
+                    for tile_num, tile_pos in self.tile_map.items():
+                        self._dlg.setAcquisitionInfo(f"Acquiring tile {tile_num} at position {tile_pos}")
+                        # Execute this tile's acquisition (move, z-align, tile-acq)
+                        fn_tile = "%s-%d-%.3f-%.3f%s" % (fn_bs, tile_num, tile_pos[0] * 1e6, tile_pos[1] * 1e6, fn_ext)
+                        tile_path = os.path.join(log_dir, fn_tile)
+                        ft = self._custom_tiled_acquisition(
+                            {"x": tile_pos[0], "y": tile_pos[1]},
+                            stitch_ss,
+                            tile_path,
+                            da_list,
+                        )
+
+                        # Wait for this tile to complete before moving to next tile
+                        dlg.showProgress(ft)
+                        ft.result()
+
+                # Stitching
+                st_data = []
+                if self.stitch.value and da_list:
+                    st_data = TiledAcquisitionTask.stitchTiles(da_list, self.registrar, self.weaver.value)
+            else:
+                # Start the tiled acquisition task
+                region = self._get_region(orig_pos)
+                ft = acquireTiledArea(
+                    stitch_ss,
+                    main_data.stage,
+                    region,
+                    overlap=self.overlap.value,
+                    settings_obs=main_data.settings_obs,
+                    log_path=fn,
+                    weaver=self.weaver.value if self.stitch.value else None,
+                    registrar=self.registrar if self.stitch.value else None,
+                    overlay_stream=overlay_stream,
+                    sfov=self._guess_smallest_fov(),
+                    batch_acquire_streams=True,
+                )
+
+                dlg.showProgress(ft)
+
+                # Wait for the acquisition and stitching to complete
+                st_data = ft.result()
 
             dlg.Close()
 

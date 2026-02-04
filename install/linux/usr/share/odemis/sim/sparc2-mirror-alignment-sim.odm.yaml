@@ -371,7 +371,7 @@ SPARC2-VIS: { # Placeholder names, change to module name(s)
         axes_map: {"x": "x", "y": "y", "z": "z"},
     },
     metadata: {
-        FAV_POS_ACTIVE: {"x": -0.00015136, "y": -0.00262131, "z": 0.05},  # m, m, m
+        FAV_POS_ACTIVE: {"x": -0.00015136, "y": -0.00262131, "z": 13.e-3},  # m, m, m
     },
 }
 
