@@ -327,6 +327,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         self._metadata = {}
         self._axes_dep = {}  # axes dependencies between different planes
 
+        # Assumed SEM scan rotation if it cannot be read from the hardware (e-beam)
+        # Used for displaying the features and moving the stage in SEM imaging posture in the right orientation.
+        self._default_scan_rotation = 0  # rad
+
         # pre-tilt is required for milling posture, but not all systems have it
         stage_md = self.stage.getMetadata()
         md_calib = stage_md.get(model.MD_CALIB, {})
@@ -555,43 +559,74 @@ class MeteorPostureManager(MicroscopePostureManager):
         self._initialise_offset()
 
     def _update_conversion(self,
-                           rotation: float = 0,
-                           ):
+                           pre_tilt: float = 0,
+                           ) -> None:
         """
         Computes transformation parameters based on the given metadata to allow conversion
         stage-bare and sample plane.
+        This version assumes the FM imaging posture is 180° rotated in rx compared to the SEM imaging posture.
         NOTE: transformations are defined as sample stage -> stage bare
         the inverse transformation is used for stage bare -> sample stage
-        :param rotation: rotation in radians from sample plane to stage (pre-tilt)
+        :param pre_tilt: rotation in radians from sample plane to stage (pre-tilt)
         """
+        tf_id = numpy.eye(3)  # identity transform for the UNKNOWN posture, to make it clear it's not handled
+        tf_rz_180, _ = get_rotation_transforms(rz=math.pi)
+
+        # Note that the tilt of the stage doesn't matter here, because the XYZ of the stage is
+        # "after" the tilt axis.
+
+        # Compensate for the scan rotation (around Z)
+        sr = self._get_scan_rotation()   # Fails if ion-beam and e-beam have different scan rotations
+        # Make sure the SEM image is shown without rotation in the UI. This works by setting
+        # MD_ROTATION_COR as the same value as MD_ROTATION (automatically set on the image).
+        self._set_scanner_rotation_cor(sr)
+        tf_sr, _ = get_rotation_transforms(rz=sr)
+
+        # We assume that FM & SEM are rotate by 180°. Let's warn if that's not the case.
         stage_md = self.stage.getMetadata()
+        rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
+        rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
+        rot_fm_sem = rx_sem - rx_fm
+        if not util.rot_almost_equal(rot_fm_sem, math.pi, atol=math.radians(5)):
+            logging.warning("FM and SEM imaging postures are expected to be 180° rotated in rx, but got %s°.",
+                            math.degrees(rot_fm_sem))
 
         # FM imaging: compensate for the pre-tilt
-        tf, tf_inv = get_rotation_transforms(rx=rotation)
+        tf_tilt, _ = get_rotation_transforms(rx=pre_tilt)
+        # Rotate by 180° to compensate for the stage being rotated in rz compared to the SEM imaging posture
+        # Also rotate by the scan rotation, as the CCD image is aligned with the SEM image
+        tf_fm = tf_tilt @ tf_sr @ tf_rz_180
+        tf_fm_inv = numpy.linalg.inv(tf_fm)
 
-        # get the scan rotation value
-        sr = self._get_scan_rotation()
-        if sr != 0:
-            # Making sure the image will look 'normal' (not rotated) in the UI. This works by setting MD_ROTATION_COR,
-            # which is to be subtracted from MD_ROTATION (set on the image).
-            self._set_scanner_rotation_cor(sr)
-        # TODO: update MILLING transformations when changing milling angle
-        # get scan rotation matrix (rz -> rx)
-        tf_sr, tf_inv_sr = get_rotation_transforms(rx=rotation, rz=sr)
-        logging.debug(f"tf_matrix: {tf}, tf_sr: {tf_sr}")
+        # SEM imaging + milling: stage 180° rotated along rz compared to FM IMAGING + opposite pre-tilt.
+        tf_tilt, _ = get_rotation_transforms(rx=-pre_tilt)
+        tf_sem = tf_tilt @ tf_sr
+        tf_sem_inv = numpy.linalg.inv(tf_sem)
+
+        logging.debug(f"tf_fm: {tf_fm}, tf_sem: {tf_sem}")
+
+        # FIB IMAGING: stage is 180° rotated compared to the SEM IMAGING
+        # TODO: test once FIB IMAGING is supported
+
+        tf_fib_im = tf_sem @ tf_rz_180
+        tf_fib_im_inv = numpy.linalg.inv(tf_fib_im)
 
         # From sample-stage to stage-bare
-        self._transforms = {FM_IMAGING: tf,
-                            FIB_IMAGING: tf_sr,
-                             SEM_IMAGING: tf_inv_sr,
-                             MILLING: tf_inv_sr,
-                             UNKNOWN: tf_inv_sr}
+        self._transforms = {
+            FM_IMAGING: tf_fm,
+            SEM_IMAGING: tf_sem,
+            FIB_IMAGING: tf_fib_im,
+            MILLING: tf_sem,
+            UNKNOWN: tf_id
+        }
         # From stage-bare to sample-stage
-        self._inv_transforms = {FM_IMAGING: tf_inv,
-                                 FIB_IMAGING: tf_inv_sr,
-                                 SEM_IMAGING: tf_sr,
-                                 MILLING: tf_sr,
-                                 UNKNOWN: tf_sr}
+        self._inv_transforms = {
+            FM_IMAGING: tf_fm_inv,
+            SEM_IMAGING: tf_sem_inv,
+            FIB_IMAGING: tf_fib_im_inv,
+            MILLING: tf_sem_inv,
+            UNKNOWN: tf_id
+        }
 
     def _initialise_offset(self):
         stage_md = self.stage.getMetadata()
@@ -629,13 +664,20 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         try:
             ebeam = model.getComponent(role='e-beam')
-            ion_beam = model.getComponent(role='ion-beam')
         except LookupError:
-            logging.info("e-beam and/or ion-beam not available, scan rotation assumed to 0°")
-            return 0
+            logging.info("e-beam and/or ion-beam not available, scan rotation assumed to %s°",
+                         round(math.degrees(self._default_scan_rotation)))
+            return self._default_scan_rotation
 
         # check if e-beam and ion-beam have the same rotation
         sr = ebeam.rotation.value
+
+        try:
+            ion_beam = model.getComponent(role='ion-beam')
+        except LookupError:
+            logging.info("ion-beam not available, scan rotation assumed to be the same as e-beam: %s°", math.degrees(sr))
+            return sr
+
         ion_sr = ion_beam.rotation.value
         if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
             raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
@@ -842,6 +884,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.check_stage_metadata(required_keys=self.required_keys)
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
+
+        # On TFS, the default scan orientation makes the FIB image in MILLING posture display the
+        # closest points at the top, which is not intuitive. So typically, the users apply a scan
+        # rotation of 180° (on e-beam and ion-beam)
+        self._default_scan_rotation = math.pi  # rad
 
         # forced conversion to sample-stage axes
         comp = model.getComponent(name="Linked YZ")
@@ -1160,6 +1207,11 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
+        # On TFS, the default scan orientation makes the FIB image in MILLING posture display the
+        # closest points at the top, which is not intuitive. So typically, the users apply a scan
+        # rotation of 180° (on e-beam and ion-beam)
+        self._default_scan_rotation = math.pi  # rad
+
         self.postures = [SEM_IMAGING, FM_IMAGING]
         # These positions are "optional", and only used with Odemis advanced
         stage_md = self.stage.getMetadata()
@@ -1321,6 +1373,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
             raise KeyError("The stage misses %s axes" % missed_axes)
         self.fib_column_tilt = ZEISS_FIB_COLUMN_TILT
+
+        self._default_scan_rotation = math.pi  # rad
 
         if self.pre_tilt is None: # pre-tilt not available in the stage calib metadata
             # First version of the microscope file had it hard-coded on the Linked YM wrapper component
