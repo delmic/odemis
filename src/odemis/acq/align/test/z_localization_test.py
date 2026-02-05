@@ -30,7 +30,8 @@ from concurrent.futures._base import CancelledError
 import odemis
 from odemis import model
 from odemis.acq import stream
-from odemis.acq.align.z_localization import determine_z_position, measure_z
+from odemis.acq.align.z_localization import determine_z_position, measure_z_multi_targets
+from odemis.acq.feature import Target, TargetType
 from odemis.acq.move import MicroscopePostureManager
 from odemis.dataio.tiff import read_data
 from odemis.util import comp, testing
@@ -164,90 +165,84 @@ class TestMeasureZ(unittest.TestCase):
         # setting the MD_POS on acquired data.
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
         cls.stage = cls.posture_manager.sample_stage
-
-    def test_measure_z(self):
-        """
-        Check the call to measure_z() works
-        """
-        # Note: the simulator image is not proper, so measure_z will return odd value
-        # with a warning.
-
-        # Ask to locate exactly in the center
-        pos = self.stage.position.value
+        pos = cls.stage.position.value
         pos = pos["x"], pos["y"]
 
-        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
-                               self.light, self.filter, focuser=self.focus)
+        cls.fms = stream.FluoStream("fluo", cls.ccd, cls.ccd.data,
+                                    cls.light, cls.filter, focuser=cls.focus)
+        cls.focus_start_pos = cls.focus.position.value["z"]
 
-        angle = min(self.stigmator.getMetadata()[model.MD_CALIB].keys())
+        cls.pois = [Target(x=pos[0], y=pos[1],
+                           z=cls.focus_start_pos,
+                           name="POI-1",
+                           index=1,
+                           type=TargetType.PointOfInterest,
+                           fm_focus_position=cls.focus_start_pos)]
+        cls.poi_size = 100e-6  # 100 um
 
-        f = measure_z(self.stigmator, angle, pos, fms)
-        zshift, warning = f.result(30)
+        cls.fiducials = [Target(x=pos[0] + 1e-6, y=pos[1] + 1e-6,
+                                z=cls.focus_start_pos,
+                                name="Fiducial-1",
+                                index=1,
+                                type=TargetType.Fiducial,
+                                fm_focus_position=cls.focus_start_pos)]
+        cls.fiducial_size = 200e-6  # 200 um
 
-        # Check it's not a super odd value: < 10µm
-        self.assertLessEqual(abs(zshift), 10e-6)
-
-    def test_measure_z_pos_shifted(self):
+    def test_measure_z_multi_targets(self):
         """
-        Test measure_z with a pos within the FoV, but not in the center
+        Check the call to measure_z_multi_targets() works
         """
-        # Note: the simulator image is not proper, so measure_z will return odd value
-        # with a warning.
+        f = measure_z_multi_targets(stigmator=self.stigmator, focus= self.focus,
+                                    stream=self.fms, poi_size=self.poi_size, pois=self.pois,
+                                    fiducial_size=self.fiducial_size, fiducials=self.fiducials)
+        f.result(30)
 
+
+    def test_measure_z_multi_targets_pos_shifted(self):
+        """
+        Test measure_z_multi_targets with a pos within the FoV, but not in the center
+        """
         # Ask to locate shift from the center (but within FoV)
         pos = self.stage.position.value
         fov = comp.compute_camera_fov(self.ccd)
         pos = pos["x"] + fov[0] / 3, pos["y"] - fov[1] / 4
+        pois = [Target(x=pos[0], y=pos[1],
+                       z=self.focus_start_pos,
+                       name="POI-1",
+                       index=1,
+                       type=TargetType.PointOfInterest,
+                       fm_focus_position=self.focus_start_pos)]
 
-        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
-                               self.light, self.filter, focuser=self.focus)
-
-        angle = min(self.stigmator.getMetadata()[model.MD_CALIB].keys())
-
-        f = measure_z(self.stigmator, angle, pos, fms, logpath="test-measurez.ome.tiff")
-        zshift, warning = f.result(30)
+        f = measure_z_multi_targets(stigmator=self.stigmator, focus= self.focus,
+                                    stream=self.fms, poi_size=self.poi_size, pois=pois)
+        targets = f.result(30)
 
         # Check it's not a super odd value: < 10µm
-        self.assertLessEqual(abs(zshift), 10e-6)
+        self.assertLessEqual(abs(targets[0].coordinates.value[2] - self.focus_start_pos), 10e-6)
 
-    def test_measure_z_cancel(self):
+    def test_measure_z_multi_targets_cancel(self):
         """
-        Test the cancellation process of measure_z.
+        Test the cancellation process of measure_z_multi_targets.
         """
-        # Note: the simulator image is not proper, so measure_z will return odd value
-        # with a warning.
-
-        # Ask to locate shift from the center (but within FoV)
-        pos = self.stage.position.value
-        fov = comp.compute_camera_fov(self.ccd)
-        pos = pos["x"] + fov[0] / 3, pos["y"] - fov[1] / 4
-
-        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
-                               self.light, self.filter, focuser=self.focus)
-
-        angle = min(self.stigmator.getMetadata()[model.MD_CALIB].keys())
-
-        f = measure_z(self.stigmator, angle, pos, fms, logpath="test-measurez.ome.tiff")
+        f = measure_z_multi_targets(stigmator=self.stigmator, focus=self.focus,
+                                    stream=self.fms, poi_size=self.poi_size, pois=self.pois,
+                                    fiducial_size=self.fiducial_size, fiducials=self.fiducials)
         f.cancel()
         with self.assertRaises(CancelledError):
-            zshift, warning = f.result()
+            f.result()
         self.assertTrue(f.cancelled())
 
-    def test_measure_z_bad_angle(self):
+    def test_measure_z_false_target_size(self):
         """
-        Check that an error is reported if passing the wrong angle
+        Check that an error is reported if passing the target size not present in the stigmator calibration data
         """
-        pos = self.stage.position.value
-        pos = pos["x"], pos["y"]
-
-        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
-                               self.light, self.filter, focuser=self.focus)
-
-        angle = -1.57 # Should not be within the calibration angles
+        poi_size = 400e-06 # Should not be within the target sizes of the stigmator calibration data
 
         with self.assertRaises(KeyError):
-            f = measure_z(self.stigmator, angle, pos, fms)
-            zshit, warning = f.result(30)
+            f = measure_z_multi_targets(stigmator=self.stigmator, focus= self.focus,
+                                    stream=self.fms, poi_size=poi_size, pois=self.pois,
+                                    fiducial_size=self.fiducial_size, fiducials=self.fiducials)
+            f.result(30)
 
 
 if __name__ == '__main__':
