@@ -91,7 +91,7 @@ TOOLS = {
             "btn_view_update",
             model.TOOL_ROI,
             model.TOOL_NONE,
-            "Select region of interest"
+            "Select and edit shapes"
         ),
     model.TOOL_ROA:
         ModeTool(
@@ -194,21 +194,21 @@ TOOLS = {
             "btn_rectangle",
             model.TOOL_RECTANGLE,
             model.TOOL_NONE,
-            "Create/Move rectangle"
+            "Create rectangle"
         ),
     model.TOOL_ELLIPSE:
         ModeTool(
             "btn_circle",
             model.TOOL_ELLIPSE,
             model.TOOL_NONE,
-            "Create/Move ellipse"
+            "Create ellipse"
         ),
     model.TOOL_POLYGON:
         ModeTool(
             "btn_polygon",
             model.TOOL_POLYGON,
             model.TOOL_NONE,
-            "Create/Move polygon"
+            "Create polygon"
         ),
     model.TOOL_VIEW_LAYOUT:
         ToggleTool(
