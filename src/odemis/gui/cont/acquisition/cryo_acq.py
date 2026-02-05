@@ -187,6 +187,7 @@ class CryoAcquiController(object):
             self._panel.chkbox_save_acquisition.Bind(wx.EVT_CHECKBOX, self._on_chkbox_save_acquisition)
             self._panel.btn_cryosecom_change_file.Enable(False) # disable the change file button
             self._panel.streams_chk_list.Hide()
+            self._tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
 
         # advanced features toggle
         if self.acqui_mode is guimod.AcquiMode.FLM:
@@ -199,6 +200,7 @@ class CryoAcquiController(object):
         # refresh the GUI
         self._panel.Layout()
 
+    @call_in_wx_main
     def _on_current_feature(self, feature: CryoFeature):
         """
         Called when the current feature changes
