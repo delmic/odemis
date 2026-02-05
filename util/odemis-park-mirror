@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Attempt to park the mirror of the SPARCv2, even if no backend is running
 """
 Created on October 2015
 
 @author: Éric Piel
 
-Copyright © 2015 Éric Piel, Delmic
+Copyright © 2015-2026 Éric Piel, Delmic
 
 Odemis is free software: you can redistribute it and/or modify it under the terms
 of the GNU General Public License version 2 as published by the Free Software
@@ -25,8 +24,9 @@ import logging
 import os
 import sys
 import threading
-import time
-from typing import Optional
+from concurrent.futures import CancelledError, Future
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 import Pyro4
 import wx
@@ -52,65 +52,79 @@ if TEST_NOHW:
     REDUX_KWARGS["address"] = None
 
 
-def park(mirror):
+@dataclass
+class FutureHolder:
+    """Mutable container for sharing a Future between threads, enabling cancellation."""
+    future: Optional[Future] = None
+
+
+@dataclass
+class ParkState(FutureHolder):
+    """Shared state for the GUI parking operation: current future and any exception raised."""
+    error: Optional[Exception] = None
+
+
+def park(mirror: model.Actuator, future_holder: Optional[FutureHolder] = None) -> None:
     # Need to park in two moves: first S, then L
     f = mirror.reference({"s"})
+    if future_holder is not None:
+        future_holder.future = f
     logging.info("Parking the mirror...")
     try:
         logging.debug("Moving S axis")
-        f.result()
+        f.result()  # Can raise CancelledError if cancelled, or other exceptions if move failed
     except KeyboardInterrupt:
         f.cancel()
         logging.warning("Cancelled parking move")
-        raise
+        raise CancelledError()
 
     f = mirror.reference({"l"})
+    if future_holder is not None:
+        future_holder.future = f
     try:
         logging.debug("Moving L axis")
         f.result()
     except KeyboardInterrupt:
         f.cancel()
         logging.warning("Cancelled parking move")
-        raise
+        raise CancelledError()
 
 
-def park_via_backend():
+def get_mirror() -> Tuple[model.Actuator, bool]:
     """
-    Try to use the backend to park the stage
-    raise:
-        CommunicationError if no backend present
-        LookupError: backend is present but doesn't have mirror
-        IOError: if move failed
-    """
-    mirror = model.getComponent(role="mirror")
-    logging.debug("Using the backend to park the mirror")
-    park(mirror)
+    Get the mirror component, either from the backend or directly from the hardware.
 
-
-def park_direct():
+    :return:
+      mirror: The mirror component
+      should_terminate: a boolean indicating whether the component should be terminated when not used
+       anymore by the caller (False if it was obtained from the backend)
+    :raises: Various exceptions if the mirror cannot be accessed
     """
-    Try to directly connect to the TMCM board and park the mirror
-    """
-    mirror = tmcm.TMCLController("Mirror stage", "mirror", **REDUX_KWARGS)
-    logging.info("Connected to %s", mirror.hwVersion)
-
     try:
-        park(mirror)
-    finally:
-        mirror.terminate()
+        mirror = model.getComponent(role="mirror")
+        logging.debug("Using the backend to park the mirror")
+        return mirror, False  # False indicates we got it from the backend
+    except (Pyro4.errors.CommunicationError, LookupError):
+        logging.info("Failed to access the backend, will try directly")
+        mirror = tmcm.TMCLController("Mirror stage", "mirror", **REDUX_KWARGS)
+        logging.info("Connected to %s", mirror.hwVersion)
+        return mirror, True  # True indicates we got a direct connection
 
 
-def do_park_mirror() -> None:
+def do_park_mirror(future_holder: Optional[FutureHolder] = None) -> None:
     """
     Execute the mirror parking operation.
 
-    :raises: Various exceptions from park_via_backend() or park_direct()
+    :param future_holder: Optional FutureHolder to store the current future,
+        allowing external cancellation.
+    :raises: Various exceptions from park()
     """
+    mirror, must_terminate = get_mirror()
     try:
-        park_via_backend()
-    except (Pyro4.errors.CommunicationError, IOError, LookupError):
-        logging.info("Failed to access the backend, will try directly")
-        park_direct()
+        park(mirror, future_holder)
+    finally:
+        if must_terminate:
+            mirror.terminate()
 
 
 class ProgressDialog(wx.Dialog):
@@ -118,14 +132,17 @@ class ProgressDialog(wx.Dialog):
     Dialog showing an indeterminate progress bar during mirror parking operation.
     """
 
-    def __init__(self, parent: Optional[wx.Window] = None):
+    def __init__(self, parent: Optional[wx.Window] = None, future_holder: Optional[FutureHolder] = None):
         """
         Initialize the progress dialog.
 
         :param parent: Parent window (None for top-level)
+        :param future_holder: Optional FutureHolder to store the current future,
+            allowing cancellation from the Cancel button.
         """
         super().__init__(parent, title="Parking Mirror",
-                         style=wx.DEFAULT_DIALOG_STYLE)
+                         style=wx.CAPTION)  # No close button, so user can't hide the progress bar
+        self._future_holder = future_holder
 
         # Create UI elements
         panel = wx.Panel(self)
@@ -139,6 +156,12 @@ class ProgressDialog(wx.Dialog):
         self.gauge = wx.Gauge(panel, range=100, size=(300, 25))
         sizer.Add(self.gauge, 0, wx.ALL | wx.EXPAND, 10)
 
+        # Cancel button
+        if self._future_holder is not None:
+            cancel_btn = wx.Button(panel, wx.ID_CANCEL, "Cancel")
+            sizer.Add(cancel_btn, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+            cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel)
+
         panel.SetSizer(sizer)
         sizer.Fit(self)
         self.Centre()
@@ -151,6 +174,16 @@ class ProgressDialog(wx.Dialog):
     def _on_timer(self, event: wx.Event) -> None:
         """Update the progress gauge to show activity."""
         self.gauge.Pulse()
+
+    def _on_cancel(self, event: wx.Event) -> None:
+        """Cancel the ongoing parking move and close the dialog."""
+        if self._future_holder.future:
+            self._future_holder.future.cancel()
+        else:
+            return  # No future to cancel, just ignore the cancel request
+        logging.warning("Cancelled parking move")
+        self.timer.Stop()
+        self.EndModal(wx.ID_CANCEL)
 
     def close_dialog(self) -> None:
         """Stop the timer and close the dialog."""
@@ -176,54 +209,64 @@ def park_mirror_with_gui() -> int:
 
     if result != wx.YES:
         logging.info("User cancelled mirror parking")
+        app.Destroy()
         return 1
 
-    # Create progress dialog
-    dlg = ProgressDialog()
+    # Shared state
+    state = ParkState()  # holds the current future (for cancellation) and any exception raised
 
-    # Parking result
-    error = [None]  # Use list to allow modification in thread
+    # Create progress dialog
+    dlg = ProgressDialog(future_holder=state)
 
     def park_thread():
         """Thread function to park the mirror."""
         try:
-            do_park_mirror()
+            do_park_mirror(state)
+        except CancelledError as e:
+            state.error = e
         except Exception as e:
-            error[0] = e
+            logging.exception("Unexpected error while parking mirror")
+            state.error = e
         finally:
-            # Close dialog on main thread
-            wx.CallAfter(dlg.close_dialog)
+            # Close dialog on main thread, if not already closed by Cancel
+            if dlg.IsShown():
+                wx.CallAfter(dlg.close_dialog)
 
     # Start parking in background thread
     thread = threading.Thread(target=park_thread, daemon=True)
     thread.start()
 
-    # Show modal dialog (blocks until closed)
-    dlg.ShowModal()
+    # Show modal dialog (blocks until closed by park_thread or Cancel button)
+    modal_result = dlg.ShowModal()
     dlg.Destroy()
 
     # Wait for thread to complete
     thread.join(timeout=2.0)
+    if thread.is_alive():
+        logging.warning("Parking thread is still running after dialog closed.")
 
-    # Check for errors
-    if error[0]:
-        exc = error[0]
-        logging.exception("Unexpected error while performing action.")
+    # Determine outcome
+    ex = state.error
+    if modal_result == wx.ID_CANCEL or isinstance(ex, CancelledError):
         wx.MessageBox(
-            f"Error while attempting to park the mirror: {str(exc)}",
+            "Mirror parking was cancelled.",
+            "Cancelled",
+            wx.OK | wx.ICON_INFORMATION
+        )
+        ret = 1
+    elif ex:
+        wx.MessageBox(
+            f"Error while attempting to park the mirror: {str(ex)}",
             "Error",
             wx.OK | wx.ICON_ERROR
         )
-        return 130
+        ret = 130
+    else:
+        # No need for a success window, the user does see the mirror has moved.
+        ret = 0
 
-    # Success
-    wx.MessageBox(
-        "Mirror has been successfully parked.",
-        "Success",
-        wx.OK | wx.ICON_INFORMATION
-    )
-
-    return 0
+    app.Destroy()
+    return ret
 
 
 def main(args):
@@ -257,12 +300,8 @@ def main(args):
     if options.no_gui:
         # CLI mode - original behavior
         try:
-            try:
-                park_via_backend()
-            except (Pyro4.errors.CommunicationError, IOError, LookupError):
-                logging.info("Failed to access the backend, will try directly")
-                park_direct()
-        except KeyboardInterrupt:
+            do_park_mirror()
+        except (KeyboardInterrupt, CancelledError):
             logging.info("Interrupted before the end of the execution")
             return 1
         except ValueError as exp:
