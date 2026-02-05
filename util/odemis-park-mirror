@@ -24,9 +24,12 @@ import argparse
 import logging
 import os
 import sys
+import threading
 import time
+from typing import Optional
 
 import Pyro4
+import wx
 
 from odemis import model
 from odemis.driver import tmcm
@@ -90,18 +93,145 @@ def park_direct():
     """
     mirror = tmcm.TMCLController("Mirror stage", "mirror", **REDUX_KWARGS)
     logging.info("Connected to %s", mirror.hwVersion)
-    
+
     try:
         park(mirror)
     finally:
         mirror.terminate()
 
 
+def do_park_mirror() -> None:
+    """
+    Execute the mirror parking operation.
+
+    :raises: Various exceptions from park_via_backend() or park_direct()
+    """
+    try:
+        park_via_backend()
+    except (Pyro4.errors.CommunicationError, IOError, LookupError):
+        logging.info("Failed to access the backend, will try directly")
+        park_direct()
+
+
+class ProgressDialog(wx.Dialog):
+    """
+    Dialog showing an indeterminate progress bar during mirror parking operation.
+    """
+
+    def __init__(self, parent: Optional[wx.Window] = None):
+        """
+        Initialize the progress dialog.
+
+        :param parent: Parent window (None for top-level)
+        """
+        super().__init__(parent, title="Parking Mirror",
+                         style=wx.DEFAULT_DIALOG_STYLE)
+
+        # Create UI elements
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Status text
+        text = wx.StaticText(panel, label="Parking mirror, please wait...")
+        sizer.Add(text, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+        # Progress gauge (indeterminate)
+        self.gauge = wx.Gauge(panel, range=100, size=(300, 25))
+        sizer.Add(self.gauge, 0, wx.ALL | wx.EXPAND, 10)
+
+        panel.SetSizer(sizer)
+        sizer.Fit(self)
+        self.Centre()
+
+        # Timer for pulsing the gauge
+        self.timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_timer)
+        self.timer.Start(50)  # Update every 50ms
+
+    def _on_timer(self, event: wx.Event) -> None:
+        """Update the progress gauge to show activity."""
+        self.gauge.Pulse()
+
+    def close_dialog(self) -> None:
+        """Stop the timer and close the dialog."""
+        self.timer.Stop()
+        self.EndModal(wx.ID_OK)
+
+
+def park_mirror_with_gui() -> int:
+    """
+    Park the mirror with GUI confirmation and progress display.
+
+    :return: Exit code (0 for success, non-zero for errors)
+    """
+    app = wx.App()
+
+    # Show confirmation dialog
+    result = wx.MessageBox(
+        "Do you want to park the mirror?\n\n"
+        "This will move the mirror to its parked position.",
+        "Park Mirror Confirmation",
+        wx.YES_NO | wx.ICON_QUESTION
+    )
+
+    if result != wx.YES:
+        logging.info("User cancelled mirror parking")
+        return 1
+
+    # Create progress dialog
+    dlg = ProgressDialog()
+
+    # Parking result
+    error = [None]  # Use list to allow modification in thread
+
+    def park_thread():
+        """Thread function to park the mirror."""
+        try:
+            do_park_mirror()
+        except Exception as e:
+            error[0] = e
+        finally:
+            # Close dialog on main thread
+            wx.CallAfter(dlg.close_dialog)
+
+    # Start parking in background thread
+    thread = threading.Thread(target=park_thread, daemon=True)
+    thread.start()
+
+    # Show modal dialog (blocks until closed)
+    dlg.ShowModal()
+    dlg.Destroy()
+
+    # Wait for thread to complete
+    thread.join(timeout=2.0)
+
+    # Check for errors
+    if error[0]:
+        exc = error[0]
+        logging.exception("Unexpected error while performing action.")
+        wx.MessageBox(
+            f"Error while attempting to park the mirror: {str(exc)}",
+            "Error",
+            wx.OK | wx.ICON_ERROR
+        )
+        return 130
+
+    # Success
+    wx.MessageBox(
+        "Mirror has been successfully parked.",
+        "Success",
+        wx.OK | wx.ICON_INFORMATION
+    )
+
+    return 0
+
+
 def main(args):
     """
     Handles the command line arguments
-    args is the list of arguments passed
-    return (int): value to return to the OS as program exit code
+
+    :param args: List of arguments passed
+    :return: Value to return to the OS as program exit code
     """
 
     # arguments handling
@@ -110,6 +240,8 @@ def main(args):
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
+    parser.add_argument("--no-gui", dest="no_gui", action="store_true",
+                        help="run in CLI mode without GUI confirmation")
 
     options = parser.parse_args(args[1:])
 
@@ -121,26 +253,32 @@ def main(args):
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
     logging.getLogger().setLevel(loglev)
 
-    try:
+    # Choose GUI or CLI mode
+    if options.no_gui:
+        # CLI mode - original behavior
         try:
-            park_via_backend()
-        except (Pyro4.errors.CommunicationError, IOError, LookupError):
-            logging.info("Failed to access the backend, will try directly")
-            park_direct()
-    except KeyboardInterrupt:
-        logging.info("Interrupted before the end of the execution")
-        return 1
-    except ValueError as exp:
-        logging.error("%s", exp)
-        return 127
-    except IOError as exp:
-        logging.error("%s", exp)
-        return 129
-    except Exception:
-        logging.exception("Unexpected error while performing action.")
-        return 130
+            try:
+                park_via_backend()
+            except (Pyro4.errors.CommunicationError, IOError, LookupError):
+                logging.info("Failed to access the backend, will try directly")
+                park_direct()
+        except KeyboardInterrupt:
+            logging.info("Interrupted before the end of the execution")
+            return 1
+        except ValueError as exp:
+            logging.error("%s", exp)
+            return 127
+        except IOError as exp:
+            logging.error("%s", exp)
+            return 129
+        except Exception:
+            logging.exception("Unexpected error while performing action.")
+            return 130
 
-    return 0
+        return 0
+    else:
+        # GUI mode
+        return park_mirror_with_gui()
 
 
 if __name__ == '__main__':
