@@ -869,6 +869,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.pre_tilt = comp.getMetadata()[model.MD_ROTATION_COR]
         self.postures = [SEM_IMAGING, FM_IMAGING]
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+        self.create_sample_stage()
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -1326,6 +1327,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         self.postures = [SEM_IMAGING, FM_IMAGING]
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "m"], rotation=self.pre_tilt)
+        self.create_sample_stage()
 
     def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
         new_pos = super().from_sample_stage_to_stage_position(pos)
