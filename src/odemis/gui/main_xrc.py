@@ -1937,6 +1937,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxBoxSizer">
+                <orient>wxHORIZONTAL</orient>
                 <object class="spacer">
                   <option>1</option>
                   <flag>wxEXPAND</flag>
@@ -1948,7 +1949,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                       <assign_var>1</assign_var>
                     </XRCED>
                   </object>
-                  <flag>wxALIGN_RIGHT</flag>
                 </object>
                 <object class="spacer">
                   <option>1</option>
