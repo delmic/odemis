@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import copy
 import inspect
 import itertools
+import math
 import operator
 import unittest
 
@@ -44,6 +45,7 @@ from odemis.util.transform import (
     to_physical_space_transform,
     to_pixel_index,
     to_pixel_index_transform,
+    get_rotation_transforms,
 )
 
 
@@ -690,6 +692,44 @@ class TransformFromPointsetEquivalence(unittest.TestCase):
 
         for a, b in itertools.combinations(values, 2):
             self.assertAlmostEqual(a, b)
+
+
+class TestRotationTransform(unittest.TestCase):
+
+    def test_transformation_calculation(self):
+        """Simple tests for 3D transform calculations"""
+
+        tf, tf_inv = get_rotation_transforms(rx=0)
+        self.assertEqual(tf.shape, (3, 3))
+        self.assertEqual(tf_inv.shape, (3, 3))
+        numpy.testing.assert_array_almost_equal(tf, numpy.eye(3))
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.eye(3))
+
+        # rotation around x-axis
+        rx = math.radians(45)
+        tf, tf_inv = get_rotation_transforms(rx=rx)
+        tf_rx = numpy.array(
+                [[1, 0, 0],
+                [0, numpy.cos(rx), -numpy.sin(rx)],
+                [0, numpy.sin(rx), numpy.cos(rx)]])
+        numpy.testing.assert_array_almost_equal(tf, tf_rx)
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_rx))
+
+        # rotation around z-axis
+        rz = math.radians(180)
+        tf, tf_inv = get_rotation_transforms(rz=rz)
+        tf_rz = numpy.array([
+            [numpy.cos(rz), -numpy.sin(rz), 0],
+            [numpy.sin(rz), numpy.cos(rz), 0],
+            [0, 0, 1]])
+        numpy.testing.assert_array_almost_equal(tf, tf_rz)
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_rz))
+
+        # multiply two rotations (rz, rx)
+        tf, tf_inv = get_rotation_transforms(rx=rx, rz=rz)
+        tf_2 = numpy.dot(tf_rz, tf_rx)
+        numpy.testing.assert_array_almost_equal(tf, tf_2)
+        numpy.testing.assert_array_almost_equal(tf_inv, numpy.linalg.inv(tf_2))
 
 
 if __name__ == "__main__":
