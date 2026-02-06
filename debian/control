@@ -77,7 +77,7 @@ Depends: ${shlibs:Depends},
 Suggests: imagej
 Description: Open Delmic Microscope Software
  Odemis is the acquisition software for the Delmic microscopes. In particular,
- it supports the SECOM, DELPHI, and SPARC systems. Odemis provides a simple graphical
+ it supports the SECOM, SPARC, and METEOR systems. Odemis provides a simple graphical
  interface to manipulate the microscope settings and acquire an image. It
  also provides a command line interface and Python bindings for advanced 
  usage.
