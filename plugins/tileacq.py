@@ -143,7 +143,7 @@ class TileAcqPlugin(Plugin):
 
         self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
         self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
-        self.overlap = model.FloatContinuous(20, (0, 80), unit="%")
+        self.overlap = model.FloatContinuous(0.2, (0., 0.8))
         self.filename = model.StringVA("a.ome.tiff")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
@@ -335,8 +335,8 @@ class TileAcqPlugin(Plugin):
         nx = self.nx.value
         ny = self.ny.value
         logging.debug("Updating total area based on FoV = %s m x (%d x %d)", fov, nx, ny)
-        ta = (fov[0] * (nx - (nx - 1) * self.overlap.value / 100),
-              fov[1] * (ny - (ny - 1) * self.overlap.value / 100))
+        ta = (fov[0] * (nx - (nx - 1) * self.overlap.value),
+              fov[1] * (ny - (ny - 1) * self.overlap.value))
 
         # Use _set_value as it's read only
         self.totalArea._set_value(ta, force_write=True)
@@ -349,7 +349,7 @@ class TileAcqPlugin(Plugin):
         stage = self.main_app.main_data.stage
         orig_pos = stage.position.value
         tile_size = self._guess_smallest_fov()
-        overlap = 1 - self.overlap.value / 100
+        overlap = 1 - self.overlap.value
         tile_pos_x = orig_pos["x"] + self.nx.value * tile_size[0] * overlap
 
         # The acquisition region only extends to the right and to the bottom, never
@@ -371,7 +371,7 @@ class TileAcqPlugin(Plugin):
         stage = self.main_app.main_data.stage
         orig_pos = stage.position.value
         tile_size = self._guess_smallest_fov()
-        overlap = 1 - self.overlap.value / 100
+        overlap = 1 - self.overlap.value
         tile_pos_y = orig_pos["y"] - self.ny.value * tile_size[1] * overlap
 
         if hasattr(stage.axes["y"], "range"):
