@@ -65,7 +65,6 @@ class TabController(object):
         self._tab.notify(self._tab.value)
         self._tab.subscribe(self._on_tab_change, init=True)
 
-        self._enabled_tabs = set()  # tabs which were enabled before starting acquisition
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
         self._tab_fixed_big_text = set()  # {str}: set of tab names which have been fixed
@@ -75,22 +74,17 @@ class TabController(object):
 
     @call_in_wx_main
     def on_acquisition(self, is_acquiring):
+        # Generic term for "busy", not always acquiring. Can also be moving the stage.
         if is_acquiring:
             # Remember which tab is already disabled, to not enable those afterwards
-            self._enabled_tabs = set()
             for tab in self._tab.choices:
-                if tab.button.Enabled:
-                    self._enabled_tabs.add(tab)
-                    tab.button.Enable(False)
+                tab.should_be_enabled = tab.button.Enabled
+                tab.button.Enable(False)
         else:
-            if not self._enabled_tabs:
-                # It should never happen, but just to protect in case it was
-                # called twice in a row acquiring
-                logging.warning("No tab to enable => will enable them all")
-                self._enabled_tabs = set(self._tab.choices)
-
-            for tab in self._enabled_tabs:
-                tab.button.Enable(True)
+            for tab in self._tab.choices:
+                # Check if button should be enabled based on its state
+                # (which may have been set by stage position callback)
+                tab.button.Enable(tab.should_be_enabled)
 
     @call_in_wx_main
     def _on_tab_change(self, tab):

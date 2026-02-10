@@ -543,7 +543,7 @@ class EnzelAlignTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         targets = (ALIGNMENT, THREE_BEAMS)
-        guiutil.enable_tab_on_stage_position(self.button, self.posture_manager, targets,
+        guiutil.enable_tab_on_stage_position(self, self.posture_manager, targets,
                                              tooltip="Alignment can only be performed in the three beams mode")
 
     def Show(self, show=True):

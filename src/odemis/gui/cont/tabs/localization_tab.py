@@ -472,7 +472,7 @@ class LocalizationTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         guiutil.enable_tab_on_stage_position(
-            self.button,
+            self,
             self.main_data.posture_manager,
             self._allowed_targets,
             tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
