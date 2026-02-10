@@ -45,16 +45,50 @@ class TestMeteorTFS1Move(unittest.TestCase):
     def setUpClass(cls):
         testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
-        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
+        cls.pm = MicroscopePostureManager(microscope=cls.microscope)
+        cls.posture_manager = cls.pm  # For compatibility with old code
 
         # get the stage components
-        cls.stage = model.getComponent(role="stage-bare")
+        cls.stage_bare = model.getComponent(role="stage-bare")
+        cls.stage = cls.stage_bare  # For compatibility with old code
         cls.linked_stage = model.getComponent(role="stage")
 
         # get the metadata
         stage_md = cls.stage.getMetadata()
         cls.stage_grid_centers = stage_md[model.MD_SAMPLE_CENTERS]
         cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
+
+    def test_sample_stage_invariance(self):
+        """
+        Check the same position on the sample, for all posture results in the same sample stage coordinates
+        """
+        stage_md = self.stage_bare.getMetadata()
+
+        # Grid positions are defined in the stage bare coordinates, on the SEM_IMAGING posture
+        # They only contain the linear axes (x, y, z, m).
+        # The rotation axes are defined on MD_FAV_SEM_POS_ACTIVE.
+        sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+        sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        # "arbitrary" positions on the SEM posture in stage bare coordinates
+        pos_bares = [sem_grid1_pos, sem_grid2_pos]
+
+        for pos_bare in pos_bares:
+            pos_sample_ref = None
+            for posture in self.pm.postures:
+                # Convert the SEM position the same position in the other posture
+                pos_bare_switched = self.pm.to_posture(pos_bare, posture)
+                # Convert to sample stage coordinates
+                pos_sample = self.pm.to_sample_stage_from_stage_position(pos_bare_switched, posture)
+                logging.debug("Position %s in posture %s: %s",  pos_bare, POSITION_NAMES[posture], pos_sample)
+
+                if pos_sample_ref is None:
+                    pos_sample_ref = pos_sample
+                else:
+                    testing.assert_pos_almost_equal(pos_sample, pos_sample_ref, atol=1e-6)
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
         # Check the instantiation of correct posture manager

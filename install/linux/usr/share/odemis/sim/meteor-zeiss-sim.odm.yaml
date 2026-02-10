@@ -139,8 +139,7 @@
 }
 
 # Controller for the filter-wheel
-# TMCM-6110: DIP must be configured with address 7 (= 1110000)
-# TMCM-1211: Must be pre-initiliazed with address 17
+# DIP must be configured with address 7 (= 1110000)
 "Optical Actuators": {
     class: tmcm.TMCLController,
     role: null,
@@ -149,7 +148,7 @@
         address: null, # Simulator
         # param_file: "/usr/share/odemis/meteor-tmcm1211-filterwheel.tmcm.tsv",
         axes: ["fw"],
-        ustepsize: [1.227184e-6], # [rad/µstep]
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
         refproc: "Standard",

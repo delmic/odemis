@@ -30,15 +30,20 @@
     role: e-beam,
     init: {
         hfw_nomag: 0.25, # hfw when mag == 1x
-    }
+    },
+    properties: {
+        # Set scan rotation to 180°, which is the standard, to ensure the camera
+        # rotation is matching.
+        rotation: 3.141592653589,  # rad, 180°
+    },
 }
 
 "Electron-Detector": {
     role: se-detector,
     init: {},
     properties: {
-        medianFilter: 3,
-    }
+        # medianFilter: 3,
+    },
 }
 
 "Electron-Focus": {
@@ -51,7 +56,12 @@
     role: "ion-beam",
     init: {
         hfw_nomag: 0.25, # hfw when mag == 1x
-    }
+    },
+    properties: {
+        # Set scan rotation to 180°, which is the standard, to ensure the camera
+        # rotation is matching.
+        rotation: 3.141592653589,  # rad, 180°
+    },
 }
 
 "Ion-Detector": {
@@ -59,7 +69,7 @@
     init: {},
     properties: {
         medianFilter: 3,
-    }
+    },
 }
 
 "Ion-Focus": {
