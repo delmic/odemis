@@ -24,7 +24,6 @@ import os
 import statistics
 import threading
 import time
-from collections import OrderedDict
 from concurrent.futures import CancelledError, TimeoutError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 from enum import Enum
@@ -39,7 +38,6 @@ from shapely.geometry import Polygon, box
 
 from odemis import dataio, model
 from odemis.acq import acqmng
-from odemis.acq.acqmng import AcquisitionTask
 from odemis.acq.align.autofocus import MTD_EXHAUSTIVE, AutoFocus
 from odemis.acq.align.roi_autofocus import (
     autofocus_in_roi,
@@ -107,7 +105,7 @@ class TiledAcquisitionTask(object):
 
     def __init__(self, streams, stage, region, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 focus_points=None, focus_range=None, centered_acq=True, overlay_stream=None, sfov=None):
+                 focus_points=None, focus_range=None, centered_acq=True):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -133,16 +131,12 @@ class TiledAcquisitionTask(object):
         :param centered_acq: (bool) If True, center the acquisition area on the given region; any extra area is added
             symmetrically to all sides of the bounding box. If False, the top-left of the acquisition area is aligned
             with the top-left of the bounding box.
-        :param overlay_stream: (OverlayStream or None) If provided, the overlay stream will be used for metadata adjustment
-            after acquisition.
-        :param sfov: (tuple(float, float) or None) If provided, use this as the smallest field of view
         """
         self._future = future
         self._streams = streams
         self._stage = stage
         self._focus_points = focus_points
         self._focus_range = focus_range
-        self._overlay_stream = overlay_stream
         # Average time taken for each tile acquisition
         self.average_acquisition_time = None
         self._overlap = overlap
@@ -167,7 +161,7 @@ class TiledAcquisitionTask(object):
         #         stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
 
         # Get the smallest field of view
-        self._sfov = self.guessSmallestFov(streams) if sfov is None else sfov
+        self._sfov = self.guessSmallestFov(streams)
         logging.debug("Smallest FoV: %s", self._sfov)
 
         self._starting_pos, self._tile_indices = self._get_tile_coverage()
@@ -654,11 +648,6 @@ class TiledAcquisitionTask(object):
 
             stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
 
-        # Estimate overlay stream acquisition time
-        overlay_time = 0
-        if self._overlay_stream is not None:
-            overlay_time = self._overlay_stream.estimateAcquisitionTime()
-
         try:
             # move_speed is a default speed but not an actual stage speed due to which
             # extra time is added based on observed time taken to move stage from one tile position to another
@@ -670,7 +659,7 @@ class TiledAcquisitionTask(object):
         logging.info(f"The computed time in seconds for tiled acquisition for {remaining} tiles for move is {move_time},"
                      f" acquisition is {acq_time}")
 
-        return acq_time + move_time + stitch_time + overlay_time
+        return acq_time + move_time + stitch_time
 
     def _save_tiles(self, ix, iy, das, stream_cube_id=None):
         """
@@ -749,35 +738,49 @@ class TiledAcquisitionTask(object):
         except IndexError:
             raise IndexError(f"Failure in acquiring tile {ix}x{iy}, stream {stream.name}.")
 
+    def _acquireStreamsTile(self, i, ix, iy, streams):
+        """
+        Calls acquire function and blocks until the data is returned.
+        :return: list(DataArray) acquired das for the current tile streams
+        """
+        # Update the progress bar
+        self._future.set_progress(end=self.estimateTime(self._number_of_tiles - i) + time.time())
+        # Acquire data array for passed stream
+        self._future.running_subf = acqmng.acquire(streams, self._settings_obs)
+        das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
+        if e:
+            logging.warning(f"Acquisition for tile {ix}x{iy}, streams partially failed: {e}")
+
+        if self._future._task_state == CANCELLED:
+            raise CancelledError()
+
+        return das  # return all das for the tile
+
     def _getTileDAs(self, i, ix, iy):
         """
         Iterate over each tile stream and construct their data arrays list
         :return: list(DataArray) list of each stream DataArray
         """
-        # Keep order so that the DataArrays are returned in the order they were
-        # acquired. Not absolutely needed, but nice for the user in some cases.
-        raw_images = OrderedDict()  # stream -> list of raw images
-        if self._overlay_stream:
-            da = self._acquireStreamTile(i, ix, iy, self._overlay_stream)
-            raw_images[self._overlay_stream] = da
-        for stream in self._streams:
-            if stream.focuser is not None and len(self._zlevels) > 1:
-                # Acquire zstack images based on the given zlevels, and compress them into a single da
-                da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
-            elif stream.focuser and len(self._zlevels) == 1:
-                z = self._zlevels[0]
-                logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
-                stream.focuser.moveAbsSync({'z': z})
-                # Acquire a single image of the stream
-                da = self._acquireStreamTile(i, ix, iy, stream)
-            else:
-                # Acquire a single image of the stream
-                da = self._acquireStreamTile(i, ix, iy, stream)
-            raw_images[stream] = da
+        das = []
 
-        AcquisitionTask.adjust_metadata(raw_images)
+        if len(self._zlevels):
+            for stream in self._streams:
+                if stream.focuser is not None and len(self._zlevels) > 1:
+                    # Acquire zstack images based on the given zlevels, and compress them into a single da
+                    da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
+                elif stream.focuser is not None and len(self._zlevels) == 1:
+                    z = self._zlevels[0]
+                    logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
+                    stream.focuser.moveAbsSync({'z': z})
+                    da = self._acquireStreamTile(i, ix, iy, stream)
+                else:
+                    # Acquire a single image of the stream
+                    da = self._acquireStreamTile(i, ix, iy, stream)
+                das.append(da)
+        else:
+            das = self._acquireStreamsTile(i, ix, iy, self._streams)
 
-        return list(raw_images.values())
+        return das
 
     def _acquireTiles(self):
         """
@@ -1098,7 +1101,7 @@ def estimateTiledAcquisitionMemory(*args, **kwargs):
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                      registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                     focus_points=None, focus_range=None, centered_acq=True, overlay_stream=None, sfov=None):
+                     focus_points=None, focus_range=None, centered_acq=True):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -1115,8 +1118,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     # Create a tiled acquisition task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points, focus_range=focus_range, centered_acq=centered_acq,
-                                overlay_stream=overlay_stream, sfov=sfov)
+                                focus_points=focus_points, focus_range=focus_range, centered_acq=centered_acq)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
