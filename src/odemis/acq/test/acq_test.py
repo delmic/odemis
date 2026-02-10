@@ -35,7 +35,7 @@ from odemis import model
 from odemis.acq import acqmng
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
 from odemis.acq.leech import ProbeCurrentAcquirer
-from odemis.acq.move import MicroscopePostureManager
+from odemis.acq.move import MicroscopePostureManager, FM_IMAGING, SEM_IMAGING, LOADING
 from odemis.driver import xt_client
 from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
 from odemis.util import testing
@@ -692,6 +692,11 @@ class MeteorTestCase(unittest.TestCase):
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
 
         cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
+        # MD_POS in the stream metadata should be in the same reference as the focuser, so we need to switch to the
+        # FM Imaging position such that MD_POS metadata exists in the acquired data.
+        cls.posture_manager.cryoSwitchSamplePosition(LOADING).result()
+        cls.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        cls.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
 
     def setUp(self):
         self._nb_updates = 0
