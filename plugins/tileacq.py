@@ -96,11 +96,18 @@ class TileAcqPlugin(Plugin):
         ("weaver", {
             "label": "Weaving method",
             "control_type": odemis.gui.CONTROL_COMBO,
-            "tooltip": "Mean: Overlapping pixels in the final image are averaged across tiles\n"
-                       "Collage: Pastes tiles at their center positions, assuming uniform pixel"
-                       " sizes and ignoring rotation/skew.\n"
-                       "Collage (reverse order): Similar to Collage, but fills only empty regions"
+            "tooltip": "Mean: Overlapping pixels in the final image are averaged across tiles.\n"
+                       "Collage (last tile on top): Shows tiles at their center positions, assuming uniform pixel"
+                       " sizes and ignoring rotation/skew, new tiles are shown on top of the previous tile.\n"
+                       "Collage (first tile on top): Similar to Collage, but fills only empty regions"
                        " with new tiles to preserve higher-quality overlaps from first-time imaging.",
+        }),
+        ("register", {
+            "label": "Registering method",
+            "control_type": odemis.gui.CONTROL_COMBO,
+            "tooltip": "Global shift: Find the optimal shift for each tile with all of its neighbours and perform"
+                       " a global optimization to find the best path connecting the tile.\n"
+                       "Identity: Does not apply any shift, the tiles are stitched together based on the stage positions.",
         }),
         ("expectedDuration", {
         }),
@@ -143,11 +150,15 @@ class TileAcqPlugin(Plugin):
         self.stitch = model.BooleanVA(True)
         weaver_choices = {
             WEAVER_MEAN: "Mean",
-            WEAVER_COLLAGE: "Collage",
-            WEAVER_COLLAGE_REVERSE: "Collage (reverse order)",
+            WEAVER_COLLAGE: "Collage (last tile on top)",
+            WEAVER_COLLAGE_REVERSE: "Collage (first tile on top)",
         }
         self.weaver = model.VAEnumerated(WEAVER_MEAN, choices=weaver_choices)
-        self.register = REGISTER_GLOBAL_SHIFT
+        register_choices = {
+            REGISTER_GLOBAL_SHIFT: "Global shift",
+            REGISTER_IDENTITY: "Identity",
+        }
+        self.register = model.VAEnumerated(REGISTER_GLOBAL_SHIFT, choices=register_choices)
 
         # Allow to running fine alignment procedure, only on SECOM and DELPHI
         self.fineAlign = model.BooleanVA(False)
@@ -177,7 +188,7 @@ class TileAcqPlugin(Plugin):
         self.nx.subscribe(self._update_total_area)
         self.ny.subscribe(self._update_total_area)
         self.overlap.subscribe(self._update_total_area)
-        self.weaver.subscribe(self._on_weaver_change)
+        self.stitch.subscribe(self._on_stitch_change)
 
         # Warn if memory will be exhausted
         self.nx.subscribe(self._memory_check)
@@ -248,11 +259,18 @@ class TileAcqPlugin(Plugin):
                             entry.value_ctrl.Enable(False)
                         break
 
-    def _on_weaver_change(self, weaver):
-        if weaver == WEAVER_COLLAGE:
-            self.register = REGISTER_IDENTITY
-        else:
-            self.register = REGISTER_GLOBAL_SHIFT
+    @call_in_wx_main
+    def _on_stitch_change(self, stitch):
+        if self._dlg:
+            for entry in self._dlg.setting_controller.entries:
+                if hasattr(entry, "vigilattr"):
+                    if entry.vigilattr in (self.weaver, self.register):
+                        if stitch:
+                            entry.lbl_ctrl.Show(True)
+                            entry.value_ctrl.Show(True)
+                        else:
+                            entry.lbl_ctrl.Show(False)
+                            entry.value_ctrl.Show(False)
 
     def _unsubscribe_vas(self):
         ss = self._get_live_streams()
@@ -270,7 +288,7 @@ class TileAcqPlugin(Plugin):
         try:
             stitch_ss = self._get_stitch_streams()
             if not stitch_ss:
-                self.expectedDuration._set_value(1, force_write=True)
+                self.expectedDuration._set_value(0, force_write=True)
                 return
 
             # Calculate bounding box of the acquisition region
@@ -278,25 +296,22 @@ class TileAcqPlugin(Plugin):
             if region is None:
                 return
 
-            overlap_frac = self.overlap.value / 100
-            overlay_stream = None
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
-                overlay_stream = self._ovrl_stream
+                stitch_ss.append(self._ovrl_stream)
 
             tat = estimateTiledAcquisitionTime(
                 stitch_ss,
                 self.main_app.main_data.stage,
                 region,
-                overlap=overlap_frac,
+                overlap=self.overlap.value / 100,
                 settings_obs=self.main_app.main_data.settings_obs,
                 weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register if self.stitch.value else None,
-                overlay_stream=overlay_stream,
-                sfov=self._guess_smallest_fov(),
+                registrar=self.register.value if self.stitch.value else None,
             )
         except (ValueError, AttributeError):
             # No streams or cannot compute FoV
-            tat = 1
+            logging.debug("Cannot compute expected acquisition duration")
+            tat = 0
 
         # Typically there are a few more pixels inserted at the beginning of
         # each line for the settle time of the beam. We don't take this into
@@ -448,6 +463,8 @@ class TileAcqPlugin(Plugin):
         self.nx.value = self.nx.value
         self.ny.value = self.ny.value
         self._memory_check()
+        # Force the stitch change callback to show/hide the weaver and register options
+        self.stitch._set_value(self.stitch.value, must_notify=True)
 
         # TODO: disable "acquire" button if no stream selected.
 
@@ -560,21 +577,17 @@ class TileAcqPlugin(Plugin):
             if region is None:
                 return
 
-            overlap_frac = self.overlap.value / 100
-            overlay_stream = None
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
-                overlay_stream = self._ovrl_stream
+                stitch_ss.append(self._ovrl_stream)
 
             mem_sufficient, mem_est = estimateTiledAcquisitionMemory(
                 stitch_ss,
                 self.main_app.main_data.stage,
                 region,
-                overlap=overlap_frac,
+                overlap=self.overlap.value / 100,
                 settings_obs=self.main_app.main_data.settings_obs,
                 weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register if self.stitch.value else None,
-                overlay_stream=overlay_stream,
-                sfov=self._guess_smallest_fov(),
+                registrar=self.register.value if self.stitch.value else None,
             )
         except (ValueError, AttributeError):
             # No streams or cannot compute FoV
@@ -599,17 +612,15 @@ class TileAcqPlugin(Plugin):
         """
         sfov = self._guess_smallest_fov()
 
-        overlap_frac = self.overlap.value / 100.0
-
         # Reliable FoV
         # The size of the smallest tile, non-including the overlap, which will be
         # lost (and also indirectly represents the precision of the stage)
-        reliable_fov = ((1 - overlap_frac) * sfov[0], (1 - overlap_frac) * sfov[1])
+        reliable_fov = ((1 - self.overlap.value / 100) * sfov[0], (1 - self.overlap.value / 100) * sfov[1])
 
         xmin = start_pos["x"] - reliable_fov[0] / 2
         ymax = start_pos["y"] + reliable_fov[1] / 2
-        xmax = xmin + self.totalArea.value[0]
-        ymin = ymax - self.totalArea.value[1]
+        xmax = xmin + reliable_fov[0] * self.nx.value
+        ymin = ymax - reliable_fov[1] * self.ny.value
 
         return (xmin, ymin, xmax, ymax)
 
@@ -627,22 +638,17 @@ class TileAcqPlugin(Plugin):
         orig_pos = main_data.stage.position.value
 
         try:
-            ss = []
-            overlay_stream = None
-            overlap_frac = self.overlap.value / 100
             stitch_ss = self._get_stitch_streams()
-            ss += stitch_ss
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
-                ss.append(self._ovrl_stream)
-                overlay_stream = self._ovrl_stream
+                stitch_ss.append(self._ovrl_stream)
 
-            if not ss:
+            if not stitch_ss:
                 logging.warning("No stream available for tiled acquisition.")
                 dlg.resumeSettings()
                 return
 
             # Force external to all streams with emitters
-            for s in ss:
+            for s in stitch_ss:
                 if (s.emitter
                     and model.hasVA(s.emitter, "external")
                     and s.emitter.external.value is None
@@ -656,13 +662,11 @@ class TileAcqPlugin(Plugin):
                 stitch_ss,
                 main_data.stage,
                 region,
-                overlap=overlap_frac,
+                overlap=self.overlap.value / 100,
                 settings_obs=main_data.settings_obs,
                 log_path=fn,
                 weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register if self.stitch.value else None,
-                overlay_stream=overlay_stream,
-                sfov=self._guess_smallest_fov(),
+                registrar=self.register.value if self.stitch.value else None,
             )
 
             dlg.showProgress(ft)
