@@ -583,13 +583,16 @@ class MeteorPostureManager(MicroscopePostureManager):
         tf_sr, _ = get_rotation_transforms(rz=sr)
 
         # We assume that FM & SEM are rotate by 180°. Let's warn if that's not the case.
-        stage_md = self.stage.getMetadata()
-        rx_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rx"]
-        rx_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rx"]
-        rot_fm_sem = rx_sem - rx_fm
-        if not util.rot_almost_equal(rot_fm_sem, math.pi, atol=math.radians(5)):
-            logging.warning("FM and SEM imaging postures are expected to be 180° rotated in rx, but got %s°.",
-                            math.degrees(rot_fm_sem))
+        try:
+            stage_md = self.stage.getMetadata()
+            rz_fm = stage_md[model.MD_FAV_FM_POS_ACTIVE]["rz"]
+            rz_sem = stage_md[model.MD_FAV_SEM_POS_ACTIVE]["rz"]
+            rot_fm_sem = rz_sem - rz_fm
+            if not util.rot_almost_equal(rot_fm_sem, math.pi, atol=math.radians(5)):
+                logging.warning("FM and SEM imaging postures are expected to be 180° rotated in rz, but got %s°.",
+                                math.degrees(rot_fm_sem))
+        except Exception:
+            logging.exception("Failed to check the rotation between FM and SEM imaging postures")
 
         # FM imaging: compensate for the pre-tilt
         tf_tilt, _ = get_rotation_transforms(rx=pre_tilt)
