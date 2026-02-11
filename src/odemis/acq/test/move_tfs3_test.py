@@ -50,10 +50,15 @@ class TestMeteorTFS3Move(unittest.TestCase):
     def setUpClass(cls):
         testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
+        cls.stage_bare = model.getComponent(role="stage-bare")
+
+        # Reset the metadata as if the backend just started (even if it was already running for other tests)
+        cls.stage_bare.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: {},
+                                       model.MD_FM_POS_SAMPLE_DEACTIVE: {}})
+
         cls.pm: MeteorTFS3PostureManager = MicroscopePostureManager(microscope=cls.microscope)
 
         # get the stage components
-        cls.stage_bare = model.getComponent(role="stage-bare")
         cls.stage = cls.pm.sample_stage
 
         # get the metadata
@@ -305,6 +310,37 @@ class TestMeteorTFS3Move(unittest.TestCase):
         self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
         position_reverted = self.stage_bare.position.value
         testing.assert_pos_almost_equal(position_reverted, position_initial, atol=1e-9)
+
+    def test_fixed_fm_z_restart(self):
+        """
+        Check that the fixed FM Z works correctly even when GUI (and PostureManager) is restarted.
+        """
+        # move to SEM/GRID 1 (mostly to start at a known position)
+        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        f = self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]])
+        f.result()
+        pos_grid1_sem = self.stage_bare.position.value
+        # Go to FM
+        f = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        pos_grid1_fm = self.stage_bare.position.value
+        # Go to SEM (also happens when going to MILLING)
+        # f = self.pm.cryoSwitchSamplePosition(MILLING)
+        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        pos_grid1_sem_back = self.stage_bare.position.value
+        testing.assert_pos_almost_equal(pos_grid1_sem, pos_grid1_sem_back, atol=1e-9)
+
+        pos_grid1_fm_pm1 = self.pm.getTargetPosition(FM_IMAGING)
+        testing.assert_pos_almost_equal(pos_grid1_fm, pos_grid1_fm_pm1, atol=1e-9)
+
+        # Simulate a restart by creating a new PostureManager instance
+        pm2 = MicroscopePostureManager(microscope=self.microscope)
+
+        # FIXME: this fails: the FM position is at a different Z after the restart
+        pos_grid1_fm_pm2 = pm2.getTargetPosition(FM_IMAGING)
+        testing.assert_pos_almost_equal(pos_grid1_fm_pm1, pos_grid1_fm_pm2, atol=1e-9)
 
 
 class TestMeteorTFS3FIBSEMMove(TestMeteorTFS3Move):

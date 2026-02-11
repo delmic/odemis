@@ -945,6 +945,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # Revert to deactive position if available
                 deactive_fm_position = stage_md.get(model.MD_FM_POS_SAMPLE_DEACTIVE)
                 if deactive_fm_position and "z" in deactive_fm_position:
+                    logging.debug("offset FM: %s", self._offset[FM_IMAGING])
                     sample_stage_pos = self.to_sample_stage_from_stage_position(stage_position, posture=FM_IMAGING)
                     sample_stage_pos["z"] = deactive_fm_position["z"]
                     stage_position = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
