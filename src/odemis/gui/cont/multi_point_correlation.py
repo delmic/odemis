@@ -700,9 +700,10 @@ class CorrelationPointsController:
                 if mip_enabled:
                     self._on_z_targeting(None)
 
-        for row in range(self.grid.GetNumberRows()):
-            if self._selected_target_in_grid(target, row):
-                self.grid.SelectRow(row)
+        for current_row_count in range(self.grid.GetNumberRows()):
+            if (self._selected_target_in_grid(target, current_row_count) and
+                    (self.grid.GetNumberRows() > current_row_count >= 0)):
+                self.grid.SelectRow(current_row_count)
                 break
 
         for vp in self._viewports:
@@ -764,7 +765,8 @@ class CorrelationPointsController:
                 self.grid.ClearSelection()
             else:
                 current_row_count = self.grid.GetNumberRows()
-                self.grid.SelectRow(current_row_count)
+                if current_row_count >= 0:
+                    self.grid.SelectRow(current_row_count)
                 self.grid.AppendRows(1)
                 # Get the pixel coordinates of the target and first set the z value in the grid
                 if target.type.value == TargetType.FibFiducial:
