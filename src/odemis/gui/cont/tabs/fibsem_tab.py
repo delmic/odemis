@@ -363,7 +363,7 @@ class FibsemTab(Tab):
         :param pos: updated position of the stage (with rx and rz in radians)
         """
         guiutil.enable_tab_on_stage_position(
-            button=self.button,
+            tab=self,
             posture_manager=self.pm,
             target=[SEM_IMAGING, MILLING, FIB_IMAGING],
             tooltip="FIBSEM tab is only available at SEM position"

@@ -51,6 +51,7 @@ class Tab(object):
         self.highlighted = False
         self.focussed_viewport = None
         self.label = None
+        self.should_be_enabled = True
 
     def Show(self, show=True):
         self.button.SetToggle(show)

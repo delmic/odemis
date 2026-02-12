@@ -281,19 +281,21 @@ class AttrDict(dict):
 
 
 @call_in_wx_main
-def enable_tab_on_stage_position(button, posture_manager, target, tooltip=None):
+def enable_tab_on_stage_position(tab, posture_manager, target, tooltip=None):
     """
-    Enable the given tab button if the stage is in target position, disable it otherwise
-    :param button: (Button) the Tab button to enable/disable
+    Enable the given tab button if the stage is in target position, disable it otherwise.
+    Stores the should-be-enabled state on the tab to prevent race conditions with acquisition.
+    :param tab: (Tab) the Tab object whose button should be enabled/disabled
     :param posture_manager: (Class) controls the stage movement based on the imaging mode
     :param target: (list) target position labels for which the tab button is enabled [IMAGING, FM_IMAGING]
     :param tooltip: (str or None) Tooltip message to show when disabled
     """
     within_target = posture_manager.getCurrentPostureLabel() in target
-    button.Enable(within_target)
+    tab.should_be_enabled = within_target
+    tab.button.Enable(within_target)
 
     if tooltip is not None:
         if not within_target:
-            button.SetToolTip(tooltip)
+            tab.button.SetToolTip(tooltip)
         else:
-            button.SetToolTip(None)
+            tab.button.SetToolTip(None)

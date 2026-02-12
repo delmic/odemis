@@ -331,7 +331,7 @@ class MimasAlignTab(Tab):
         Called when the stage, or aligner are moved, enable the tab if position is imaging mode, disable otherwise
         """
         targets = (MILLING, FM_IMAGING, IMAGING)
-        guiutil.enable_tab_on_stage_position(self.button,
+        guiutil.enable_tab_on_stage_position(self,
                                              self.posture_manager,
                                              target=targets,
                                              tooltip="Alignment can only be performed in optical or FIB position")
