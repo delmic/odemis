@@ -535,8 +535,8 @@ class Detector(model.Detector):
                 # compute each row and column that will be included
                 first_x = trans[0] + (max_res[0] - res[0] * scale[0]) / 2
                 first_y = trans[1] + (max_res[1] - res[1] * scale[1]) / 2
-                coord = ([round(first_x + i * scale[0]) for i in range(res[0])],
-                         [round(first_y + i * scale[1]) for i in range(res[1])])
+                coord = ([int(round(first_x + i * scale[0])) for i in range(res[0])],
+                         [int(round(first_y + i * scale[1])) for i in range(res[1])])
                 # Get every pixel of the grid
                 sim_img = fov_img[numpy.ix_(coord[1], coord[0])]  # copy
 
