@@ -32,8 +32,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-METEOR_TESCAN1_HW_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
-METEOR_TESCAN1_SIM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-sim.odm.yaml"
+METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
+
+METEOR_TESCAN1_FIBSEM_HW_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-sim.odm.yaml"
+METEOR_TESCAN1_FIBSEM_SIM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-sim.odm.yaml"
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
@@ -42,11 +44,7 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
     """
     Test the MeteorPostureManager functions for Tescan 1
     """
-    if TEST_NOHW:
-        MIC_CONFIG = METEOR_TESCAN1_SIM_CONFIG
-    else:
-        MIC_CONFIG = METEOR_TESCAN1_HW_CONFIG
-
+    MIC_CONFIG = METEOR_TESCAN1_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
 
     @classmethod
@@ -175,9 +173,9 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
 
 class TestMeteorTescan1FibsemMove(TestMeteorTFS3Move):
     if TEST_NOHW:
-        MIC_CONFIG = METEOR_TESCAN1_SIM_CONFIG
+        MIC_CONFIG = METEOR_TESCAN1_FIBSEM_SIM_CONFIG
     else:
-        MIC_CONFIG = METEOR_TESCAN1_HW_CONFIG
+        MIC_CONFIG = METEOR_TESCAN1_FIBSEM_HW_CONFIG
 
     ROTATION_AXES = {'rx', 'rz'}
 
