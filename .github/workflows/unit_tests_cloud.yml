@@ -219,6 +219,12 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src.odemis.acq.test.fastem_test.TestFastEMAcquisitionTaskMock --verbose
 
+    - name: Run tests for static Streams
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/acq/test/stream_static_test.py --verbose
+
     - name: Run tests from odemis.util.raster
       if: ${{ !cancelled() }}
       run: |
