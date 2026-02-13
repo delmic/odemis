@@ -764,7 +764,6 @@ class CorrelationPointsController:
                 self.grid.ClearSelection()
             else:
                 current_row_count = self.grid.GetNumberRows()
-                self.grid.SelectRow(current_row_count)
                 self.grid.AppendRows(1)
                 # Get the pixel coordinates of the target and first set the z value in the grid
                 if target.type.value == TargetType.FibFiducial:
