@@ -21,8 +21,6 @@ import os
 import time
 import unittest
 
-import numpy
-
 import odemis
 from odemis import model
 from odemis.acq.move import (FM_IMAGING, GRID_1, MILLING, SEM_IMAGING, UNKNOWN, POSITION_NAMES,

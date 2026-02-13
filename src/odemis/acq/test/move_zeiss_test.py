@@ -22,9 +22,8 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (GRID_1, GRID_2, UNKNOWN, POSITION_NAMES,
-)
-from odemis.acq.test.move_tfs1_test import TestMeteorTFS1Move
+from odemis.acq.move import GRID_1, GRID_2, UNKNOWN, POSITION_NAMES
+from odemis.acq.test import move_tfs1_test
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -34,7 +33,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 METEOR_ZEISS1_CONFIG = CONFIG_PATH + "sim/meteor-zeiss-sim.odm.yaml"
 
 
-class TestMeteorZeiss1Move(TestMeteorTFS1Move):
+class TestMeteorZeiss1Move(move_tfs1_test.TestMeteorTFS1Move):
     """
     Test the MeteorPostureManager functions for Zeiss 1
     """

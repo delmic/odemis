@@ -23,9 +23,9 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN, MicroscopePostureManager, MeteorTescan1PostureManager, LOADING, MILLING)
-from odemis.acq.test.move_tfs1_test import TestMeteorTFS1Move
-from odemis.acq.test.move_tfs3_test import TestMeteorTFS3Move
+from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN, MicroscopePostureManager,
+                             MeteorTescan1PostureManager, LOADING, MILLING)
+from odemis.acq.test import move_tfs1_test, move_tfs3_test
 from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -40,7 +40,7 @@ METEOR_TESCAN1_FIBSEM_SIM_CONFIG = CONFIG_PATH + "sim/meteor-tescan-fibsem-full-
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 
-class TestMeteorTescan1Move(TestMeteorTFS1Move):
+class TestMeteorTescan1Move(move_tfs1_test.TestMeteorTFS1Move):
     """
     Test the MeteorPostureManager functions for Tescan 1
     """
@@ -171,7 +171,7 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
         self.assertAlmostEqual(zshift["z"], shift["z"], places=5)
 
 
-class TestMeteorTescan1FibsemMove(TestMeteorTFS3Move):
+class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
     if TEST_NOHW:
         MIC_CONFIG = METEOR_TESCAN1_FIBSEM_SIM_CONFIG
     else:
