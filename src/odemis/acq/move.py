@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import copy
+import functools
 import logging
 import math
 import threading
@@ -1202,8 +1203,18 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
             self.postures.append(FIB_IMAGING)
 
+        # Hack warning: during initialization of the transforms, the offset is computed by calling
+        # to_posture(), which calls _transformFromSEMToMeteor() for the SEM->FM transform. If
+        # MD_FM_POS_SAMPLE_ACTIVE is already present, the fix_fm_plane logic is triggered, which
+        # uses the sample plane transformations, which aren't fully initialized yet. This can cause
+        # an incorrect offset computation, and eventually an incorrect movement to FM.
+        # To avoid this, we temporarily set to_posture() to not use the fix_fm_plane logic.
+        _transformFromSEMToMeteorNoFixFM = functools.partial(self._transformFromSEMToMeteor, fix_fm_plane=False)
+        self._posture_transforms[SEM_IMAGING][FM_IMAGING] = _transformFromSEMToMeteorNoFixFM
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
+        # Reset to the standard function (with fixed FM plane)
+        self._posture_transforms[SEM_IMAGING][FM_IMAGING] = self._transformFromSEMToMeteor
 
         # If there is no known fixed sample z for FM, compute it here and store it for later use
         if not stage_md.get(model.MD_FM_POS_SAMPLE_ACTIVE):
