@@ -2197,11 +2197,14 @@ class Stage(model.Actuator):
          systems.
         """
         self._raw_coordinates = raw_coordinates
-        # When raw coordinate system is selected, in theory just z should change
-        # but in practice x and y change by a fixed offset. When raw coordinate system is used,
-        # offset correction is applied (in the later part of init)
-        # such that all axes apart from z, have same values
-        self._raw_offset = {"x": 0, "y": 0}
+        # We use a "hybrid" coordinate system: the main advantage of the raw coordinate system
+        # is that the Z axis is never "linked" to the working distance. When the Z axis is linked,
+        # it's oriented in the other direction (0 is at the pole-piece, and an increase goes down),
+        # and is dependent on the SEM working distance (focus).
+        # In raw coordinates, Z always means the same thing, independent of what the user has done
+        # in the GUI. However, for the other axes, there might be an offset, but as it's convenient
+        # to show the same value as in the TFS GUI, we compensate for that offset.
+        self._raw_offset = {"x": 0, "y": 0, "rx": 0, "rz": 0}
 
         if rng is None:
             rng = {}
@@ -2242,10 +2245,11 @@ class Stage(model.Actuator):
         self._pos_poll.start()
 
     def _switch_coordinate_system(self, raw_coordinates: bool) -> None:
-        """Calculate the offset in linear stage axes x and y when the stage coordinates are read in raw coordinates such
-         that it is equal to x and y when stage coordinates are read in linked coordinates.
-         :param raw_coordinates: True if stage coordinates are read in raw system else False
-         """
+        """
+        Select the coordinate system for the stage and calculate the offset in raw coordinates,
+        to keep the x,y,rx,rz coordinates the same as the linked coordinates.
+        :param raw_coordinates: True if stage coordinates are read in raw system else False
+        """
         if raw_coordinates:
             self.parent.set_raw_coordinate_system(False)
             pos_linked = self._getPosition()
@@ -2253,13 +2257,8 @@ class Stage(model.Actuator):
             pos = self._getPosition()
             for axis in self._raw_offset.keys():
                 self._raw_offset[axis] = pos_linked[axis] - pos[axis]
-            # the offset should only be in linear axes, it is not expected in rotational axes
-            if not all(pos[axis] == pos_linked[axis] for axis in ["rx", "rz"]):
-                logging.warning(
-                    "During offset estimation in linear axes in raw coordinate system in x and y, unexpected offset is "
-                    "found in rotation axes")
-            logging.debug(f"The offset values in x and y are {self._raw_offset} when stage is in the raw coordinate "
-                          f"system for raw stage coordinates: {pos}, non-raw stage coordinates: {pos_linked}")
+            logging.debug(f"The raw coordinates offset is {self._raw_offset}. "
+                          f"Computed from raw stage coordinates: {pos}, specimen stage coordinates: {pos_linked}")
         else:
             # Make sure the system is read in the linked coordinate system
             try:
@@ -2279,8 +2278,18 @@ class Stage(model.Actuator):
         if self._raw_coordinates:
             # correct for the offset such that the stage coordinates displayed in
             # TFS software is the same as Odemis
-            pos["x"] += self._raw_offset["x"]
-            pos["y"] += self._raw_offset["y"]
+            for axis, offset in self._raw_offset.items():
+                if axis in pos:
+                    pos[axis] += offset
+
+            # Make sure the full rotations are within the range (because the SEM actually reports
+            # values within -2pi -> 2pi rad)
+            for an in ("rx", "rz"):
+                rng = self.axes[an].range
+                # To handle both rotations 0->2pi and inverted: -2pi -> 0.
+                if util.almost_equal(rng[1] - rng[0], 2 * math.pi):
+                    pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
+
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -2323,17 +2332,16 @@ class Stage(model.Actuator):
                 else:
                     logging.debug("Moving to position {}".format(pos))
 
+                # Correct for offset compensation in absolute movements
+                if self._raw_coordinates and not rel:
+                    for axis, offset in self._raw_offset.items():
+                        if axis in pos:
+                            pos[axis] -= offset
+
                 if "rx" in pos.keys():
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
-
-                # Correct for offset compensation in absolute movements
-                if self._raw_coordinates and not rel:
-                    if "x" in pos.keys():
-                        pos["x"] -= self._raw_offset["x"]
-                    if "y" in pos.keys():
-                        pos["y"] -= self._raw_offset["y"]
 
                 orig_pos = self.parent.get_stage_position()
 
