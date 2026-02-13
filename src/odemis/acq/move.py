@@ -905,65 +905,44 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
-        current_position = self.getCurrentPostureLabel()
+        stage_position = self.stage.position.value
+        current_posture = self.getCurrentPostureLabel(stage_position)
         end_pos = None
 
-        # Note: all grid positions need to have rx, rz axes to be able to transform
-        # this is not the case by default, and needs to be added in the metadata
-        sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-        sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-        sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-        sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-
-        stage_position = self.stage.position.value
-
-        if target_pos_lbl == LOADING:
+        if target_pos_lbl in (GRID_1, GRID_2):
+            # Go to grid center: only works if in a supported sample stage posture (ie, not LOADING, UNKNOWN...)
+            if current_posture not in self.postures:
+                raise ValueError(f"Cannot go to grid position from current posture "
+                                 f"{POSITION_NAMES.get(current_posture, current_posture)}")
+            sem_grid_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[target_pos_lbl]]
+            sem_grid_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            end_pos = self.to_posture(pos=sem_grid_pos, posture=current_posture)
+        elif target_pos_lbl == LOADING:  # Always accept going to loading position from any posture
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
-        elif current_position in [LOADING, SEM_IMAGING]:
-            if target_pos_lbl in [SEM_IMAGING, GRID_1]:
-                # if at loading, and sem is pressed, choose grid1 by default
-                end_pos = sem_grid1_pos
-            elif target_pos_lbl == GRID_2:
-                end_pos = sem_grid2_pos
-            elif target_pos_lbl == FM_IMAGING:
-                if current_position == LOADING:
-                    # if at loading and fm is pressed, choose grid1 by default
-                    fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
-                elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(stage_position)
-                end_pos = fm_target_pos
-            elif target_pos_lbl == MILLING:
-                end_pos = self._transformFromSEMToMilling(stage_position)
-            elif target_pos_lbl == FIB_IMAGING:
-                end_pos = self._transformFromSEMToFIB(stage_position)
-        elif current_position == FM_IMAGING:
-            if target_pos_lbl == GRID_1:
-                end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
-            elif target_pos_lbl == GRID_2:
-                end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
-            elif target_pos_lbl in [SEM_IMAGING, MILLING, FIB_IMAGING]:
-                # Revert to deactive position if available
+        elif current_posture == LOADING:
+            # If at loading, go to GRID 1 by default
+            # Note: all grid positions need to have rx, rz axes to be able to transform
+            # this is not the case by default, and needs to be added in the metadata
+            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+            sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            end_pos = self.to_posture(pos=sem_grid1_pos, posture=target_pos_lbl)
+        elif current_posture == FM_IMAGING:
+            if target_pos_lbl in [SEM_IMAGING, MILLING, FIB_IMAGING]:
+                # Revert to the same Z height as before going to FM (if known)
                 deactive_fm_position = stage_md.get(model.MD_FM_POS_SAMPLE_DEACTIVE)
                 if deactive_fm_position and "z" in deactive_fm_position:
                     sample_stage_pos = self.to_sample_stage_from_stage_position(stage_position, posture=FM_IMAGING)
                     sample_stage_pos["z"] = deactive_fm_position["z"]
                     stage_position = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=FM_IMAGING)
-                if target_pos_lbl == SEM_IMAGING:
-                    end_pos = self._transformFromMeteorToSEM(stage_position)
-                elif target_pos_lbl == MILLING:
-                    end_pos = self._transformFromMeteorToMilling(stage_position)
-                elif target_pos_lbl == FIB_IMAGING:
-                    end_pos = self._transformFromMeteorToFIB(stage_position)
-        elif current_position == MILLING:
-            if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]:
                 end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
-        elif current_position == FIB_IMAGING:
-            if target_pos_lbl in [SEM_IMAGING, FM_IMAGING, MILLING]:
+        elif current_posture in (SEM_IMAGING, MILLING, FIB_IMAGING):
+            if target_pos_lbl in self.postures:
                 end_pos = self.to_posture(pos=stage_position, posture=target_pos_lbl)
+
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
                 POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
-                POSITION_NAMES.get(current_position, current_position))
+                POSITION_NAMES.get(current_posture, current_posture))
             )
 
         return end_pos
