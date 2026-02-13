@@ -571,7 +571,7 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_vis_pol.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait(40.0)  # It can take a long time
+        e.wait(90.0)  # It can take a long time (especially since libqhull v8)
         assert e.is_set()
         time.sleep(1.0)  # wait shortly as .image is updated multiple times
 
