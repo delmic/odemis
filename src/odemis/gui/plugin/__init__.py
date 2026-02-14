@@ -420,7 +420,7 @@ class AcquisitionDialog(xrcfr_plugin):
         self.spectrum_viewport.setView(self.spectrum_view, self._dmodel)
         self._dmodel.focussedView.value = self.view
         self._dmodel.views.value = [self.view, self.view_r,
-                                    self.spectrum_view]
+                                    self.spectrum_view, self.hidden_view]
         self._viewports = (self.viewport_l, self.viewport_r, self.spectrum_viewport)
 
         self.streambar_controller = StreamBarController(
@@ -505,7 +505,7 @@ class AcquisitionDialog(xrcfr_plugin):
         self.pnl_buttons.Layout()
 
     @call_in_wx_main
-    def addStream(self, stream, index=0):
+    def addStream(self, stream, index=0, sp_options=None):
         """
         Adds a stream to the viewport, and a stream entry to the stream panel.
         It also ensures the panel box and viewport are shown.
@@ -517,6 +517,7 @@ class AcquisitionDialog(xrcfr_plugin):
         index (0, 1, 2, or None): Index of the viewport to add the stream. 0 = left,
           1 = right, 2 = spectrum viewport. If None, it will not show the stream
           on any viewport (and it will be added to the .hidden_view)
+        sp_options: (int or None) combination of OPT_* values for the StreamPanel or None for default.
         """
         need_layout = False
 
@@ -535,7 +536,7 @@ class AcquisitionDialog(xrcfr_plugin):
             if not self.fp_streams.IsShown():
                 self.fp_streams.Show()
                 need_layout = True
-            self.streambar_controller.addStream(stream, add_to_view=v)
+            self.streambar_controller.addStream(stream, add_to_view=v, sp_options=sp_options)
 
         if need_layout:
             self.Layout()
