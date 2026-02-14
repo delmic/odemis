@@ -12243,30 +12243,28 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxFlexGridSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxStaticText">
-                                        <label>Filename</label>
-                                        <fg>#E5E5E5</fg>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>4</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="wxTextCtrl" name="txt_filename">
-                                        <size>150,20</size>
-                                        <value>Select a destination file</value>
-                                        <fg>#2FA7D4</fg>
-                                        <bg>#333333</bg>
-                                        <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxLEFT|wxEXPAND</flag>
-                                      <border>1</border>
-                                    </object>
-                                    <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Filename</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <flag>wxALIGN_CENTER_VERTICAL</flag>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxTextCtrl" name="txt_filename">
+                                    <size>-1,20</size>
+                                    <value>Select a destination file</value>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxLEFT|wxEXPAND</flag>
+                                  <border>5</border>
+                                  <option>1</option>
+                                </object>
+                                <object class="sizeritem">
                                       <object class="ImageTextButton" name="btn_cryosecom_change_file">
                                         <height>24</height>
                                         <face_colour>def</face_colour>
@@ -12276,21 +12274,12 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                         </XRCED>
                                       </object>
                                       <flag>wxLEFT</flag>
-                                      <border>85</border>
+                                      <border>5</border>
                                     </object>
-                                    <cols>3</cols>
-                                    <rows>1</rows>
-                                    <vgap>5</vgap>
-                                    <hgap>10</hgap>
-                                    <growablecols>1</growablecols>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
                               <option>0</option>
-                              <flag>wxTOP</flag>
+                              <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
