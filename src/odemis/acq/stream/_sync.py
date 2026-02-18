@@ -3169,14 +3169,14 @@ class SEMCCDAcquirerRectangle(SEMCCDAcquirer):
 
         # If the CCD stream has power, need to temporarily turn it off (otherwise
         # the SEM reading might be incorrect)
-        if hasattr(self._mdstream._sccd, "light") and self._mdstream._sccd.light.value:
+        if hasattr(self._mdstream._sccd, "light") and self._mdstream._sccd.light:
             self._mdstream._sccd._stop_light()
 
     def resume_pixel_acquisition(self) -> None:
         """
         Called just after running the leeches
         """
-        if hasattr(self._mdstream._sccd, "light") and self._mdstream._sccd.light.value:
+        if hasattr(self._mdstream._sccd, "light") and self._mdstream._sccd.light:
             self._mdstream._sccd._setup_light()
 
         # re-use the real trigger
