@@ -34,7 +34,7 @@ jobs:
       run: |
         apt-get update
         apt-get install -y devscripts equivs
-        mk-build-deps -i -r -t "apt-get -y" debian/control
+        mk-build-deps -i -r -t "apt-get -y --no-install-recommends" debian/control
 
     - name: Build Debian package
       run: |
