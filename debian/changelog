@@ -1,3 +1,80 @@
+odemis (3.8.0-1) focal; urgency=medium
+
+  * New version: 3.8
+  * Main new changes and features:
+    - SPARC: support rotation of the RoA (with new NI-DAQ scan generator)
+    - SPARC: parabolic mirror auto-alignment functionality (on new SPARCs)
+    - FASTEM: add tool for ROA and TOA editing and visualization
+    - FASTEM: save individual tiles of TOA acquisitions
+    - FASTEM: add pre-calibrations to TOA acquisition
+    - FASTEM: option to calibrate phase shift between descanner and scanner signal
+    - FASTEM: "import region" plugin now supports scaling option when importing "from image"
+    - METEOR: add support for JEOL JIB-4700F FIB system
+    - METEOR: features appear at the same position in FM and SEM posture
+    - METEOR: safer trajectory during posture switch on Tescan and TFS
+    - METEOR Advanced: use fibsemOS for milling
+    - METEOR Advanced: support Odemis advanced on Tescan
+    - METEOR Advanced: safer SEM<>MILLING controls in FIBSEM tab
+    - METEOR Advanced: new SuperZ workflow along with multi point correlation
+    - METEOR Advanced: introduce lens metadata to adjust refractive index correction factor
+    - METEOR: new tucsen driver for the Dhyana 400BSI
+  * Other improvements and bug fixes:
+    - SPARC: changed SEM survey default settings for a faster refresh rate
+    - SPARC: support for "fuzzy" scan also on time-correlator streams
+    - SPARC: store MD_LIGHT_POWER metadata also in HDF5 files
+    - SPARC: LabCube bandpass filter setting stored in metadata
+    - SPARC: simulator for parabolic mirror spot alignment
+    - METEOR: FM posture always uses the same position relative to the optical lens (TFS)
+    - METEOR: GUI automatically deletes empty project folders
+    - METEOR: GUI stability improved
+    - METEOR: update styling of the FIBSEM milling tab
+    - METEOR: support reading basic JEOL metadata from TIFF files
+    - FASTEM: leave beam on by default after acquisition
+    - driver autoscript: store scan rotation as MD_ROTATION metadata
+    - driver semnidaq: support for vector scanning
+    - driver tescan: option to select the detector type
+    - driver tescan: improve stability when moving stage while acquiring images
+    - driver tescan: option to control the scan rotation
+    - GUI: also support loading files with extension in uppercase
+    - GUI: minor fixes for display on Ubuntu 24.04
+    - Bug reporter: collect the latest microscope file
+    - Bug reporter: collect actuator configuration files (*.tsv)
+    - Bug reporter: different way to collect USB information to avoid camera disconnections
+  * Improvements and bug fixes already present in the v3.7 branch:
+    - driver xt_client: Reduce waiting time after a move (METEOR/SPARC)
+    - driver autoscript: also handle raw coordinate offset on rotation axes (METEOR)
+    - driver omicronxx: optimize speed when changing the light intensity (METEOR/SECOM)
+    - FixedPositionsActuator: optimize move duration when referencing is needed (METEOR)
+    - Fix GUI toolbar incorrect positioning when screen has High DPI scaling
+    - CLI: add auto-completion script for fish shell
+    - Windows: fix "XRC error 472", which happened on some Windows 11 computers
+    - SPARC: improve angular spectrum display when no background data is available
+    - SPARC: At acquisition, stream "tint" is also stored for SEM survey
+    - SPARC: Going directly from spot mode to RoA mode now works
+    - METEOR: only show calibration menu on microscopes which support it
+    - METEOR: when moving a feature, don't ask whether all postures should be
+      updated on Odemis standard, as it's always useful.
+    - METEOR: switching posture could sometimes lead to a GUI crash
+    - Update channel selector didn't uncomment DEVPATH when switching to
+      development channel.
+    - METEOR overview acquisition window failed to open on some installations
+    - Recover quicker from Andor Sona cameras dropping frames due to high frame rate
+    - Ensure milling default configuration is packaged too (METEOR)
+    - Do not fail after acquiring a stream without names (METEOR)
+    - Angular Spectrum data display now compensates for mirror solid angle (SPARC)
+    - Improve descanner reliability (FASTEM)
+    - "Import region" plugin keeps RoAs apart (FASTEM)
+    - Fix bug reporter failing to start on Ubuntu 24.04
+    - Improve logging information in some cases
+    - Ensure milling code is packaged too
+    - Fix building package on Ubuntu 24.04 due to documentation build
+    - Update build environment on Windows
+    - Don't rotate tiles during stitching based on e-beam scan rotation
+    - FASTEM: Don't show TOAs with transparency
+    - semnidaq driver now also supports NI PCIe-625x cards
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 18 Feb 2026 16:40:52 +0100
+
 odemis (3.7.0-1) focal; urgency=medium
 
   * New version: 3.7
