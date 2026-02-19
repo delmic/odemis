@@ -1184,6 +1184,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             logging.exception("Failure to move to {} position.".format(target_name))
             raise
         finally:
+            try:
+                self._update_posture(self.stage.position.value)
+            except Exception as e:
+                logging.warning("Failed to update posture after move: %s", e)
+
             with future._task_lock:
                 if future._task_state == CANCELLED:
                     raise CancelledError()
@@ -1672,6 +1677,11 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             logging.exception("Failure to move to {} position.".format(target_name))
             raise
         finally:
+            try:
+                self._update_posture(self.stage.position.value)
+            except Exception as e:
+                logging.warning("Failed to update posture after move: %s", e)
+
             with future._task_lock:
                 if future._task_state == CANCELLED:
                     raise CancelledError()
@@ -2194,6 +2204,11 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             logging.exception("Failure to move to %s position.", target_name)
             raise
         finally:
+            try:
+                self._update_posture(self.stage.position.value)
+            except Exception as e:
+                logging.warning("Failed to update posture after move: %s", e)
+
             with future._task_lock:
                 if future._task_state == CANCELLED:
                     raise CancelledError()
@@ -2450,6 +2465,11 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
             logging.exception("Failure to move to %s position.", target_name)
             raise
         finally:
+            try:
+                self._update_posture(self.stage.position.value)
+            except Exception as e:
+                logging.warning("Failed to update posture after move: %s", e)
+
             with future._task_lock:
                 if future._task_state == CANCELLED:
                     raise CancelledError()
