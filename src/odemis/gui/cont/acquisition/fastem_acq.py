@@ -1754,6 +1754,9 @@ class FastEMCalibrationController:
         # Toggle visibility based on button state
         is_visible = btn.GetToggle()
         self._show_calibration_region(is_visible, scintillator_num, calibration_key)
+        if calibration_key == CALIBRATION_1:
+            for i in range(9):
+                self._show_calibration_region(is_visible, scintillator_num, f"focus_map_{i}")
 
     def add_calibration_control(self, label_text, value=True, pos_col=1, span=wx.DefaultSpan):
         """ Add a calibration control to the calibration settings panel
@@ -2011,6 +2014,16 @@ class FastEMCalibrationController:
                 # Start alignment
                 xmin, ymin, xmax, ymax = calibration.region.coordinates.value
                 stage_pos = ((xmin + xmax) / 2, (ymin + ymax) / 2)
+                if calib_name == CALIBRATION_1:
+                    stage_pos = [stage_pos]
+                    for i in range(9):
+                        focus_map_calibration = current_sample.scintillators[
+                            scintillator_num
+                        ].calibrations[f"focus_map_{i}"]
+                        fxmin, fymin, fxmax, fymax = focus_map_calibration.region.coordinates.value
+                        fstage_pos = ((fxmin + fxmax) / 2, (fymin + fymax) / 2)
+                        stage_pos.append(fstage_pos)
+
                 f = align.fastem.align(
                     self._main_data_model.ebeam,
                     self._main_data_model.multibeam,
