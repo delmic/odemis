@@ -445,6 +445,9 @@ class DelayGenerator(model.HwComponent):
         # The pulse frequency. Can be at 0 if the pulse is not active.
         self.triggerRate = model.FloatVA(1e6, unit="Hz", readonly=True)
 
+        # Not all delay generators have a phase lock, but let's simulate one
+        self.phaseLock = model.BooleanVA(False)
+
         self._trigger_rate_sim = util.RepeatingTimer(1, self._updateTriggerRate, "Simulated trigger rate changes")
         self._trigger_rate_sim.start()
 
@@ -466,9 +469,10 @@ class DelayGenerator(model.HwComponent):
                 if not isinstance(delay, numbers.Real):
                     raise ValueError("Trigger delay %s corresponding to time range %s is not of type float."
                                      "Please check calibration file for trigger delay." % (delay, timeRange))
-                if not 0 <= delay <= 1:
-                    raise ValueError("Trigger delay %s corresponding to time range %s is not in range (0, 1)."
-                                     "Please check the calibration file for the trigger delay." % (delay, timeRange))
+                if not self.triggerDelay.range[0] <= delay <= self.triggerDelay.range[1]:
+                    raise ValueError("Trigger delay %s corresponding to time range %s is not in range %s."
+                                     "Please check the calibration file for the trigger delay." %
+                                     (delay, timeRange, self.triggerDelay.range))
 
         super(DelayGenerator, self).updateMetadata(md)
 
