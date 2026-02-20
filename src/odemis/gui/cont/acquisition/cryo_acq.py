@@ -453,7 +453,6 @@ class CryoAcquiController(object):
 
         # toggle file controls when saving is enabled
         enable = self._panel.chkbox_save_acquisition.IsChecked()
-        self._panel.lbl_filename.Enable(enable)
         self._panel.txt_filename.Enable(enable)
         self._panel.btn_cryosecom_change_file.Enable(enable)
 
