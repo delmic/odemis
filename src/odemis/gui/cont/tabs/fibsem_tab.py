@@ -23,6 +23,7 @@ import collections
 import logging
 import math
 from typing import Dict
+from concurrent.futures import CancelledError
 
 import numpy
 import wx
@@ -42,7 +43,7 @@ from odemis.acq.stream import (
     StaticSEMStream,
 )
 from odemis.gui import conf
-from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF
+from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS
 from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.features import CryoFeatureController
@@ -188,15 +189,19 @@ class FibsemTab(Tab):
         self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
         self.panel = panel
 
+        self._posture_switch_future = model.InstantaneousFuture()
+
         rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["mill_angle"]
         self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
-        self.panel.ctrl_milling_angle.SetValueRange(*MILLING_RANGE)
+        # Tilt field is in degrees, so convert from radians to integer degrees to prevent a lot of decimals from showing
+        self.panel.ctrl_milling_angle.SetValueRange(*numpy.round(numpy.rad2deg(MILLING_RANGE)).astype(int))
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
         self._update_milling_angle(None)
-        self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_position)
-        self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem)
+        self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_posture)
+        self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem_posture)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
 
+    @call_in_wx_main
     def _on_view(self, view):
         """Hide/Disable milling controls when fib view is not selected"""
         # is_fib_view = issubclass(view.stream_classes, FIBStream)
@@ -394,68 +399,70 @@ class FibsemTab(Tab):
             logging.warning("Failed to update stage position label: %s", e)
 
         # update the stage position buttons
-        self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
-        self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
-        self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
+        if self._posture_switch_future.done():
+            self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
+            self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
+            self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
 
-        if posture == SEM_IMAGING:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
-        else:
-            self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
-        if posture == MILLING:
-            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
-        else:
-            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+            if posture == SEM_IMAGING:
+                self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
+            else:
+                self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
+            if posture == MILLING:
+                self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
+            else:
+                self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
 
-        self.panel.Layout()
+            self.panel.Layout()
 
     def _update_milling_angle(self, evt: wx.Event):
+        # Check if already at milling posture
+        already_at_milling = self.pm.getCurrentPostureLabel() == MILLING
 
         # update the metadata of the stage
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
-        current_md = self.pm.stage.getMetadata()
-        self.pm.stage.updateMetadata({
-            model.MD_FAV_MILL_POS_ACTIVE: {"mill_angle": milling_angle,
-                                           "rz": current_md[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
-        })
-
+        self.pm.milling_angle.value = milling_angle  # this will call the setter in the move posture manager and handle md update
         md = self.pm.get_posture_orientation(MILLING)
         stage_tilt = md["rx"]
         self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
                                                  f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
 
-        self._on_stage_pos(self.pm.stage.position.value)
-
-        # if the tab isn't shown, we don't want to ask the user
-        if evt is None:  # if the event is None, it means this is the initial update, dont ask the user
+        # if the tab isn't shown, we don't want to perform a move or change features
+        if evt is None:
             return
 
-        # changing milling angle, causes previously defined features at milling angle to be "seen" as SEM_IMAGING
-        # QUERY: should we update the features to the new milling angle?
-        box = wx.MessageDialog(self.main_frame,
-                               message=f"Do you want to update existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)?",
-                               caption="Update existing feature positions?",
-                               style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
+        # NOTE: use stage_tilt, not milling_angle
+        for feature in self.main_data.features.value:
+            milling_position = feature.get_posture_position(MILLING)
+            if milling_position is not None:
+                milling_position["rx"] = stage_tilt
+                feature.set_posture_position(MILLING, milling_position)
 
-        ans = box.ShowModal()  # Waits for the window to be closed
-        if ans == wx.ID_YES:
-            logging.debug(
-                f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
-            # NOTE: use stage_tilt, not milling_angle
-            for feature in self.main_data.features.value:
-                milling_position = feature.get_posture_position(MILLING)
-                if milling_position is not None:
-                    milling_position["rx"] = stage_tilt
-                    feature.set_posture_position(MILLING, milling_position)
+        if already_at_milling:
+            # Normally this happens automatically when clicking the ProgressRadioButton, but since we are now not
+            # clicking it, but still want to show progress, we set the progress state of the button manually.
+            self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_PROGRESS)
+            self._move_to_milling_posture(None)
 
-    def _move_to_milling_position(self, evt: wx.Event) -> None:
-        logging.info(f"MILLING ORIENTATION: {self.pm.get_posture_orientation(MILLING)}")
-        f = self.pm.cryoSwitchSamplePosition(MILLING)
-        f.result()
+    def _move_to_milling_posture(self, evt: wx.Event):
+        self._posture_switch_future = self.pm.cryoSwitchSamplePosition(MILLING)
 
-    def _move_to_sem(self, evt: wx.Event) -> None:
-        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.result()
+        # Do NOT call f.result(). Instead, add a callback:
+        self._posture_switch_future.add_done_callback(self._on_move_complete)
+
+    def _move_to_sem_posture(self, evt: wx.Event):
+        self._posture_switch_future = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        self._posture_switch_future.add_done_callback(self._on_move_complete)
+
+    @call_in_wx_main
+    def _on_move_complete(self, future):
+        try:
+            future.result()
+        except CancelledError:
+            logging.info("Posture switch was cancelled")
+        except Exception:
+            logging.exception("Failed to switch posture")
 
     def terminate(self):
         self.main_data.stage.position.unsubscribe(self._on_stage_pos)

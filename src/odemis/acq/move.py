@@ -84,7 +84,7 @@ ZEISS_FIB_COLUMN_TILT = math.radians(54)
 
 # These values might differ per system and would then require a configuration option per system.
 # Hardcoded for now. Note that these values correspond to the milling angle, and not the actual stage tilt.
-MILLING_RANGE = (5, 30)  # degrees
+MILLING_RANGE = (math.radians(5), math.radians(30))
 
 def filter_dict(keys: set, d: Dict[str, float]) -> Dict[str, float]:
     """
@@ -337,7 +337,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         md_calib = stage_md.get(model.MD_CALIB, {})
         self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
         self.fib_column_tilt = TFS_FIB_COLUMN_TILT
-
         # use_linked_sem_focus_compensation: when True, the SEM focus is restored to the eucentric
         # focus when moving the stage. This is done on TFS systems to compensate
         # for the SEM focus changing when the stage is moved in Z (due to stage linking).
@@ -360,6 +359,14 @@ class MeteorPostureManager(MicroscopePostureManager):
                 logging.info("Upgrading stage metadata %s: converting 'rx' to 'mill_angle'", model.MD_FAV_MILL_POS_ACTIVE)
                 mill_md["mill_angle"] = mill_md.pop("rx")
                 self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_md})
+
+            milling_angle = mill_md["mill_angle"]
+        else:
+            milling_angle = MILLING_RANGE[0]
+
+        self.milling_angle = model.FloatContinuous(
+            milling_angle, (MILLING_RANGE[0], MILLING_RANGE[1]), unit="rad", setter=self._set_milling_angle
+        )
 
         # current posture va
         self.current_posture = model.VigilantAttribute(UNKNOWN)
@@ -534,6 +541,18 @@ class MeteorPostureManager(MicroscopePostureManager):
         :return: (dict str->float) the transformed position. It returns the updated axes.
         """
         pass
+
+    def _set_milling_angle(self, angle: float) -> float:
+        """
+        Set the milling angle of the stage
+        :param angle: (float) milling angle in radians
+        """
+        if model.MD_FAV_MILL_POS_ACTIVE not in self.stage.getMetadata():
+            logging.warning("Trying to set a milling angle on a system that was not configured for milling")
+            return angle
+        rotations = {'mill_angle': angle, 'rz': self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
+        self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: rotations})
+        return angle
 
     def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -765,7 +784,8 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         logging.info(f"Position Posture: {POSITION_NAMES[position_posture]}, Target Posture: {POSITION_NAMES[posture]}")
 
-        if position_posture == posture:
+        # The milling angle can change, so we should handle the MILLING --> MILLING posture switch differently.
+        if posture != MILLING and position_posture == posture:
             return pos
 
         # validate the transformation
@@ -1702,30 +1722,21 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         self.postures = [SEM_IMAGING, FM_IMAGING]
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             self.postures.append(MILLING)
-        self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
+
+        self.linked_axes = ["y", "z"]
+        # The setter of self.milling_angle sets the milling angle metadata, which is used to update the transformation parameters.
+        self.milling_angle.subscribe(self._initialise_transformation, init=True)
         self.create_sample_stage()
 
         # Update the posture based on the actual metadata
         self._update_posture(self.stage.position.value)
 
-    def _initialise_transformation(
-            self,
-            axes: Sequence[str],
-            rotation: float = 0,
-            scale: tuple = (1, 1),
-            translation: tuple = (0, 0),
-            shear: tuple = (0, 0),
-    ):
+    def _initialise_transformation(self, angle):
         """
         Initializes the transformation parameters that allows conversion between stage-bare and sample plane.
-        :param axes: stage axes which are used to calculate transformation parameters
-        :param rotation: rotation in radians from sample plane to stage
-        :param scale: scale from sample to stage
-        :param translation: translation from sample to stage
-        :param shear: shear from sample to stage
         """
-        self._axes_dep = {"x": axes[0], "y": axes[1]}  # TODO: Should be called y, z... or even better: also take x as first axis
-        self._update_conversion(rotation)
+        self._axes_dep = {"x": self.linked_axes[0], "y": self.linked_axes[1]}  # TODO: Should be called y, z... or even better: also take x as first axis
+        self._update_conversion(self.pre_tilt)
         self._initialise_offset()
 
     def _update_conversion(self,
@@ -1764,7 +1775,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         tf_sem = tf_reverse @ tf_tilt @ tf_sr
         tf_sem_inv = numpy.linalg.inv(tf_sem)
 
-        # TODO: update MILLING transformations when changing milling angle
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
             rx_mill = calculate_stage_tilt_from_milling_angle(milling_angle=mill_pos_active["mill_angle"],
