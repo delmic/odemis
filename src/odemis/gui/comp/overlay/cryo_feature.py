@@ -36,7 +36,7 @@ from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
-from odemis.acq.move import MicroscopePostureManager, SEM_IMAGING, FM_IMAGING, UNKNOWN
+from odemis.acq.move import MicroscopePostureManager, POSITION_NAMES, SEM_IMAGING, FM_IMAGING, UNKNOWN
 
 
 MODE_EDIT_FEATURES = 1
@@ -250,9 +250,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         # only possible to set the position in FM, so it's never needed to ask the user.
         # TODO: only ask if the posture had been set explicitly in a different posture previously.
         if len(self.pm.postures) > 2:
+            current_posture_name = POSITION_NAMES.get(self.pm.current_posture.value, "current posture")
             box = wx.MessageDialog(wx.GetApp().main_frame,
-                                message="Do you want to recalculate this feature position for all other postures?",
+                                message=f"Do you want to update this feature position only for {current_posture_name} "
+                                         "or recalculate for all other postures?",
                                 caption="Recalculate feature positions?", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+            box.SetYesNoLabels("All", f"Only {current_posture_name}")
 
             ans = box.ShowModal()  # Waits for the window to be closed
             if ans != wx.ID_YES:
