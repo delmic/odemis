@@ -229,6 +229,9 @@ class CorrelationPointsController:
 
         # Reset targets and current target and populate it based on the current feature
         self._subscribed_target = None
+        # On GUI start: ensure FM fiducial indices are contiguous (1..N) when there are no FIB fiducials.
+        # This fixes cases like FM indices being 1,2,3,6 when no FIB fiducials are present on startup.
+        self._renumber_fm_fiducials_on_start()
         self._tab_data_model.main.targets.subscribe(self._on_target_changes, init=True)
         self._tab_data_model.main.currentTarget.subscribe(self._on_current_target_changes, init=True)
 
@@ -839,3 +842,48 @@ class CorrelationPointsController:
         for row, row_data in enumerate(data):
             for col, value in enumerate(row_data):
                 self.grid.SetCellValue(row, col, str(value))
+
+    def _renumber_fm_fiducials_on_start(self) -> None:
+        """
+        If there are no FIB fiducials at GUI start, renumber FM fiducials so their indices are contiguous
+        starting from 1. This handles cases where FM fiducials may have gaps (e.g. 1,2,3,6).
+
+        This method updates both the `index` and `name` fields of the FM targets in-place and
+        persists the feature file via `update_feature_correlation_target` so the rest of the GUI
+        sees the corrected ordering when it initializes.
+        """
+        try:
+            targets = self._tab_data_model.main.targets.value
+        except Exception:
+            # If targets are not available for any reason, skip renumbering
+            return
+
+        # Check if any FIB fiducials exist; if so, we don't renumber on startup
+        has_fib = any(t.type.value == TargetType.FibFiducial for t in targets)
+        if has_fib:
+            return
+
+        # Collect FM fiducials (TargetType.Fiducial) and sort by current index
+        fm_fiducials = [t for t in targets if t.type.value == TargetType.Fiducial]
+        if not fm_fiducials:
+            return
+
+        fm_fiducials.sort(key=lambda t: t.index.value)
+
+        # If indices are already contiguous starting from 1, nothing to do
+        # The fiducials are sorted when saved, so we just need to check the last index
+        expected_last_index = len(fm_fiducials)
+        actual_last_index = fm_fiducials[-1].index.value
+        if expected_last_index == actual_last_index:
+            return
+
+        # Renumber sequentially and update names preserving the prefix (if present)
+        for new_idx, target in enumerate(fm_fiducials, start=1):
+            old_name = target.name.value
+            old_name_type = re.search(FIDUCIAL_PATTERN, old_name).group()
+            target.index.value = new_idx
+            target.name.value = old_name_type + str(target.index.value)
+
+        # Update the correlation_target and persist features
+        logging.debug(f"Renumbered FM fiducials on GUI start to contiguous indices 1..{len(fm_fiducials)}")
+        self.correlation_target = update_feature_correlation_target(self.correlation_target, self._tab_data_model)
