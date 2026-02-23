@@ -175,6 +175,10 @@ class CorrelationPointsController:
         # Access the correlation points table (wxListCtrl)
         self.grid = self._panel.table_grid
 
+        # Access the Refine Z text (to check if refine_z is working or not)
+        self.txt_refinez_active = self._panel.txt_refinez_active
+        self.txt_refinez_active.Show(True)
+
         # Access the Z-targeting button
         self.z_targeting_btn = self._panel.btn_z_targeting
         self.z_targeting_btn.Bind(wx.EVT_BUTTON, self._on_z_targeting)
@@ -182,8 +186,10 @@ class CorrelationPointsController:
         # Disable Z-targeting button if super z stream is available as Z-targeting is not required in that case
         self.refinez_active = True
         if self._tab_data_model.main.currentFeature.value.superz_stream_name:
-            self.z_targeting_btn.Hide()
+            self.z_targeting_btn.SetToolTip("Super Z information available, Refine Z disabled")
+            self.txt_refinez_active.SetLabel("Super Z information in use")
             self.refinez_active = False
+
 
         self.delete_btn = self._panel.btn_delete_row
         self.delete_btn.Bind(wx.EVT_BUTTON, self._on_delete_row)
@@ -803,6 +809,9 @@ class CorrelationPointsController:
             if not streams_projections:
                 wx.MessageBox("FM streams are not available for refining Z", "Error", wx.OK | wx.ICON_ERROR)
                 return
+
+            self.txt_refinez_active.SetLabel("active ...")
+            wx.CallLater(1000, self.txt_refinez_active.SetLabel, "")
 
             coords = self._tab_data_model.main.currentTarget.value.coordinates.value
             pixel_coords = getPixel3DCoordinates(self.correlation_target.fm_streams[0], coords)
