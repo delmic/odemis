@@ -407,8 +407,6 @@ class CryoZLocalizationController(object):
                 if feature.superz_stream_name:
                     self._selected_stream = next((s for s in streams if isinstance(s, FluoStream) and
                                                   s.name.value == feature.superz_stream_name), None)
-                elif self._selected_stream:
-                    feature.superz_stream_name = self._selected_stream.name.value
 
                 if correlation_data:
                     self.correlation_target = correlation_data
@@ -470,13 +468,6 @@ class CryoZLocalizationController(object):
         """Get and save the stream option when an aption is selected in the pop-up menu"""
         menu_id = evt.GetId()
         self._selected_stream = self._menu_to_stream[menu_id]
-        if self._tab_data.main.currentFeature.value:
-            feature = self._tab_data.main.currentFeature.value
-            feature.superz_stream_name = self._selected_stream.name.value
-
-            # Save the stream name in the config file
-            acq_conf = conf.get_acqui_conf()
-            save_features(acq_conf.pj_last_path, self._tab_data.main.features.value)
 
     def _on_z_localization(self, evt):
         """Start or cancel the localization method when the button is clicked"""

@@ -119,6 +119,7 @@ class xrcfr_correlation(wx.Dialog):
         self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
         self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
         self.btn_z_targeting = xrc.XRCCTRL(self, "btn_z_targeting")
+        self.txt_refinez_active = xrc.XRCCTRL(self, "txt_refinez_active")
         self.table_grid = xrc.XRCCTRL(self, "table_grid")
         self.txt_correlation_rms = xrc.XRCCTRL(self, "txt_correlation_rms")
         self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
@@ -2015,6 +2016,15 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                   <object class="wxButton" name="btn_z_targeting">
                                     <label>Refine Z</label>
                                   </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="txt_refinez_active">
+                                  <label> </label>
+                                  <fg>#E5E5E5</fg>
+                                  <hidden>1</hidden>
+                                  </object>
+                                  <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                                  <border>10</border>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                                 <flag>wxALL|wxEXPAND</flag>

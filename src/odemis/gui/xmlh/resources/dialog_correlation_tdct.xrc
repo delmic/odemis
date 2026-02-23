@@ -92,6 +92,15 @@
                                     <label>Refine Z</label>
                                   </object>
                                 </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="txt_refinez_active">
+                                  <label> </label>
+                                  <fg>#E5E5E5</fg>
+                                  <hidden>1</hidden>
+                                  </object>
+                                  <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                                  <border>10</border>
+                                </object>
                                 <orient>wxHORIZONTAL</orient>
                                 <flag>wxALL|wxEXPAND</flag>
                                 <border>10</border>
