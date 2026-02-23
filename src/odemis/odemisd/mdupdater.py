@@ -395,14 +395,14 @@ class MetadataUpdater(model.Component):
         Its metadata will be updated.
         :param filter: a (light) filter-(wheel) component (should have a "band" axis)
         :param spectrograph: a spectrograph component (should have a "wavelength" axis)
-        Only used if the detector has the role "monochromator".
+        Only used if the detector has the role "monochromator", "time-correlator" or "photo-detector".
         """
         filter_pos = self.get_filter_pos(filter)
 
         # We only need to care about the spectrograph in the case of the monochromator, because for
         # the other types of components (eg, spectrometer), MD_OUT_WL is used exclusively for the
         # filter info, and the MD_WL_LIST is used to store the wavelength info (handled separately).
-        if comp_affected.role == "monochromator":
+        if any(comp_affected.role.startswith(r) for r in ("monochromator", "time-correlator", "photo-detector")):
             spec_bandwidth = self.getMonochromatorBandwidth(spectrograph)  # None if wavelength == 0
         else:
             spec_bandwidth = None
@@ -427,11 +427,12 @@ class MetadataUpdater(model.Component):
                 logging.debug("Updating %s with intersection of filter %s and spectrograph %s -> %s",
                               comp_affected.name, filter_bandwidth, spec_bandwidth, bandwidth)
 
+        logging.debug("Updating output wavelength for component %s to %s", comp_affected.name, bandwidth)
         comp_affected.updateMetadata({model.MD_OUT_WL: bandwidth})
 
     def observeSpectrograph(self, spectrograph, comp_affected):
 
-        if comp_affected.role == "monochromator":
+        if any(comp_affected.role.startswith(r) for r in ("monochromator", "time-correlator", "photo-detector")):
             def updateOutWLRange(pos, sp=spectrograph, comp_affected=comp_affected):
                 self.updateOutWavelength(comp_affected,
                                          self._det_to_filter.get(comp_affected.name),
