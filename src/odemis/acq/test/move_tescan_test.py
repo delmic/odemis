@@ -266,5 +266,44 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
         self.assertEqual(self.pm.shutter.value, None, "Shutter should remain in auto mode for SEM")
 
+    def test_milling_angle_callback(self):
+        initial_mill_pos_md = self.stage_md.get(model.MD_FAV_MILL_POS_ACTIVE)
+        self.assertIsNotNone(initial_mill_pos_md)
+        initial_mill_angle = math.radians(10)
+        self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: {"mill_angle": initial_mill_angle, "rz": initial_mill_pos_md["rz"]}})
+        # Now test that when altering the milling angle VA, the metadata is automatically updated.
+        self.pm.milling_angle.value = math.radians(22)
+        altered_mill_angle_md = self.pm.stage.getMetadata().get(model.MD_FAV_MILL_POS_ACTIVE)["mill_angle"]
+        self.assertNotAlmostEqual(initial_mill_angle, altered_mill_angle_md, places=3)
+
+    def test_milling_angle_stable_pos(self):
+        # Make sure to start from a valid position
+        self.pm.cryoSwitchSamplePosition(LOADING).result()
+        # Transform to milling posture
+        self.pm.cryoSwitchSamplePosition(MILLING).result()
+        # Store shorthand for sample stage
+        sample_stage = self.pm.sample_stage
+        # Take note of sample stage pos
+        initial_sample_stage_pos = sample_stage.position.value
+        # Switch to SEM posture
+        self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        # Compare sample stage pos to previous pos
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        # Switch back to milling posture
+        self.pm.cryoSwitchSamplePosition(MILLING).result()
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        # TODO: uncomment the following section once all the sample stage problems are resolved
+        # # Now change milling angle to check stability; sample stage pos should remain the same.
+        # milling_angle = math.radians(30)
+        # self.pm.milling_angle.value = milling_angle
+        # # Switch to SEM posture
+        # self.pm.cryoSwitchSamplePosition(SEM_IMAGING).result()
+        # # Compare sample stage pos to previous pos
+        # testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        # # Switch back to milling posture
+        # self.pm.cryoSwitchSamplePosition(MILLING).result()
+        # testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+
+
 if __name__ == "__main__":
     unittest.main()
