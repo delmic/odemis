@@ -355,6 +355,15 @@ class SEM(model.HwComponent):
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
 
+    def terminate(self):
+        for child in self.children.value:
+            child.terminate()
+
+        if hasattr(self, "server"):
+            del self.server  # to let the proxy close the connection
+
+        super().terminate()
+
     def transfer_latest_package(self, data: bytes) -> None:
         """
         Transfer a (new) xtadapter package.
@@ -1477,6 +1486,12 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
+    def terminate(self):
+        if self._va_poll:
+            self._va_poll.cancel()
+            self._va_poll = None
+        super().terminate()
+
     def _updateSettings(self) -> None:
         """
         Read all the current settings from the SEM and reflects them on the VAs
@@ -1798,6 +1813,10 @@ class Detector(model.Detector):
             self._genmsg.put(GEN_TERM)
             self._generator.join(5)
             self._generator = None
+        if self._va_poll:
+            self._va_poll.cancel()
+            self._va_poll = None
+        super().terminate()
 
     def start_generate(self) -> None:
         self._genmsg.put(GEN_START)
@@ -2133,6 +2152,7 @@ class Chamber(model.Actuator):
 
     def terminate(self) -> None:
         self._polling_thread.cancel()
+        super().terminate()
 
 
 class TerminationRequested(Exception):
@@ -2243,6 +2263,16 @@ class Stage(model.Actuator):
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
+
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
+        super().terminate()
 
     def _switch_coordinate_system(self, raw_coordinates: bool) -> None:
         """
@@ -2602,6 +2632,12 @@ class Focus(model.Actuator):
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
+
+    def terminate(self):
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
+        super().terminate()
 
     @isasync
     def applyAutofocus(self, detector: model.Detector) -> futures.Future:

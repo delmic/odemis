@@ -141,6 +141,7 @@ class TestMicroscope(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        logging.debug("Terminating microscope.")
         cls.microscope.terminate()
 
     def setUp(self):
@@ -188,7 +189,7 @@ class TestMicroscope(unittest.TestCase):
             f = self.stage.moveAbs(position)
             f.result()
         # Move stage back to initial position
-        self.stage.moveAbs(init_pos)
+        self.stage.moveAbsSync(init_pos)
 
     @unittest.skipIf(not TEST_NOHW, "Microscope stage not tested, too dangerous.")
     def test_move_stage_rot_tilt(self):
@@ -222,7 +223,7 @@ class TestMicroscope(unittest.TestCase):
         self.assertAlmostEqual(self.stage.position.value["rz"] % (2 * math.pi),
                                rel_pos["rz"] % (2 * math.pi), places=4)
 
-        self.stage.moveAbs(init_pos)
+        self.stage.moveAbsSync(init_pos)
 
     def test_hfov(self):
         """
