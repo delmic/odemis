@@ -522,6 +522,8 @@ class MeteorPostureManager(MicroscopePostureManager):
                                                         pre_tilt=self.pre_tilt,
                                                         column_tilt=self.fib_column_tilt)
             return {"rx": rx, "rz": md["rz"]}
+        else:
+            raise KeyError(f"posture {POSITION_NAMES.get(posture, posture)} not supported for orientation retrieval")
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
