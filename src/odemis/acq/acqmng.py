@@ -248,6 +248,8 @@ class ZStackAcquisitionTask(object):
 
                 zcube = assembleZCube(zstack, self._zlevels[stream])
                 acquired_data.append(zcube)
+                # Clear the individual z-slices from memory as they are now part of the cube
+                zstack.clear()
 
         # state that the future has finished
         with self._future_lock:

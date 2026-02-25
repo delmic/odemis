@@ -42,6 +42,7 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
+from odemis.acq.feature import load_feature_streams_from_disk
 from odemis.util.dataio import data_to_static_streams
 
 # There are two kinds of controllers:
@@ -615,7 +616,11 @@ class StreamBarController(object):
         visible_streams = [s if isinstance(s, acqstream.Stream) else s.stream for s in flat]
 
         for e in self._stream_bar.stream_panels:
-            e.set_visible(e.stream in visible_streams)
+            try:
+                e.set_visible(e.stream in visible_streams)
+            except RuntimeError:
+                # Widget may have been deleted when stream was cleared
+                pass
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -2138,7 +2143,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         # * .features: which contain every CryoFeature, which all have a .streams
         # * .currentFeature: the current feature (can be None)
 
-        # TODO: eventually, also unload/reload data when the feature is not shown? (to save memory)
+        self._current_feature = None  # The feature whose streams are currently loaded in memory
 
         tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
 
@@ -2169,23 +2174,161 @@ class CryoAcquiredStreamsController(CryoStreamsController):
     @call_in_wx_main
     def _on_current_feature_changes(self, feature):
         """
-        Handle switching the acquired streams appropriate to the current feature
+        Handle switching the acquired streams appropriate to the current feature.
+        Hard-deletes all other features' streams from memory, then
+        reloads the new feature's streams from disk asynchronously if they were previously evicted.
         :param feature: (CryoFeature or None) the newly selected current feature
         """
-        self.clear_feature_streams()
+
+        # Clear all features except the newly selected one
+        self._clear_all_feature_streams_except(feature)
+
+        self._current_feature = feature
+
+        # Load streams from disk if they were previously evicted (streams list is empty)
+        # Do this in a background thread to avoid blocking the GUI
+        if feature is not None and not feature.streams.value:
+            thread = threading.Thread(
+                target=self._load_feature_streams_bg,
+                args=(feature,),
+                daemon=True
+            )
+            thread.start()
+        else:
+            # If streams are already loaded, display them immediately
+            self._display_feature_streams(feature)
+
+
+    def _load_feature_streams_bg(self, feature):
+        """
+        Load feature streams from disk (must be called from a background thread).
+        This method performs blocking disk I/O and data processing.
+        Once loaded, displays the streams on the main thread via _display_feature_streams().
+        The caller (_on_current_feature_changes) is responsible for creating the background thread.
+        :param feature: (CryoFeature) the feature whose streams to load
+        """
+        # Keep a reference to feature name to detect if feature was deleted
+        feature_name = feature.name.value if feature else None
+
+        try:
+            logging.debug("Starting background load of streams for feature %s", feature_name)
+
+            # Verify feature is still valid before loading
+            if not feature or feature not in self._tab_data_model.main.features.value:
+                logging.warning("Feature %s was deleted before loading started", feature_name)
+                return
+
+            self._load_feature_streams(feature)
+            logging.debug("Background load completed for feature %s", feature_name)
+
+        except Exception as e:
+            logging.error(f"Error loading feature streams for {feature_name}: {e}", exc_info=True)
+            return
+
+        finally:
+            # Display the streams on the main thread once loaded
+            # Only if this feature is still the current one (user didn't switch while loading)
+            # and the feature still exists
+            try:
+                if (self._current_feature is feature and
+                    feature in self._tab_data_model.main.features.value):
+                    self._display_feature_streams(feature)
+                else:
+                    logging.debug("Feature %s is no longer current or was deleted, discarding loaded streams", feature_name)
+                    # Discard the loaded streams since we won't display them
+                    if feature and feature.streams.value:
+                        feature.streams.value.clear()
+            except Exception as e:
+                logging.error(f"Error displaying feature streams for {feature_name}: {e}", exc_info=True)
+
+    @call_in_wx_main
+    def _display_feature_streams(self, feature):
+        """
+        Display the feature's streams in the acquired view (must be called on main thread).
+        Adds streams to the tab model and displays them.
+        :param feature: (CryoFeature or None) the feature whose streams to display
+        """
+
+        if not feature:
+            return
+
+        # Verify feature still exists (may have been deleted while background thread was loading)
+        if feature not in self._tab_data_model.main.features.value:
+            logging.debug("Feature was deleted before display, skipping display")
+            return
+
+        # Verify streams are available
+        if not feature.streams.value:
+            logging.debug("Feature has no streams to display")
+            return
+
+        # Add streams to the tab model
+        for s in feature.streams.value:
+            if s not in self._tab_data_model.streams.value:
+                self._tab_data_model.streams.value.append(s)
+
         # show the feature streams on the acquired view
-        acquired_streams = feature.streams.value if feature else []
-        for stream in acquired_streams:
+        for stream in feature.streams.value:
             self.showFeatureStream(stream)
+
         # refit the selected feature in the acquired view
         self._view_controller.viewports[1].canvas.fit_view_to_content()
 
-    def clear_feature_streams(self):
+    def _clear_all_feature_streams_except(self, current_feature) -> None:
         """
-        Remove from display all feature streams (but leave the overview and live streams)
-        But DO NOT REMOVE the streams from the model
+        Clear the streams from all features except the currently selected one.
+        This ensures only the current feature's streams are kept in memory.
+        :param current_feature: (CryoFeature or None) the feature to keep in memory
         """
-        # Remove the panels, and indirectly it will clear the view
+        for i, feature in enumerate(self._tab_data_model.main.features.value):
+            if feature is not current_feature and feature.streams.value:
+                self.clear_feature_streams(feature)
+
+    def _clear_all_feature_streams(self) -> None:
+        """
+        Clear the streams from ALL features.
+        Used during batch acquisition to immediately free memory after each feature.
+        """
+        for feature in self._tab_data_model.main.features.value:
+            if feature.streams.value:
+                self.clear_feature_streams(feature)
+
+    def _load_feature_streams(self, feature):
+        """
+        Load streams for a feature from disk. Streams are loaded into feature.streams but
+        not added to the tab model yet, since that's done in _display_feature_streams on the main thread.
+        :param feature: (CryoFeature) the feature whose streams to load
+        """
+        # Verify feature is still valid
+        if not feature or feature not in self._tab_data_model.main.features.value:
+            logging.warning("Cannot load streams: feature no longer exists")
+            return
+
+        project_path = self._tab_data_model.main.project_path.value
+        if not project_path:
+            logging.warning("Cannot reload feature streams: no project path set")
+            return
+
+        load_feature_streams_from_disk(feature, project_path)
+
+        # Verify feature still exists after loading (in case it was deleted during load)
+        if feature not in self._tab_data_model.main.features.value:
+            logging.warning("Feature was deleted during stream loading, discarding loaded streams")
+            return
+
+        # Verify streams were actually loaded
+        if not feature.streams.value:
+            logging.warning("No streams loaded for feature %s", feature.name.value if feature else None)
+            return
+
+    def clear_feature_streams(self, feature):
+        """
+        Remove the specified feature's streams from display and memory.
+        Deletes the streams from both the feature and the model so memory is freed.
+        :param feature: (CryoFeature) the feature whose streams to clear
+        """
+
+        # Remove the feature's stream panels from the display
         v = self._feature_view
         for sc in self.stream_controllers.copy():
             if not isinstance(sc.stream, StaticStream):
@@ -2194,6 +2337,9 @@ class CryoAcquiredStreamsController(CryoStreamsController):
             # Leave the overview streams
             if sc.stream in self._tab_data_model.overviewStreams.value:
                 continue
+            # Only clear streams belonging to this feature
+            if sc.stream not in feature.streams.value:
+                continue
 
             self._stream_bar.remove_stream_panel(sc.stream_panel)
             if hasattr(v, "removeStream"):
@@ -2201,11 +2347,27 @@ class CryoAcquiredStreamsController(CryoStreamsController):
             if sc in self.stream_controllers:
                 self.stream_controllers.remove(sc)
 
-        self._stream_bar.fit_streams()
+        # Hard-delete: remove the feature's streams from the model so memory can be freed
+        for s in list(feature.streams.value):
+            # Drop the raw DataArray references immediately. Even if the stream
+            # object itself is kept alive by a reference cycle (e.g. between
+            # DataProjection.stream and stream.tint._subscribers), the large
+            # numpy arrays are freed as soon as we clear .raw.
+            s.raw = []
+            try:
+                self._tab_data_model.streams.value.remove(s)
+            except ValueError:
+                pass
+        feature.streams.value.clear()
 
-        # Force a check of what can be garbage collected, as some of the streams
-        # could be quite big, that will help to reduce memory pressure.
-        gc.collect()
+        # Clear the canvas RGBA cache and rendered image list so that all
+        # converted copies of the evicted stream data are released immediately
+        # rather than waiting for the next repaint.
+        canvas = self._view_controller.viewports[1].canvas
+        canvas._images_cache = []
+        canvas.images = [None]
+
+        self._stream_bar.fit_streams()
 
     def clear(self, clear_model=True):
         """
@@ -2287,16 +2449,16 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         Handle switching the acquired streams appropriate to the current feature
         :param feature: (CryoFeature or None) the newly selected current feature
         """
+        # Clear previously displayed feature streams before showing the new one
         self.clear_feature_streams()
         # show the feature streams on the acquired view
-
         acquired_streams = []
         if feature:
             if feature.reference_image is not None:
                 acquired_streams = data_to_static_streams([feature.reference_image])
             for stream in acquired_streams:
                 self.showFeatureStream(stream)
-                self.stream = stream # should only ever be 1 stream
+                self.stream = stream  # should only ever be 1 stream
         else:
             self.stream = None
         # refit the selected feature in the acquired view
@@ -2309,7 +2471,7 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         """
         # Remove the panels, and indirectly it will clear the view
         v = self._feature_view
-        for sc in self.stream_controllers.copy():
+        for sc in self.stream_controllers:
             if not isinstance(sc.stream, StaticSEMStream):
                 logging.warning("Unexpected non static stream: %s", sc.stream)
                 continue
