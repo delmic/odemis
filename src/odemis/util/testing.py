@@ -138,21 +138,23 @@ def stop_backend():
     """
     cmd = ODEMISD_CMD + ["--kill"]
     ret = subprocess.call(cmd)
-    if ret != 0:
-        raise IOError("Failed stopping backend with '%s' (returned %d)" % (cmd, ret))
-
-    # wait for the backend to be fully stopped
-    time.sleep(1)  # time to stop
-    end = time.time() + 15  # s timeout
-    while time.time() < end:
-        status = driver.get_backend_status()
-        if status in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
-            logging.info("Backend is stopping...")
-            time.sleep(1)
+    if ret == 0:
+        status = None
+        # wait for the backend to be fully stopped
+        time.sleep(1)  # time to stop
+        end = time.time() + 15  # s timeout
+        while time.time() < end:
+            status = driver.get_backend_status()
+            if status in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
+                logging.info("Backend is stopping...")
+                time.sleep(1)
+            else:
+                break
         else:
-            break
+            logging.warning("Backend still stopping after 15 s")
     else:
-        logging.warning("Backend still stopping after 15 s")
+        status = driver.BACKEND_DEAD
+        logging.warning("Failed stopping backend with '%s' (returned %d)", cmd, ret)
 
     model._core._microscope = None  # force reset of the microscope for next connection
 
