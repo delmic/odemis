@@ -3101,6 +3101,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_cryosecom_chamber">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>CHAMBER</label>
                 <fg>#E5E5E5</fg>
@@ -3120,6 +3121,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_align_enzel">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>ALIGNMENT</label>
                 <fg>#E5E5E5</fg>
@@ -3139,6 +3141,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>STREAMS</label>
                 <fg>#E5E5E5</fg>
@@ -3157,6 +3160,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_localization">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>LOCALIZATION</label>
                 <fg>#E5E5E5</fg>
@@ -3175,6 +3179,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_correlation">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>CORRELATION</label>
                 <fg>#E5E5E5</fg>
@@ -3193,6 +3198,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_fibsem">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>FIBSEM</label>
                 <fg>#E5E5E5</fg>
@@ -3211,6 +3217,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>ACQUISITION</label>
                 <fg>#E5E5E5</fg>
@@ -3229,6 +3236,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_fastem_main">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>MAIN</label>
                 <fg>#E5E5E5</fg>
@@ -3247,6 +3255,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_inspection">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>ANALYSIS</label>
                 <fg>#E5E5E5</fg>
@@ -3269,6 +3278,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_chamber">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>CHAMBER</label>
                 <fg>#E5E5E5</fg>
@@ -3306,6 +3316,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_align">
                 <size>160,30</size>
+                <hidden>1</hidden>
                 <face_colour>def</face_colour>
                 <label>ALIGNMENT</label>
                 <fg>#E5E5E5</fg>

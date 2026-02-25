@@ -555,9 +555,7 @@ class SecomStreamsTab(Tab):
     @classmethod
     def get_display_priority(cls, main_data):
         # For SECOM/DELPHI and all simple microscopes
-        if main_data.role in ("enzel", "meteor"):
-            return None
-        elif main_data.role in ("secom", "delphi", "sem", "optical"):
+        if main_data.role in ("secom", "delphi", "sem", "optical"):
             return 2
         else:
             return None

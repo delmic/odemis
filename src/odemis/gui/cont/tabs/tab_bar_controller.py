@@ -179,12 +179,7 @@ class TabBarController(TabController):
                 tabs.append(tab)
                 assert tab.button not in buttons
                 buttons.add(tab.button)
-
-        # Hides the buttons which are not used
-        for tab_def in tab_defs:
-            b = tab_def["button"]
-            if b not in buttons:
-                b.Hide()
+                tab.button.Show()
 
         # The Odemis Viewer has Analysis and Correlation tabs. The Correlation tab is disabled
         # by default and in this case hide the tab buttons panel. In general, hide the tab buttons
