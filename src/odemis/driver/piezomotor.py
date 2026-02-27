@@ -237,10 +237,10 @@ class PMD401Bus(Actuator):
         # terminate can be called several times, do nothing if ._serial is already None
         if self._serial is None:
             return
-        self._serial.close()
-        self._serial = None
         for axis in self._axis_map.values():
             self.setWaveform(axis, WAVEFORM_PARK)  # power off
+        self._serial.close()
+        self._serial = None
 
         super(PMD401Bus, self).terminate()
 
