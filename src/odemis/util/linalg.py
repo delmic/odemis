@@ -48,7 +48,7 @@ from typing import Iterable, Tuple, List
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
-from scipy.linalg.misc import LinAlgError
+from scipy.linalg import LinAlgError
 
 __all__ = ['qrp', 'qlp', 'tri_inv']
 
