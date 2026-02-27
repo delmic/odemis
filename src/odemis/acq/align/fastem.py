@@ -254,8 +254,12 @@ class CalibrationTask(object):
             # reset beamshift
             self._beamshift.shift.value = (0, 0)
 
-            if self.stage_pos:
-                # move to region of calibration (ROC) position
+            if self.stage_pos and len(self.stage_pos) > 2:
+                logging.info(f"moving to 'x': {self.stage_pos[0][0]}, 'y': {self.stage_pos[0][1]}")
+                # move to region of calibration (ROC) position (always the first in the list)
+                self._stage.moveAbsSync({'x': self.stage_pos[0][0], 'y': self.stage_pos[0][1]})
+            elif self.stage_pos:
+                logging.info(f"moving to 'x': {self.stage_pos[0]}, 'y': {self.stage_pos[1]}")
                 self._stage.moveAbsSync({'x': self.stage_pos[0], 'y': self.stage_pos[1]})
 
             # loop over calibrations in list (order in list is important!)
@@ -264,7 +268,7 @@ class CalibrationTask(object):
                 logging.debug("Starting calibration %s", calib_cls.__name__)
                 calib_runner = calib_cls(components, debug=self.debug)
                 # TODO return a sub-future when implemented for calibrations
-                self.run_calibration(calib_runner, spot_grid_thresh=self.spot_grid_thresh)
+                self.run_calibration(calib_runner, spot_grid_thresh=self.spot_grid_thresh, focus_pos=self.stage_pos)
 
                 # def _pass_future_progress(sub_f, start, end):
                 #     f.set_progress(start, end)

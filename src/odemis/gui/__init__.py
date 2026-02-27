@@ -48,6 +48,7 @@ FG_COLOUR_BUTTON = "#999999"
 FG_COLOUR_BLIND_BLUE = "#648FFF"    # Colour-blind-friendly blue; choosen from IBM Design Library
 FG_COLOUR_BLIND_ORANGE = "#FFB000"  # Colour-blind-friendly orange; choosen from IBM Design Library
 FG_COLOUR_BLIND_PINK = "#DC267F"    # Colour-blind-friendly pink; choosen from IBM Design Library
+FG_COLOUR_BLIND_YELLOW = "#FE6100"  # Colour-blind-friendly yellow; choosen from IBM Design Library
 
 # Border colours for the viewports
 BORDER_COLOUR_FOCUS = "#127BA6"
