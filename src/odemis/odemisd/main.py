@@ -254,6 +254,7 @@ class BackendContainer(model.Container):
                         return
                     if not newcmps:
                         failed.add(n)
+            self._update_persistent_metadata()
 
         except Exception:
             logging.exception("Instantiator thread failed")
@@ -319,7 +320,6 @@ class BackendContainer(model.Container):
                 prop_names, _ = self._instantiator.get_persistent(c.name)
                 for prop_name in prop_names:
                     self._observe_persistent_va(c, prop_name)
-            self._update_persistent_metadata()
 
             return new_cmps
 
@@ -395,11 +395,14 @@ class BackendContainer(model.Container):
         futures.wait(fs_running, return_when=futures.ALL_COMPLETED)
 
     def _terminate_independent(self, comp):
-        try:
-            # First terminate the children
-            children = comp.children.value
-            for child in children:
+        # First terminate the children
+        children = comp.children.value
+        for child in children:
+            try:
                 self._terminate_component(child)
+            except Exception:
+                logging.warning("Failed to terminate child component %s of %s", child.name, comp.name, exc_info=True)
+        try:
             # Terminate component itself
             self._terminate_component(comp)
             del self._dependents[comp]  # children are already deleted from ._parents
@@ -439,6 +442,8 @@ class BackendContainer(model.Container):
     def terminate(self):
         if self._must_stop.is_set():
             logging.info("Terminate already called, so not running it again")
+            model.Container.terminate(self)
+            return
 
         # Save values of persistent properties and metadata
         self._update_persistent_metadata()
