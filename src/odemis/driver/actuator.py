@@ -3084,7 +3084,7 @@ class DualChannelPositionSensor(model.HwComponent):
             * False / "never": Never reference. This means that the device might not be able to produce position data,
                 if it was not previously referenced.
         """
-        model.HwComponent.__init__(self, name, role, **kwargs)
+        model.HwComponent.__init__(self, name, role, dependencies=dependencies, **kwargs)
 
         # Check distance argument
         try:

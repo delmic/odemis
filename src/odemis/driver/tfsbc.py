@@ -175,7 +175,7 @@ class BeamShiftController(model.HwComponent):
             added to the beamshift metadata.
         """
         # .hwVersion, .swVersion not available
-        model.HwComponent.__init__(self, name, role, **kwargs)
+        model.HwComponent.__init__(self, name, role, dependencies=dependencies, **kwargs)
 
         # Find port by RS485 adapter serial number
         self._portpattern = port
