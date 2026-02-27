@@ -129,7 +129,6 @@ def load_milling_tasks(path: str) -> Dict[str, MillingTaskSettings]:
     :param path: path to the yaml file
     :return: dictionary of milling tasks
     """
-    milling_tasks = {}
     with open(path, "r") as f:
         yaml_file = yaml.safe_load(f)
 
