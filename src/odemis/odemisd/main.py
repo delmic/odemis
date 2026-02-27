@@ -145,13 +145,33 @@ class BackendContainer(model.Container):
     def _write_persistent_data(self):
         """
         Write values for all persistent properties and metadata to the settings file.
+
+        The data is serialized to a string first to avoid truncating the settings file
+        if serialization fails.
         """
         if not self._settings or self._dry_run:
             return
 
-        self._settings.truncate(0)  # delete previous file contents
-        self._settings.seek(0)  # go back to position 0
-        yaml.dump(self._persistent_data, self._settings, Dumper=YamlExtraDumper)
+        try:
+            data_str = yaml.dump(self._persistent_data, Dumper=YamlExtraDumper)
+        except Exception:
+            logging.exception("Failed to serialize persistent data; settings file unchanged")
+            return
+
+        try:
+            # Overwrite file only after successful serialization
+            self._settings.truncate(0)
+            self._settings.seek(0)
+            if isinstance(data_str, (bytes, bytearray)):
+                data_str = data_str.decode()
+            self._settings.write(data_str)
+            self._settings.flush()
+            try:
+                os.fsync(self._settings.fileno())
+            except Exception:
+                logging.debug("fsync not available for settings file")
+        except Exception:
+            logging.exception("Failed to write persistent data to settings file")
 
     def run(self):
         # Create the root
