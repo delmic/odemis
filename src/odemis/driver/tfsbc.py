@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+from typing import List, Tuple
 
 import numpy
 import serial.tools.list_ports
@@ -175,7 +176,7 @@ class BeamShiftController(model.HwComponent):
             added to the beamshift metadata.
         """
         # .hwVersion, .swVersion not available
-        model.HwComponent.__init__(self, name, role, **kwargs)
+        model.HwComponent.__init__(self, name, role, dependencies=dependencies, **kwargs)
 
         # Find port by RS485 adapter serial number
         self._portpattern = port
@@ -191,7 +192,18 @@ class BeamShiftController(model.HwComponent):
                                            setter=self._setShift)
 
         if dependencies and "scanner" in dependencies.keys():
-            self.updateMetadata({model.MD_CALIB: dependencies["scanner"].beamShiftTransformationMatrix.value})
+            # Update MD_CALIB with new matrix, new values means the way the beam shift moves has been recalibrated.
+            dependencies["scanner"].beamShiftTransformationMatrix.subscribe(
+                self._onBeamShiftTransformationMatrixChange, init=True)
+
+    def _onBeamShiftTransformationMatrixChange(self, value : List[Tuple[float, float]]):
+        """
+         :param value:
+            A list of 4 tuples containing 2 values (floats) of each of the 4 dc coils, in the order:
+            [x lower, x upper, y lower, y upper].
+            These 4 items describe 4x2 transformation matrix for a required beam shift using DC coils.
+        """
+        self.updateMetadata({model.MD_CALIB: value})
 
     def _findDevice(self, port=None, serialnum=None):
         """
