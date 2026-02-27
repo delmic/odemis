@@ -48,6 +48,8 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
 
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 
+USER_MILLING_TASKS_PATH = os.path.expanduser("~/.config/odemis/milling_tasks.yaml")
+
 
 # define the target types
 class TargetType(Enum):
@@ -166,7 +168,18 @@ class CryoFeature(object):
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
 
         if milling_tasks is None:
-            milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+            # Find the default milling tasks, starting by looking into the config directory, and then
+            # the fallback file in the package.
+            try:
+                milling_tasks = load_milling_tasks(USER_MILLING_TASKS_PATH)
+            except Exception as e:
+                if not isinstance(e, FileNotFoundError):
+                    logging.warning(f"Error loading milling tasks from user path: {e}")
+                try:
+                    milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+                except Exception as e:
+                    logging.warning(f"Error loading milling tasks from both user and default paths: {e}")
+                    milling_tasks = {}
         self.milling_tasks: Dict[str, MillingTaskSettings] = milling_tasks
 
         self.status = model.StringVA(FEATURE_ACTIVE)
