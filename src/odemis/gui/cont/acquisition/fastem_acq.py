@@ -1425,6 +1425,7 @@ class FastEMMultiBeamAcquiController(object):
                     acq_dwell_time=self.main_tab_data.project_settings_data.value[
                         project_name
                     ][DWELL_TIME_MULTI_BEAM],
+                    focus_mapping=True,
                 )
                 # If this is the last ROA in the current project, set the dwell time for the next project
                 # on completion of current project's future

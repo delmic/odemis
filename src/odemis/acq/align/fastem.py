@@ -254,9 +254,13 @@ class CalibrationTask(object):
             # reset beamshift
             self._beamshift.shift.value = (0, 0)
 
-            if self.stage_pos:
+            if self.stage_pos and len(self.stage_pos) > 2:
+                logging.info(f"moving to 'x': {self.stage_pos[0][0]}, 'y': {self.stage_pos[0][1]}")
                 # move to region of calibration (ROC) position (always the first in the list)
                 self._stage.moveAbsSync({'x': self.stage_pos[0][0], 'y': self.stage_pos[0][1]})
+            elif self.stage_pos:
+                logging.info(f"moving to 'x': {self.stage_pos[0]}, 'y': {self.stage_pos[1]}")
+                self._stage.moveAbsSync({'x': self.stage_pos[0], 'y': self.stage_pos[1]})
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
