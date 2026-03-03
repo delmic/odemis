@@ -162,8 +162,6 @@ class BackendContainer(model.Container):
             # Overwrite file only after successful serialization
             self._settings.truncate(0)
             self._settings.seek(0)
-            if isinstance(data_str, (bytes, bytearray)):
-                data_str = data_str.decode()
             self._settings.write(data_str)
             self._settings.flush()
             try:
