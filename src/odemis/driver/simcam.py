@@ -34,9 +34,11 @@ from scipy import ndimage
 from odemis import dataio, model, util
 from odemis.model import oneway
 from odemis.util.synthetic import ParabolicMirrorRayTracer
+from odemis.util.synthetic import simulate_peak
 
 ERROR_STATE_FILE = "simcam-hw.error"
-
+GOFFSET_TO_PIXEL = 0.25  # Conversion factor for grating offset to image pixels.
+PEAK_WIDTH = 2.5  # Width of the simulated spectrograph peak in pixels (before binning).
 
 class Camera(model.DigitalCamera):
     '''
@@ -178,6 +180,22 @@ class Camera(model.DigitalCamera):
             logging.info("Will not simulate ray traced images")
             self._img_simulator = None
             self._mirror = None
+
+        try:
+            spectrograph = dependencies["spectrograph"]
+            if not (
+                    isinstance(spectrograph, model.ComponentBase)
+                    and hasattr(spectrograph, "axes")
+                    and isinstance(spectrograph.axes, dict)
+                    and "goffset" in spectrograph.axes):
+                raise ValueError("spectrograph %s must have a 'goffset' attribute" % spectrograph)
+
+            self._spectrograph = spectrograph
+            logging.debug("Will simulate spectral peaks using spectrograph %s", spectrograph.name)
+
+        except (TypeError, KeyError):
+            logging.info("Will not simulate spectrograph peaks")
+            self._spectrograph = None
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
@@ -374,6 +392,11 @@ class Camera(model.DigitalCamera):
         center = self._img_res[0] / 2, self._img_res[1] / 2
         pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
 
+        # Extra translation to simulate stage movement
+        pos = self._metadata.get(model.MD_POS, (0, 0))
+        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
+        stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
+
         if self._mirror:
             eff_pixel_size = [p * b for p, b in zip(pixel_size, binning)]
             self._img_simulator.resolution.value = res
@@ -382,11 +405,6 @@ class Camera(model.DigitalCamera):
             self._img = model.DataArray(sim_img, self._img.metadata)
             sim_img = self._img.copy()
         else:
-            # Extra translation to simulate stage movement
-            pos = self._metadata.get(model.MD_POS, (0, 0))
-            pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
-            stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
-
             # First and last index (eg, 0 -> 255)
             ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
                     center[1] + trans[1] + stage_shift[1] - (res[1] / 2) * binning[1],
@@ -412,6 +430,31 @@ class Camera(model.DigitalCamera):
             coord = ([int(round(ltrb[0] + i * binning[0])) for i in range(res[0])],
                      [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
             sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
+
+        # spectrograph peak simulation
+        if self._spectrograph:
+            current_offset = self._spectrograph.position.value["goffset"]
+
+            ccd_center_x = self._img_res[0]/2.0  # find the x-coordinate of the center of the ccd
+            x0_px = ccd_center_x + current_offset * GOFFSET_TO_PIXEL
+            roi_left = center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0]
+
+            bin_x = binning[0]  # binning factor along x-axis
+            peak_center_binned = (x0_px - roi_left) / bin_x  # express the peak position in the ROI's coordinate system
+
+            logging.info("DEBUG: x0_px=%s, ltrb0=%s, result=%s",
+                         x0_px, roi_left, peak_center_binned
+                         )
+
+            width_binned = PEAK_WIDTH / bin_x
+
+            peak = simulate_peak(amplitude=20000, x0=peak_center_binned, width=width_binned,
+                                shape=sim_img.shape, dtype=sim_img.dtype)
+
+            # set all values in sim_img to the minimal sim_img value
+            min_val = sim_img.min()
+            sim_img[...] = min_val
+            sim_img += peak
 
         # Add some noise
         mx = self._img.max()

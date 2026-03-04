@@ -23,7 +23,7 @@ import unittest
 
 import numpy
 
-from odemis.util.synthetic import ParabolicMirrorRayTracer
+from odemis.util.synthetic import ParabolicMirrorRayTracer, simulate_peak
 
 
 class TestParabolicMirrorRayTracer(unittest.TestCase):
@@ -125,6 +125,84 @@ class TestParabolicMirrorRayTracer(unittest.TestCase):
         with self.assertRaises(ValueError):
             ParabolicMirrorRayTracer(good_pos=bad_pos_missing_all)
 
+class TestPeakSimulation(unittest.TestCase):
+
+    def test_simulate_peak_1d(self):
+        """
+        Verify simulate_peak generates a correct 1D Gaussian peak.
+        """
+
+        amplitude = 1000
+        x0 = 50
+        width = 5
+        shape = 100
+
+        peak = simulate_peak(amplitude, x0, width, shape)
+
+        self.assertEqual(peak.shape, (shape,))
+        self.assertEqual(peak.dtype, numpy.uint16)
+
+        # peak maximum should occur near x0
+        peak_idx = numpy.argmax(peak)
+        self.assertAlmostEqual(peak_idx, x0, delta=1)
+
+        # peak value should be close to amplitude (clipped if necessary)
+        self.assertAlmostEqual(peak[peak_idx], amplitude, delta=5)
+
+    def test_simulate_peak_2d(self):
+        """
+        Verify simulate_peak correctly expands the 1D peak to 2D.
+        """
+
+        amplitude = 500
+        x0 = 40
+        width = 4
+        shape = (20, 100)
+
+        peak = simulate_peak(amplitude, x0, width, shape)
+
+        self.assertEqual(peak.shape, shape)
+
+        # every row should be identical
+        for row in peak:
+            self.assertTrue(numpy.array_equal(row, peak[0]))
+
+        # verify peak location
+        peak_idx = numpy.argmax(peak[0])
+        self.assertAlmostEqual(peak_idx, x0, delta=1)
+
+    def test_simulate_peak_dtype_clipping(self):
+        """
+        Verify values are clipped to dtype limits.
+        """
+
+        amplitude = 100000  # larger than uint16 max
+        x0 = 30
+        width = 3
+        shape = 80
+
+        peak = simulate_peak(amplitude, x0, width, shape)
+
+        dtype_max = numpy.iinfo(numpy.uint16).max
+
+        self.assertEqual(peak.max(), dtype_max)
+
+    def test_simulate_peak_dtype(self):
+        """
+        Verify simulate_peak respects the dtype argument.
+        """
+
+        amplitude = 200
+        x0 = 25
+        width = 3
+        shape = 60
+
+        peak = simulate_peak(amplitude, x0, width, shape, dtype=numpy.uint8)
+
+        self.assertEqual(peak.dtype, numpy.uint8)
+
+        dtype_max = numpy.iinfo(numpy.uint8).max
+        self.assertLessEqual(peak.max(), dtype_max)
 
 if __name__ == "__main__":
     unittest.main()
