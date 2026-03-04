@@ -13,11 +13,10 @@ from concurrent.futures._base import CancelledError
 
 from odemis import model
 from odemis.util import testing, timeout
-from odemis.acq.align.goffset import (
-    find_peak_position,
+
+from odemis.acq.align.goffset import (find_peak_position,
     estimate_goffset_scale,
-    SparcAutoGratingOffset,
-)
+    sparc_auto_grating_offset)
 
 import odemis
 
