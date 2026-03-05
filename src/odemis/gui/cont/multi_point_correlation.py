@@ -190,9 +190,7 @@ class CorrelationPointsController:
             self.txt_refinez_active.SetLabel("Super Z information in use")
             self.refinez_active = False
 
-
-        self.delete_btn = self._panel.btn_delete_row
-        self.delete_btn.Bind(wx.EVT_BUTTON, self._on_delete_row)
+        self._panel.btn_delete_row.Bind(wx.EVT_BUTTON, self._on_delete_row)
 
         # Bind the event for cell selection
         self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self._on_cell_selected)
@@ -528,32 +526,25 @@ class CorrelationPointsController:
         Deletes the currently selected row and clear the current target VA. Updates the correlation target based on the
         latest changes.
         """
-        if not self._tab_data_model.main.currentTarget.value:
+        target = self._tab_data_model.main.currentTarget.value
+        if not target:
             self.grid.ClearSelection()
             return
 
-        selected_rows = self.grid.GetSelectedRows()
-        # The grid contains only FIB and FM fiducials and POIs.
-        # So if the current target is of these types, delete from the grid.
-        # Otherwise, it is a surface fiducial which is not present in the grid.
-        # Check the type of the current target and delete accordingly.
-        if selected_rows:
-            for row in selected_rows:
-                self.grid.DeleteRows(pos=row, numRows=1, updateLabels=True)
-
-                for target in self._tab_data_model.main.targets.value:
-                    if target.name.value == self._tab_data_model.main.currentTarget.value.name.value:
-                        logging.debug(f"Deleting target: {target.name.value}")
-                        self._tab_data_model.main.targets.value.remove(target)
-                        self.z_targeting_btn.Enable(False)
-                        self._tab_data_model.main.currentTarget.value = None
-                        self.grid.ClearSelection()
-                        break
-
-        elif TargetType.SurfaceFiducial == self._tab_data_model.main.currentTarget.value.type.value:
-            for target in self._tab_data_model.main.targets.value:
-                if TargetType.SurfaceFiducial == target.type.value:
-                    logging.debug("Deleting Surface Fiducial")
+        # A surface fiducial is not present in the grid, so special case to just remove it from the targets
+        if target.type.value == TargetType.SurfaceFiducial:
+            logging.debug("Deleting Surface Fiducial")
+            try:
+                self._tab_data_model.main.targets.value.remove(target)
+            except ValueError:
+                logging.warning("Target surface fiducial %s not found in the targets list.", target.name.value)
+            self._tab_data_model.main.currentTarget.value = None
+        else:
+            # Find the row which contains the current target, and delete both the row and the target itself
+            for row in range(self.grid.GetNumberRows()):
+                if self._selected_target_in_grid(target, row):
+                    logging.debug(f"Deleting target: {target.name.value}")
+                    # The VA subcribers will take care of updating the grid
                     self._tab_data_model.main.targets.value.remove(target)
                     self._tab_data_model.main.currentTarget.value = None
                     break
@@ -573,8 +564,15 @@ class CorrelationPointsController:
         for vp in self._viewports:
             vp.canvas.update_drawing()
 
-        # highlight the selected row
-        self.grid.SelectRow(event.GetRow())
+        # Highlight the selected row
+        # Note: as of wxPython 4.1, when AppendRow() is called on an empty grid, this event is
+        # triggered. This causes an error, as it's not possible to select a row in such case.
+        # We now temporarily unbind from this event when recreating the grid to avoid this, but also
+        # handle it explicitly just in case.
+        try:
+            self.grid.SelectRow(row)
+        except Exception as e:
+            logging.warning("Could not select row %s: %s", row, e)
         event.Skip()
 
     def _selected_target_in_grid(self, target: Target, row: int) -> bool:
@@ -697,7 +695,7 @@ class CorrelationPointsController:
         if not target:
             self.grid.ClearSelection()
             self.z_targeting_btn.Enable(False)
-            return None
+            return
 
         mip_enabled = any([stream.max_projection.value for stream in self.correlation_target.fm_streams])
 
@@ -764,15 +762,18 @@ class CorrelationPointsController:
         Update the grid with the new targets and update the correlation target based on the latest changes.
         :param targets: the updated list of targets
         """
-        # Clear the grid before populating it with new data
-        self.grid.ClearGrid()
-        # delete the empty rows
-        if self.grid.GetNumberRows() > 0:
-            self.grid.DeleteRows(0, self.grid.GetNumberRows())
-        for target in targets:
-            if target.type.value not in self.grid_targets:
-                self.grid.ClearSelection()
-            else:
+        # Disconnect as it gets called with odd values when AppendRows() is run, and it would
+        # change the current target.
+        self.grid.Unbind(wx.grid.EVT_GRID_SELECT_CELL, handler=self._on_cell_selected)
+        try:
+            # Clear the grid before populating it with new data
+            if self.grid.GetNumberRows() > 0:
+                self.grid.DeleteRows(0, self.grid.GetNumberRows())
+
+            # Repopulate the grid with the updated targets
+            for target in targets:
+                if target.type.value not in self.grid_targets:
+                    continue
                 current_row_count = self.grid.GetNumberRows()
                 self.grid.AppendRows(1)
                 # Get the pixel coordinates of the target and first set the z value in the grid
@@ -792,7 +793,10 @@ class CorrelationPointsController:
                 self.grid.SetCellValue(current_row_count, GridColumns.Index.value, str(target.index.value))
                 self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
 
-        self._reorder_grid()
+            self._reorder_grid()
+        finally:
+            self.grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self._on_cell_selected)
+
         self._panel.Layout()
         self.correlation_target = update_feature_correlation_target(self.correlation_target, self._tab_data_model)
 
