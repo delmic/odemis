@@ -820,9 +820,8 @@ class TUCAM_ELEMENT(Structure):
         ("DisplayPrecision", c_int64)
     ]
 
-BUFFER_CALLBACK  = eval('CFUNCTYPE')(c_void_p)
-CONTEXT_CALLBACK = eval('CFUNCTYPE')(c_void_p)
-
+BUFFER_CALLBACK  = CFUNCTYPE(c_void_p)
+CONTEXT_CALLBACK = CFUNCTYPE(c_void_p)
 
 class TUCamDLL:
     def __init__(self):
@@ -1203,6 +1202,12 @@ class TUCamDLL:
 
         self.TUCAMOPEN = TUCAM_OPEN(0, 0)
 
+        # C wrapper for the buffer callback function
+        self._callback_func = BUFFER_CALLBACK(self._data_callback)
+        self._callback_none = BUFFER_CALLBACK()  # NULL pointer, to disable the callback
+        self._on_data: Optional[callable] = None
+        self.m_raw_header = TUCAM_RAWIMG_HEADER()  # used to get raw image info in callback
+
         # Path where the library will store the camera current settings
         config_path = tempfile.gettempdir()  # Always writable, and always forgotten next run => perfect!
         init_args = TUCAM_INIT(0, config_path.encode('utf-8'))
@@ -1505,8 +1510,7 @@ class TUCamDLL:
 
     def start_capture(self):
         """
-        This call starts a capture on an open camera by calling the necessary SDK fucntions.
-        Do not use directly, it is part of the cpature thread.
+        This call starts a capture on an open camera by calling the necessary SDK functions.
 
         Raises
         ------
@@ -1519,7 +1523,9 @@ class TUCamDLL:
         self.m_capmode = TUCAM_CAPTURE_MODES
 
         self.m_frame.pBuffer = 0
-        self.m_frame.ucFormatGet = self.m_frformat.TUFRM_FMT_USUAl.value
+        # Note: it seems that FMT_RAW is needed (instead of TUFRM_FMT_USUAl) because of the callback.
+        # At least, that's how the SDK example code does it.
+        self.m_frame.ucFormatGet = self.m_frformat.TUFRM_FMT_RAW.value
         self.m_frame.uiRsdSize = 1
 
         self.TUCAM_Buf_Alloc(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame))
@@ -1527,20 +1533,18 @@ class TUCamDLL:
 
     def capture_frame(self, timeout: float) -> numpy.ndarray:
         """
-        This call captures one frame by calling the necessary SDK functions.
-        Do not use directly, it is part of the capture thread.
+        Wait for the next frame to be available and receives it.
+        To stop earlier that the expected frame exposure time, use end_capture() from another thread,
+        (which uses TUCAM_Buf_AbortWait())
 
         :param: timeout: maximum time to wait for a frame, in seconds.
+        Note: starting from the SDK released in 2025, timeouts that are shorter than the exposure
+        time are ignored, and the function waits always at least until the frame should be ready,
+        or capture has been aborted (from a separate thread).
         :return: numpy array of the captured frame.
 
-        Raises
-        ------
-        TUCamError
-            If the actual SDK function call does not return TUCAMRET_SUCCESS.
+        :raises: TUCamError: if the timeout passed, or another error with the camera has happened.
         """
-        # FIXME: timeout doesn't seem to work with SDK of 2025-08-18, it always waits until the image is received
-        # In new SDK (from 2025), WaitForFrame() ignores timeouts that are shorter than the exposure
-        # time. => Need to use TUCAM_Buf_AbortWait to stop waiting.
         self.TUCAM_Buf_WaitForFrame(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_frame), int(timeout * 1000))
 
         # Copy the data into a NumPy array of the same length and dtype
@@ -1572,6 +1576,48 @@ class TUCamDLL:
         self.TUCAM_Buf_AbortWait(self.TUCAMOPEN.hIdxTUCam)
         self.TUCAM_Cap_Stop(self.TUCAMOPEN.hIdxTUCam)
         self.TUCAM_Buf_Release(self.TUCAMOPEN.hIdxTUCam)
+
+    def _data_callback(self) -> None:
+        """
+        Callback function called by the SDK when a new frame is available.
+        Do not use directly, it is part of the capture thread.
+        Note: the documentation says it should accept as a parameter a c_void_p user context (ie,
+        arbitrary pointer), but the SDK example code does not use it, so we ignore it here as well.
+        """
+        try:
+            self.TUCAM_Buf_GetData(self.TUCAMOPEN.hIdxTUCam, pointer(self.m_raw_header))
+        except TUCamError:
+            logging.exception("Error in data callback")
+            return
+
+        try:
+            pointer_data = c_void_p(self.m_raw_header.pImgData)
+            # Copy the data into a NumPy array of the same length and dtype
+            p = cast(pointer_data, POINTER(c_uint16))
+            np_buffer = numpy.ctypeslib.as_array(p, (self.m_raw_header.usHeight, self.m_raw_header.usWidth))
+            np_array = np_buffer.copy()
+            callback = self._on_data
+            if callback is not None:
+                try:
+                    callback(np_array)
+                except Exception:
+                    logging.exception("Error in user data callback")
+        except Exception:
+            logging.exception("Error processing data in callback")
+
+    def register_data_callback(self, on_data: Optional[callable]) -> None:
+        """
+        Registers the data callback function
+        :param on_data: function to call when a new frame is available. The function must accept one parameter, a numpy array
+        with the image data. If None, the callback is unregistered.
+        """
+        self._on_data = on_data
+
+        callback_c = self._callback_func if on_data is not None else self._callback_none
+        self.TUCAM_Buf_DataCallBack(self.TUCAMOPEN.hIdxTUCam,
+                                    callback_c,
+                                    None  # No user context needed
+                                    )
 
     # functions to apply parameters to the actual hardware:
     def set_resolution(self, res_idx: int) -> None:
@@ -1770,6 +1816,13 @@ class FakeTUCamDLL:
         self._exposure_time = 1.0
         self._gain = 0
 
+        # Callback and threading for simulating asynchronous frame capture
+        self._on_data: Optional[callable] = None
+        self._capture_thread: Optional[threading.Thread] = None
+        self._capture_stopped = threading.Event()
+        self._capture_stopped.set()  # Initially stopped
+        self._capture_lock = threading.Lock()
+
     def TUCAM_Api_Uninit(self):
         pass
 
@@ -1783,18 +1836,46 @@ class FakeTUCamDLL:
     def close_camera(self):
         pass
 
-    def start_capture(self):
-        pass
+    def start_capture(self) -> None:
+        """
+        Start capturing frames. Frames will be sent to the registered callback.
+        """
+        with self._capture_lock:
+            if not self._capture_stopped.is_set():
+                logging.debug("Capture already running")
+                return
 
-    def end_capture(self):
-        pass
+            self._capture_stopped.clear()
 
-    def capture_frame(self, timeout: float) -> numpy.ndarray:
-        # Simulate the exposure time
-        # TODO: Simulate the timeout by sleeping the timeout time, and raising a TUCamError(TIMEOUT)
-        # on timeout if shorter than exposure time.
-        time.sleep(self._exposure_time)
+            # Start the capture thread if not already running
+            if self._capture_thread is None or not self._capture_thread.is_alive():
+                self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True, name="FakeTUCam capture")
+                self._capture_thread.start()
+                logging.debug("Started fake capture thread")
 
+    def end_capture(self) -> None:
+        """
+        Stop capturing frames.
+        """
+        with self._capture_lock:
+            if self._capture_stopped.is_set():
+                logging.debug("Capture not running")
+                return
+
+            self._capture_stopped.set()
+            logging.debug("Stopping fake capture")
+
+        # Wait for the thread to finish (with timeout)
+        if self._capture_thread is not None and self._capture_thread.is_alive():
+            self._capture_thread.join(timeout=5.0)
+            if self._capture_thread.is_alive():
+                logging.warning("Fake capture thread did not stop in time")
+
+    def _generate_frame(self) -> numpy.ndarray:
+        """
+        Generates a fake frame as a NumPy array.
+        :return: numpy array with the image data.
+        """
         # Create an empty NumPy array of the same length and dtype
         arr = numpy.empty((self._roi[3], self._roi[2]), dtype=numpy.uint16)
 
@@ -1805,6 +1886,51 @@ class FakeTUCamDLL:
         arr += numpy.random.randint(0, 200, arr.shape, dtype=arr.dtype)
 
         return arr
+
+    def capture_frame(self, timeout: float) -> numpy.ndarray:
+        # Note: timeout is ignored, as it only is used in case the hardware fails to deliver a frame
+        # in time, which never happens in this implementation.
+
+        # Simulate the exposure time
+        if self._capture_stopped.wait(self._exposure_time):
+            raise TUCamError(TUCAMRET_Enum.TUCAMRET_ABORT, "Aborted")
+
+        return self._generate_frame()
+
+    def _capture_loop(self) -> None:
+        """
+        Background thread that continuously generates frames and sends them to the callback.
+        Simulates the SDK's asynchronous frame capture behavior.
+        """
+        logging.debug("Fake capture loop started")
+        try:
+            while not self._capture_stopped.is_set():
+                # Simulate the exposure time
+                if self._capture_stopped.wait(self._exposure_time):
+                    return  # Exit if stopped during wait
+
+                # Generate a frame
+                arr = self._generate_frame()
+
+                # Call the callback if registered
+                callback = self._on_data
+                if callback is not None:
+                    try:
+                        callback(arr)
+                    except Exception:
+                        logging.exception("Error in data callback")
+        except Exception:
+            logging.exception("Unexpected error in fake capture loop")
+        finally:
+            logging.debug("Fake capture loop ended")
+
+    def register_data_callback(self, on_data: Optional[callable]) -> None:
+        """
+        Registers the data callback function.
+        :param on_data: function to call when a new frame is available. The function must accept one parameter, a numpy array
+        with the image data. If None, the callback is unregistered.
+        """
+        self._on_data = on_data
 
     # camera properties
     def get_max_resolution(self, res_idx: int) -> Tuple[Tuple[int, int], int]:
@@ -1898,6 +2024,7 @@ class AcqMessage(Enum):
     STOP = "E"  # Stop acquisition
     TERMINATE = "T"  # Terminate acquisition thread
     SETTINGS = "U"  # Update settings
+    FRAME = "F"  # One frame received
 
 
 class TerminationRequested(Exception):
@@ -2019,7 +2146,7 @@ class TUCam(model.DigitalCamera):
         self._set_resolution(self.resolution.value)
 
         mn, mx, _, self._exp_step = self._dll.get_exposure_time_range()
-        self.exposureTime = model.FloatContinuous(1.0, (mn, mx),
+        self.exposureTime = model.FloatContinuous(self._exposure_time, (mn, mx),
                                                   unit="s", setter=self._set_exposure_time)
         self._set_exposure_time(self.exposureTime.value)
 
@@ -2044,6 +2171,8 @@ class TUCam(model.DigitalCamera):
 
         self.data = DataFlow(self)
 
+        self._dll.register_data_callback(self._on_frame)
+        self._next_frame_metadata = {}  # metadata for the next frame, set by the acq thread
         # Start the acquisition thread immediately, as it also takes care of updating the
         # frameDuration whenever some of the settings change.
         self._ensure_acq_thread_is_running()
@@ -2068,6 +2197,7 @@ class TUCam(model.DigitalCamera):
                 self.temp_timer.join(5)
                 self.temp_timer = None
 
+            self._dll.register_data_callback(None)
             self._dll.close_camera()
             try:
                 self._dll.TUCAM_Api_Uninit()
@@ -2235,28 +2365,29 @@ class TUCam(model.DigitalCamera):
 
     def _update_settings(self) -> float:
         """
-          This call applies the parameters that have been set (targetTemperature, resolution, binning, roi)
+        This call applies the parameters that have been set (targetTemperature, resolution, binning, roi)
 
-          :return: actual exposure time set (in s)
-          :raises TUCamError: if some settings failed to be applied.
-          """
+        :return: actual exposure time set (in s)
+        :raises TUCamError: if some settings failed to be applied.
+        """
         logging.debug("Updating camera settings")
+        self._need_settings_update = False
 
         res_idx = self._resolution_idx
         if res_idx != self._prev_resolution_idx:
-            self._dll.set_resolution(self._resolution_idx)
-            _, binning = self._dll.get_max_resolution(self._resolution_idx)
+            self._dll.set_resolution(res_idx)
+            _, binning = self._dll.get_max_resolution(res_idx)
             self._metadata[model.MD_BINNING] = (binning, binning)
             self._prev_resolution_idx = res_idx
 
         roi, trans = self._roi, self._translation
         if (roi, trans) != self._prev_roi_trans:
-            self._dll.set_roi(self._roi, self._translation)
+            self._dll.set_roi(roi, trans)
             self._prev_roi_trans = (roi, trans)
 
-        exp_time = self._prev_exposure_time
-        if self._exposure_time != exp_time:
-            self._dll.set_exposure_time(self._exposure_time)
+        exp_time = self._exposure_time
+        if self._exposure_time != self._prev_exposure_time:
+            self._dll.set_exposure_time(exp_time)
             self._prev_exposure_time = exp_time
 
             exp = self._dll.get_exposure_time()
@@ -2282,48 +2413,26 @@ class TUCam(model.DigitalCamera):
 
         return metadata
 
-    def _acquire_frame(self, timeout: float) -> bool:
-        # Acquire 1 frame
-        start_t = time.time()
-        metadata = self._prepare_image_metadata()
+    def _on_frame(self, array: numpy.ndarray) -> None:
+        """
+        Called when a new frame is available from the camera.
+        Sends the data to the .data DataFlow
+        :param array: acquired image
+        """
+        metadata = self._next_frame_metadata
+        self._genmsg.put(AcqMessage.FRAME)
+        da = model.DataArray(array, metadata)
+        self.data.notify(self._transposeDAToUser(da))
 
-        logging.debug("Waiting for up to %g s", timeout)
-
-        tstart = time.time()
-        tend = tstart + timeout
-        # Wait until the frame has arrived
-        while True:
-            if self._acq_should_stop():
-                return True
-
-            try:
-                array = self._dll.capture_frame(timeout=0.1)  # Never wait too long
-                logging.debug("Received image of %s after %s s", array.shape,
-                              time.time() - start_t)
-
-                if self._acq_should_stop():
-                    return True
-
-                # An image!
-                da = model.DataArray(array, metadata)
-                self.data.notify(self._transposeDAToUser(da))
-                return False
-            except TUCamError as ex:
-                # Timeout is expected for any exposure time >= 0.1s
-                if ex.errno == TUCAMRET_Enum.TUCAMRET_TIMEOUT.value:
-                    if time.time() > tend:
-                        logging.warning("Timeout after %g s", time.time() - tstart)
-                        raise TimeoutError(f"Timeout after {time.time() - tstart} s")
-                    else:
-                        logging.debug("Waiting a little longer")
-                else:
-                    raise
+        self._next_frame_metadata = self._prepare_image_metadata()
+        dur = time.time() - metadata[model.MD_ACQ_DATE]
+        logging.debug("Got image of %s after %s s", array.shape, dur)
 
     def _acquire_images(self):
         try:
             logging.debug("Starting acquisition")
             exp = self._update_settings()
-            self._need_settings_update = False
+            self._next_frame_metadata = self._prepare_image_metadata()
             self._dll.start_capture()
 
             # Acquire until requested to stop
@@ -2333,24 +2442,21 @@ class TUCam(model.DigitalCamera):
                         self._dll.end_capture()
                     except Exception:
                         logging.debug("Failed to stop capture")
-                    # If multiple settings update requests in a row, flush them
-                    while True:
-                        if self._acq_should_stop():
-                            logging.debug("Acquisition cancelled")
-                            return
-                        else:
-                            break  # Flushed
 
                     exp = self._update_settings()
-                    self._need_settings_update = False
+                    self._next_frame_metadata = self._prepare_image_metadata()
                     self._dll.start_capture()
 
-                # Acquire one frame, with a timeout
-                timeout = exp * 2 + 5  # s, should be more than enough
-                should_stop = self._acquire_frame(timeout)
-                if should_stop:
-                    logging.debug("Acquisition cancelled")
-                    return
+                # From now on, every frame received is passed to ._on_frame(), which passes it to the DataFlow.
+                # Wait until stop or settings update
+                while True:
+                    # TODO: timeout if no frame received after a while (depending on exp)? But to do what in such case?!
+                    should_stop = self._acq_should_stop()  # blocks until frame received or stop requested
+                    if should_stop:
+                        logging.debug("Acquisition cancelled")
+                        return
+                    elif self._need_settings_update:
+                        break  # to update settings
         finally:
             try:
                 self._dll.end_capture()
@@ -2407,6 +2513,7 @@ class TUCam(model.DigitalCamera):
         it will be done after end of the current frame.
         This way the .frameDuration value is updated.
         """
+        self._need_settings_update = True
         self._genmsg.put(AcqMessage.SETTINGS)
 
     def _ensure_acq_thread_is_running(self):
@@ -2432,10 +2539,10 @@ class TUCam(model.DigitalCamera):
             # No message
             return None
 
-        if not isinstance(msg, AcqMessage):
+        if isinstance(msg, AcqMessage):
             logging.debug("Acq received message %s", msg)
         else:
-            logging.warning("Acq received unexpected message %s", msg)
+            logging.warning("Acq received unexpected message %s, %s", msg, type(msg))
         return msg
 
     def _acq_wait_start(self) -> None:
@@ -2450,33 +2557,33 @@ class TUCam(model.DigitalCamera):
             if msg == AcqMessage.TERMINATE:
                 raise TerminationRequested()
             elif msg == AcqMessage.SETTINGS:
-                self._update_settings()
-                self._need_settings_update = False
+                if self._need_settings_update:
+                    self._update_settings()
                 continue  # wait for more message
             elif msg == AcqMessage.START:
                 return
 
-            # Either a (duplicated) Stop or a trigger => we don't care
+            # Either a (duplicated) Stop or frame or a trigger => we don't care
             logging.debug("Skipped message %s as acquisition is stopped", msg)
 
     def _acq_should_stop(self) -> bool:
         """
         Indicate whether the acquisition should stop now or can keep running.
-        Settings update requests are discarded, but flagged on _need_settings_update.
-        Non blocking.
+        Settings update requests are discarded.
         Note: it expects that the acquisition is running.
         :return: False if can continue, True if should stop
         :raise: TerminationRequested if a terminate message was received
         """
         while True:
-            msg = self._get_acq_msg(block=False)
+            msg = self._get_acq_msg(block=True)
 
-            if msg == None:
+            if msg == AcqMessage.FRAME:
                 return False
             elif msg == AcqMessage.STOP:
                 return True
             elif msg == AcqMessage.SETTINGS:
-                self._need_settings_update = True
+                # No need to stop acquisition just due to settings update, it will be done after the
+                # current frame
                 logging.debug("Skipped settings update request while receiving data")
             elif msg == AcqMessage.TERMINATE:
                 raise TerminationRequested()
