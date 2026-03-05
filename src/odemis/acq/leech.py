@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 28 Sep 2017
 
 @author: Éric Piel
@@ -13,7 +13,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 # This contains LeechAcquirers. The basic idea of these objects is that they
 # can do some small extra acquisition in parallel to a standard acquisition
@@ -22,11 +22,13 @@ You should have received a copy of the GNU General Public License along with Ode
 
 import logging
 import math
+import time
+
 import numpy
+
 from odemis import model
 from odemis.acq import drift
 from odemis.acq.stream import UNDEFINED_ROI
-import time
 
 
 # Helper function for code using the leeches
