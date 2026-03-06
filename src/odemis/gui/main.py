@@ -182,97 +182,146 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetMinSize((1000, 550))
             self.main_frame.Maximize()  # must be done before Show()
 
-            # List of all possible tabs used in Odemis' main GUI
+            # List of all possible tabs used in Odemis' main GUI, and only load the tabs depending on
+            # the current microscope role.
+            from odemis.gui.cont.tabs.analysis_tab import AnalysisTab
+
             tab_defs = [
-                {
-                    # Unique name of the tab
-                    "name": "secom_live",
-                    # Tab controller for this tab
-                    "controller": tabs.SecomStreamsTab,
-                    # Tab button for this tab
-                    "button": self.main_frame.btn_tab_secom_streams,
-                    # Constructor of the tab panel
-                    "panel": main_xrc.xrcpnl_tab_secom_streams
-                },
-                {
-                    "name": "cryosecom-localization",
-                    "controller": tabs.LocalizationTab,
-                    "button": self.main_frame.btn_tab_localization,
-                    "panel": main_xrc.xrcpnl_tab_localization
-                },
-                {
-                    "name": "meteor-correlation",
-                    "controller": tabs.CorrelationTab,
-                    "button": self.main_frame.btn_tab_correlation,
-                    "panel": main_xrc.xrcpnl_tab_correlation
-                },
-                {
-                    "name": "meteor-fibsem",
-                    "controller": tabs.FibsemTab,
-                    "button": self.main_frame.btn_tab_fibsem,
-                    "panel": main_xrc.xrcpnl_tab_fibsem
-                },
-                {
-                    "name": "secom_align",
-                    "controller": tabs.SecomAlignTab,
-                    "button": self.main_frame.btn_tab_align,
-                    "panel": main_xrc.xrcpnl_tab_secom_align
-                },
-                {
-                    "name"      : "enzel_align",
-                    "controller": tabs.EnzelAlignTab,
-                    "button"    : self.main_frame.btn_tab_align_enzel,
-                    "panel"     : main_xrc.xrcpnl_tab_enzel_align
-                },
-                {
-                    "name": "mimas_align",
-                    "controller": tabs.MimasAlignTab,
-                    "button": self.main_frame.btn_tab_align_enzel,  # enzel alignment button is fine
-                    "panel": main_xrc.xrcpnl_tab_mimas_align
-                },
-                {
-                    "name": "sparc_align",
-                    "controller": tabs.SparcAlignTab,
-                    "button": self.main_frame.btn_tab_align,
-                    "panel": main_xrc.xrcpnl_tab_sparc_align
-                },
-                {
-                    "name": "sparc2_align",
-                    "controller": tabs.Sparc2AlignTab,
-                    "button": self.main_frame.btn_tab_align,
-                    "panel": main_xrc.xrcpnl_tab_sparc2_align
-                },
-                {
-                    "name": "sparc_acqui",
-                    "controller": tabs.SparcAcquisitionTab,
-                    "button": self.main_frame.btn_tab_sparc_acqui,
-                    "panel": main_xrc.xrcpnl_tab_sparc_acqui
-                },
-                {
-                    "name": "fastem_main",
-                    "controller": tabs.FastEMMainTab,
-                    "button": self.main_frame.btn_tab_fastem_main,
-                    "panel": main_xrc.xrcpnl_tab_fastem_main
-                },
-                {
-                    "name": "sparc_chamber",
-                    "controller": tabs.ChamberTab,
-                    "button": self.main_frame.btn_tab_sparc_chamber,
-                    "panel": main_xrc.xrcpnl_tab_sparc_chamber
-                },
-                {
-                    "name": "cryosecom_chamber",
-                    "controller": tabs.CryoChamberTab,
-                    "button": self.main_frame.btn_tab_cryosecom_chamber,
-                    "panel": main_xrc.xrcpnl_tab_cryosecom_chamber
-                },
+                # Analysis tab is common to almost all roles, so always load it.
+                # (the mbsem actually doesn't use it, but it's simpler to load it all the time)
                 {
                     "name": "analysis",
-                    "controller": tabs.AnalysisTab,
+                    "controller": AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
                     "panel": main_xrc.xrcpnl_tab_inspection
-                },
+                }
             ]
+            if self.main_data.role in ("secom", "delphi", "sem", "optical"):
+                from odemis.gui.cont.tabs.secom_streams_tab import SecomStreamsTab
+                from odemis.gui.cont.tabs.secom_align_tab import SecomAlignTab
+
+                tab_defs.extend([
+                    {
+                        # Unique name of the tab
+                        "name": "secom_live",
+                        # Tab controller for this tab
+                        "controller": SecomStreamsTab,
+                        # Tab button for this tab
+                        "button": self.main_frame.btn_tab_secom_streams,
+                        # Constructor of the tab panel
+                        "panel": main_xrc.xrcpnl_tab_secom_streams
+                    },
+                    {
+                        "name": "secom_align",
+                        "controller": SecomAlignTab,
+                        "button": self.main_frame.btn_tab_align,
+                        "panel": main_xrc.xrcpnl_tab_secom_align
+                    },
+                ])
+            elif self.main_data.role in ("sparc-simplex", "sparc", "sparc2"):
+                from odemis.gui.cont.tabs.sparc_acquisition_tab import SparcAcquisitionTab
+                from odemis.gui.cont.tabs.sparc_align_tab import SparcAlignTab
+                from odemis.gui.cont.tabs.sparc2_align_tab import Sparc2AlignTab
+                from odemis.gui.cont.tabs.sparc2_chamber_tab import ChamberTab
+
+                tab_defs.extend([
+                    {
+                        "name": "sparc_acqui",
+                        "controller": SparcAcquisitionTab,
+                        "button": self.main_frame.btn_tab_sparc_acqui,
+                        "panel": main_xrc.xrcpnl_tab_sparc_acqui
+                    },
+                    {
+                        "name": "sparc_chamber",
+                        "controller": ChamberTab,
+                        "button": self.main_frame.btn_tab_sparc_chamber,
+                        "panel": main_xrc.xrcpnl_tab_sparc_chamber
+                    },
+                    {
+                        "name": "sparc_align",
+                        "controller": SparcAlignTab,
+                        "button": self.main_frame.btn_tab_align,
+                        "panel": main_xrc.xrcpnl_tab_sparc_align
+                    },
+                    {
+                        "name": "sparc2_align",
+                        "controller": Sparc2AlignTab,
+                        "button": self.main_frame.btn_tab_align,
+                        "panel": main_xrc.xrcpnl_tab_sparc2_align
+                    },
+                ])
+
+            elif self.main_data.role in ("meteor",):  # mimas and enzel are deprecated
+                from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
+                from odemis.gui.cont.tabs.cryo_chamber_tab import CryoChamberTab
+                from odemis.gui.cont.tabs.localization_tab import LocalizationTab
+                from odemis.gui.cont.tabs.fibsem_tab import FibsemTab
+
+                tab_defs.extend([
+                    {
+                        "name": "meteor-correlation",
+                        "controller": CorrelationTab,
+                        "button": self.main_frame.btn_tab_correlation,
+                        "panel": main_xrc.xrcpnl_tab_correlation
+                    },
+                    {
+                        "name": "cryosecom_chamber",
+                        "controller": CryoChamberTab,
+                        "button": self.main_frame.btn_tab_cryosecom_chamber,
+                        "panel": main_xrc.xrcpnl_tab_cryosecom_chamber
+                    },
+                    {
+                        "name": "cryosecom-localization",
+                        "controller": LocalizationTab,
+                        "button": self.main_frame.btn_tab_localization,
+                        "panel": main_xrc.xrcpnl_tab_localization
+                    },
+                    {
+                        "name": "meteor-fibsem",
+                        "controller": FibsemTab,
+                        "button": self.main_frame.btn_tab_fibsem,
+                        "panel": main_xrc.xrcpnl_tab_fibsem
+                    },
+                    # Currently unused (enzel and mimas are deprecated)
+                    # {
+                    #     "name": "enzel_align",
+                    #     "controller": EnzelAlignTab,
+                    #     "button": self.main_frame.btn_tab_align_enzel,
+                    #     "panel": main_xrc.xrcpnl_tab_enzel_align
+                    # },
+                    # {
+                    #     "name": "mimas_align",
+                    #     "controller": MimasAlignTab,
+                    #     "button": self.main_frame.btn_tab_align_enzel,  # enzel alignment button is fine
+                    #     "panel": main_xrc.xrcpnl_tab_mimas_align
+                    # },
+                ])
+
+            elif self.main_data.role == "mbsem":
+                from odemis.gui.cont.tabs.fastem_main_tab import FastEMMainTab
+
+                tab_defs.extend([
+                    {
+                        "name": "fastem_main",
+                        "controller": FastEMMainTab,
+                        "button": self.main_frame.btn_tab_fastem_main,
+                        "panel": main_xrc.xrcpnl_tab_fastem_main
+                    },
+                ])
+            elif self.main_data.role is None:  # viewer
+                # Correlation tab is also an option on the viewer.
+                from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
+
+                tab_defs.extend([
+                    {
+                        "name": "meteor-correlation",
+                        "controller": CorrelationTab,
+                        "button": self.main_frame.btn_tab_correlation,
+                        "panel": main_xrc.xrcpnl_tab_correlation
+                    },
+                ])
+            else:
+                logging.warning("Unknown microscope role '%s', no specific tab will be loaded", self.main_data.role)
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
