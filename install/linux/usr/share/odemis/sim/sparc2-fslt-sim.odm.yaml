@@ -273,33 +273,36 @@
 }
 
 # Controller for moving the 'stagebox' stage
-# DIP must be configured with address 4 (= 0010000)
 "Mirror Actuators": {
     class: tmcm.TMCLController,
     role: "mirror",
     init: {
-#        port: "/dev/ttyTMCM*",
-#        address: 4,
         port: "/dev/fake6",
-        address: null,        
-        # For the TMCM-6110:
+        address: null,
         axes: ["l", "s"],
-#        ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
-        # TODO: limit the range to the pole-piece
         rng: [[0, 250.e-3], [-2.0e-3, 2.0e-3]],  # m, min/max
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        # TODO: to be calibrated
         FAV_POS_ACTIVE: {"l": 0.049, "s": 0.0020},  # m, m
         #AXES_ORDER_REF: ["s", "l"],
     },
-#    persistent: {
-#        metadata: [FAV_POS_ACTIVE],
-#    },
+}
+
+# Internal component to convert between the referential of the mirror actuators
+# and the X/Y referential of the SEM. Used by the mirror alignment functions.
+"Mirror Actuators in XY referential": {
+    class: actuator.ConvertStage,
+    role: "mirror-xy",
+    dependencies: {"orig": "Mirror Actuators"},
+    init: {
+        axes: ["l", "s"], # mapped respectively to X, Y
+        rotation: -1.0471975511965976, # rad (= 60°)
+        # Note: if you want to use absolute moves, add a "translation" too
+    },
 }
 
 # Spectrograph on a separate table, kymera 328i
