@@ -167,6 +167,9 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 self._integrationTime = s.integrationTime
                 self._integrationCounts = s.integrationCounts
 
+        # Set the focuser as None since it is used in TiledAcquisitionTask
+        self._focuser = None
+
         # Information about the scanning, computed just before running an acquisition
         self._pxs = None  # (float, float): pixel size in the CCD data (so, independent of fuzzing)
         self._scanner_pxs = None  # (float, float): pixel size of the scanner (only different from the pixel size if fuzzing)
