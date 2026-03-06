@@ -128,6 +128,34 @@ def psf_gaussian(
     numpy.rint(UINT16_MAX * out, out=out)
     return out.astype(numpy.uint16)
 
+def simulate_peak(amplitude, x0, width, shape, image=None, dtype=numpy.uint16):
+    # Standardize shape to a tuple, so we can index it
+    if isinstance(shape, (int, numpy.integer)):
+        shape = (shape,)
+
+    # Determine resolution.y (height)
+    # If it's a 1D shape, resolution_y is 1
+    resolution_y = shape[0] if len(shape) > 1 else 1
+
+    # If an image is provided and it's a 2D request (y > 1)
+    if image is not None and resolution_y > 1:
+        return numpy.asanyarray(image).astype(dtype)
+
+    # Otherwise, generate the peak logic as usual
+    x = numpy.arange(shape[-1])
+    intensity = amplitude*(numpy.exp(-0.5*((x-x0)/width)**2))
+
+    # Clip based on the actual dtype provided
+    info = numpy.iinfo(dtype)
+    intensity_clipped = numpy.clip(intensity, info.min, info.max)
+    peak_1d = intensity_clipped.astype(dtype)
+
+    if len(shape) == 1:
+        return peak_1d
+    else:
+        # Duplicated along the y-dimension (shape[0])
+        return numpy.tile(peak_1d, (shape[0], 1))
+
 
 class ParabolicMirrorRayTracer:
     """

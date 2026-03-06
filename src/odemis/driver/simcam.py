@@ -34,6 +34,7 @@ from scipy import ndimage
 from odemis import dataio, model, util
 from odemis.model import oneway
 from odemis.util.synthetic import ParabolicMirrorRayTracer
+from odemis.util.synthetic import simulate_peak
 
 ERROR_STATE_FILE = "simcam-hw.error"
 
@@ -178,6 +179,18 @@ class Camera(model.DigitalCamera):
             logging.info("Will not simulate ray traced images")
             self._img_simulator = None
             self._mirror = None
+
+        try:
+            spectrograph = dependencies["spectrograph"]
+            if not (hasattr(spectrograph, "axes") or not isinstance(spectrograph.axes, dict) or "goffset" not in spectrograph.axes):
+                raise ValueError(f"spectrograph {spectrograph} must have a 'goffset' attribute")
+
+            self._spectrograph = spectrograph
+            logging.debug("Will simulate spectral peaks using spectrograph %s", spectrograph.name)
+
+        except (TypeError, KeyError):
+            logging.info("Will not simulate spectrograph peaks")
+            self._spectrograph = None
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
@@ -412,6 +425,30 @@ class Camera(model.DigitalCamera):
             coord = ([int(round(ltrb[0] + i * binning[0])) for i in range(res[0])],
                      [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
             sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
+
+        # spectrograph peak simulation
+        if getattr(self, "_spectrograph", None) is not None:
+            goffset_to_pixel = 0.25
+            width_px = 2.5
+            current_offset = self._spectrograph.position.value["goffset"]
+
+            ccd_center_x = self._img_res[0]/2.0  # find the x-coordinate of the center of the ccd
+            x0_px = ccd_center_x + current_offset*goffset_to_pixel
+
+            bin_x = binning[0]  # binning factor along x-axis
+            peak_center_binned = (x0_px - ltrb[0])/bin_x  # express the peak position in the ROI's coordinate system
+
+            logging.info(f"DEBUG: x0_px={x0_px}, ltrb0={ltrb[0]}, result={peak_center_binned}")
+
+            width_binned = width_px/bin_x
+
+            peak = simulate_peak(amplitude=20000, x0=peak_center_binned, width=width_binned,
+                                shape=sim_img.shape, dtype=sim_img.dtype)
+
+            # set all values in sim_img to the minimal sim_img value
+            min_val = sim_img.min()
+            sim_img[...] = min_val
+            sim_img += peak
 
         # Add some noise
         mx = self._img.max()
