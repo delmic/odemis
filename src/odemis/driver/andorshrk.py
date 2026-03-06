@@ -502,7 +502,8 @@ class Shamrock(model.Actuator):
             axes = {"wavelength": model.Axis(unit="m", range=wl_range,
                                              speed=(max_speed, max_speed)),
                     "grating": model.Axis(choices=gchoices),
-                    "goffset": model.Axis(unit=None, range=((GRAT_OFFSET_MIN+DET_OFFSET_MIN), (GRAT_OFFSET_MAX+DET_OFFSET_MAX)))
+                    "goffset": model.Axis(unit=None,
+                                          range=((GRAT_OFFSET_MIN + DET_OFFSET_MIN), (GRAT_OFFSET_MAX + DET_OFFSET_MAX)))
                     }
 
             if self.FocusMirrorIsPresent():
@@ -1604,16 +1605,26 @@ class Shamrock(model.Actuator):
         return gchoices
 
     def GetGoffset(self):
+        """
+        Checks the current grating and flip-mirror positions.
+        Returns the grating offset, consisting of the grating_offset + the detector offset.
+
+        The detector offset is the equivalent grating offset that is needed to compensate for the change in
+        optical path length, introduced by the flip-mirrors.
+        This allows to maintain a stable wavelength calibration across different optical paths, rather than forcing the user
+        to recalibrate for every detector configuration.
+        """
+
         grating = self.GetGrating()
         if "flip-in" in self.axes:
             flip_in_pos = self.GetFlipperMirror(INPUT_FLIPPER)
         else:
-            flip_in_pos = 0
+            flip_in_pos = DIRECT_PORT
 
         if "flip-out" in self.axes:
             flip_out_pos = self.GetFlipperMirror(OUTPUT_FLIPPER)
         else:
-            flip_out_pos = 0
+            flip_out_pos = DIRECT_PORT
 
         goffset = self.GetGratingOffset(grating) + self.GetDetectorOffset(flip_in_pos, flip_out_pos)
         return goffset
@@ -2097,37 +2108,40 @@ class Shamrock(model.Actuator):
         if "flip-in" in self.axes:
             flip_in_pos = self.GetFlipperMirror(INPUT_FLIPPER)
         else:
-            flip_in_pos = 0
+            flip_in_pos = DIRECT_PORT
 
         if "flip-out" in self.axes:
             flip_out_pos = self.GetFlipperMirror(OUTPUT_FLIPPER)
         else:
-            flip_out_pos = 0
+            flip_out_pos = DIRECT_PORT
 
-        with self._hw_access:
-            current_grat_offset = self.GetGratingOffset(grating)
-            current_det_offset = self.GetDetectorOffset(flip_in_pos, flip_out_pos)
-            logging.debug("Current goffset: %d (Grat: %d, Det: %d)",
-                          (current_grat_offset + current_det_offset),
-                          current_grat_offset, current_det_offset)
+        current_grat_offset = self.GetGratingOffset(grating)
+        current_det_offset = self.GetDetectorOffset(flip_in_pos, flip_out_pos)
+        logging.debug("Current goffset: %d (Grat: %d, Det: %d)",
+                      (current_grat_offset + current_det_offset),
+                      current_grat_offset, current_det_offset)
 
-            if grating == 1:
-                if not allow_grating_offset:
-                    logging.debug("Grating offset update disabled (grating=1, target=%d)",target_offset,)
-                else:
-                    grating_offset = target_offset - current_det_offset
-                    self.SetGratingOffset(grating, grating_offset)
+        # The effective grating offset is the actual grating offset + the detector offset to account for changes in the detector path
+        # (e.g. flipper mirrors) that shift the spectrum on the detector. By adding the detector offset to the grating offset,
+        # the reported goffset always matches the observed spectral alignment, keeping calibration consistent.
 
-            elif grating > 1:
-                detector_offset = target_offset - current_grat_offset
-                self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
+        if grating == 1:
+            if not allow_grating_offset:
+                logging.debug("Grating offset update disabled (grating=1, target=%d)",target_offset,)
+            else:
+                grating_offset = target_offset - current_det_offset
+                self.SetGratingOffset(grating, grating_offset)
 
-            self._updatePosition()
+        else grating > 1:
+            detector_offset = target_offset - current_grat_offset
+            self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
+
+        self._updatePosition()
 
     def _doSetGoffsetRel(self, shift):
-        current_pos = self.position.value.get("goffset", 0)
+        # We expect the goffset axis to exist
+        current_pos = self.position.value["goffset"]
         return self._doSetGoffsetAbs(current_pos + shift)
-
 
     def _updateShutterMode(self, pos):
         """
