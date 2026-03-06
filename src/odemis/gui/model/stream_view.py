@@ -603,6 +603,10 @@ class StreamView(View):
                     # Stop listening to the stream changes
                     if hasattr(node, "image"):
                         node.image.unsubscribe(self._onNewImage)
+                        # Drop the rendered frame immediately so the DataArray
+                        # can be GC'd without waiting for the projection thread
+                        # to wake up and release its reference.
+                        node.image.value = None
 
                     # remove stream from the StreamTree()
                     # TODO: handle more complex trees
