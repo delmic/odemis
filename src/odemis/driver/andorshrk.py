@@ -639,7 +639,7 @@ class Shamrock(model.Actuator):
                     raise ValueError(f"check_move[{axis}] should be a bool, but got {check}")
 
             # provides a ._axes
-            model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+            model.Actuator.__init__(self, name, role, axes=axes, dependencies=dependencies, **kwargs)
 
             # set HW and SW version
             try:
