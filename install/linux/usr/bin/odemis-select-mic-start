@@ -185,10 +185,14 @@ done
 # Close the file descriptor
 exec 3>&-
 
-# Prompt the user with a list of microscope configurations to choose from
+# Prompt the user with a list of microscope configurations to choose from.
+# The first column (file name) is hidden, but it's what we get as output.
+# As there is a single column, ideally, we wouldn't show the header ("Configuration"),
+# but it seems there is a bug in zenity, on Ubuntu 22 and 24, " --hide-header"
+# still shows the header, but empty, which is even more confusing.
 selection="$(zenity --list --title="Odemis configuration starter" \
     --list --text "Please select a configuration to start:" \
-    --column "" --column "" "${mic_list[@]}" --hide-header \
+     --column "File" --column "Configuration" "${mic_list[@]}" \
     --width=300 --height=400 \
     --hide-column 1 --print-column=1 2>/dev/null)"
 
