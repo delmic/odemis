@@ -15,22 +15,24 @@ from odemis.acq.align.goffset import sparc_auto_grating_offset
 
 
 def _checkCancelled(future: "model.ProgressiveFuture"):
-    lock_name = "_centering_lock" if hasattr(future, "_centering_lock") else "_align_lock"
-    state_name = "_centering_state" if hasattr(future, "_centering_state") else "_align_state"
 
-    lock = getattr(future, lock_name)
-    state = getattr(future, state_name)
+    """
+    Check if the future has been cancelled, and if so raise CancelledError.
+    """
 
-    with lock:
-        if state == CANCELLED:
+    with future._function_lock:
+        if future._function_state == CANCELLED:
             raise CancelledError()
-
 
 def _total_alignment_time(n_gratings: int,
                         n_detectors: int) -> float:
 
     """
     Estimate total time for aligning all grating-detector combinations.
+
+    :param n_gratings: number of gratings to align
+    :param n_detectors: number of detectors to align
+    :return: estimated total time in seconds
     """
 
     runs = n_detectors + max(0, n_gratings - 1)
@@ -44,6 +46,22 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
                                     detectors: Union[model.Detector, List[model.Detector]],
                                     selector: Optional[model.Actuator] = None,
                                     streams: Optional[List['Stream']] = None) -> model.ProgressiveFuture:
+
+    """
+    Automatically align grating-detector offsets for all combinations of gratings and detectors.
+     - If a selector is provided, it will be used to switch between detectors for the first grating, then the first detector
+     will be used for all subsequent gratings.
+     - For multiple detectors, the grating alignment will only be adjusted for the first detector; subsequent detectors will
+     be aligned by adjusting the detector offset with the grating alignment fixed.
+
+        :param spectrograph: spectrograph
+        :param detectors: list of detectors
+        :param selector: optional selector to switch between detectors
+        :param streams: optional list of streams to update with progress
+        :return: ProgressiveFuture that will resolve to a dict mapping (grating, detector)
+     :raises ValueError: if no detectors provided, or if multiple detectors provided without a selector
+     :raises CancelledError: if the operation is cancelled
+    """
 
     if not isinstance(detectors, Iterable):
         detectors = [detectors]
@@ -62,8 +80,8 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
     f = model.ProgressiveFuture(start=est_start, end=est_start + a_time)
     f.task_canceller = _cancel_auto_align_grating_detector_offsets
 
-    f._align_state = RUNNING
-    f._align_lock = threading.Lock()
+    f._task_lock = threading.Lock()
+    f._task_state = RUNNING
     f._subfuture = InstantaneousFuture()
     executeAsyncTask(f, _do_auto_align_grating_detector_offsets, args=(f, spectrograph, detectors, selector, streams))
     return f
@@ -81,8 +99,19 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
 
     """
     Iterate through each grating and detector combination, adjusting the selector if provided, and run the auto-alignment algorithm.
-     - If a selector is provided, it will be used to switch between detectors for the first grating, then the first detector will be used for all subsequent gratings.
-     - For multiple detectors, the grating alignment will only be adjusted for the first detector; subsequent detectors will be aligned by adjusting the detector offset with the grating alignment fixed.
+     - If a selector is provided, it will be used to switch between detectors for the first grating, then the first detector
+     will be used for all subsequent gratings.
+     - For multiple detectors, the grating alignment will only be adjusted for the first detector; subsequent detectors will
+     be aligned by adjusting the detector offset with the grating alignment fixed.
+
+     :param future: ProgressiveFuture to update with progress and results
+     :param spectrograph: spectrograph
+        :param detectors: list of detectors
+        :param selector: optional selector to switch between detectors
+        :param streams: optional list of streams to update with progress
+        :param stabilization_time: time to wait after moving hardware before starting alignment (default: 15s)
+     :return: dict mapping (grating, detector) to alignment success boolean
+     :raises CancelledError: if the operation is cancelled
     """
 
     results: dict[tuple, bool] = {}
@@ -154,17 +183,17 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
         if selector:
             selector.moveAbsSync(original_selector)
 
-        with future._align_lock:
-            future._align_state = FINISHED
+        with future._task_lock:
+            future._task_state = FINISHED
 
 
 def _cancel_auto_align_grating_detector_offsets(future: model.ProgressiveFuture) -> bool:
     logging.debug("Cancelling autoalignment...")
 
-    with future._align_lock:
-        if future._align_state == FINISHED:
+    with future._task_lock:
+        if future._task_state == FINISHED:
             return False
-        future._align_state = CANCELLED
+        future._task_state = CANCELLED
         future._subfuture.cancel()
         logging.debug("Auto-alignment cancellation requested")
 
