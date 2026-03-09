@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from odemis.acq.stream import Stream
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
@@ -91,7 +92,7 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
 
 def estimate_goffset_scale(spgr: model.Actuator, detector: model.Detector, delta=5.0, retries = 1) -> Tuple[float, float, float]:
     """
-    Estimate the scale factor between a change in the grating offset ('goffset') 
+    Estimate the scale factor between a change in the grating offset ('goffset')
     and the resulting shift of the spectral peak on the detector.
 
     The function moves the actuator by a small step (delta) and measures the peak position before and after the move.
@@ -106,7 +107,6 @@ def estimate_goffset_scale(spgr: model.Actuator, detector: model.Detector, delta
     :param delta: The relative goffset step size to apply when measuring the scale (default: 5.0).
                   The actual step may be negated to avoid exceeding hardware limits.
     :param retries: number of retries allowed if the estimated scale is unreliable (default: 1).
-                  
     :return: Tuple (scale, p0, p1)
          scale: estimated pixels per unit of goffset
          p0: peak position at the initial goffset
@@ -226,7 +226,7 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
         max_step = 0.1 * (maxv - minv)  # max 10% of range
 
         for i in range(max_it):
-            _checkCancelled()
+            _checkCancelled(future)
 
             if i == 0:
                 peak_px = p0
@@ -253,7 +253,8 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
             logging.debug(
                 "DEBUG | Iter: %d | Peak: %.1f | Error: %.1f | Move: %.4f | Total Change: %.4f",
                 i, peak_px, error_px, delta_goffset, total_goffset_displacement
-            )            spgr.moveRelSync({"goffset": delta_goffset})
+            )
+            spgr.moveRelSync({"goffset": delta_goffset})
 
             future.set_progress(
                 end=time.time() + (max_it - i - 1) * 0.5)  # update estimated end time
@@ -268,16 +269,20 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
         logging.error("Alignment error: %s", e)
         raise
 
-def _cancel_sparc_auto_grating_offset(future: model.ProgressiveFuture):
+def _cancel_sparc_auto_grating_offset(future: model.ProgressiveFuture) -> Bool:
 
     """
     Canceller of _do_sparc_auto_grating_offset task.
     """
     with future._task_lock:
+        if future._task_state == FINISHED:
+            return False
         future._task_state = CANCELLED
+        logging.debug("Cancelling alignment")
 
+    return True
 
-def _checkCancelled(future: "model.ProgressiveFuture"):
+def _checkCancelled(future: "model.ProgressiveFuture") -> None:
 
     """
     Check if the future has been cancelled, and if so raise CancelledError.
@@ -412,11 +417,11 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
 
             if selector:
                 selector.moveAbsSync({selector_axes: detector_to_selector[d]})
-                future._subfuture = sparc_auto_grating_offset(spectrograph, d)
-                success = future._subfuture.result()
-                results[(g0, d.name)] = success
+            future._subfuture = sparc_auto_grating_offset(spectrograph, d)
+            success = future._subfuture.result()
+            results[(g0, d.name)] = success
 
-                logging.info("Finished alignment | Detector: %s | Grating: %s | Success: %s", d.name, g0)
+            logging.info("Finished alignment | Detector: %s | Grating: %s", d.name, g0)
 
         if selector:
             selector.moveAbsSync({selector_axes: detector_to_selector[first_detector]})
