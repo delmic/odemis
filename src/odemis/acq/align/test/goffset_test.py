@@ -98,7 +98,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         direction = 1 if (current + delta < goffset_max) else -1
 
         self.spgr.moveRelSync({"goffset": delta * direction})
-        f = SparcAutoGratingOffset(self.spgr, self.detector, max_it=20)
+        f = sparc_auto_grating_offset(self.spgr, self.detector, max_it=20)
 
         result = f.result(timeout=200)
         self.assertTrue(result)
@@ -108,7 +108,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         """
         Test cancelling alignment.
         """
-        f = SparcAutoGratingOffset(self.spgr, self.detector)
+        f = sparc_auto_grating_offset(self.spgr, self.detector)
         # Wait for the result or a timeout
         try:
             f.result(timeout=5)
