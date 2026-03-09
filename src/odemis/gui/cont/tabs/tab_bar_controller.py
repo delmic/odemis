@@ -83,8 +83,12 @@ class TabController(object):
         else:
             for tab in self._tab.choices:
                 # Check if button should be enabled based on its state
-                # (which may have been set by stage position callback)
-                tab.button.Enable(tab.should_be_enabled)
+                # (which may have been changed while the acquisition was running)
+                # Only re-enable the buttons, as they were all disabled at the start of the acquisition,
+                # so if one button is now already enabled, it means another part of the GUI decided
+                # to enable it, and we should respect that.
+                if tab.should_be_enabled:
+                    tab.button.Enable(tab.should_be_enabled)
 
     @call_in_wx_main
     def _on_tab_change(self, tab):

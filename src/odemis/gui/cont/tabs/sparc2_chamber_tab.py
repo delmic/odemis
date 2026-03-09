@@ -350,7 +350,8 @@ class ChamberTab(Tab):
 
         try:
             tab_align = self.tab_data_model.main.getTabByName("sparc2_align")
-            tab_align.button.Enable(mstate == MIRROR_ENGAGED)
+            tab_align.should_be_enabled = (mstate == MIRROR_ENGAGED)
+            tab_align.button.Enable(tab_align.should_be_enabled)
         except LookupError:
             logging.debug("Failed to find the alignment tab")
 
