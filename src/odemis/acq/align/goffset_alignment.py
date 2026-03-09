@@ -4,36 +4,15 @@ import time
 from collections.abc import Iterable
 from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-from typing import Any, Dict, List, Optional, Tuple, Union, Callable
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from odemis import model
 from odemis.model import InstantaneousFuture
-from odemis.util import executeAsyncTask, almost_equal
+from odemis.util import executeAsyncTask
 
-from odemis.acq.align.goffset import SparcAutoGratingOffset
+from odemis.acq.align.autofocus import _mapDetectorToSelector
+from odemis.acq.align.goffset import sparc_auto_grating_offset
 
-
-def _mapDetectorToSelector(selector: model.Actuator,
-                           detectors: List[model.Detector]) -> Tuple[str, Dict[str, Any]]:
-    det_2_sel = {}
-    sel_axis = None
-
-    for an, ad in selector.axes.items():
-        if hasattr(ad, "choices") and isinstance(ad.choices, dict):
-            sel_axis = an
-            for pos, value in ad.choices.items():
-                for d in detectors:
-                    if d.name in value:
-                        det_2_sel[d] = pos
-
-            if det_2_sel:
-                break
-
-    if len(det_2_sel) < len(detectors):
-        raise ValueError("Failed to find all detectors (%s) in positions of selector axes %s" %
-                         (", ".join(d.name for d in detectors), list(selector.axes.keys())))
-
-    return sel_axis, det_2_sel
 
 def _checkCancelled(future: "model.ProgressiveFuture"):
     lock_name = "_centering_lock" if hasattr(future, "_centering_lock") else "_align_lock"
@@ -47,7 +26,7 @@ def _checkCancelled(future: "model.ProgressiveFuture"):
             raise CancelledError()
 
 
-def _totalAlignmentTime(n_gratings: int,
+def _total_alignment_time(n_gratings: int,
                         n_detectors: int) -> float:
 
     """
@@ -55,13 +34,13 @@ def _totalAlignmentTime(n_gratings: int,
     """
 
     runs = n_detectors + max(0, n_gratings - 1)
-    move_time = ((n_gratings-1)*MOVE_TIME_GRATING+(n_detectors-1)*MOVE_TIME_DETECTOR)
+    move_time = ((n_gratings-1) * MOVE_TIME_GRATING + (n_detectors - 1) * MOVE_TIME_DETECTOR)
 
     # total time = time spent running alignment algorithms + time spent moving hardware
-    return runs*EST_ALIGN_TIME + move_time
+    return runs * EST_ALIGN_TIME + move_time
 
 
-def AutoAlignGratingDetectorOffsets(spectrograph: model.Actuator,
+def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
                                     detectors: Union[model.Detector, List[model.Detector]],
                                     selector: Optional[model.Actuator] = None,
                                     streams: Optional[List['Stream']] = None) -> model.ProgressiveFuture:
@@ -79,21 +58,21 @@ def AutoAlignGratingDetectorOffsets(spectrograph: model.Actuator,
     est_start = time.time() + 0.1
     n_gratings = len(spectrograph.axes["grating"].choices)
     n_detectors = len(detectors)
-    a_time = _totalAlignmentTime(n_gratings, n_detectors)
+    a_time = _total_alignment_time(n_gratings, n_detectors)
     f = model.ProgressiveFuture(start=est_start, end=est_start + a_time)
-    f.task_canceller = _CancelAutoAlignGratingDetectorOffsets
+    f.task_canceller = _cancel_auto_align_grating_detector_offsets
 
     f._align_state = RUNNING
     f._align_lock = threading.Lock()
     f._subfuture = InstantaneousFuture()
-    executeAsyncTask(f, _DoAutoAlignGratingDetectorOffsets, args=(f, spectrograph, detectors, selector, streams))
+    executeAsyncTask(f, _do_auto_align_grating_detector_offsets, args=(f, spectrograph, detectors, selector, streams))
     return f
 
 MOVE_TIME_GRATING = 20 #s
 MOVE_TIME_DETECTOR = 5 #s
 EST_ALIGN_TIME = 30 #s
 
-def _DoAutoAlignGratingDetectorOffsets(future: model.ProgressiveFuture,
+def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
                                        spectrograph: model.Actuator,
                                        detectors: List[model.Detector],
                                        selector: Optional[model.Actuator],
@@ -140,8 +119,7 @@ def _DoAutoAlignGratingDetectorOffsets(future: model.ProgressiveFuture,
 
             if selector:
                 selector.moveAbsSync({selector_axes: detector_to_selector[d]})
-                align_grating = (d is first_detector)
-                future._subfuture = SparcAutoGratingOffset(spectrograph, d, align_grating = align_grating,)
+                future._subfuture = sparc_auto_grating_offset(spectrograph, d)
                 success = future._subfuture.result()
                 results[(g0, d.name)] = success
 
@@ -159,7 +137,7 @@ def _DoAutoAlignGratingDetectorOffsets(future: model.ProgressiveFuture,
             time.sleep(stabilization_time)
             logging.info(f"Starting alignment | Detector: {first_detector.name} | Grating: {g}")
 
-            future._subfuture = SparcAutoGratingOffset(spectrograph, first_detector, align_grating=True,)
+            future._subfuture = sparc_auto_grating_offset(spectrograph, first_detector)
             success = future._subfuture.result()
             results[(g, first_detector.name)] = success
 
@@ -180,7 +158,7 @@ def _DoAutoAlignGratingDetectorOffsets(future: model.ProgressiveFuture,
             future._align_state = FINISHED
 
 
-def _CancelAutoAlignGratingDetectorOffsets(future: model.ProgressiveFuture) -> bool:
+def _cancel_auto_align_grating_detector_offsets(future: model.ProgressiveFuture) -> bool:
     logging.debug("Cancelling autoalignment...")
 
     with future._align_lock:

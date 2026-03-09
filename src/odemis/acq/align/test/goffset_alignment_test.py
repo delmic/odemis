@@ -11,7 +11,7 @@ from odemis import model, acq
 import odemis
 from odemis.acq import align, stream, path
 from odemis.acq.align.autofocus import Sparc2AutoFocus, MTD_BINARY
-from odemis.acq.align.goffset_alignment import AutoAlignGratingDetectorOffsets
+from odemis.acq.align.goffset_alignment import auto_align_grating_detector_offsets
 from odemis.dataio import tiff, hdf5
 from odemis.util import testing, timeout, img
 import odemis.util.focus
@@ -38,7 +38,7 @@ class TestAutoAlignGratingDetectorOffsets(unittest.TestCase):
 
     @timeout(100)
     def test_cancel(self):
-        f = AutoAlignGratingDetectorOffsets(spectrograph=self.spgr, detectors=[self.ccd],)
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=[self.ccd],)
         time.sleep(1)
 
         cancelled = f.cancel()
@@ -51,7 +51,7 @@ class TestAutoAlignGratingDetectorOffsets(unittest.TestCase):
 
     @timeout(1000)
     def test_single_detector_iteration(self):
-        f = AutoAlignGratingDetectorOffsets(spectrograph=self.spgr, detectors=[self.ccd], selector=self.selector)
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=[self.ccd], selector=self.selector)
         res = f.result(timeout=900)
 
         n_gratings = len(self.spgr.axes["grating"].choices)
@@ -67,7 +67,7 @@ class TestAutoAlignGratingDetectorOffsets(unittest.TestCase):
 
     @timeout(100)
     def test_cancel(self):
-        f = AutoAlignGratingDetectorOffsets(spectrograph=self.spgr, detectors=[self.ccd],)
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=[self.ccd],)
 
         time.sleep(1)
 
@@ -85,7 +85,7 @@ class TestAutoAlignGratingDetectorOffsets(unittest.TestCase):
         detectors = [self.ccd, spccd]
 
         # run alignment
-        f = AutoAlignGratingDetectorOffsets(spectrograph=self.spgr, detectors=detectors, selector=self.selector)
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=detectors, selector=self.selector)
         res = f.result(timeout=900)
 
         # calculate expected results
