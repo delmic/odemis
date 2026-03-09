@@ -49,15 +49,11 @@ SLITWIDTHMAX = 2500
 # SHAMROCK_I24SLITWIDTHMAX 24000
 SHUTTERMODEMIN = 0
 SHUTTERMODEMAX = 2  # Note: 1 is max on SR303, 2 is max on SR193
-# SHAMROCK_DET_OFFSET_MIN -240000
-# SHAMROCK_DET_OFFSET_MAX 240000
-# SHAMROCK_GRAT_OFFSET_MIN -20000
-# SHAMROCK_GRAT_OFFSET_MAX 20000
 
-DET_OFFSET_MIN = -240000 #CHECK!!
-DET_OFFSET_MAX = 240000 #CHECK!!
-GRAT_OFFSET_MIN = -20000 #CHECK!!
-GRAT_OFFSET_MAX = 20000 #CHECK!!
+SHAMROCK_DET_OFFSET_MIN = -240000
+SHAMROCK_DET_OFFSET_MAX = 240000
+SHAMROCK_GRAT_OFFSET_MIN = -20000
+SHAMROCK_GRAT_OFFSET_MAX = 20000
 
 SLIT_INDEX_MIN = 1
 SLIT_INDEX_MAX = 4
@@ -503,7 +499,7 @@ class Shamrock(model.Actuator):
                                              speed=(max_speed, max_speed)),
                     "grating": model.Axis(choices=gchoices),
                     "goffset": model.Axis(unit=None,
-                                          range=((GRAT_OFFSET_MIN + DET_OFFSET_MIN), (GRAT_OFFSET_MAX + DET_OFFSET_MAX)))
+                                          range=((SHAMROCK_GRAT_OFFSET_MIN + SHAMROCK_DET_OFFSET_MIN), (SHAMROCK_GRAT_OFFSET_MAX + SHAMROCK_DET_OFFSET_MAX)))
                     }
 
             if self.FocusMirrorIsPresent():
@@ -2132,7 +2128,7 @@ class Shamrock(model.Actuator):
                 grating_offset = target_offset - current_det_offset
                 self.SetGratingOffset(grating, grating_offset)
 
-        else grating > 1:
+        else:
             detector_offset = target_offset - current_grat_offset
             self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
 
