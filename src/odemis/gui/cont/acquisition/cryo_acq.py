@@ -404,6 +404,7 @@ class CryoAcquiController(object):
             filename=filename,
             settings_obs=self._tab_data.main.settings_obs,
             use_autofocus=self._panel.chk_use_autofocus_acquire_features.IsChecked(),
+            per_feature_callback=self._on_per_feature_acquired,
         )
 
         # link the acquisition gauge to the acquisition future
@@ -421,6 +422,20 @@ class CryoAcquiController(object):
         self._panel.Layout()
 
     @call_in_wx_main
+    def _on_per_feature_acquired(self) -> None:
+        """
+        Called after each feature is acquired during batch acquisition.
+        Clears streams from all features to avoid excessive memory accumulation.
+        Since we're immediately acquiring the next feature, there's no need to keep
+        the acquired feature's streams in memory.
+        """
+        try:
+            # Clear all feature streams immediately to free memory for the next acquisition
+            self._tab._acquired_stream_controller._clear_all_feature_streams()
+        except Exception as e:
+            logging.warning(f"Error clearing streams after feature acquisition: {e}")
+
+    @call_in_wx_main
     def _on_feature_acquisition_done(self, future):
         self._acq_future = None
         self._gauge_future_conn = None
@@ -430,7 +445,12 @@ class CryoAcquiController(object):
         try:
             self._reset_acquisition_gui(state=ST_FINISHED)
             self._update_acquisition_time()
+            # After all features are acquired, clear all but the current feature
+            current_feature = self._tab_data.main.currentFeature.value
+            self._tab._acquired_stream_controller._clear_all_feature_streams_except(current_feature)
             self._refresh_current_feature_data()
+            # Note: Do NOT call gc.collect() here as background threads may be loading
+            # feature streams. Garbage collection will run naturally.
         except Exception as e:
             logging.warning(f"Error resetting acquisition GUI: {e}")
 

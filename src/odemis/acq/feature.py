@@ -8,7 +8,7 @@ import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from enum import Enum
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Callable
 
 from odemis import model
 from odemis.acq.acqmng import (
@@ -30,7 +30,7 @@ from odemis.acq.move import (
 )
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream, StaticFluoStream
-from odemis.dataio import find_fittest_converter
+from odemis.dataio import find_fittest_converter, get_available_formats
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
@@ -375,6 +375,25 @@ def read_features(project_dir: str) -> List[CryoFeature]:
         return json.load(jsonfile, cls=FeaturesDecoder)
 
 
+def load_feature_streams_from_disk(feature: "CryoFeature", path: str) -> None:
+    """
+    Load the acquired stream files for a single feature from the project directory
+    and append them to feature.streams.
+
+    :param feature: the feature whose streams to load
+    :param path: path to the project directory containing the stream files
+    """
+    stream_filenames = set()
+    glob_path = os.path.join(path, f"*-{glob.escape(feature.name.value)}-{{ext}}")
+    formats = get_available_formats(os.O_RDONLY, allowlossy=False).values()
+    formats_flat = [f"*{ext}" for sublist in formats for ext in sublist]
+    for ext in formats_flat:
+        stream_filenames.update(glob.glob(glob_path.format(ext=ext)))
+
+    for fname in sorted(stream_filenames):
+        feature.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
+
+
 def load_project_data(path: str) -> dict:
     """load meteor project data from a directory:
     :param path: path to the project directory
@@ -397,16 +416,8 @@ def load_project_data(path: str) -> dict:
     except ValueError:
         logging.warning("No features.json file found in the project directory.")
 
-    # load feature streams
-    for f in features:
-        # search dir for images matching f.name.value
-        stream_filenames = []
-        glob_path = os.path.join(path, f"*-{glob.escape(f.name.value)}-{{ext}}")
-        for ext in ["*.tif", "*.tiff", "*.h5"]:
-            stream_filenames.extend(glob.glob(glob_path.format(ext=ext)))
-
-        for fname in stream_filenames:
-            f.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
+    # Feature streams are intentionally not loaded here; they are lazy-loaded
+    # on demand by CryoAcquiredStreamsController when a feature is selected.
 
     return {"overviews": overview_data, "features": features}
 
@@ -464,6 +475,7 @@ class CryoFeatureAcquisitionTask(object):
         settings_obs: SettingsObserver = None,
         use_autofocus: bool = True,
         autofocus_conf_level: float = 0.8,
+        per_feature_callback: Optional[Callable[[], None]] = None,
     ):
         self.features = features
         self.stage = stage
@@ -472,6 +484,7 @@ class CryoFeatureAcquisitionTask(object):
         self.zparams = zparams
         self.filename = filename
         self._settings_obs = settings_obs
+        self._per_feature_callback = per_feature_callback
 
         # autofocus settings
         self.use_autofocus = use_autofocus
@@ -757,6 +770,13 @@ class CryoFeatureAcquisitionTask(object):
                 # acquire data
                 self._acquire_feature(feature)
 
+                # Call per-feature callback to allow cleanup (e.g., freeing streams from other features)
+                if self._per_feature_callback:
+                    try:
+                        self._per_feature_callback()
+                    except Exception as e:
+                        logging.warning(f"Error in per-feature callback: {e}")
+
         except CancelledError:
             logging.debug("Stopping because acquisition was cancelled")
             raise
@@ -795,6 +815,7 @@ def acquire_at_features(
     zparams: Dict[str, float] = {},
     settings_obs: SettingsObserver = None,
     use_autofocus: bool = False,
+    per_feature_callback: Optional[Callable[[], None]] = None,
 ) -> futures.Future:
     """
     Acquire data at the given features.
@@ -805,6 +826,7 @@ def acquire_at_features(
     :param filename: The filename to save the acquired data to.
     :param zparams: The z-levels parameters to acquire data at for each stream.
     :param settings_obs: The settings observer to use for the acquisition.
+    :param per_feature_callback: Optional callback called after each feature is acquired.
     :return: The future of the acquisition task.
     """
     # Create a future for the acquisition task
@@ -819,6 +841,7 @@ def acquire_at_features(
         zparams=zparams,
         settings_obs=settings_obs,
         use_autofocus=use_autofocus,
+        per_feature_callback=per_feature_callback,
     )
 
     # Assign the cancellation function to the future

@@ -519,12 +519,6 @@ class CryoChamberTab(Tab):
         # load features
         self.tab_data_model.main.features.value = proj_data["features"]
 
-        # load acquired streams
-        f_streams = []
-        for f in self.tab_data_model.main.features.value:
-            f_streams.extend(f.streams.value)
-        localization_tab.tab_data_model.streams.value.extend(f_streams)
-
         # log project data
         logging.debug(f"Loaded project data from {proj_path}")
         logging.debug(f"{len(self.tab_data_model.main.features.value)} features loaded.")
