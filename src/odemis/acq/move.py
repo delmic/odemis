@@ -877,7 +877,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
 
 # Minimum stage bare z height required to switch between FM and SEM postures
-Z_LOW = 0.028  # m, safe value provided by TFS on a Hydra Bio CX system which should also be compatible on other systems
+Z_LOW = 0.027  # m, safe value provided by TFS on a Hydra Bio CX system which should also be compatible on other systems
 
 
 class MeteorTFS1PostureManager(MeteorPostureManager):
@@ -1133,7 +1133,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                         sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
                         self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
                         # Stage switching based on Hydra Bio TFS assessment
-                        # move lower than 28 mm (z_low)
+                        # move lower than 27 mm (z_low)
                         # move r and t
                         # move x and y
                         # move all to final position (outside if else block to take other switching postures combinations)
