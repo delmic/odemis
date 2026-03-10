@@ -120,8 +120,8 @@ class TiledAcquisitionTask(object):
         :param zlevels: (list(float) or None) focus z positions required zstack acquisition.
            Currently, can only be used if focusing_method == MAX_INTENSITY_PROJECTION.
            If focus_points is defined, zlevels is adjusted relative to the focus_points.
-        :param registrar: (REGISTER_*) type of registration method
-        :param weaver: (WEAVER_*) type of weaving method
+        :param registrar: (REGISTER_* or None) type of registration method. If registrar and weaver are None, do not stitch.
+        :param weaver: (WEAVER_* or None) type of weaving method. If registrar and weaver are None, do not stitch.
         :param focusing_method: (FocusingMethod) Defines when will the autofocuser be run.
            The autofocuser uses the first stream with a .focuser.
            If MAX_INTENSITY_PROJECTION is used, zlevels must be provided too.
@@ -161,7 +161,7 @@ class TiledAcquisitionTask(object):
         #         stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
 
         # Get the smallest field of view
-        self._sfov = self._guessSmallestFov(streams)
+        self._sfov = self.guessSmallestFov(streams)
         logging.debug("Smallest FoV: %s", self._sfov)
 
         self._starting_pos, self._tile_indices = self._get_tile_coverage()
@@ -279,7 +279,8 @@ class TiledAcquisitionTask(object):
             raise ValueError("The provided region does not form a valid polygon.")
         return polygon
 
-    def _getFov(self, sd):
+    @staticmethod
+    def getFov(sd):
         """
         sd (Stream or DataArray): If it's a stream, it must be a live stream,
           and the FoV will be estimated based on the settings.
@@ -295,13 +296,14 @@ class TiledAcquisitionTask(object):
         else:
             raise TypeError("Unsupported object")
 
-    def _guessSmallestFov(self, ss):
+    @classmethod
+    def guessSmallestFov(cls, ss):
         """
         Return (float, float): smallest width and smallest height of all the FoV
           Note: they are not necessarily from the same FoV.
         raise ValueError: If no stream selected
         """
-        fovs = [self._getFov(s) for s in ss]
+        fovs = [cls.getFov(s) for s in ss]
         if not fovs:
             raise ValueError("No stream so no FoV, so no minimum one")
 
@@ -543,7 +545,7 @@ class TiledAcquisitionTask(object):
         sfov: previous estimate for the fov
         :returns same fov or updated from the data arrays
         """
-        afovs = [self._getFov(d) for d in das]
+        afovs = [self.getFov(d) for d in das]
         asfov = (min(f[0] for f in afovs),
                  min(f[1] for f in afovs))
         if not all(util.almost_equal(e, a) for e, a in zip(sfov, asfov)):
@@ -598,17 +600,20 @@ class TiledAcquisitionTask(object):
         stitching and compares it to the available memory on the computer.
         :returns (bool) True if sufficient memory available, (float) estimated memory
         """
-        # Number of pixels for acquisition
-        pxs = sum(self._estimateStreamPixels(s) for s in self._streams)
-        pxs *= self._number_of_tiles
+        mem_sufficient = True
+        mem_est = 0.0
+        if self._registrar is not None and self._weaver is not None:
+            # Number of pixels for acquisition
+            pxs = sum(self._estimateStreamPixels(s) for s in self._streams)
+            pxs *= self._number_of_tiles
 
-        # Memory calculation
-        mem_est = pxs * self.MEMPP
-        mem_computer = psutil.virtual_memory().total
-        logging.debug("Estimating %g GB needed, while %g GB available",
-                      mem_est / 1024 ** 3, mem_computer / 1024 ** 3)
-        # Assume computer is using 2 GB RAM for odemis and other programs
-        mem_sufficient = mem_est < mem_computer - (2 * 1024 ** 3)
+            # Memory calculation
+            mem_est = pxs * self.MEMPP
+            mem_computer = psutil.virtual_memory().total
+            logging.debug("Estimating %g GB needed, while %g GB available",
+                          mem_est / 1024 ** 3, mem_computer / 1024 ** 3)
+            # Assume computer is using 2 GB RAM for odemis and other programs
+            mem_sufficient = mem_est < mem_computer - (2 * 1024 ** 3)
 
         return mem_sufficient, mem_est
 
@@ -632,18 +637,21 @@ class TiledAcquisitionTask(object):
         acq_time = acq_time * remaining
 
         # Estimate stitching time based on number of pixels in the overlapping part
-        max_pxs = 0
-        for s in self._streams:
-            for sda in s.raw:
-                pxs = sda.shape[0] * sda.shape[1]
-                if pxs > max_pxs:
-                    max_pxs = pxs
+        stitch_time = 0
+        if self._registrar is not None and self._weaver is not None:
+            max_pxs = 0
+            for s in self._streams:
+                for sda in s.raw:
+                    pxs = sda.shape[0] * sda.shape[1]
+                    if pxs > max_pxs:
+                        max_pxs = pxs
 
-        stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
+            stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
+
         try:
             # move_speed is a default speed but not an actual stage speed due to which
             # extra time is added based on observed time taken to move stage from one tile position to another
-            move_time = max(self._guessSmallestFov(self._streams)) * (remaining - 1) / self._move_speed + 0.3 * remaining
+            move_time = max(self._sfov) * (remaining - 1) / self._move_speed + 0.3 * remaining
             # current tile is part of remaining, so no need to move there
         except ValueError:  # no current streams
             move_time = 0.5
@@ -730,26 +738,48 @@ class TiledAcquisitionTask(object):
         except IndexError:
             raise IndexError(f"Failure in acquiring tile {ix}x{iy}, stream {stream.name}.")
 
+    def _acquireStreamsTile(self, i, ix, iy, streams):
+        """
+        Calls acquire function and blocks until the data is returned.
+        :return: list(DataArray) acquired das for the current tile streams
+        """
+        # Update the progress bar
+        self._future.set_progress(end=self.estimateTime(self._number_of_tiles - i) + time.time())
+        # Acquire data array for passed stream
+        self._future.running_subf = acqmng.acquire(streams, self._settings_obs)
+        das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
+        if e:
+            logging.warning(f"Acquisition for tile {ix}x{iy}, streams partially failed: {e}")
+
+        if self._future._task_state == CANCELLED:
+            raise CancelledError()
+
+        return das  # return all das for the tile
+
     def _getTileDAs(self, i, ix, iy):
         """
         Iterate over each tile stream and construct their data arrays list
         :return: list(DataArray) list of each stream DataArray
         """
         das = []
-        for stream in self._streams:
-            if stream.focuser is not None and len(self._zlevels) > 1:
-                # Acquire zstack images based on the given zlevels, and compress them into a single da
-                da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
-            elif stream.focuser and len(self._zlevels) == 1:
-                z = self._zlevels[0]
-                logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
-                stream.focuser.moveAbsSync({'z': z})
-                # Acquire a single image of the stream
-                da = self._acquireStreamTile(i, ix, iy, stream)
-            else:
-                # Acquire a single image of the stream
-                da = self._acquireStreamTile(i, ix, iy, stream)
-            das.append(da)
+
+        if len(self._zlevels):
+            for stream in self._streams:
+                if stream.focuser is not None and len(self._zlevels) > 1:
+                    # Acquire zstack images based on the given zlevels, and compress them into a single da
+                    da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
+                elif stream.focuser is not None and len(self._zlevels) == 1:
+                    z = self._zlevels[0]
+                    logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
+                    stream.focuser.moveAbsSync({'z': z})
+                    da = self._acquireStreamTile(i, ix, iy, stream)
+                else:
+                    # Acquire a single image of the stream
+                    da = self._acquireStreamTile(i, ix, iy, stream)
+                das.append(da)
+        else:
+            das = self._acquireStreamsTile(i, ix, iy, self._streams)
+
         return das
 
     def _acquireTiles(self):
@@ -1018,13 +1048,14 @@ class TiledAcquisitionTask(object):
             # Acquire the needed tiles
             da_list = self._acquireTiles()
 
-            if not da_list or not da_list[0]:
-                logging.warning("No stream acquired that can be used for stitching.")
-            else:
-                logging.info("Acquisition completed, now stitching...")
-                # Stitch the acquired tiles
-                self._future.set_progress(end=self.estimateTime(0) + time.time())
-                st_data = self._stitchTiles(da_list)
+            if self._registrar is not None and self._weaver is not None:
+                if not da_list or not da_list[0]:
+                    logging.warning("No stream acquired that can be used for stitching.")
+                else:
+                    logging.info("Acquisition completed, now stitching...")
+                    # Stitch the acquired tiles
+                    self._future.set_progress(end=self.estimateTime(0) + time.time())
+                    st_data = self._stitchTiles(da_list)
 
             if self._future._task_state == CANCELLED:
                 raise CancelledError()
