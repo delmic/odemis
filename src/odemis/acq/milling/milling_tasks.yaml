@@ -6,6 +6,23 @@
 # task_name:
 #  milling: Milling parameters
 #  patterns: List of patterns (and parameters) to mill
+'Microexpansion':
+  name: 'Microexpansion'
+  milling:
+    current: 1.0e-9
+    voltage: 30000.0
+    field_of_view: 8e-05
+    mode: 'Serial'
+    channel: 'ion'
+  patterns:
+    - name: 'Microexpansion'
+      width: 0.5e-06
+      height: 1.5e-05
+      depth: 1.0e-06
+      spacing: 1.0e-05
+      center_x: 0
+      center_y: 0
+      pattern: 'microexpansion'
 'Rough Milling 01':
   name: 'Rough Milling 01'
   milling:
@@ -74,20 +91,3 @@
       center_x: 0
       center_y: 0
       pattern: 'trench'
-'Microexpansion':
-  name: 'Microexpansion'
-  milling:
-    current: 1.0e-9
-    voltage: 30000.0
-    field_of_view: 8e-05
-    mode: 'Serial'
-    channel: 'ion'
-  patterns:
-    - name: 'Microexpansion'
-      width: 0.5e-06
-      height: 1.5e-05
-      depth: 1.0e-06
-      spacing: 1.0e-05
-      center_x: 0
-      center_y: 0
-      pattern: 'microexpansion'
