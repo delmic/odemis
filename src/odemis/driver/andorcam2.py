@@ -2192,7 +2192,7 @@ class AndorCam2(model.DigitalCamera):
         # "some settings", so check one last time that it's really possible to use
         # software trigger. Or alternatively, maybe the previous settings didn't
         # allow software trigger, but the new ones do.
-        if (self._supports_soft_trigger and synchronized and
+        if (self._supports_soft_trigger and synchronized == TRIG_SW and
             (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE)
            ):
             logging.debug("Reconfiguring trigger mode as its availability has changed (readout rate = %s, gain = %s)",
