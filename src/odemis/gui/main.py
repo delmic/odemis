@@ -32,7 +32,7 @@ from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
-from odemis.util.datacollector import DataCollector
+from odemis.util.datacollector import get_data_collector
 import sys
 import threading
 import traceback
@@ -75,7 +75,7 @@ class OdemisGUIApp(wx.App):
         self._snapshot_controller = None
         self._temperature_controller = None
         self._menu_controller = None
-        self._data_collector = DataCollector()
+        self._data_collector = get_data_collector()
         self.plugins = []  # List of instances of plugin.Plugins
 
         # User input devices
