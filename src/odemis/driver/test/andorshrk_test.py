@@ -589,6 +589,42 @@ class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
 
         sp.moveAbsSync({"iris-in": orig_pos})
 
+    def test_goffset(self):
+        self.assertIn("goffset", self.spectrograph.axes)
+        sp = self.spectrograph
+        rng = sp.axes["goffset"].range
+        orig_pos = sp.position.value["goffset"]
+
+        try:
+            # try absolute move for grating 1
+            sp.moveAbsSync({"grating": 1})
+            target_abs = rng[0] + 10
+            sp.moveAbsSync({"goffset": target_abs})
+            self.assertAlmostEqual(sp.position.value["goffset"], target_abs)
+
+            # try relative move for grating 1
+            shift = 5
+            expected_rel = sp.position.value["goffset"] + shift
+            sp.moveRelSync({"goffset": shift})
+            self.assertAlmostEqual(sp.position.value["goffset"], expected_rel)
+
+            # try other gratings
+            choices = sp.axes["grating"].choices
+            for g in choices:
+                if g > 1 and choices[g] != "mirror":
+                    sp.moveAbsSync({"grating": g})
+                    break
+            else:
+                self.skipTest("No second grating available to test Detector Offset logic")
+
+            target_alt = rng[0] + 20
+            sp.moveAbsSync({"goffset": target_alt})
+            self.assertAlmostEqual(sp.position.value["goffset"], target_alt)
+
+        finally:
+            # restore the original offset so other tests aren't affected
+            sp.moveAbsSync({"goffset": orig_pos})
+
 class TestShamrockAndCCD(SpectrographTestBaseClass, unittest.TestCase):
     """
     Test the Shamrock + AndorSpec class

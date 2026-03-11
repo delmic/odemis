@@ -457,5 +457,79 @@ class TestSimCamWithPolarization(unittest.TestCase):
         testing.assert_array_not_equal(im_horizontal, im_vertical)
 
 
+class TestSimCamSpectrograph(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        class MockSpectrograph(model.Component):
+            def __init__(self, name="mock_spectrograph"):
+                super().__init__(name)
+                self.axes = {"goffset": None}
+                self.position = type('obj', (object,), {'value': {"goffset": 0.0}})()
+
+        cls.focus = simulated.Stage(**KWARGS_FOCUS)
+        cls.mock_spectrograph = MockSpectrograph()
+
+        cls.camera = CLASS(dependencies={"focus": cls.focus, "spectrograph": cls.mock_spectrograph},
+                               **KWARGS_MOVE)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.camera.terminate()
+
+    def setUp(self):
+        self.camera.binning.value = (1, 1)
+        self.camera.translation.value = (0, 0)
+        self.camera.resolution.value = self.camera.resolution.range[1]
+        self.camera.exposureTime.value = 0.05
+        self.mock_spectrograph.position.value["goffset"] = 0.0
+        time.sleep(0.1)
+
+    # helper function to find the peak
+    def _find_peak(self, image):
+        data = image.astype(float)
+        profile = data.mean(axis=0)
+
+        p_min, p_max = profile.min(), profile.max()
+        threshold = p_min + (p_max - p_min) * 0.8
+
+        mask = profile > threshold
+        indices = numpy.arange(len(profile))
+
+        if numpy.sum(mask) == 0:
+            return float(profile.argmax(()), p_max, profile.mean())
+
+        # find the peak
+        weighted_average = numpy.sum(indices[mask] * profile[mask]) / numpy.sum(profile[mask])
+
+        return weighted_average, p_max, profile.mean()
+
+    def test_spectrograph_with_goffset(self):
+        move = 300
+        expected_ratio = 0.25
+
+        self.mock_spectrograph.position.value["goffset"] = 0.0
+        image_0 = self.camera.data.get()
+        date_0 = image_0.metadata[model.MD_ACQ_DATE]
+
+        # change offset
+        self.mock_spectrograph.position.value["goffset"] = move
+
+        image_new = None
+        for _ in range(10):
+            image_new = self.camera.data.get()
+            if image_new.metadata[model.MD_ACQ_DATE] > date_0:
+                break
+            time.sleep(0.05)
+
+        x0, _, _ = self._find_peak(image_0)
+        x1, _, _ = self._find_peak(image_new)
+
+        shift = x1 - x0
+        print(f"DEBUG: Moved {move}, Peak went from {x0} to {x1}. Shift: {shift}")
+
+        expected_shift = move * expected_ratio
+        self.assertAlmostEqual(shift, expected_shift, delta=0.5)
+
 if __name__ == '__main__':
     unittest.main()
