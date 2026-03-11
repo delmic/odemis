@@ -28,6 +28,7 @@ import odemis.gui.conf
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_in_wx_main
+from odemis.util.datacollector import DataCollector
 from odemis.util import driver
 import os
 import subprocess
@@ -42,7 +43,7 @@ class MenuController(object):
     tab controller.
     """
 
-    def __init__(self, main_data, main_frame):
+    def __init__(self, main_data, main_frame, data_collector: DataCollector):
         """ Binds the menu actions.
 
         main_data (MainGUIData): the representation of the microscope GUI
@@ -50,6 +51,7 @@ class MenuController(object):
         """
         self._main_data = main_data
         self._main_frame = main_frame
+        self._data_collector = data_collector
 
         # /File
         # /File/Open...
@@ -153,6 +155,9 @@ class MenuController(object):
 
         # /Help/About
         main_frame.Bind(wx.EVT_MENU, self._on_about, id=main_frame.menu_item_about.GetId())
+        self._consent_menu_item = self._append_data_sharing_menu_item(main_frame)
+        if self._consent_menu_item is not None:
+            main_frame.Bind(wx.EVT_MENU, self._on_toggle_data_sharing, id=self._consent_menu_item.GetId())
 
         # add a toggle for correlation tab in viewer mode
         if main_data.is_viewer:
@@ -162,6 +167,22 @@ class MenuController(object):
             menu = main_frame.menu_item_show_correlation.GetMenu()
             menu.Remove(main_frame.menu_item_show_correlation)
             main_frame.menu_item_show_correlation.Destroy()
+
+    def _append_data_sharing_menu_item(self, main_frame):
+        """Append and initialize Help menu checkbox for data sharing consent."""
+        help_menu = main_frame.menu_item_about.GetMenu()
+        if help_menu is None:
+            return None
+        help_menu.AppendSeparator()
+        item = help_menu.AppendCheckItem(wx.ID_ANY, "Share data with Delmic")
+        item.Check(self._data_collector.get_consent() is True)
+        return item
+
+    def _on_toggle_data_sharing(self, evt):
+        """Toggle data sharing consent from Help menu check item."""
+        enabled = self._consent_menu_item.IsChecked()
+        self._data_collector.set_consent(enabled)
+        evt.Skip()
 
     def _on_update(self, evt):
         import odemis.gui.util.updater as updater
