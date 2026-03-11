@@ -593,7 +593,13 @@ class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
         self.assertIn("goffset", self.spectrograph.axes)
         sp = self.spectrograph
         rng = sp.axes["goffset"].range
-        orig_pos = sp.position.value["goffset"]
+
+        orig_offsets = {}
+        orig_grating = sp.position.value["goffset"]
+
+        for g in sp.axes["grating"].choices:
+            sp.moveAbsSync({"grating": g})
+            orig_offsets[g] = sp.position.value["goffset"]
 
         try:
             # try absolute move for grating 1
@@ -623,7 +629,12 @@ class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
 
         finally:
             # restore the original offset so other tests aren't affected
-            sp.moveAbsSync({"goffset": orig_pos})
+            for g, offset in orig_offsets.items():
+                sp.moveAbsSync({"grating": g})
+                sp.moveAbsSync({"goffset": offset})
+
+            # restore original grating
+            sp.moveAbsSync({"grating": orig_grating})
 
 class TestShamrockAndCCD(SpectrographTestBaseClass, unittest.TestCase):
     """

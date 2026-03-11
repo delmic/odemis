@@ -50,10 +50,10 @@ SLITWIDTHMAX = 2500
 SHUTTERMODEMIN = 0
 SHUTTERMODEMAX = 2  # Note: 1 is max on SR303, 2 is max on SR193
 
-SHAMROCK_DET_OFFSET_MIN = -240000
-SHAMROCK_DET_OFFSET_MAX = 240000
-SHAMROCK_GRAT_OFFSET_MIN = -20000
-SHAMROCK_GRAT_OFFSET_MAX = 20000
+DET_OFFSET_MIN = -240000
+DET_OFFSET_MAX = 240000
+GRAT_OFFSET_MIN = -20000
+GRAT_OFFSET_MAX = 20000
 
 SLIT_INDEX_MIN = 1
 SLIT_INDEX_MAX = 4
@@ -499,7 +499,7 @@ class Shamrock(model.Actuator):
                                              speed=(max_speed, max_speed)),
                     "grating": model.Axis(choices=gchoices),
                     "goffset": model.Axis(unit=None,
-                                          range=((SHAMROCK_GRAT_OFFSET_MIN + SHAMROCK_DET_OFFSET_MIN), (SHAMROCK_GRAT_OFFSET_MAX + SHAMROCK_DET_OFFSET_MAX)))
+                                          range=((GRAT_OFFSET_MIN + DET_OFFSET_MIN), (GRAT_OFFSET_MAX + DET_OFFSET_MAX)))
                     }
 
             if self.FocusMirrorIsPresent():
@@ -2098,6 +2098,13 @@ class Shamrock(model.Actuator):
         self._updatePosition()
 
     def _doSetGoffsetAbs(self, target_offset, *, allow_grating_offset=True):
+
+        """
+        Change grating offset, by either changing the grating offset or the detector offset.
+        :param target_offset (float): the new grating offset to set
+        :param allow_grating_offset (bool): check to allow changing the grating offset, if false, only change
+        detector offset.
+        """
         target_offset = int(round(target_offset)) # ensure that we get integers for steps
         grating = self.GetGrating()
 
@@ -2128,13 +2135,32 @@ class Shamrock(model.Actuator):
                 grating_offset = target_offset - current_det_offset
                 self.SetGratingOffset(grating, grating_offset)
 
+            if not (GRAT_OFFSET_MIN <= grating_offset <= GRAT_OFFSET_MAX):
+                raise ValueError("Grating offset %.3f out of bounds [%.3f, %.3f] "
+                                 "(target_offset=%.3f, detector_offset=%.3f)"
+                                    % (grating_offset, GRAT_OFFSET_MIN, GRAT_OFFSET_MAX)
+                                 )
+
         else:
             detector_offset = target_offset - current_grat_offset
+            if not (DET_OFFSET_MIN <= detector_offset <= DET_OFFSET_MAX):
+                raise ValueError(
+                    "Detector offset %.3f out of bounds [%.3f, %.3f] "
+                    "(target_offset=%.3f, grating_offset=%.3f)"
+                    % (detector_offset, DET_OFFSET_MIN, DET_OFFSET_MAX)
+                )
+
             self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
 
         self._updatePosition()
 
     def _doSetGoffsetRel(self, shift):
+
+        """
+        Change the grating offset by either changing the grating offset or detector offset.
+        :param shift (float): relative change in offset
+        """
+
         # We expect the goffset axis to exist
         current_pos = self.position.value["goffset"]
         return self._doSetGoffsetAbs(current_pos + shift)
