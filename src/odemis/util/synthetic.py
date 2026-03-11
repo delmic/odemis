@@ -128,22 +128,25 @@ def psf_gaussian(
     numpy.rint(UINT16_MAX * out, out=out)
     return out.astype(numpy.uint16)
 
-def simulate_peak(amplitude, x0, width, shape, image=None, dtype=numpy.uint16):
+def simulate_peak(amplitude, x0, width, shape, dtype=numpy.uint16) -> numpy.ndarray:
+
+    """
+    Simulate a 1D Gaussian peak across the x-dimension of an image, with optional 2D image input for direct use when y > 1.
+    :param amplitude: the maximum intensity of the peak
+    :param x0: the center position of the peak along the x-axis
+    :param width: the standard deviation (width) of the Gaussian peak
+    :param shape: the shape of the output image (can be an int for 1D or a tuple for 2D)
+    :param dtype: the data type of the output array (default is numpy.uint16)
+    :return: a numpy array containing the simulated peak, either as a 1D Gaussian or directly from the provided image
+    """
+
     # Standardize shape to a tuple, so we can index it
     if isinstance(shape, (int, numpy.integer)):
         shape = (shape,)
 
-    # Determine resolution.y (height)
-    # If it's a 1D shape, resolution_y is 1
-    resolution_y = shape[0] if len(shape) > 1 else 1
-
-    # If an image is provided and it's a 2D request (y > 1)
-    if image is not None and resolution_y > 1:
-        return numpy.asanyarray(image).astype(dtype)
-
-    # Otherwise, generate the peak logic as usual
+    # Generate the 1D Gaussian peak across the x-dimension
     x = numpy.arange(shape[-1])
-    intensity = amplitude*(numpy.exp(-0.5*((x-x0)/width)**2))
+    intensity = amplitude*(numpy.exp(-0.5 * ((x - x0) / width)**2))
 
     # Clip based on the actual dtype provided
     info = numpy.iinfo(dtype)

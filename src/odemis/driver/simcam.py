@@ -37,7 +37,8 @@ from odemis.util.synthetic import ParabolicMirrorRayTracer
 from odemis.util.synthetic import simulate_peak
 
 ERROR_STATE_FILE = "simcam-hw.error"
-
+GOFFSET_TO_PIXEL = 0.25  # Conversion factor for grating offset to image pixels.
+PEAK_WIDTH = 2.5  # Width of the simulated spectrograph peak in pixels (before binning).
 
 class Camera(model.DigitalCamera):
     '''
@@ -182,8 +183,12 @@ class Camera(model.DigitalCamera):
 
         try:
             spectrograph = dependencies["spectrograph"]
-            if not (hasattr(spectrograph, "axes") or not isinstance(spectrograph.axes, dict) or "goffset" not in spectrograph.axes):
-                raise ValueError(f"spectrograph {spectrograph} must have a 'goffset' attribute")
+            if not (
+                    isinstance(spectrograph, model.ComponentBase)
+                    and hasattr(spectrograph, "axes")
+                    and isinstance(spectrograph.axes, dict)
+                    and "goffset" in spectrograph.axes):
+                raise ValueError("spectrograph %s must have a 'goffset' attribute" % spectrograph)
 
             self._spectrograph = spectrograph
             logging.debug("Will simulate spectral peaks using spectrograph %s", spectrograph.name)
@@ -387,6 +392,11 @@ class Camera(model.DigitalCamera):
         center = self._img_res[0] / 2, self._img_res[1] / 2
         pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
 
+        # Extra translation to simulate stage movement
+        pos = self._metadata.get(model.MD_POS, (0, 0))
+        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
+        stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
+
         if self._mirror:
             eff_pixel_size = [p * b for p, b in zip(pixel_size, binning)]
             self._img_simulator.resolution.value = res
@@ -395,11 +405,6 @@ class Camera(model.DigitalCamera):
             self._img = model.DataArray(sim_img, self._img.metadata)
             sim_img = self._img.copy()
         else:
-            # Extra translation to simulate stage movement
-            pos = self._metadata.get(model.MD_POS, (0, 0))
-            pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
-            stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
-
             # First and last index (eg, 0 -> 255)
             ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
                     center[1] + trans[1] + stage_shift[1] - (res[1] / 2) * binning[1],
@@ -427,20 +432,21 @@ class Camera(model.DigitalCamera):
             sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
 
         # spectrograph peak simulation
-        if getattr(self, "_spectrograph", None) is not None:
-            goffset_to_pixel = 0.25
-            width_px = 2.5
+        if self._spectrograph:
             current_offset = self._spectrograph.position.value["goffset"]
 
             ccd_center_x = self._img_res[0]/2.0  # find the x-coordinate of the center of the ccd
-            x0_px = ccd_center_x + current_offset*goffset_to_pixel
+            x0_px = ccd_center_x + current_offset * GOFFSET_TO_PIXEL
+            roi_left = center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0]
 
             bin_x = binning[0]  # binning factor along x-axis
-            peak_center_binned = (x0_px - ltrb[0])/bin_x  # express the peak position in the ROI's coordinate system
+            peak_center_binned = (x0_px - roi_left) / bin_x  # express the peak position in the ROI's coordinate system
 
-            logging.info(f"DEBUG: x0_px={x0_px}, ltrb0={ltrb[0]}, result={peak_center_binned}")
+            logging.info("DEBUG: x0_px=%s, ltrb0=%s, result=%s",
+                         x0_px, roi_left, peak_center_binned
+                         )
 
-            width_binned = width_px/bin_x
+            width_binned = PEAK_WIDTH / bin_x
 
             peak = simulate_peak(amplitude=20000, x0=peak_center_binned, width=width_binned,
                                 shape=sim_img.shape, dtype=sim_img.dtype)
