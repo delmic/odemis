@@ -49,10 +49,11 @@ SLITWIDTHMAX = 2500
 # SHAMROCK_I24SLITWIDTHMAX 24000
 SHUTTERMODEMIN = 0
 SHUTTERMODEMAX = 2  # Note: 1 is max on SR303, 2 is max on SR193
-# SHAMROCK_DET_OFFSET_MIN -240000
-# SHAMROCK_DET_OFFSET_MAX 240000
-# SHAMROCK_GRAT_OFFSET_MIN -20000
-# SHAMROCK_GRAT_OFFSET_MAX 20000
+
+DET_OFFSET_MIN = -240000
+DET_OFFSET_MAX = 240000
+GRAT_OFFSET_MIN = -20000
+GRAT_OFFSET_MAX = 20000
 
 SLIT_INDEX_MIN = 1
 SLIT_INDEX_MAX = 4
@@ -496,7 +497,9 @@ class Shamrock(model.Actuator):
 
             axes = {"wavelength": model.Axis(unit="m", range=wl_range,
                                              speed=(max_speed, max_speed)),
-                    "grating": model.Axis(choices=gchoices)
+                    "grating": model.Axis(choices=gchoices),
+                    "goffset": model.Axis(unit=None,
+                                          range=((GRAT_OFFSET_MIN + DET_OFFSET_MIN), (GRAT_OFFSET_MAX + DET_OFFSET_MAX)))
                     }
 
             if self.FocusMirrorIsPresent():
@@ -1597,6 +1600,31 @@ class Shamrock(model.Actuator):
 
         return gchoices
 
+    def GetGoffset(self):
+        """
+        Checks the current grating and flip-mirror positions.
+        Returns the grating offset, consisting of the grating_offset + the detector offset.
+
+        The detector offset is the equivalent grating offset that is needed to compensate for the change in
+        optical path length, introduced by the flip-mirrors.
+        This allows to maintain a stable wavelength calibration across different optical paths, rather than forcing the user
+        to recalibrate for every detector configuration.
+        """
+
+        grating = self.GetGrating()
+        if "flip-in" in self.axes:
+            flip_in_pos = self.GetFlipperMirror(INPUT_FLIPPER)
+        else:
+            flip_in_pos = DIRECT_PORT
+
+        if "flip-out" in self.axes:
+            flip_out_pos = self.GetFlipperMirror(OUTPUT_FLIPPER)
+        else:
+            flip_out_pos = DIRECT_PORT
+
+        goffset = self.GetGratingOffset(grating) + self.GetDetectorOffset(flip_in_pos, flip_out_pos)
+        return goffset
+
     # high-level methods (interface)
     def _updatePosition(self, must_notify=False):
         """
@@ -1604,7 +1632,8 @@ class Shamrock(model.Actuator):
         """
         # TODO: support "axes" to limit the axes to update
         pos = {"wavelength": self.GetWavelength(),
-               "grating": self.GetGrating()
+               "grating": self.GetGrating(),
+               "goffset": self.GetGoffset()
               }
 
         if "focus" in self.axes:
@@ -1814,6 +1843,8 @@ class Shamrock(model.Actuator):
                 actions.append((axis, self._doSetWavelengthRel, s))
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusRel, s))
+            elif axis == "goffset":
+                actions.append((axis, self._doSetGoffsetRel, s))
             elif axis in self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
                 actions.append((axis, self._doSetSlitRel, sid, s))
@@ -1851,6 +1882,8 @@ class Shamrock(model.Actuator):
                 actions.append((axis, self._doSetFilter, p, check))
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusAbs, p))
+            elif axis == "goffset":
+                actions.append((axis, self._doSetGoffsetAbs, p))
             elif axis == "flip-in":
                 check = self._check_move.get(axis, True)
                 actions.append((axis, self._doSetFlipper, INPUT_FLIPPER, p, check))
@@ -2063,6 +2096,74 @@ class Shamrock(model.Actuator):
         except ShamrockError:
             logging.warning("Failed to update turret position, detector offset might be incorrect", exc_info=True)
         self._updatePosition()
+
+    def _doSetGoffsetAbs(self, target_offset, *, allow_grating_offset=True):
+
+        """
+        Change grating offset, by either changing the grating offset or the detector offset.
+        :param target_offset (float): the new grating offset to set
+        :param allow_grating_offset (bool): check to allow changing the grating offset, if false, only change
+        detector offset.
+        """
+        target_offset = int(round(target_offset)) # ensure that we get integers for steps
+        grating = self.GetGrating()
+
+        if "flip-in" in self.axes:
+            flip_in_pos = self.GetFlipperMirror(INPUT_FLIPPER)
+        else:
+            flip_in_pos = DIRECT_PORT
+
+        if "flip-out" in self.axes:
+            flip_out_pos = self.GetFlipperMirror(OUTPUT_FLIPPER)
+        else:
+            flip_out_pos = DIRECT_PORT
+
+        current_grat_offset = self.GetGratingOffset(grating)
+        current_det_offset = self.GetDetectorOffset(flip_in_pos, flip_out_pos)
+        logging.debug("Current goffset: %d (Grat: %d, Det: %d)",
+                      (current_grat_offset + current_det_offset),
+                      current_grat_offset, current_det_offset)
+
+        # The effective grating offset is the actual grating offset + the detector offset to account for changes in the detector path
+        # (e.g. flipper mirrors) that shift the spectrum on the detector. By adding the detector offset to the grating offset,
+        # the reported goffset always matches the observed spectral alignment, keeping calibration consistent.
+
+        if grating == 1:
+            if not allow_grating_offset:
+                logging.debug("Grating offset update disabled (grating=1, target=%d)",target_offset,)
+            else:
+                grating_offset = target_offset - current_det_offset
+                self.SetGratingOffset(grating, grating_offset)
+
+            if not (GRAT_OFFSET_MIN <= grating_offset <= GRAT_OFFSET_MAX):
+                raise ValueError("Grating offset %.3f out of bounds [%.3f, %.3f] "
+                                 "(target_offset=%.3f, detector_offset=%.3f)"
+                                    % (grating_offset, GRAT_OFFSET_MIN, GRAT_OFFSET_MAX)
+                                 )
+
+        else:
+            detector_offset = target_offset - current_grat_offset
+            if not (DET_OFFSET_MIN <= detector_offset <= DET_OFFSET_MAX):
+                raise ValueError(
+                    "Detector offset %.3f out of bounds [%.3f, %.3f] "
+                    "(target_offset=%.3f, grating_offset=%.3f)"
+                    % (detector_offset, DET_OFFSET_MIN, DET_OFFSET_MAX)
+                )
+
+            self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
+
+        self._updatePosition()
+
+    def _doSetGoffsetRel(self, shift):
+
+        """
+        Change the grating offset by either changing the grating offset or detector offset.
+        :param shift (float): relative change in offset
+        """
+
+        # We expect the goffset axis to exist
+        current_pos = self.position.value["goffset"]
+        return self._doSetGoffsetAbs(current_pos + shift)
 
     def _updateShutterMode(self, pos):
         """
@@ -2451,6 +2552,9 @@ class FakeShamrockDLL(object):
         offset.value = self._detoffset[_val(entrancePort), _val(exitPort)]
 
     def ShamrockSetGratingOffset(self, device, grating, offset):
+        cur_offset = self._goffset[_val(grating) - 1]
+        new_offset = _val(offset)
+        time.sleep(abs(cur_offset - new_offset) / 10000)
         self._goffset[_val(grating) - 1] = _val(offset)
 
     def ShamrockGetGratingOffset(self, device, grating, p_offset):
