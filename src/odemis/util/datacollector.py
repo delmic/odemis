@@ -32,7 +32,6 @@ import json
 import logging
 import os
 import queue
-import random
 import re
 import shutil
 import socket
@@ -86,6 +85,26 @@ CONSENT_DATE_KEY = "consent_date"
 _DEFAULT_COLLECTION_PROBABILITY = 0.10
 _FULL_COLLECTION_PROBABILITY = 1.0
 
+_shared_data_collector: Optional["DataCollector"] = None
+_shared_data_collector_lock = threading.Lock()
+
+
+def get_data_collector() -> "DataCollector":
+    """Return a process-wide DataCollector instance.
+
+    The instance is created lazily and reused by all callers in the current
+    Python process.
+    """
+    global _shared_data_collector
+    if _shared_data_collector is not None:
+        return _shared_data_collector
+
+    with _shared_data_collector_lock:
+        if _shared_data_collector is None:
+            _shared_data_collector = DataCollector()
+            _shared_data_collector._lazy_init()
+    assert _shared_data_collector is not None
+    return _shared_data_collector
 
 def _sanitize_filename(name: str) -> str:
     """Return a filesystem-safe version of name.
@@ -351,11 +370,11 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
 
                 if exporter is not None:
                     ext = exporter.EXTENSIONS[0]
-                    arc_name = f"{_sanitize_filename(key)}.{ext}"
+                    arc_name = f"{_sanitize_filename(key)}{ext}"
                     abs_path = tmp_dir / arc_name
                     try:
                         da = value if isinstance(value, model.DataArray) else model.DataArray(value)
-                        tiff.export(str(abs_path), da)
+                        exporter.export(str(abs_path), da)
                     except Exception:
                         logging.warning("Failed to export DataArray to %s at %s",  ext, abs_path, exc_info=True)
                         abs_path = None
@@ -609,7 +628,7 @@ class _BackgroundWorker:
         """Main loop: process items until the thread is stopped."""
         while True:
             # Always drain the in-memory queue first with a non-blocking get so
-            # new record() calls are serialised to disk even when upload backoff
+            # new record() calls are serialized to disk even when upload backoff
             # is in progress.  Without this, the queue grows unbounded and
             # queue.get() is never reached while pending ZIPs exist.
             try:
@@ -657,6 +676,30 @@ class DataCollector:
         self._worker: Optional[_BackgroundWorker] = None
         self._init_ok: bool = False
         self._init_lock = threading.Lock()
+        # Controls the probability of collecting acquired data. 0 means no data
+        # is collected, 1 means all data is collected.
+        self.probability = 0.0
+
+    def _refresh_probability(self) -> None:
+        """Refresh collection probability from consent state and expiry date."""
+        if not self._init_ok or self._config is None:
+            return
+
+        # No consent means no collection.
+        if self._config.consent is not True:
+            self.probability = 0.0
+            return
+
+        consent_day = self._config.consent_date
+        if consent_day is None:
+            self.probability = _DEFAULT_COLLECTION_PROBABILITY
+            return
+
+        days_left = (consent_day - datetime.now().astimezone().date()).days
+        if days_left <= 1:
+            self.probability = _FULL_COLLECTION_PROBABILITY
+        else:
+            self.probability = _DEFAULT_COLLECTION_PROBABILITY
 
     def _lazy_init(self) -> None:
         """Initialise configuration and worker on first use."""
@@ -669,6 +712,7 @@ class DataCollector:
                 self._config = DataCollectorConfig()
                 self._worker = _BackgroundWorker(self._config)
                 self._init_ok = True
+                self._refresh_probability()
                 logging.debug("DataCollector initialised.")
             except Exception:
                 logging.warning(
@@ -691,6 +735,7 @@ class DataCollector:
         today_local = datetime.now().astimezone().date()
         if today_local > consent_day:
             self._config.consent = False
+            self._refresh_probability()
             logging.info("DataCollector: temporary consent expired; consent set to False.")
             return False
         return True
@@ -706,6 +751,7 @@ class DataCollector:
         if not self._init_ok:
             return
         self._config.consent = value
+        self._refresh_probability()
 
     def set_temporary_consent(self, days: int = 1) -> None:
         """
@@ -723,6 +769,7 @@ class DataCollector:
             return
         consent_day = datetime.now().astimezone().date() + timedelta(days=days)
         self._config.set_consent_with_expiry(consent_date=consent_day)
+        self._refresh_probability()
 
     def record(
         self,
@@ -738,8 +785,8 @@ class DataCollector:
         granted, this is a no-op.  This function never raises (beyond the
         input validation below); all errors are logged and suppressed.
 
-        Collection probability is applied before enqueuing: 100% when
-        temporary consent (1-day) is active, 10% otherwise.
+        Sampling policy is controlled by callers. This method handles consent
+        checks and asynchronous enqueueing when called.
 
         :param event_name: Human-readable event identifier, e.g.
          "z_stack_acquired".  Must be a non-empty string.
@@ -776,26 +823,6 @@ class DataCollector:
             if not consent:
                 logging.debug(
                     "DataCollector: consent=%s, skipping event '%s'.", consent, event_name
-                )
-                return
-
-            # Apply collection probability: 100% if consent expires within 1 day,
-            # 10% otherwise (no consent_date = permanent opt-in).
-            consent_day = self._config.consent_date
-            if consent_day is not None:
-                days_left = (consent_day - datetime.now().astimezone().date()).days
-            else:
-                days_left = None
-
-            if days_left is not None and days_left <= 1:
-                probability = _FULL_COLLECTION_PROBABILITY
-            else:
-                probability = _DEFAULT_COLLECTION_PROBABILITY
-
-            if random.random() >= probability:
-                logging.debug(
-                    "DataCollector: event '%s' not sampled (%.0f%% collection probability).",
-                    event_name, probability * 100,
                 )
                 return
 

@@ -166,6 +166,7 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
         feature_item = {
             'name': feature.name.value,
             'status': feature.status.value,
+            'is_collectible': feature.is_collectible,
             'stage_position': feature.stage_position.value,
             'fm_focus_position': feature.fm_focus_position.value,
             'posture_positions': feature.posture_positions,
