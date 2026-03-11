@@ -1889,6 +1889,13 @@ class OverlayStream(Stream):
 
         return result_as_da
 
+    def guessFoV(self):
+        """
+        Estimate the field-of-view based on the current settings.
+        :return: (float, float): width, height in meters
+        """
+        # Calculate FoV based on the emitter's shape and pixel size
+        return tuple(s * p for s, p in zip(self._emitter.shape, self._emitter.pixelSize.value))
 
 class ScannedTCSettingsStream(RepetitionStream):
 
