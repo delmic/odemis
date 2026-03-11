@@ -1301,6 +1301,22 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.lbl_m_lens2 = xrc.XRCCTRL(self, "lbl_m_lens2")
         self.btn_m_lens_switch_x = xrc.XRCCTRL(self, "btn_m_lens_switch_x")
         self.btn_p_lens_switch_x = xrc.XRCCTRL(self, "btn_p_lens_switch_x")
+        self.pnl_lens_tunnel = xrc.XRCCTRL(self, "pnl_lens_tunnel")
+        self.slider_spec_ded_aligner_xy = xrc.XRCCTRL(self, "slider_spec_ded_aligner_xy")
+        self.lbl_spec_ded_aligner_py = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_py")
+        self.lbl_spec_ded_aligner_my = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_my")
+        self.lbl_spec_ded_aligner_px = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_px")
+        self.lbl_spec_ded_aligner_mx = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_mx")
+        self.btn_p_spec_ded_aligner_y = xrc.XRCCTRL(self, "btn_p_spec_ded_aligner_y")
+        self.btn_m_spec_ded_aligner_y = xrc.XRCCTRL(self, "btn_m_spec_ded_aligner_y")
+        self.btn_m_spec_ded_aligner_x = xrc.XRCCTRL(self, "btn_m_spec_ded_aligner_x")
+        self.btn_p_spec_ded_aligner_x = xrc.XRCCTRL(self, "btn_p_spec_ded_aligner_x")
+        self.lbl_ss_spec_ded_aligner_z = xrc.XRCCTRL(self, "lbl_ss_spec_ded_aligner_z")
+        self.slider_spec_ded_aligner_z = xrc.XRCCTRL(self, "slider_spec_ded_aligner_z")
+        self.lbl_spec_ded_aligner_pz = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_pz")
+        self.lbl_spec_ded_aligner_mz = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_mz")
+        self.btn_m_spec_ded_aligner_z = xrc.XRCCTRL(self, "btn_m_spec_ded_aligner_z")
+        self.btn_p_spec_ded_aligner_z = xrc.XRCCTRL(self, "btn_p_spec_ded_aligner_z")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
         self.btn_auto_align = xrc.XRCCTRL(self, "btn_auto_align")
         self.gauge_auto_align = xrc.XRCCTRL(self, "gauge_auto_align")
@@ -1355,22 +1371,6 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.pnl_fib_focus = xrc.XRCCTRL(self, "pnl_fib_focus")
         self.btn_fib_autofocus = xrc.XRCCTRL(self, "btn_fib_autofocus")
         self.gauge_fib_autofocus = xrc.XRCCTRL(self, "gauge_fib_autofocus")
-        self.pnl_lens_tunnel = xrc.XRCCTRL(self, "pnl_lens_tunnel")
-        self.slider_spec_ded_aligner_xy = xrc.XRCCTRL(self, "slider_spec_ded_aligner_xy")
-        self.lbl_spec_ded_aligner_py = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_py")
-        self.lbl_spec_ded_aligner_my = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_my")
-        self.lbl_spec_ded_aligner_px = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_px")
-        self.lbl_spec_ded_aligner_mx = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_mx")
-        self.btn_p_spec_ded_aligner_y = xrc.XRCCTRL(self, "btn_p_spec_ded_aligner_y")
-        self.btn_m_spec_ded_aligner_y = xrc.XRCCTRL(self, "btn_m_spec_ded_aligner_y")
-        self.btn_m_spec_ded_aligner_x = xrc.XRCCTRL(self, "btn_m_spec_ded_aligner_x")
-        self.btn_p_spec_ded_aligner_x = xrc.XRCCTRL(self, "btn_p_spec_ded_aligner_x")
-        self.lbl_ss_spec_ded_aligner_z = xrc.XRCCTRL(self, "lbl_ss_spec_ded_aligner_z")
-        self.slider_spec_ded_aligner_z = xrc.XRCCTRL(self, "slider_spec_ded_aligner_z")
-        self.lbl_spec_ded_aligner_pz = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_pz")
-        self.lbl_spec_ded_aligner_mz = xrc.XRCCTRL(self, "lbl_spec_ded_aligner_mz")
-        self.btn_m_spec_ded_aligner_z = xrc.XRCCTRL(self, "btn_m_spec_ded_aligner_z")
-        self.btn_p_spec_ded_aligner_z = xrc.XRCCTRL(self, "btn_p_spec_ded_aligner_z")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
@@ -14797,6 +14797,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
         <minsize>460,-1</minsize>
         <object class="wxPanel">
           <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_mode_btns">
                 <object class="wxBoxSizer">
@@ -15602,6 +15603,313 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
             </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_lens_tunnel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Lens</label>
+                      <font>
+                        <size>16</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Step size</label>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_spec_ded_aligner_xy">
+                          <size>-1,20</size>
+                          <value>0.000005</value>
+                          <min>0.00000005</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_spec_ded_aligner_py">
+                          <label>+Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_spec_ded_aligner_my">
+                          <label>-Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_spec_ded_aligner_px">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_spec_ded_aligner_mx">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_spec_ded_aligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_spec_ded_aligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_spec_ded_aligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_spec_ded_aligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_ss_spec_ded_aligner_z">
+                          <label>Step size</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_spec_ded_aligner_z">
+                          <size>-1,20</size>
+                          <value>0.000025</value>
+                          <min>0.0000003</min>
+                          <max>0.003</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_spec_ded_aligner_pz">
+                          <label>+Z</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_spec_ded_aligner_mz">
+                          <label>-Z</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_spec_ded_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_spec_ded_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+          </object>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_mirror">
                 <object class="wxBoxSizer">
@@ -16415,7 +16723,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
             </object>
-            <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_fibaligner">
                 <object class="wxBoxSizer">
@@ -16657,313 +16964,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                 </XRCED>
               </object>
               <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_lens_tunnel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Lens</label>
-                      <font>
-                        <size>16</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxBoxSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText">
-                          <label>Step size</label>
-                        </object>
-                        <flag>wxRIGHT</flag>
-                        <border>5</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitFloatSlider" name="slider_spec_ded_aligner_xy">
-                          <size>-1,20</size>
-                          <value>0.000005</value>
-                          <min>0.00000005</min>
-                          <max>0.001</max>
-                          <unit>m</unit>
-                          <scale>log</scale>
-                          <accuracy>2</accuracy>
-                          <style>wxBORDER_NONE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <option>1</option>
-                        <flag>wxEXPAND</flag>
-                      </object>
-                      <orient>wxHORIZONTAL</orient>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_spec_ded_aligner_py">
-                          <label>+Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>0,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_spec_ded_aligner_my">
-                          <label>-Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>4,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_spec_ded_aligner_px">
-                          <label>+X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_spec_ded_aligner_mx">
-                          <label>-X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_spec_ded_aligner_y">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>↑</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>1,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_spec_ded_aligner_y">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>↓</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>3,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_spec_ded_aligner_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>←</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_spec_ded_aligner_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>→</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxALIGN_CENTRE</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxBoxSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_ss_spec_ded_aligner_z">
-                          <label>Step size</label>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxRIGHT</flag>
-                        <border>5</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitFloatSlider" name="slider_spec_ded_aligner_z">
-                          <size>-1,20</size>
-                          <value>0.000025</value>
-                          <min>0.0000003</min>
-                          <max>0.003</max>
-                          <unit>m</unit>
-                          <scale>log</scale>
-                          <accuracy>2</accuracy>
-                          <style>wxBORDER_NONE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <option>1</option>
-                        <flag>wxEXPAND</flag>
-                      </object>
-                      <orient>wxHORIZONTAL</orient>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_spec_ded_aligner_pz">
-                          <label>+Z</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>0,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_spec_ded_aligner_mz">
-                          <label>-Z</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_spec_ded_aligner_z">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>←</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_spec_ded_aligner_z">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>→</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>5</border>
             </object>
             <object class="spacer">
               <option>1</option>
