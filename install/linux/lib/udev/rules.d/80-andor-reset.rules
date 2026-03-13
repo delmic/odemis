@@ -1,0 +1,8 @@
+# This gives rights for the "normal" user to reset the USB connection of Andor
+# devices. Sometimes cameras don't respond, and just resetting the connection
+# (by writing 0 to authorized, followed by 1) allows to recover the connection.
+# The alternative is to manually unplug & replug the USB cable.
+
+SUBSYSTEM=="usb", ATTRS{idVendor}=="136e", RUN+="/bin/chmod g+w /sys/bus/usb/devices/%k/authorized", RUN+="/bin/chgrp odemis /sys/bus/usb/devices/%k/authorized"
+
+
