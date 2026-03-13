@@ -22,9 +22,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
+import io
 from odemis.driver import andorcam3
 import unittest
+from unittest import mock
 from unittest.case import skip
+from typing import Dict, List, Callable, Any
 
 from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, \
     VirtualTestSynchronized
@@ -84,6 +87,97 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS_EXTRA
+
+
+class TestAndorCam3ConnectionCheck(unittest.TestCase):
+    """
+    Unit tests for USB connection validation in AndorCam3._check_connection().
+    """
+
+    def _make_camera(self, serial_number: str) -> andorcam3.AndorCam3:
+        """
+        Build a minimal camera instance for connection checks.
+
+        :param serial_number: Serial number returned by GetString("SerialNumber").
+        :return: Partially initialized camera object suitable for unit tests.
+        """
+        camera = andorcam3.AndorCam3.__new__(andorcam3.AndorCam3)
+        camera._name = "camera"
+        camera.isImplemented = lambda feature: feature == "InterfaceType"
+        camera.GetString = lambda feature: "USB3" if feature == "InterfaceType" else serial_number
+        return camera
+
+    def test_check_connection_valid_vid_pid_usb2_raises(self) -> None:
+        """
+        Ensure valid Andor VID:PID on USB2 triggers a connection error.
+        """
+        camera = self._make_camera("VSC-01959")
+        paths = ["/sys/bus/usb/devices/3-1.2"]
+        files = {
+            "/sys/bus/usb/devices/3-1.2/idVendor": "136e\n",
+            "/sys/bus/usb/devices/3-1.2/idProduct": "0014\n",
+            "/sys/bus/usb/devices/3-1.2/version": "2.00\n",
+        }
+
+        def _open(path: str, *args, **kwargs) -> io.StringIO:
+            if path in files:
+                return io.StringIO(files[path])
+            raise IOError(path)
+
+        with mock.patch.object(andorcam3.glob, "glob", return_value=paths), \
+                mock.patch("builtins.open", side_effect=_open):
+            with self.assertRaises(andorcam3.HwError):
+                camera._check_connection()
+
+    def test_check_connection_vsc_andor_serial_is_accepted(self) -> None:
+        """
+        Ensure "VSC-ANDOR" serial is accepted when VID:PID is valid.
+        """
+        camera = self._make_camera("VSC-01959")
+        paths = ["/sys/bus/usb/devices/3-1.2", "/sys/bus/usb/devices/4-1.3"]
+        files = {
+            "/sys/bus/usb/devices/3-1.2/idVendor": "136e\n",
+            "/sys/bus/usb/devices/3-1.2/idProduct": "0014\n",
+            "/sys/bus/usb/devices/3-1.2/serial": "VSC-ANDOR\n",
+            "/sys/bus/usb/devices/3-1.2/version": "2.10\n",
+            "/sys/bus/usb/devices/4-1.3/idVendor": "136e\n",
+            "/sys/bus/usb/devices/4-1.3/idProduct": "0021\n",
+            "/sys/bus/usb/devices/4-1.3/serial": "OTHER\n",
+            "/sys/bus/usb/devices/4-1.3/version": "3.10\n",
+        }
+
+        def _open(path: str, *args, **kwargs) -> io.StringIO:
+            if path in files:
+                return io.StringIO(files[path])
+            raise IOError(path)
+
+        with mock.patch.object(andorcam3.glob, "glob", return_value=paths), \
+                mock.patch("builtins.open", side_effect=_open):
+            with self.assertRaises(andorcam3.HwError):
+                camera._check_connection()
+
+    def test_check_connection_vsc_andor_without_valid_vid_pid_is_ignored(self) -> None:
+        """
+        Ensure "VSC-ANDOR" is ignored when VID:PID is not an Andor pair.
+        """
+        camera = self._make_camera("VSC-01959")
+        paths = ["/sys/bus/usb/devices/3-1.2"]
+        files = {
+            "/sys/bus/usb/devices/3-1.2/idVendor": "1234\n",
+            "/sys/bus/usb/devices/3-1.2/idProduct": "abcd\n",
+            "/sys/bus/usb/devices/3-1.2/serial": "VSC-ANDOR\n",
+            "/sys/bus/usb/devices/3-1.2/version": "2.00\n",
+        }
+
+        def _open(path: str, *args, **kwargs) -> io.StringIO:
+            if path in files:
+                return io.StringIO(files[path])
+            raise IOError(path)
+
+        with mock.patch.object(andorcam3.glob, "glob", return_value=paths), \
+                mock.patch("builtins.open", side_effect=_open):
+            camera._check_connection()
+
 
 # Notes on testing the reconnection (which is pretty impossible to do non-manually):
 # * Test both cable disconnect/reconnect and turning off/on
