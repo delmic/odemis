@@ -727,6 +727,7 @@ class Sparc2AlignTab(Tab):
 
                 if main_data.tc_od_filter:
                     speccnt_spe.add_axis_entry("density", main_data.tc_od_filter)
+                if main_data.tc_filter:
                     speccnt_spe.add_axis_entry("band", main_data.tc_filter)
                 speccnt_spe.stream_panel.flatten()
                 self._speccnt_stream = speccnts
