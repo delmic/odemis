@@ -601,7 +601,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         sr = self._get_scan_rotation()   # Fails if ion-beam and e-beam have different scan rotations
         # Make sure the SEM image is shown without rotation in the UI. This works by setting
         # MD_ROTATION_COR as the same value as MD_ROTATION (automatically set on the image).
-        self._set_scanner_rotation_cor(sr)
+        self._set_scanner_rotation_cor()
         tf_sr, _ = get_rotation_transforms(rz=sr)
 
         # We assume that FM & SEM are rotate by 180°. Let's warn if that's not the case.
@@ -685,10 +685,17 @@ class MeteorPostureManager(MicroscopePostureManager):
     def _get_scan_rotation(self) -> float:
         """
         Get the scan rotation value for SEM/FIB, and ensure they match.
+        If not both e-beam and ion-beam are available, the default scan rotation is used.
         :return: the scan rotation value in radians
+        :raise: ValueError if the scan rotation values for e-beam and ion-beam do not match
         """
+        # We only "trust" the scan rotation, if both the SEM and FIB have the same rotation.
+        # Otherwise, it might mean the user didn't really pay attention to it. The FM is calibrated
+        # for a given scan rotation, so picking the arbitrary scan rotation at startup could cause
+        # the sample stage to go in the wrong direction related to the FM image.
         try:
             ebeam = model.getComponent(role='e-beam')
+            ion_beam = model.getComponent(role='ion-beam')
         except LookupError:
             logging.info("e-beam and/or ion-beam not available, scan rotation assumed to %s°",
                          round(math.degrees(self._default_scan_rotation)))
@@ -696,33 +703,26 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # check if e-beam and ion-beam have the same rotation
         sr = ebeam.rotation.value
-
-        try:
-            ion_beam = model.getComponent(role='ion-beam')
-        except LookupError:
-            logging.info("ion-beam not available, scan rotation assumed to be the same as e-beam: %s°", math.degrees(sr))
-            return sr
-
         ion_sr = ion_beam.rotation.value
         if not numpy.isclose(sr, ion_sr, atol=ATOL_ROTATION_POS):
             raise ValueError(f"The SEM and FIB rotations do not match {sr} != {ion_sr}")
 
         return sr
 
-    def _set_scanner_rotation_cor(self, rotation: float):
+    def _set_scanner_rotation_cor(self):
         """
-        Set the scanners' MD_ROTATION_COR metadata field to the provided rotation value.
-        :param rotation: rotation in radians
+        Set the scanners' MD_ROTATION_COR metadata field to the current rotation, so that the
+        image is shown without rotation in the UI, as in the SEM UI. This is necessary, as
+        the sample stage compensates for the scan rotation already.
         """
         for scanner_name in ["e-beam", "ion-beam"]:
-            scanner = None
             try:
                 scanner = model.getComponent(role=scanner_name)
             except LookupError:
-                pass
+                continue
 
-            if scanner is not None:
-                scanner.updateMetadata({model.MD_ROTATION_COR: rotation})
+            rotation = scanner.rotation.value
+            scanner.updateMetadata({model.MD_ROTATION_COR: rotation})
 
     def from_sample_stage_to_stage_movement(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1756,7 +1756,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Compensate for the scan rotation (around Z)
         sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
-        self._set_scanner_rotation_cor(sr)  # Makes sure total image rotation is 0
+        self._set_scanner_rotation_cor()  # Makes sure total image rotation is 0
         tf_sr, _ = get_rotation_transforms(rz=-sr)
 
         # FM imaging
