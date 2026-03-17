@@ -16360,7 +16360,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Retract</label>
-                          <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
+                          <tooltip>Moves the selector mirror away, so that the light goes to the internal spectrograph.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -16375,7 +16375,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Engage</label>
-                          <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
+                          <tooltip>Moves the selector mirror so that the light goes out. It is then possible to align it.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
