@@ -1699,8 +1699,8 @@ class DraggableCanvas(BitmapCanvas):
     # Buffer and drawing methods
     def get_minimum_buffer_size(self):
         """ Return the minimum size needed by the buffer """
-        return (max(self.MinClientSize.x, self.ClientSize.x) + self.default_margin * 2,
-                max(self.MinClientSize.y, self.ClientSize.y) + self.default_margin * 2)
+        return (max(1, self.MinClientSize.x, self.ClientSize.x) + self.default_margin * 2,
+                max(1, self.MinClientSize.y, self.ClientSize.y) + self.default_margin * 2)
 
     def _calc_bg_offset(self, new_pos):
         """ Calculate the offset needed for the checkered background after a canvas shift
