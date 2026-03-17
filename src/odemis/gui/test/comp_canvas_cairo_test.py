@@ -1,13 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Created on 22 April 2014
 
-Dummy test case for rapid prototype of Cairo drawn canvas
+@author: Rinze de Laat
 
-TODO: Useful code should be migrated to a 'real' test case for the canvas and miccanvas modules once
-Cairo has been fully integrated.
+Copyright © 2014 Rinze de Laat, Delmic
 
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 """
+# Dummy test case for rapid prototype of Cairo drawn canvas
+
+# TODO: Useful code should be migrated to a 'real' test case for the canvas and miccanvas modules once
+# Cairo has been fully integrated.
 
 import unittest
 import logging
