@@ -2097,16 +2097,21 @@ class Shamrock(model.Actuator):
             logging.warning("Failed to update turret position, detector offset might be incorrect", exc_info=True)
         self._updatePosition()
 
-    def _doSetGoffsetAbs(self, target_offset, *, allow_grating_offset=True):
+
+    def _doSetGoffsetAbs(self, target_offset, *, allow_grating_offset=True, single_detector_mode = False):
 
         """
         Change grating offset, by either changing the grating offset or the detector offset.
         :param target_offset (float): the new grating offset to set
         :param allow_grating_offset (bool): check to allow changing the grating offset, if false, only change
         detector offset.
+        :param single_detector_mode (bool): if true, it will always change the grating offset,
+        even if the output flipper is not in the direct port position.
         """
-        target_offset = int(round(target_offset)) # ensure that we get integers for steps
+
+        target_offset = int(round(target_offset))  # ensure that we get integers for steps
         grating = self.GetGrating()
+        port_index = self.GetFlipperMirror(OUTPUT_FLIPPER)
 
         if "flip-in" in self.axes:
             flip_in_pos = self.GetFlipperMirror(INPUT_FLIPPER)
@@ -2118,38 +2123,36 @@ class Shamrock(model.Actuator):
         else:
             flip_out_pos = DIRECT_PORT
 
+        single_detector = bool(single_detector_mode)
         current_grat_offset = self.GetGratingOffset(grating)
         current_det_offset = self.GetDetectorOffset(flip_in_pos, flip_out_pos)
         logging.debug("Current goffset: %d (Grat: %d, Det: %d)",
                       (current_grat_offset + current_det_offset),
                       current_grat_offset, current_det_offset)
 
-        # The effective grating offset is the actual grating offset + the detector offset to account for changes in the detector path
-        # (e.g. flipper mirrors) that shift the spectrum on the detector. By adding the detector offset to the grating offset,
-        # the reported goffset always matches the observed spectral alignment, keeping calibration consistent.
+        # The detector offset compensates for small naccuracies introduced by the flip-mirror mechanism.
+        # This value is normally stable and seldom requires re-adjustment.
 
-        if grating == 1:
+        if port_index == 0 or single_detector:
+            logging.debug(
+                "Choosing grating offset update (port_index=%s single_detector=%s)",
+                port_index, single_detector
+            )
+
+            # primary detector -> modify grating offset
             if not allow_grating_offset:
-                logging.debug("Grating offset update disabled (grating=1, target=%d)",target_offset,)
+                logging.debug("Grating offset update disabled (grating=1, target=%d)", target_offset, )
             else:
                 grating_offset = target_offset - current_det_offset
                 self.SetGratingOffset(grating, grating_offset)
 
-            if not (GRAT_OFFSET_MIN <= grating_offset <= GRAT_OFFSET_MAX):
-                raise ValueError("Grating offset %.3f out of bounds [%.3f, %.3f] "
-                                 "(target_offset=%.3f, detector_offset=%.3f)"
-                                    % (grating_offset, GRAT_OFFSET_MIN, GRAT_OFFSET_MAX)
-                                 )
-
+        # secondary detector (if multiple detectors) -> modify detector offset
         else:
+            logging.debug(
+                "Choosing detector offset update (port_index=%s single_detector=%s)",
+                port_index, single_detector
+            )
             detector_offset = target_offset - current_grat_offset
-            if not (DET_OFFSET_MIN <= detector_offset <= DET_OFFSET_MAX):
-                raise ValueError(
-                    "Detector offset %.3f out of bounds [%.3f, %.3f] "
-                    "(target_offset=%.3f, grating_offset=%.3f)"
-                    % (detector_offset, DET_OFFSET_MIN, DET_OFFSET_MAX)
-                )
-
             self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
 
         self._updatePosition()
