@@ -38,7 +38,6 @@ import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
-from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.util import call_in_wx_main
 from odemis.acq.move import FM_IMAGING
 
@@ -135,7 +134,7 @@ class CorrelationController(object):
             vp.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
 
         # localization tab
-        self.localization_tab: LocalizationTab = None
+        self.localization_tab: "LocalizationTab" = None
         self.fibsem_tab = None
 
         # auto correlation SEM<>FM, based on the  stage-bare position found in the image metadata
@@ -262,7 +261,7 @@ class CorrelationController(object):
         """
         if self.localization_tab is None:
             try:
-                self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
+                self.localization_tab: "LocalizationTab" = self._main_data_model.getTabByName("cryosecom-localization")
             except LookupError:
                 return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 
@@ -467,7 +466,7 @@ class CorrelationController(object):
 
         if self.localization_tab is None:
             try:
-                self.localization_tab: LocalizationTab = self._main_data_model.getTabByName("cryosecom-localization")
+                self.localization_tab: "LocalizationTab" = self._main_data_model.getTabByName("cryosecom-localization")
             except LookupError:
                 return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 

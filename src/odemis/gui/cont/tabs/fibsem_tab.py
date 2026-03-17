@@ -22,17 +22,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import math
-from typing import Dict
 from concurrent.futures import CancelledError
+from typing import Dict
 
 import numpy
 import wx
 
-import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
-from odemis.gui.conf.data import get_local_vas
 from odemis import model
 from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
@@ -44,13 +42,12 @@ from odemis.acq.stream import (
 )
 from odemis.gui import conf
 from odemis.gui.comp.buttons import BTN_TOGGLE_COMPLETE, BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS
+from odemis.gui.conf.data import get_local_vas
 from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
+from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
 from odemis.gui.cont.features import CryoFeatureController
-from odemis.gui.cont.stream_bar import (
-    CryoFIBAcquiredStreamsController,
-    CryoStreamsController,
-)
+from odemis.gui.cont.stream_bar import CryoFIBAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
@@ -121,8 +118,7 @@ class FibsemTab(Tab):
         )
         self._streambar_controller._stream_bar.btn_add_stream.Hide()
 
-        self._acquisition_controller = acqcont.CryoAcquiController(
-            tab_data, panel, self, mode=guimod.AcquiMode.FIBSEM)
+        self._acquisition_controller = CryoAcquiController(tab_data, panel, self, mode=guimod.AcquiMode.FIBSEM)
         self.conf = conf.get_acqui_conf()
 
         # Toolbar

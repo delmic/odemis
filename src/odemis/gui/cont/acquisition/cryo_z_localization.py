@@ -27,7 +27,6 @@ of microscope images.
 
 """
 import logging
-import math
 from concurrent.futures._base import CancelledError
 from typing import List, Optional
 
@@ -40,17 +39,12 @@ from odemis.acq.feature import Target, TargetType, save_features
 from odemis.acq.move import FM_IMAGING
 from odemis.acq.stream import FluoStream
 from odemis.gui import conf
-from odemis.gui.comp import popup
 from odemis.gui.cont.multi_point_correlation import update_feature_correlation_target
 from odemis.gui.model import TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import (
-    ProgressiveFutureConnector,
-    VigilantAttributeConnector,
-)
+from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
 from odemis.model import ListVA
 from odemis.util import units
-from odemis.util.filename import create_filename
 
 
 class CryoZLocalizationController(object):
