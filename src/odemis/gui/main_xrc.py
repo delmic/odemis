@@ -8851,7 +8851,7 @@ D$T\xf2
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_overview_acq">
                       <bg>#333333</bg>
-                      <size>400,100</size>
+                      <size>400,102</size>
                       <flag>wxTOP|wxEXPAND</flag>
                     </object>
                   </object>

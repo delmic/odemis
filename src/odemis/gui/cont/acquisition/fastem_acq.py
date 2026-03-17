@@ -154,7 +154,7 @@ class FastEMOverviewAcquiController(object):
 
         # Setup the controls
         self.overview_acq_panel = SettingsPanel(
-            self._tab_panel.pnl_overview_acq, size=(400, 100)
+            self._tab_panel.pnl_overview_acq, size=(400, 102)
         )
         _, self._contrast_ctrl = self.overview_acq_panel.add_float_slider(
             CONTRAST, value=self._main_data_model.sed.contrast.value, conf=contrast_conf
