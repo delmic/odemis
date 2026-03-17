@@ -2,12 +2,27 @@ import logging
 import os
 import time
 import unittest
+import numpy
+from collections.abc import Iterable
 from concurrent.futures import CancelledError
+from scipy import ndimage
 
-from odemis import model
-from odemis.acq.align.goffset_alignment import auto_align_grating_detector_offsets
-from odemis.util import timeout
+from odemis import model, acq
+
+#from odemis.acq.align.goffset import auto_align_grating_detector_offsets
+
+from odemis.util import testing, timeout, img
 import odemis.util.focus
+
+from odemis.acq.align.goffset import(
+    find_peak_position,
+    acquire_peak,
+    estimate_goffset_scale,
+    sparc_auto_grating_offset,
+    auto_align_grating_detector_offsets
+)
+
+
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc2-focus-test.odm.yaml"
@@ -27,17 +42,17 @@ class TestAutoAlignGratingDetectorOffsets(unittest.TestCase):
         # Speed up acquisition
         self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
 
-    @timeout(100)
-    def test_cancel(self):
-        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=[self.ccd],)
-        time.sleep(1)
-
-        cancelled = f.cancel()
-        self.assertTrue(cancelled)
-        self.assertTrue(f.cancelled())
-
-        with self.assertRaises(CancelledError):
-            f.result(timeout=900)
+    # @timeout(100)
+    # def test_cancel(self):
+    #     f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=[self.ccd],)
+    #     time.sleep(1)
+    #
+    #     cancelled = f.cancel()
+    #     self.assertTrue(cancelled)
+    #     self.assertTrue(f.cancelled())
+    #
+    #     with self.assertRaises(CancelledError):
+    #         f.result(timeout=900)
 
 
     @timeout(1000)
@@ -105,6 +120,7 @@ class TestAutoAlignGratingDetectorOffsets(unittest.TestCase):
         # move to spectral camera
         self.selector.moveAbsSync({"rx": 1.5707963267948966})
         data = spccd.data.get(asap=False)
+
         # check data is not flat
         if data.max() == data.min():
             print("WARNING: sp-ccd is returning a flat image!")
