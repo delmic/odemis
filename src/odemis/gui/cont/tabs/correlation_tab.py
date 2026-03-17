@@ -45,6 +45,10 @@ from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
+from odemis.util.tiff_convert import (
+    ensure_pyramidal_tiff_for_file_gui,
+    ensure_pyramidal_tiff_for_tileset_gui,
+)
 
 
 class CorrelationTab(Tab):
@@ -167,10 +171,14 @@ class CorrelationTab(Tab):
         self.select_acq_file(extend=True, tileset=True)
 
     def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
+        # Convert all files to pyramidal if they're TIFFs
+        filenames = ensure_pyramidal_tiff_for_tileset_gui(filenames, self.panel, self.main_data)
         data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
         self.load_streams(data)
 
     def load_data(self, filename: str, fmt: str = None, extend: bool = False) -> None:
+        # Convert to pyramidal if it's a TIFF file
+        filename = ensure_pyramidal_tiff_for_file_gui(filename, self.panel, self.main_data)
         data = open_acquisition(filename, fmt)
         self.load_streams(data)
 
