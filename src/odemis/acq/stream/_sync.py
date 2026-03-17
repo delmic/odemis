@@ -91,7 +91,8 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
           should be the e-beam, and will be used to scan). Streams should have
           a different detector. The order matters.
           The first stream with .repetition will be used to define
-          the region of acquisition (ROA), with the .roi and .fuzzing VAs.
+          the region of acquisition (ROA), with the .roi, .rotation, .fuzzing VAs
+          and .guessFoV will be used to define the field-of-view (FoV).
           The first stream with .useScanStage will be used to define a scanning
           stage.
           The first leech of type AnchorDriftCorrector will be used for drift correction.
@@ -124,6 +125,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 logging.debug("Using ROA from %s", s)
                 self.repetition = s.repetition
                 self.roi = s.roi
+                self.guessFoV = s.guessFoV
                 if model.hasVA(s, "rotation"):
                     self.rotation = s.rotation
                 if model.hasVA(s, "fuzzing"):
@@ -166,6 +168,15 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 # get the VAs
                 self._integrationTime = s.integrationTime
                 self._integrationCounts = s.integrationCounts
+
+        # Get focuser if found on any of the substreams
+        self._focuser = None
+        for s in streams:
+            if hasattr(s, "_focuser") and s._focuser:
+                if self._focuser and self._focuser != s._focuser:
+                    logging.warning("Multiple different focusers were found.")
+                    break
+                self._focuser = s._focuser
 
         # Information about the scanning, computed just before running an acquisition
         self._pxs = None  # (float, float): pixel size in the CCD data (so, independent of fuzzing)
