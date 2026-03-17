@@ -43,8 +43,10 @@ from odemis.acq.feature import (
     CryoFeature,
     _create_fibsem_filename,
     acquire_at_features,
-    add_feature_info_to_filename,
+    create_feature_acquisition_filename,
+    save_features,
 )
+from odemis.acq.project_state import STREAM_ORIGIN_FILENAME_MD, STREAM_ORIGIN_INDEX_MD
 from odemis.acq.move import FM_IMAGING
 from odemis.acq.stream import (
     BrightfieldStream,
@@ -96,13 +98,18 @@ class CryoAcquiController(object):
         self._config = conf.get_acqui_conf()
         # contains the acquisition progressive future for the given streams
         self._acq_future = None
+        # Snapshot of the feature bound to the currently running FLM acquisition.
+        # Needed because currentFeature can change in the UI before async export/display completes.
+        self._active_acq_feature: Optional[CryoFeature] = None
 
         # VA's
         self._filename = self._tab_data.filename
         self._acquiStreams = self._tab_data.acquisitionStreams
         if self.acqui_mode is guimod.AcquiMode.FLM:
+            # Reuse the tab-level z-stack toggle: FLM is the only mode supporting z-stack acquisition.
             self._zStackActive = self._tab_data.zStackActive
         else:
+            # Keep a local disabled VA in non-FLM modes so downstream code can always read _zStackActive.
             self._zStackActive = model.BooleanVA(False)
 
         # Find the function pattern without detecting the count
@@ -284,6 +291,9 @@ class CryoAcquiController(object):
 
         # get the streams to acquire (depending on mode, btn, ...)
         acq_streams = self._get_acqui_streams(evt)
+        if self.acqui_mode is guimod.AcquiMode.FLM and self._tab_data.main.currentFeature.value is None:
+            self._tab.tab_data_model.select_current_position_feature()
+        self._active_acq_feature = self._tab_data.main.currentFeature.value
 
         # acquire the data
         if self._zStackActive.value:
@@ -317,9 +327,6 @@ class CryoAcquiController(object):
         Called when the acquisition process is
         done, failed or canceled
         """
-        if self.acqui_mode is guimod.AcquiMode.FLM:
-            self._tab.tab_data_model.select_current_position_feature()
-
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
@@ -334,12 +341,14 @@ class CryoAcquiController(object):
         except CancelledError:
             logging.info("The acquisition was canceled")
             self._reset_acquisition_gui(state=ST_CANCELED)
+            self._active_acq_feature = None
             return
         except Exception:
             logging.exception("The acquisition failed")
             self._reset_acquisition_gui(
                 text="Acquisition failed (see log panel).", state=ST_FAILED
             )
+            self._active_acq_feature = None
             return
         if exp:
             logging.error("Acquisition partially failed %s: ", exp)
@@ -348,7 +357,7 @@ class CryoAcquiController(object):
         executor = futures.ThreadPoolExecutor(max_workers=2)
         st = stream.StreamTree(streams=list(self._acquiStreams.value))
         # thumb_nail = acqmng.computeThumbnail(st, future) # ImageJ does not work with the thumbnail in the tiff files
-        scheduled_future = executor.submit(self._export_data, data, None)
+        scheduled_future = executor.submit(self._export_data, data)
         scheduled_future.add_done_callback(self._on_export_data_done)
 
     def _acquire_at_features(self, _: wx.Event):
@@ -503,7 +512,7 @@ class CryoAcquiController(object):
         Shows the acquired image on the view
         """
         if self.acqui_mode is guimod.AcquiMode.FLM:
-            self._tab.display_acquired_data(data)
+            self._tab.display_acquired_data(data, feature=self._active_acq_feature)
 
     @call_in_wx_main
     def _on_export_data_done(self, future):
@@ -514,6 +523,7 @@ class CryoAcquiController(object):
         self._update_acquisition_time()
         data = future.result()
         self._display_acquired_data(data)
+        self._active_acq_feature = None
 
     def _create_cryo_filename(self, filename: str, acq_type: Optional[str] = None) -> str:
         """
@@ -525,14 +535,17 @@ class CryoAcquiController(object):
             model.MD_AT_FIB: "FIB"
         }
         if self.acqui_mode is guimod.AcquiMode.FLM:
-            filename = add_feature_info_to_filename(feature=self._tab_data.main.currentFeature.value,
-                                        filename=filename)
+            if self._active_acq_feature is None:
+                logging.warning("No active feature selected for FLM acquisition; using base filename.")
+                return filename
+            filename = create_feature_acquisition_filename(feature=self._active_acq_feature,
+                                                           filename=filename)
         else:
             filename = _create_fibsem_filename(filename, acq_map[acq_type])
 
         return filename
 
-    def _export_data(self, data: List[model.DataArray], thumb_nail):
+    def _export_data(self, data: List[model.DataArray], thumb_nail=None):
         """
         Called to export the acquired data.
         data (DataArray): the returned data/images from the future
@@ -558,6 +571,16 @@ class CryoAcquiController(object):
                 filename = self._create_cryo_filename(base_filename)
                 exporter.export(filename, data, thumb_nail)
                 logging.info("Acquisition saved as file '%s'.", filename)
+
+                current_feature = self._active_acq_feature
+                if current_feature is not None:
+                    project_dir = self._config.pj_last_path
+                    rel_filename = os.path.relpath(filename, project_dir)
+                    current_feature.add_stream_record(rel_filename, len(data))
+                    for stream_index, data_array in enumerate(data):
+                        data_array.metadata[STREAM_ORIGIN_FILENAME_MD] = rel_filename
+                        data_array.metadata[STREAM_ORIGIN_INDEX_MD] = stream_index
+                    save_features(project_dir, self._tab_data.main.features.value)
 
             # TODO: make saving fibsem data optional
             # TODO: investigate using Cntrl + S to save?

@@ -24,12 +24,14 @@ data streams coming from the microscope.
 """
 
 import logging
+
+import wx
+
 from odemis import acq
 from odemis.gui import FG_COLOUR_BUTTON
 from odemis.gui.comp import buttons
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.evt import EVT_STREAM_REMOVE
-import wx
 
 
 class StreamBar(wx.Panel):
@@ -78,6 +80,7 @@ class StreamBar(wx.Panel):
 
         self.stream_panels = []
         self._on_destroy_callbacks = {}  # StreamPanel -> Callable()
+        self._on_user_remove_callback = None
 
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
@@ -162,8 +165,17 @@ class StreamBar(wx.Panel):
         """
         st = evt.spanel.stream
         logging.debug("User removed stream (panel) %s", st.name.value)
+        if self._on_user_remove_callback:
+            self._on_user_remove_callback(st)
         # delete stream panel (which will "Destroy" it, which will trigger on_streamp_destroy())
         self.remove_stream_panel(evt.spanel)
+
+    def set_on_user_remove_callback(self, callback):
+        """Set callback called on explicit user stream-panel removal.
+
+        :param callback: Callable receiving the stream instance.
+        """
+        self._on_user_remove_callback = callback
 
     def on_streamp_destroy(self, evt: wx.Event):
         """

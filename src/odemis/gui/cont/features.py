@@ -19,7 +19,9 @@ from odemis.acq.feature import (
     FIBFMCorrelationData,
     Target,
     TargetType,
+    feature_storage_dirname,
 )
+from odemis.acq.project_state import get_stream_origin, set_stream_origin
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.move import (
     FM_IMAGING,
@@ -108,8 +110,18 @@ class CryoFeatureController(object):
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()
         if ans == wx.ID_YES:
+            # Optional controller: available on tabs that manage acquired static streams.
+            acquired_ctrl = getattr(self._tab, "_acquired_stream_controller", None)
+            if acquired_ctrl is not None:
+                # FIBSEM keeps only one acquired-stream set in memory, while FLM/localization
+                # tracks streams per feature, so only the deleted feature is cleared there.
+                if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+                    acquired_ctrl.clear_feature_streams()
+                else:
+                    acquired_ctrl.clear_feature_streams(current_feature)
             self._tab_data_model.main.features.value.remove(current_feature)
             self._tab_data_model.main.currentFeature.value = None
+            save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
                 self._tab.milling_task_controller.draw_milling_tasks()
 
@@ -408,13 +420,89 @@ class CryoFeatureController(object):
 
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
+    def _rename_feature_storage_paths(self, feature: CryoFeature, old_name: str, new_name: str) -> bool:
+        """Rename feature acquisition directory and update persisted stream paths.
+
+        :return: ``True`` when rename/path rewrite succeeded (or was not needed),
+            ``False`` when rename must be rejected.
+        """
+        project_dir = self._tab.conf.pj_last_path
+        if not project_dir:
+            return True
+
+        # Example: "Feature-1" -> "Feature-A"
+        old_dirname = feature_storage_dirname(old_name)
+        new_dirname = feature_storage_dirname(new_name)
+        # If sanitization yields the same folder (e.g. only slash/backslash differences),
+        # there is nothing to rewrite on disk or in records.
+        if old_dirname == new_dirname:
+            return True
+
+        # Relative path prefix used in stream records:
+        # "Feature-1/" -> "Feature-A/"
+        old_prefix = old_dirname + os.sep
+        new_prefix = new_dirname + os.sep
+        for record in feature.stream_records:
+            filename = record.get("filename")
+            if not isinstance(filename, str):
+                continue
+            normalized = os.path.normpath(filename)
+            # Only rewrite files currently under the old feature folder.
+            if not normalized.startswith(old_prefix):
+                continue
+            # Keep trailing file path unchanged:
+            # "Feature-1/acq-001.ome.tiff" -> "Feature-A/acq-001.ome.tiff"
+            suffix = normalized[len(old_prefix):]
+            record["filename"] = os.path.normpath(new_prefix + suffix)
+
+        # Also update origins on already loaded in-memory streams so UI actions
+        # (delete/tint/save) keep pointing to renamed files.
+        for stream in feature.streams.value:
+            filename, stream_index = get_stream_origin(stream)
+            if not isinstance(filename, str) or not isinstance(stream_index, int):
+                continue
+            normalized = os.path.normpath(filename)
+            if not normalized.startswith(old_prefix):
+                continue
+            suffix = normalized[len(old_prefix):]
+            set_stream_origin(stream, os.path.normpath(new_prefix + suffix), stream_index)
+
+        old_dir = os.path.join(project_dir, old_dirname)
+        new_dir = os.path.join(project_dir, new_dirname)
+        if os.path.isdir(old_dir):
+            # Do not overwrite an existing target folder; keep old folder and warn.
+            if os.path.exists(new_dir):
+                logging.warning(
+                    "Cannot rename feature acquisition folder %s -> %s: target exists.",
+                    old_dir,
+                    new_dir,
+                )
+                return False
+            # Final on-disk rename for acquisition files.
+            try:
+                os.rename(old_dir, new_dir)
+            except OSError:
+                logging.exception(
+                    "Cannot rename feature acquisition folder %s -> %s.",
+                    old_dir,
+                    new_dir,
+                )
+                return False
+        return True
+
     def _on_cmb_feature_name_change(self):
         feature = self._tab_data_model.main.currentFeature.value
-        value = self._panel.cmb_features.GetValue()  # Old name
-        # Update the name of the streams with the new name
-        for stream in feature.streams.value:
-            stream.name.value = stream.name.value.replace(feature.name.value, value)
-        return value
+        if feature is None:
+            return self._panel.cmb_features.GetValue()
+
+        old_name = feature.name.value
+        new_name = self._panel.cmb_features.GetValue()
+        if old_name != new_name:
+            rename_successful = self._rename_feature_storage_paths(feature, old_name, new_name)
+            if not rename_successful:
+                logging.warning("Feature rename rejected, keeping original name '%s'.", old_name)
+                return old_name
+        return new_name
 
     def _on_feature_status(self, feature_status):
         """

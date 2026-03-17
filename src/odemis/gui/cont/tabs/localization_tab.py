@@ -28,7 +28,7 @@ import logging
 import numpy
 import wx
 
-from typing import List
+from typing import List, Optional
 from odemis.gui import conf
 from odemis.gui.cont.features import CryoFeatureController
 
@@ -41,6 +41,15 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.acq.align import AutoFocus
+from odemis.acq.project_state import (
+    STREAM_ORIGIN_FILENAME_MD,
+    STREAM_ORIGIN_INDEX_MD,
+    get_stream_origin,
+    is_overview_stream_deleted,
+    register_overview_streams,
+    set_stream_origin,
+    set_stream_origin_from_raw,
+)
 from odemis.acq.move import MILLING, ALIGNMENT, \
     FM_IMAGING, SEM_IMAGING, THREE_BEAMS
 from odemis.acq.stream import LiveStream, StaticStream
@@ -283,16 +292,37 @@ class LocalizationTab(Tab):
 
     @call_in_wx_main
     def load_overview_data(self, data: List[model.DataArray]):
-        # Create streams from data
-        streams = data_to_static_streams(data)
+        project_path = self.tab_data_model.main.project_path.value or self.conf.pj_last_path
+        kept_data: List[model.DataArray] = []
+        for data_array in data:
+            filename = data_array.metadata.get(STREAM_ORIGIN_FILENAME_MD)
+            stream_index = data_array.metadata.get(STREAM_ORIGIN_INDEX_MD)
+            if (
+                project_path
+                and isinstance(filename, str)
+                and isinstance(stream_index, int)
+                and is_overview_stream_deleted(project_path, filename, stream_index)
+            ):
+                continue
+            kept_data.append(data_array)
+
+        # Create streams from non-deleted overview data only.
+        streams = data_to_static_streams(kept_data)
+        kept_streams: List[StaticStream] = []
         bbox = (None, None, None, None)  # ltrb in m
-        for s in streams:
+        for data_array, s in zip(kept_data, streams):
+            set_stream_origin_from_raw(s)
+            filename = data_array.metadata.get(STREAM_ORIGIN_FILENAME_MD)
+            stream_index = data_array.metadata.get(STREAM_ORIGIN_INDEX_MD)
+            if get_stream_origin(s) == (None, None) and isinstance(filename, str) and isinstance(stream_index, int):
+                set_stream_origin(s, filename, stream_index)
             s.name.value = "Overview " + s.name.value
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
             self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
             self._acquired_stream_controller.showOverviewStream(s)
+            kept_streams.append(s)
 
             # Compute the total bounding box
             try:
@@ -313,12 +343,15 @@ class LocalizationTab(Tab):
         if self.main_data.role in ["meteor", "enzel"]:
             # Display the same acquired data in the chamber tab view
             chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-            chamber_tab.load_overview_streams(streams)
+            chamber_tab.load_overview_streams(kept_streams)
 
         # sync overview streams with correlation tab
-        if len(streams) > 0 and self.main_data.role == "meteor":
+        if len(kept_streams) > 0 and self.main_data.role == "meteor":
             correlation_tab = self.main_data.getTabByName("meteor-correlation")
-            correlation_tab.correlation_controller.add_streams(streams)
+            correlation_tab.correlation_controller.add_streams(kept_streams)
+
+        if kept_streams and project_path:
+            register_overview_streams(project_path, kept_streams)
 
     def reset_live_streams(self):
         """
@@ -425,18 +458,30 @@ class LocalizationTab(Tab):
             self._streambar_controller.update_stream_settings()
 
     @call_in_wx_main
-    def display_acquired_data(self, data):
+    def display_acquired_data(self, data, feature: Optional[object]):
         """
         Display the acquired streams on the top right view
-        data (DataArray): the images/data acquired
+
+        :param data: The images/data acquired.
+        :param feature: Feature snapshot bound to this acquisition. Used to
+            attach displayed static streams to the correct feature even if the
+            UI current feature changed while acquisition/export was running.
         """
         # get the top right view port
         view = self.tab_data_model.views.value[1]
         self.tab_data_model.focussedView.value = view
-        for s in data_to_static_streams(data):
-            if self.tab_data_model.main.currentFeature.value:
-                s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
-                self.tab_data_model.main.currentFeature.value.streams.value.append(s)
+        current_feature = feature
+        latest_record = current_feature.stream_records[-1] if current_feature and current_feature.stream_records else None
+
+        for stream_index, s in enumerate(data_to_static_streams(data)):
+            set_stream_origin_from_raw(s)
+            if current_feature and latest_record:
+                filename, persisted_index = get_stream_origin(s)
+                if filename is None or persisted_index is None:
+                    set_stream_origin(s, latest_record["filename"], stream_index)
+
+            if current_feature:
+                current_feature.streams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
             self._acquired_stream_controller.showFeatureStream(s)
         # refit the latest acquired feature so that the new data is fully visible in the
