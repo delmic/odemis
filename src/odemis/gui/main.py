@@ -368,7 +368,9 @@ class OdemisGUIApp(wx.App):
 
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
-
+            # Due to a bug in wxPython, sometimes the .Maximize() at the beginning of the function
+            # has no effect. So we call it after the Show() to be sure it works.
+            wx.CallAfter(self.main_frame.Maximize)
         except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
