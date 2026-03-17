@@ -210,6 +210,46 @@ def determine_z_position(image, calibration_data, fit_tol=0.1):
 
     return z_position, warning
 
+def ensure_stig_calib_format(stigmator: model.HwComponent) -> None:
+    """Convert the stigmator ``MD_CALIB`` from the old angle-keyed format to the new
+    target-size-keyed format, updating the component metadata in place.
+
+    Old format (angle as key)::
+
+        {0.08726: {'x': {...}, 'y': {...}, ...}}
+
+    New format (target size in metres as key, angle stored inside)::
+
+        {100e-6: {'angle': 0.08726, 'x': {...}, 'y': {...}, ...}}
+
+    Nothing happens if the calibration is absent or already in the new format.
+
+    :param stigmator: stigmator hardware component whose ``MD_CALIB`` may need converting.
+    :raises ValueError: if any calibration angle falls outside the ``rz`` axis range.
+    """
+    stig_calib = stigmator.getMetadata().get(model.MD_CALIB, None)
+    if not stig_calib:
+        return
+
+    # New format: every sub-dict already contains an 'angle' key.
+    if all('angle' in subdict for subdict in stig_calib.values()):
+        return
+
+    angles = frozenset(stig_calib.keys())
+    updated_stig_calib = {}
+    target_size = 0
+    rng = stigmator.axes["rz"].range
+    for a in angles:
+        if not rng[0] <= a <= rng[1]:
+            raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+        target_size += 100.e-6
+        updated_stig_calib[target_size] = stig_calib[a]
+        updated_stig_calib[target_size]['angle'] = a
+    stigmator.updateMetadata({model.MD_CALIB: updated_stig_calib})
+    logging.warning("Random target sizes have been created for the stigmator calibration: %s",
+                    list(updated_stig_calib.keys()))
+
+
 def measure_z_multi_targets(stigmator: model.HwComponent, focus: model.HwComponent, stream: FluoStream, poi_size : float,
                    pois: List[Target], fiducial_size: Optional[float] = None,
                    fiducials: Optional[List[Target]] = None) -> ProgressiveFuture:

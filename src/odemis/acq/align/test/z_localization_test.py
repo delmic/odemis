@@ -30,7 +30,7 @@ from concurrent.futures._base import CancelledError
 import odemis
 from odemis import model
 from odemis.acq import stream
-from odemis.acq.align.z_localization import determine_z_position, measure_z_multi_targets
+from odemis.acq.align.z_localization import determine_z_position, ensure_stig_calib_format, measure_z_multi_targets
 from odemis.acq.feature import Target, TargetType
 from odemis.acq.move import MicroscopePostureManager
 from odemis.dataio.tiff import read_data
@@ -160,6 +160,11 @@ class TestMeasureZ(unittest.TestCase):
         cls.stigmator = model.getComponent(role="stigmator")
         cls.focus = model.getComponent(role="focus")
         cls.filter = model.getComponent(role="filter")
+
+        # Convert stigmator MD_CALIB from old angle-keyed format to new target-size-keyed
+        # format, exactly as CryoLocalizationGUIData.__init__ does. This is required so that
+        # measure_z_multi_targets() can look up calibration data by poi_size / fiducial_size.
+        ensure_stig_calib_format(cls.stigmator)
 
         # The METEOR always needs a PostureManager to handle the stage properly, including
         # setting the MD_POS on acquired data.
