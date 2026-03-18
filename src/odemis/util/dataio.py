@@ -37,7 +37,7 @@ from odemis.acq.stream import (
     StaticSpectrumStream,
 )
 from odemis.model import MD_THETA_LIST, MD_TIME_LIST, MD_WL_LIST
-from odemis.util import img
+from odemis.util import img, rot_almost_equal
 
 
 def data_to_static_streams(data):
@@ -278,7 +278,9 @@ def add_acq_type_md(das):
 
 def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENTITY, weaving_method: int = WEAVER_MEAN) -> list:
     """
-    Stitches a set of tiles.
+    Stitches a set of tiles. If the files contain multiple streams, each stream is assumed to be acquired
+    at the same position, and they are stitched independently, so that the final result contains one
+    stitched image for each stream. All files are assumed to contain the same streams.
     :param infns: file names of tiles
     :param registration_method: method used for registration
     :param weaving_method: method used for weaving
@@ -319,33 +321,68 @@ def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENT
                 das_2d.append(img.ensure2DImage(da))
             except ValueError:
                 logging.info("Skipping %s because it is not 2D", da)
-        das = das_2d
 
+        das = das_2d
         if not das:
             raise ValueError(f"No compatible 2D data found in file {fn}")
 
-        # Add sorted DAs to list
-        das = sorted(das, key=leader_quality, reverse=True)
-        da_streams.append(tuple(das))
+        # Find the best stream to use for registration, and place it first. Note the outcome of this
+        # sorting is expected to be the same for all the tiles.
+        das = tuple(sorted(das, key=leader_quality, reverse=True))
+        da_streams.append(das)
 
     def get_acq_time(das):
         return das[0].metadata.get(model.MD_ACQ_DATE, 0)
 
+    # Sort by time, assuming it's going to be the acquisition order, which normally ensures that
+    # tiles are adjacent in the list, currently required for the register
     da_streams = sorted(da_streams, key=get_acq_time)
 
     das_registered = stitching.register(da_streams, registration_method)
 
-    # Weave every stream
-    st_data = []
-    for s in range(len(das_registered[0])):
-        streams = []
-        for da in das_registered:
-            streams.append(da[s])
-        da = stitching.weave(streams, weaving_method)
-        da.metadata[model.MD_DIMS] = "YX"
-        st_data.append(da)
+    # Weave every stream independently
+    st_weaved_data = []  # List of DataArrays, one for each stream, containing the stitched image
+    # zip(*) to convert from a series of streams per tile to a series of tiles per stream
+    for tiles in zip(*das_registered):  # Iterate on the streams, with all the tiles in a tuple
+        rot = _use_scan_rotation_as_rotation(tiles)
+        weaved = stitching.weave(tiles, weaving_method)
+        weaved.metadata[model.MD_DIMS] = "YX"
+        if rot is not None:
+            weaved.metadata[model.MD_ROTATION_COR] = rot
+        st_weaved_data.append(weaved)
 
-    return st_data
+    return st_weaved_data
+
+
+def _use_scan_rotation_as_rotation(tiles: tuple[model.DataArray]) -> Optional[float]:
+    """
+    If the tiles have scan rotation metadata, use it as rotation metadata, so that the weaver can
+    handle it and the final image looks correctly connected.
+    :param tiles: the DataArrays to update the metadata of.
+    :return: The scan rotation if it can be used as rotation, or None otherwise
+    """
+    # Trick for handling SEM data from other microscopes. Use scan rotation as rotation, which
+    # the weaver knows how to handle, so that the final image looks correctly connected.
+    # Use MD_ROTATION_COR to display the final stitch image in the original orientation.
+    rot = None
+    for i, da in enumerate(tiles):
+        if model.MD_BEAM_SCAN_ROTATION in da.metadata and model.MD_ROTATION not in da.metadata:
+            rot_tile = da.metadata[model.MD_BEAM_SCAN_ROTATION]
+            da.metadata[model.MD_ROTATION] = rot_tile
+        else:
+            rot_tile = None
+
+        if i == 0:  # First tile, use its rotation as reference
+            rot = rot_tile
+        elif rot is None and rot_tile is None:
+            # No rotation metadata, nothing to check
+            pass
+        elif (rot_tile is None) != (rot is None):
+            logging.warning("Tile %s has different scan rotation metadata, than the first tile",i)
+        elif not rot_almost_equal(rot_tile, rot, atol=1e-3):
+                logging.warning("Tile %s has a different scan rotation (%s) than the first tile (%s)",
+                          i, rot_tile, rot)
+    return rot
 
 
 def read_json(file_path: str) -> Optional[Any]:
