@@ -2401,6 +2401,42 @@ def read_data(filename):
     return [acd.content[n].getData() for n in range(len(acd.content))]
 
 
+def is_pyramidal(filename: str) -> bool:
+    """
+    Check whether a TIFF file has SubIFD pyramid levels.
+
+    :param filename: Path to TIFF file
+    :return: True when TIFFTAG_SUBIFD contains one or more entries
+    :raises IOError: If the file cannot be opened as TIFF
+    """
+    try:
+        tiff_file = TIFF.open(filename, mode="r")
+        try:
+            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+            return sub_ifds is not None and len(sub_ifds) > 0
+        finally:
+            tiff_file.close()
+    except Exception as exc:
+        raise IOError("Failed to inspect TIFF pyramid status for %s: %s" % (filename, exc))
+
+
+def convert_to_pyramidal(src_filename: str, dst_filename: str, compressed: bool = True) -> None:
+    """
+    Convert TIFF content into a pyramidal TIFF.
+
+    :param src_filename: Source TIFF file path
+    :param dst_filename: Destination TIFF file path
+    :param compressed: Whether to write with TIFF compression
+    :raises IOError: If conversion fails
+    """
+    try:
+        data = read_data(src_filename)
+        export(dst_filename, data, compressed=compressed, pyramid=True)
+    except Exception as exc:
+        raise IOError("Failed to convert TIFF %s to pyramidal %s: %s" %
+                      (src_filename, dst_filename, exc))
+
+
 def read_thumbnail(filename):
     """
     Read the thumbnail data of a given TIFF file.

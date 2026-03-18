@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 import unittest
 import xml.etree.ElementTree as ET
@@ -47,6 +48,52 @@ from PIL import Image
 logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = "test" + tiff.EXTENSIONS[0]
+
+
+class TestTiffPyramidalIO(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self) -> None:
+        try:
+            for filename in os.listdir(self.temp_dir):
+                file_path = os.path.join(self.temp_dir, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            os.rmdir(self.temp_dir)
+        except Exception:
+            pass
+
+    def _create_test_tiff(self, filename: str, pyramid: bool = False) -> str:
+        array = numpy.random.randint(0, 255, (256, 256), dtype=numpy.uint8)
+        data = model.DataArray(array)
+        full_path = os.path.join(self.temp_dir, filename)
+        tiff.export(full_path, data, pyramid=pyramid, imagej=True)
+        return full_path
+
+    def test_is_pyramidal_tiff(self) -> None:
+        pyramidal_file = self._create_test_tiff("pyramidal.tif", pyramid=True)
+        self.assertTrue(tiff.is_pyramidal(pyramidal_file))
+
+    def test_is_pyramidal_non_pyramidal_tiff(self) -> None:
+        non_pyramidal_file = self._create_test_tiff("non_pyramidal.tif", pyramid=False)
+        self.assertFalse(tiff.is_pyramidal(non_pyramidal_file))
+
+    def test_is_pyramidal_invalid_file(self) -> None:
+        with self.assertRaises(IOError):
+            tiff.is_pyramidal("/nonexistent/file.tif")
+
+    def test_convert_to_pyramidal_tiff(self) -> None:
+        source_file = self._create_test_tiff("source.tif", pyramid=False)
+        dest_file = os.path.join(self.temp_dir, "converted.tif")
+
+        tiff.convert_to_pyramidal(source_file, dest_file, compressed=True)
+
+        self.assertTrue(os.path.exists(dest_file))
+        self.assertTrue(tiff.is_pyramidal(dest_file))
+
+
 class TestTiffIO(unittest.TestCase):
 
     def tearDown(self):

@@ -60,6 +60,10 @@ from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_ACT_ZOOM_FIT, TOOL_RULE
     TOOL_NONE
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
+from odemis.util.tiff_convert import (
+    ensure_pyramidal_tiff_for_file_gui,
+    ensure_pyramidal_tiff_for_tileset_gui,
+)
 
 
 class AnalysisTab(Tab):
@@ -319,10 +323,14 @@ class AnalysisTab(Tab):
         self.select_acq_file(extend=True, tileset=True)
 
     def load_tileset(self, filenames, extend=False):
+        # Convert all files to pyramidal if they're TIFFs
+        filenames = ensure_pyramidal_tiff_for_tileset_gui(filenames, self.panel, self.tab_data_model.main)
         data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
         self.display_new_data(filenames[0], data, extend=extend)
 
     def load_data(self, filename, fmt=None, extend=False):
+        # Convert to pyramidal if it's a TIFF file
+        filename = ensure_pyramidal_tiff_for_file_gui(filename, self.panel, self.tab_data_model.main)
         data = open_acquisition(filename, fmt)
         self.display_new_data(filename, data, extend=extend)
 
