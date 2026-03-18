@@ -1,3 +1,23 @@
+odemis (3.8.1-1) focal; urgency=medium
+
+  * New version: 3.8.1
+  * Main bug fixes and improvements:
+    - METEOR Advanced: allow user to provide default milling tasks
+    - METEOR Advanced: milling pattern adjusted position was lost when switching feature
+    - METEOR Advanced: MicroExpansion task is now listed first, as it's the first one milled
+    - METEOR overlay cryofeature: clarify the current posture in
+      "recalculate position" message box
+    - METEOR: avoid occasional warnings when switching to FM on TFS Hydra
+    - METEOR: "filename" text box can use more space to show the filename
+    - METEOR: On TFSv1 (legacy) configuration the features could be shown at a
+      wrong position
+    - SPARC: don't prevent acquisition when laser interlock for gun exciter is open
+    - SPARC: Alignment tab fails to get enabled when engaging the mirror
+    - FASTEM: in some cases the calibration changes were not stored when closing Odemis
+    - Backend: improve reliability when terminating, to stop faster
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 18 Mar 2026 20:53:40 +0100
+
 odemis (3.8.0-1) focal; urgency=medium
 
   * New version: 3.8
