@@ -52,8 +52,10 @@ CALIB_DATA = {
                 'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07],
               }
 
-z_stack_step_size = 50*10-9  # m
+z_stack_step_size = 50e-9  # m
 PRECISION = z_stack_step_size * 0.45  # Precision should be better than the step within a z stack
+IMG_PATH = os.path.join(os.path.dirname(__file__), "images")
+
 
 class TestDetermineZPosition(unittest.TestCase):
     @classmethod
@@ -72,48 +74,48 @@ class TestDetermineZPosition(unittest.TestCase):
         Test for known data the outcome of the function determine_z_position
         """
         # Test on an image below focus
-        image = read_data("images/super_z_single_beed_aprox_500nm_under_focus.tif")[0]
-        expected_outcome_image_1 = -592.5e-9  # Value determined using the function determine_z_position
+        image = read_data(os.path.join(IMG_PATH, "super_z_single_beed_aprox_500nm_under_focus.tif"))[0]
+        expected_outcome_image_1 = 592.5e-9  # Value determined using the function determine_z_position
         z, warning = determine_z_position(image, CALIB_DATA)
         self.assertEqual(warning, None)
         self.assertAlmostEqual(expected_outcome_image_1, z, delta=PRECISION)
 
         # Test on an image which is roughly in focus/point of least confusion
-        image = read_data("images/super_z_single_beed_semi_in_focus.tif")[0]
-        expected_outcome_image_2 = -62.8e-9  # Value determined using the function determine_z_position
+        image = read_data(os.path.join(IMG_PATH, "super_z_single_beed_semi_in_focus.tif"))[0]
+        expected_outcome_image_2 = 62.8e-9  # Value determined using the function determine_z_position
         z, warning = determine_z_position(image, CALIB_DATA)
         self.assertEqual(warning, None)
         self.assertAlmostEqual(expected_outcome_image_2, z, delta=PRECISION)
 
         # Test on an image which is above focus
-        image = read_data("images/super_z_single_beed_aprox_500nm_above_focus.tif")[0]
-        expected_outcome_image_3 = 420.6e-9  # Value determined using the function determine_z_position
+        image = read_data(os.path.join(IMG_PATH, "super_z_single_beed_aprox_500nm_above_focus.tif"))[0]
+        expected_outcome_image_3 = -420.6e-9  # Value determined using the function determine_z_position
         z, warning = determine_z_position(image, CALIB_DATA)
         self.assertEqual(warning, None)
         self.assertAlmostEqual(expected_outcome_image_3, z, delta=PRECISION)
 
         # Test on an image where no feature visible because it is just white noise
-        image = read_data("images/super_z_no_beed_just_noise.tif")[0]
+        image = read_data(os.path.join(IMG_PATH, "super_z_no_beed_just_noise.tif"))[0]
         _, warning = determine_z_position(image, CALIB_DATA)
         self.assertEqual(warning, 5)  # Since the entire image is noise the warning raised should be 5
 
         # Test on an image where no feature visible because it is entirely white
-        image = read_data("images/super_z_no_beed_just_white.tif")[0]
+        image = read_data(os.path.join(IMG_PATH, "super_z_no_beed_just_white.tif"))[0]
         _, warning = determine_z_position(image, CALIB_DATA)
-        self.assertEqual(warning, 6)  # Since the entire image is white the warning raised should be 5
+        self.assertEqual(warning, 6)  # Since the entire image is white the warning raised should be 6
 
         # Change the range so warning 6 is raised with an image which is just above focus
         calib_data_limited_range = CALIB_DATA.copy()
         calib_data_limited_range["z_calibration_range"] = (-1e-10, 1e-10)
-        image = read_data("images/super_z_single_beed_aprox_500nm_above_focus.tif")[0]
-        expected_outcome_image_3 = 420.6e-9  # Value determined using the function determine_z_position
+        image = read_data(os.path.join(IMG_PATH, "super_z_single_beed_aprox_500nm_above_focus.tif"))[0]
+        expected_outcome_image_3 = -420.6e-9  # Value determined using the function determine_z_position
         z, warning = determine_z_position(image, calib_data_limited_range)
         # Since the range is set to small the detected feature is to big and warning raised should be 4
         self.assertEqual(warning, 4)
         self.assertAlmostEqual(expected_outcome_image_3, z, delta=PRECISION)
 
     def test_key_error(self):
-        image = read_data("images/super_z_single_beed_semi_in_focus.tif")[0]
+        image = read_data(os.path.join(IMG_PATH, "super_z_single_beed_semi_in_focus.tif"))[0]
 
         # Check if the key error is raised when the key 'x' is missing
         calib_data_missing_key = CALIB_DATA.copy()
@@ -130,7 +132,7 @@ class TestDetermineZPosition(unittest.TestCase):
     # TODO Add a test to find that indeed the module not found error is raised when a module is missing.
     # Maybe use something with MOCK?
     # def test_module_not_found_error(self):
-    #     image = read_data("images/super_z_single_beed_semi_in_focus.tif")[0]
+    #     image = read_data(os.path.join(IMG_PATH, "super_z_single_beed_semi_in_focus.tif"))[0]
     #
     #     with self.assertRaises(ModuleNotFoundError):
     #         _, _ = determine_z_position(image, CALIB_DATA)
@@ -196,7 +198,6 @@ class TestMeasureZ(unittest.TestCase):
                                     stream=self.fms, poi_size=self.poi_size, pois=self.pois,
                                     fiducial_size=self.fiducial_size, fiducials=self.fiducials)
         f.result(30)
-
 
     def test_measure_z_multi_targets_pos_shifted(self):
         """
