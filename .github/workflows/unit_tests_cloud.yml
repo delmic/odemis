@@ -217,7 +217,7 @@ jobs:
       if: ${{ !cancelled() }}
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
-        python3 -m unittest src/odemis/gui/test/test_cryo_stream_cleanup.py --verbose
+        python3 -m unittest src/odemis/gui/test/cryo_stream_cleanup_test.py --verbose
 
     - name: Run mocked tests from odemis.acq.fastem
       if: ${{ !cancelled() }}

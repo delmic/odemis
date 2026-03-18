@@ -1,9 +1,27 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
-Integration test for CryoAcquiredStreamsController stream cleanup.
-Verifies that stream cleanup methods properly free memory by removing
-streams from both the feature model and the tab data model.
+Created on 25 February 2026
+
+@author: Tim Moerkerken
+
+Copyright © 2026 Tim Moerkerken, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 """
+# Integration test for CryoAcquiredStreamsController stream cleanup.
+# Verifies that stream cleanup methods properly free memory by removing
+# streams from both the feature model and the tab data model.
 
 import unittest
 from unittest.mock import MagicMock, patch
