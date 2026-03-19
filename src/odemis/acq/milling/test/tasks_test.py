@@ -89,6 +89,7 @@ class MillingTaskTestCase(unittest.TestCase):
 
         dict_data = milling_task_settings.to_dict()
         self.assertEqual(dict_data["name"], "Milling Task")
+        self.assertEqual(dict_data["selected"], True)
         self.assertEqual(dict_data["milling"], milling_settings.to_dict())
         self.assertEqual(dict_data["patterns"][0], trench_pattern.to_dict())
 

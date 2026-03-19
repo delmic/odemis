@@ -283,6 +283,8 @@ def get_associated_tasks(wt: MillingWorkflowTask,
     :return: List of associated tasks."""
     associated_tasks = []
     for task in milling_tasks.values():
+        if not task.selected:
+            continue
 
         if wt.value in task.name:
             associated_tasks.append(task)
