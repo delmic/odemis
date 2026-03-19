@@ -25,12 +25,14 @@ import glob
 import json
 import logging
 import os
+import re
 import threading
 import time
+import uuid
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from enum import Enum
-from typing import Dict, List, Tuple, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from odemis import model
 from odemis.acq.acqmng import (
@@ -49,6 +51,17 @@ from odemis.acq.move import (
     UNKNOWN,
     POSITION_NAMES,
     MicroscopePostureManager,
+)
+from odemis.acq.project_state import (
+    PROJECT_STATE_VERSION,
+    STREAM_ORIGIN_FILENAME_MD,
+    STREAM_ORIGIN_INDEX_MD,
+    normalize_stream_record,
+    read_overview_records,
+    read_project_state,
+    save_overview_records,
+    set_stream_origin,
+    write_project_state,
 )
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream, StaticFluoStream
@@ -69,6 +82,7 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
 )
 
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
+FEATURES_STATE_VERSION = 2
 
 USER_MILLING_TASKS_PATH = os.path.expanduser("~/.config/odemis/milling_tasks.yaml")
 
@@ -183,6 +197,8 @@ class CryoFeature(object):
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
         """
         self.name = model.StringVA(name)
+        # Stable feature identity persisted in project state for forward-compatible linking/migration.
+        self.id = str(uuid.uuid4())
         # FIXME: The 'position' parameter should eventually contain the SampleStage coordinates and not stage bare from the stage_position!
         self.position = model.VigilantAttribute(stage_position, unit="m") # sample stage aka "ideal stage", with x, y, z axes
         self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare, in the first posture found # TODO: drop
@@ -205,8 +221,10 @@ class CryoFeature(object):
         self.milling_tasks: Dict[str, MillingTaskSettings] = milling_tasks
 
         self.status = model.StringVA(FEATURE_ACTIVE)
-        # TODO: Handle acquired files
+        # Runtime in-memory StaticStream objects currently loaded for this feature.
         self.streams = streams if streams is not None else model.ListVA()
+        # Persisted file/index records used to reconstruct streams across sessions.
+        self.stream_records: List[Dict[str, Any]] = []
         if correlation_data is None:
             correlation_data = {}
         self.correlation_data = correlation_data
@@ -220,6 +238,82 @@ class CryoFeature(object):
 
         self.superz_focused: Optional[bool] = None  # True if super z focus has high accuracy, False otherwise,
         # If None, it means that the super z focus was not used.
+
+    def set_stream_records(self, records: List[Dict[str, Any]]) -> None:
+        """Assign normalized stream records to this feature.
+
+        :param records: Stream records loaded from persisted state.
+        """
+        self.stream_records = [normalize_stream_record(record) for record in records]
+
+    def _stream_record_lookup(self) -> Dict[str, Dict[str, Any]]:
+        """Build a filename-to-record lookup for current stream records.
+
+        :return: Mapping from relative filename to stream record.
+        """
+        # TODO: If profiling shows this path is a bottleneck (maybe for very big projects),
+        # keep a synchronized filename index instead of rebuilding this mapping for each call.
+        return {
+            record["filename"]: record
+            for record in self.stream_records
+            if isinstance(record.get("filename"), str)
+        }
+
+    def add_stream_record(self, filename: str, stream_count: int) -> None:
+        """Register persisted stream links for one acquired file.
+
+        :param filename: Relative filename in project directory.
+        :param stream_count: Number of static streams represented in the file.
+        """
+        stream_indices = set(range(stream_count))
+        record = self._stream_record_lookup().get(filename)
+        if record is not None:
+            record["stream_indices"] = sorted(set(record["stream_indices"]).union(stream_indices))
+            record["deleted_stream_indices"] = [
+                index
+                for index in record["deleted_stream_indices"]
+                if index in record["stream_indices"]
+            ]
+            return
+
+        self.stream_records.append(
+            normalize_stream_record(
+                {
+                    "filename": filename,
+                    "stream_indices": sorted(stream_indices),
+                    "deleted_stream_indices": [],
+                }
+            )
+        )
+
+    def mark_stream_deleted(self, filename: str, stream_index: int) -> bool:
+        """Persistently mark one stream index as deleted.
+
+        :param filename: Relative filename in project directory.
+        :param stream_index: Index in ``data_to_static_streams`` output.
+        :return: ``True`` when a persisted record was updated.
+        """
+        record = self._stream_record_lookup().get(filename)
+        if record is None or stream_index not in record["stream_indices"]:
+            return False
+        if stream_index not in record["deleted_stream_indices"]:
+            record["deleted_stream_indices"].append(stream_index)
+            record["deleted_stream_indices"].sort()
+        return True
+
+    def get_active_stream_indices(self, filename: str, available_count: int) -> List[int]:
+        """Return active (non-deleted) stream indices for one file.
+
+        :param filename: Relative filename in project directory.
+        :param available_count: Number of streams currently decoded from file.
+        :return: Stream indices to keep linked to the feature.
+        """
+        record = self._stream_record_lookup().get(filename)
+        if record is not None:
+            indices = [i for i in record["stream_indices"] if 0 <= i < available_count]
+            deleted = set(record["deleted_stream_indices"])
+            return [i for i in indices if i not in deleted]
+        return list(range(available_count))
 
     def set_posture_position(self, posture: str, position: Dict[str, float]) -> None:
         """
@@ -267,7 +361,7 @@ class CryoFeature(object):
         self.reference_image = reference_image
 
         # save the reference image to disk (NOTE: we want to overwrite the existing file)
-        filename = os.path.join(self.path, f"{self.name.value}-{REFERENCE_IMAGE_FILENAME}")
+        filename = os.path.join(self.path, REFERENCE_IMAGE_FILENAME)
         exporter = find_fittest_converter(filename)
         exporter.export(filename, reference_image)
 
@@ -308,7 +402,7 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
 
     return position
 
-def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
+def get_features_dict(features: List[CryoFeature]) -> Dict[str, Any]:
     """
     Convert list of features to JSON serializable list of dict
     :param features: list of CryoFeature
@@ -317,18 +411,20 @@ def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
     flist = []
     for feature in features:
         feature_item = {'name': feature.name.value,
+                        'id': feature.id,
                         'status': feature.status.value,
                         'stage_position': feature.stage_position.value,
                         'fm_focus_position': feature.fm_focus_position.value,
                         'posture_positions': feature.posture_positions,
                         "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
                         'correlation_data': feature.correlation_data.to_dict() if feature.correlation_data  else {},
+                        'stream_records': feature.stream_records,
                         'superz_stream_name': feature.superz_stream_name,
                         'superz_focused': feature.superz_focused}
         if feature.path:
             feature_item['path'] = feature.path
         flist.append(feature_item)
-    return {'feature_list': flist}
+    return {'state_version': FEATURES_STATE_VERSION, 'feature_list': flist}
 
 
 class FeaturesDecoder(json.JSONDecoder):
@@ -353,21 +449,31 @@ class FeaturesDecoder(json.JSONDecoder):
                                   stage_position=stage_position,
                                   fm_focus_position=fm_focus_position
                                   )
+            feature.id = obj.get("id", str(uuid.uuid4()))
             feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
             feature.status.value = obj['status']
             feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
             feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
+            feature.set_stream_records(obj.get("stream_records", []))
             feature.path = obj.get('path', None)
             feature.superz_stream_name = obj.get('superz_stream_name', None)
             feature.superz_focused = obj.get('superz_focused', None)
 
             # load the reference image
             if feature.path:
-                filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
+                filename = os.path.join(feature.path, REFERENCE_IMAGE_FILENAME)
+                legacy_filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
                 if os.path.exists(filename):
                     feature.reference_image = open_acquisition(filename)[0].getData()
+                elif os.path.exists(legacy_filename):
+                    feature.reference_image = open_acquisition(legacy_filename)[0].getData()
                 else:
-                    logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
+                    logging.warning(
+                        "Reference image for feature %s not found in %s or %s",
+                        feature.name.value,
+                        filename,
+                        legacy_filename,
+                    )
             return feature
         if 'feature_list' in obj:
             return obj['feature_list']
@@ -375,13 +481,18 @@ class FeaturesDecoder(json.JSONDecoder):
 
 def save_features(project_dir: str, features: List[CryoFeature]) -> None:
     """
-    Save the whole features list directly to the file
-    :param project_dir: directory to save the file to (typically project directory)
+    Save the whole features list in the project state file.
+
+    :param project_dir: directory to save the state to (typically project directory)
     :param features: all the features to serialize
     """
-    filename = os.path.join(project_dir, "features.json")
-    with open(filename, "w") as jsonfile:
-        json.dump(get_features_dict(features), jsonfile)
+    features_dict = get_features_dict(features)
+    state = read_project_state(project_dir)
+    state["state_version"] = PROJECT_STATE_VERSION
+    state["features"] = features_dict
+    if "overview_records" not in state:
+        state["overview_records"] = []
+    write_project_state(project_dir, state)
 
 
 def read_features(project_dir: str) -> List[CryoFeature]:
@@ -390,30 +501,113 @@ def read_features(project_dir: str) -> List[CryoFeature]:
     :param project_dir: directory to read the file from (typically project directory)
     :return: list of deserialized features
     """
+    state = read_project_state(project_dir)
+    features_state = state.get("features")
+    if isinstance(features_state, dict) and "feature_list" in features_state:
+        return json.loads(json.dumps(features_state), cls=FeaturesDecoder)
+
     filename = os.path.join(project_dir, "features.json")
     if not os.path.exists(filename):
         raise ValueError(f"Features file doesn't exists in this location. {filename}")
     with open(filename, "r") as jsonfile:
-        return json.load(jsonfile, cls=FeaturesDecoder)
+        features = json.load(jsonfile, cls=FeaturesDecoder)
+
+    # Legacy project migration path:
+    # if features were loaded from legacy features.json (no state features payload),
+    # pre-discover stream records and persist them once to project_state.json.
+    migrated = False
+    for feature in features:
+        if feature.stream_records:
+            continue
+        legacy_records = _discover_legacy_stream_records(feature, project_dir)
+        if legacy_records:
+            feature.set_stream_records(legacy_records)
+            migrated = True
+    if migrated:
+        save_features(project_dir, features)
+    return features
 
 
-def load_feature_streams_from_disk(feature: "CryoFeature", path: str) -> None:
+def _discover_legacy_stream_records(feature: "CryoFeature", project_dir: str) -> List[Dict[str, Any]]:
+    """Discover legacy filename-based stream records for one feature.
+
+    :param feature: Feature whose acquired files must be discovered.
+    :param project_dir: Project directory.
+    :return: Normalized stream-record list.
+    """
+    stream_filenames = set()
+    feature_name = glob.escape(feature.name.value)
+    feature_dir = glob.escape(feature_storage_dirname(feature.name.value))
+    glob_patterns = [
+        os.path.join(project_dir, f"{feature_name}-{{ext}}"),
+        os.path.join(project_dir, f"*-{feature_name}-{{ext}}"),
+        # Fallback for newer folder-based projects when state is missing/corrupt.
+        # This is not a legacy-format assumption.
+        os.path.join(project_dir, feature_dir, "{ext}"),
+    ]
+    formats = get_available_formats(os.O_RDONLY, allowlossy=False).values()
+    formats_flat = [f"*{ext}" for sublist in formats for ext in sublist]
+    for ext in formats_flat:
+        for pattern in glob_patterns:
+            stream_filenames.update(glob.glob(pattern.format(ext=ext)))
+
+    records: List[Dict[str, Any]] = []
+    for stream_filename in sorted(stream_filenames):
+        rel_filename = os.path.relpath(stream_filename, project_dir)
+        records.append(
+            normalize_stream_record(
+                {
+                    "filename": rel_filename,
+                    "stream_indices": [],
+                    "deleted_stream_indices": [],
+                }
+            )
+        )
+    return records
+
+
+def load_feature_streams_from_disk(feature: "CryoFeature", path: str) -> bool:
     """
     Load the acquired stream files for a single feature from the project directory
     and append them to feature.streams.
 
     :param feature: the feature whose streams to load
     :param path: path to the project directory containing the stream files
+    :return: ``True`` when legacy name-based discovery was migrated to persisted records.
     """
-    stream_filenames = set()
-    glob_path = os.path.join(path, f"*-{glob.escape(feature.name.value)}-{{ext}}")
-    formats = get_available_formats(os.O_RDONLY, allowlossy=False).values()
-    formats_flat = [f"*{ext}" for sublist in formats for ext in sublist]
-    for ext in formats_flat:
-        stream_filenames.update(glob.glob(glob_path.format(ext=ext)))
+    migrated = False
+    records = feature.stream_records
+    if not records:
+        state = read_project_state(path)
+        features_state = state.get("features")
+        has_persisted_feature_state = isinstance(features_state, dict) and "feature_list" in features_state
+        if has_persisted_feature_state:
+            return False
 
-    for fname in sorted(stream_filenames):
-        feature.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
+        feature.stream_records.extend(_discover_legacy_stream_records(feature, path))
+        records = feature.stream_records
+        migrated = bool(records)
+
+    for record in records:
+        if not record["filename"]:
+            continue
+        record_filename = record["filename"]
+        filename = record_filename if os.path.isabs(record_filename) else os.path.join(path, record_filename)
+        if not os.path.exists(filename):
+            logging.warning("Stream file for feature %s not found: %s", feature.name.value, filename)
+            continue
+
+        loaded_streams = data_to_static_streams(open_acquisition(filename))
+        if not record["stream_indices"]:
+            record["stream_indices"] = list(range(len(loaded_streams)))
+            migrated = True
+
+        for stream_index in feature.get_active_stream_indices(record_filename, len(loaded_streams)):
+            stream = loaded_streams[stream_index]
+            set_stream_origin(stream, record_filename, stream_index)
+            feature.streams.value.append(stream)
+
+    return migrated
 
 
 def load_project_data(path: str) -> dict:
@@ -422,14 +616,51 @@ def load_project_data(path: str) -> dict:
     :return: dictionary containing the loaded data (features and overviews)
     """
 
-    # load overview images
-    overview_filenames = glob.glob(os.path.join(path, "*overview*.ome.tiff"))
     overview_data = []
-    for fname in overview_filenames:
-        # note: we only load the overview data, as the conversion to streams
-        # is done in the localisation_tab.add_overview_data which also
-        # handles assigning the streams throughout the gui
-        overview_data.extend(open_acquisition(fname))
+    overview_records = read_overview_records(path)
+    migrated_overview_records = False
+
+    if not overview_records:
+        overview_filenames = glob.glob(os.path.join(path, "*overview*.ome.tiff"))
+        for filename in sorted(overview_filenames):
+            rel_filename = os.path.relpath(filename, path)
+            file_data = open_acquisition(filename)
+            overview_records.append(
+                normalize_stream_record(
+                    {
+                        "filename": rel_filename,
+                        "stream_indices": list(range(len(file_data))),
+                        "deleted_stream_indices": [],
+                    }
+                )
+            )
+            for stream_index, data_array in enumerate(file_data):
+                data_array.metadata[STREAM_ORIGIN_FILENAME_MD] = rel_filename
+                data_array.metadata[STREAM_ORIGIN_INDEX_MD] = stream_index
+                overview_data.append(data_array)
+        migrated_overview_records = bool(overview_records)
+    else:
+        for record in overview_records:
+            filename = record["filename"]
+            full_filename = filename if os.path.isabs(filename) else os.path.join(path, filename)
+            if not os.path.exists(full_filename):
+                logging.warning("Overview file missing from disk: %s", full_filename)
+                continue
+            file_data = open_acquisition(full_filename)
+            if not record["stream_indices"]:
+                record["stream_indices"] = list(range(len(file_data)))
+                migrated_overview_records = True
+            deleted = set(record["deleted_stream_indices"])
+            for stream_index in record["stream_indices"]:
+                if stream_index in deleted or stream_index >= len(file_data):
+                    continue
+                data_array = file_data[stream_index]
+                data_array.metadata[STREAM_ORIGIN_FILENAME_MD] = filename
+                data_array.metadata[STREAM_ORIGIN_INDEX_MD] = stream_index
+                overview_data.append(data_array)
+
+    if migrated_overview_records:
+        save_overview_records(path, overview_records)
 
     features = []
     try:
@@ -443,20 +674,32 @@ def load_project_data(path: str) -> dict:
 
     return {"overviews": overview_data, "features": features}
 
-def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
+def create_feature_acquisition_filename(feature: CryoFeature, filename: str) -> str:
     """
-    Add details of the given feature and the counter at the end of the given filename.
-    :param feature: the feature to add to the filename
-    :param filename: filename given by user
+    Create a unique feature acquisition filename in the feature-specific directory.
+
+    This helper rewrites the destination path to ``<project>/<feature_dir>/...``
+    and does not only alter the basename.
+
+    :param feature: Feature owning the acquisition.
+    :param filename: Base filename chosen by the user.
+    :return: Unique output path for the acquisition.
     """
     path_base, ext = splitext(filename)
-    feature_name = feature.name.value
-    feature_status = feature.status.value
 
     path, basename = os.path.split(path_base)
-    ptn = f"{basename}-{feature_name}-{feature_status}-{{cnt}}"
+    feature_dir = os.path.join(path, feature_storage_dirname(feature.name.value))
+    os.makedirs(feature_dir, exist_ok=True)
+    ptn = f"{basename}-{{cnt}}"
+    return create_filename(feature_dir, ptn, ext, count="001")
 
-    return create_filename(path, ptn, ext, count="001")
+
+def feature_storage_dirname(feature_name: str) -> str:
+    """Return filesystem-safe directory name for feature acquisitions."""
+    parts = re.split(r"[\\/]+", feature_name.strip())
+    safe_parts = [part.strip() for part in parts if part.strip() and part.strip() not in (".", "..")]
+    dirname = "_".join(safe_parts).strip()
+    return dirname or "Feature"
 
 def _create_fibsem_filename(filename: str, acq_type: str) -> str:
     """
@@ -505,6 +748,7 @@ class CryoFeatureAcquisitionTask(object):
         self.streams = streams
         self.zparams = zparams
         self.filename = filename
+        self.project_root = os.path.dirname(filename) or "."
         self._settings_obs = settings_obs
         self._per_feature_callback = per_feature_callback
 
@@ -596,11 +840,17 @@ class CryoFeatureAcquisitionTask(object):
             return
 
         # export the data
-        self._export_data(site, data)
-
-        # Convert the data to StaticStreams, and add them to the feature
+        filename = create_feature_acquisition_filename(site, self.filename)
+        self._export_data(site, data, filename)
+        # Convert the data to StaticStreams after metadata is finalized.
         new_streams = dataio.data_to_static_streams(data)
+        # Keep stream records relative to the project root, not feature subfolders.
+        relative_filename = os.path.relpath(filename, self.project_root)
+        site.add_stream_record(relative_filename, len(new_streams))
+        for stream_index, stream in enumerate(new_streams):
+            set_stream_origin(stream, relative_filename, stream_index)
         site.streams.value.extend(new_streams)
+        save_features(self.project_root, self.features)
         logging.info(f"The acquisition of {self.streams} for {site.name.value} is done")
 
     def _run_autofocus(self, site: CryoFeature) -> None:
@@ -810,13 +1060,17 @@ class CryoFeatureAcquisitionTask(object):
 
         return [], exp
 
-    def _export_data(self, feature: CryoFeature, data: List[model.DataArray]) -> None:
+    def _export_data(self, feature: CryoFeature, data: List[model.DataArray], filename: str) -> None:
         """
-        Called to export the acquired data.
-        data: the returned data/images from the future
-        """
+        Export acquired feature data to a provided output file.
 
-        filename = add_feature_info_to_filename(feature, self.filename)
+        Before export, each data-array description is prefixed with the feature
+        name and status for traceability in downstream tools.
+
+        :param feature: Feature associated with this acquisition batch.
+        :param data: Acquired data arrays returned by the acquisition future.
+        :param filename: Absolute path of the exported acquisition file.
+        """
 
         # add feature name to the data description
         for d in data:

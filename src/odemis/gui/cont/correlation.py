@@ -37,7 +37,13 @@ import wx.html
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
+from odemis.acq.project_state import (
+    get_stream_origin,
+    is_overview_stream_deleted,
+    set_stream_origin_from_raw,
+)
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
+from odemis.gui import conf as guiconf
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.util import call_in_wx_main
 from odemis.acq.move import FM_IMAGING
@@ -311,7 +317,21 @@ class CorrelationController(object):
                     return
 
         logging.debug(f"Adding {len(streams)} streams to localization tab {streams}")
+        project_path = (
+            self._main_data_model.project_path.value
+            or guiconf.get_acqui_conf().pj_last_path
+            or ""
+        )
         for s in streams:
+            set_stream_origin_from_raw(s)
+            filename, stream_index = get_stream_origin(s)
+            if (
+                project_path
+                and filename is not None
+                and stream_index is not None
+                and is_overview_stream_deleted(project_path, filename, stream_index)
+            ):
+                continue
             # add stream to localizations tab
             if s not in self.localization_tab.tab_data_model.streams.value:
                 self.localization_tab.tab_data_model.overviewStreams.value.append(s)
@@ -322,6 +342,15 @@ class CorrelationController(object):
         if self.fibsem_tab:
             logging.debug(f"Adding {len(streams)} streams to fibsem tab {streams}")
             for s in streams:
+                set_stream_origin_from_raw(s)
+                filename, stream_index = get_stream_origin(s)
+                if (
+                    project_path
+                    and filename is not None
+                    and stream_index is not None
+                    and is_overview_stream_deleted(project_path, filename, stream_index)
+                ):
+                    continue
                 # add stream to fibsem tab
                 if s not in self.fibsem_tab.tab_data_model.streams.value:
                     self.fibsem_tab.tab_data_model.overviewStreams.value.append(s)

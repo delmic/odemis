@@ -34,6 +34,15 @@ import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.gui.conf.data import get_local_vas
 from odemis import model
+from odemis.acq.project_state import (
+    STREAM_ORIGIN_FILENAME_MD,
+    STREAM_ORIGIN_INDEX_MD,
+    get_stream_origin,
+    is_overview_stream_deleted,
+    register_overview_streams,
+    set_stream_origin,
+    set_stream_origin_from_raw,
+)
 from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
     FIBStream,
@@ -270,16 +279,37 @@ class FibsemTab(Tab):
 
     @call_in_wx_main
     def load_overview_data(self, data):
-        # Create streams from data
-        streams = data_to_static_streams(data)
+        project_path = self.tab_data_model.main.project_path.value or self.conf.pj_last_path
+        kept_data = []
+        for data_array in data:
+            filename = data_array.metadata.get(STREAM_ORIGIN_FILENAME_MD)
+            stream_index = data_array.metadata.get(STREAM_ORIGIN_INDEX_MD)
+            if (
+                project_path
+                and isinstance(filename, str)
+                and isinstance(stream_index, int)
+                and is_overview_stream_deleted(project_path, filename, stream_index)
+            ):
+                continue
+            kept_data.append(data_array)
+
+        # Create streams from non-deleted overview data only.
+        streams = data_to_static_streams(kept_data)
+        kept_streams = []
         bbox = (None, None, None, None)  # ltrb in m
-        for s in streams:
+        for data_array, s in zip(kept_data, streams):
+            set_stream_origin_from_raw(s)
+            filename = data_array.metadata.get(STREAM_ORIGIN_FILENAME_MD)
+            stream_index = data_array.metadata.get(STREAM_ORIGIN_INDEX_MD)
+            if get_stream_origin(s) == (None, None) and isinstance(filename, str) and isinstance(stream_index, int):
+                set_stream_origin(s, filename, stream_index)
             s.name.value = "Overview " + s.name.value
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
             self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
             self._acquired_stream_controller.showOverviewStream(s)
+            kept_streams.append(s)
 
             # Compute the total bounding box
             try:
@@ -297,9 +327,12 @@ class FibsemTab(Tab):
             self.panel.vp_secom_bl.canvas.fit_to_bbox(bbox)
 
         # sync overview streams with correlation tab
-        if len(streams) > 0 and self.main_data.role == "meteor":
+        if len(kept_streams) > 0 and self.main_data.role == "meteor":
             correlation_tab = self.main_data.getTabByName("meteor-correlation")
-            correlation_tab.correlation_controller.add_streams(streams)
+            correlation_tab.correlation_controller.add_streams(kept_streams)
+
+        if kept_streams and project_path:
+            register_overview_streams(project_path, kept_streams)
 
     @call_in_wx_main
     def _on_acquired_streams(self, streams):

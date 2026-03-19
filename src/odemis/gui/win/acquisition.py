@@ -36,6 +36,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import dataio, model
 from odemis.acq import acqmng, path, stitching, stream
+from odemis.acq.project_state import STREAM_ORIGIN_FILENAME_MD, STREAM_ORIGIN_INDEX_MD
 from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview,
                                   get_tiled_bboxes, get_stream_based_bbox,
@@ -1313,6 +1314,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 logging.warning("File format doesn't support saving image in pyramidal form")
                 exporter.export(self.filename)
             self.data = exporter.open_data(self.filename).content
+            for stream_index, data_array in enumerate(self.data):
+                data_array.metadata[STREAM_ORIGIN_FILENAME_MD] = self.filename
+                data_array.metadata[STREAM_ORIGIN_INDEX_MD] = stream_index
         except Exception:
             # We cannot do much: just warn the user and pretend it was cancelled
             logging.exception("Storage failed")

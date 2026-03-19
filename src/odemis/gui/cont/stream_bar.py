@@ -42,7 +42,16 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
-from odemis.acq.feature import CryoFeature, load_feature_streams_from_disk
+from odemis.acq.feature import (
+    CryoFeature,
+    load_feature_streams_from_disk,
+    save_features,
+)
+from odemis.acq.project_state import (
+    get_stream_origin,
+    mark_overview_stream_deleted,
+    set_stream_origin_from_raw,
+)
 from odemis.util.dataio import data_to_static_streams
 
 # There are two kinds of controllers:
@@ -2085,6 +2094,49 @@ class CryoStreamsController(SecomStreamsController):
     Controls the display of stream panels without affecting the actual streams
     """
 
+    def __init__(self, tab_data, *args, **kwargs):
+        super().__init__(tab_data, *args, **kwargs)
+
+    def _get_project_path(self) -> Optional[str]:
+        """Resolve project path for state persistence."""
+        return (
+            self._tab_data_model.main.project_path.value
+            or self._main_data_model.project_path.value
+        )
+
+    def _attach_stream_state_hooks(self, stream: StaticStream) -> None:
+        """Attach lightweight stream state hooks."""
+        if get_stream_origin(stream) == (None, None):
+            set_stream_origin_from_raw(stream)
+
+    def _detach_stream_state_hooks(self, stream: StaticStream) -> None:
+        """Detach stream-level subscriptions."""
+
+    def _remove_overview_from_peer_tabs(self, stream: StaticStream) -> None:
+        """Remove an overview stream from chamber/correlation/other overview tabs."""
+        try:
+            chamber_tab = self._main_data_model.getTabByName("cryosecom_chamber")
+            chamber_tab.remove_overview_streams([stream])
+        except LookupError:
+            pass
+
+        for tab_name in ("cryosecom-localization", "meteor-fibsem", "meteor-correlation"):
+            try:
+                tab = self._main_data_model.getTabByName(tab_name)
+            except LookupError:
+                continue
+
+            tab_data = getattr(tab, "tab_data_model", None)
+            if tab_data is None or tab_data is self._tab_data_model:
+                continue
+            if stream not in tab_data.streams.value:
+                continue
+
+            if hasattr(tab, "_acquired_stream_controller"):
+                tab._acquired_stream_controller.removeStream(stream)
+            elif hasattr(tab, "streambar_controller"):
+                tab.streambar_controller.removeStream(stream)
+
     def _onView(self, view):
         """ Handle the changing of the focused view """
         if not view or self.ignore_view:
@@ -2094,6 +2146,7 @@ class CryoStreamsController(SecomStreamsController):
         allowed_classes = view.stream_classes
         ov_streams = self._tab_data_model.overviewStreams.value
         static = issubclass(allowed_classes, StaticStream)
+        is_overview_view = hasattr(self, "_ov_view") and view is self._ov_view
         for e in self._stream_bar.stream_panels:
             # Three primary options for views are outlined here:
             # 1. Live Stream: Focused on real-time viewership, generating 'Live Views'.
@@ -2109,7 +2162,7 @@ class CryoStreamsController(SecomStreamsController):
                 #     'overviewStreams' signifies its classification.
                 # Thus, combining the class type and 'overviewStreams' presence ensures
                 # the accurate identification of the 'Overview' view.
-                if isinstance(view, guimodel.FeatureOverviewView):
+                if is_overview_view or isinstance(view, guimodel.FeatureOverviewView):
                     e.Show(e.stream in ov_streams)
                 else:
                     e.Show(e.stream not in ov_streams)
@@ -2165,7 +2218,34 @@ class CryoAcquiredStreamsController(CryoStreamsController):
 
         self._current_feature = None  # The feature whose streams are currently loaded in memory
 
-        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+        stream_bar = getattr(self, "_stream_bar", None)
+        if stream_bar is not None:
+            stream_bar.set_on_user_remove_callback(self._on_user_stream_remove)
+        current_feature_va = getattr(tab_data.main, "currentFeature", None)
+        if current_feature_va is not None:
+            current_feature_va.subscribe(self._on_current_feature_changes)
+
+    def _on_user_stream_remove(self, stream: StaticStream) -> None:
+        """Persist deletion state for streams explicitly removed by the user."""
+        feature = self._current_feature
+        filename, stream_index = get_stream_origin(stream)
+        is_overview_stream = stream in self._tab_data_model.overviewStreams.value
+        if filename is None or stream_index is None:
+            set_stream_origin_from_raw(stream)
+            filename, stream_index = get_stream_origin(stream)
+
+        if filename is None or stream_index is None:
+            return
+
+        project_path = self._get_project_path()
+        if not project_path:
+            return
+        if feature and stream in feature.streams.value:
+            if feature.mark_stream_deleted(filename, stream_index):
+                save_features(project_path, self._tab_data_model.main.features.value)
+        elif is_overview_stream:
+            mark_overview_stream_deleted(project_path, filename, stream_index)
+            self._remove_overview_from_peer_tabs(stream)
 
     def showOverviewStream(self, stream) -> StreamController:
         """
@@ -2173,7 +2253,10 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         Must be run in the main GUI thread.
         """
         self._ov_view.addStream(stream)
-        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+        self._attach_stream_state_hooks(stream)
+        focussed_view = self._tab_data_model.focussedView.value
+        show_panel = focussed_view is self._ov_view
+        sc = self._add_stream_cont(stream, show_panel=show_panel, static=self.static_mode,
                                    view=self._ov_view)
         sc.stream_panel.show_remove_btn(True)
         return sc
@@ -2186,7 +2269,10 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         # TODO: don't delete/create stream controller every time? Instead, we
         # could just hide/show them the same way it's done when switching view.
         self._feature_view.addStream(stream)
-        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+        self._attach_stream_state_hooks(stream)
+        focussed_view = self._tab_data_model.focussedView.value
+        show_panel = focussed_view is self._feature_view
+        sc = self._add_stream_cont(stream, show_panel=show_panel, static=self.static_mode,
                                    view=self._feature_view)
         sc.stream_panel.show_remove_btn(True)
         return sc
@@ -2327,7 +2413,9 @@ class CryoAcquiredStreamsController(CryoStreamsController):
             logging.warning("Cannot reload feature streams: no project path set")
             return
 
-        load_feature_streams_from_disk(feature, project_path)
+        migrated = load_feature_streams_from_disk(feature, project_path)
+        if migrated:
+            save_features(project_path, self._tab_data_model.main.features.value)
 
         # Verify feature still exists after loading (in case it was deleted during load)
         if feature not in self._tab_data_model.main.features.value:
@@ -2338,6 +2426,19 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         if not feature.streams.value:
             logging.warning("No streams loaded for feature %s", feature.name.value if feature else None)
             return
+
+    def removeStream(self, stream):
+        """Remove stream from UI/model. Persistence is handled on user remove event."""
+        feature = self._current_feature
+        is_overview_stream = stream in self._tab_data_model.overviewStreams.value
+        self._detach_stream_state_hooks(stream)
+        super().removeStream(stream)
+
+        if feature and stream in feature.streams.value:
+            feature.streams.value.remove(stream)
+
+        if is_overview_stream and stream in self._tab_data_model.overviewStreams.value:
+            self._tab_data_model.overviewStreams.value.remove(stream)
 
     def clear_feature_streams(self, feature):
         """
@@ -2360,6 +2461,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
                 continue
 
             self._stream_bar.remove_stream_panel(sc.stream_panel)
+            self._detach_stream_state_hooks(sc.stream)
             if hasattr(v, "removeStream"):
                 v.removeStream(sc.stream)
             if sc in self.stream_controllers:
@@ -2367,9 +2469,10 @@ class CryoAcquiredStreamsController(CryoStreamsController):
 
         # Hard-delete: remove the feature's streams from the model so memory can be freed
         for s in list(feature.streams.value):
+            self._detach_stream_state_hooks(s)
             # Drop the raw DataArray references immediately. Even if the stream
             # object itself is kept alive by a reference cycle (e.g. between
-            # DataProjection.stream and stream.tint._subscribers), the large
+            # DataProjection.stream and UI subscribers), the large
             # numpy arrays are freed as soon as we clear .raw.
             s.raw = []
             try:
@@ -2438,7 +2541,29 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         self._ov_view = ov_view
         self.stream: Optional[StaticStream] = None  # The stream currently displayed, related the selected Feature
 
-        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+        stream_bar = getattr(self, "_stream_bar", None)
+        if stream_bar is not None:
+            stream_bar.set_on_user_remove_callback(self._on_user_stream_remove)
+        current_feature_va = getattr(tab_data.main, "currentFeature", None)
+        if current_feature_va is not None:
+            current_feature_va.subscribe(self._on_current_feature_changes)
+
+    def _on_user_stream_remove(self, stream: StaticStream) -> None:
+        """Persist overview deletions for explicit user removes in FIBSEM tab."""
+        if stream not in self._tab_data_model.overviewStreams.value:
+            return
+        filename, stream_index = get_stream_origin(stream)
+        if filename is None or stream_index is None:
+            set_stream_origin_from_raw(stream)
+            filename, stream_index = get_stream_origin(stream)
+        if filename is None or stream_index is None:
+            return
+
+        project_path = self._get_project_path()
+        if not project_path:
+            return
+        mark_overview_stream_deleted(project_path, filename, stream_index)
+        self._remove_overview_from_peer_tabs(stream)
 
     def showOverviewStream(self, stream) -> StreamController:
         """
@@ -2446,7 +2571,10 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         Must be run in the main GUI thread.
         """
         self._ov_view.addStream(stream)
-        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+        self._attach_stream_state_hooks(stream)
+        focussed_view = self._tab_data_model.focussedView.value
+        show_panel = focussed_view is self._ov_view
+        sc = self._add_stream_cont(stream, show_panel=show_panel, static=self.static_mode,
                                    view=self._ov_view)
         sc.stream_panel.show_remove_btn(True)
         return sc
@@ -2457,7 +2585,10 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         Must be run in the main GUI thread.
         """
         self._feature_view.addStream(stream)
-        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+        self._attach_stream_state_hooks(stream)
+        focussed_view = self._tab_data_model.focussedView.value
+        show_panel = focussed_view is self._feature_view
+        sc = self._add_stream_cont(stream, show_panel=show_panel, static=self.static_mode,
                                    view=self._feature_view)
         return sc
 
@@ -2498,6 +2629,7 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
                 continue
 
             self._stream_bar.remove_stream_panel(sc.stream_panel)
+            self._detach_stream_state_hooks(sc.stream)
             if hasattr(v, "removeStream"):
                 v.removeStream(sc.stream)
             if sc in self.stream_controllers:
@@ -2509,6 +2641,14 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         # Force a check of what can be garbage collected, as some of the streams
         # could be quite big, that will help to reduce memory pressure.
         gc.collect()
+
+    def removeStream(self, stream):
+        """Remove stream and keep overviewStreams in sync for FIBSEM tab."""
+        is_overview_stream = stream in self._tab_data_model.overviewStreams.value
+        self._detach_stream_state_hooks(stream)
+        super().removeStream(stream)
+        if is_overview_stream and stream in self._tab_data_model.overviewStreams.value:
+            self._tab_data_model.overviewStreams.value.remove(stream)
 
     def clear(self, clear_model=True):
         """

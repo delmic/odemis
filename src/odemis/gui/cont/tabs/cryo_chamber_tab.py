@@ -36,6 +36,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.feature import load_project_data
+from odemis.acq.project_state import set_stream_origin_from_raw
 from odemis.acq.move import (
     ALIGNMENT,
     COATING,
@@ -503,6 +504,7 @@ class CryoChamberTab(Tab):
         # Load overview streams in the Localization and Fibsem tabs
         streams = data_to_static_streams(proj_data["overviews"])
         for s in streams:
+            set_stream_origin_from_raw(s)
             s.name.value = "Overview " + s.name.value
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
