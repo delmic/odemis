@@ -204,6 +204,9 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
     def test_revert_from_fixed_fm_z(self):
         self.skipTest("Test not meaningful for Tescan")
 
+    def test_fixed_fm_z_restart(self):
+        self.skipTest("Test not meaningful for Tescan")
+
     def test_stage_to_chamber(self):
         # Override, as Tescan has different behaviour: the Z axis is directly connected the chamber Z
         # go to sem imaging
