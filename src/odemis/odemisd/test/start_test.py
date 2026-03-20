@@ -30,7 +30,7 @@ from unittest import mock
 import notify2
 
 import odemis
-from odemis.odemisd.start import find_window, main
+from odemis.odemisd.start import find_window, main, run_model_options
 from odemis.util import testing
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
@@ -115,6 +115,50 @@ class StartTestCase(unittest.TestCase):
         self.assertFalse(find_window("Odemis"))
         self.assertTrue(hasattr(self, "error_code"))
         self.assertGreater(self.error_code, 0)
+
+
+class RunModelOptionsTestCase(unittest.TestCase):
+    """Unit tests for run_model_options(), exercising glob pattern expansion."""
+
+    def test_glob_expansion_single_pattern(self):
+        """A wildcard pattern matching sim files is expanded and odemis-select-mic-start is called
+        with the resulting file list."""
+        pattern = CONFIG_PATH + "sim/*.yaml"
+        with mock.patch("odemis.odemisd.start.subprocess.call", return_value=0) as mock_call, \
+             mock.patch("odemis.odemisd.start.show_error_box"):
+            ret = run_model_options(pattern)
+
+        self.assertEqual(ret, 0)
+        mock_call.assert_called_once()
+        call_args = mock_call.call_args[0][0]  # positional first arg: the list
+        self.assertEqual(call_args[0], "odemis-select-mic-start")
+        # The known secom-sim file must be among the expanded paths
+        self.assertIn(SECOM_CONFIG, call_args[1:])
+        # There should be multiple files
+        self.assertGreater(len(call_args[1:]), 1)
+
+    def test_glob_expansion_multiple_patterns(self):
+        """Two space-separated patterns are each expanded and all matches are forwarded."""
+        optical_config = CONFIG_PATH + "sim/optical-sim.odm.yaml"
+        pattern = '"%s" "%s"' % (SECOM_CONFIG, optical_config)
+        with mock.patch("odemis.odemisd.start.subprocess.call", return_value=0) as mock_call, \
+             mock.patch("odemis.odemisd.start.show_error_box"):
+            run_model_options(pattern)
+
+        call_args = mock_call.call_args[0][0]
+        self.assertIn(SECOM_CONFIG, call_args)
+        self.assertIn(optical_config, call_args)
+
+    def test_no_match_raises_value_error(self):
+        """A pattern that matches no files raises ValueError and shows an error box."""
+        pattern = "/nonexistent/path/that/does/not/exist/*.yaml"
+        with mock.patch("odemis.odemisd.start.subprocess.call") as mock_call, \
+             mock.patch("odemis.odemisd.start.show_error_box") as mock_error_box:
+            with self.assertRaises(ValueError):
+                run_model_options(pattern)
+
+        mock_error_box.assert_called_once()
+        mock_call.assert_not_called()
 
 
 if __name__ == '__main__':
