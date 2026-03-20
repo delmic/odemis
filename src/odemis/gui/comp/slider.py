@@ -554,14 +554,19 @@ class NumberSlider(Slider):
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
 
         # Make sure we give enough vertical space to the text field
-        self.SetMinSize((-1, self.linked_field.BestSize[1]))
+        # The below commented line doesn't work with wxPython 4.2.1 on Ubuntu 24.04 because
+        # BestSize returns a too large value. wxPython 4.2.5 doesn't have this problem
+        # self.SetMinSize((-1, self.linked_field.BestSize[1]))
+        # So we guess the best size based on the character height, which seems to work
+        # across platforms and wxPython versions
+        self.SetMinSize((-1, max(self.linked_field.GetCharHeight() + 2, self.handle_height)))
 
     def OnSize(self, event=None):
         super(NumberSlider, self).OnSize(event)
         # Set the height of the linked field to make it's middle line up with the
         # horizontal line of the slider
         height = self.GetHeight() + 4
-        self.linked_field.SetSize((self.linked_field.Size[0], height))
+        self.linked_field.SetSize((-1, height))
 
     def SetForegroundColour(self, colour, *args, **kwargs):
         Slider.SetForegroundColour(self, colour)
