@@ -578,6 +578,10 @@ class TestActuatorAbsEnc(TestActuator):
         # don't test led protection on abs enc
         pass
 
+    def test_protection(self):
+        # No support for .protection
+        pass
+
     def test_close_shutter(self):
         pass
 
@@ -593,6 +597,10 @@ class TestActuatorRelEnc(TestActuator):
 
     def test_led_protection_referencing(self):
         # don't test led protection on rel enc
+        pass
+
+    def test_protection(self):
+        # No support for .protection
         pass
 
     def test_close_shutter(self):
