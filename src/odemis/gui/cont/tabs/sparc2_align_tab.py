@@ -1443,7 +1443,7 @@ class Sparc2AlignTab(Tab):
                 self._ccd_stream_ext.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_mirror.Show(True)
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
