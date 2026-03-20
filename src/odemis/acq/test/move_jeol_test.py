@@ -279,7 +279,7 @@ class TestMeteorJeol1Move(unittest.TestCase):
         self._check_focus_position(model.MD_FAV_POS_DEACTIVE)
 
     def test_unknown_label_at_initialization(self):
-        arbitrary_position = {"x": 0.0, "y": 0.01, "z": 0.85e-3}
+        arbitrary_position = {"x": 0.0, "y": 0.01, "z": 4.85e-3}
         self.stage_bare.moveAbs(arbitrary_position).result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(UNKNOWN, current_imaging_mode)
