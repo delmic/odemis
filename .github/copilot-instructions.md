@@ -1,6 +1,7 @@
 # Style
 For Python code, always use type hints for function parameters and return types.
-Include docstrings for all functions and classes, following the reStructuredText style guide (but without the type information).
+Include docstrings for all functions and classes, following the reStructuredText style guide,
+but without the type information and without using inline formatting markers or backticks.
 
 Code should be valid for Python 3.10 and above.
 
