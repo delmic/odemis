@@ -1061,7 +1061,7 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
         """
         Test short & long acquisition for SE CL and EBIC acquisition simultaneously
         """
-        self.skipIfNotSupported("ebic")
+        self.skipIfNotSupported("ebic", "cl")
         # create axes
         axes = {"filter": ("band", self.filter)}
 
@@ -2041,7 +2041,7 @@ class SPARC2ScanStageVectorTestCase(BaseSPARCTestCase):
     Tests to be run with a (simulated) SPARCv2 with a scan stage and vector scanning.
     """
     simulator_config = SPARC2_VECTOR_SSTAGE_CONFIG
-    capabilities = {"spec", "vector", "scan-stage"}
+    capabilities = {"cl", "spec", "vector", "scan-stage"}
 
 
 class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
