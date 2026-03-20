@@ -167,6 +167,15 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 self._integrationTime = s.integrationTime
                 self._integrationCounts = s.integrationCounts
 
+        # Get focuser if found on any of the substreams
+        self._focuser = None
+        for s in streams:
+            if hasattr(s, "_focuser") and s._focuser:
+                if self._focuser and self._focuser != s._focuser:
+                    logging.warning("Multiple different focusers were found.")
+                    break
+                self._focuser = s._focuser
+
         # Information about the scanning, computed just before running an acquisition
         self._pxs = None  # (float, float): pixel size in the CCD data (so, independent of fuzzing)
         self._scanner_pxs = None  # (float, float): pixel size of the scanner (only different from the pixel size if fuzzing)
@@ -564,6 +573,23 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         # fill the X dimension
         pos[:, :, 1] = numpy.linspace(lim_main[1], lim_main[3], repetition[1])
         return pos
+
+    def guessFoV(self):
+        """
+        Estimate the field-of-view based on the current settings.
+        :return: (float, float): width, height in meters
+        :raises: ValueError if it cannot be guessed (ie, no stream has guessFoV())
+        """
+        for s in self._streams:
+            try:
+                fov = s.guessFoV()
+                logging.debug("Guessed FoV from stream %s: %s", s, fov)
+                return fov
+            except (NotImplementedError, AttributeError):
+                logging.debug("Unsupported Stream %s, it doesn't have a .guessFoV()", s)
+                continue
+
+        raise ValueError("Cannot guess FoV, no stream has .guessFoV()")
 
     @abstractmethod
     def _runAcquisition(self, future) -> Tuple[List[model.DataArray], Optional[Exception]]:
