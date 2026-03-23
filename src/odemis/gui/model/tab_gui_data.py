@@ -31,6 +31,7 @@ from typing import Dict, Tuple, Optional, List
 import odemis.acq.stream as acqstream
 from odemis import model
 from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Target, TargetType
+from odemis.acq.align.z_localization import ensure_stig_calib_format
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
 from odemis.acq.stream import StaticFluoStream
 from odemis.gui import conf
@@ -410,42 +411,8 @@ class CryoLocalizationGUIData(CryoGUIData):
             if not stig_calib:
                 logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
             else:
-                # stig_calib keys are based on target sizes or angles, if with target sizes then it is valid
-                # if angle is the key within the subdictionary, then the metadata keys depend on target sizes
-                # otherwise modify the metadata such that angle is in the subdictionary
-                valid_keys = all('angle' in subdict for key, subdict in stig_calib.items())
-                if not valid_keys:
-                    # Modify the stig_calib to add the angle info within the values of the keys where keys
-                    # are the target sizes. We need to create new arbitrary keys (100 µm, 200µm...)
-                    # for the angle stigmator calibration
-                    # This is done to provide backward compatibility for old formats like below, where angles are the
-                    # keys.
-                    # CALIB: {
-                    #     0.08726: {  # 5°
-                    #         'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,
-                    #               'd': 638.8463397122532, 'w0': 11.560179003062268},
-                    #         'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,
-                    #               'd': 425.6030263781317, 'w0': 11.332043010740446},
-                    #         'feature_angle': -3.1416,
-                    #         'upsample_factor': 5,
-                    #         'z_least_confusion': 9.418563712742548e-07,
-                    #         'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
-                    #     }}
-                    angles = frozenset(stig_calib.keys())
-                    updated_stig_calib = {}
-                    target_size = 0
-                    rng = main.stigmator.axes["rz"].range
-                    for a in angles:
-                        if not rng[0] <= a <= rng[1]:
-                            raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
-                        target_size += 100.e-6
-                        updated_stig_calib[target_size] = stig_calib[a]
-                        updated_stig_calib[target_size]['angle'] = a
-                    stig.updateMetadata({model.MD_CALIB: updated_stig_calib})
-                    stig_calib = updated_stig_calib
-                    logging.warning("Random target sizes have been created for the stigmator calibration: %s",
-                                    stig_calib.keys())
-
+                ensure_stig_calib_format(stig)
+                stig_calib = stig.getMetadata().get(model.MD_CALIB)
                 tools.add(TOOL_FIDUCIAL)
                 target_sizes = frozenset(stig_calib.keys())
                 self.fiducial_size = model.FloatEnumerated(min(target_sizes), choices=target_sizes, unit="m")
