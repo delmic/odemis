@@ -2202,11 +2202,12 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """Transform the shift from stage bare to chamber coordinates.
         Used for moving the stage vertically in the chamber.
         For tescan, the z-axis is already aligned with the chamber axis,
-        so this function returns the input.
+        so this function returns the input, with the sidenote that the z-axis is inverted.
+        Increasing stage z lowers the stage in the chamber.
         :param shift: The shift to be transformed
         :return: The transformed shift
         """
-        vshift = {"x": shift.get("x", 0), "z": shift.get("z", 0)}
+        vshift = {"x": shift.get("x", 0), "z": -shift.get("z", 0)}
         return vshift
 
 
