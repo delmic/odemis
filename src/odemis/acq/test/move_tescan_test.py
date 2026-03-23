@@ -168,7 +168,7 @@ class TestMeteorTescan1Move(move_tfs1_test.TestMeteorTFS1Move):
         shift = {"x": 100e-6, "z": 50e-6}
         zshift = self.posture_manager._transformFromChamberToStage(shift)
         self.assertAlmostEqual(zshift["x"], shift["x"], places=5)
-        self.assertAlmostEqual(zshift["z"], shift["z"], places=5)
+        self.assertAlmostEqual(zshift["z"], -shift["z"], places=5)
 
 
 class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
