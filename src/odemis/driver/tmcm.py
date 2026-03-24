@@ -873,91 +873,135 @@ class TMCLController(model.Actuator):
 
         return axis_params, global_params, io_config
 
-    # TODO: finish this method and use where possible
-    def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
-
-        try:
-            self.SendInstruction(n, typ, mot, val)
-
-        except IOError:
-            # TODO: could serial.outWaiting() give a clue on what is going on?
-
-
-            # One possible reason is that the device disappeared because the
-            # cable was pulled out, or the power got cut (unlikely, as it's
-            # powered via 2 sources).
-
-            # TODO: detect that the connection was lost if the port we have
-            # leads to nowhere. => It seems os.path.exists should fail ?
-            # or /proc/pid/fd/n link to a *(deleted)
-            # How to handle the fact it will then probably get a different name
-            # on replug? Use a pattern for the file name?
-
-            self._resynchonise()
-
-    def SendInstruction(self, n, typ=0, mot=0, val=0):
+    def _send_query(self, n: int, typ: int, mot: int, val: int) -> "abc.Buffer":
         """
-        Sends one instruction, and return the reply.
-        n (0<=int<=255): instruction ID
-        typ (0<=int<=255): instruction type
-        mot (0<=int<=255): motor/bank number
-        val (-2**31<=int<2**31-1): value to send
-        return (-2**31<=int<2**31-1): value of the reply (if status is good)
-        raises:
-            IOError: if problem with sending/receiving data over the serial port
-            TMCLError: if status if bad
+        Sends one query (instruction) without waiting for the reply and without retry logic.
+        The caller must already hold self._ser_access.
+
+        :param n: instruction ID (0-255)
+        :param typ: instruction type (0-255)
+        :param mot: motor/bank number (0-255)
+        :param val: value to send (-2**31 to 2**31-1)
+        :return: the message sent (9 bytes)
+        :raises IOError: if the serial write fails or the reply is incomplete
+        :raises TMCLError: if the device reports a bad status
         """
         msg = numpy.empty(9, dtype=numpy.uint8)
         struct.pack_into('>BBBBiB', msg, 0, self._target, n, typ, mot, val, 0)
-        # compute the checksum (just the sum of all the bytes)
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
-        with self._ser_access:
-            logging.debug("Sending %s", self._instr_to_str(msg))
+        logging.debug("Sending %s", self._instr_to_str(msg))
+        self._serial.write(msg)
+        self._serial.flush()  # Wait for the data to be full sent (to detect any connection error)
+        return msg
+
+    def _receive_answer(self, n: int, msg: "abc.Buffer") -> int:
+        """
+        Wait for the reply from a command, and return the value, with no retry logic.
+        The caller must already hold self._ser_access.
+
+        :param n: instruction ID (0-255)
+        :param msg: the message that was sent (for logging purposes)
+        :returns: reply value
+        :raises TimeoutError: if the device doesn't reply anything within the timeout (100ms)
+        :raises IOError: if the serial write fails or the reply is incomplete
+        :raises TMCLError: if the device reports a bad status
+        """
+        while True:
             try:
-                self._serial.write(msg)
+                res = self._serial.read(9)
             except IOError:
-                logging.warning("Failed to send command to TMCM, trying to reconnect.")
+                logging.warning("Failed to read from TMCM, trying to reconnect.")
                 self._tryRecover()
-                # Failure here should mean that the device didn't get the (complete)
-                # instruction, so it's safe to send the command again.
-                return self.SendInstruction(n, typ, mot, val)
-            self._serial.flush()
+                # We already sent the instruction before, so don't send it again
+                # here. Instead, raise an error and let the user decide what to do next
+                raise IOError("Failed to read from TMCM, restarted serial connection.")
+            if len(res) == 0:  # Something went wrong, maybe the device discarded the message
+                raise TimeoutError("No bytes received after %s" % self._instr_to_str(msg))
+            elif len(res) < 9:  # Only part of a message was received, that's a sign something went even more wrong
+                logging.warning("Received only %d bytes after %s, will fail the instruction",
+                                len(res), self._instr_to_str(msg))
+                raise IOError("Received only %d bytes after %s" %
+                              (len(res), self._instr_to_str(msg)))
+            logging.debug("Received %s", self._reply_to_str(res))
+            ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
+
+            # Check it's a valid message
+            npres = numpy.frombuffer(res, dtype=numpy.uint8)
+            good_chk = numpy.sum(npres[:-1], dtype=numpy.uint8)
+            if chk == good_chk:
+                if self._target != 0 and self._target != rt:  # 0 means 'any device'
+                    logging.warning("Received a message from %d while expected %d",
+                                    rt, self._target)
+                if rn != n:
+                    logging.info("Skipping a message about instruction %d (waiting for %d)",
+                                 rn, n)
+                    continue
+                if status not in TMCL_OK_STATUS:
+                    raise TMCLError(status, rval, self._instr_to_str(msg))
+            else:
+                # TODO: investigate more why once in a while (~1/1000 msg)
+                # the message is garbled
+                logging.warning("Message checksum incorrect (%d), will assume it's all fine", chk)
+
+            return rval
+
+    def SendInstruction(self, n: int, typ: int = 0, mot: int = 0, val: int = 0) -> int:
+        """
+        Sends one instruction, and return the reply.
+        When 0 bytes are received (transient glitch), a GetVersion ping is sent
+        up to 3 times to wait for the device to recover. Once the ping
+        succeeds, the original instruction is retried once. Any failure after
+        that raises an error immediately.
+
+        :param n: instruction ID (0-255)
+        :param typ: instruction type (0-255)
+        :param mot: motor/bank number (0-255)
+        :param val: value to send (-2**31 to 2**31-1)
+        :returns: reply value
+        :raises IOError: if problem with sending/receiving data over the serial port
+        :raises TMCLError: if status is bad
+        """
+        with self._ser_access:
+            attempt = 0
             while True:
+                attempt += 1
                 try:
-                    res = self._serial.read(9)
+                    msg = self._send_query(n, typ, mot, val)
                 except IOError:
-                    logging.warning("Failed to read from TMCM, trying to reconnect.")
+                    logging.warning("Failed to send command to TMCM, trying to reconnect.")
                     self._tryRecover()
-                    # We already sent the instruction before, so don't send it again
-                    # here. Instead, raise an error and let the user decide what to do next
-                    raise IOError("Failed to read from TMCM, restarted serial connection.")
-                if len(res) < 9:  # TODO: TimeoutError?
-                    logging.warning("Received only %d bytes after %s, will fail the instruction",
-                                    len(res), self._instr_to_str(msg))
-                    raise IOError("Received only %d bytes after %s" %
-                                  (len(res), self._instr_to_str(msg)))
-                logging.debug("Received %s", self._reply_to_str(res))
-                ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
+                    # Failure here should mean that the device didn't get the (complete)
+                    # instruction, so it's safe to send the command again.
+                    msg = self._send_query(n, typ, mot, val)
 
-                # Check it's a valid message
-                npres = numpy.frombuffer(res, dtype=numpy.uint8)
-                good_chk = numpy.sum(npres[:-1], dtype=numpy.uint8)
-                if chk == good_chk:
-                    if self._target != 0 and self._target != rt:  # 0 means 'any device'
-                        logging.warning("Received a message from %d while expected %d",
-                                        rt, self._target)
-                    if rn != n:
-                        logging.info("Skipping a message about instruction %d (waiting for %d)",
-                                     rn, n)
-                        continue
-                    if status not in TMCL_OK_STATUS:
-                        raise TMCLError(status, rval, self._instr_to_str(msg))
+                try:
+                    return self._receive_answer(n, msg)
+                except TimeoutError:
+                    # Only recover when 0 bytes were received, other errors are typically more severe,
+                    # so we just immediately fail the instruction without trying to recover.
+                    # Also, this most likely means that the device discarded the instruction,
+                    # so we can just retry it after recovery without worrying about side effects.
+                    logging.warning("Received 0 bytes after instruction %d, checking communication", n)
+
+                if attempt >= 2:  # Only try to recover once
+                    logging.warning("Too many attempts to send instruction %d, giving up", n)
+                    raise IOError(f"Instruction {n} failed after {attempt} attempts")
+
+                # Try a lightweight ping (GetVersion) to wait for the device to recover,
+                # before re-sending an instruction that may have side effects.
+                for ping_attempt in range(3):
+                    time.sleep(0.1)
+                    try:
+                        ping_msg = self._send_query(136, 1, 0, 0)  # GetVersion
+                        self._receive_answer(136, ping_msg)
+                        break
+                    except IOError:  # includes TimeoutError (which derives from IOError)
+                        logging.warning("Ping attempt %d failed after 0-byte response",ping_attempt + 1)
                 else:
-                    # TODO: investigate more why once in a while (~1/1000 msg)
-                    # the message is garbled
-                    logging.warning("Message checksum incorrect (%d), will assume it's all fine", chk)
+                    raise IOError("Device not responding to instructions")
 
-                return rval
+                logging.info("Communication recovered after %d ping attempt(s), retrying instruction %d",
+                             ping_attempt + 1, n)
 
     def _tryRecover(self):
         self.state._set_value(HwError("USB connection lost"), force_write=True)
@@ -2259,7 +2303,7 @@ class TMCLController(model.Actuator):
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=0.1,  # s
+                timeout=0.1,  # s, typically the device responds within 1ms
                 **kwargs
             )
         except IOError:
