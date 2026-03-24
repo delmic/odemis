@@ -194,7 +194,7 @@ class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
     def test_error(self):
         """Test the different RemoteEx errors possible."""
         # send wrong command, will timeout
-        with self.assertRaises(util.TimeoutError):
+        with self.assertRaises(TimeoutError):
             self.streakcam.sendCommand("Appinfoo", "type")
 
     def test_SendCommandSimple(self):
@@ -329,7 +329,7 @@ class TestHamamatsurxCam(unittest.TestCase):
     def test_error(self):
         """Test the different RemoteEx errors possible."""
         # send wrong command, will timeout
-        with self.assertRaises(util.TimeoutError):
+        with self.assertRaises(TimeoutError):
             self.streakcam.sendCommand("Appinfoo", "type")
 
     ### General commands #####################################################

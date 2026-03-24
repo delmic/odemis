@@ -32,7 +32,6 @@ import numpy.random
 from odemis import util
 from odemis.model import CancellableFuture
 from odemis.util import (
-    TimeoutError,
     executeAsyncTask,
     limit_invocation,
     perpendicular_distance,

@@ -30,7 +30,7 @@ import numpy
 from odemis import model
 from odemis import util
 from odemis.dataio import tiff
-from odemis.util import TimeoutError, spot, executeAsyncTask
+from odemis.util import spot, executeAsyncTask
 from odemis.util.img import Subtract
 import os
 import threading

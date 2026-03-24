@@ -28,7 +28,7 @@ import math
 import numpy
 from odemis import model
 from odemis.acq.align import find_overlay
-from odemis.util import TimeoutError, executeAsyncTask
+from odemis.util import executeAsyncTask
 import sys
 import threading
 

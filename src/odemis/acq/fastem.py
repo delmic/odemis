@@ -46,7 +46,7 @@ from odemis.acq import fastem_conf, stitching
 from odemis.acq.align.fastem import align, estimate_calibration_time
 from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod, WEAVER_COLLAGE
 from odemis.acq.stream import SEMStream
-from odemis.util import TimeoutError, transform
+from odemis.util import transform
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.registration import estimate_grid_orientation_from_img
 from odemis.util.transform import SimilarityTransform, to_physical_space
