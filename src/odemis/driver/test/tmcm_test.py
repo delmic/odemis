@@ -21,8 +21,7 @@ from odemis.driver import tmcm
 import os
 import time
 import unittest
-from unittest.case import skip
-from builtins import range
+from unittest import mock
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -152,6 +151,100 @@ class TestStatic(unittest.TestCase):
 
         dev.terminate()
         os.remove(PARAM_FILE)
+
+
+class TestSendInstructionRetry(unittest.TestCase):
+    """
+    Tests for the 0-byte retry logic in SendInstruction.
+    Uses the simulator, with _receive_answer patched to inject failures.
+    """
+
+    def setUp(self):
+        self.dev = CLASS(**KWARGS_SIM)
+
+    def tearDown(self):
+        self.dev.terminate()
+
+    def _make_mock_receive(self, fail_non_ping_count: int, fail_ping_count: int = 0):
+        """
+        Returns a replacement for _receive_answer that raises
+        IOError("Received only 0 bytes ...") for the first N calls of each
+        category, then delegates to the real method.
+
+        :param fail_non_ping_count: how many non-ping (n != 136) calls should fail
+        :param fail_ping_count: how many ping (n == 136) calls should fail
+        :returns: (mock callable, list[int] non-ping calls, list[int] ping calls)
+        """
+        non_ping_calls = [0]
+        ping_calls = [0]
+        real_method = self.dev._receive_answer
+
+        def mock_receive(n: int, msg) -> int:
+            if n == 136:  # GetVersion (ping)
+                ping_calls[0] += 1
+                if ping_calls[0] <= fail_ping_count:
+                    raise TimeoutError("Received only 0 bytes after %d, %d" % (self.dev._target, n))
+            else:
+                non_ping_calls[0] += 1
+                if non_ping_calls[0] <= fail_non_ping_count:
+                    raise TimeoutError("Received only 0 bytes after %d, %d" % (self.dev._target, n))
+            return real_method(n, msg)
+
+        return mock_receive, non_ping_calls, ping_calls
+
+    def test_retry_succeeds_after_one_ping(self):
+        """0-byte on original, first ping succeeds, retry of original succeeds."""
+        mock_receive, non_ping_calls, ping_calls = self._make_mock_receive(fail_non_ping_count=1)
+        with mock.patch.object(self.dev, '_receive_answer', mock_receive):
+            val = self.dev.SendInstruction(6, 0, 0)  # GetAxisParam axis 0, param 0
+        self.assertIsNotNone(val)
+        self.assertEqual(non_ping_calls[0], 2)  # 1 failed + 1 successful retry
+        self.assertEqual(ping_calls[0], 1)
+
+    def test_retry_succeeds_after_three_pings(self):
+        """0-byte on original, first two pings fail, third ping succeeds, retry succeeds."""
+        mock_receive, non_ping_calls, ping_calls = self._make_mock_receive(fail_non_ping_count=1,
+                                                                        fail_ping_count=2)
+        with mock.patch.object(self.dev, '_receive_answer', mock_receive):
+            val = self.dev.SendInstruction(6, 0, 0)
+        self.assertIsNotNone(val)
+        self.assertEqual(non_ping_calls[0], 2)
+        self.assertEqual(ping_calls[0], 3)
+
+    def test_all_pings_fail_raises(self):
+        """0-byte on original, all 3 pings fail — IOError is raised."""
+        mock_receive, non_ping_calls, ping_calls = self._make_mock_receive(fail_non_ping_count=1,
+                                                                        fail_ping_count=3)
+        with mock.patch.object(self.dev, '_receive_answer', mock_receive):
+            with self.assertRaises(IOError):
+                self.dev.SendInstruction(6, 0, 0)
+        self.assertEqual(non_ping_calls[0], 1)
+        self.assertEqual(ping_calls[0], 3)
+
+    def test_retry_fails_after_ping_raises(self):
+        """0-byte on original, ping recovers, but retry of original also fails — TimeoutError."""
+        mock_receive, non_ping_calls, ping_calls = self._make_mock_receive(fail_non_ping_count=2)
+        with mock.patch.object(self.dev, '_receive_answer', mock_receive):
+            with self.assertRaises((TimeoutError, IOError)):
+                self.dev.SendInstruction(6, 0, 0)
+        self.assertEqual(non_ping_calls[0], 2)  # initial + 1 retry, both fail
+        self.assertEqual(ping_calls[0], 1)
+
+    def test_partial_reply_not_retried(self):
+        """A partial reply (e.g. 4 bytes) is NOT retried — only 0-byte responses are."""
+        real_method = self.dev._receive_answer
+        call_count = [0]
+
+        def mock_receive(n: int, msg) -> int:
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise IOError("Received only 4 bytes after %d, %d" % (self.dev._target, n))
+            return real_method(n, msg)
+
+        with mock.patch.object(self.dev, '_receive_answer', mock_receive):
+            with self.assertRaises(IOError):
+                self.dev.SendInstruction(6, 0, 0)
+        self.assertEqual(call_count[0], 1)  # no retry attempt
 
 
 # @skip("faster")
