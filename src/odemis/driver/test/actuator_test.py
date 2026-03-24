@@ -26,6 +26,7 @@ import os
 import random
 import time
 import unittest
+import unittest.mock
 
 import odemis
 import simulated_test
@@ -190,6 +191,124 @@ class FixedPositionsTest(unittest.TestCase):
     # force to not use the default method from TestCase
     def tearDown(self):
         super(FixedPositionsTest, self).tearDown()
+
+
+class TestFixedPositionsActuatorAdaptiveRef(unittest.TestCase):
+    """Tests the adaptive ref_start learning in _quick_reference()."""
+
+    def setUp(self):
+        self.dependency = simulated.Stage("sstage_adaptive", "test", {"a"})
+        self.dev = FixedPositionsActuator(
+            "stage_adaptive", "stage",
+            {"x": self.dependency}, "a",
+            {0: "pos0", 0.01: "pos1", 0.02: "pos2",
+             0.03: "pos3", 0.04: "pos4", 0.05: "pos5"},
+            cycle=0.06,
+        )
+        # Provide a mock reference() on the dependency since simulated.Stage doesn't have one
+        self.dependency.reference = unittest.mock.MagicMock(
+            return_value=model.InstantaneousFuture()
+        )
+
+    def tearDown(self):
+        self.dev.terminate()
+        self.dependency.terminate()
+
+    def _run_quick_reference_with_timing(self, t_premove: float, t_ref: float):
+        """
+        Call _quick_reference() with mocked time.monotonic() so that the
+        reported pre-move duration is t_premove and the reference duration is t_ref.
+
+        :param t_premove: simulated pre-move duration in seconds
+        :param t_ref: simulated reference duration in seconds
+        """
+        # time.monotonic() is called 4 times: start_premove, end_premove, start_ref, end_ref
+        side_effects = [0.0, t_premove, t_premove, t_premove + t_ref]
+        with unittest.mock.patch("odemis.driver.actuator.time.monotonic",
+                                 side_effect=side_effects):
+            self.dev._quick_reference()
+
+    def test_initial_state(self):
+        """Without explicit ref_start, auto mode is enabled and the first candidate is cycle * 0.1."""
+        self.assertTrue(self.dev._ref_start_auto)
+        self.assertAlmostEqual(self.dev._ref_start, 0.06 * 0.1)
+        self.assertEqual(self.dev._ref_candidate_idx, 0)
+        self.assertEqual(self.dev._ref_candidate_times, [None, None])
+
+    def test_explicit_ref_start_disables_adaptation(self):
+        """With an explicit ref_start, adaptive learning should be disabled."""
+        dep2 = simulated.Stage("sstage_explicit", "test", {"a"})
+        dev2 = FixedPositionsActuator(
+            "stage_explicit", "stage",
+            {"x": dep2}, "a",
+            {0: "pos0", 0.01: "pos1", 0.02: "pos2",
+             0.03: "pos3", 0.04: "pos4", 0.05: "pos5"},
+            cycle=0.06,
+            ref_start=0.005,
+        )
+        try:
+            self.assertFalse(dev2._ref_start_auto)
+            self.assertAlmostEqual(dev2._ref_start, 0.005)
+        finally:
+            dev2.terminate()
+            dep2.terminate()
+
+    def test_slow_candidate_a_switches_to_candidate_b(self):
+        """If candidate A is slow (t_ref > 2 * t_premove), switch to candidate B next time."""
+        # t_premove=0.1 s, t_ref=0.5 s  →  0.5 > 2*0.1, so "long"
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.5)
+
+        self.assertAlmostEqual(self.dev._ref_candidate_times[0], 0.5)
+        self.assertIsNone(self.dev._ref_candidate_times[1])
+        self.assertEqual(self.dev._ref_candidate_idx, 1)
+        self.assertAlmostEqual(self.dev._ref_start, 0.06 * 0.9)
+        self.assertTrue(self.dev._ref_start_auto)
+
+    def test_fast_candidate_a_stays_on_candidate_a(self):
+        """If candidate A is fast (t_ref <= 2 * t_premove), keep using candidate A."""
+        # t_premove=0.1 s, t_ref=0.15 s  →  0.15 <= 2*0.1, so "fast"
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.15)
+
+        self.assertAlmostEqual(self.dev._ref_candidate_times[0], 0.15)
+        self.assertIsNone(self.dev._ref_candidate_times[1])
+        self.assertEqual(self.dev._ref_candidate_idx, 0)
+        self.assertAlmostEqual(self.dev._ref_start, 0.06 * 0.1)
+        self.assertTrue(self.dev._ref_start_auto)
+
+    def test_both_candidates_tried_picks_faster_b(self):
+        """After both candidates are timed, the one with the smaller t_ref is used permanently."""
+        # First call: slow A → switches to B
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.5)
+        # Second call: B is faster
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.2)
+
+        self.assertAlmostEqual(self.dev._ref_candidate_times[0], 0.5)
+        self.assertAlmostEqual(self.dev._ref_candidate_times[1], 0.2)
+        self.assertAlmostEqual(self.dev._ref_start, 0.06 * 0.9)  # B is faster
+        self.assertFalse(self.dev._ref_start_auto)  # learning complete
+
+    def test_both_candidates_tried_picks_faster_a(self):
+        """If A is faster than B after both are tried, A is selected permanently."""
+        # First call: slow A → switches to B
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.5)
+        # Second call: B is even slower than A
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.8)
+
+        self.assertAlmostEqual(self.dev._ref_candidate_times[0], 0.5)
+        self.assertAlmostEqual(self.dev._ref_candidate_times[1], 0.8)
+        self.assertAlmostEqual(self.dev._ref_start, 0.06 * 0.1)  # A is faster
+        self.assertFalse(self.dev._ref_start_auto)  # learning complete
+
+    def test_repeated_calls_after_fast_a_do_not_change_state(self):
+        """Subsequent calls after a fast candidate A do not re-record or switch anything."""
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.15)
+        # Call again — state should be identical (time already recorded for A)
+        self._run_quick_reference_with_timing(t_premove=0.1, t_ref=0.9)
+
+        self.assertAlmostEqual(self.dev._ref_candidate_times[0], 0.15)  # unchanged
+        self.assertIsNone(self.dev._ref_candidate_times[1])
+        self.assertAlmostEqual(self.dev._ref_start, 0.06 * 0.1)
+        self.assertTrue(self.dev._ref_start_auto)
 
 
 class FixedPositionsTestAntibacklash(unittest.TestCase):

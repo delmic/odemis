@@ -27,6 +27,7 @@ import logging
 import math
 import numbers
 import threading
+import time
 from concurrent.futures._base import CancelledError, FINISHED
 from concurrent import futures
 from typing import Dict, Union, Set
@@ -1377,9 +1378,14 @@ class FixedPositionsActuator(model.Actuator):
         if cycle is not None:
             if ref_start is None:
                 # The reference switch is typically at 0, so a little after that is often a good
-                # starting point (assuming the referencing goes towards negative direction).
-                self._ref_start = self._cycle / len(self._positions)
+                # starting point. As we don't know which direction goes the referencing, we
+                # start with two candidates, and the faster one will be used.
+                self._ref_start_auto = True
+                self._ref_start_candidates = [cycle * 0.1, cycle * 0.9]
+                self._ref_candidate_times = [None, None]
+                self._ref_start = self._ref_start_candidates[0]
             else:
+                self._ref_start_auto = False
                 self._ref_start = ref_start
             if not all(0 <= p < cycle for p in positions.keys()):
                 raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
@@ -1492,20 +1498,14 @@ class FixedPositionsActuator(model.Actuator):
                 move = {self._caxis: req_pos}
                 self._dependency.moveAbs(move).result()
             else:
-                cur_pos = self._dependency.position.value[self._caxis]
-
-                # After moving more than the equivalent of a full cycle, reference again to get rid
+                # After moving more than the equivalent of 2 full cycles, reference again to get rid
                 # of accumulated error.
-                if self._move_sum >= self._cycle:
+                if self._move_sum >= 2 * self._cycle:
                     logging.debug("Re-referencing axis %s (-> %s) after moving %s",
                                   self._axis, self._caxis, self._move_sum)
-                    # Move near the reference switch, using the shortest way, to save a bit of time
-                    shift = util.rot_shortest_move(cur_pos, self._ref_start, self._cycle)
-                    self._dependency.moveRel({self._caxis: shift}).result()
-                    self._dependency.reference({self._caxis}).result()
-                    self._move_sum = 0
-                    cur_pos = self._dependency.position.value[self._caxis]
+                    self._quick_reference()
 
+                cur_pos = self._dependency.position.value[self._caxis]
                 # Optimize by moving through the closest way
                 shift = util.rot_shortest_move(cur_pos, req_pos, self._cycle)
                 self._move_sum += abs(shift)
@@ -1516,6 +1516,62 @@ class FixedPositionsActuator(model.Actuator):
             self._actual_positions[req_pos] = cur_pos
         finally:
             self._dependency.position.subscribe(self._update_dep_position, init=True)
+
+    def _quick_reference(self):
+        """
+        Do a quick reference by moving to a position near the reference switch and then referencing.
+        Assuming we know which direction uses the reference procedure, *on a cyclic axis*,
+        it's faster than potentially doing a full turn.
+        When ref_start was not provided at init, the method learns which of two candidate start
+        positions (10% or 90% of the cycle) yields a faster reference operation, and
+        permanently uses the faster one once both have been tried.
+        """
+        cur_pos = self._dependency.position.value[self._caxis]
+        shift = util.rot_shortest_move(cur_pos, self._ref_start, self._cycle)
+
+        t_premove_start = time.monotonic()
+        self._dependency.moveRel({self._caxis: shift}).result()
+        t_premove = time.monotonic() - t_premove_start
+
+        t_ref_start = time.monotonic()
+        f = self._dependency.reference({self._caxis})
+        f.result()
+        t_ref = time.monotonic() - t_ref_start
+
+        if self._ref_start_auto:
+            idx = self._ref_start_candidates.index(self._ref_start)
+            if self._ref_candidate_times[idx] is None:
+                # First time measuring this candidate: record its duration and decide what to do next.
+                self._ref_candidate_times[idx] = t_ref
+                logging.debug("Candidate ref_start %g took %.3f s for reference (pre-move %.3f s)",
+                              self._ref_start_candidates[idx], t_ref, t_premove)
+
+                other_idx = 1 - idx
+                if self._ref_candidate_times[other_idx] is None:
+                    # Other candidate not tried yet; switch to it if this one was slow
+                    is_long = t_premove > 0 and t_ref > 2 * t_premove
+                    if is_long:
+                        logging.debug("Reference from %g was slow (%.3f s > 2 * %.3f s), "
+                                      "trying the other candidate (%g) next time",
+                                      self._ref_start_candidates[idx], t_ref, t_premove,
+                                      self._ref_start_candidates[other_idx])
+                        self._ref_candidate_idx = other_idx
+                        self._ref_start = self._ref_start_candidates[other_idx]
+                    else:  # Fast enough => stick to it
+                        logging.debug(
+                            "Reference from %g was short enough (%.3f s < 2 * %.3f s), will keep using it.",
+                            self._ref_start_candidates[idx], t_ref, t_premove)
+                        self._ref_start_auto = False
+                else:
+                    # Both candidates have been measured; pick the faster one permanently
+                    best_idx = 0 if self._ref_candidate_times[0] <= self._ref_candidate_times[1] else 1
+                    self._ref_start = self._ref_start_candidates[best_idx]
+                    self._ref_start_auto = False
+                    logging.info("Settled on ref_start %g (%.3f s) over %g (%.3f s)",
+                                 self._ref_start_candidates[best_idx], self._ref_candidate_times[best_idx],
+                                 self._ref_start_candidates[1 - best_idx], self._ref_candidate_times[1 - best_idx])
+
+        self._move_sum = 0
 
     def _doReference(self, axes):
         logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
