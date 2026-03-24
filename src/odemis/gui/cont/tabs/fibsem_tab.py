@@ -343,8 +343,8 @@ class FibsemTab(Tab):
             p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
             init_pos = self.fib_stream.raw[0].metadata[model.MD_POS]
 
-            # get difference between p_pos and init_pos
-            dx = p_pos[0] - init_pos[0]
+            # Only take the "vertical" displacement, since horizontal displacement
+            # is not desired for the coincidental alignment process.
             dy = p_pos[1] - init_pos[1]
 
             # invert dy if scan rotated.
@@ -353,8 +353,8 @@ class FibsemTab(Tab):
                                 atol=1e-2):
                 dy *= -1
                 logging.debug("Scan rotation detected, inverting dy")
-            logging.info(f"Moving stage vertically by: {dx}, {dy}")
-            f = self.pm.sample_stage.moveRelChamberCoordinates({"x": dx, "z": dy})
+            logging.info(f"Moving stage vertically by: {dy}")
+            f = self.pm.sample_stage.moveRelChamberCoordinates({"z": dy})
             f.result()
             return
 
