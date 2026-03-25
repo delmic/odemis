@@ -29,7 +29,7 @@ from typing import Tuple, Optional
 import matplotlib
 import numpy
 
-from odemis import model
+from odemis import model, util
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase,
                           MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
@@ -86,6 +86,14 @@ POL_POSITIONS_2_DISPLAY = {MD_POL_HORIZONTAL: "Horizontal",
                            MD_POL_UP: "Degree of unpolarized light"
                            }
 POL_MOVE_TIME = 6  # [s] extra time to move polarimetry hardware (value is very approximate)
+# Power value depends on selected excitation
+# Emission value depends on selected excitation
+# Tint can automatically change if excitation and emission are changed
+# Therefore, the below VAs are changed first in the below order and then the rest of stream VAs
+SETTINGS_ORDER = ["excitation", "power", "emission"]
+# The below VAs are not important for loading the settings of a specific stream
+NON_SETTINGS_VA = ['acquisitionType', 'auto_bc', 'background', 'histogram', 'image', 'intensityRange', 'is_active',
+                   'roi', 'should_update', 'single_frame_acquisition', 'status', 'integrationCounts']
 
 
 class Stream(object):
@@ -1368,3 +1376,56 @@ class Stream(object):
     def force_image_update(self):
         """Force the stream image to be updated"""
         self._shouldUpdateImage()
+
+    def _get_settings_order(self):
+        """
+        Get the VAs for loading a stream setting and sort them, so it can applied in the given order while loading
+        a stream later.
+        """
+        all_vas = model.getVAs(self)
+        settings_vas = set(all_vas.keys()).difference(NON_SETTINGS_VA)
+        return util.sorted_according_to(settings_vas, SETTINGS_ORDER)
+
+    def get_settings_entries(self) -> dict:
+        """Get the stream settings as a dict of entries, which can be used to save the stream settings."""
+        entries = {}
+        settings_vas = self._get_settings_order()
+        for va_name in settings_vas:
+            if va_name == "tint":
+                entries["tint"] = img.tint_to_md_format(self.tint.value)
+            else:
+                entries.update({va_name: getattr(self, va_name).value})
+        # Add the class name to the entries, so that it can be used when loading the stream settings to know
+        # and/or differentiate which stream class to instantiate
+        entries["class"] = self.__class__.__name__
+        return entries
+
+    def set_settings_entries(self, entries: dict):
+        """
+        Set the stream settings according to the given entries dict, which should be in the same format as the one
+        returned by get_settings_entries.
+        """
+        for key in util.sorted_according_to(entries.keys(), self._get_settings_order()):
+            if key in ("name", "class"):
+                # Entry name is not to be applied
+                # class is not an entry of the stream settings, but is used to know which stream class to instantiate
+                # when loading the stream settings
+                continue
+
+            value = entries[key]
+            if key == "tint":
+                self.tint.value = img.md_format_to_tint(entries["tint"])
+            elif isinstance(value, list) and all(
+                isinstance(x, (int, float)) for x in value
+            ):
+                value = tuple(value)
+
+            try:
+                getattr(self, key).value = value
+            except Exception:
+                logging.exception(
+                    "Failed to set %s setting %s to value %s",
+                    entries.get("class", self.__class__.__name__),
+                    key,
+                    value,
+                )
