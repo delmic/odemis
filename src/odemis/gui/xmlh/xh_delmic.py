@@ -162,8 +162,10 @@ class CaptionBarXmlHandler(xrc.XmlResourceHandler):
         w = fpb.CaptionBar(
                         parent,
                         self.GetText('label'),
-                        self.GetBool('collapsed')
+                        self.GetBool('collapsed'),
+                        foldable=self.GetBool('foldable')
         )
+        w.SetName(self.GetName())
         self.SetupWindow(w)
         return w
 HANDLER_CLASS_LIST.append(CaptionBarXmlHandler)
