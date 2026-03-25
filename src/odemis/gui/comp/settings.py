@@ -585,4 +585,18 @@ class SettingsPanel(wx.Panel):
                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         return lbl_ctrl, run_btn
 
+    @control_bookkeeper
+    def add_btn(self, label_text, btn_label):
+        """
+        Add a generic button with a label and the corresponding side label to the gridbag sizer.
+        :param label_text: (str) label text to display
+        :param btn_label: (str) label for the button
+        :returns: (wx.StaticText, ImageTextButton) side label and button
+        """
+        lbl_ctrl = self._add_side_label(label_text)
+        btn = ImageTextButton(self, label=btn_label, height=16, style=wx.ALIGN_CENTER)
+        self.gb_sizer.Add(btn, (self.num_rows, 2), span=(1, 1),
+                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        return lbl_ctrl, btn
+
 # END Control methods
