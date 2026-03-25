@@ -19,31 +19,7 @@ import logging
 import os
 from typing import List, Dict, Any
 
-from odemis import model, util
 from odemis.acq.stream import Stream
-from odemis.util.img import md_format_to_tint, tint_to_md_format
-
-# Power value depends on selected excitation
-# Emission value depends on selected excitation
-# Tint can automatically change if excitation and emission are changed
-# Therefore, the below VAs are changed first in the below order and then the rest of stream VAs
-SETTINGS_ORDER = ["excitation", "power", "emission"]
-# The below VAs are not important for loading the settings of a specific stream
-NON_SETTINGS_VA = ['acquisitionType', 'auto_bc', 'background', 'histogram', 'image', 'intensityRange', 'is_active',
-                   'roi', 'should_update', 'single_frame_acquisition', 'status']
-
-
-def get_settings_order(stream):
-    """
-    Get the VAs for loading a stream setting and sort them so it can applied in the given order while loading
-    a stream later.
-    :param stream: stream object that consists of VAs
-    """
-    stream_vas = model.getVAs(stream)
-    settings = set(stream_vas.keys()).difference(NON_SETTINGS_VA)
-    settings_order = util.sorted_according_to(settings, SETTINGS_ORDER)
-
-    return settings_order
 
 
 class StreamSettingsConfig:
@@ -137,21 +113,7 @@ class StreamSettingsConfig:
         Update the streams settings from the list of streams to update the entries in the JSON file.
         :param streams: (list of streams) List of vigilant attributes of each stream settings
         """
-        local_entries = []
-
-        for s in streams:
-            settings_order = get_settings_order(s)
-            entries = {}
-            # set the settings for the stream from a settings json file
-            # self.stream_settings.get_stream_settings(self.stream_controllers)
-            for attr_name in settings_order:
-                # tint requires special handling
-                if attr_name == "tint":
-                    entries["tint"] = tint_to_md_format(s.tint.value)
-                else:
-                    entries.update({attr_name: getattr(s, attr_name).value})
-
-            local_entries.append(entries)
+        local_entries = [s.get_settings_entries() for s in streams]
 
         # read and update the stream settings in the JSON file
         self.update_data(local_entries)
@@ -168,23 +130,5 @@ class StreamSettingsConfig:
             logging.debug("Not applying the stream settings as '%s' is unknown.", name)
             return
 
-        settings_order = get_settings_order(stream)
         prev_setting = self.config_data[index]
-        # Follow the order for setting the values as listed in setting_keys
-        for key in util.sorted_according_to(prev_setting.keys(), settings_order):
-            if key == "name":
-                continue  # Entry name is not to be applied
-
-            current_value = prev_setting[key]  # Get the previous value if it exists
-            # tint requires special handling
-            if key == "tint":
-                current_value = md_format_to_tint(prev_setting["tint"])
-            # Special handling for attributes that need to be converted to tuples
-            elif isinstance(current_value, list) and all(isinstance(x, (int, float)) for x in current_value):
-                current_value = tuple(current_value)
-
-            # Set the VA value
-            try:
-                getattr(stream, key).value = current_value
-            except Exception as e:
-                logging.warning(f"Error in applying the stream settings for {key}: {e}")
+        stream.set_settings_entries(prev_setting)
