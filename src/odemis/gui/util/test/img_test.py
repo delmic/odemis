@@ -1099,7 +1099,7 @@ class TestSpatialExport(test.GuiTestCase):
         for s, md in zip(streams, orig_md):
             self.assertEqual(md, s.raw[0].metadata)
 
-    def test_fluo_ztack(self):
+    def test_fluo_zstack(self):
         """
         Export of a fluorescence z-stack -> the image at the given z-index should be exported
         """
