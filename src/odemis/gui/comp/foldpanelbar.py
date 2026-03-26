@@ -258,7 +258,7 @@ class CaptionBar(wx.Window):
     It can also be used as a standalone CaptionBar along with a panel, without the need of having
     FoldPanelItem as its parent . In that case, the folding and unfolding events will be sent
     to the parent of the CaptionBar, and the parent can decide how to handle them ideally to show
-    or hide the associated panel. See panel_tab_sparc_acquis.xrc object cbar_acq_recipes.
+    or hide the associated panel. See panel_tab_sparc_acqui.xrc object cbar_acq_recipes.
     """
 
     def __init__(self, parent, caption, collapsed, foldable=False):

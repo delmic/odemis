@@ -30,14 +30,16 @@ from collections import OrderedDict
 from concurrent import futures
 import functools
 import logging
-import numpy
 from odemis import model
 from odemis.acq.stream import SpectrumSettingsStream, POL_POSITIONS, SEMSpectrumMDStream
 import odemis.gui
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.stream import StreamController
+from odemis.gui.cont.stream_bar import SparcStreamsController
+from odemis.gui.model.tab_gui_data import SparcAcquisitionGUIData
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_POL_NONE, MD_DESCRIPTION
+from odemis.model import MD_POL_NONE
 from odemis.util import executeAsyncTask
 
 import odemis.gui.conf.util as confutil
@@ -266,15 +268,23 @@ class SpecExtraPlugin(Plugin):
             ))
         )
 
-    def addSpectrum(self, name, detector):
+    def addSpectrum(
+        self,
+        name: str,
+        detector: model.DigitalCamera,
+        tab_data: SparcAcquisitionGUIData,
+        stctrl: SparcStreamsController,
+        **kwargs
+    ) -> StreamController:
         """
-        name (str): name of the stream
-        detector (DigitalCamera): spectrometer to acquire the spectrum
+        :param name: (str) name of the stream
+        :param detector: (DigitalCamera) spectrometer to acquire the spectrum
+        :param tab_data: (SparcAcquisitionGUIData) the data of the acquisition tab
+        :param stctrl: (SparcStreamsController) the SPARC stream controller to which the stream should be added
+        :param kwargs: other options, can contain "settings_entries"
         """
         logging.debug("Adding spectrum stream for %s", detector.name)
-
-        main_data = self.main_app.main_data
-        stctrl = self._tab.streambar_controller
+        main_data = tab_data.main
 
         spg = stctrl._getAffectingSpectrograph(detector, default=main_data.spectrograph)
 
@@ -294,7 +304,7 @@ class SpecExtraPlugin(Plugin):
         axes = stctrl._filter_axes(axes)
 
         spec_stream = LASpectrumSettingsStream(
-            name,
+            stctrl.get_unique_stream_name(name),
             detector,
             detector.data,
             main_data.ebeam,
@@ -306,6 +316,9 @@ class SpecExtraPlugin(Plugin):
             detvas=get_local_vas(detector, main_data.hw_settings_config),
         )
         stctrl._set_default_spectrum_axes(spec_stream)
+
+        if kwargs.get("settings_entries"):
+            spec_stream.set_settings_entries(kwargs["settings_entries"])
 
         # Create the equivalent MDStream
         sem_stream = self._tab.tab_data_model.semStream

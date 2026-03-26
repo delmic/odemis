@@ -768,6 +768,13 @@ def _updateMDFromOME(root, das):
             except (OverflowError, ValueError):
                 pass
 
+        acq_recipes = ime.find("AcquisitionRecipes")
+        if acq_recipes is not None:
+            try:
+                md[model.MD_ACQ_RECIPES] = acq_recipes.text
+            except (AttributeError, KeyError, ValueError):
+                pass
+
         expse = ime.find("ExperimentRef")
         if expse is not None:
             try:
@@ -1547,6 +1554,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                         for d in das if model.MD_ACQ_DATE in d.metadata)
         ad = ET.SubElement(ime, "AcquisitionDate")
         ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
+
+    if model.MD_ACQ_RECIPES in globalMD:
+        ar = ET.SubElement(ime, "AcquisitionRecipes")
+        ar.text = globalMD[model.MD_ACQ_RECIPES]
 
     # add ExperimentRef as image element
     if model.MD_HW_NOTE in globalMD:

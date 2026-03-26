@@ -25,7 +25,7 @@ import functools
 import inspect
 import logging
 from collections import OrderedDict
-from typing import Tuple, List
+from typing import List, Tuple
 
 import numpy
 
@@ -34,8 +34,10 @@ from odemis import model
 from odemis.acq.stream import SEMSpectrumMDStream, SpectrumSettingsStream
 from odemis.gui.conf import data, util
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.stream import StreamController
+from odemis.gui.cont.stream_bar import SparcStreamsController
+from odemis.gui.model.tab_gui_data import SparcAcquisitionGUIData
 from odemis.gui.plugin import Plugin
-
 
 # This plugin provides a new type of SpectrumStream. The implementation actually uses the
 # standard SpectrumSettingsStream, and only needs to provide a dedicated MDStream that overrides
@@ -206,7 +208,7 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
                 actname = "Spectrum Arbitrary Scan"
             else:
                 actname = "Spectrum Arbitrary Scan with %s" % (sptm.name,)
-            act = functools.partial(self.add_stream, name=actname, detector=sptm)
+            act = functools.partial(self.add_stream, name=actname, detector=sptm, tab_data=self._tab.tab_data_model, stctrl=stctrl)
             stctrl.add_action(actname, act)
 
         # We "patch" the gui.conf.data for our special stream
@@ -233,15 +235,24 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
             ))
         )
 
-    def add_stream(self, name: str, detector: "Detector"):
+    def add_stream(
+        self,
+        name: str,
+        detector: model.Detector,
+        tab_data: SparcAcquisitionGUIData,
+        stctrl: SparcStreamsController,
+        **kwargs
+    ) -> StreamController:
         """
         Create a new spectrum stream and MDStream.
-        :param name: Name of the new stream to be created
-        :param detector: The spectrometer to use
+        :param name: (str) Name of the new stream to be created
+        :param detector: (model.Detector) The spectrometer to use
+        :param tab_data: (SparcAcquisitionGUIData) The data of the acquisition tab
+        :param stctrl: (SparcStreamsController) The SPARC stream controller to which the stream should be added
+        :param kwargs: Other options, can contain "settings_entries"
         """
         # Mostly a copy of odemis.gui.cont.streams.SparcStreamsController.addSpectrum()
-        main_data = self.main_app.main_data
-        stctrl = self._tab.streambar_controller
+        main_data = tab_data.main
 
         logging.debug("Adding spectrum arbitrary order stream for %s", detector.name)
 
@@ -262,7 +273,7 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
                 break
 
         sr_stream = SpectrumArbitraryOrderSettingsStream(
-            name,
+            stctrl.get_unique_stream_name(name),
             detector,
             detector.data,
             main_data.ebeam,
@@ -273,8 +284,11 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
         )
         stctrl._set_default_spectrum_axes(sr_stream)
 
+        if kwargs.get("settings_entries"):
+            sr_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
-        sem_stream = self._tab.tab_data_model.semStream
+        sem_stream = tab_data.semStream
         sem_cl_stream = SEMSpectrumArbitraryOrderMDStream(name, [sem_stream, sr_stream])
 
         return stctrl._addRepStream(sr_stream, sem_cl_stream)

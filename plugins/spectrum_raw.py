@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 """
 
+import functools
 import logging
 from collections import OrderedDict
 from typing import Any, Dict, Tuple
@@ -28,15 +29,28 @@ from typing import Any, Dict, Tuple
 import numpy
 
 import odemis
-import odemis.gui.conf.util as confutil
 import odemis.gui.conf.data as confdata
+import odemis.gui.conf.util as confutil
 import odemis.gui.model
 from odemis import model
-from odemis.acq.stream import SEMCCDMDStream, PolarizedCCDSettingsStream, TemporalSpectrumStream
+from odemis.acq.stream import (
+    PolarizedCCDSettingsStream,
+    SEMCCDMDStream,
+    TemporalSpectrumStream,
+)
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.stream import StreamController
+from odemis.gui.cont.stream_bar import SparcStreamsController
+from odemis.gui.model.tab_gui_data import SparcAcquisitionGUIData
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_DESCRIPTION, MD_DIMS, MD_PIXEL_SIZE, MD_POS, MD_ROTATION, MD_ROTATION_COR, MD_WL_LIST
-
+from odemis.model import (
+    MD_DESCRIPTION,
+    MD_DIMS,
+    MD_PIXEL_SIZE,
+    MD_POS,
+    MD_ROTATION,
+    MD_WL_LIST,
+)
 
 # Simulate a "Temporal Spectrum" stream... but with the time dimension being "unknown".
 # This allows Odemis to display directly the data (almost) correctly
@@ -321,7 +335,8 @@ class SpectrumRawPlugin(Plugin):
 
         self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
         stctrl = self._tab.streambar_controller
-        stctrl.add_action("Spectrum Raw", self.addst)
+        act = functools.partial(self.addst, tab_data=self._tab.tab_data_model, stctrl=stctrl)
+        stctrl.add_action("Spectrum Raw", act)
         # TODO: also support same functionality with all ccd* and sp-ccd*
 
         # Add the Temporal Spectrum viewport if it's not already created
@@ -370,9 +385,8 @@ class SpectrumRawPlugin(Plugin):
             # Update the model
             tab_model.visible_views.value = [vp.view for vp in first_four_views]
 
-    def addst(self):
-        main_data = self.main_app.main_data
-        stctrl = self._tab.streambar_controller
+    def addst(self, tab_data: SparcAcquisitionGUIData, stctrl: SparcStreamsController, **kwargs) -> StreamController:
+        main_data = tab_data.main
 
         detvas = get_local_vas(main_data.ccd, main_data.hw_settings_config)
         # For ek acquisition we use a horizontal and a vertical binning
@@ -395,7 +409,7 @@ class SpectrumRawPlugin(Plugin):
         axes = stctrl._filter_axes(axes)
 
         sr_stream = SpectrumRawSettingsStream(
-            "Spectrum Raw",
+            stctrl.get_unique_stream_name("Spectrum Raw"),
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
@@ -409,8 +423,11 @@ class SpectrumRawPlugin(Plugin):
         )
         stctrl._set_default_spectrum_axes(sr_stream)
 
+        if kwargs.get("settings_entries"):
+            sr_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
-        sem_stream = self._tab.tab_data_model.semStream
+        sem_stream = tab_data.semStream
         sem_cl_stream = SEMSpectrumRawMDStream("SEM Spectrum Raw", [sem_stream, sr_stream])
 
         return stctrl._addRepStream(sr_stream, sem_cl_stream)
