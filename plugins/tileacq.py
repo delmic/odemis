@@ -23,19 +23,28 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 '''
 
+import csv
 import logging
 import math
 import os
+import threading
 import time
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError
-from typing import Any, Dict, Tuple
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import matplotlib.pyplot as plt
+import numpy
 import wx
+from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+from scipy.spatial import ConvexHull, Delaunay
+from shapely.geometry import MultiPoint, Point
 
 import odemis.gui
 from odemis import dataio, model
 from odemis.acq import stream
+from odemis.acq.acqmng import AcquisitionTask
 from odemis.acq.stitching import (
     REGISTER_GLOBAL_SHIFT,
     REGISTER_IDENTITY,
@@ -43,8 +52,6 @@ from odemis.acq.stitching import (
     WEAVER_COLLAGE_REVERSE,
     WEAVER_MEAN,
     acquireTiledArea,
-    estimateTiledAcquisitionMemory,
-    estimateTiledAcquisitionTime,
 )
 from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
 from odemis.acq.stream import (
@@ -62,7 +69,516 @@ from odemis.gui.comp.stream_panel import OPT_BTN_REMOVE, OPT_BTN_SHOW
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import AcquisitionDialog, Plugin
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
+from odemis.model import CancellableThreadPoolExecutor
 from odemis.util import dataio as udataio
+
+try:
+    from sparc_calibrations.parabolic_mirror_alignment import (
+        AlignmentAxis,
+        ParabolicMirrorAlignmentTask,
+    )
+    sparc_calib_available = True
+except ImportError as err:
+    sparc_calib_available = False
+    logging.info("sparc_calibrations module not available, mirror z alignment not possible: %s", err)
+
+
+def create_z_interpolator(points: List[Tuple[float, float]], z_values: List[float])-> Optional[Callable]:
+    """
+    Create a Z-height interpolator from survey points.
+
+    Uses scipy LinearNDInterpolator for smooth interpolation within the convex hull
+    of survey points, and NearestNDInterpolator as fallback for extrapolation beyond.
+
+    :param points: List of (x, y) tuples representing survey point positions
+    :param z_values: List of z values corresponding to each survey point
+    :return: Interpolator function (x, y) -> z, or None if interpolation fails
+    """
+    if not points or not z_values or len(points) != len(z_values):
+        logging.error(
+            f"Cannot create Z interpolator: {len(points)} points, {len(z_values)} z values"
+        )
+        return None
+
+    try:
+        # Convert to numpy arrays
+        points = numpy.array(points)
+        z_values = numpy.array(z_values)
+
+        # Create linear interpolator for smooth interpolation
+        lin_interp = LinearNDInterpolator(points, z_values, fill_value=numpy.nan)
+
+        # Create nearest-neighbor interpolator for fallback extrapolation
+        nn_interp = NearestNDInterpolator(points, z_values)
+
+        # Combined interpolator: use linear inside, nearest outside
+        def interpolator(x, y):
+            """Interpolate Z at given (x, y) position."""
+            z_lin = lin_interp(x, y)
+
+            # If linear interpolation returns NaN (outside convex hull),
+            # fall back to nearest-neighbor extrapolation
+            if numpy.isnan(z_lin):
+                z_lin = float(nn_interp(x, y))
+            else:
+                z_lin = float(z_lin)
+
+            return z_lin
+
+        logging.info(
+            f"Created Z-height interpolator from {len(points)} survey points"
+        )
+        return interpolator
+
+    except Exception:
+        logging.exception("Failed to create Z interpolator")
+        return None
+
+def order_positions_spiral_outward(positions: List[Tuple[float, float]],
+                                   current_pos: Tuple[float, float]) -> List[Tuple[float, float]]:
+    """
+    Order positions in concentric rings spiraling inward to center, then outward.
+
+    Optimal for:
+    - Circular distributions (wafer area)
+    - Polygonal boundaries
+    - Any convex region with interior starting point
+
+    Algorithm:
+    1. Calculate centroid of all positions (center point)
+    2. Find the position CLOSEST to current stage position (critical for collision avoidance!)
+    3. Compute distance and angle from centroid for each position
+    4. Group into concentric rings by distance from centroid
+    5. Sort each ring by angle (polar coordinates)
+    6. Start spiral from closest position's ring
+    7. Traverse INWARD to innermost ring (decreasing distance)
+    8. Then traverse OUTWARD to outermost ring (increasing distance)
+    9. Alternate direction within each ring (prevents backtracking)
+
+    Result: Smooth concentric spiral with NO backtracking, NO big jumps.
+
+    Visual Flow (closest point at Ring 2):
+
+    Start at Ring 2 (closest to stage):
+    Ring 2: ★→●→●→● ↘
+                        ↘
+    Spiral INWARD:
+    Ring 1:          ●←●←●
+                    ↗
+                ↗
+    Ring 0: ●→●→● (center)
+
+    Then spiral OUTWARD:
+    Ring 2: ●→●→● (already visited, skip)
+    Ring 3: ●←●←●
+    Ring 4: ●→●→●
+
+    :param positions: List of (x, y) tuples
+    :param start_pos: Current stage position (used to find spiral start point)
+    :return: List of positions ordered in spiral pattern starting from closest point
+    """
+
+    positions_array = numpy.array(positions)
+
+    # Find centroid of all positions (center reference point)
+    centroid = positions_array.mean(axis=0)
+
+    # ========== FIND CLOSEST POSITION TO CURRENT POS (KEY FOR SAFETY) ==========
+    closest_distance_sq = float('inf')
+    closest_pos = None
+    closest_idx = None
+
+    for idx, pos in enumerate(positions):
+        distance_sq = (pos[0] - current_pos[0])**2 + (pos[1] - current_pos[1])**2
+        if distance_sq < closest_distance_sq:
+            closest_distance_sq = distance_sq
+            closest_pos = pos
+            closest_idx = idx
+
+    logging.debug(
+        f"Closest position to current_pos {current_pos}@{closest_idx}: {closest_pos}"
+        f"at distance {numpy.sqrt(closest_distance_sq):.2e} m"
+    )
+
+    # Compute distance and angle from centroid (for ring grouping and spiral ordering)
+    vectors = positions_array - centroid
+    distances = numpy.linalg.norm(vectors, axis=1)
+    angles = numpy.arctan2(vectors[:, 1], vectors[:, 0])
+
+    # Determine ring spacing: adaptive based on point density
+    distance_range = distances.max() - distances.min()
+    num_rings = max(2, min(10, len(positions) // 5))  # 2-10 rings based on point count
+    ring_spacing = distance_range / num_rings if distance_range > 0 else 1.0
+
+    # Group points into concentric rings
+    rings = {}
+    closest_ring_key = None
+
+    for idx, (pos, dist, angle) in enumerate(zip(positions, distances, angles)):
+        # Determine which ring this point belongs to
+        if ring_spacing > 0:
+            ring_key = int(round((dist - distances.min()) / ring_spacing))
+        else:
+            ring_key = 0
+
+        if ring_key not in rings:
+            rings[ring_key] = []
+        rings[ring_key].append((angle, list(pos)))
+
+        # Track which ring contains the closest position
+        if numpy.allclose(pos, closest_pos):
+            closest_ring_key = ring_key
+
+    # ========== BUILD SPIRAL: INWARD THEN OUTWARD ==========
+    ordered_path = []
+
+    # PHASE 1: Traverse INWARD from closest ring to center (ring 0)
+    logging.debug(f"Closest position is in ring {closest_ring_key}. Spiraling inward to center (ring 0)")
+
+    reverse_direction = False
+
+    # Go from closest_ring_key down to 0 (innermost)
+    for ring_idx in range(closest_ring_key, -1, -1):
+        if ring_idx not in rings:
+            continue
+
+        ring_positions = rings[ring_idx]
+        ring_positions.sort(key=lambda x: x[0])  # Sort by angle
+
+        # For the closest ring, put the closest position first
+        if ring_idx == closest_ring_key:
+            try:
+                closest_angle = None
+                for angle, pos in ring_positions:
+                    if numpy.allclose(pos, closest_pos):
+                        closest_angle = angle
+                        break
+
+                if closest_angle is not None:
+                    # Find index of closest position in ring
+                    closest_idx_in_ring = next(
+                        i for i, (angle, _) in enumerate(ring_positions)
+                        if numpy.isclose(angle, closest_angle)
+                    )
+
+                    # Determine initial direction (forward or backward from closest)
+                    # Wrap around so that ALL positions in the ring are visited.
+                    if closest_idx_in_ring < len(ring_positions) / 2:
+                        # Closer to start of ring, traverse forward (clockwise), then wrap
+                        wrapped = ring_positions[closest_idx_in_ring:] + ring_positions[:closest_idx_in_ring]
+                        ordered_path.extend([tuple(pos) for _, pos in wrapped])
+                        reverse_direction = True  # Next ring (inward) goes backward (counter-clockwise)
+                    else:
+                        # Closer to end of ring, traverse backward (counter-clockwise), then wrap
+                        back_half = list(reversed(ring_positions[:closest_idx_in_ring + 1]))
+                        front_half = list(reversed(ring_positions[closest_idx_in_ring + 1:]))
+                        ordered_path.extend([tuple(pos) for _, pos in back_half + front_half])
+                        reverse_direction = False  # Next ring (inward) goes forward (clockwise)
+
+                    logging.debug(
+                        f"Ring {ring_idx} (closest): Starting from angle {closest_angle:.2f}, "
+                        f"direction={'backward' if reverse_direction else 'forward'}, "
+                        f"positions: {len(ring_positions)}"
+                    )
+            except (ValueError, StopIteration):
+                ordered_path.extend([tuple(pos) for _, pos in ring_positions])
+                reverse_direction = not reverse_direction
+        else:
+            # For inward rings, alternate direction (smooth spiral)
+            if reverse_direction:
+                ordered_path.extend([tuple(pos) for _, pos in reversed(ring_positions)])
+                logging.debug(f"Ring {ring_idx} (inward): backward, positions: {len(ring_positions)}")
+            else:
+                ordered_path.extend([tuple(pos) for _, pos in ring_positions])
+                logging.debug(f"Ring {ring_idx} (inward): forward, positions: {len(ring_positions)}")
+            reverse_direction = not reverse_direction
+
+    # PHASE 2: Traverse OUTWARD from closest ring to outermost (skip ring 0 which we already did)
+    logging.debug(f"Now spiraling outward from ring {closest_ring_key} to outermost")
+
+    max_ring = max(rings.keys()) if rings else 0
+
+    # Go from closest_ring_key+1 up to max_ring (outermost)
+    for ring_idx in range(closest_ring_key + 1, max_ring + 1):
+        if ring_idx not in rings:
+            continue
+
+        ring_positions = rings[ring_idx]
+        ring_positions.sort(key=lambda x: x[0])  # Sort by angle
+
+        # Alternate direction in successive rings (spiral effect, no backtracking)
+        if reverse_direction:
+            ordered_path.extend([tuple(pos) for _, pos in reversed(ring_positions)])
+            logging.debug(f"Ring {ring_idx} (outward): backward, positions: {len(ring_positions)}")
+        else:
+            ordered_path.extend([tuple(pos) for _, pos in ring_positions])
+            logging.debug(f"Ring {ring_idx} (outward): forward, positions: {len(ring_positions)}")
+        reverse_direction = not reverse_direction
+
+    logging.info(
+        f"Spiral pattern (inward→outward): {len(rings)} rings, {len(ordered_path)} total positions. "
+        f"Starting ring: {closest_ring_key}, Center (ring 0), Outermost (ring {max_ring}), "
+        f"Centroid: ({centroid[0]:.2e}, {centroid[1]:.2e}), "
+        f"Distance range: {distance_range:.2e} m"
+    )
+
+    return ordered_path
+
+
+def order_positions_snake_lanes(positions: List[Tuple[float, float]],
+                                current_pos: Tuple[float, float]) -> List[Tuple[float, float]]:
+    """
+    Order positions using snake/boustrophedon pattern with smooth lane transitions.
+
+    Optimal for:
+    - Grid-like distributions
+    - Starting point outside the survey region
+    - Rectangular/square survey areas
+
+    Algorithm:
+    1. Analyze grid structure: determine dominant axis (X or Y)
+    2. Create lanes perpendicular to dominant axis
+    3. Find closest position to current stage
+    4. Traverse lanes in snake pattern (alternating directions)
+    5. Connect lanes smoothly to nearest endpoint (no big jumps)
+
+    Result: Parallel passes through survey area with minimal backtracking.
+
+    Visual example:
+        Lane 0: ★→●→●→● ↘
+                            ↘
+        Lane 1:          ●←●←●
+                        ↗
+                    ↗
+        Lane 2: ●→●→● →
+
+    :param positions: List of (x, y) tuples
+    :param current_pos: Current stage position
+    :return: List of positions ordered in snake pattern
+    """
+    if not positions:
+        return []
+
+    # ========== PHASE 1: ANALYZE GRID STRUCTURE ==========
+    xs = [p[0] for p in positions]
+    ys = [p[1] for p in positions]
+
+    x_range = max(xs) - min(xs)
+    y_range = max(ys) - min(ys)
+
+    # Determine dominant axis (where points are more spread out)
+    use_y_lanes = x_range >= y_range  # If X spread > Y spread, create Y-lanes
+    lane_threshold = 10.e-6  # 10 micrometers: points within this belong to same lane
+
+    if use_y_lanes:
+        # Create lanes based on X coordinate (lanes run along Y direction)
+        sorted_positions = sorted(positions, key=lambda p: p[0])
+        lanes_dict = {}
+        lane_key = 0
+        last_x = sorted_positions[0][0]
+
+        for pos in sorted_positions:
+            # New lane if X coordinate jumps more than threshold
+            if abs(pos[0] - last_x) > lane_threshold:
+                lane_key += 1
+            if lane_key not in lanes_dict:
+                lanes_dict[lane_key] = []
+            lanes_dict[lane_key].append(pos)
+            last_x = pos[0]
+
+        # Sort each lane by Y coordinate (ascending)
+        for lane_positions in lanes_dict.values():
+            lane_positions.sort(key=lambda p: p[1])
+
+        lanes = lanes_dict
+        lane_keys = sorted(lanes_dict.keys())
+        axis_name = "Y"
+
+    else:
+        # Create lanes based on Y coordinate (lanes run along X direction)
+        sorted_positions = sorted(positions, key=lambda p: p[1])
+        lanes_dict = {}
+        lane_key = 0
+        last_y = sorted_positions[0][1]
+
+        for pos in sorted_positions:
+            # New lane if Y coordinate jumps more than threshold
+            if abs(pos[1] - last_y) > lane_threshold:
+                lane_key += 1
+            if lane_key not in lanes_dict:
+                lanes_dict[lane_key] = []
+            lanes_dict[lane_key].append(pos)
+            last_y = pos[1]
+
+        # Sort each lane by X coordinate (ascending)
+        for lane_positions in lanes_dict.values():
+            lane_positions.sort(key=lambda p: p[0])
+
+        lanes = lanes_dict
+        lane_keys = sorted(lanes_dict.keys())
+        axis_name = "X"
+
+    # ========== PHASE 2: FIND STARTING POINT ==========
+    closest_distance_sq = float('inf')
+    closest_pos = None
+    closest_lane_key = None
+
+    for lane_key in lane_keys:
+        lane_positions = lanes[lane_key]
+        for pos in lane_positions:
+            distance_sq = (pos[0] - current_pos[0])**2 + (pos[1] - current_pos[1])**2
+            if distance_sq < closest_distance_sq:
+                closest_distance_sq = distance_sq
+                closest_pos = pos
+                closest_lane_key = lane_key
+
+    # ========== PHASE 3: BUILD SNAKE PATTERN WITH SMOOTH LANE TRANSITIONS ==========
+    ordered_path = []
+    visited_lanes = set()
+    current_lane = closest_lane_key
+    reverse_direction = False
+
+    while len(visited_lanes) < len(lane_keys):
+        lane_positions = lanes[current_lane][:]  # Copy to avoid modifications
+        visited_lanes.add(current_lane)
+
+        # For starting lane, begin from closest position
+        if current_lane == closest_lane_key:
+            try:
+                start_idx = lane_positions.index(closest_pos)
+                # Determine direction: closer to lane start or end?
+                if start_idx < len(lane_positions) / 2:
+                    # Closer to start of lane, traverse forward
+                    ordered_path.extend(lane_positions[start_idx:])
+                    reverse_direction = True  # Next lane goes backward
+                else:
+                    # Closer to end of lane, traverse backward
+                    lane_positions_reversed = lane_positions[:start_idx+1]
+                    lane_positions_reversed.reverse()
+                    ordered_path.extend(lane_positions_reversed)
+                    reverse_direction = False  # Next lane goes forward
+            except ValueError:
+                ordered_path.extend(lane_positions)
+                reverse_direction = not reverse_direction
+        else:
+            # For subsequent lanes, alternate direction (snake pattern)
+            if reverse_direction:
+                ordered_path.extend(reversed(lane_positions))
+            else:
+                ordered_path.extend(lane_positions)
+            reverse_direction = not reverse_direction
+
+        # Find next lane: closest unvisited lane to current endpoint
+        if ordered_path and len(visited_lanes) < len(lane_keys):
+            last_pos = ordered_path[-1]
+
+            # Find unvisited lane with nearest endpoint
+            closest_next_lane = None
+            closest_next_distance = float('inf')
+
+            for lane_key in lane_keys:
+                if lane_key not in visited_lanes:
+                    next_lane_positions = lanes[lane_key]
+
+                    # Calculate distance to both ends of this lane
+                    # Choose the end that is closer (will be traversal start)
+                    dist_to_first = (next_lane_positions[0][0] - last_pos[0])**2 + \
+                                (next_lane_positions[0][1] - last_pos[1])**2
+                    dist_to_last = (next_lane_positions[-1][0] - last_pos[0])**2 + \
+                                (next_lane_positions[-1][1] - last_pos[1])**2
+
+                    closest_end_distance = min(dist_to_first, dist_to_last)
+
+                    if closest_end_distance < closest_next_distance:
+                        closest_next_distance = closest_end_distance
+                        closest_next_lane = lane_key
+
+            if closest_next_lane is not None:
+                current_lane = closest_next_lane
+            else:
+                break
+
+    logging.info(
+        f"Snake pattern: {len(lanes)} lanes along {axis_name}-direction, "
+        f"{len(ordered_path)} total positions. "
+        f"Range X: {x_range:.2e} m, Range Y: {y_range:.2e} m"
+    )
+
+    return ordered_path
+
+
+def order_positions(positions: List[Tuple[float, float]],
+                    current_pos: Tuple[float, float]) -> List[Tuple[float, float]]:
+    """
+    Order positions using intelligent adaptive path planning.
+
+    HYBRID ALGORITHM:
+    1. Detect if current_pos is inside the convex hull of positions
+    2. If INSIDE: Use spiral/concentric ring traversal (optimal for circles, polygons)
+    3. If OUTSIDE: Use snake/lane pattern (optimal for grids, peripheral points)
+
+    This unified approach handles arbitrary point distributions with minimal stage travel.
+
+    INSIDE CASE - Spiral from center outward:
+        Ring 3: ●←●←●  ↙
+                ↙
+        Ring 2: ●→●→●  ↘
+                ↘
+        Ring 1:    ★  ↘ (start)
+                ↗
+        Ring 0: ●→●→●
+
+    OUTSIDE CASE - Snake lanes:
+        Lane 0: ★→●→●→● ↘
+                        ↘
+        Lane 1:          ●←●←●
+                        ↗
+                    ↗
+        Lane 2: ●→●→● →
+
+    :param positions: List of (x, y) tuples representing all points to visit
+    :param start_pos: Current stage position (x, y) tuple
+    :return: List of positions ordered in optimized path (spiral or snake)
+    """
+    if not positions:
+        return []
+    if len(positions) == 1:
+        return positions
+    if len(positions) == 2:
+        dist_0 = (positions[0][0] - current_pos[0])**2 + (positions[0][1] - current_pos[1])**2
+        dist_1 = (positions[1][0] - current_pos[0])**2 + (positions[1][1] - current_pos[1])**2
+        return positions if dist_0 <= dist_1 else [positions[1], positions[0]]
+
+    # ========== DETECT IF CURRENT POS IS INSIDE CONVEX HULL ==========
+
+    is_inside = False
+    try:
+        tri = Delaunay(positions)
+        is_inside = tri.find_simplex(current_pos) >= 0
+        logging.debug(f"Current position {'INSIDE' if is_inside else 'OUTSIDE'} convex hull")
+    except Exception as e:
+        logging.debug(f"Could not compute convex hull (likely collinear points): {e}. Using snake pattern.")
+        is_inside = False
+
+    if is_inside:
+        # ========== SPIRAL PATTERN FROM CENTER OUTWARD ==========
+        logging.info(f"Current position inside convex hull - using spiral outward pattern for {len(positions)} positions")
+        return order_positions_spiral_outward(positions, current_pos)
+    else:
+        # ========== SNAKE LANE PATTERN FROM OUTSIDE ==========
+        logging.info(f"Current position outside convex hull - using snake lane pattern for {len(positions)} positions")
+        return order_positions_snake_lanes(positions, current_pos)
+
+
+class TileMode(Enum):
+    STANDARD = "Standard (X × Y grid)"
+    CUSTOM = "Custom (from tsv file with mirror alignment)"
+
+
+class TileColumnNames(Enum):
+    NUMBER = "Tile Number"
+    POSX = "Stage Position.X [m]"
+    POSY = "Stage Position.Y [m]"
 
 
 class TileAcqPlugin(Plugin):
@@ -74,6 +590,12 @@ class TileAcqPlugin(Plugin):
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
+        ("tile_mode", {
+            "label": "Tile mode",
+            "control_type": odemis.gui.CONTROL_COMBO,
+            "tooltip": "Standard: Regular grid of X × Y tiles\n"
+                       "Custom: Load tile positions from external file",
+        }),
         ("nx", {
             "label": "Tiles X",
             "control_type": odemis.gui.CONTROL_INT,  # no slider
@@ -82,6 +604,12 @@ class TileAcqPlugin(Plugin):
             "label": "Tiles Y",
             "control_type": odemis.gui.CONTROL_INT,  # no slider
         }),
+        ("tiles_file", {
+            "label": "Tiles file",
+            "tooltip": "TSV file with tile positions (x, y in meters)",
+            "control_type": odemis.gui.CONTROL_OPEN_FILE,
+            "wildcard": formats_to_wildcards({"TSV": [".tsv"]})[0],
+        }),
         ("overlap", {
             "tooltip": "Approximate amount of overlapping area between tiles",
         }),
@@ -89,6 +617,11 @@ class TileAcqPlugin(Plugin):
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard": formats_to_wildcards(get_available_formats(os.O_WRONLY))[0],
+        }),
+        ("z_map", {
+            "label": "Z-map",
+            "tooltip": "Use a z-map to adjust the z position for each tile during acquisition.",
+            "control_type": odemis.gui.CONTROL_CHECK,
         }),
         ("stitch", {
             "tooltip": "Use all the tiles to create a large-scale image at the end of the acquisition",
@@ -141,10 +674,29 @@ class TileAcqPlugin(Plugin):
 
         self._ovrl_stream = None  # stream for fine alignment
 
+        self._executor = None
+        mirror_align_possible = False
+        if microscope.role == "sparc2":
+            if main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
+                mirror_md = main_data.mirror.getMetadata()
+                calib = mirror_md.get(model.MD_CALIB, {})
+                mirror_align_calib = "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib
+                mirror_align_possible = mirror_align_calib and sparc_calib_available
+
+        tile_mode_choices = {
+            TileMode.STANDARD.name: TileMode.STANDARD.value,
+        }
+        if mirror_align_possible:
+            tile_mode_choices[TileMode.CUSTOM.name] = TileMode.CUSTOM.value
+            self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+        self.tile_mode = model.VAEnumerated(TileMode.STANDARD.name, choices=tile_mode_choices)
         self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
         self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
-        self.overlap = model.FloatContinuous(20, (0, 80), unit="%")
+        self.overlap = model.FloatContinuous(0.2, (0., 0.8))
+        self.z_map = model.BooleanVA(False)
         self.filename = model.StringVA("a.ome.tiff")
+        self.tiles_file = model.StringVA("")
+        self.tile_map: Dict[int, Tuple[float, float]] = {}
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
@@ -182,9 +734,6 @@ class TileAcqPlugin(Plugin):
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
         # of the ROI and linearly interpolate)
 
-        self.nx.subscribe(self._update_exp_dur)
-        self.ny.subscribe(self._update_exp_dur)
-        self.fineAlign.subscribe(self._update_exp_dur)
         self.nx.subscribe(self._update_total_area)
         self.ny.subscribe(self._update_total_area)
         self.overlap.subscribe(self._update_total_area)
@@ -192,9 +741,23 @@ class TileAcqPlugin(Plugin):
 
         # Warn if memory will be exhausted
         self.nx.subscribe(self._memory_check)
+
+        self.ny.subscribe(self._update_total_area)
+        self.ny.subscribe(self._update_exp_dur)
         self.ny.subscribe(self._memory_check)
+
+        self.overlap.subscribe(self._update_total_area)
+
+        self.fineAlign.subscribe(self._update_exp_dur)
+
         self.stitch.subscribe(self._memory_check)
+
+        self.weaver.subscribe(self._update_exp_dur)
         self.weaver.subscribe(self._memory_check)
+
+        self.tile_mode.subscribe(self._on_tile_mode_change)
+
+        self.tiles_file.subscribe(self._on_tile_file_change)
 
     def _can_fine_align(self, streams):
         """
@@ -236,6 +799,62 @@ class TileAcqPlugin(Plugin):
             conf.last_path,
             "%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
+
+    @call_in_wx_main
+    def _on_tile_mode_change(self, mode):
+        """Show/hide relevant controls based on tile mode"""
+        if not self._dlg:
+            return
+
+        if mode == TileMode.CUSTOM.name:
+            self.overlap.value = 0
+
+        for entry in self._dlg.setting_controller.entries:
+            if hasattr(entry, "vigilattr"):
+                # Show grid controls only in standard mode
+                if entry.vigilattr in (self.nx, self.ny, self.overlap):
+                    entry.lbl_ctrl.Show(mode == TileMode.STANDARD.name)
+                    entry.value_ctrl.Show(mode == TileMode.STANDARD.name)
+                # Show file control only in custom mode
+                if entry.vigilattr in (self.tiles_file, self.z_map):
+                    entry.lbl_ctrl.Show(mode == TileMode.CUSTOM.name)
+                    entry.value_ctrl.Show(mode == TileMode.CUSTOM.name)
+        self._update_total_area(None)
+        self._update_exp_dur(None)
+        self._memory_check(None)
+        self._dlg.Layout()
+        self._dlg.Refresh()
+
+    def _on_tile_file_change(self, filepath: str):
+        """
+        """
+        self.tile_map.clear()
+        try:
+            with open(filepath, 'r', encoding='utf-8-sig', newline='') as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                for row in reader:
+                    logging.debug(row)
+                    # Skip empty rows
+                    if not row:
+                        continue
+
+                    try:
+                        # Parse the columns
+                        tile_num = int(row[TileColumnNames.NUMBER.value].strip())
+                        x = float(row[TileColumnNames.POSX.value].strip())
+                        y = float(row[TileColumnNames.POSY.value].strip())
+
+                        self.main_app.main_data.stage._checkMoveAbs({"x": x, "y" : y})
+                        self.tile_map[tile_num] = (x, y)
+
+                    except (ValueError, KeyError):
+                        logging.debug(f"Not able to process row {row}")
+                        continue
+            self._update_total_area(None)
+            self._update_exp_dur(None)
+            self._memory_check(None)
+        except Exception:
+            logging.exception("Failed to load tile positions from %s", filepath)
 
     def _on_streams_change(self, _=None):
         ss = self._get_visible_streams()
@@ -295,7 +914,7 @@ class TileAcqPlugin(Plugin):
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
                 stitch_ss.append(self._ovrl_stream)
 
-            tat = estimateTiledAcquisitionTime(
+            task = TiledAcquisitionTask(
                 stitch_ss,
                 self.main_app.main_data.stage,
                 region,
@@ -304,6 +923,9 @@ class TileAcqPlugin(Plugin):
                 weaver=self.weaver.value if self.stitch.value else None,
                 registrar=self.register.value if self.stitch.value else None,
             )
+            if self.tile_mode.value == TileMode.CUSTOM.name:
+                task._number_of_tiles = len(self.tile_map)
+            tat = task.estimateTime()
         except (ValueError, AttributeError):
             # No streams or cannot compute FoV
             logging.debug("Cannot compute expected acquisition duration")
@@ -320,22 +942,34 @@ class TileAcqPlugin(Plugin):
         """
         Called when VA that affects the total area is changed
         """
-        # Find the stream with the smallest FoV
-        try:
-            fov = self._guess_smallest_fov()
-        except ValueError as ex:
-            logging.debug("Cannot compute total area: %s", ex)
-            return
+        if self.tile_mode.value == TileMode.STANDARD.name:
+            # Find the stream with the smallest FoV
+            try:
+                fov = self._guess_smallest_fov()
+            except ValueError as ex:
+                logging.debug("Cannot compute total area: %s", ex)
+                return
 
-        # * number of tiles - overlap
-        nx = self.nx.value
-        ny = self.ny.value
-        logging.debug("Updating total area based on FoV = %s m x (%d x %d)", fov, nx, ny)
-        ta = (fov[0] * (nx - (nx - 1) * self.overlap.value / 100),
-              fov[1] * (ny - (ny - 1) * self.overlap.value / 100))
+            # * number of tiles - overlap
+            nx = self.nx.value
+            ny = self.ny.value
+            logging.debug("Updating total area based on FoV = %s m x (%d x %d)", fov, nx, ny)
+            ta = (fov[0] * (nx - (nx - 1) * self.overlap.value / 100),
+                fov[1] * (ny - (ny - 1) * self.overlap.value / 100))
 
-        # Use _set_value as it's read only
-        self.totalArea._set_value(ta, force_write=True)
+            # Use _set_value as it's read only
+            self.totalArea._set_value(ta, force_write=True)
+        elif self.tile_mode.value == TileMode.CUSTOM.name:
+            area = (0, 0)
+            if self.tile_map:
+                coords = list(self.tile_map.values())
+
+                xs, ys = zip(*coords)
+                xmin, xmax = min(xs), max(xs)
+                ymin, ymax = min(ys), max(ys)
+                area = (xmax - xmin, ymax - ymin)
+
+            self.totalArea._set_value(area, force_write=True)
 
     def _set_nx(self, nx):
         """
@@ -394,6 +1028,7 @@ class TileAcqPlugin(Plugin):
 
         # Fail if the live tab is not selected
         self._tab = self.main_app.main_data.tab.value
+        self._align_tab = self.main_app.main_data.getTabByName("sparc2_align")
         if self._tab.name not in ("secom_live", "sparc_acqui"):
             box = wx.MessageDialog(self.main_app.main_frame,
                        "Tiled acquisition must be done from the acquisition tab.",
@@ -459,8 +1094,10 @@ class TileAcqPlugin(Plugin):
         self.nx.value = self.nx.value
         self.ny.value = self.ny.value
         self._memory_check()
+        self.tile_mode._set_value(self.tile_mode.value, must_notify=True)
         # Call the stitch change callback to show/hide the weaver and register options
         self._on_stitch_change(self.stitch.value)
+        self.tiles_file._set_value(self.tiles_file.value, must_notify=True)
 
         # TODO: disable "acquire" button if no stream selected.
 
@@ -575,7 +1212,7 @@ class TileAcqPlugin(Plugin):
             if self.fineAlign.value and self._can_fine_align(stitch_ss):
                 stitch_ss.append(self._ovrl_stream)
 
-            mem_sufficient, mem_est = estimateTiledAcquisitionMemory(
+            task = TiledAcquisitionTask(
                 stitch_ss,
                 self.main_app.main_data.stage,
                 region,
@@ -584,6 +1221,9 @@ class TileAcqPlugin(Plugin):
                 weaver=self.weaver.value if self.stitch.value else None,
                 registrar=self.register.value if self.stitch.value else None,
             )
+            if self.tile_mode.value == TileMode.CUSTOM.name:
+                task._number_of_tiles = len(self.tile_map)
+            mem_sufficient, mem_est = task.estimateMemory()
         except (ValueError, AttributeError):
             # No streams or cannot compute FoV
             mem_sufficient = True
@@ -619,6 +1259,529 @@ class TileAcqPlugin(Plugin):
 
         return (xmin, ymin, xmax, ymax)
 
+    # Constants for safe Z movements
+    SAFE_Z_OFFSET = 50.e-6  # [m] Safe offset from mirror to prevent collisions
+
+
+    def _get_z_alignment_position(self, tile_center: Tuple[float, float],
+                                   fov: Tuple[float, float],
+                                   corner: str = "top-left") -> Tuple[float, float]:
+        """
+        Calculate a safe Z-alignment position offset from the tile center based on the FoV and corner choice.
+
+        This function computes an offset position for Z-alignment that is safely away from the tile,
+        taking into account the FoV size and the desired corner for alignment.
+
+        :param tile_center: (x, y) coordinates of the tile center in meters
+        :param fov: (fov_x, fov_y) size of the field of view in meters
+        :param corner: Desired corner for Z-alignment ("top-left", "top-right", "bottom-left", "bottom-right")
+        :return: (x, y) coordinates for Z-alignment position in meters
+        """
+        # Calculate FoV offsets
+        offset_x = fov[0] * 1.5
+        offset_y = fov[1] * 1.5
+
+        # Map corner names to offsets
+        corner_offsets = {
+            "top-left": (-offset_x, offset_y),
+            "top-right": (offset_x, offset_y),
+            "bottom-left": (-offset_x, -offset_y),
+            "bottom-right": (offset_x, -offset_y),
+        }
+
+        if corner not in corner_offsets:
+            logging.warning(f"Unknown corner '{corner}', defaulting to 'top-left'")
+            corner = "top-left"
+
+        offset = corner_offsets[corner]
+        z_align_pos = (tile_center[0] + offset[0], tile_center[1] + offset[1])
+
+        return z_align_pos
+
+    def _filter_survey_points_away_from_tiles(self,
+                                              survey_points: List[Tuple[float, float]],
+                                              tiles: Dict,
+                                              min_distance: float = 30.e-6) -> List[Tuple[float, float]]:
+        """
+        Filter survey points that are too close to tile positions and offset them away.
+
+        When survey points are generated near tile positions, acquiring Z-alignment data
+        there would interfere with or damage tiles. This function identifies survey points
+        that are too close to any tile and offsets them radially outward to a safe distance.
+
+        :param survey_points: List of (x, y) survey point tuples from Z-map generation
+        :param tiles: Dict of tile positions {tile_num: (x, y), ...}
+        :param min_distance: Minimum safe distance between survey and tile points in meters
+                            Default: 30µm (matching grid spacing)
+        :return: List of (x, y) survey points with unsafe ones removed or offset
+        """
+        if not tiles:
+            return survey_points
+
+        tile_positions = list(tiles.values())
+        filtered_points = []
+
+        for survey_point in survey_points:
+            too_close_to_tile = False
+
+            # Check distance to all tiles
+            for tile_pos in tile_positions:
+                distance = math.sqrt((survey_point[0] - tile_pos[0])**2 +
+                                    (survey_point[1] - tile_pos[1])**2)
+
+                if distance < min_distance:
+                    too_close_to_tile = True
+
+                    # Offset survey point away from this tile
+                    # Calculate direction from tile to survey point
+                    if distance > 0:
+                        direction_x = (survey_point[0] - tile_pos[0]) / distance
+                        direction_y = (survey_point[1] - tile_pos[1]) / distance
+                    else:
+                        # Survey point is exactly at tile position, move along arbitrary direction
+                        direction_x = 1.0 / math.sqrt(2)
+                        direction_y = 1.0 / math.sqrt(2)
+
+                    # Move survey point further away
+                    new_survey_point = (
+                        tile_pos[0] + direction_x * min_distance,
+                        tile_pos[1] + direction_y * min_distance
+                    )
+
+                    logging.info(
+                        f"Survey point {survey_point} was {distance*1e6:.1f}µm from tile {tile_pos}. "
+                        f"Offsetting to {new_survey_point}"
+                    )
+
+                    # Use the offset point instead (only first offset applied)
+                    filtered_points.append(new_survey_point)
+                    break
+
+            if not too_close_to_tile:
+                # Survey point is safe, keep it as-is
+                filtered_points.append(survey_point)
+
+        return filtered_points
+
+    def _calculate_optimal_survey_spacing(self, tile_positions: List[Tuple[float, float]]) -> float:
+        """
+        Calculate optimal SPARSE survey point spacing based on tile layout.
+
+        Strategy for INITIAL Z-MAP SURVEY:
+        1. Compute average nearest-neighbor distance between tiles
+        2. Use LARGER spacing than tiles (sparse survey to cover wafer efficiently)
+        3. Survey points should be BETWEEN tiles, not overlapping them
+        4. Goal: Get coarse Z-variation map with minimal points
+        5. Tiles will fill in the fine details during acquisition
+
+        The survey spacing should be:
+        - LARGER than tile spacing (sparse coverage of wafer area)
+        - Typically 1.5x to 2.5x the tile spacing
+        - Ensures survey points are distributed across entire wafer
+        - Avoids clustering near tile positions
+
+        Example:
+        If tiles are 100µm apart → survey points 150-250µm apart
+        If tiles are 50µm apart → survey points 75-125µm apart
+
+        :param tile_positions: List of (x, y) tuples representing tile center positions
+        :return: Optimal max_dist in meters for sparse survey point generation
+        """
+
+        if not tile_positions or len(tile_positions) < 2:
+            # Default fallback if insufficient tiles
+            logging.warning("Insufficient tiles for optimal spacing calculation, using default 100µm")
+            return 100.e-6
+
+        tile_array = numpy.array(tile_positions)
+
+        # ========== CALCULATE TILE SPACING STATISTICS ==========
+        # For each tile, find distance to nearest neighbor
+        nearest_distances = []
+
+        for i, tile_pos in enumerate(tile_positions):
+            distances_to_others = [
+                numpy.sqrt((tile_pos[0] - other[0])**2 + (tile_pos[1] - other[1])**2)
+                for j, other in enumerate(tile_positions) if i != j
+            ]
+            nearest_distances.append(min(distances_to_others))
+
+        # Statistics on tile spacing
+        avg_tile_spacing = numpy.mean(nearest_distances)
+        min_tile_spacing = numpy.min(nearest_distances)
+        max_tile_spacing = numpy.max(nearest_distances)
+
+        logging.debug(
+            f"Tile spacing statistics: "
+            f"avg={avg_tile_spacing:.2e}m, "
+            f"min={min_tile_spacing:.2e}m, "
+            f"max={max_tile_spacing:.2e}m"
+        )
+
+        # ========== DETERMINE CONVEX HULL OF TILES ==========
+        try:
+            hull = ConvexHull(tile_positions)
+            hull_vertices = tile_array[hull.vertices]
+
+            # Calculate hull perimeter for geometry assessment
+            hull_perimeter = sum(
+                numpy.linalg.norm(hull_vertices[(i+1) % len(hull_vertices)] - hull_vertices[i])
+                for i in range(len(hull_vertices))
+            )
+
+            logging.debug(
+                f"Tile hull perimeter: {hull_perimeter:.2e}m"
+            )
+        except Exception as e:
+            logging.debug(f"Could not compute convex hull of tiles: {e}")
+
+        # ========== CALCULATE OPTIMAL SPARSE SURVEY SPACING ==========
+        # Rule: Survey spacing should be 1.5-2.0x the average tile spacing
+        # This creates a sparse grid that covers the wafer but doesn't cluster near tiles
+
+        # Use 1.8x as a balanced multiplier (creates good sparse coverage)
+        sparse_multiplier = 1.8
+        optimal_spacing = avg_tile_spacing * sparse_multiplier
+
+        # Bounds: keep between 50µm (minimum sparse) and 500µm (maximum sparse)
+        optimal_spacing = max(50.e-6, min(500.e-6, optimal_spacing))
+
+        logging.info(
+            f"Calculated optimal SPARSE survey spacing: {optimal_spacing:.2e}m "
+            f"({sparse_multiplier}x avg tile spacing of {avg_tile_spacing:.2e}m). "
+            f"Tile spacing range: {min_tile_spacing:.2e}m to {max_tile_spacing:.2e}m. "
+            f"Survey points will be between tiles, not overlapping them."
+        )
+
+        return optimal_spacing
+
+    def _generate_survey_points(self, dist: float) -> List[Tuple[float, float]]:
+        """
+        Generates survey points for the Z-Map.
+        - If shape is a Point or Line (Area=0): Returns the Centroid.
+        - If shape is a Polygon (Area>0): Returns grid points strictly inside the polygon.
+        """
+        if not self.tile_map:
+            return []
+
+        coords = list(self.tile_map.values())
+
+        # Convex Hull wraps the points.
+        # It returns a Point, LineString, or Polygon.
+        geom = MultiPoint(coords).convex_hull
+
+        # CASE 1: Point or Line (Area is 0)
+        # As requested: just return the midpoint.
+        if geom.area == 0:
+            return [(geom.centroid.x, geom.centroid.y)]
+
+        # CASE 2: Valid Polygon (Area > 0)
+        # Generate the grid strictly inside.
+        minx, miny, maxx, maxy = geom.bounds
+
+        # Use arange for fixed steps.
+        x_arr = numpy.arange(minx, maxx + dist, dist)
+        y_arr = numpy.arange(miny, maxy + dist, dist)
+
+        valid_points = []
+        for px in x_arr:
+            for py in y_arr:
+                # .contains is strict (points on the edge are False).
+                # Use .intersects or buffer if you want edge points,
+                # but usually strict inside is safer for microscope limits.
+                if geom.contains(Point(px, py)) or geom.touches(Point(px, py)):
+                    valid_points.append((px, py))
+
+        valid_points.append((geom.centroid.x, geom.centroid.y))
+
+        return valid_points
+
+    def _build_z_align_axis(self) -> "AlignmentAxis":
+        """
+        Compute Z bounds from the current working-distance delta and return
+        an AlignmentAxis ready for use with ParabolicMirrorAlignmentTask.
+
+        :return: AlignmentAxis configured for the current stage Z position.
+        :raises RuntimeError: if mirror calibration metadata is missing.
+        """
+        main_data = self.main_app.main_data
+        mirror_md = main_data.mirror.getMetadata()
+        calib = mirror_md[model.MD_CALIB]
+        min_step_size = calib["auto_align_min_step_size"]
+        ebeam_wd_calib = calib["ebeam_working_distance"]
+
+        current_ebeam_wd = main_data.ebeam_focus.position.value["z"]
+        current_stage_z = main_data.stage.position.value["z"]
+        wd_delta = ebeam_wd_calib - current_ebeam_wd
+        good_z = current_stage_z + wd_delta
+
+        focus_dist = main_data.lens.focusDistance.value if main_data.lens else 500e-6
+        z_min = good_z - focus_dist * 0.3
+        z_max = good_z + focus_dist
+
+        return AlignmentAxis("z", min_step_size["z"], main_data.stage,
+                             abs_bounds=(z_min, z_max))
+
+    @staticmethod
+    def _make_cancel_move(future: model.ProgressiveFuture) -> Callable:
+        """
+        Return a task_canceller function that cancels sub-futures stored on
+        *future* by the movement helper.
+        """
+        def cancel_move(f):
+            for attr in ("running_subf_z", "running_subf_xy", "running_subf_target_z"):
+                subf = getattr(f, attr, None)
+                if subf is not None:
+                    logging.debug("Cancelling %s on future %s.", attr, f)
+                    subf.cancel()
+        return cancel_move
+
+    def _do_safe_move(
+        self,
+        future: model.ProgressiveFuture,
+        xy_pos: Dict,
+        target_z: float = None,
+    ) -> None:
+        """
+        Perform a collision-safe XY (and optionally Z) stage movement:
+
+        1. Move up by SAFE_Z_OFFSET (prevents dragging across sample surface).
+        2. Move to *xy_pos*.
+        3. If *target_z* is given, move to that absolute Z position.
+
+        Sub-futures are stored on *future* so they can be cancelled via
+        _make_cancel_move().
+
+        :param future: ProgressiveFuture that owns this movement.
+        :param xy_pos: Dict with at least ``"x"`` and ``"y"`` keys (metres).
+        :param target_z: Optional absolute Z target in metres.
+        """
+        stage = self.main_app.main_data.stage
+
+        future.running_subf_z = stage.moveRel({"z": self.SAFE_Z_OFFSET})
+        future.running_subf_z.result()
+
+        future.running_subf_xy = stage.moveAbs(xy_pos)
+        future.running_subf_xy.result()
+
+        if target_z is not None:
+            future.running_subf_target_z = stage.moveAbs({"z": target_z})
+            future.running_subf_target_z.result()
+
+    def _do_move(
+        self,
+        future: model.ProgressiveFuture,
+        xy_pos: Dict,
+        predecessor: model.ProgressiveFuture = None,
+    ) -> None:
+        """
+        Perform a direct XY move.
+        Sub-future is stored on *future* so it can be cancelled via _make_cancel_move().
+        :param future: ProgressiveFuture that owns this movement.
+        :param xy_pos: Dict with at least ``"x"`` and ``"y"`` keys (metres).
+        """
+        if predecessor is not None:
+            predecessor.result()  # propagates any exception / cancellation
+        stage = self.main_app.main_data.stage
+
+        future.running_subf_xy = stage.moveAbs(xy_pos)
+        future.running_subf_xy.result()
+
+    def _do_z_align(
+        self,
+        predecessor: model.ProgressiveFuture,
+        z_align_task: "ParabolicMirrorAlignmentTask",
+        search_range: float = 100e-6,
+        max_iter: int = 50,
+    ) -> None:
+        """
+        Wait for *predecessor* to finish, switch to mirror-align optical path,
+        activate the CCD stream and run the Z-alignment task.
+
+        The CCD stream is always deactivated in the finally block.
+
+        :param predecessor: Future that must complete before alignment starts.
+        :param z_align_task: Configured ParabolicMirrorAlignmentTask.
+        :param search_range: Z search range passed to align_mirror (metres).
+        :param max_iter: Maximum alignment iterations.
+        """
+        predecessor.result()  # propagates any exception / cancellation
+
+        main_data = self.main_app.main_data
+        main_data.opm.setPath("mirror-align").result()
+        time.sleep(5)
+
+        ccd_stream = self._align_tab._ccd_stream
+        ccd_stream.is_active.value = True
+        ccd_stream.should_update.value = True
+        try:
+            z_align_task.align_mirror(search_range=search_range, max_iter=max_iter)
+        except StopIteration:
+            logging.debug("StopIteration raised during Z-alignment (normal early-stop).")
+        finally:
+            ccd_stream.is_active.value = False
+            ccd_stream.should_update.value = False
+
+    def _perform_z_survey_point(
+        self,
+        survey_pos: Dict,
+    ) -> model.ProgressiveFuture:
+        """
+        Perform Z-height measurement at a survey point with safe movements.
+
+        Moves safely to the survey point with configured safe Z offset,
+        then acquires the Z-height through mirror alignment.
+
+        :param survey_pos: Dict with 'x', 'y' keys for the XY position
+        :return: model.ProgressiveFuture representing the survey operation
+        """
+        z_align_axis = self._build_z_align_axis()
+
+        # --- movement future ---
+        f_move = model.ProgressiveFuture()
+        f_move.task_canceller = self._make_cancel_move(f_move)
+
+        # --- z-alignment future ---
+        f_z_align = model.ProgressiveFuture()
+        f_z_align.n_steps = 0
+        f_z_align.current_step = 0
+        z_align_task = ParabolicMirrorAlignmentTask(
+            [z_align_axis],
+            self.main_app.main_data.ccd,
+            f_z_align,
+            stop_early=True,
+            save_images=True,
+        )
+        f_z_align.task_canceller = z_align_task.cancel
+
+        self._executor.submitf(f_move, self._do_safe_move, f_move, survey_pos)
+        self._executor.submitf(f_z_align, self._do_z_align, f_move, z_align_task)
+
+        return model.ProgressiveBatchFuture({f_move: 25, f_z_align: 60})
+
+    def _do_acquire(
+        self,
+        predecessor: model.ProgressiveFuture,
+        tile_acq_task: AcquisitionTask,
+        tile_path: str,
+        da_list: list,
+    ) -> None:
+        """
+        Wait for the preceding movement/alignment future to complete, then
+        acquire one tile and schedule an asynchronous save.
+
+        Called by the executor as a chained sub-future.  Any exception or
+        cancellation raised by *f_pre_acq* is propagated automatically via
+        ``f_pre_acq.result()``.
+
+        Acquired DataArrays are appended to *da_list* so the caller can
+        later stitch all tiles together.  The file is written in the
+        background (daemon thread) so acquisition of the next tile can
+        begin immediately.
+
+        :param predecessor: Future that must complete before alignment starts.
+        :param tile_acq_task: Configured AcquisitionTask for this tile.
+        :param tile_path: Destination file path for this tile.
+        :param da_list: Shared list that accumulates all acquired DataArrays.
+        :raises AcquisitionError: If the underlying acquisition task fails
+            with a non-recoverable error.
+        """
+        def save_tile(tile_path, das):
+            """Save tile data to disk"""
+            exporter = dataio.find_fittest_converter(tile_path)
+            logging.debug("Will save data of tile %s", tile_path)
+            exporter.export(tile_path, das)
+
+        predecessor.result()  # propagates any exception / cancellation
+        das, e = tile_acq_task.run()
+        if e:
+            logging.warning(f"Acquisition for tile {tile_path} partially failed: {e}")
+        if not das:
+            raise ValueError(f"Acquisition for tile {tile_path} failed with no data: {e}")
+        da_list.extend(das)
+        threading.Thread(target=save_tile, args=(tile_path, das), daemon=True).start()
+
+    def _acquire_single_tile(
+        self,
+        tile_pos: Dict,
+        streams,
+        tile_path,
+        da_list,
+        fov: Tuple[float, float] = None,
+        target_z: float = None,
+        enable_z_alignment: bool = False,
+    ) -> model.ProgressiveFuture:
+        """
+        Unified tile acquisition function that handles both calibration-based Z-alignment
+        and direct Z-positioning modes.
+
+        This replaces both _custom_tiled_target_z_acquisition and _custom_tiled_acquisition,
+        providing a clean, modular approach to tile acquisition with or without Z-alignment.
+
+        When Z-alignment is enabled, the function moves to a safe corner position (offset
+        from the tile center by FoV/2) to perform Z-height alignment. This prevents damage
+        to the sample in the actual imaging region.
+
+        :param tile_pos: Dict with 'x', 'y' keys for the tile XY position (center)
+        :param streams: List of streams to acquire
+        :param tile_path: File path to save the tile data
+        :param da_list: List to accumulate acquired data arrays
+        :param fov: Tuple of (width, height) field of view in meters.
+                   Required when enable_z_alignment=True. Used to calculate safe corner position.
+        :param target_z: Target Z position (used when enable_z_alignment=False)
+        :param enable_z_alignment: If True, use mirror alignment for Z at a safe corner position;
+                                   if False, move to target_z directly at tile center
+        :return: model.ProgressiveFuture tracking the acquisition
+        """
+        main_data = self.main_app.main_data
+        futures: Dict[model.ProgressiveFuture, int] = {}
+
+        # --- movement future (always present) ---
+        f_move = model.ProgressiveFuture()
+        f_move.task_canceller = self._make_cancel_move(f_move)
+        futures[f_move] = 25
+
+        # --- acquisition future (always present) ---
+        f_acq = model.ProgressiveFuture()
+        acq_task = AcquisitionTask(streams, f_acq, main_data.settings_obs)
+        f_acq.task_canceller = acq_task.cancel
+        futures[f_acq] = sum(acq_task._streamTimes.values())
+
+        if enable_z_alignment:
+            # Move to a safe corner position offset from the tile centre
+            z_align_pos_xy = self._get_z_alignment_position(
+                (tile_pos["x"], tile_pos["y"]), fov, corner="top-left"
+            )
+            move_to = {"x": z_align_pos_xy[0], "y": z_align_pos_xy[1]}
+
+            # --- z-alignment future ---
+            z_align_axis = self._build_z_align_axis()
+            f_z_align = model.ProgressiveFuture()
+            f_z_align.n_steps = 0
+            f_z_align.current_step = 0
+            z_align_task = ParabolicMirrorAlignmentTask(
+                [z_align_axis], main_data.ccd, f_z_align,
+                stop_early=True, save_images=True,
+            )
+            f_z_align.task_canceller = z_align_task.cancel
+            futures[f_z_align] = 60
+
+            # --- move to tile center future (after Z-alignment) ---
+            f_move_to_tile = model.ProgressiveFuture()
+            f_move_to_tile.task_canceller = self._make_cancel_move(f_move_to_tile)
+            futures[f_move_to_tile] = 5
+
+            self._executor.submitf(f_move, self._do_safe_move, f_move, move_to)
+            self._executor.submitf(f_z_align, self._do_z_align, f_move, z_align_task)
+            self._executor.submitf(f_move_to_tile, self._do_move, f_move_to_tile, tile_pos, f_z_align)
+            self._executor.submitf(f_acq, self._do_acquire, f_z_align, acq_task, tile_path, da_list)
+        else:
+            move_to = tile_pos
+            self._executor.submitf(f_move, self._do_safe_move, f_move, move_to, target_z)
+            self._executor.submitf(f_acq, self._do_acquire, f_move, acq_task, tile_path, da_list)
+
+        return model.ProgressiveBatchFuture(futures)
+
     def acquire(self, dlg):
         main_data = self.main_app.main_data
         str_ctrl = self._tab.streambar_controller
@@ -652,22 +1815,199 @@ class TileAcqPlugin(Plugin):
                     s.emitter.external.value = True
 
             # Start the tiled acquisition task
-            region = self._get_region(orig_pos)
-            ft = acquireTiledArea(
-                stitch_ss,
-                main_data.stage,
-                region,
-                overlap=self.overlap.value / 100,
-                settings_obs=main_data.settings_obs,
-                log_path=fn,
-                weaver=self.weaver.value if self.stitch.value else None,
-                registrar=self.register.value if self.stitch.value else None,
-            )
+            if self.tile_mode.value == TileMode.CUSTOM.name:
+                if not self.tile_map:
+                    logging.warning("No tile positions loaded for tiled acquisition.")
+                    dlg.resumeSettings()
+                    return
 
-            dlg.showProgress(ft)
+                da_list = []
+                if self.z_map.value:
+                    # ========== IMPROVED Z-MAP INTERPOLATION WITH SMART PATH PLANNING ==========
+                    # Strategy: Find closest survey point to current position and traverse
+                    # survey points using nearest-neighbor approach to avoid large Z jumps
 
-            # Wait for the acquisition and stitching to complete
-            st_data = ft.result()
+                    known_points = [] # (x, y)
+                    known_z = []      # z
+                    max_dist = self._calculate_optimal_survey_spacing(list(self.tile_map.values()))
+                    survey_points = self._generate_survey_points(dist=max_dist)
+
+                    # Get FoV for safe Z-alignment positioning (will be used for survey points)
+                    try:
+                        fov = self._guess_smallest_fov()
+                    except ValueError:
+                        logging.error("Cannot determine FoV for Z-alignment positioning. Aborting.")
+                        dlg.resumeSettings()
+                        return
+
+                    if not survey_points:
+                        logging.error("No survey points generated. Aborting.")
+                        dlg.resumeSettings()
+                        return
+
+                    # Filter out survey points that are too close to tile positions
+                    # This prevents Z-alignment from interfering with actual tile acquisition
+                    survey_points = self._filter_survey_points_away_from_tiles(
+                        survey_points,
+                        self.tile_map,
+                        min_distance=max(fov) * 2
+                    )
+
+                    if not survey_points:
+                        logging.error("No valid survey points after filtering. Aborting.")
+                        dlg.resumeSettings()
+                        return
+
+                    # Get current position for intelligent path planning
+                    current_xy = (main_data.stage.position.value["x"],
+                                  main_data.stage.position.value["y"])
+
+                    # Order survey points using nearest-neighbor to minimize travel distance
+                    ordered_survey_points = order_positions(
+                        survey_points, current_xy
+                    )
+
+                    logging.info(f"Measuring {len(ordered_survey_points)} survey points in optimized order")
+
+                    previous_z = main_data.stage.position.value["z"]
+                    # Measure Z at each survey point in smart order
+                    for i, survey_point in enumerate(ordered_survey_points, start=1):
+                        self._dlg.setAcquisitionInfo(
+                            f"Measuring survey point {i}/{len(ordered_survey_points)} "
+                            f"at position {survey_point}"
+                        )
+                        ft = self._perform_z_survey_point({"x": survey_point[0], "y": survey_point[1]})
+                        dlg.showProgress(ft)
+                        ft.result()
+
+                        measured_z = main_data.stage.position.value["z"]
+                        if abs(measured_z - previous_z) > 0.6 * self.SAFE_Z_OFFSET:
+                            measured_z = previous_z  # Discard outlier and use previous Z
+                            main_data.stage.moveAbs({"z": measured_z}).result()  # Move back to previous Z
+                            logging.debug(f"Discarded Z measurement at point {survey_point}, using previous Z={measured_z:.6e}")
+                        known_z.append(measured_z)
+                        known_points.append(survey_point)
+                        previous_z = measured_z
+
+                        logging.debug(f"Survey point {i}: pos={survey_point}, z={measured_z:.6e}")
+
+                    # Create interpolator from the surveyed points
+                    z_interpolator = create_z_interpolator(known_points, known_z)
+
+                    if z_interpolator is None:
+                        logging.error("Z-Map generation failed (no valid points). Aborting.")
+                        dlg.resumeSettings()
+                        return
+
+                    try:
+                        X = numpy.array(known_points)[:, 0]
+                        Y = numpy.array(known_points)[:, 1]
+                        Z = numpy.array(known_z)
+                        plt.figure(figsize=(6, 5))
+                        plt.tricontourf(X, Y, Z, levels=14, cmap="viridis")
+                        plt.colorbar(label="Z height (m)")
+                        plt.scatter(X, Y, c="red", label="Survey Points")
+                        plt.title("Z-Map")
+                        plt.xlabel("X (m)")
+                        plt.ylabel("Y (m)")
+                        plt.axis("equal")
+                        plt.legend()
+                        plt.tight_layout()
+                        z_map_path = os.path.join(log_dir, f"{fn_bs}_zmap.png")
+                        plt.savefig(z_map_path)
+                        plt.close()
+                        logging.info(f"Saved Z-map visualization to {z_map_path}")
+                    except Exception as e:
+                        logging.warning(f"Failed to create Z-map visualization: {e}")
+
+                    main_data.stage.moveRel({"z": 300e-6}).result()  # Move away from sample before moving to tiles
+
+                    for acq_idx, (tile_num, tile_pos) in enumerate(self.tile_map.items(), start=1):
+                        self._dlg.setAcquisitionInfo(
+                            f"Acquiring tile {acq_idx}/{len(self.tile_map)}\n"
+                            f"Tile #{tile_num} at {tile_pos}"
+                        )
+
+                        fn_tile = "%s-%d-%.3f-%.3f%s" % (fn_bs, tile_num, tile_pos[0] * 1e6,
+                                                         tile_pos[1] * 1e6, fn_ext)
+                        tile_path = os.path.join(log_dir, fn_tile)
+
+                        # Interpolate Z height at this tile position
+                        target_z = float(z_interpolator(tile_pos[0], tile_pos[1]))
+
+                        logging.debug(f"Tile {tile_num}: pos={tile_pos}, target_z={target_z:.6e}")
+
+                        # Acquire tile using unified function (without z-alignment)
+                        ft = self._acquire_single_tile(
+                            {"x": tile_pos[0], "y": tile_pos[1]},
+                            stitch_ss,
+                            tile_path,
+                            da_list,
+                            fov=fov,
+                            target_z=target_z,
+                            enable_z_alignment=False,
+                        )
+
+                        # Wait for this tile to complete before moving to next
+                        dlg.showProgress(ft)
+                        ft.result()
+                else:
+                    # Original approach: acquire tiles with Z-alignment per tile
+                    logging.info(f"Acquiring {len(self.tile_map)} tiles with per-tile Z-alignment")
+
+                    for tile_num, tile_pos in self.tile_map.items():
+                        self._dlg.setAcquisitionInfo(
+                            f"Acquiring tile {tile_num} at position {tile_pos}"
+                        )
+
+                        fn_tile = "%s-%d-%.3f-%.3f%s" % (fn_bs, tile_num, tile_pos[0] * 1e6,
+                                                         tile_pos[1] * 1e6, fn_ext)
+                        tile_path = os.path.join(log_dir, fn_tile)
+
+                        # Get FoV for safe Z-alignment positioning at tile corners
+                        try:
+                            fov_align = self._guess_smallest_fov()
+                        except ValueError:
+                            logging.error("Cannot determine FoV for Z-alignment positioning. Aborting.")
+                            dlg.resumeSettings()
+                            return
+
+                        # Acquire tile using unified function (with z-alignment at safe corner)
+                        ft = self._acquire_single_tile(
+                            {"x": tile_pos[0], "y": tile_pos[1]},
+                            stitch_ss,
+                            tile_path,
+                            da_list,
+                            fov=fov_align,
+                            enable_z_alignment=True,
+                        )
+
+                        # Wait for this tile to complete before moving to next
+                        dlg.showProgress(ft)
+                        ft.result()
+
+                # Stitching
+                st_data = []
+                if self.stitch.value and da_list:
+                    st_data = TiledAcquisitionTask.stitchTiles(da_list, self.register.value, self.weaver.value)
+            else:
+                # Start the tiled acquisition task
+                region = self._get_region(orig_pos)
+                ft = acquireTiledArea(
+                    stitch_ss,
+                    main_data.stage,
+                    region,
+                    overlap=self.overlap.value / 100,
+                    settings_obs=main_data.settings_obs,
+                    log_path=fn,
+                    weaver=self.weaver.value if self.stitch.value else None,
+                    registrar=self.register.value if self.stitch.value else None,
+                )
+
+                dlg.showProgress(ft)
+
+                # Wait for the acquisition and stitching to complete
+                st_data = ft.result()
 
             dlg.Close()
 
@@ -709,7 +2049,6 @@ class TileAcqPlugin(Plugin):
                                          lvl=logging.ERROR)
         finally:
             logging.info("Tiled acquisition ended")
-            main_data.stage.moveAbs(orig_pos)
             # reset all external values
             for va, value in orig_hw_values.items():
                 try:
