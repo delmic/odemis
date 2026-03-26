@@ -25,6 +25,7 @@ These are the conventional metadata available in a DataArray.
 # This list of constants are used as key for the metadata
 MD_EXP_TIME = "Exposure time"  # s
 MD_ACQ_DATE = "Acquisition date"  # s since epoch
+MD_ACQ_RECIPES = "Acquisition recipes"  # str
 MD_AD_LIST = "Acquisition dates"  # s since epoch for each element in dimension T
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus

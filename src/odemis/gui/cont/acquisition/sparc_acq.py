@@ -496,6 +496,10 @@ class SparcAcquiController(object):
             # TODO: if *only* survey: don't report partial failure, but complete failure.
 
         if data:
+            if self._tab_data_model.recipes:
+                recipes = ", ".join(sorted(self._tab_data_model.recipes))
+                for d in data:
+                    d.metadata[model.MD_ACQ_RECIPES] = recipes
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)

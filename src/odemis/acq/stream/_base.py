@@ -1414,7 +1414,7 @@ class Stream(object):
 
             value = entries[key]
             if key == "tint":
-                self.tint.value = img.md_format_to_tint(entries["tint"])
+                value = img.md_format_to_tint(value)
             elif isinstance(value, list) and all(
                 isinstance(x, (int, float)) for x in value
             ):

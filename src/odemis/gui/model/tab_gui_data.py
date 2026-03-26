@@ -33,7 +33,6 @@ from odemis import model
 from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Target, TargetType
 from odemis.acq.align.z_localization import ensure_stig_calib_format
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
-from odemis.acq.stream import StaticFluoStream
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -64,13 +63,12 @@ from odemis.gui.model._constants import (
     Z_ALIGN,
 )
 from odemis.model import (
-    MD_CALIB,
     BooleanVA,
     FloatContinuous,
     IntEnumerated,
     StringEnumerated,
     StringVA,
-    VigilantAttribute, getComponent,
+    VigilantAttribute,
 )
 from odemis.util.filename import create_filename, make_unique_name
 
@@ -603,6 +601,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         # TODO: VA for autofocus procedure mode needs to be connected in the tab
 #         self.autofocus_active = BooleanVA(False)
+
+        # Set of current acquisition recipes. It is saved as MD_ACQ_RECIPES metadata of the acquired streams.
+        self.recipes = set()
 
 
 class ChamberGUIData(MicroscopyGUIData):
