@@ -22,7 +22,7 @@ import math
 import unittest
 
 import numpy
-from scipy.linalg.misc import LinAlgError
+from scipy.linalg import LinAlgError
 
 from odemis.util.linalg import tri_inv, get_z_pos_on_plane, get_point_on_plane, are_collinear, fit_plane_lstsq, \
     generate_triangulation_points, ranges_overlap
