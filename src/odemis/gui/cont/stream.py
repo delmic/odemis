@@ -1382,10 +1382,10 @@ class StreamController(object):
 
 class FastEMStreamController(StreamController):
     def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None,
-                 sb_ctrl=None):
+                 sb_ctrl=None, sp_options=None):
         super().__init__(
             stream_bar=stream_bar, stream=stream, tab_data_model=tab_data_model,
-            show_panel=show_panel, view=view, sb_ctrl=sb_ctrl
+            show_panel=show_panel, view=view, sb_ctrl=sb_ctrl, sp_options=sp_options
         )
 
         assert isinstance(stream, acqstream.SEMStream)  # don't show for CCD stream
