@@ -26,6 +26,7 @@ import logging
 from odemis import model, gui
 import odemis
 from odemis.gui import main_xrc, log, img, plugin
+from odemis.gui.win.thoughts import show_important_thought_dialog
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
@@ -181,6 +182,9 @@ class OdemisGUIApp(wx.App):
             # it cannot draw certain images, because the dimensions are 0x0.
             self.main_frame.SetMinSize((1000, 550))
             self.main_frame.Maximize()  # must be done before Show()
+
+            # Only show the dialog if today is the right day, before even showing the main window
+            show_important_thought_dialog(self.main_frame)
 
             # List of all possible tabs used in Odemis' main GUI, and only load the tabs depending on
             # the current microscope role.
