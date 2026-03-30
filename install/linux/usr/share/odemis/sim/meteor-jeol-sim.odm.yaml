@@ -99,28 +99,23 @@
     affects: ["Camera"]
 }
 
-# Andor Zyla
 "Camera": {
-    class: andorcam2.AndorCam2,
+    class: tucsen.TUCam,
     role: ccd,
     init: {
-        # device: 0,  # if a real camera is plugged in, it's usually 0
         device: "fake",
-        # TODO: adjust the axes so that they match the SEM orientation (with scan rotation = 0)
-        transp: [2, 1], # To swap/invert axes
-        # TODO: adjust the cropping (use multiple of 4, for a better handling of the binning)
-        # Calibrate per system to obtain right balance between uniform image and large field of view.
-        # max_res: [2048, 2048], # Crop the image as the optical FoV is smaller than the whole CMOS area
+        transp: [-2, 1], # To swap/invert axes
     },
     properties: {
-        # To change some default settings
-#        targetTemperature: 0,
+        targetTemperature: -10,  # °C
+        fanSpeed: 0  # Water cooling -> no fan needed
     },
     metadata: {
         # If the camera is not exactly parallel to the stage axes, the angle can be adjusted
         ROTATION: 0, # [rad] (=0°)
     },
 }
+
 
 # Controller for the filter-wheel
 # DIP must be configured with address 7 (= 1110000)

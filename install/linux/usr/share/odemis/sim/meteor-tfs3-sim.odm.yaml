@@ -176,14 +176,14 @@
             "stig": 20.e-3,  # rad of move
         },
     },
-    children: {"slave": "Stigmator Actuator"},
+    dependencies: {"slave": "Stigmator Actuator"},
 }
 
 "Stigmator": {
     class: actuator.RotationActuator,
     role: stigmator,
     affects: ["Camera"],
-    children: {"rz": "AntiBacklash for Stigmator"},
+    dependencies: {"rz": "AntiBacklash for Stigmator"},
     init: {
         axis_name: "stig",
         #cycle: 2 * pi, # rad
