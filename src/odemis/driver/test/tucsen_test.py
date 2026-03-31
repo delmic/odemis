@@ -91,8 +91,8 @@ class TestTUCam(VirtualTestCam, unittest.TestCase):
     def test_resolution_rounding(self):
         self.camera.resolution.value = (199, 103)
         # horizontal res (== second dim as it's transposed) is rounded to multiple of 8
-        # vertical res (== first dim as it's transposed) is accepted as is
-        self.assertEqual(self.camera.resolution.value, (199, 96))
+        # vertical res (== first dim as it's transposed) is rounded to multiple of 2
+        self.assertEqual(self.camera.resolution.value, (198, 96))
 
 if __name__ == '__main__':
     unittest.main()
