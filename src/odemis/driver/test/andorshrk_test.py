@@ -590,12 +590,16 @@ class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
         sp.moveAbsSync({"iris-in": orig_pos})
 
     def test_goffset(self):
+        """
+        Test relative and absolute moves of the goffset,
+        and check that it works for different gratings (if available).
+        """
         self.assertIn("goffset", self.spectrograph.axes)
         sp = self.spectrograph
         rng = sp.axes["goffset"].range
 
         orig_offsets = {}
-        orig_grating = sp.position.value["goffset"]
+        orig_grating = sp.position.value["grating"]
 
         for g in sp.axes["grating"].choices:
             sp.moveAbsSync({"grating": g})
