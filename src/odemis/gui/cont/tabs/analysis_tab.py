@@ -27,6 +27,8 @@ import collections
 import gc
 import logging
 import os.path
+from pathlib import Path
+from typing import Union
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -55,11 +57,19 @@ from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport
     AngularSpectrumViewport, ThetaViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings
+from odemis.gui.cont.tabs import PYRAMIDAL_CONVERSION_SUFFIX
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_LABEL, \
     TOOL_NONE
 from odemis.gui.util import call_in_wx_main
-from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
+from odemis.util.dataio import (
+    data_to_static_streams,
+    export_data_as_pyramidal,
+    open_acquisition,
+    open_files_and_stitch,
+    is_pyramidal,
+    convert_file_to_pyramidal,
+)
 
 
 class AnalysisTab(Tab):
@@ -93,6 +103,9 @@ class AnalysisTab(Tab):
         # displayed
         tab_data = guimod.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
+
+        self.main_data = main_data
+
         if main_data.role in ("sparc-simplex", "sparc", "sparc2"):
             # Different name on the SPARC to reflect the slightly different usage
             self.set_label("ANALYSIS")
@@ -318,13 +331,52 @@ class AnalysisTab(Tab):
     def _on_add_tileset(self):
         self.select_acq_file(extend=True, tileset=True)
 
+    def _get_pyramidal_path(self, filename: Union[str, Path]):
+        """
+        Returns the output path for a given input file, used in the pyramidal conversion process.
+
+        :param filename: The input filename of the file that is to be converted
+        :return: The adjusted output path
+        """
+        filename = Path(filename)
+        name_converted = f"{filename.stem}{PYRAMIDAL_CONVERSION_SUFFIX}.tif"
+
+        project_folder = (
+            None
+            if getattr(self.main_data, "is_viewer", False)
+            else self.main_data.project_path.value
+        )
+
+        if project_folder:
+            return Path(project_folder) / name_converted
+        else:
+            # For simplicity, always convert to tiff format
+            return filename.with_name(name_converted)
+
     def load_tileset(self, filenames, extend=False):
-        data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
-        self.display_new_data(filenames[0], data, extend=extend)
+        data = open_files_and_stitch(filenames)  # TODO: allow user defined registration / weave methods
+        # For the lack of a better name, use the name of the first tile
+        source_filename = filenames[0]
+        filename_converted = self._get_pyramidal_path(source_filename)
+        try:
+            export_data_as_pyramidal(data, filename_converted, compressed=True)
+            self.display_new_data(filename_converted, open_acquisition(filename_converted), extend=extend)
+        except Exception:
+            logging.exception("Failed to export/reopen stitched pyramidal tileset")
+            self.display_new_data(filenames[0], data, extend=extend)
 
     def load_data(self, filename, fmt=None, extend=False):
-        data = open_acquisition(filename, fmt)
-        self.display_new_data(filename, data, extend=extend)
+        filename = Path(filename)
+        if is_pyramidal(filename):
+            self.display_new_data(filename, open_acquisition(filename, fmt), extend=extend)
+            return
+        filename_converted = self._get_pyramidal_path(filename)
+        try:
+            convert_file_to_pyramidal(filename, filename_converted, compressed=True)
+            self.display_new_data(filename_converted, open_acquisition(filename_converted, fmt), extend=extend)
+        except Exception as ex:
+            logging.exception("Failed to process TIFF import, loading original. Error: %s", ex)
+            self.display_new_data(filename, open_acquisition(filename, fmt), extend=extend)
 
     def _get_time_spectrum_streams(self, spec_streams):
         """
@@ -358,6 +410,7 @@ class AnalysisTab(Tab):
         extend (bool): if False, will ensure that the previous streams are closed.
           If True, will add the new file to the current streams opened.
         """
+        filename = str(filename)
         if not extend:
             # Remove all the previous streams
             self._stream_bar_controller.clear()

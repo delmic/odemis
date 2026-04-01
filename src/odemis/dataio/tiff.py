@@ -2401,6 +2401,25 @@ def read_data(filename):
     return [acd.content[n].getData() for n in range(len(acd.content))]
 
 
+def is_pyramidal(filename: str) -> bool:
+    """
+    Check whether a TIFF file has SubIFD pyramid levels.
+
+    :param filename: Path to TIFF file
+    :return: True when TIFFTAG_SUBIFD contains one or more entries
+    :raises IOError: If the file cannot be opened as TIFF
+    """
+    try:
+        tiff_file = TIFF.open(filename, mode="r")
+        try:
+            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+            return sub_ifds is not None and len(sub_ifds) > 0
+        finally:
+            tiff_file.close()
+    except Exception as exc:
+        raise IOError("Failed to inspect TIFF pyramid status for %s: %s" % (filename, exc))
+
+
 def read_thumbnail(filename):
     """
     Read the thumbnail data of a given TIFF file.

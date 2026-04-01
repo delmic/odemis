@@ -25,26 +25,33 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import collections
 import logging
-import os.path
-from typing import List, Optional
+import os
+from pathlib import Path
+from typing import List, Optional, Union
 import wx
-
 from odemis.gui import conf
-
 from odemis import dataio
 from odemis import model
 import odemis.gui
 import odemis.gui.cont.export as exportcont
-from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.acq.stream import OpticalStream, EMStream, StaticStream
 from odemis.gui.cont.correlation import CorrelationController
+from odemis.gui.cont.stream_bar import StreamBarController
+from odemis.gui.cont.tabs import PYRAMIDAL_CONVERSION_SUFFIX
+from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.cont.tabs.tab import Tab
-from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
+from odemis.util.dataio import (
+    convert_file_to_pyramidal,
+    data_to_static_streams,
+    export_data_as_pyramidal,
+    is_pyramidal,
+    open_acquisition,
+    open_files_and_stitch,
+)
 
 
 class CorrelationTab(Tab):
@@ -166,13 +173,53 @@ class CorrelationTab(Tab):
     def _on_add_tileset(self) -> None:
         self.select_acq_file(extend=True, tileset=True)
 
-    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
-        data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
-        self.load_streams(data)
+    def _get_pyramidal_path(self, filename: Union[str, Path]):
+        """
+        Returns the output path for a given input file, used in the pyramidal conversion process.
 
-    def load_data(self, filename: str, fmt: str = None, extend: bool = False) -> None:
-        data = open_acquisition(filename, fmt)
-        self.load_streams(data)
+        :param filename: The input filename of the file that is to be converted
+        :return: The adjusted output path
+        """
+        filename = Path(filename)
+        name_converted = f"{filename.stem}{PYRAMIDAL_CONVERSION_SUFFIX}.tif"
+
+        project_folder = (
+            None
+            if getattr(self.main_data, "is_viewer", False)
+            else self.main_data.project_path.value
+        )
+
+        if project_folder:
+            return Path(project_folder) / name_converted
+        else:
+            # For simplicity, always convert to tiff format
+            return filename.with_name(name_converted)
+
+    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
+        data = open_files_and_stitch(filenames)  # TODO: allow user defined registration / weave methods
+        # For the lack of a better name, use the name of the first tile
+        source_filename = filenames[0]
+        filename_converted = self._get_pyramidal_path(source_filename)
+        try:
+            export_data_as_pyramidal(data, filename_converted, compressed=True)
+            self.load_streams(open_acquisition(filename_converted))
+        except Exception:
+            logging.exception("Failed to export/reopen stitched pyramidal tileset")
+            self.load_streams(data)
+
+
+    def load_data(self, filename: Union[str, Path], fmt: Optional[str] = None, extend: bool = False) -> None:
+        filename = Path(filename)
+        if is_pyramidal(filename):
+            self.load_streams(open_acquisition(filename, fmt))
+            return
+        filename_converted = self._get_pyramidal_path(filename)
+        try:
+            convert_file_to_pyramidal(filename, filename_converted, compressed=True)
+            self.load_streams(open_acquisition(filename_converted, fmt))
+        except Exception as ex:
+            logging.exception("Failed to process TIFF import, loading original. Error: %s", ex)
+            self.load_streams(open_acquisition(filename, fmt))
 
     def select_acq_file(self, extend: bool = False, tileset: bool = False):
         """ Open an image file using a file dialog box

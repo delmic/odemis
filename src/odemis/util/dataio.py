@@ -21,8 +21,9 @@ see http://www.gnu.org/licenses/.
 """
 import json
 import logging
+from pathlib import Path
 import os
-from typing import Any, Optional
+from typing import Any, List, Optional, Union
 
 import numpy
 
@@ -199,15 +200,16 @@ def _split_planes(data):
     return data
 
 
-def open_acquisition(filename, fmt=None):
+def open_acquisition(filename, fmt=None) -> List[Union[model.DataArray, model.DataArrayShadow]]:
     """
     Opens the data according to the type of file, and returns the opened data.
     If it's a pyramidal image, do not fetch the whole data from the image. If the image
     is not pyramidal, it reads the entire image and returns it
     filename (string): Name of the file where the image is
     fmt (string): The format of the file
-    return (list of DataArrays or DataArrayShadows): The opened acquisition source
+    return: The opened acquisition source
     """
+    filename = str(filename)
     if fmt:
         converter = dataio.get_converter(fmt)
     else:
@@ -223,6 +225,60 @@ def open_acquisition(filename, fmt=None):
         logging.exception("Failed to open file '%s' with format %s", filename, fmt)
 
     return data
+
+
+def is_pyramidal(filename: Union[str, Path]) -> bool:
+    """
+    Check whether a file is in pyramidal format.
+
+    :param filename: Path to file
+    :return: True if the file is pyramidal, False otherwise
+    :raises IOError: If the file cannot be read or converter doesn't support pyramid detection
+    """
+    reader = dataio.find_fittest_converter(str(filename), mode=os.O_RDONLY)
+    if not hasattr(reader, "is_pyramidal"):
+        return False
+
+    return reader.is_pyramidal(str(filename))
+
+
+def export_data_as_pyramidal(
+    data: Union[model.DataArray, List[model.DataArray]],
+    dst_filename: Union[str, Path],
+    compressed: bool = True,
+) -> None:
+    """
+    Export provided data to a pyramidal file format selected by destination extension.
+
+    :param data: Array that holds image data
+    :param dst_filename: Destination file path
+    :param compressed: Whether to request compressed output
+    """
+    dst_filename = str(dst_filename)
+    exporter = dataio.find_fittest_converter(dst_filename, mode=os.O_WRONLY)
+    if not getattr(exporter, "CAN_SAVE_PYRAMID", False):
+        raise IOError(
+            "Destination format %s does not support pyramidal export"
+            % (getattr(exporter, "FORMAT", type(exporter).__name__),)
+        )
+    exporter.export(dst_filename, data, compressed=compressed, pyramid=True)
+
+
+def convert_file_to_pyramidal(src_filename: Union[str, Path], dst_filename: Union[str, Path], compressed: bool = True) -> None:
+    """
+    Convert any readable acquisition file into a pyramidal file format.
+
+    The source is read via the source converter's read_data API. The destination
+    converter is selected from dst_filename and must support pyramidal export.
+
+    :param src_filename: Source file path
+    :param dst_filename: Destination file path
+    :param compressed: Whether to request compressed output
+    :raises IOError: If reading/exporting fails or destination doesn't support pyramids
+    """
+    reader = dataio.find_fittest_converter(str(src_filename), mode=os.O_RDONLY)
+    data = reader.read_data(str(src_filename))
+    export_data_as_pyramidal(data, dst_filename, compressed)
 
 
 def splitext(path):

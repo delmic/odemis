@@ -31,6 +31,7 @@ from odemis.dataio import tiff
 from odemis.util import testing
 from odemis.util.dataio import (
     _split_planes,
+    convert_file_to_pyramidal,
     data_to_static_streams,
     open_acquisition,
     open_files_and_stitch,
@@ -288,6 +289,16 @@ class TestDataIO(unittest.TestCase):
 
         testing.assert_tuple_almost_equal(rdata[0].metadata[model.MD_POS], (25e-6, 25e-6))
         testing.assert_tuple_almost_equal(rdata[0].metadata[model.MD_PIXEL_SIZE], (1e-6, 1e-6))
+
+    def test_convert_to_pyramidal(self):
+        data = model.DataArray(numpy.random.randint(0, 255, (256, 256), dtype=numpy.uint8))
+        with tempfile.TemporaryDirectory(prefix="odemis-dataio-pyr-") as tmpdir:
+            source_file = os.path.join(tmpdir, "source_non_pyramidal.tif")
+            dest_file = os.path.join(tmpdir, "converted_pyramidal.tif")
+            tiff.export(source_file, data, pyramid=False, imagej=True)
+            convert_file_to_pyramidal(source_file, dest_file, compressed=True)
+            self.assertTrue(os.path.exists(dest_file))
+            self.assertTrue(tiff.is_pyramidal(dest_file))
 
 class TestSplitPlanes(unittest.TestCase):
 
