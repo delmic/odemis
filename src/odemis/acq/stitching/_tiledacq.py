@@ -24,7 +24,7 @@ import os
 import statistics
 import threading
 import time
-from concurrent.futures import CancelledError, TimeoutError
+from concurrent.futures import CancelledError, TimeoutError, ThreadPoolExecutor
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 from enum import Enum
 from itertools import groupby
@@ -142,6 +142,7 @@ class TiledAcquisitionTask(object):
         self._overlap = overlap
         self._centered_acq = centered_acq
         self._polygon = None
+        self._save_executor = None
         if future is not None:
             self._future.running_subf: future.Future = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
@@ -245,6 +246,7 @@ class TiledAcquisitionTask(object):
             self._exporter = dataio.find_fittest_converter(filename)
             self._fn_bs, self._fn_ext = udataio.splitext(filename)
             self._log_dir = os.path.dirname(self._log_path)
+            self._save_executor = ThreadPoolExecutor(max_workers=5)
 
         self._registrar = registrar
         self._weaver = weaver
@@ -675,8 +677,8 @@ class TiledAcquisitionTask(object):
             logging.debug("Will save data of tile %dx%d to %s", ix, iy, fn_tile)
             self._exporter.export(os.path.join(self._log_dir, fn_tile), das)
 
-        # Run in a separate thread
-        threading.Thread(target=save_tile, args=(ix, iy, das, stream_cube_id), ).start()
+        # Run in a separate thread via the executor
+        self._save_executor.submit(save_tile, ix, iy, das, stream_cube_id)
 
     def _acquireStreamCompressedZStack(self, i, ix, iy, stream):
         """
@@ -1072,6 +1074,8 @@ class TiledAcquisitionTask(object):
             logging.debug(f"The actual time taken per tile for each action is {self._save_time}")
             logging.debug(f"The average time taken per tile for each action is {avg_per_action}")
             logging.debug(f"The average time taken per tile is {self.average_acquisition_time}")
+            if self._save_executor is not None:
+                self._save_executor.shutdown()
             with self._future._task_lock:
                 self._future._task_state = FINISHED
         return st_data
