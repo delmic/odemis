@@ -208,7 +208,7 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         self.skipTest("Test not meaningful for Tescan")
 
     def test_stage_to_chamber(self):
-        # Override, as Tescan has different behaviour: the Z axis is directly connected the chamber Z
+        # Override, as Tescan has different behaviour: the Z axis is inversely connected the chamber Z
         # go to sem imaging
         f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
@@ -217,8 +217,8 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         # calculate the vertical shift in chamber coordinates
         shift = {"x": 100e-6, "z": 50e-6}
         zshift = self.pm._transformFromChamberToStage(shift)
-        # Should return the same movement
-        testing.assert_pos_almost_equal(zshift, shift)
+        # Should return the same movement, but with z inverted
+        testing.assert_pos_almost_equal(zshift, {"x": shift["x"], "z": -shift["z"]})
 
     def test_rel_move_fm_posture(self):
         f = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
