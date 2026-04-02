@@ -1,0 +1,27 @@
+name: size-label
+
+on: pull_request_target
+
+jobs:
+  size-label:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: size-label
+        uses: "pascalgn/size-label-action@v0.5.7"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+          # Provide a newline-separated list of files or glob patterns to ignore.
+          # Lines starting with '!' are always included.
+          IGNORED: ".*\n!.gitignore\nyarn.lock\npackage-lock.json\ngenerated/**"
+
+        with:
+          sizes: >
+            {
+              "0": "size/S",
+              "20": "size/M",
+              "100": "size/L"
+            }
