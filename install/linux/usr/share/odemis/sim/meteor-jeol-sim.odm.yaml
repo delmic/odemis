@@ -33,9 +33,10 @@
         stage_range: {
             # Stage ranges. These are required to be correctly specified for 
             # the stage to be controllable by Odemis
-            "x": [-55.e-3, 10.e-3],  # m
+#            "x": [-55.e-3, 10.e-3],  # m, Standard value
+            "x": [-10.e-3, 10.e-3],  # m, for the simulator
             "y": [-15.e-3, 15.e-3],  # m
-            "z": [0.e-3, 41.5e-3],  # m
+            "z": [1.5e-3, 41.5e-3],  # m
             "rx": [-3.3161, 3.3161],  # rad, angle range in degrees is -190 to +190
             "rz": [-0.2617, 0.9599]  # rad, angle range in degrees is -15 to +55
         },
@@ -51,7 +52,8 @@
             "x_0": 0.e-3,
             "y_0": 0.e-3,
             "z_0": 8.5e-3,
-            "dx": -53.e-3,
+#            "dx": -53.e-3,  # Standard value
+            "dx": -9.5e-3,  # For the simulator
             "dy": 0.0,
             "dz": 0.0,
             "version": "jeol_1"
@@ -70,11 +72,12 @@
             "z": [4.e-3, 41.5e-3]
         },
         FM_IMAGING_RANGE: {
-            "x": [-55.e-3, -44.75e-3],
+#            "x": [-55.e-3, -44.75e-3],  # Standard value
+            "x": [-10.e-3, -3.e-3],  # For the simulator
             "y": [-8.25e-3, 8.25e-3],
             "z": [5.5e-3, 11.5e-3]
         },
-        FAV_POS_DEACTIVE: {"x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0 }
+        FAV_POS_DEACTIVE: {"x": 0.0, "y": 0.0, "z": 4.0e-3, "rx": 0.0, "rz": 0.0 }
     },
 }
 
