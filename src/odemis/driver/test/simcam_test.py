@@ -485,8 +485,10 @@ class TestSimCamSpectrograph(unittest.TestCase):
         self.mock_spectrograph.position.value["goffset"] = 0.0
         time.sleep(0.1)
 
-    # helper function to find the peak
     def _find_peak(self, image):
+        """
+        Helper function to find the peak
+        """
         data = image.astype(float)
         profile = data.mean(axis=0)
 
@@ -515,18 +517,12 @@ class TestSimCamSpectrograph(unittest.TestCase):
         # change offset
         self.mock_spectrograph.position.value["goffset"] = move
 
-        image_new = None
-        for _ in range(10):
-            image_new = self.camera.data.get()
-            if image_new.metadata[model.MD_ACQ_DATE] > date_0:
-                break
-            time.sleep(0.05)
+        # obtain new image
+        image_new = self.camera.data.get(asap=False)
 
         x0, _, _ = self._find_peak(image_0)
         x1, _, _ = self._find_peak(image_new)
-
         shift = x1 - x0
-        print(f"DEBUG: Moved {move}, Peak went from {x0} to {x1}. Shift: {shift}")
 
         expected_shift = move * expected_ratio
         self.assertAlmostEqual(shift, expected_shift, delta=0.5)

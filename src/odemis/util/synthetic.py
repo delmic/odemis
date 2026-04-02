@@ -128,8 +128,11 @@ def psf_gaussian(
     numpy.rint(UINT16_MAX * out, out=out)
     return out.astype(numpy.uint16)
 
-def simulate_peak(amplitude, x0, width, shape, dtype=numpy.uint16) -> numpy.ndarray:
-
+def simulate_peak(amplitude: float,
+                  x0: float,
+                  width: float,
+                  shape: Union[int, Tuple[int, int]],
+                  dtype: numpy.dtype = numpy.uint16) -> numpy.ndarray:
     """
     Simulate a 1D Gaussian peak across the x-dimension of an image, with optional 2D image input for direct use when y > 1.
     :param amplitude: the maximum intensity of the peak

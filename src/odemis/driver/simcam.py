@@ -213,6 +213,14 @@ class Camera(model.DigitalCamera):
         self._error_creation_thread.daemon = True
         self._error_creation_thread.start()
 
+        self._min_val = self._img.min()
+        if numpy.issubdtype(self._img.dtype, numpy.integer):
+            self._dtype_max = numpy.iinfo(self._img.dtype).max
+        elif numpy.issubdtype(self._img.dtype, numpy.floating):
+            self._dtype_max = numpy.finfo(self._img.dtype).max
+        else:
+            self._dtype_max = numpy.inf
+
     def _setBinning(self, value):
         """
         value (2-tuple int)
@@ -435,33 +443,34 @@ class Camera(model.DigitalCamera):
         if self._spectrograph:
             current_offset = self._spectrograph.position.value["goffset"]
 
-            ccd_center_x = self._img_res[0]/2.0  # find the x-coordinate of the center of the ccd
+            ccd_center_x = self._img_res[0]/ 2  # find the x-coordinate of the center of the ccd
             x0_px = ccd_center_x + current_offset * GOFFSET_TO_PIXEL
             roi_left = center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0]
 
             bin_x = binning[0]  # binning factor along x-axis
             peak_center_binned = (x0_px - roi_left) / bin_x  # express the peak position in the ROI's coordinate system
 
-            logging.info("DEBUG: x0_px=%s, ltrb0=%s, result=%s",
-                         x0_px, roi_left, peak_center_binned
-                         )
+            logging.debug("Peak center: x0_px=%s, ROI left: ltrb0=%s, Peak center (binned): %s",
+                         x0_px, roi_left, peak_center_binned)
 
             width_binned = PEAK_WIDTH / bin_x
 
             peak = simulate_peak(amplitude=20000, x0=peak_center_binned, width=width_binned,
                                 shape=sim_img.shape, dtype=sim_img.dtype)
 
-            # set all values in sim_img to the minimal sim_img value
-            min_val = sim_img.min()
-            sim_img[...] = min_val
-            sim_img += peak
+            # simulation routine
+            sim_img = (peak + self._min_val).astype(self._img.dtype, copy=False)
 
-        # Add some noise
+            # define max noise amplitude
         mx = self._img.max()
-        sim_img += numpy.random.randint(0, max(mx // 100, 10), sim_img.shape, dtype=sim_img.dtype)
-        # Clip, but faster than clip() on big array.
-        # There can still be some overflow, but let's just consider this "strong noise"
-        sim_img[sim_img > mx] = mx
+        noise_max = max(mx // 100, 10)
+
+            # generate noise and add directly
+        noise = numpy.random.randint(0, noise_max, sim_img.shape, dtype=self._img.dtype)
+        sim_img += noise
+
+            # final clamp to prevent overflow
+        sim_img = numpy.minimum(sim_img, mx)
 
         return sim_img
 
