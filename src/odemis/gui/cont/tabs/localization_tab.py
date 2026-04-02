@@ -25,28 +25,27 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import collections
 import logging
+from typing import List
+
 import numpy
 import wx
 
-from typing import List
-from odemis.gui import conf
-from odemis.gui.cont.features import CryoFeatureController
-
-from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui
-import odemis.gui.cont.acquisition as acqcont
-from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
+from odemis import model
 from odemis.acq.align import AutoFocus
-from odemis.acq.move import MILLING, ALIGNMENT, \
-    FM_IMAGING, SEM_IMAGING, THREE_BEAMS
+from odemis.acq.move import MILLING, ALIGNMENT, FM_IMAGING, SEM_IMAGING, THREE_BEAMS
 from odemis.acq.stream import LiveStream, StaticStream
+from odemis.gui import conf
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
-from odemis.gui.cont.acquisition import CryoZLocalizationController
+from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
+from odemis.gui.cont.acquisition.cryo_z_localization import CryoZLocalizationController
+from odemis.gui.cont.features import CryoFeatureController
+from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
@@ -128,8 +127,7 @@ class LocalizationTab(Tab):
             view_ctrl=self.view_controller
         )
 
-        self._acquisition_controller = acqcont.CryoAcquiController(
-            tab_data, panel, self, mode=guimod.AcquiMode.FLM)
+        self._acquisition_controller = CryoAcquiController(tab_data, panel, self, mode=guimod.AcquiMode.FLM)
 
         self._acquired_stream_controller = CryoAcquiredStreamsController(
             tab_data,
