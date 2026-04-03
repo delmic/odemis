@@ -60,6 +60,7 @@ from odemis.dataio import get_available_formats
 from odemis.gui.comp import popup
 from odemis.gui.comp.stream_panel import OPT_BTN_REMOVE, OPT_BTN_SHOW
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import AcquisitionDialog, Plugin
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.util import dataio as udataio
@@ -394,7 +395,7 @@ class TileAcqPlugin(Plugin):
 
         # Fail if the live tab is not selected
         self._tab = self.main_app.main_data.tab.value
-        if self._tab.name not in ("secom_live", "sparc_acqui"):
+        if self._tab.name not in (TabName.SECOM_LIVE.value, TabName.SPARC_ACQUI.value):
             box = wx.MessageDialog(self.main_app.main_frame,
                        "Tiled acquisition must be done from the acquisition tab.",
                        "Tiled acquisition not possible", wx.OK | wx.ICON_STOP)

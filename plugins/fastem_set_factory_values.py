@@ -29,6 +29,7 @@ import logging
 import wx
 
 from odemis import model
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 
 
@@ -44,7 +45,7 @@ class SetFactoryValues(Plugin):
         # It only makes sense if the FASTEM acquisition tab is present
         try:
             self.main_frame = main_app.main_frame
-            fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
+            fastem_main_tab = main_app.main_data.getTabByName(TabName.FASTEM_MAIN.value)
             main_data = main_app.tab_controller.main_data
             self.descanner = main_data.descanner
             self.stage = main_data.stage

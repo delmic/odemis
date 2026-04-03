@@ -50,6 +50,7 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import hdf5
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import executeAsyncTask
@@ -872,7 +873,7 @@ class ARspectral(Plugin):
                                                   self.sgrh, lsw, bigslit, main_data.opm, wl_inverted)
 
         # For reading the ROA and anchor ROI
-        self._tab = main_data.getTabByName("sparc_acqui")
+        self._tab = main_data.getTabByName(TabName.SPARC_ACQUI.value)
         self._tab_data = self._tab.tab_data_model
 
         # The settings to be displayed in the dialog
@@ -1012,7 +1013,7 @@ class ARspectral(Plugin):
         raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def start(self):
-        if self.main_app.main_data.tab.value.name != "sparc_acqui":
+        if self.main_app.main_data.tab.value.name != TabName.SPARC_ACQUI.value:
             box = wx.MessageDialog(self.main_app.main_frame,
                        "AR spectral acquisition must be done from the acquisition tab.",
                        "AR spectral acquisition not possible", wx.OK | wx.ICON_STOP)

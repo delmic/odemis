@@ -51,6 +51,7 @@ from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf import util as cutil
 from odemis.gui.model import TOOL_ROA, TOOL_RO_ANCHOR, TOOL_NONE
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.util import img
@@ -998,7 +999,7 @@ class CLAcqPlugin(Plugin):
 
             # Open analysis tab, with 3 files
             self.showAcquisition(self._secom_sem_cl_stream.firstOptImg)
-            analysis_tab = self.main_data.getTabByName('analysis')
+            analysis_tab = self.main_data.getTabByName(TabName.ANALYSIS.value)
             for fn_img in self.fns:
                 analysis_tab.load_data(fn_img, extend=True)
 

@@ -38,6 +38,7 @@ import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
+from odemis.gui.model._constants import TabName
 from odemis.gui.util import call_in_wx_main
 from odemis.acq.move import FM_IMAGING
 
@@ -261,13 +262,13 @@ class CorrelationController(object):
         """
         if self.localization_tab is None:
             try:
-                self.localization_tab: "LocalizationTab" = self._main_data_model.getTabByName("cryosecom-localization")
+                self.localization_tab: "LocalizationTab" = self._main_data_model.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
             except LookupError:
                 return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 
         if self.fibsem_tab is None:
             try:
-                self.fibsem_tab = self._main_data_model.getTabByName("meteor-fibsem")
+                self.fibsem_tab = self._main_data_model.getTabByName(TabName.METEOR_FIBSEM)
             except LookupError:
                 pass
 
@@ -292,7 +293,7 @@ class CorrelationController(object):
                     logging.debug(f"Stream removed from localization tab: {s.name.value}")
 
                     # remove from chamber tab
-                    chamber_tab = self._main_data_model.getTabByName("cryosecom_chamber")
+                    chamber_tab = self._main_data_model.getTabByName(TabName.CRYOSECOM_CHAMBER)
                     chamber_tab.remove_overview_streams([s])
                     logging.debug(f"Stream removed from chamber tab: {s.name.value}")
 
@@ -466,13 +467,13 @@ class CorrelationController(object):
 
         if self.localization_tab is None:
             try:
-                self.localization_tab: "LocalizationTab" = self._main_data_model.getTabByName("cryosecom-localization")
+                self.localization_tab: "LocalizationTab" = self._main_data_model.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
             except LookupError:
                 return  # Localization tab doesn't exist (eg, on the Viewer) => nothing to do
 
         if self.fibsem_tab is None:
             try:
-                self.fibsem_tab = self._main_data_model.getTabByName("meteor-fibsem")
+                self.fibsem_tab = self._main_data_model.getTabByName(TabName.METEOR_FIBSEM)
             except LookupError:
                 pass
 

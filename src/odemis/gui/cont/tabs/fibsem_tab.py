@@ -32,6 +32,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
+from odemis.gui.model._constants import TabName
 from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
 from odemis.acq.stream import (
     FIBStream,
@@ -294,7 +295,7 @@ class FibsemTab(Tab):
 
         # sync overview streams with correlation tab
         if len(streams) > 0 and self.main_data.role == "meteor":
-            correlation_tab = self.main_data.getTabByName("meteor-correlation")
+            correlation_tab = self.main_data.getTabByName(TabName.METEOR_CORRELATION.value)
             correlation_tab.correlation_controller.add_streams(streams)
 
     @call_in_wx_main
@@ -315,7 +316,7 @@ class FibsemTab(Tab):
             if st in self.tab_data_model.overviewStreams.value:
                 self.tab_data_model.overviewStreams.value.remove(st)
                 # Remove from chamber tab too
-                chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+                chamber_tab = self.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER.value)
                 chamber_tab.remove_overview_streams([st])
 
         # Update and save the used stream settings on acquisition
@@ -386,7 +387,7 @@ class FibsemTab(Tab):
             self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
             self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
             self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-            ltab = self.main_data.getTabByName("cryosecom-localization")
+            ltab = self.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION.value)
             if ltab:
                 ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
                 ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)

@@ -43,6 +43,7 @@ from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTem
 from odemis.gui import conf
 from odemis.gui.comp import popup
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
+from odemis.gui.model._constants import TabName
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
@@ -408,7 +409,7 @@ class SparcAcquiController(object):
         acqfile (File): file object to which the data was saved
         """
         # get the analysis tab
-        analysis_tab = self._main_data_model.getTabByName("analysis")
+        analysis_tab = self._main_data_model.getTabByName(TabName.ANALYSIS)
         analysis_tab.display_new_data(acqfile.name, data)
 
         # show the new tab

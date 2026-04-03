@@ -36,6 +36,7 @@ from odemis.acq.stream import SpectrumSettingsStream, POL_POSITIONS, SEMSpectrum
 import odemis.gui
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 from odemis.model import MD_POL_NONE, MD_DESCRIPTION
 from odemis.util import executeAsyncTask
@@ -208,7 +209,7 @@ class SpecExtraPlugin(Plugin):
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):
-            self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+            self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI.value)
             stctrl = self._tab.streambar_controller
 
             try:

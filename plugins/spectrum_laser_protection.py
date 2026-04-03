@@ -36,6 +36,7 @@ from typing import Dict, Callable
 from odemis.acq.stream import SpectrumSettingsStream
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.cont.tabs import MIRROR_ENGAGED
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 
 
@@ -50,9 +51,9 @@ class SpectrumLaserProtectionPlugin(Plugin):
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):
-            self._acqui_tab = main_data.getTabByName("sparc_acqui")
+            self._acqui_tab = main_data.getTabByName(TabName.SPARC_ACQUI.value)
             self._stb_ctrl = self._acqui_tab.streambar_controller
-            self._chamber_tab = main_data.getTabByName("sparc_chamber")
+            self._chamber_tab = main_data.getTabByName(TabName.SPARC_CHAMBER.value)
 
             sptms = main_data.spectrometers
             if not sptms:

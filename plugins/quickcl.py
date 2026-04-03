@@ -36,6 +36,7 @@ from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import img, call_in_wx_main, formats_to_wildcards
 from odemis.model import InstantaneousFuture
@@ -472,7 +473,7 @@ class QuickCLPlugin(Plugin):
         self._dlg = None
 
         # Update filename in main window
-        tab_acqui = main_data.getTabByName("sparc_acqui")
+        tab_acqui = main_data.getTabByName(TabName.SPARC_ACQUI.value)
         tab_acqui.acquisition_controller.update_fn_suggestion()
 
     @call_in_wx_main

@@ -45,6 +45,7 @@ import warnings
 
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.model as guimodel
+from odemis.gui.model._constants import TabName
 
 
 class OdemisGUIApp(wx.App):
@@ -194,7 +195,7 @@ class OdemisGUIApp(wx.App):
                 # Analysis tab is common to almost all roles, so always load it.
                 # (the mbsem actually doesn't use it, but it's simpler to load it all the time)
                 {
-                    "name": "analysis",
+                    "name": TabName.ANALYSIS.value,
                     "controller": AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
                     "panel": main_xrc.xrcpnl_tab_inspection
@@ -207,7 +208,7 @@ class OdemisGUIApp(wx.App):
                 tab_defs.extend([
                     {
                         # Unique name of the tab
-                        "name": "secom_live",
+                        "name": TabName.SECOM_LIVE.value,
                         # Tab controller for this tab
                         "controller": SecomStreamsTab,
                         # Tab button for this tab
@@ -216,7 +217,7 @@ class OdemisGUIApp(wx.App):
                         "panel": main_xrc.xrcpnl_tab_secom_streams
                     },
                     {
-                        "name": "secom_align",
+                        "name": TabName.SECOM_ALIGN.value,
                         "controller": SecomAlignTab,
                         "button": self.main_frame.btn_tab_align,
                         "panel": main_xrc.xrcpnl_tab_secom_align
@@ -230,25 +231,25 @@ class OdemisGUIApp(wx.App):
 
                 tab_defs.extend([
                     {
-                        "name": "sparc_acqui",
+                        "name": TabName.SPARC_ACQUI.value,
                         "controller": SparcAcquisitionTab,
                         "button": self.main_frame.btn_tab_sparc_acqui,
                         "panel": main_xrc.xrcpnl_tab_sparc_acqui
                     },
                     {
-                        "name": "sparc_chamber",
+                        "name": TabName.SPARC_CHAMBER.value,
                         "controller": ChamberTab,
                         "button": self.main_frame.btn_tab_sparc_chamber,
                         "panel": main_xrc.xrcpnl_tab_sparc_chamber
                     },
                     {
-                        "name": "sparc_align",
+                        "name": TabName.SPARC_ALIGN.value,
                         "controller": SparcAlignTab,
                         "button": self.main_frame.btn_tab_align,
                         "panel": main_xrc.xrcpnl_tab_sparc_align
                     },
                     {
-                        "name": "sparc2_align",
+                        "name": TabName.SPARC2_ALIGN.value,
                         "controller": Sparc2AlignTab,
                         "button": self.main_frame.btn_tab_align,
                         "panel": main_xrc.xrcpnl_tab_sparc2_align
@@ -263,25 +264,25 @@ class OdemisGUIApp(wx.App):
 
                 tab_defs.extend([
                     {
-                        "name": "meteor-correlation",
+                        "name": TabName.METEOR_CORRELATION.value,
                         "controller": CorrelationTab,
                         "button": self.main_frame.btn_tab_correlation,
                         "panel": main_xrc.xrcpnl_tab_correlation
                     },
                     {
-                        "name": "cryosecom_chamber",
+                        "name": TabName.CRYOSECOM_CHAMBER.value,
                         "controller": CryoChamberTab,
                         "button": self.main_frame.btn_tab_cryosecom_chamber,
                         "panel": main_xrc.xrcpnl_tab_cryosecom_chamber
                     },
                     {
-                        "name": "cryosecom-localization",
+                        "name": TabName.CRYOSECOM_LOCALIZATION.value,
                         "controller": LocalizationTab,
                         "button": self.main_frame.btn_tab_localization,
                         "panel": main_xrc.xrcpnl_tab_localization
                     },
                     {
-                        "name": "meteor-fibsem",
+                        "name": TabName.METEOR_FIBSEM.value,
                         "controller": FibsemTab,
                         "button": self.main_frame.btn_tab_fibsem,
                         "panel": main_xrc.xrcpnl_tab_fibsem
@@ -306,7 +307,7 @@ class OdemisGUIApp(wx.App):
 
                 tab_defs.extend([
                     {
-                        "name": "fastem_main",
+                        "name": TabName.FASTEM_MAIN.value,
                         "controller": FastEMMainTab,
                         "button": self.main_frame.btn_tab_fastem_main,
                         "panel": main_xrc.xrcpnl_tab_fastem_main
@@ -318,7 +319,7 @@ class OdemisGUIApp(wx.App):
 
                 tab_defs.extend([
                     {
-                        "name": "meteor-correlation",
+                        "name": TabName.METEOR_CORRELATION.value,
                         "controller": CorrelationTab,
                         "button": self.main_frame.btn_tab_correlation,
                         "panel": main_xrc.xrcpnl_tab_correlation

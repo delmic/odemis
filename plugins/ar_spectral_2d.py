@@ -51,6 +51,7 @@ from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 import os.path
 import threading
 import time
@@ -904,7 +905,7 @@ class ARspectral(Plugin):
                                                   self.sgrh, lsw, lsm, bigslit, oa, main_data.opm)
 
         # For reading the ROA and anchor ROI
-        self._acqui_tab = main_app.main_data.getTabByName("sparc_acqui").tab_data_model
+        self._acqui_tab = main_app.main_data.getTabByName(TabName.SPARC_ACQUI.value).tab_data_model
 
         # The settings to be displayed in the dialog
         # Trick: we use the same VAs as the stream, so they are directly synchronised

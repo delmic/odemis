@@ -53,6 +53,7 @@ from odemis.dataio import hdf5
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.conf.util import label_to_human
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.util import limit_invocation
@@ -445,7 +446,7 @@ class ExtSpectrumMapPlugin(Plugin):
 
         # Force the acquisition tab to be selected, and make sure that all
         # streams are paused
-        acqui_tab = main_data.getTabByName("sparc_acqui")
+        acqui_tab = main_data.getTabByName(TabName.SPARC_ACQUI.value)
         self.main_app.main_data.tab.value = acqui_tab
         acqui_tab.streambar_controller.pauseStreams()
 

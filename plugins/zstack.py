@@ -32,6 +32,7 @@ from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
 from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.model import DataArray
@@ -226,7 +227,7 @@ class ZStackPlugin(Plugin):
     def start(self):
         # Fail if the live tab is not selected
         tab = self.main_app.main_data.tab.value
-        if tab.name not in ("secom_live", "sparc_acqui", "cryosecom-localization"):
+        if tab.name not in (TabName.SECOM_LIVE.value, TabName.SPARC_ACQUI.value, TabName.CRYOSECOM_LOCALIZATION.value):
             box = wx.MessageDialog(self.main_app.main_frame,
                        "ZStack acquisition must be done from the acquisition stream.",
                        "ZStack acquisition not possible", wx.OK | wx.ICON_STOP)

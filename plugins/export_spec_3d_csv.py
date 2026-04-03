@@ -31,6 +31,7 @@ import logging
 from odemis import model
 from odemis.acq.stream import StaticSpectrumStream
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import spectrum
@@ -49,7 +50,7 @@ class SpecCSVPlugin(Plugin):
         self.addMenu("File/Export spectrum to 3D CSV...", self.export)
 
     def export(self):
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS.value)
 
         # Search for a spectrum stream
         for s in analysis_tab.tab_data_model.streams.value:

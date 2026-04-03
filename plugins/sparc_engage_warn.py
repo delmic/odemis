@@ -21,6 +21,7 @@ see http://www.gnu.org/licenses/.
 
 import logging
 from odemis.gui.cont.tabs import MIRROR_PARKED
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 import wx
 
@@ -45,7 +46,7 @@ class SparcEngageWarnPlugin(Plugin):
 
         # It only makes sense if the SPARC chamber tab is present
         try:
-            self._chamber_tab = main_app.main_data.getTabByName("sparc_chamber")
+            self._chamber_tab = main_app.main_data.getTabByName(TabName.SPARC_CHAMBER.value)
         except LookupError:
             logging.debug("No loading SPARC engage warn as chamber tab is not present")
             return

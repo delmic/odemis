@@ -33,6 +33,7 @@ import wx
 
 import odemis.gui.model as guimod
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream
+from odemis.gui.model._constants import TabName
 from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
@@ -105,7 +106,7 @@ class SecomAcquiController(object):
 
     def open_acquisition_dialog(self):
         main_data = self._tab_data_model.main
-        secom_live_tab = main_data.getTabByName("secom_live")
+        secom_live_tab = main_data.getTabByName(TabName.SECOM_LIVE)
 
         # Indicate we are acquiring, especially important for the SEM which
         # need to get the external signal to not scan (cf MicroscopeController)

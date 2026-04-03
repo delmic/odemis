@@ -22,6 +22,7 @@ see http://www.gnu.org/licenses/.
 from collections import OrderedDict
 import logging
 from odemis.acq.stream import FluoStream
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import random
 import threading
@@ -75,7 +76,7 @@ class SecomUserPlugin(Plugin):
         main_data = self.main_app.main_data
         try:
             # Switch to STREAMS tab
-            acq_tab = main_data.getTabByName("secom_live")
+            acq_tab = main_data.getTabByName(TabName.SECOM_LIVE.value)
             main_data.tab.value = acq_tab
             tab_data = acq_tab.tab_data_model
 

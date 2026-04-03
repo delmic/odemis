@@ -40,6 +40,7 @@ from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
 from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.util.dataio import splitext
@@ -210,9 +211,9 @@ class TimelapsePlugin(Plugin):
     def start(self):
         # Fail if the live tab is not selected
         tab = self.main_app.main_data.tab.value
-        if tab.name not in ("secom_live", "sparc_acqui", "cryosecom-localization"):
+        if tab.name not in (TabName.SECOM_LIVE.value, TabName.SPARC_ACQUI.value, TabName.CRYOSECOM_LOCALIZATION.value):
             available_tabs = self.main_app.main_data.tab.choices.values()
-            exp_tab_name = "localization" if "cryosecom-localization" in available_tabs else "acquisition"
+            exp_tab_name = "localization" if TabName.CRYOSECOM_LOCALIZATION.value in available_tabs else "acquisition"
             box = wx.MessageDialog(self.main_app.main_frame,
                        "Timelapse acquisition must be done from the %s tab." % (exp_tab_name,),
                        "Timelapse acquisition not possible", wx.OK | wx.ICON_STOP)
