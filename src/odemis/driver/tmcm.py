@@ -986,7 +986,7 @@ class TMCLController(model.Actuator):
                         ping_msg = self._send_query(136, 1, 0, 0)  # GetVersion
                         self._receive_answer(136, ping_msg)
                         break
-                    except IOError:  # includes TimeoutError (which derives from IOError)
+                    except (IOError, TimeoutError):
                         logging.warning("Ping attempt %d failed after 0-byte response",ping_attempt + 1)
                 else:
                     raise IOError("Device not responding to instructions")
