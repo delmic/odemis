@@ -50,6 +50,7 @@ from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.cont.acquisition.fastem_acq import OVERVIEW_IMAGES_DIR
 from odemis.gui.cont.fastem_project_grid import ROAColumnNames, TOAColumnNames
 from odemis.gui.cont.fastem_project_grid_base import DEFAULT_PARENT
+from odemis.gui.model._constants import TabName
 from odemis.gui.model.main_gui_data import Scintillator
 from odemis.gui.plugin import Plugin
 from odemis.util.filename import make_unique_name
@@ -341,7 +342,7 @@ class ImportRegionPlugin(Plugin):
 
         # It only makes sense if the FASTEM main tab is present
         try:
-            main_tab = main_app.main_data.getTabByName("fastem_main")
+            main_tab = main_app.main_data.getTabByName(TabName.FASTEM_MAIN)
             self._pm = main_tab.project_manager_panel
             self._acqui_config = AcquisitionConfig()
         except LookupError:

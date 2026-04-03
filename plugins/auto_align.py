@@ -31,6 +31,7 @@ from odemis.acq import stream
 from odemis.acq.align import keypoint
 from odemis.acq.stream import OpticalStream, EMStream, CLStream
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main
 from odemis.util import img, limit_invocation
@@ -282,7 +283,7 @@ class AutomaticOverlayPlugin(Plugin):
         update the value, while trying to keep the same as before if possible.
         raise ValueError: if they are no compatible streams.
         """
-        tab = self.main_app.main_data.getTabByName("analysis")
+        tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         tab_data = tab.tab_data_model
 
         # Any greyscale spatial stream should be compatible. For now we consider
@@ -343,7 +344,7 @@ class AutomaticOverlayPlugin(Plugin):
         return data
 
     def open_image(self, dlg):
-        tab = self.main_app.main_data.getTabByName("analysis")
+        tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         tab_data = tab.tab_data_model
         fi = tab_data.acq_fileinfo.value
 
@@ -437,7 +438,7 @@ class AutomaticOverlayPlugin(Plugin):
         raw.metadata.update(transf_md)
 
         # Add a new stream panel (removable)
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         aligned_stream = stream.StaticSEMStream(self._nem_proj.stream.name.value, raw)
         scont = analysis_tab.stream_bar_controller.addStream(aligned_stream, add_to_view=True)
         scont.stream_panel.show_remove_btn(True)

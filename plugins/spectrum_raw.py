@@ -34,6 +34,7 @@ import odemis.gui.model
 from odemis import model
 from odemis.acq.stream import SEMCCDMDStream, PolarizedCCDSettingsStream, TemporalSpectrumStream
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 from odemis.model import MD_DESCRIPTION, MD_DIMS, MD_PIXEL_SIZE, MD_POS, MD_ROTATION, MD_ROTATION_COR, MD_WL_LIST
 
@@ -319,7 +320,7 @@ class SpectrumRawPlugin(Plugin):
                          self.name)
             return
 
-        self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+        self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
         stctrl = self._tab.streambar_controller
         stctrl.add_action("Spectrum Raw", self.addst)
         # TODO: also support same functionality with all ccd* and sp-ccd*

@@ -31,6 +31,7 @@ from odemis.acq.stream import SpectrumSettingsStream, SEMSpectrumMDStream
 from odemis.dataio import get_available_formats
 from odemis.gui.conf import util
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import img
@@ -191,7 +192,7 @@ class BlExtraPlugin(Plugin):
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):
-            self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+            self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
             stctrl = self._tab.streambar_controller
 
             sptms = main_data.spectrometers

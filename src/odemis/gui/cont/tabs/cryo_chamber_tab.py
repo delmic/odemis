@@ -35,6 +35,7 @@ import wx
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
+from odemis.gui.model._constants import TabName
 from odemis.acq.feature import load_project_data
 from odemis.acq.move import (
     ALIGNMENT,
@@ -417,13 +418,13 @@ class CryoChamberTab(Tab):
         try:
             streams = self._get_overview_view().getStreams()
             self.remove_overview_streams(streams)
-            localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
+            localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
             localization_tab.clear_acquired_streams()
             localization_tab.reset_live_streams()
             self.tab_data_model.main.features.value = []
             self.tab_data_model.main.currentFeature.value = None
 
-            correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName("meteor-correlation")
+            correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName(TabName.METEOR_CORRELATION)
             correlation_tab.clear_streams()
         except LookupError:
             logging.warning("Unable to find localization tab.")
@@ -487,15 +488,15 @@ class CryoChamberTab(Tab):
             return True
 
         # stop the stream subscribers to prevent circular updates and timing issues
-        localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
-        correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName("meteor-correlation")
+        localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
+        correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName(TabName.METEOR_CORRELATION)
         correlation_tab.correlation_controller._stop_streams_subscriber()
         localization_tab._stop_streams_subscriber()
 
         # load sem overview streams
         fibsem_tab = None
         try:
-            fibsem_tab: Tab = self.tab_data_model.main.getTabByName("meteor-fibsem")
+            fibsem_tab: Tab = self.tab_data_model.main.getTabByName(TabName.METEOR_FIBSEM)
             fibsem_tab._stop_streams_subscriber()  # stop the streams subscriber to prevent circular updates
         except Exception:
             logging.info("Fibsem tab does not exists.")

@@ -31,6 +31,7 @@ arising from, out of or in connection with the software or the use or
 other dealings in the software.
 '''
 
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 
 
@@ -45,5 +46,5 @@ class ClearPlugin(Plugin):
         self.addMenu("Help/Development/Clear data", self.clear)
 
     def clear(self):
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         analysis_tab.display_new_data(None, None)

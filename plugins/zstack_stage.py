@@ -31,6 +31,7 @@ from odemis import dataio, model
 from odemis.acq import acqmng
 from odemis.acq.stream import BrightfieldStream, FluoStream, Stream
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -60,7 +61,7 @@ class StageZStackPlugin(Plugin):
             return
 
         try:
-            tab = self.main_data.getTabByName("cryosecom-localization")
+            tab = self.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
             self.tab_data = tab.tab_data_model
             self.tab_panel = tab.panel
         except LookupError:
@@ -81,7 +82,7 @@ class StageZStackPlugin(Plugin):
         tab = self.main_data.tab.value
 
         # Check that we're on the correct tab
-        if tab.name != "cryosecom-localization":
+        if tab.name != TabName.CRYOSECOM_LOCALIZATION.value:
             box = wx.MessageDialog(
                 self.main_app.main_frame,
                 "Stage Z-Stack acquisition must be done from the LOCALIZATION tab.",

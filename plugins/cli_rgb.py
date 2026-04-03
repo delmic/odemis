@@ -40,6 +40,7 @@ from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf import util
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards, get_home_folder
 import os.path
@@ -102,7 +103,7 @@ class RGBCLIntensity(Plugin):
         # The SEM survey and CLi stream (will be updated when showing the window)
         self._survey_s = None
         self._cl_int_s = None
-        self._acqui_tab = main_app.main_data.getTabByName("sparc_acqui").tab_data_model
+        self._acqui_tab = main_app.main_data.getTabByName(TabName.SPARC_ACQUI).tab_data_model
 
         # The settings to be displayed in the dialog
         # TODO: pick better default filters than first 3 filters
@@ -260,7 +261,7 @@ class RGBCLIntensity(Plugin):
     def start(self):
         # Check the acquisition tab is open, and a CL-intensity stream is available
         ct = self.main_app.main_data.tab.value
-        if ct.name == "sparc_acqui":
+        if ct.name == TabName.SPARC_ACQUI.value:
             cls = self._get_cl_intensity()
         else:
             cls = None

@@ -60,6 +60,7 @@ from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
     OverviewStreamAcquiController, CorrelationDialogController,
 )
+from odemis.gui.model._constants import TabName
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
@@ -823,7 +824,7 @@ class CryoAcquiController(object):
             self.correlation_dialog_controller.open_correlation_dialog()
 
             # redraw milling position
-            fibsem_tab = self._tab_data.main.getTabByName("meteor-fibsem")
+            fibsem_tab = self._tab_data.main.getTabByName(TabName.METEOR_FIBSEM)
             if self._tab_data.main.currentFeature.value:
                 correlation_dict = self._tab_data.main.currentFeature.value.correlation_data
                 if correlation_dict and correlation_dict.fib_projected_pois:

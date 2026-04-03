@@ -38,6 +38,7 @@ from scipy.spatial.distance import cdist
 from odemis import model, dataio
 from odemis.acq.acqmng import acquireZStack
 from odemis.acq.stream import FluoStream
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import get_home_folder, call_in_wx_main
 from odemis.model import DataArray
@@ -168,7 +169,7 @@ class ChromaticCorrectionPlugin(Plugin):
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):
-        if "cryosecom-localization" in main_app.main_data.tab.choices.values():
+        if TabName.CRYOSECOM_LOCALIZATION.value in main_app.main_data.tab.choices.values():
             super().__init__(microscope, main_app)
             # Green channel is selected as reference channel, as it lies in the middle of the spectrum
             # All the other channels will be corrected according to the reference colored channel
@@ -186,7 +187,7 @@ class ChromaticCorrectionPlugin(Plugin):
         # Save the image
         dataio.tiff.export(file_location, data)
         # Read the saved images and display
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         self.main_app.main_data.tab.value = analysis_tab
         analysis_tab.load_data(file_location, extend=True)
 
@@ -263,7 +264,7 @@ class ChromaticCorrectionPlugin(Plugin):
     def open_dialog_window(self):
         """Opens a dialog window which shows start button if all the specific requirements are present
         otherwise suggests changing the settings"""
-        localization_tab = self.main_app.main_data.getTabByName("cryosecom-localization")
+        localization_tab = self.main_app.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
         tab_data = localization_tab.tab_data_model
         all_emission = [fms.emission.value for fms in
                         tab_data.streams.value if isinstance(fms, FluoStream)]
@@ -358,7 +359,7 @@ class ChromaticCorrectionPlugin(Plugin):
     def _start_chromatic_correction(self, dlg):
         # Change the Start button to Close
         dlg.buttons[0].SetLabel("Close")
-        localization_tab = self.main_app.main_data.getTabByName("cryosecom-localization")
+        localization_tab = self.main_app.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
         tab_data = localization_tab.tab_data_model
         self.dlg.lbl_description.SetLabel("In progress\n - Acquiring z stack of the given channels")
         # Acquire z levels for the given streams

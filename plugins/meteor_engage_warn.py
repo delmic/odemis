@@ -24,6 +24,7 @@ import math
 
 from odemis import model
 from odemis.acq.move import FM_IMAGING, SEM_IMAGING
+from odemis.gui.model._constants import TabName
 from odemis.gui.plugin import Plugin
 from odemis.util.units import readable_str
 from typing import Dict
@@ -52,7 +53,7 @@ class MeteorEngageWarnPlugin(Plugin):
 
         # It only makes sense if the METEOR chamber tab is present
         try:
-            self._chamber_tab = main_app.main_data.getTabByName("cryosecom_chamber")
+            self._chamber_tab = main_app.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER)
         except LookupError:
             logging.debug("No loading METEOR engage warn as chamber tab is not present")
             return
