@@ -2010,10 +2010,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                                   <flag>wxALL|wxEXPAND</flag>
                                   <border>10</border>
                                 </object>
-                                <!-- Z-targeting button -->
+                                <!-- XYZ-targeting button -->
                                 <object class="sizeritem">
                                   <object class="wxButton" name="btn_z_targeting">
-                                    <label>Refine Z</label>
+                                    <label>Refine</label>
                                   </object>
                                 </object>
                                 <object class="sizeritem">

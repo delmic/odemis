@@ -2318,5 +2318,65 @@ class TestProjectYXC2RGB8(unittest.TestCase):
         # red becomes black (255*0, 0*1, 0*0), alpha preserved
         numpy.testing.assert_array_equal(out[1, 1], [0, 0, 0, 255])
 
+
+class TestCenterOfMassTargeting(unittest.TestCase):
+    """Test 3D Center of Mass targeting helper functions."""
+
+    def test_bounding_box_slice(self):
+        """Test boundary-safe ROI extraction."""
+        # Normal case
+        roi = img.get_bounding_box_slice(50, 50, 10, 10, 100, 100)
+        self.assertEqual(roi[1].start, 40)
+        self.assertEqual(roi[1].stop, 61)
+        self.assertEqual(roi[2].start, 40)
+        self.assertEqual(roi[2].stop, 61)
+
+        # Boundary clipping at origin
+        roi = img.get_bounding_box_slice(5, 5, 10, 10, 100, 100)
+        self.assertEqual(roi[1].start, 0)
+        self.assertEqual(roi[1].stop, 16)
+        self.assertEqual(roi[2].start, 0)
+        self.assertEqual(roi[2].stop, 16)
+
+        # Boundary clipping at max
+        roi = img.get_bounding_box_slice(95, 95, 10, 10, 100, 100)
+        self.assertEqual(roi[1].start, 85)
+        self.assertEqual(roi[1].stop, 100)
+        self.assertEqual(roi[2].start, 85)
+        self.assertEqual(roi[2].stop, 100)
+
+    def test_brightest_channel(self):
+        """Test channel selection by maximum intensity."""
+        # 4D array: (C, Z, Y, X)
+        multi_channel = numpy.random.rand(3, 10, 20, 20)
+        multi_channel[1] = numpy.ones((10, 20, 20)) * 100  # Make channel 1 bright
+        best_c = img.get_brightest_channel(multi_channel)
+        self.assertEqual(best_c, 1)
+
+    def test_compute_local_center_of_mass_with_noise(self):
+        """Test COM computation correctly filters background noise."""
+        # Create 3D image with strong peak and weak noise
+        sub_image = numpy.zeros((10, 20, 20))
+        # Add signal (strong)
+        for z in range(4, 7):
+            for y in range(8, 13):
+                for x in range(8, 13):
+                    sub_image[z, y, x] = 100.0
+        # Add weak noise (much smaller than signal)
+        sub_image += numpy.random.rand(10, 20, 20) * 2.0
+
+        roi = img.get_bounding_box_slice(10, 10, 5, 5, 20, 20)
+        com_z, com_y, com_x = img.compute_local_center_of_mass(
+            sub_image, roi, baseline_percentile=95.0
+        )
+
+        # COM z should be near peak (z=4-6, center at 5)
+        self.assertAlmostEqual(com_z, 5.0, delta=1.0)
+        # COM should be within the extracted ROI [5:16] range
+        self.assertGreaterEqual(com_x, 5)
+        self.assertLess(com_x, 16)
+        self.assertGreaterEqual(com_y, 5)
+        self.assertLess(com_y, 16)
+
 if __name__ == "__main__":
     unittest.main()
