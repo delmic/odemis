@@ -274,6 +274,9 @@ class CryoAcquiController(object):
         """
         called when the button "acquire" is pressed
         """
+        if self.acqui_mode is guimod.AcquiMode.FLM:
+            self._tab.tab_data_model.select_current_position_feature()
+
         # store the focuser position
         self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
 
@@ -317,9 +320,6 @@ class CryoAcquiController(object):
         Called when the acquisition process is
         done, failed or canceled
         """
-        if self.acqui_mode is guimod.AcquiMode.FLM:
-            self._tab.tab_data_model.select_current_position_feature()
-
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
