@@ -22,6 +22,7 @@ see http://www.gnu.org/licenses/.
 """
 
 import argparse
+import glob
 import logging
 import os
 import re
@@ -636,6 +637,32 @@ def show_error_box(caption, message):
     app.Yield() # Hides the window
 
 
+def run_model_options(pattern_str: str) -> int:
+    """
+    Expand MODEL_OPTIONS glob patterns and launch odemis-select-mic-start for
+    interactive model selection.
+
+    :param pattern_str: Space-separated glob pattern(s) matching .odm.yaml files,
+      as read from the MODEL_OPTIONS entry in odemis.conf.
+    :returns: The exit code of odemis-select-mic-start.
+    :raises ValueError: If no files match any of the given patterns.
+    """
+    patterns = shlex.split(pattern_str)
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(pattern))
+
+    if not files:
+        show_error_box("Error starting Odemis",
+                       "No microscope configuration files found matching MODEL_OPTIONS:\n"
+                       "%s\n\n"
+                       "Check the MODEL_OPTIONS setting in /etc/odemis.conf." % pattern_str)
+        raise ValueError("No files match MODEL_OPTIONS: %s" % pattern_str)
+
+    logging.debug("MODEL_OPTIONS matched files: %s", files)
+    return subprocess.call(["odemis-select-mic-start"] + files)
+
+
 def run_model_selector(cmd_str):
     """
     Gets the model file from the model selector
@@ -721,6 +748,18 @@ def main(args):
     # pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 
     try:
+        # If MODEL_OPTIONS is set and no specific model was given on the command line,
+        # delegate to odemis-select-mic-start for interactive model selection.
+        # odemis-select-mic-start will call odemis-start again with the chosen file,
+        # at which point options.model_conf will be set and this block is skipped.
+        # Note: do it even before checking the back-end status, because odemis-select-mic-start
+        # will suggest to restart the back-end if it's already running.
+        if not options.model_conf and not options.model_sel and "MODEL_OPTIONS" in odemis_config:
+            if "MODEL" in odemis_config or "MODEL_SELECTOR" in odemis_config:
+                logging.warning("MODEL_OPTIONS is set alongside MODEL or MODEL_SELECTOR in "
+                                "odemis.conf; MODEL_OPTIONS takes precedence")
+            return run_model_options(odemis_config["MODEL_OPTIONS"])
+
         status = driver.get_backend_status()
         if status != driver.BACKEND_RUNNING:
             starter = BackendStarter(odemis_config, options.nogui)
