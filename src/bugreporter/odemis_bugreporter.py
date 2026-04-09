@@ -343,29 +343,18 @@ class OdemisBugreporter(object):
             files.append(LOGFILE_BACKEND + ".1")
 
         try:
-            # Save microscope file, call MODEL_SELECTOR if needed
+            # Save microscope file
             odemis_config = parse_config("/etc/odemis.conf")
-            models = set()
-            if odemis_config.get("MODEL"):
-                models.add(odemis_config["MODEL"])
-            elif odemis_config.get("MODEL_SELECTOR"):
-                logging.debug("Calling %s", odemis_config["MODEL_SELECTOR"].rstrip().split(' '))
-                try:
-                    cmd = shlex.split(odemis_config["MODEL_SELECTOR"])
-                    logging.debug("Getting the model filename using %s", cmd)
-                    out = subprocess.check_output(cmd).decode("utf-8", "ignore_error").splitlines()
-                    if out:
-                        models.add(out[0].strip())
-                    else:
-                        logging.warning("Model selector failed to pick a model")
-                except Exception as ex:
-                    logging.warning("Failed to run model selector: %s", ex)
-
-            # Add the specifically selected model files to the root level
-            files.extend(models)
-
-            # Collect microscope model files from CONFIGPATH (to be saved in subfolder)
             config_model_files = set()
+            if odemis_config.get("MODEL"):
+                config_model_files.add(odemis_config["MODEL"])
+
+            # Typically, there is a CONFIGPATH, which points to the folder with all microscope files.
+            # Let's save all the files there (especially useful in case of modular microscope files).
+            # Note: in theory, if the MODEL was pointing to a file in a different folder *and* it
+            # has the same name as a file in CONFIG_PATH, we could have two files in the zip with the
+            # same name and path, which would be hard to extract. In practice, it's very unlikely to
+            # happen, and typically, the MODEL file would then be in last_model_dir.
             config_path = odemis_config.get('CONFIGPATH', None)
             if config_path and os.path.isdir(config_path):
                 config_model_files.update(glob(os.path.join(config_path, '*.odm.yaml')))
