@@ -2267,8 +2267,9 @@ class TUCam(model.DigitalCamera):
         """
         res = self._transposeSizeFromUser(value)
 
-        # The X resolution has to be a multiple of 8
-        res = res[0] - (res[0] % 8), res[1]
+        # From testing on the Dhyana 400BSI, the X resolution has to be a multiple of 8, and
+        # the Y resolution has to be a multiple of 2
+        res = res[0] - (res[0] % 8), res[1] - (res[1] % 2)
         # Clip, according to the current binning (but cannot use .binning VA, as it might not be updated)
         max_res, _ = self._dll.get_max_resolution(self._resolution_idx)  # depends on the binning
         min_res = MIN_RES_DHYANA_400BSI
