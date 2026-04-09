@@ -25,7 +25,7 @@ import glob
 import logging
 from odemis import model
 from odemis.model import isasync, CancellableFuture, CancellableThreadPoolExecutor
-from odemis.util import driver, TimeoutError, to_str_escape
+from odemis.util import driver, to_str_escape
 import os
 # import random
 import re

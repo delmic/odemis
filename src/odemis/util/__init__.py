@@ -760,8 +760,6 @@ else:
         results.sort(key=lambda pair: pair[0])
         return results
 
-class TimeoutError(Exception):
-    pass
 
 
 # TODO: only works on Unix, needs a fallback on windows (at least, don't complain)

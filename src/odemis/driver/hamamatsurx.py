@@ -1389,7 +1389,7 @@ class StreakCamera(model.HwComponent):
                     # the command as we don't know whether it was received, and
                     # whether it's safe to send twice the same command. So still
                     # report a timeout, but hopefully the next command works again.
-                    raise util.TimeoutError("No answer received after %s s for command %s."
+                    raise TimeoutError("No answer received after %s s for command %s."
                                             % (timeout, to_str_escape(command)))
 
                 # save the latest response in case we don't receive any other response before timeout

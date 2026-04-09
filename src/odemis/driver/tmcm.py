@@ -59,7 +59,7 @@ import odemis
 from odemis import model, util
 from odemis.model import (isasync, ParallelThreadPoolExecutor, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
-from odemis.util import driver, TimeoutError, to_str_escape, mock
+from odemis.util import driver, to_str_escape, mock
 
 
 class TMCLError(Exception):

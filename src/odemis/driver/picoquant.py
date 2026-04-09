@@ -40,7 +40,7 @@ from decorator import decorator
 
 from odemis import model, util
 from odemis.model import HwError
-from odemis.util import TimeoutError
+
 
 # Based on phdefin.h for PicoHarp 300 DLL
 PH_MAXDEVNUM = 8

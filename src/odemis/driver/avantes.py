@@ -36,7 +36,7 @@ import numpy
 
 from odemis import model, util
 from odemis.model import oneway
-from odemis.util import TimeoutError
+
 
 
 class AvantesError(IOError):

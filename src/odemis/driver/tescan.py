@@ -43,7 +43,7 @@ except ModuleNotFoundError:
 from odemis import model, util
 from odemis.model import (HwError, isasync, CancellableThreadPoolExecutor,
                           roattribute, oneway)
-from odemis.util import TimeoutError
+
 from odemis.util.driver import isNearPosition
 
 ACQ_CMD_UPD = 1
