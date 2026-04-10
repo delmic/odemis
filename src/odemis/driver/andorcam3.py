@@ -35,12 +35,19 @@ import re
 import threading
 import time
 import weakref
-from typing import Dict, Set, List, Optional
+from typing import Dict, Set, List, Optional, Tuple
 
 import numpy
 
 from odemis import model, util
 from odemis.model import HwError, oneway
+
+# USB IDs, used to locate the camera in the USB tree in case of issue.
+# Extend when new cameras are supported.
+ANDOR_VENDOR_ID = "136e"
+ANDOR_ZYLA_PID = "0014"
+ANDOR_SONA_PID = "0021"
+ANDOR_USB_PIDs = {ANDOR_ZYLA_PID, ANDOR_SONA_PID}
 
 
 # Neo encodings (selectable depending on gain selection):
@@ -484,6 +491,80 @@ class AndorCam3(model.DigitalCamera):
                 continue # This VA is not supported
             va.value = va.value  # setter will be called, but not listeners
 
+    def _find_device_usb_path(self, serial: Optional[str] = None) -> Optional[str]:
+        """
+        Find a sysfs USB device path for a supported Andor USB camera.
+
+        :param serial: Optional serial string used to prefer a specific path. If not provided, any
+        device that looks like a supported Andor USB camera will be accepted.
+        :return: Matching sysfs path or ``None`` if nothing valid was found.
+        """
+        valid_paths: List[str] = []
+        for sys_path in glob.glob('/sys/bus/usb/devices/*'):
+            try:
+                with open(os.path.join(sys_path, "idVendor")) as f:
+                    vendor = f.read().strip().lower()
+                if vendor != ANDOR_VENDOR_ID:
+                    continue
+                with open(os.path.join(sys_path, "idProduct")) as f:
+                    product = f.read().strip().lower()
+            except (IOError, UnicodeDecodeError):
+                continue
+            if product in ANDOR_USB_PIDs:
+                valid_paths.append(sys_path)
+
+        if not valid_paths:
+            return None
+        if serial is None or len(valid_paths) == 1:
+            return valid_paths[0]
+
+        # Multiple Andor USB devices found, try to find the one matching the serial.
+        # First pass: look for an exact serial number match.
+        vsc_andor_path: Optional[str] = None
+        for sys_path in valid_paths:
+            try:
+                with open(os.path.join(sys_path, "serial")) as f:
+                    serial_num = f.read().strip()
+            except (IOError, UnicodeDecodeError):
+                continue
+            if serial_num == serial:
+                return sys_path
+            # Some cameras don't have the actual serial number, but just VSC-ANDOR.
+            # Remember the first such path as a fallback for the second pass.
+            if serial_num == "VSC-ANDOR" and not vsc_andor_path:
+                vsc_andor_path = sys_path
+
+        # Second pass: fall back to a VSC-ANDOR device if no exact match was found.
+        if vsc_andor_path:
+            return vsc_andor_path
+
+        logging.debug("Multiple Andor USB devices found but none matched serial %s", serial)
+        return None
+
+    def _reset_usb_connection(self, sys_path: str) -> bool:
+        """
+        Disconnect and reconnect the USB in software for a device path to force re-enumeration.
+
+        :param sys_path: Sysfs USB device path (for example "/sys/bus/usb/devices/3-1"). This is
+        typically the path found by _find_device_usb_path().
+        :return: True if the toggle succeeded, otherwise False.
+        """
+        # Note that normally only root can write to any of the files in sysfs, but we have a dedicated
+        # udev rules that gives right to the "odemis" group (in which the driver should be running)
+        auth_path = os.path.join(sys_path, "authorized")
+        try:
+            with open(auth_path, "w") as f:
+                f.write("0")  # device "unauthorized" -> kernel disconnects it
+            time.sleep(1)
+            with open(auth_path, "w") as f:
+                f.write("1")  # device "authorized" -> kernel re-connects it
+            time.sleep(2)  # Wait a bit for the connection to be back
+        except OSError as ex:
+            logging.warning("Failed to reset USB authorization for %s: %s", sys_path, ex)
+            return False
+        logging.info("Reset USB connection for %s", sys_path)
+        return True
+
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
 
@@ -494,33 +575,51 @@ class AndorCam3(model.DigitalCamera):
         """
         if device is None:
             self.handle = c_int(ATDLL.HANDLE_SYSTEM)
-        else:
-            logging.info("Opening camera device, might take time...")
-            handle = c_int()
-            try:
-                self.atcore.AT_Open(device, byref(handle))
-            except ATError:
-                # Let's try to diagnose a bit the problem...
-                if self._bitflow_install_dirs is None:
-                    logging.warning("No bitflow_install_dirs value set, so "
-                                    "cameras connected via CameraLink will not "
-                                    "be detected.")
-                    raise
-                if not os.path.isdir(self._bitflow_install_dirs):
-                    logging.error("The directory '%s' is not present. Check "
-                                  "that the libandor3 package is installed, "
-                                  "and the configuration is correct.",
-                                  self._bitflow_install_dirs)
-                    raise
-                # check if bitflow module is loaded
-                fmodules = open("/proc/modules").readlines()
-                if not any(re.match("bitflow", l) for l in fmodules):
-                    logging.error("The bitflow module is not loaded. Check "
-                                  "that libandor3 is correctly installed and "
-                                  "you are using a supported kernel.")
-                    raise
-                raise
-            self.handle = handle
+            return
+
+        logging.info("Opening camera device, might take time...")
+        handle = c_int()
+        try:
+            self.atcore.AT_Open(device, byref(handle))
+        except ATError as exp:
+            if exp.errno == 10:  # ERR_CONNECTION
+                logging.debug("Failed to open camera device %s: %s. Will try to reset USB connection", device, exp)
+                # In some cases, resetting the USB connection helps, so let's try
+                sys_path = self._find_device_usb_path()
+                if sys_path is None:
+                    logging.warning("Failed to find valid Andor USB device in the USB path for reset")
+                elif self._reset_usb_connection(sys_path):
+                    logging.info("Retrying opening camera device %d after USB reset", device)
+                    try:
+                        self.atcore.AT_Open(device, byref(handle))
+                    except ATError as retry_exp:
+                        exp = retry_exp
+                    else:
+                        self.handle = handle
+                        return
+
+            # Let's try to diagnose a bit the problem...
+            # On CameraLink cameras, this can happen if the bitflow driver is not correctly installed
+            if self._bitflow_install_dirs is None:
+                logging.warning("No bitflow_install_dirs value set, so "
+                                "cameras connected via CameraLink will not "
+                                "be detected.")
+                raise exp
+            if not os.path.isdir(self._bitflow_install_dirs):
+                logging.error("The directory '%s' is not present. Check "
+                              "that the libandor3 package is installed, "
+                              "and the configuration is correct.",
+                              self._bitflow_install_dirs)
+                raise exp
+            # check if bitflow module is loaded
+            fmodules = open("/proc/modules").readlines()
+            if not any(re.match("bitflow", l) for l in fmodules):
+                logging.error("The bitflow module is not loaded. Check "
+                              "that libandor3 is correctly installed and "
+                              "you are using a supported kernel.")
+                raise exp
+            raise exp
+        self.handle = handle
 
     def Close(self):
         assert self.handle is not None
@@ -544,26 +643,17 @@ class AndorCam3(model.DigitalCamera):
             # to plug correctly the camera.
 
             # Current USB protocol level is in "/sys/bus/usb/devices/*/version".
-            # However, for the Zyla, we cannot use UsbProductId or UsbDeviceId, so
-            # we just use the serial number (which is also in ./serial)
+            # Find the camera USB path using Andor VID:PID first, then use serial
+            # only as a disambiguation hint (VSC-ANDOR is a valid serial marker).
             try:
                 sn = self.GetString("SerialNumber")
-                sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
-                for p in sn_paths:
-                    try:
-                        with open(p) as f:
-                            snp = f.read().strip()
-                    except (IOError, UnicodeDecodeError):
-                        logging.debug("Failed to read %s, skipping device", p)
-                    if snp == sn:
-                        break
-                else:
-                    logging.warning("Failed to find USB device %s in the USB path", sn)
+                sys_path = self._find_device_usb_path(sn)
+                if sys_path is None:
+                    logging.warning("Failed to find valid Andor USB device %s in the USB path", sn)
                     return
-                # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
-                sys_path = os.path.dirname(p)
-                with open(sys_path + "/version") as f:
+                with open(os.path.join(sys_path, "version")) as f:
                     usbv = float(f.read().strip())
+                logging.debug("Found camera %s in USB path %s with USB version %g", sn, sys_path, usbv)
             except Exception:
                 logging.info("Failed to check USB version for device %s", self.name, exc_info=True)
                 return
