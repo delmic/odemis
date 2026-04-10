@@ -22,7 +22,7 @@ Naming Conventions
 
 Exception: If dependent on outer dependencies which follow different
 conventions. For instance, code inheriting from wxPython classes must follow
-the wxPython style, which follows the wxwidget style from
+the wxPython style, which follows the wxWidgets style from
 typical C++ conventions.
 
 
@@ -31,10 +31,8 @@ For e.g. 1.1 the VAs in odemis have the following structure
 .. code-block:: python
 
  self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
- self.horizontalFoV = model.FloatContinuous(hfv, range=[10e-9, 10e-3],
-                                               unit="m")
- self.magnification = model.VigilantAttribute(self._hfw_nomag / hfv,
-                                                 unit="", readonly=True)
+ self.horizontalFoV = model.FloatContinuous(hfv, range=[10e-9, 10e-3], unit="m")
+ self.magnification = model.VigilantAttribute(self._hfw_nomag / hfv, unit="", readonly=True)
 
 * Naming of test files follow the below ways to provide consistency for files in test folders (no _init_.py file), which are included in each sub-directories of src folder.
 
@@ -85,30 +83,9 @@ For e.g. 1.2 the implementation of public and private attributes
 Docstrings
 ==================
 
-Use three double quotes for the docstring. The docstring consists of function definition, description of input and return arguments. We will follow the reStructuredText style to write the docstring.
-For e.g. 2.1 when type is declared in the docstring
-
-.. code-block:: python
-
-    def get_equality(arg1, arg2):
-        """
-        Summary line.
-
-        Extended description of function.
-
-        :param arg1: (int) Description of arg1.
-        :param arg2: (str) Description of arg2.
-        :raise: ValueError if arg1 is equal to arg2
-        :return: (bool) Description of return value
-        """
-        if arg1 == arg2:
-            raise ValueError('arg1 must not be equal to arg2')
-
-        return True
-
-
-Either declare the type in the function or in the docstring.
-For e.g. 2.2 when type is not declared in the docstring, it is declared in the function as seen below
+Use three double quotes for the docstring. The docstring consists of function definition, description of input and return arguments.
+We follow the reStructuredText style to write the docstring.
+The types of the arguments and the return values should be declared using type annotation in the function signature.
 
 .. code-block:: python
 
@@ -120,8 +97,29 @@ For e.g. 2.2 when type is not declared in the docstring, it is declared in the f
         :return: mean and standard deviation
         """
         mean = sum(values) / len(values)
-        std = (sum((values - mean) ** 2) / len(values)) ** 0.5
+        std = statistics.stdev(values)
         return mean, std
+
+If more information on the type can be specified, then it can be declared in the docstring as well.
+For example, when type information is refined in the docstring.
+
+.. code-block:: python
+
+    def get_equality(arg1: int, arg2: str) -> bool:
+        """
+        Summary line.
+
+        Extended description of function.
+
+        :param arg1: (0 <= int < 256) Description of arg1.
+        :param arg2: (str of len > 3) Description of arg2.
+        :return: Description of return value
+        :raise: ValueError if arg1 is equal to arg2
+        """
+        if arg1 == arg2:
+            raise ValueError('arg1 must not be equal to arg2')
+
+        return True
 
 
 In test classes, it is recommended to have one-line docstring for each test method. For very short and obvious
@@ -158,23 +156,25 @@ For e.g. 2.3 the test class should be defined as
                 orsay.OrsayComponent(name="Orsay", role="orsay", host="", children="")
 
 
-
 General Guidelines
+==================
 
 * For modules, add a license docstring (i.e. within three double quotes) at the top.
 
-  * Exception: It is not necessary for empty '__init__.py' to carry a license.
+  * Exception: It is not necessary for empty ``__init__.py`` to carry a license.
 
 * Add the description of the script as a comment below the license.
 
 * Add a docstring to define the class. See example 1.1.
+
+* For file paths, use ``pathlib.Path`` instead of ``os.path`` (in new code).
 
 Code Cleaning up
 ==================
 
 * If you clean the code for the current feature, make a separate commit for cleaning. It is recommended to place this commit as the first commit of a pull-request.
 
-* Create a separate pull request if you would like to clean an unrelated code w.r.t current working branch in the repository.
+* Create a separate pull request if you would like to clean an unrelated code w.r.t. current working branch in the repository.
 
 
 Import Order
