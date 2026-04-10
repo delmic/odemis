@@ -451,28 +451,8 @@ class CryoLocalizationGUIData(CryoGUIData):
 
         self.view_posture = model.VigilantAttribute(FM_IMAGING)
 
-    def _updateZParams(self):
-        # Calculate the new range of z pos
-        # NB: this is a copy of AnalysisGUIData._updateZParams
-        limits = []
-
-        for s in self.streams.value:
-            if model.hasVA(s, "zIndex"):
-                metadata = s.getRawMetadata()[0]  # take only the first
-                zcentre = metadata[model.MD_POS][2]
-                zstep = metadata[model.MD_PIXEL_SIZE][2]
-                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
-                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
-
-        if len(limits) > 1:
-            self.zPos.range = (min(limits), max(limits))
-            logging.debug("Z stack display range updated to %f - %f, ZPos: %f",
-                          self.zPos.range[0], self.zPos.range[1], self.zPos.value)
-        else:
-            self.zPos.range = (0, 0)
-
-    def _on_stream_change(self, _):
-        self._updateZParams()
+    def _on_stream_change(self, streams):
+        _update_zpos_params(self.zPos, streams)
 
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()
@@ -693,24 +673,6 @@ class AnalysisGUIData(MicroscopyGUIData):
         self.zPos.clip_on_range = True
         self.streams.subscribe(self._on_stream_change, init=True)
 
-    def _updateZParams(self):
-        # Calculate the new range of z pos
-        limits = []
-
-        for s in self.streams.value:
-            if model.hasVA(s, "zIndex"):
-                metadata = s.getRawMetadata()[0]  # take only the first
-                zcentre = metadata[model.MD_POS][2]
-                zstep = metadata[model.MD_PIXEL_SIZE][2]
-                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
-                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
-
-        if len(limits) > 1:
-            self.zPos.range = (min(limits), max(limits))
-            logging.debug("Z stack display range updated to %f - %f, ZPos: %f",
-                          self.zPos.range[0], self.zPos.range[1], self.zPos.value)
-        else:
-            self.zPos.range = (0, 0)
 
     def _on_ar_cal(self, fn):
         self._conf.set("calibration", "ar_file", fn)
@@ -728,8 +690,42 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf.set("calibration", "spec_file", fn)
 
     def _on_stream_change(self, streams):
-        self._updateZParams()
+        _update_zpos_params(self.zPos, streams)
 
+
+def _update_zpos_params(zpos: model.FloatContinuous, streams: List[acqstream.Stream]) -> None:
+    """
+    Calculate the new range and value of zPos VA based on the zIndex of the streams
+    :param zpos: the zPos VA to update. It is expected to have .clip_on_range=True.
+    :param streams: all the streams to consider for calculating the zPos range and value. Typically,
+    that's all the streams loaded in the tab.
+    """
+    # Calculate the new range of z pos
+    limits = []
+
+    for s in streams:
+        if model.hasVA(s, "zIndex"):
+            metadata = s.getRawMetadata()[0]  # take only the first
+            zcentre = metadata[model.MD_POS][2]
+            zstep = metadata[model.MD_PIXEL_SIZE][2]
+            limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
+            limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
+
+    if len(limits) > 1:
+        zrng = (min(limits), max(limits))
+        if not zrng[0] <= zpos.value <= zrng[1] or zpos.range == (0, 0):
+            # Completely new position => pick the middle as typically that's where the most interesting part is
+            # zPos.range == (0, 0) is the case when there was no z stack before, so we need to set a position as well
+            new_z_pos = (zrng[0] + zrng[1]) / 2
+        else:
+            new_z_pos = None
+        zpos.range = zrng
+        if new_z_pos is not None:
+            zpos.value = new_z_pos
+        logging.debug("Z stack display range updated to %f - %f, ZPos: %f",
+                      zpos.range[0], zpos.range[1], zpos.value)
+    else:
+        zpos.range = (0, 0)
 
 class ActuatorGUIData(MicroscopyGUIData):
     """
