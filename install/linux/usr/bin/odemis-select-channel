@@ -101,7 +101,7 @@ enable_proposed_mode() {
     add-apt-repository -y ppa:${PPA_PROPOSED_NAME}
 
     # Upgrade/install the odemis package
-    apt-get -y install odemis
+    apt-get -y install odemis odemis-doc
 }
 
 disable_proposed_mode() {
@@ -152,6 +152,15 @@ Enabled: no
     else
       # Force downgrade odemis to the candidate from the stable channel
       apt-get install odemis=$stable_ver --allow-downgrades --yes
+    fi
+
+    # Get the version of odemis-doc from the stable channel
+    stable_ver=$(apt-cache madison odemis-doc | awk -v p="${PPA_STABLE_NAME}/" '$0 ~ p {print $3; exit}' || true)
+    if [ -z "$stable_ver" ]; then
+        echo "Warning: could not determine stable version from apt-cache madison. Skipping force-downgrade." >&2
+    else
+      # Force downgrade odemis to the candidate from the stable channel
+      apt-get install odemis-doc=$stable_ver --allow-downgrades --yes
     fi
 }
 
