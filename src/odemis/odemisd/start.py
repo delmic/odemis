@@ -352,12 +352,13 @@ class BackendStarter(object):
 
         """
         # install cgroup, for memory protection
-        if (
-            not os.path.exists("/sys/fs/cgroup/memory/odemisd") and
-            os.path.exists("/usr/bin/cgcreate")
-        ):
+        if os.path.exists("/usr/bin/cgcreate"):
             logging.info("Creating cgroup")
-            subprocess.call(["sudo", "/usr/bin/cgcreate", "-a", ":odemis", "-g", "memory:odemisd"])
+            # Note: there should be a sudoers rule allowing to run this command without password
+            try:
+                subprocess.check_call(["sudo", "-n", "/usr/bin/cgcreate", "-a", ":odemis", "-g", "memory:odemisd"])
+            except Exception as ex:
+                logging.warning("Failed to create cgroup for memory limitation: %s", ex)
 
         logging.info("Starting back-end...")
         odemisd_cmd = ["sudo", "odemisd", "--daemonize",
