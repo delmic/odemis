@@ -5,6 +5,8 @@ but without the type information and without using inline formatting markers or 
 
 Code should be valid for Python 3.10 and above.
 
+For file paths, use `pathlib.Path`, unless interfacing with existing code that uses `os.path` strings.
+
 Clean-up code at the end of a task with:
 `autopep8 --in-place --select W291,W292,W293,W391`
 
