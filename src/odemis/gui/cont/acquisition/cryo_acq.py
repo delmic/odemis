@@ -136,6 +136,9 @@ class CryoAcquiController(object):
         # why a z-stack cannot be done.
         self._zstack_error: Optional[str] = None
 
+        # Track the current feature to manage its streams subscriptions
+        self._current_feature: Optional[CryoFeature] = None
+
         # common VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
         self._tab_data.streams.subscribe(self._on_streams_change, init=True)
@@ -200,17 +203,28 @@ class CryoAcquiController(object):
         self._panel.Layout()
 
     @call_in_wx_main
-    def _on_current_feature(self, feature: CryoFeature):
+    def _on_current_feature(self, feature: Optional[CryoFeature]) -> None:
         """
-        Called when the current feature changes
+        Called when the current feature changes.
+        Manages subscriptions to the new feature's streams VA.
         """
+        # Unsubscribe from the old feature's streams if it exists
+        if self._current_feature is not None:
+            self._current_feature.streams.unsubscribe(self._on_feature_streams_change)
+
+        # Store the new feature and subscribe to its streams
+        self._current_feature = feature
+        if feature is not None:
+            feature.streams.subscribe(self._on_feature_streams_change, init=True)
+
+        # Handle feature-specific logic
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
             self._check_correlation_controls(feature)
 
-    def _check_correlation_controls(self, current_feature: CryoFeature):
+    def _check_correlation_controls(self, current_feature: Optional[CryoFeature]):
         """
         Enable or disable the correlation controls
-        :param current_feature: the current feature
+        :param current_feature: the current feature. Can be None on startup or after deleting a feature.
         """
         # Enable the correlation controls if the current feature has a reference FIB image and altleast one FM Z stack
         tdct_available = (
@@ -219,6 +233,14 @@ class CryoAcquiController(object):
             and any(isinstance(s, StaticFluoStream) and hasattr(s, "zIndex") for s in current_feature.streams.value)
         )
         self._panel.btn_tdct.Enable(tdct_available)
+
+    @call_in_wx_main
+    def _on_feature_streams_change(self, streams: list) -> None:
+        """
+        Called when the current feature's streams list changes internally.
+        """
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._check_correlation_controls(self._current_feature)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
