@@ -26,6 +26,7 @@ from typing import Tuple
 
 import numpy
 from odemis import model
+from odemis.gui.model import TabName
 from odemis.acq.stream import SEMCCDMDStream, ARSettingsStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
@@ -94,7 +95,7 @@ class CLiCCDPlugin(Plugin):
         # Can only be used with a SPARC with AR camera
         main_data = self.main_app.main_data
         if microscope and main_data.ccd and main_data.role.startswith("sparc"):
-            self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+            self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
             stctrl = self._tab.streambar_controller
             stctrl.add_action("CL intensity on CCD", self.addst)
         else:

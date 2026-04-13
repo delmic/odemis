@@ -50,6 +50,7 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import hdf5
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import executeAsyncTask
@@ -872,7 +873,7 @@ class ARspectral(Plugin):
                                                   self.sgrh, lsw, bigslit, main_data.opm, wl_inverted)
 
         # For reading the ROA and anchor ROI
-        self._tab = main_data.getTabByName("sparc_acqui")
+        self._tab = main_data.getTabByName(TabName.SPARC_ACQUI)
         self._tab_data = self._tab.tab_data_model
 
         # The settings to be displayed in the dialog

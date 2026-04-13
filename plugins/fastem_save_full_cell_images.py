@@ -26,6 +26,7 @@ import logging
 import wx
 
 from odemis.gui.plugin import Plugin
+from odemis.gui.model import TabName
 
 
 class SaveFullCellImgPlugin(Plugin):
@@ -39,7 +40,7 @@ class SaveFullCellImgPlugin(Plugin):
 
         # It only makes sense if the FASTEM acquisition tab is present
         try:
-            fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
+            fastem_main_tab = main_app.main_data.getTabByName(TabName.FASTEM_MAIN)
             self._multi_beam_tab = fastem_main_tab.acquisition_tab.multi_beam_tab
         except LookupError:
             logging.debug(

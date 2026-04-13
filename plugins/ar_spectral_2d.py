@@ -47,6 +47,7 @@ import logging
 import math
 import numpy
 from odemis import dataio, model, acq
+from odemis.gui.model import TabName
 from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui
@@ -904,7 +905,7 @@ class ARspectral(Plugin):
                                                   self.sgrh, lsw, lsm, bigslit, oa, main_data.opm)
 
         # For reading the ROA and anchor ROI
-        self._acqui_tab = main_app.main_data.getTabByName("sparc_acqui").tab_data_model
+        self._acqui_tab = main_app.main_data.getTabByName(TabName.SPARC_ACQUI).tab_data_model
 
         # The settings to be displayed in the dialog
         # Trick: we use the same VAs as the stream, so they are directly synchronised
