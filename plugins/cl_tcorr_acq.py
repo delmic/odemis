@@ -33,6 +33,7 @@ from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import executeAsyncTask
 import os.path
@@ -734,7 +735,7 @@ class Correlator2D(Plugin):
                                                   main_app.main_data.opm)
 
         # For reading the ROA and anchor ROI
-        self._acqui_tab = main_app.main_data.getTabByName("sparc_acqui").tab_data_model
+        self._acqui_tab = main_app.main_data.getTabByName(TabName.SPARC_ALIGN).tab_data_model
 
         self.dwellTime = self._correlator_s.dwellTime
         self.pixelDuration = self._correlator_s.pixelDuration

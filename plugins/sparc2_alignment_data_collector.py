@@ -36,6 +36,7 @@ from odemis import model
 from odemis.dataio import hdf5
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.model import TabName
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import get_picture_folder
 
@@ -57,7 +58,7 @@ class Sparc2AlignmentDataCollectorPlugin(Plugin):
 
         # It only makes sense if the SPARC2 alignment tab is present
         try:
-            self.alignment_tab = main_app.main_data.getTabByName("sparc2_align")
+            self.alignment_tab = main_app.main_data.getTabByName(TabName.SPARC2_ALIGN)
         except LookupError:
             logging.debug(
                 "Not loading SPARC2 alignment data collector as alignment tab is not present"

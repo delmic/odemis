@@ -32,6 +32,7 @@ other dealings in the software.
 '''
 
 from odemis.gui.plugin import Plugin
+from odemis.gui.model import TabName
 
 
 class ClearPlugin(Plugin):
@@ -45,5 +46,5 @@ class ClearPlugin(Plugin):
         self.addMenu("Help/Development/Clear data", self.clear)
 
     def clear(self):
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         analysis_tab.display_new_data(None, None)

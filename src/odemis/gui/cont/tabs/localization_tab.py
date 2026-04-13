@@ -47,7 +47,7 @@ from odemis.gui.cont.acquisition.cryo_z_localization import CryoZLocalizationCon
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, TOOL_FIDUCIAL
+from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
 
@@ -222,7 +222,7 @@ class LocalizationTab(Tab):
         # Invisible overview streams
         invisible_ov_streams = ov_streams.difference(visible_ov_streams)
         # Hide the invisible overview streams
-        chamber_tab: CryoChamberTab = self.main_data.getTabByName("cryosecom_chamber")
+        chamber_tab: CryoChamberTab = self.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER)
         chamber_tab.remove_overview_streams(invisible_ov_streams)
         # Show the visible overview streams
         chamber_tab.load_overview_streams(visible_ov_streams)
@@ -310,12 +310,12 @@ class LocalizationTab(Tab):
         # Mimas does not have the overview image in the chamber tab, so don't display it there.
         if self.main_data.role in ["meteor", "enzel"]:
             # Display the same acquired data in the chamber tab view
-            chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+            chamber_tab = self.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER)
             chamber_tab.load_overview_streams(streams)
 
         # sync overview streams with correlation tab
         if len(streams) > 0 and self.main_data.role == "meteor":
-            correlation_tab = self.main_data.getTabByName("meteor-correlation")
+            correlation_tab = self.main_data.getTabByName(TabName.METEOR_CORRELATION)
             correlation_tab.correlation_controller.add_streams(streams)
 
     def reset_live_streams(self):
@@ -415,7 +415,7 @@ class LocalizationTab(Tab):
             if st in self.tab_data_model.overviewStreams.value:
                 self.tab_data_model.overviewStreams.value.remove(st)
                 # Remove from chamber tab too
-                chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+                chamber_tab = self.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER)
                 chamber_tab.remove_overview_streams([st])
 
         # Update and save the used stream settings on acquisition

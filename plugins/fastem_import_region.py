@@ -33,6 +33,7 @@ from skimage.measure import find_contours
 from wx.adv import EVT_WIZARD_BEFORE_PAGE_CHANGED, Wizard, WizardPageSimple
 
 from odemis import model
+from odemis.gui.model import TabName
 from odemis.dataio import tiff
 from odemis.gui.comp import popup
 from odemis.gui.comp.fastem_project_manager_panel import generate_unique_color
@@ -341,7 +342,7 @@ class ImportRegionPlugin(Plugin):
 
         # It only makes sense if the FASTEM main tab is present
         try:
-            main_tab = main_app.main_data.getTabByName("fastem_main")
+            main_tab = main_app.main_data.getTabByName(TabName.FASTEM_MAIN)
             self._pm = main_tab.project_manager_panel
             self._acqui_config = AcquisitionConfig()
         except LookupError:

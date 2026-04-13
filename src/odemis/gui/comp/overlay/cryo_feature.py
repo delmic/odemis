@@ -35,7 +35,7 @@ from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, F
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
-from odemis.gui.model import TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
+from odemis.gui.model import TabName, TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
 from odemis.acq.move import MicroscopePostureManager, POSITION_NAMES, SEM_IMAGING, FM_IMAGING, UNKNOWN
 
 
@@ -78,7 +78,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self.tab_data.view_posture.subscribe(self._on_view_posture_change, init=True)
 
         # get the tab based on the view posture
-        self.tab_name = "meteor-fibsem" if self.view_posture == SEM_IMAGING else "cryosecom-localization"
+        self.tab_name = TabName.METEOR_FIBSEM.value if self.view_posture == SEM_IMAGING else TabName.CRYOSECOM_LOCALIZATION.value
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         if self._selected_tool_va:

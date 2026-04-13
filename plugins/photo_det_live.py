@@ -25,6 +25,7 @@ import functools
 import logging
 
 from odemis import model
+from odemis.gui.model import TabName
 from odemis.acq.stream import MonochromatorSettingsStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.main import OdemisGUIApp
@@ -45,7 +46,7 @@ class PhotoDetectorLivePlugin(Plugin):
                          self.name)
             return
 
-        self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+        self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
         stctrl = self._tab.streambar_controller
         for det in main_data.photo_ds:
             name = f"{det.name} alignment"

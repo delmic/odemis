@@ -27,6 +27,7 @@ import logging
 import wx
 
 from odemis import model
+from odemis.gui.model import TabName
 from odemis.gui.comp import popup
 from odemis.gui.cont.tabs import MIRROR_PARKED, MIRROR_NOT_REFD
 from odemis.gui.plugin import Plugin
@@ -51,7 +52,7 @@ class SparcMirrorInterlockPlugin(Plugin):
             return
 
         self._mirror = main_data.mirror
-        self._tab = self.main_app.main_data.getTabByName("sparc_chamber")
+        self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_CHAMBER)
 
         # Almost everything is there... but is there an interlock? (and there can be several)
         # Interlock: role ends with "-interlock", and affects the mirror component, and it should

@@ -26,6 +26,7 @@ import logging
 import math
 import numpy
 from odemis import dataio, model, gui, util
+from odemis.gui.model import TabName
 from odemis.acq import stream, acqmng
 from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream, CLSettingsStream
 from odemis.dataio import png
@@ -472,7 +473,7 @@ class QuickCLPlugin(Plugin):
         self._dlg = None
 
         # Update filename in main window
-        tab_acqui = main_data.getTabByName("sparc_acqui")
+        tab_acqui = main_data.getTabByName(TabName.SPARC_ACQUI)
         tab_acqui.acquisition_controller.update_fn_suggestion()
 
     @call_in_wx_main
