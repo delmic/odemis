@@ -43,7 +43,7 @@ from odemis import util
 from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
                           DataArray, HwError, ProgressiveFuture,
                           StringEnumerated, isasync)
-from odemis.util.driver import isNearPosition, estimate_stage_movement_time
+from odemis.util.driver import isNearPosition
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -2488,7 +2488,7 @@ class Stage(model.Actuator):
                                 failures[axis] = (delta, tol_lin_failure_per_axis[axis])
 
                         for axis in rotational_axes_to_check:
-                            delta = abs(current_pos[axis] - target_pos[axis])
+                            delta = abs(util.wrap_to_mpi_ppi(current_pos[axis] - target_pos[axis]))
                             if delta > tol_rot_failure_per_axis[axis]:
                                 failures[axis] = (delta, tol_rot_failure_per_axis[axis])
 
