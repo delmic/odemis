@@ -1147,9 +1147,14 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                         # If current z is more than safe value, move it to safe z value else skip it.
                         # move x and y
                         # move all to final position (outside if else block to take other switching postures combinations)
-                        if current_pos["z"] > z_low:
-                            sub_moves.append((self.stage, {"z": z_low}))
-                        sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+                        if "z_low" in md_calib:
+                            if current_pos["z"] > z_low:
+                                sub_moves.append((self.stage, {"z": z_low}))
+                            sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+                        else:
+                            sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+
+                        sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
 
                     sub_moves.append((self.stage, target_pos))
 
