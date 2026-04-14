@@ -2148,18 +2148,50 @@ class Shamrock(model.Actuator):
         # For the first detector (doesn't matter to which port it's connected), the grating offset is adjusted for
         # all gratings. For the second detector, only the detector offset is adjusted.
 
-        if not is_multi_detector:
-            logging.debug("Single detector system -> updating grating offset")
-            self.SetGratingOffset(grating, target_offset)
+        # if not is_multi_detector:
+        #     logging.debug("Single detector system -> updating grating offset")
+        #     self.SetGratingOffset(grating, target_offset)
+        #
+        # elif current_detector == reference_detector:
+        #     logging.debug("Reference detector -> updating grating offset")
+        #     self.SetGratingOffset(grating, target_offset)
+        #
+        # else:
+        #     logging.debug("Secondary detector -> updating detector offset")
+        #     detector_offset = target_offset - current_grat_offset
+        #     self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
 
-        elif current_detector == reference_detector:
-            logging.debug("Reference detector -> updating grating offset")
-            self.SetGratingOffset(grating, target_offset)
+        # Decide order and perform updates based on detector priority
+        if not is_multi_detector or current_detector == reference_detector:
+            # Clamp the grating offset strictly to its hardware limits.
+            desired_grat_offset = max(GRAT_OFFSET_MIN, min(GRAT_OFFSET_MAX, target_offset))
+
+            # Spill any leftover target offset into the detector offset
+            desired_det_offset = target_offset - desired_grat_offset
+
+            # Optional: strict hardware check on the detector offset spillover
+            if not (DET_OFFSET_MIN <= desired_det_offset <= DET_OFFSET_MAX):
+                raise ValueError(f"Computed detector offset {desired_det_offset} out of hardware range")
+
+            logging.debug("Setting grating offset -> grating=%d value=%d", grating, desired_grat_offset)
+            self.SetGratingOffset(grating, desired_grat_offset)
+
+            if desired_det_offset != current_det_offset:
+                logging.debug("Updating detector offset flip_in=%s flip_out=%s value=%d",
+                              flip_in_pos, flip_out_pos, desired_det_offset)
+                self.SetDetectorOffset(flip_in_pos, flip_out_pos, desired_det_offset)
 
         else:
-            logging.debug("Secondary detector -> updating detector offset")
-            detector_offset = target_offset - current_grat_offset
-            self.SetDetectorOffset(flip_in_pos, flip_out_pos, detector_offset)
+            # We are on a secondary detector. Grating offset stays fixed.
+            # The entire requested change must be absorbed by the detector offset.
+            desired_det_offset = target_offset - current_grat_offset
+
+            if not (DET_OFFSET_MIN <= desired_det_offset <= DET_OFFSET_MAX):
+                raise ValueError(f"Computed detector offset {desired_det_offset} out of hardware range")
+
+            logging.debug("Secondary detector: setting detector offset flip_in=%s flip_out=%s value=%d",
+                          flip_in_pos, flip_out_pos, desired_det_offset)
+            self.SetDetectorOffset(flip_in_pos, flip_out_pos, desired_det_offset)
 
         new_grat_offset = self.GetGratingOffset(grating)
         new_det_offset = self.GetDetectorOffset(flip_in_pos, flip_out_pos)
