@@ -31,6 +31,7 @@ import numpy
 
 import odemis
 from odemis import model
+from odemis.gui.model import TabName
 from odemis.acq.stream import SEMSpectrumMDStream, SpectrumSettingsStream
 from odemis.gui.conf import data, util
 from odemis.gui.conf.data import get_local_vas
@@ -200,7 +201,7 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
                          self.name)
             return
 
-        self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+        self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
         stctrl = self._tab.streambar_controller
         spectrometers = main_data.spectrometers
         for sptm in spectrometers:

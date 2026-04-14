@@ -39,7 +39,7 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
-from odemis.gui.model import MicroscopeView, MicroscopyGUIData, StreamView
+from odemis.gui.model import MicroscopeView, MicroscopyGUIData, StreamView, TabName
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.model import getVAs
@@ -372,7 +372,7 @@ class Plugin(metaclass=ABCMeta):
         Show the analysis (aka Gallery) tab and opens the given acquisition file.
         filename (str): filename of the file to open.
         """
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         self.main_app.main_data.tab.value = analysis_tab
         analysis_tab.load_data(filename)
 

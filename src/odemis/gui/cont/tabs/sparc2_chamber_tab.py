@@ -32,6 +32,7 @@ import wx
 from odemis import model
 import odemis.acq.stream as acqstream
 from odemis.gui.cont.stream_bar import StreamBarController
+from odemis.gui.model import TabName
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.gui.conf.data import get_local_vas
@@ -349,7 +350,7 @@ class ChamberTab(Tab):
         self.highlight(mstate != MIRROR_ENGAGED)
 
         try:
-            tab_align = self.tab_data_model.main.getTabByName("sparc2_align")
+            tab_align = self.tab_data_model.main.getTabByName(TabName.SPARC2_ALIGN)
             tab_align.should_be_enabled = (mstate == MIRROR_ENGAGED)
             tab_align.button.Enable(tab_align.should_be_enabled)
         except LookupError:

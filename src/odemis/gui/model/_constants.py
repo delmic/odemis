@@ -107,3 +107,24 @@ CALIBRATION_3 = "Calibration 3"
 class AcquisitionMode(Enum):
     FLM = 1
     FIBSEM = 2
+
+
+class TabName(Enum):
+    """
+    Enum for tab identifiers in the GUI.
+
+    This enum defines all available tabs that can be displayed in the microscope GUI.
+    Each member preserves the original string value for backward compatibility.
+    """
+    ANALYSIS = "analysis"
+    SECOM_LIVE = "secom_live"
+    SECOM_ALIGN = "secom_align"
+    SPARC_ACQUI = "sparc_acqui"
+    SPARC_CHAMBER = "sparc_chamber"
+    SPARC_ALIGN = "sparc_align"
+    SPARC2_ALIGN = "sparc2_align"
+    METEOR_CORRELATION = "meteor-correlation"
+    CRYOSECOM_CHAMBER = "cryosecom_chamber"
+    CRYOSECOM_LOCALIZATION = "cryosecom-localization"
+    METEOR_FIBSEM = "meteor-fibsem"
+    FASTEM_MAIN = "fastem_main"

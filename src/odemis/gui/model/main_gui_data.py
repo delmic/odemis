@@ -25,7 +25,7 @@ import math
 import threading
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from odemis import model
 from odemis.acq import acqmng, path
@@ -40,8 +40,10 @@ from odemis.gui import (
 )
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.log import observe_comp_state
-from odemis.gui.model import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
-from odemis.gui.model._constants import (
+from odemis.gui.model import (
+    CALIBRATION_1,
+    CALIBRATION_2,
+    CALIBRATION_3,
     CHAMBER_PUMPING,
     CHAMBER_UNKNOWN,
     CHAMBER_VACUUM,
@@ -50,6 +52,7 @@ from odemis.gui.model._constants import (
     STATE_DISABLED,
     STATE_OFF,
     STATE_ON,
+    TabName,
 )
 from odemis.model import FloatContinuous, StringVA, hasVA
 
@@ -492,20 +495,25 @@ class MainGUIData(object):
         except Exception:
             logging.exception("Failed to stop %s actuator", actuator.name)
 
-    def getTabByName(self, name):
+    def getTabByName(self, name: Union[TabName, str]) -> object:
         """
-        Look in .tab.choices for a tab with the given name
-        name (str): name to look for
-        returns (Tab): tab whose name fits the provided name
+        Look in .tab.choices for a tab with the given name.
+
+        :param name: name to look for (TabName enum or string)
+        :returns: Tab whose name fits the provided name
+
         raise:
             LookupError: if no tab exists with such a name
         """
+        # Get the string value from TabName enum if provided
+        name_str = name.value if isinstance(name, TabName) else name
+
         for t, n in self.tab.choices.items():
-            if n == name:
+            if n == name_str:
                 return t
         else:
             raise LookupError("Failed to find tab %s among %d defined tabs" %
-                              (name, len(self.tab.choices)))
+                              (name_str, len(self.tab.choices)))
 
     def isAngularSpectrumSupported(self):
         """

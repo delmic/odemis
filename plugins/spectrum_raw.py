@@ -333,7 +333,7 @@ class SpectrumRawPlugin(Plugin):
                          self.name)
             return
 
-        self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+        self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
         stctrl = self._tab.streambar_controller
         act = functools.partial(self.addst, tab_data=self._tab.tab_data_model, stctrl=stctrl)
         stctrl.add_action("Spectrum Raw", act)

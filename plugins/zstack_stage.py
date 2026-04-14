@@ -28,6 +28,7 @@ from typing import Dict, List
 import wx
 
 from odemis import dataio, model
+from odemis.gui.model import TabName
 from odemis.acq import acqmng
 from odemis.acq.stream import BrightfieldStream, FluoStream, Stream
 from odemis.gui.conf import get_acqui_conf
@@ -60,7 +61,7 @@ class StageZStackPlugin(Plugin):
             return
 
         try:
-            tab = self.main_data.getTabByName("cryosecom-localization")
+            tab = self.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
             self.tab_data = tab.tab_data_model
             self.tab_panel = tab.panel
         except LookupError:

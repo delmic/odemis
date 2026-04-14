@@ -29,6 +29,7 @@ from odemis import model, gui
 from odemis.acq import stream
 from odemis.acq.stream import DataProjection
 from odemis.dataio import get_available_formats
+from odemis.gui.model import TabName
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util import formats_to_wildcards
@@ -99,7 +100,7 @@ class MergeChannelsPlugin(Plugin):
         self.blueShiftY = model.FloatContinuous(0, range=(-500, 500), unit="px")
         self.cropBottom = model.IntContinuous(0, range=(0, 200), unit="px")
 
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName(TabName.ANALYSIS)
         analysis_tab.stream_bar_controller.add_action("Add RGB channels...", self.start)
 
         self.filenameR.subscribe(self._filenameR)

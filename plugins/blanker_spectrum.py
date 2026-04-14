@@ -196,7 +196,7 @@ class BlExtraPlugin(Plugin):
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):
-            self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+            self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
             stctrl = self._tab.streambar_controller
 
             sptms = main_data.spectrometers

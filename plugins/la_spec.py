@@ -31,6 +31,7 @@ from concurrent import futures
 import functools
 import logging
 from odemis import model
+from odemis.gui.model import TabName
 from odemis.acq.stream import SpectrumSettingsStream, POL_POSITIONS, SEMSpectrumMDStream
 import odemis.gui
 from odemis.gui.conf import data
@@ -210,7 +211,7 @@ class SpecExtraPlugin(Plugin):
         # Can only be used with a SPARC with spectrometer(s)
         main_data = self.main_app.main_data
         if microscope and main_data.role.startswith("sparc"):
-            self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+            self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
             stctrl = self._tab.streambar_controller
 
             try:

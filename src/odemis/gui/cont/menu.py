@@ -25,7 +25,7 @@ from odemis.acq import stream
 from odemis.gui import DYE_LICENCE
 from odemis.gui.comp import popup
 import odemis.gui.conf
-from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
+from odemis.gui.model import TabName, CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_in_wx_main
 from odemis.util import driver
@@ -59,7 +59,7 @@ class MenuController(object):
 
         menu_file = main_frame.GetMenuBar().GetMenu(0)
         # Assign 'Reset fine alignment' functionality (if the tab exists)
-        if "secom_align" in main_data.tab.choices.values():
+        if TabName.SECOM_ALIGN.value in main_data.tab.choices.values():
             main_frame.Bind(wx.EVT_MENU, self._on_reset_align, id=main_frame.menu_item_reset_finealign.GetId())
         else:
             menu_file.Remove(main_frame.menu_item_reset_finealign)
@@ -207,7 +207,7 @@ class MenuController(object):
         """
         Empty the overview view (on SECOM)
         """
-        live_tab = self._main_data.getTabByName("secom_live")
+        live_tab = self._main_data.getTabByName(TabName.SECOM_LIVE)
         live_tab.overview_controller.reset_ovv()
 
     def _get_current_stream(self):
@@ -306,7 +306,7 @@ class MenuController(object):
                     not isinstance(curr_s, stream.StaticStream) and
                     ((main_data.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN} and
                       not main_data.is_acquiring.value) or
-                     main_data.tab.value.name == "sparc_chamber"))
+                     main_data.tab.value.name == TabName.SPARC_CHAMBER.value))
 
         self._main_frame.menu_item_play_stream.Enable(can_play)
         if not can_play:
@@ -345,7 +345,7 @@ class MenuController(object):
 
         # enable only if focuser is available
         tab = self._main_data.tab.value
-        if tab.name == "sparc2_align":
+        if tab.name == TabName.SPARC2_ALIGN.value:
             # TODO: autofocus enabling is quite a mess on this tab. Eventually,
             # it should be the same code that controls the autofocus button.
             f_enable = (tab.tab_data_model.align_mode.value == "lens-align" and
@@ -417,7 +417,7 @@ class MenuController(object):
         Same as "select image..." of the gallery, but automatically switch to the
         gallery tab (if a file is selected)
         """
-        analysis_tab = self._main_data.getTabByName("analysis")
+        analysis_tab = self._main_data.getTabByName(TabName.ANALYSIS)
         if analysis_tab.select_acq_file():
             # show the new tab
             self._main_data.tab.value = analysis_tab
@@ -506,10 +506,10 @@ class MenuController(object):
 
         if show:
             self._main_frame.pnl_tabbuttons.Show()
-            tab = self._main_data.getTabByName("meteor-correlation")
+            tab = self._main_data.getTabByName(TabName.METEOR_CORRELATION)
         else:
             self._main_frame.pnl_tabbuttons.Hide()
-            tab = self._main_data.getTabByName("analysis")
+            tab = self._main_data.getTabByName(TabName.ANALYSIS)
 
         self._main_data.tab.value = tab
         self._main_frame.Layout()

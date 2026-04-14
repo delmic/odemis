@@ -98,7 +98,7 @@ class CLiCCDPlugin(Plugin):
         # Can only be used with a SPARC with AR camera
         main_data = self.main_app.main_data
         if microscope and main_data.ccd and main_data.role.startswith("sparc"):
-            self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
+            self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
             stctrl = self._tab.streambar_controller
             act = functools.partial(self.addst, tab_data=self._tab.tab_data_model, stctrl=stctrl)
             stctrl.add_action("CL intensity on CCD", act)

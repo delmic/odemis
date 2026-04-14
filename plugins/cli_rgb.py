@@ -33,6 +33,7 @@ from collections import OrderedDict
 from concurrent.futures import CancelledError
 import logging
 from odemis import dataio, model
+from odemis.gui.model import TabName
 import odemis.util
 from odemis.acq import stream, drift, acqmng
 from odemis.acq.stream import UNDEFINED_ROI
@@ -102,7 +103,7 @@ class RGBCLIntensity(Plugin):
         # The SEM survey and CLi stream (will be updated when showing the window)
         self._survey_s = None
         self._cl_int_s = None
-        self._acqui_tab = main_app.main_data.getTabByName("sparc_acqui").tab_data_model
+        self._acqui_tab = main_app.main_data.getTabByName(TabName.SPARC_ACQUI).tab_data_model
 
         # The settings to be displayed in the dialog
         # TODO: pick better default filters than first 3 filters
