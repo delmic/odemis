@@ -12,6 +12,8 @@ from odemis.model import InstantaneousFuture
 from odemis.util import executeAsyncTask
 from scipy.optimize import curve_fit
 from typing import Any, Dict, List, Optional, Tuple, Union
+from scipy.ndimage import gaussian_filter1d
+
 
 MOVE_TIME_GRATING = 20  # s
 MOVE_TIME_DETECTOR = 5  # s
@@ -59,18 +61,25 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
     else:
         spectrum = data
 
-    # compute simple SNR by comparing the peak height above the median background to the background magnitude and returns
+    # compute SNR by comparing the peak height above the median background to the background magnitude and returns
     # False if that SNR is below the threshold. This helps reject cases with no real peak,
     # where the Gaussian fit would fail or produce nonsense results.
 
-    peak_value = float(spectrum.max())
-    background = float(numpy.median(spectrum))
-    snr = (peak_value - background) / (abs(background) + 1e-6)
+    # peak_value = float(spectrum.max())
+    # background = float(numpy.median(spectrum))
+    # snr = (peak_value - background) / (abs(background) + 1e-6)
 
-    if snr < 1:  # tune threshold
+    spectrum = spectrum - numpy.median(spectrum)
+    noise_std = numpy.std(spectrum)
+    peak_height = spectrum.max()
+    snr = peak_height / (noise_std + 1e-6)
+
+    if snr < 10.0:  # tune threshold
         raise RuntimeError("No peak detected (SNR too low)")
 
-    peak_idx = numpy.argmax(spectrum)  # find the absolute highest point
+    spectrum_smooth = gaussian_filter1d(spectrum, sigma=2)
+    peak_idx = int(numpy.argmax(spectrum_smooth))
+    # peak_idx = numpy.argmax(spectrum)  # find the absolute highest point
 
     # create a window around the peak
     start = max(0, peak_idx - window_radius)
@@ -109,7 +118,7 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
     return weighted_avg
 
 def peak_is_present(spectrum: numpy.ndarray,
-                    snr_threshold: float=1.0,
+                    snr_threshold: float=5.0,
                     width_range: Tuple[float, float]=(0.5, 12.0)) -> bool:
     """
        Test to decide whether spectral peak is present.
@@ -126,15 +135,22 @@ def peak_is_present(spectrum: numpy.ndarray,
     """
 
     # basic stats
-    peak_value = float(spectrum.max())
-    background = float(numpy.median(spectrum))
-    snr = (peak_value - background) / (abs(background) + 1e-6)
+    # peak_value = float(spectrum.max())
+    # background = float(numpy.median(spectrum))
+    # snr = (peak_value - background) / (abs(background) + 1e-6)
+
+    spectrum = spectrum - numpy.median(spectrum)
+    noise_std = numpy.std(spectrum)
+    peak_value = spectrum.max()
+    snr = peak_value / (noise_std + 1e-6)
 
     if snr < snr_threshold:
         return False
 
     # estimate width around the peak
-    peak_idx = int(numpy.argmax(spectrum))
+    spectrum_smooth = gaussian_filter1d(spectrum, sigma=2)
+    peak_idx = int(numpy.argmax(spectrum_smooth))
+    # peak_idx = int(numpy.argmax(spectrum))
     if peak_idx < 1 or peak_idx > len(spectrum) - 2:
         logging.debug("Peak too close to edge idx=%d len=%d", peak_idx, len(spectrum))
         return False
@@ -154,7 +170,7 @@ def peak_is_present(spectrum: numpy.ndarray,
     return present
 
 
-def coarse_scan_goffset_for_peak(spgr, detector, step: int=2000) -> Tuple[float, float]:
+def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture, step: int=2000) -> Tuple[float, float]:
     """
     Coarse scan across the goffset axis until a real peak becomes visible.
 
@@ -175,7 +191,7 @@ def coarse_scan_goffset_for_peak(spgr, detector, step: int=2000) -> Tuple[float,
 
     current = float(spgr.position.value["goffset"])
     step = abs(step) if step != 0 else 2000.0
-    max_span = 20000.0  # limit how far we wander from the current valid position
+    max_span = 200000.0  # limit how far we wander from the current valid position
 
     logging.debug(
         "Coarse local scan around goffset %.1f with step %.1f and max span %.1f",
@@ -192,6 +208,8 @@ def coarse_scan_goffset_for_peak(spgr, detector, step: int=2000) -> Tuple[float,
     tried = set()
 
     for g in positions:
+        _checkCancelled(future)
+
         # avoid duplicate moves due to symmetry or float rounding
         key = round(g, 3)
         if key in tried:
@@ -201,8 +219,8 @@ def coarse_scan_goffset_for_peak(spgr, detector, step: int=2000) -> Tuple[float,
         logging.debug("Coarse scan move attempt to goffset %.3f", g)
         try:
             spgr.moveAbsSync({"goffset": g})
-        except Exception as e:
-            logging.warning("Skipping invalid goffset %.3f (%s)", g, e)
+        except ValueError:
+            logging.warning("Skipping invalid goffset %.3f (%s)", g, ValueError)
             continue
 
         data = detector.data.get(asap=False)
@@ -287,11 +305,37 @@ def estimate_goffset_scale(spgr: model.Actuator,
 
     return scale, p0, p1
 
+def log_detector_state(caller: str, stage: str, detector: model.Detector, data: numpy.ndarray):
+    shape = data.shape
+
+    # Keep consistent with detection pipeline
+    spectrum = data.mean(axis=0) if data.ndim == 2 else data
+
+    max_val = float(spectrum.max())
+    min_val = float(spectrum.min())
+    mean_val = float(spectrum.mean())
+
+    background = float(numpy.median(spectrum))
+    signal = spectrum - background
+    peak_height = float(signal.max())
+
+    # robust noise estimate
+    noise_region = signal[signal < 0]
+    if len(noise_region) > 10:
+        noise_std = float(numpy.std(noise_region))
+    else:
+        noise_std = float(numpy.std(signal))
+
+    snr = peak_height / (noise_std + 1e-6)
+
+    logging.warning(
+        "%s: goffset: [%s] Detector=%s | shape=%s | min=%.2f max=%.2f mean=%.2f | bg=%.2f | noise=%.2f | snr=%.2f",
+        caller, stage, detector.name, shape, min_val, max_val, mean_val, background, noise_std, snr)
 
 def sparc_auto_grating_offset(spgr: model.Actuator,
                               detector: model.Detector,
                               tolerance_px: float = 0.4,
-                              max_it: int = 50,
+                              max_it: int = 60,
                               gain: float = 0.4) -> model.ProgressiveFuture:
     """
     Start an asynchronous task that centers the spectral peak by adjusting the
@@ -326,7 +370,6 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                                   tolerance_px: float,
                                   max_it: int,
                                   gain: float) -> bool:
-
     """
     Core alignment routine that iteratively adjusts the grating offset to center the peak.
 
@@ -350,17 +393,28 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
 
     try:
         center_target = detector.resolution.value[0] / 2
+        data0 = detector.data.get(asap=False)
+        spectrum0 = data0.mean(axis=0) if data0.ndim == 2 else data0
 
-        # initial read: try to get a valid peak without moving the grating
-        try:
-            data0 = detector.data.get(asap=False)
-            peak0 = find_peak_position(data0)   # raises RuntimeError if no peak present
+        if peak_is_present(spectrum0):
+            peak0 = find_peak_position(data0)
             logging.debug("Initial read: peak0=%.2f px", peak0)
             peak_present = True
-        except RuntimeError:
+        else:
             logging.debug("Initial read: no significant peak detected, scanning the axes")
             peak_present = False
             peak0 = None
+
+        # # initial read: try to get a valid peak without moving the grating
+        # try:
+        #     data0 = detector.data.get(asap=False)
+        #     peak0 = find_peak_position(data0)   # raises RuntimeError if no peak present
+        #     logging.debug("Initial read: peak0=%.2f px", peak0)
+        #     peak_present = True
+        # except RuntimeError:
+        #     logging.debug("Initial read: no significant peak detected, scanning the axes")
+        #     peak_present = False
+        #     peak0 = None
 
         # if peak present and already centered, do nothing
         if peak_present:
@@ -372,9 +426,9 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                 return True
 
         # if no peak present, run acquisition (this will move the grating)
-        if not peak_present:
+        else:
             try:
-                g_acq, p_acq = coarse_scan_goffset_for_peak(spgr, detector, step=2000)
+                g_acq, p_acq = coarse_scan_goffset_for_peak(spgr, detector, future, step=2000)
                 logging.info("Peak acquired at goffset=%d pixel=%.2f", g_acq, p_acq)
                 peak0 = p_acq
             except RuntimeError:
@@ -390,8 +444,20 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                 return True
 
         # peak is present and not centered -> estimate scale and center
-        scale, p0, p1 = estimate_goffset_scale(spgr, detector)
-        logging.info("Scale estimated: %.4f px/goffset | p0=%.2f p1=%.2f", scale, p0, p1)
+        # scale, p0, p1 = estimate_goffset_scale(spgr, detector)
+        # logging.info("Scale estimated: %.4f px/goffset | p0=%.2f p1=%.2f", scale, p0, p1)
+
+        try:
+            scale, p0, p1 = estimate_goffset_scale(spgr, detector)
+            logging.info("Scale estimated: %.4f px/goffset | p0=%.2f p1=%.2f", scale, p0, p1)
+        except RuntimeError:
+            logging.warning("Peak lost during scale estimation. Forcing re-acquisition.")
+            try:
+                g_acq, p_acq = coarse_scan_goffset_for_peak(spgr, detector, future, step=2000)
+                scale, p0, p1 = estimate_goffset_scale(spgr, detector)  # try one more time
+            except RuntimeError:
+                logging.error("Peak re-acquisition failed — aborting alignment")
+                return False
 
         # prefer p1 (after probe move) if available, else p0
         # p1 is preferred because it reflects the peak position after a controlled probe move,
@@ -412,7 +478,7 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                 try:
                     peak_px = find_peak_position(data)
                 except RuntimeError:
-                    logging.error("No peak detected during centering iteration %d — aborting", i)
+                    logging.error("Peak re-acquisition failed during iteration %d — aborting", i)
                     return False
 
             error_px = peak_px - center_target
@@ -435,7 +501,12 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                 "Iter: %d | Peak: %.2f | Error: %.2f | Move: %.6f | Total Change: %.6f",
                 i, peak_px, error_px, delta_goffset, total_goffset_displacement)
 
-            spgr.moveRelSync({"goffset": delta_goffset})
+            try:
+                spgr.moveRelSync({"goffset": delta_goffset})
+            except ValueError:
+                logging.warning("Hardware offset limit reached: %s. Keeping max allowed move.", ValueError)
+                break
+
             future.set_progress(end=time.time() + (max_it - i - 1) * 0.5)
 
         logging.warning("SparcAutoGratingOffset did not converge within max iterations")
@@ -558,19 +629,6 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
     gratings = sorted(list(spectrograph.axes["grating"].choices.keys()))
     logging.info(f"Available gratings: {list(spectrograph.axes['grating'].choices.keys())}")
 
-    total_time = _total_alignment_time(len(gratings), len(detectors))
-    start_time = time.time()
-
-    # helper functions for progress tracking in GUI
-    def update_progress():
-        elapsed = time.time() - start_time
-        future._progress = min(1.0, elapsed / total_time)
-
-    def set_step(duration):
-        future._step_start_time = time.time()
-        future._step_duration = duration
-
-    # main alignment loop
     first_detector = detectors[0]
 
     if selector:
@@ -584,46 +642,18 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             return True
         return detector_to_selector[d] == selector.position.value[selector_axes]
 
-    # Store original states of detectors to restore later
-    # Force GUI to use full resolution
-    original_detector_states = {}
-    for d in detectors:
-        state = {}
-        if hasattr(d, 'translation'): state['translation'] = d.translation.value
-        if hasattr(d, 'binning'): state['binning'] = d.binning.value
-        if hasattr(d, 'resolution'): state['resolution'] = d.resolution.value
-        original_detector_states[d.name] = state
+    # Calculate total steps for a simple progress bar
+    total_steps = len(detectors) + (len(gratings) - 1)
+    current_step = 0
+    future._progress = 0.0
 
-        logging.info("Forcing detector %s to full horizontal sensor", d.name)
-        try:
-            # 1. Reset ROI translation to top-left corner
-            if hasattr(d, 'translation'):
-                d.translation.value = (0, 0)
-
-            # 2. Maximize vertical binning (squashes light into a bright 1D line)
-            if hasattr(d, 'binning'):
-                max_bin_y = d.binning.range[1][1]
-                d.binning.value = (1, max_bin_y)
-
-            # 3. Read the full horizontal width of the sensor
-            if hasattr(d, 'resolution'):
-                max_res_x = d.resolution.range[1][0]
-                d.resolution.value = (max_res_x, 1)
-        except Exception as e:
-            logging.warning("Failed to enforce full-sensor state for %s: %s", d.name, e)
-
-    # start alignment for the first grating
+    # Start alignment for the first grating
     try:
         g0 = gratings[0]
         logging.info("Starting alignment for initial grating: %s", g0)
 
-        set_step(MOVE_TIME_GRATING)
         spectrograph.moveAbsSync({"grating": g0, "wavelength": 0})
-        update_progress()
-
-        set_step(stabilization_time)
         time.sleep(stabilization_time)
-        update_progress()
 
         detectors_sorted = sorted(detectors, key=is_current_detector, reverse=True)
 
@@ -633,48 +663,42 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             logging.info("Starting alignment | Detector: %s | Grating: %s", d.name, g0)
 
             if selector:
-                set_step(MOVE_TIME_DETECTOR)
                 selector.moveAbsSync({selector_axes: detector_to_selector[d]})
-                update_progress()
-
-                set_step(stabilization_time)
                 time.sleep(stabilization_time)
-                update_progress()
+
+            gui_data = d.data.get(asap=False)
+            log_detector_state("GUI", "INITIAL", d, gui_data)
 
             future._subfuture = sparc_auto_grating_offset(spectrograph, d)
             success = future._subfuture.result()
             results[(g0, d.name)] = success
 
+            # Update progress
+            current_step += 1
+            future._progress = current_step / total_steps
+
             logging.info("Finished alignment | Detector: %s | Grating: %s", d.name, g0)
 
         if selector:
-            set_step(MOVE_TIME_DETECTOR)
             selector.moveAbsSync({selector_axes: detector_to_selector[first_detector]})
-            update_progress()
-
-            set_step(stabilization_time)
             time.sleep(stabilization_time)
-            update_progress()
 
         # align remaining gratings using the first detector
         for g in gratings[1:]:
             _checkCancelled(future)
             logging.info("Switching to grating: %s", g)
 
-            set_step(MOVE_TIME_GRATING)
             spectrograph.moveAbsSync({"grating": g, "wavelength": 0})
-            update_progress()
-
-            set_step(stabilization_time)
             time.sleep(stabilization_time)
-            update_progress()
             logging.info("Starting alignment | Detector: %s | Grating: %s", first_detector.name, g)
 
-            set_step(EST_ALIGN_TIME)
             future._subfuture = sparc_auto_grating_offset(spectrograph, first_detector)
             success = future._subfuture.result()
             results[(g, first_detector.name)] = success
-            update_progress()
+
+            # Update progress
+            current_step += 1
+            future._progress = current_step / total_steps
 
             logging.info("Finished alignment | Detector: %s | Grating: %s", first_detector.name, g)
 
@@ -689,22 +713,6 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
         spectrograph.moveAbsSync(original_pos)
         if selector:
             selector.moveAbsSync(original_selector)
-
-        # Restore original GUI settings
-        for d in detectors:
-            if d.name in original_detector_states:
-                state = original_detector_states[d.name]
-                logging.info("Restoring original state for detector %s", d.name)
-                try:
-                    # Restore in reverse order: resolution, binning, then offset
-                    if 'resolution' in state and hasattr(d, 'resolution'):
-                        d.resolution.value = state['resolution']
-                    if 'binning' in state and hasattr(d, 'binning'):
-                        d.binning.value = state['binning']
-                    if 'offset' in state and hasattr(d, 'offset'):
-                        d.offset.value = state['offset']
-                except Exception as e:
-                    logging.warning("Could not fully restore state for %s: %s", d.name, e)
 
         with future._task_lock:
             future._task_state = FINISHED

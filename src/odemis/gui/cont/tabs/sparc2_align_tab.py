@@ -45,6 +45,7 @@ from odemis.acq.align.autofocus import (
     Sparc2AutoFocus,
     Sparc2ManualFocus,
 )
+from odemis.acq.align.goffset_ext import auto_align_grating_detector_offsets
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
 from odemis.gui.conf.data import get_hw_config, get_local_vas
@@ -864,6 +865,9 @@ class Sparc2AlignTab(Tab):
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
 
+        # Auto-calibration button
+        self.panel.btn_auto_calibrate.Bind(wx.EVT_BUTTON, self._on_btn_auto_calibrate)
+
     def _on_btn_auto_align(self, evt):
         """
         Handle the "Auto alignment" button click.
@@ -1536,6 +1540,100 @@ class Sparc2AlignTab(Tab):
             logging.exception("Failed changing alignment mode.")
         else:
             logging.debug("Optical path was updated.")
+
+
+    # Auto-Calibration
+    def _on_btn_auto_calibrate(self, evt):
+
+        # Check if there's a process running, if so, cancel and reset
+        if hasattr(self, "_auto_calibrate_future") and not self._auto_calibrate_future.done():
+            self._auto_calibrate_future.cancel()
+
+            self.panel.btn_auto_calibrate.SetLabel("Auto calibrate")
+            self.panel.gauge_auto_calibrate.SetValue(0)
+            return
+
+        # Reset progress bar
+        self.panel.gauge_auto_calibrate.SetValue(0)
+        self.panel.btn_auto_calibrate.SetLabel("Cancel")
+
+        wx.CallAfter(self._start_auto_calibration)
+
+        self._progress_timer = wx.Timer(self.panel)
+        self.panel.Bind(wx.EVT_TIMER, self._on_progress_timer, self._progress_timer)
+        self._progress_timer.Start(200)
+
+    def _start_auto_calibration(self):
+        main = self.tab_data_model.main
+        spectrograph = main.spectrograph
+
+        # combine all detectors
+        detectors = getattr(main, "ccds", []) + getattr(main, "sp_ccds", [])
+        if not detectors:
+            detectors = [main.ccd]
+
+        selector = getattr(main, "detector_selector", None)
+
+        # If multiple detectors but no selector, only use the first detector
+        if len(detectors) > 1 and selector is None:
+            logging.warning(
+                "Multiple detectors detected but no selector; aligning only the first detector")
+            detectors = [detectors[0]]
+
+        logging.info(
+            "Starting auto-calibration: detectors=%s selector=%s",
+            [d.name for d in detectors], selector.position.value if selector else None)
+
+        # Start alignment procedure
+        self._auto_calibrate_future = auto_align_grating_detector_offsets(
+            spectrograph, detectors, selector=selector)
+
+        # Bind progress & done callbacks
+        self._auto_calibrate_future.add_done_callback(self._on_auto_calibrate_done)
+        self.panel.btn_auto_calibrate.SetLabel("Cancel")
+
+    def _on_progress_timer(self, evt):
+        if not hasattr(self, "_auto_calibrate_future"):
+            return
+
+        f = self._auto_calibrate_future
+
+        if f.done():
+            self._progress_timer.Stop()
+            self.panel.gauge_auto_calibrate.SetValue(100)
+            return
+
+        # Fetch where the backend logic says we are
+        target_val = int(getattr(f, "_progress", 0.0) * 100)
+        current_val = self.panel.gauge_auto_calibrate.GetValue()
+
+        # Smooth UI trick:
+        # If we are behind the target, catch up quickly.
+        if current_val < target_val:
+            self.panel.gauge_auto_calibrate.SetValue(current_val + 1)
+
+        # If we are caught up, STILL allow the bar to creep up to 5% ahead of the target.
+        # This ensures the bar instantly starts moving to ~4% while waiting
+        # for the hardware's 10-second stabilization time.
+        elif current_val < (target_val + 4) and current_val < 95:
+            self.panel.gauge_auto_calibrate.SetValue(current_val + 1)
+
+    def _on_auto_calibrate_done(self, f):
+        try:
+            result = f.result()
+            logging.info("Auto calibration finished: %s", result)
+        except CancelledError:
+            logging.info("Auto calibration cancelled")
+        except Exception:
+            logging.exception("Auto calibration failed")
+        finally:
+            self._auto_calibrate_future = model.InstantaneousFuture()
+
+            if hasattr(self, "_progress_timer"):
+                self._progress_timer.Stop()
+
+            wx.CallAfter(self.panel.btn_auto_calibrate.SetLabel, "Auto calibrate")
+            wx.CallAfter(self.panel.gauge_auto_calibrate.SetValue, 0)
 
     @call_in_wx_main
     def _on_lens_align_done(self, f):
