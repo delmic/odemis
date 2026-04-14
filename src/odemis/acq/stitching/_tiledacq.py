@@ -458,25 +458,53 @@ class TiledAcquisitionTask(object):
         if idx[1] != prev_idx[1]:  # y-axis changed
             m["y"] = self._starting_pos["y"] - idx[1] * tile_size[1] * overlap
 
+        # Compute the time to wait
+        if prev_idx == START_INDEX:
+            # If this is the first tile, wait for a long time to allow the stage to move
+            # This is needed because the current stage position may be far from the first tile
+            # so it may take a long time to move there
+            timeout = 100  # s
+        else:
+            # For any tile after the first, don't wait forever for the stage to move,
+            # guess the time it should take and then give a large margin
+            t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
+                           abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
+            timeout = 5 * t + 3  # s
+
         logging.debug("Moving to tile %s at %s m", idx, m)
-        self._future.running_subf = self._stage.moveAbs(m)
-        try:
-            if prev_idx == START_INDEX:
-                # If this is the first tile, wait for a long time to allow the stage to move
-                # This is needed because the current stage position may be far from the first tile
-                # and it may take a long time to move there
-                t = 600  # s
-            else:
-                # For any tile after the first, don't wait forever for the stage to move,
-                # guess the time it should take and then give a large margin
-                t = math.hypot(abs(idx_change[0]) * tile_size[0] * overlap,
-                               abs(idx_change[1]) * tile_size[1] * overlap) / self._move_speed
-                t = 5 * t + 3  # s
-            self._future.running_subf.result(t)
-        except TimeoutError:
-            logging.warning("Failed to move to tile %s within %s s", idx, t)
-            self._future.running_subf.cancel()
-            # Continue acquiring anyway... maybe it has moved somewhere near
+        for i in range(3):  # Try moving up to 3 times
+            if self._future._task_state == CANCELLED:
+                raise CancelledError()
+            self._future.running_subf = self._stage.moveAbs(m)
+            try:
+                self._future.running_subf.result(timeout)
+            except ValueError:  # Typically, asked to move to the wrong place, let's give up
+                raise
+            except CancelledError:
+                logging.warning("Move to tile %s cancelled", idx)
+                raise
+            except TimeoutError:
+                self._future.running_subf.cancel()
+                pos = self._stage.position.value
+                pos_xy = (pos["x"], pos["y"])
+                logging.warning("Failed to move to tile %s within %s s, now at %s%s",
+                                idx, timeout, pos_xy, ", will retry" if i < 2 else "")
+                time.sleep(0.1)
+                continue
+            except Exception as ex:
+                pos = self._stage.position.value
+                pos_xy = (pos["x"], pos["y"])
+                logging.warning("Failed to move to tile %s, now at %s: %s%s",
+                                idx, pos_xy, ex, ", will retry" if i < 2 else "")
+                time.sleep(0.1)
+                continue
+
+            # The moved finished successfully, just stop trying to move, we are done!
+            break
+        else:
+            # We exhausted all retries, we failed to move to the tile, so we cancel the acquisition
+            logging.error("Failed to move to tile %s after 3 trials", idx)
+            raise OSError(f"Failed to move to tile {idx} after 3 trials")
 
     def _sortDAs(self, das, ss):
         """
