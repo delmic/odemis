@@ -1132,14 +1132,20 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                         sample_stage_pos = self.to_sample_stage_from_stage_position(target_pos_unfixed, posture=FM_IMAGING)
                         sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
                         self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
-                        # Stage switching based on Hydra Bio TFS assessment
-                        # move lower than 27 mm (z_low)
-                        # move r and t
-                        # move x and y
-                        # move all to final position (outside if else block to take other switching postures combinations)
-                        sub_moves.append((self.stage, {"z": z_low}))
-                        sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-                        sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+
+                        if "z_low" in md_calib:
+                            # Stage switching based on Hydra Bio TFS assessment
+                            # move lower than 27 mm (z_low)
+                            # move r and t
+                            # move x and y
+                            # move all to final position (outside if else block to take other switching postures combinations)
+                            sub_moves.append((self.stage, {"z": z_low}))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                            sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+                            sub_moves.append((self.stage, target_pos))  # Only moves the Z back
+                        else:
+                            sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
 
                     elif (current_label == FM_IMAGING
                         and target in [SEM_IMAGING, MILLING, FIB_IMAGING]):
@@ -1151,17 +1157,19 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                             if current_pos["z"] > z_low:
                                 sub_moves.append((self.stage, {"z": z_low}))
                             sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                            sub_moves.append((self.stage, target_pos))
                         else:
                             sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
-
-                        sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-
-                    sub_moves.append((self.stage, target_pos))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                    else:
+                        logging.warning("Unexpected posture switch from %s to %s, proceeding with direct move.",
+                                        current_name, target_name)
+                        sub_moves.append((self.stage, target_pos))
 
                 if target == FM_IMAGING:
                     # Engage the focuser
                     sub_moves.append((self.focus, focus_active))
-
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
