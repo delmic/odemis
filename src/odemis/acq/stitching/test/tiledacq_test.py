@@ -43,6 +43,7 @@ from odemis.acq.stitching import (
     acquireTiledArea,
 )
 from odemis.acq.stitching._tiledacq import (
+    START_INDEX,
     TiledAcquisitionTask,
     clip_tiling_bbox_to_range,
     get_fov,
@@ -185,10 +186,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         exp_shift = fov[0] * (1 - overlap), fov[1] * (1 - overlap)
         # move to starting position (left, top)
         starting_pos = tiled_acq_task._starting_pos
-        self.stage.moveAbs(starting_pos).result()
         logging.debug("Starting position: %s, expected shift per tile = %s", starting_pos, exp_shift)
-        # no change in movement
-        tiled_acq_task._moveToTile((0, 0), (0, 0), fov)
+        tiled_acq_task._moveToTile((0, 0), START_INDEX, fov)
         testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
 
         # Note that we cannot predict precisely, as the algorithm may choose to spread
