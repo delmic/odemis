@@ -218,14 +218,14 @@ class CRYOSECOMTestCase(unittest.TestCase):
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area, overlap=overlap, future=model.InstantaneousFuture())
-        sem_fov = tiled_acq_task._getFov(self.sem_streams[0])
+        sem_fov = tiled_acq_task.getFov(self.sem_streams[0])
 
         exp_sem_fov = (self.ebeam.shape[0] * self.ebeam.pixelSize.value[0],
                        self.ebeam.shape[1] * self.ebeam.pixelSize.value[1])
         self.assertEqual(len(sem_fov), 2)  # (float, float)
         (self.assertAlmostEqual(x, y) for x, y in zip(sem_fov, exp_sem_fov))
 
-        fm_fov = tiled_acq_task._getFov(self.fm_streams[0])
+        fm_fov = tiled_acq_task.getFov(self.fm_streams[0])
         self.assertEqual(len(fm_fov), 2)
         pixel_size = self.ccd.getMetadata()[model.MD_PIXEL_SIZE]
         exp_fm_fov = (self.ccd.shape[0] * pixel_size[0],
@@ -233,7 +233,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         (self.assertAlmostEqual(x, y) for x, y in zip(fm_fov, exp_fm_fov))
 
         with self.assertRaises(TypeError):
-            tiled_acq_task._getFov(None)
+            tiled_acq_task.getFov(None)
 
     def test_area(self):
         """
