@@ -321,9 +321,20 @@ HW_SETTINGS_CONFIG = {
         )),
     "ebeam-gun-exciter":
         OrderedDict((
-            ("power", {
-                 "scale": "cubic",  # If a slider is used (float), then use a non-linear scale
+            ("laserPower", {
+                "scale": "cubic",  # If a slider is used (float), then use a non-linear scale
+                "tooltip": "Laser power, as measured, to be manually copied from the control application"
             }),
+            ("operation", {
+                "tooltip": "Changes the e-beam column values all at once",
+            }),
+            # Just for the order
+            ("filamentCurrent", {}),
+            ("extractorVoltage", {}),
+            ("suppresorVoltage", {}),
+            ("c0", {}),
+            ("c1", {}),
+            ("c2", {}),
         )),
     "laser-mirror":
         OrderedDict((

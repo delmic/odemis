@@ -170,10 +170,35 @@
     role: null,
     init: {
         vas: {
-            "power": {"value": 0.0, "unit": "W", "range": [0.0, 100.e-3]},
+            "laserPower": {"value": 0.0, "unit": "W", "range": [0.0, 100.e-3]},
             "spectra": {"value": [358.e-9, 359.e-9, 360.e-9, 361.e-9, 362.e-9], "unit": "m", "readonly": True},
             "period": {"value": 1.e-6, "unit": "s", "readonly": True},
             "hwName": {"value": "Pulsed Laser Sim", "readonly": True},
+             # Can also contain e-beam column config info
+            "filamentCurrent": {"value": 1.050, "unit": "A"},
+            "extractorVoltage": {"value": 5900, "unit": "V"},
+            # Special option to change a series of values together
+            "operation": {"value": "CW", "choices": ["CW", "Pulsed"]}
+        },
+    },
+    persistent: {
+        properties: ["filamentCurrent", "extractorVoltage"],
+    },
+    metadata: {
+        CALIB: {
+            # These defines the values depending on the operation.
+            # The plugin gun_exciter_operation can be used to automatically load them
+            # based on the operation selected.
+            "operation": {
+                "CW": {
+                    "filamentCurrent": 2.030,
+                    "extractorVoltage": 7200,
+                },
+                "Pulsed": {
+                    "filamentCurrent": 1.050,
+                    "extractorVoltage": 5900,
+                },
+            },
         },
     },
 }
