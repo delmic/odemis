@@ -23,7 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import copy
 import itertools
 import logging
+import math
 import os
+import threading
 
 import wx
 from typing import Dict, List
@@ -36,6 +38,7 @@ from odemis.acq.feature import (
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
     CryoFeature,
+    collect_feature_data,
     get_feature_position_at_posture,
     save_features,
     FIBFMCorrelationData,
@@ -57,6 +60,10 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
+
+# Maximum distance (in metres) within which another feature is considered "nearby"
+# for the feature-deletion data-collection trigger.
+_NEARBY_FEATURE_DISTANCE_M = 100e-6
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -113,6 +120,9 @@ class CryoFeatureController(object):
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
             self.pm.current_posture.subscribe(self._on_posture_change)
 
+        # Track previous posture so we can detect FM → SEM/FIB transitions.
+        self._prev_posture = self.pm.getCurrentPostureLabel() if self.pm else None
+
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,
         # directly change the tool to feature tool
@@ -130,6 +140,7 @@ class CryoFeatureController(object):
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()
         if ans == wx.ID_YES:
+            self._maybe_collect_on_delete(current_feature)
             self._tab_data_model.main.features.value.remove(current_feature)
             self._tab_data_model.main.currentFeature.value = None
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
@@ -250,6 +261,11 @@ class CryoFeatureController(object):
             logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
             return
         self._enable_feature_ctrls(True)
+
+        prev = self._prev_posture
+        self._prev_posture = posture
+        if prev == FM_IMAGING and posture in (SEM_IMAGING, FIB_IMAGING):
+            self._collect_eligible_features_in_thread()
 
     def _enable_feature_ctrls(self, enable: bool):
         """
@@ -457,3 +473,97 @@ class CryoFeatureController(object):
         zpos = self._panel.ctrl_feature_z.GetValue()
 
         return {"z": zpos}
+
+    # ── Data-collection helpers ──────────────────────────────────────────────
+
+    def _get_overview_streams(self) -> list:
+        """Return overview streams from the tab data model, or an empty list."""
+        try:
+            return list(self._tab_data_model.overviewStreams.value)
+        except AttributeError:
+            return []
+
+    def _get_project_dir(self) -> str:
+        """Return the current project directory, or an empty string."""
+        try:
+            return self._tab.conf.pj_last_path or ""
+        except AttributeError:
+            return ""
+
+    def _collect_feature_in_thread(self, feature: CryoFeature) -> None:
+        """Launch collect_feature_data for a single feature in a background thread.
+
+        :param feature: The feature to collect data for.
+        """
+        overview_streams = self._get_overview_streams()
+        project_dir = self._get_project_dir()
+
+        def _run():
+            collect_feature_data(feature, overview_streams=overview_streams, project_dir=project_dir)
+
+        t = threading.Thread(target=_run, name="FeatureDataCollection", daemon=True)
+        t.start()
+
+    def _collect_eligible_features_in_thread(self) -> None:
+        """Launch collect_feature_data for all features with collect=True in a background thread."""
+        features = list(self._tab_data_model.main.features.value)
+        overview_streams = self._get_overview_streams()
+        project_dir = self._get_project_dir()
+
+        def _run():
+            for feature in features:
+                if feature.collect:
+                    collect_feature_data(
+                        feature,
+                        overview_streams=overview_streams,
+                        project_dir=project_dir,
+                    )
+
+        t = threading.Thread(target=_run, name="FeatureDataCollectionBulk", daemon=True)
+        t.start()
+
+    def _has_zstack_stream(self, feature: CryoFeature) -> bool:
+        """Return True if the feature has at least one z-stack stream.
+
+        :param feature: The feature to check.
+        :returns: True when a z-stack stream is present, False otherwise.
+        """
+        from odemis.acq.feature import _is_zstack_stream
+        return any(_is_zstack_stream(s) for s in feature.streams.value)
+
+    def _has_nearby_feature(self, feature: CryoFeature, distance_m: float = _NEARBY_FEATURE_DISTANCE_M) -> bool:
+        """Return True if any other feature is within distance_m of the given feature.
+
+        :param feature: The feature to check proximity for.
+        :param distance_m: Maximum distance in metres to be considered nearby.
+        :returns: True when another feature is within the threshold distance.
+        """
+        pos = feature.stage_position.value
+        fx, fy = pos.get("x", 0.0), pos.get("y", 0.0)
+        for other in self._tab_data_model.main.features.value:
+            if other is feature:
+                continue
+            other_pos = other.stage_position.value
+            ox, oy = other_pos.get("x", 0.0), other_pos.get("y", 0.0)
+            dist = math.sqrt((fx - ox) ** 2 + (fy - oy) ** 2)
+            if dist <= distance_m:
+                return True
+        return False
+
+    def _maybe_collect_on_delete(self, feature: CryoFeature) -> None:
+        """Trigger data collection before a feature is deleted if eligible.
+
+        Collection is triggered when all three conditions are met:
+        - feature.collect is True
+        - The feature has at least one z-stack stream
+        - No other feature is within 100 µm
+
+        :param feature: The feature about to be deleted.
+        """
+        if not feature.collect:
+            return
+        if not self._has_zstack_stream(feature):
+            return
+        if self._has_nearby_feature(feature):
+            return
+        self._collect_feature_in_thread(feature)
