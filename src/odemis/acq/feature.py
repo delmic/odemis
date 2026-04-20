@@ -629,6 +629,13 @@ def collect_feature_data(
             if da is not None:
                 payload[f"overview_sem_{idx}"] = da
 
+        image_keys = [k for k in payload if k.startswith(("channel_", "overview_fm_", "overview_sem_"))]
+        if not image_keys:
+            logging.debug(
+                "collect_feature_data: no images found for feature; skipping upload."
+            )
+            return
+
         _dc.record("feature_collected", "1.0", payload)
 
         feature.collect = False

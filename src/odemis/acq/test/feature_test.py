@@ -192,6 +192,22 @@ class TestCollectFeatureData(unittest.TestCase):
             pos = {"x": 0.0, "y": 0.0, "z": 0.0}
         return CryoFeature("TestFeature", pos, {"z": 0.0}, collect=collect)
 
+    def _make_fluo_stream(self):
+        """Return a minimal StaticFluoStream with a 2-D DataArray."""
+        from odemis.acq.stream import StaticFluoStream
+        arr = numpy.zeros((64, 64), dtype=numpy.uint16)
+        da = model.DataArray(arr, metadata={
+            model.MD_POS: (0.0, 0.0),
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        })
+        return StaticFluoStream("ch0", da)
+
+    def _make_feature_with_stream(self, collect: bool = True) -> CryoFeature:
+        """Return a feature with one FM stream attached."""
+        f = self._make_feature(collect=collect)
+        f.streams.value.append(self._make_fluo_stream())
+        return f
+
     def test_skips_when_collect_false(self):
         """collect_feature_data must not call record() when feature.collect is False."""
         f = self._make_feature(collect=False)
@@ -201,15 +217,31 @@ class TestCollectFeatureData(unittest.TestCase):
 
     def test_skips_when_no_consent(self):
         """collect_feature_data must not call record() when consent is not granted."""
-        f = self._make_feature(collect=True)
+        f = self._make_feature_with_stream(collect=True)
         with patch("odemis.acq.feature.DataCollector") as MockDC:
             MockDC.return_value.get_consent.return_value = False
             collect_feature_data(f)
             MockDC.return_value.record.assert_not_called()
 
+    def test_no_record_without_images(self):
+        """record() must NOT be called when the feature has no image streams."""
+        f = self._make_feature(collect=True)  # no streams attached
+        with patch("odemis.acq.feature.DataCollector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            collect_feature_data(f)
+            MockDC.return_value.record.assert_not_called()
+
+    def test_collect_flag_unchanged_without_images(self):
+        """feature.collect must stay True when skipped due to no images."""
+        f = self._make_feature(collect=True)  # no streams
+        with patch("odemis.acq.feature.DataCollector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            collect_feature_data(f)
+        self.assertTrue(f.collect)
+
     def test_calls_record_when_consent_given(self):
-        """collect_feature_data must call record() once when consent is True."""
-        f = self._make_feature(collect=True)
+        """collect_feature_data must call record() once when consent is True and images exist."""
+        f = self._make_feature_with_stream(collect=True)
         with patch("odemis.acq.feature.DataCollector") as MockDC:
             mock_instance = MockDC.return_value
             mock_instance.get_consent.return_value = True
@@ -217,8 +249,8 @@ class TestCollectFeatureData(unittest.TestCase):
             mock_instance.record.assert_called_once()
 
     def test_sets_collect_false_after_collection(self):
-        """feature.collect must be False after collect_feature_data is called."""
-        f = self._make_feature(collect=True)
+        """feature.collect must be False after successful collection with images."""
+        f = self._make_feature_with_stream(collect=True)
         with patch("odemis.acq.feature.DataCollector") as MockDC:
             MockDC.return_value.get_consent.return_value = True
             collect_feature_data(f)
@@ -226,15 +258,15 @@ class TestCollectFeatureData(unittest.TestCase):
 
     def test_collect_false_not_changed_when_skipped(self):
         """feature.collect remains True when collection is skipped due to no consent."""
-        f = self._make_feature(collect=True)
+        f = self._make_feature_with_stream(collect=True)
         with patch("odemis.acq.feature.DataCollector") as MockDC:
             MockDC.return_value.get_consent.return_value = False
             collect_feature_data(f)
         self.assertTrue(f.collect)
 
-    def test_payload_contains_status_and_positions(self):
-        """Payload must contain status, stage_position and fm_focus_position."""
-        f = self._make_feature(collect=True)
+    def test_payload_contains_status_positions_and_image(self):
+        """Payload must contain status, stage_position, fm_focus_position, and at least one image."""
+        f = self._make_feature_with_stream(collect=True)
         f.status.value = "Active"
         captured = {}
 
@@ -249,10 +281,12 @@ class TestCollectFeatureData(unittest.TestCase):
         self.assertIn("status", captured)
         self.assertIn("stage_position", captured)
         self.assertIn("fm_focus_position", captured)
+        image_keys = [k for k in captured if k.startswith(("channel_", "overview_fm_", "overview_sem_"))]
+        self.assertTrue(len(image_keys) >= 1, "Payload must contain at least one image")
 
     def test_payload_has_no_feature_name(self):
         """Payload must not contain the feature name string as a key or value."""
-        f = self._make_feature(collect=True)
+        f = self._make_feature_with_stream(collect=True)
         f.name.value = "my_secret_feature_name"
         captured = {}
 
@@ -268,16 +302,13 @@ class TestCollectFeatureData(unittest.TestCase):
         self.assertNotIn("my_secret_feature_name", str(captured.keys()))
 
     def test_payload_channel_keys_are_generic(self):
-        """Image payload keys must be generic (channel_N) not derived from feature name."""
-        from odemis.acq.stream import StaticFluoStream
-        arr = numpy.zeros((64, 64), dtype=numpy.uint16)
-        da = model.DataArray(arr, metadata={
-            model.MD_POS: (0.0, 0.0),
-            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
-        })
-        stream = StaticFluoStream("test_stream", da)
-        f = self._make_feature(collect=True)
-        f.streams.value.append(stream)
+        """Image payload keys must be generic (channel_N), not derived from feature or stream name.
+
+        A StaticFluoStream named 'test_stream' is attached to the feature.
+        After collection the payload key for the image must be 'channel_0',
+        not 'test_stream' or the feature name — ensuring data privacy.
+        """
+        f = self._make_feature_with_stream(collect=True)
         captured = {}
 
         def fake_record(event_name, schema_version, payload, **kwargs):
