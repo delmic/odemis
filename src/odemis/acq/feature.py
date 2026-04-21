@@ -508,7 +508,7 @@ def _stream_overlaps_position(stream: "Stream", x: float, y: float) -> bool:
     except Exception:
         return False
     left, top, right, bottom = bbox
-    return left <= x <= right and bottom <= y <= top
+    return left <= x <= right and top <= y <= bottom
 
 
 def collect_feature_data(

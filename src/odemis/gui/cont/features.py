@@ -94,6 +94,9 @@ class CryoFeatureController(object):
         self._feature_status_va_connector = None
         self._feature_z_va_connector = None
 
+        # Feature whose status VA we are subscribed to for data-collection triggering.
+        self._status_collect_feature: Optional[CryoFeature] = None
+
         self._tab_data_model.main.features.subscribe(self._on_features_changes, init=True)
         self._tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -349,6 +352,11 @@ class CryoFeatureController(object):
         if self._feature_z_va_connector:
             self._feature_z_va_connector.disconnect()
 
+        # Unsubscribe status-change data-collection trigger from the previous feature.
+        if self._status_collect_feature is not None:
+            self._status_collect_feature.status.unsubscribe(self._on_status_for_collection)
+            self._status_collect_feature = None
+
         self._update_feature_cmb_list()
 
         if feature is None:
@@ -414,6 +422,10 @@ class CryoFeatureController(object):
                                                                     events=wx.EVT_TEXT_ENTER,
                                                                     ctrl_2_va=self._on_ctrl_feature_z_change,
                                                                     va_2_ctrl=self._on_feature_focus_pos)
+
+        # Subscribe to status changes to trigger data collection (init=False: skip current value).
+        feature.status.subscribe(self._on_status_for_collection, init=False)
+        self._status_collect_feature = feature
 
     def _on_feature_focus_pos(self, fm_focus_position: dict):
         # Set the feature Z ctrl with the focus position
@@ -489,6 +501,19 @@ class CryoFeatureController(object):
             return self._tab.conf.pj_last_path or ""
         except AttributeError:
             return ""
+
+    def _on_status_for_collection(self, _status: str) -> None:
+        """Trigger data collection when the current feature's status changes.
+
+        Called by the status VA subscriber (init=False) so it fires only on
+        actual changes, never on initial subscription.
+
+        :param _status: The new feature status value (unused; feature is read
+            from the stored reference to avoid a race with currentFeature).
+        """
+        feature = self._status_collect_feature
+        if feature is not None and feature.collect:
+            self._collect_feature_in_thread(feature)
 
     def _collect_feature_in_thread(self, feature: CryoFeature) -> None:
         """Launch collect_feature_data for a single feature in a background thread.

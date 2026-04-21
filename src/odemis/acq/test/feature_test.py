@@ -34,16 +34,17 @@ from odemis import model
 from odemis.acq.feature import (
     CryoFeature,
     FEATURE_COLLECT_PROBABILITY,
-    FeaturesDecoder,
-    _is_zstack_stream,
-    collect_feature_data,
-    get_features_dict,
-    read_features,
-    save_features,
-    load_milling_tasks,
     FEATURE_READY_TO_MILL,
+    FeaturesDecoder,
     MILLING,
     REFERENCE_IMAGE_FILENAME,
+    _is_zstack_stream,
+    _stream_overlaps_position,
+    collect_feature_data,
+    get_features_dict,
+    load_milling_tasks,
+    read_features,
+    save_features,
 )
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 
@@ -332,6 +333,100 @@ class TestCollectFeatureData(unittest.TestCase):
                 collect_feature_data(f)
             except Exception as exc:
                 self.fail(f"collect_feature_data raised unexpectedly: {exc}")
+
+    def test_collects_on_status_change(self):
+        """Subscribing to feature.status and calling collect_feature_data on change must call record().
+
+        This simulates the controller's _on_status_for_collection subscriber: when
+        the feature status VA changes, collect_feature_data is invoked and record()
+        is called exactly once (consent granted, images present, collect=True).
+        """
+        f = self._make_feature_with_stream(collect=True)
+        record_calls = []
+
+        def fake_record(event_name, schema_version, payload, **kwargs):
+            record_calls.append((event_name, schema_version))
+
+        def _on_status_changed(_status):
+            if f.collect:
+                collect_feature_data(f)
+
+        f.status.subscribe(_on_status_changed, init=False)
+        try:
+            with patch("odemis.acq.feature.DataCollector") as MockDC:
+                MockDC.return_value.get_consent.return_value = True
+                MockDC.return_value.record.side_effect = fake_record
+                f.status.value = FEATURE_READY_TO_MILL
+        finally:
+            f.status.unsubscribe(_on_status_changed)
+
+        self.assertEqual(len(record_calls), 1)
+        self.assertEqual(record_calls[0][0], "feature_collected")
+
+    def test_no_collect_on_status_change_when_disabled(self):
+        """record() must not be called on status change when feature.collect is False.
+
+        Simulates the controller's _on_status_for_collection guard on feature.collect.
+        """
+        f = self._make_feature_with_stream(collect=False)
+
+        def _on_status_changed(_status):
+            if f.collect:
+                collect_feature_data(f)
+
+        f.status.subscribe(_on_status_changed, init=False)
+        try:
+            with patch("odemis.acq.feature.DataCollector") as MockDC:
+                MockDC.return_value.get_consent.return_value = True
+                f.status.value = FEATURE_READY_TO_MILL
+                MockDC.return_value.record.assert_not_called()
+        finally:
+            f.status.unsubscribe(_on_status_changed)
+
+
+class TestStreamHelpers(unittest.TestCase):
+    """Tests for _is_zstack_stream and _stream_overlaps_position."""
+
+    def _make_static_fluo_stream(self, shape=(64, 64), pos=(0.0, 0.0), pixel_size=(1e-6, 1e-6)):
+        """Return a minimal StaticFluoStream."""
+        from odemis.acq.stream import StaticFluoStream
+        arr = numpy.zeros(shape, dtype=numpy.uint16)
+        da = model.DataArray(arr, metadata={
+            model.MD_POS: pos,
+            model.MD_PIXEL_SIZE: pixel_size,
+        })
+        return StaticFluoStream("test_stream", da)
+
+    def _make_zstack_stream(self, pos=(0.0, 0.0), pixel_size=(1e-6, 1e-6)):
+        """Return a minimal StaticFluoStream that looks like a z-stack (has zIndex)."""
+        s = self._make_static_fluo_stream(pos=pos, pixel_size=pixel_size)
+        s.zIndex = model.IntContinuous(0, (0, 3))
+        return s
+
+    def test_overlaps_centre(self):
+        """Position at the stream centre must overlap."""
+        # 64 x 64 pixels at 1 µm/pixel centred at (0, 0) → bbox ±32 µm.
+        s = self._make_static_fluo_stream()
+        self.assertTrue(_stream_overlaps_position(s, 0.0, 0.0))
+
+    def test_overlaps_edge(self):
+        """Position exactly on the bounding-box edge must still overlap."""
+        s = self._make_static_fluo_stream(pos=(0.0, 0.0), pixel_size=(2e-6, 2e-6))
+        # half-width = 64/2 * 2e-6 = 64e-6 m → right edge at +64e-6
+        self.assertTrue(_stream_overlaps_position(s, 64e-6, 0.0))
+
+    def test_no_overlap_outside(self):
+        """Position clearly outside the bounding box must not overlap."""
+        s = self._make_static_fluo_stream()
+        # bbox is ±32 µm; 100 µm is well outside.
+        self.assertFalse(_stream_overlaps_position(s, 100e-6, 0.0))
+
+    def test_no_overlap_bad_stream(self):
+        """_stream_overlaps_position returns False when getBoundingBox() raises."""
+        from unittest.mock import MagicMock
+        bad_stream = MagicMock()
+        bad_stream.getBoundingBox.side_effect = AttributeError("no bbox")
+        self.assertFalse(_stream_overlaps_position(bad_stream, 0.0, 0.0))
 
 
 if __name__ == "__main__":
