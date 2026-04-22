@@ -29,13 +29,14 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
+import random
 
 import wx
 
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.feature import load_project_data
+from odemis.acq.feature import FEATURE_COLLECT_PROBABILITY, load_project_data
 from odemis.acq.move import (
     ALIGNMENT,
     COATING,
