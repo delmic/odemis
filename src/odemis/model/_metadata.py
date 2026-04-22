@@ -284,3 +284,8 @@ MD_SLICE_IDX = "Index of slice in volume stack"  # int
 MD_FIELD_SIZE = "Average field of view of a megafield"  # tuple (px, px)
 
 MD_CHROMATIC_COR = "Chromatic correction per filter position"  # dict of correction parameters per filter position
+
+# Stream/File metadata
+MD_FILENAME = "Filename"  # str, original filename the stream/data came from
+MD_IN_FILE_INDEX = "In-file index"  # int, index of subdata within the file (for multi-stream files)
+MD_IN_FILE_IDS = "In-file indices"  # Array of int, indices of subdata within the file (for multi-stream files)

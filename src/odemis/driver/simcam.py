@@ -66,6 +66,8 @@ class Camera(model.DigitalCamera):
 
         # remove metadata which would not be on real hardware
         self._img.metadata.pop(model.MD_DESCRIPTION, None)
+        self._img.metadata.pop(model.MD_FILENAME, None)
+        self._img.metadata.pop(model.MD_IN_FILE_INDEX, None)
 
         if self._img.ndim > 3:  # remove dims of length 1
             self._img = numpy.squeeze(self._img)

@@ -380,6 +380,7 @@ class MainGUIData(object):
             if microscope.role in ["meteor", "enzel", "mimas"]:
                 # List VA contains all the CryoFeatures
                 self.features = model.ListVA()
+                self.overviews = model.ListVA()
                 # VA for the currently selected feature
                 self.currentFeature = model.VigilantAttribute(None)
                 # VAs for currently selected targets

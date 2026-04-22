@@ -22,7 +22,7 @@ see http://www.gnu.org/licenses/.
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Optional, List, Union
 
 import numpy
 
@@ -36,7 +36,7 @@ from odemis.acq.stream import (
     StaticSEMStream,
     StaticSpectrumStream,
 )
-from odemis.model import MD_THETA_LIST, MD_TIME_LIST, MD_WL_LIST
+from odemis.model import MD_THETA_LIST, MD_TIME_LIST, MD_WL_LIST, DataArray, DataArrayShadow
 from odemis.util import img, rot_almost_equal
 
 
@@ -199,15 +199,16 @@ def _split_planes(data):
     return data
 
 
-def open_acquisition(filename, fmt=None):
+def open_acquisition(filename: os.PathLike, fmt: Optional[str] = None) -> List[Union[DataArray, DataArrayShadow]]:
     """
     Opens the data according to the type of file, and returns the opened data.
     If it's a pyramidal image, do not fetch the whole data from the image. If the image
     is not pyramidal, it reads the entire image and returns it
-    filename (string): Name of the file where the image is
-    fmt (string): The format of the file
-    return (list of DataArrays or DataArrayShadows): The opened acquisition source
+    filename: Name of the file where the image is
+    fmt: The format of the file
+    return: The opened acquisition source
     """
+    filename = str(filename)
     if fmt:
         converter = dataio.get_converter(fmt)
     else:
