@@ -537,6 +537,9 @@ class TestTiffIO(unittest.TestCase):
         # check data
         rdata = tiff.read_data(FILENAME)
         self.assertEqual(len(rdata), num)
+        for i, im in enumerate(rdata):
+            self.assertEqual(im.metadata[model.MD_FILENAME], FILENAME)
+            self.assertEqual(im.metadata[model.MD_IN_FILE_INDEX], i)
 
         for i, im in enumerate(rdata):
             if len(im.shape) > 2:

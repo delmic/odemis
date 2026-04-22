@@ -208,6 +208,7 @@ def open_acquisition(filename, fmt=None):
     fmt (string): The format of the file
     return (list of DataArrays or DataArrayShadows): The opened acquisition source
     """
+    filename = str(filename)
     if fmt:
         converter = dataio.get_converter(fmt)
     else:

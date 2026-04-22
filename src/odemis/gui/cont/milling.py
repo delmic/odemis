@@ -38,7 +38,7 @@ from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
-    CryoFeature, save_features,
+    CryoFeature,
 )
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
@@ -49,6 +49,7 @@ from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.cont.features import save_project
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import (
     ProgressiveFutureConnector,
@@ -370,7 +371,7 @@ class MillingTaskController:
         for task_name, task in self.milling_tasks.items():
             task.selected = task_name in tasks
 
-        save_features(self._tab.conf.pj_last_path, self._tab_data.main.features.value)
+        save_project(self._tab_data.main)
         self.draw_milling_tasks()
 
     def move_milling_tasks(self, pos: Tuple[float, float]):
@@ -383,7 +384,7 @@ class MillingTaskController:
             for pattern in task.patterns:
                 pattern.center.value = pos
 
-        save_features(self._tab.conf.pj_last_path, self._tab_data.main.features.value)
+        save_project(self._tab_data.main)
         self.draw_milling_tasks()
 
     @call_in_wx_main
