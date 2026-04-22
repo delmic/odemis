@@ -61,7 +61,11 @@ from odemis.dataio import tiff
 S3_BUCKET = "delmic-odemis-collect"
 
 # S3 bucket used for automated tests (not the production bucket).
+# Selected automatically when the environment variable TEST_DATACOLLECTION=1 is set.
 S3_TEST_BUCKET = "delmic-odemis-collect-test"
+
+# Environment variable name that switches the framework to the test bucket.
+_TEST_DATACOLLECTION_ENV = "TEST_DATACOLLECTION"
 
 # S3 endpoint URL — None means let boto3 resolve the regional endpoint automatically.
 # Set explicitly only for custom S3-compatible storage.
@@ -272,14 +276,27 @@ class DataCollectorConfig:
         return datetime.now(timezone.utc) >= remind_after
 
     def get_upload_backend(self) -> "S3UploadBackend":
-        """Return the configured upload backend instance."""
+        """Return the configured upload backend instance.
+
+        When the environment variable ``TEST_DATACOLLECTION=1`` is set the test
+        bucket (``S3_TEST_BUCKET``) is used instead of the production bucket so
+        that developer machines never contaminate real data.
+        """
         credentials = _search_credentials()
+        if os.environ.get(_TEST_DATACOLLECTION_ENV) == "1":
+            bucket = S3_TEST_BUCKET
+            logging.info(
+                "DataCollector: %s=1 — using test bucket '%s'",
+                _TEST_DATACOLLECTION_ENV, bucket,
+            )
+        else:
+            bucket = S3_BUCKET
         return S3UploadBackend(
             access_key=credentials["access_key"],
             secret_key=credentials["secret_key"],
             endpoint_url=S3_ENDPOINT_URL,
             region=S3_REGION,
-            bucket=S3_BUCKET,
+            bucket=bucket,
         )
 
 

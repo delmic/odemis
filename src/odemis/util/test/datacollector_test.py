@@ -40,9 +40,11 @@ from odemis.util.datacollector import (
     DataCollector,
     DataCollectorConfig,
     S3UploadBackend,
+    S3_BUCKET,
     S3_REGION,
     S3_TEST_BUCKET,
     _CREDENTIALS_PATH,
+    _TEST_DATACOLLECTION_ENV,
     _BackgroundWorker,
     _WorkItem,
     _enforce_queue_limit,
@@ -126,6 +128,38 @@ class TestDataCollectorConfig(unittest.TestCase):
 
         cfg.remind_date = datetime.now(timezone.utc) - timedelta(seconds=1)
         self.assertTrue(cfg.should_prompt_for_consent())
+
+    def test_get_upload_backend_uses_production_bucket_by_default(self) -> None:
+        """get_upload_backend uses the production bucket when TEST_DATACOLLECTION is unset."""
+        cfg = self._make_config()
+        fake_creds = {"access_key": "AKID", "secret_key": "SECRET"}
+        with patch("odemis.util.datacollector._search_credentials", return_value=fake_creds), \
+                patch.dict(os.environ, {}, clear=False) as env:
+            env.pop(_TEST_DATACOLLECTION_ENV, None)
+            backend = cfg.get_upload_backend()
+        self.assertIsInstance(backend, S3UploadBackend)
+        self.assertEqual(backend._bucket, S3_BUCKET)
+
+    def test_get_upload_backend_uses_test_bucket_when_env_set(self) -> None:
+        """get_upload_backend selects S3_TEST_BUCKET when TEST_DATACOLLECTION=1."""
+        cfg = self._make_config()
+        fake_creds = {"access_key": "AKID", "secret_key": "SECRET"}
+        with patch("odemis.util.datacollector._search_credentials", return_value=fake_creds), \
+                patch.dict(os.environ, {_TEST_DATACOLLECTION_ENV: "1"}):
+            backend = cfg.get_upload_backend()
+        self.assertIsInstance(backend, S3UploadBackend)
+        self.assertEqual(backend._bucket, S3_TEST_BUCKET)
+
+    def test_get_upload_backend_ignores_non_one_env_value(self) -> None:
+        """get_upload_backend falls back to production when TEST_DATACOLLECTION != '1'."""
+        cfg = self._make_config()
+        fake_creds = {"access_key": "AKID", "secret_key": "SECRET"}
+        for value in ("0", "true", "yes", ""):
+            with self.subTest(value=value), \
+                    patch("odemis.util.datacollector._search_credentials", return_value=fake_creds), \
+                    patch.dict(os.environ, {_TEST_DATACOLLECTION_ENV: value}):
+                backend = cfg.get_upload_backend()
+            self.assertEqual(backend._bucket, S3_BUCKET, f"Expected production bucket for env={value!r}")
 
 
 class TestSerialize(unittest.TestCase):
