@@ -188,7 +188,7 @@ class Camera(model.DigitalCamera):
                     and hasattr(spectrograph, "axes")
                     and isinstance(spectrograph.axes, dict)
                     and "goffset" in spectrograph.axes):
-                raise ValueError("spectrograph %s must have a 'goffset' attribute" % spectrograph)
+                raise ValueError((f"spectrograph {spectrograph} must have a 'goffset' attribute"))
 
             self._spectrograph = spectrograph
             logging.debug("Will simulate spectral peaks using spectrograph %s", spectrograph.name)
@@ -214,12 +214,6 @@ class Camera(model.DigitalCamera):
         self._error_creation_thread.start()
 
         self._min_val = self._img.min()
-        if numpy.issubdtype(self._img.dtype, numpy.integer):
-            self._dtype_max = numpy.iinfo(self._img.dtype).max
-        elif numpy.issubdtype(self._img.dtype, numpy.floating):
-            self._dtype_max = numpy.finfo(self._img.dtype).max
-        else:
-            self._dtype_max = numpy.inf
 
     def _setBinning(self, value):
         """
@@ -443,7 +437,7 @@ class Camera(model.DigitalCamera):
         if self._spectrograph:
             current_offset = self._spectrograph.position.value["goffset"]
 
-            ccd_center_x = self._img_res[0]/ 2  # find the x-coordinate of the center of the ccd
+            ccd_center_x = self._img_res[0] / 2  # find the x-coordinate of the center of the ccd
             x0_px = ccd_center_x + current_offset * GOFFSET_TO_PIXEL
             roi_left = center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0]
 
@@ -467,10 +461,10 @@ class Camera(model.DigitalCamera):
 
             # generate noise and add directly
         noise = numpy.random.randint(0, noise_max, sim_img.shape, dtype=self._img.dtype)
-        sim_img += noise
 
-            # final clamp to prevent overflow
-        sim_img = numpy.minimum(sim_img, mx)
+        # final clamp to prevent overflow
+        dtype_max = numpy.iinfo(sim_img.dtype).max
+        sim_img += numpy.minimum(dtype_max - sim_img, noise)
 
         return sim_img
 

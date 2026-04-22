@@ -460,7 +460,11 @@ class TestSimCamWithPolarization(unittest.TestCase):
 class TestSimCamSpectrograph(unittest.TestCase):
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
+        """
+        Validate spectrograph goffset peak simulation in SimCam.
+        """
+
         class MockSpectrograph(model.Component):
             def __init__(self, name="mock_spectrograph"):
                 super().__init__(name)
@@ -474,10 +478,10 @@ class TestSimCamSpectrograph(unittest.TestCase):
                                **KWARGS_MOVE)
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         cls.camera.terminate()
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.camera.binning.value = (1, 1)
         self.camera.translation.value = (0, 0)
         self.camera.resolution.value = self.camera.resolution.range[1]
@@ -485,9 +489,10 @@ class TestSimCamSpectrograph(unittest.TestCase):
         self.mock_spectrograph.position.value["goffset"] = 0.0
         time.sleep(0.1)
 
-    def _find_peak(self, image):
+    def _find_peak(self, image: numpy.ndarray) -> tuple[float, float, float]:
         """
         Helper function to find the peak
+        Returns weighted peak position, max profile value and mean profile value.
         """
         data = image.astype(float)
         profile = data.mean(axis=0)
@@ -499,7 +504,7 @@ class TestSimCamSpectrograph(unittest.TestCase):
         indices = numpy.arange(len(profile))
 
         if numpy.sum(mask) == 0:
-            return float(profile.argmax(()), p_max, profile.mean())
+            return float(profile.argmax()), float(p_max), float(profile.mean())
 
         # find the peak
         weighted_average = numpy.sum(indices[mask] * profile[mask]) / numpy.sum(profile[mask])
