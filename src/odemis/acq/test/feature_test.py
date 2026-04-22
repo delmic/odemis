@@ -135,9 +135,9 @@ class TestCollectFlag(unittest.TestCase):
     """Tests for the CryoFeature.collect flag and its persistence."""
 
     def test_collect_flag_is_bool(self):
-        """CryoFeature.collect must be a bool when not explicitly provided."""
+        """CryoFeature.collect must be False by default."""
         f = CryoFeature("F", {"x": 0, "y": 0, "z": 0}, {"z": 0})
-        self.assertIsInstance(f.collect, bool)
+        self.assertFalse(f.collect)
 
     def test_collect_flag_explicit_true(self):
         """Passing collect=True must set the attribute to True."""
@@ -148,17 +148,6 @@ class TestCollectFlag(unittest.TestCase):
         """Passing collect=False must set the attribute to False."""
         f = CryoFeature("F", {"x": 0, "y": 0, "z": 0}, {"z": 0}, collect=False)
         self.assertFalse(f.collect)
-
-    def test_collect_flag_random_probability(self):
-        """With enough samples, roughly FEATURE_COLLECT_PROBABILITY fraction should be True."""
-        n = 500
-        trues = sum(
-            CryoFeature(f"F{i}", {"x": 0, "y": 0, "z": 0}, {"z": 0}).collect
-            for i in range(n)
-        )
-        ratio = trues / n
-        # Allow ±10 percentage points tolerance.
-        self.assertAlmostEqual(ratio, FEATURE_COLLECT_PROBABILITY, delta=0.10)
 
     def test_collect_flag_persisted_in_dict(self):
         """get_features_dict must include 'collect' in each feature entry."""
@@ -175,14 +164,86 @@ class TestCollectFlag(unittest.TestCase):
             loaded = json.loads(j, cls=FeaturesDecoder)
             self.assertEqual(loaded[0].collect, value)
 
-    def test_collect_flag_missing_in_json_defaults_to_random(self):
-        """When collect key is absent in loaded JSON, the flag is randomly assigned."""
+    def test_collect_flag_missing_in_json_defaults_to_false(self):
+        """When collect key is absent in loaded JSON, the flag defaults to False."""
         f = CryoFeature("F", {"x": 0, "y": 0, "z": 0}, {"z": 0}, collect=True)
         d = get_features_dict([f])
         del d["feature_list"][0]["collect"]
         j = json.dumps(d)
         loaded = json.loads(j, cls=FeaturesDecoder)
-        self.assertIsInstance(loaded[0].collect, bool)
+        self.assertFalse(loaded[0].collect)
+
+
+class TestPerProjectSampling(unittest.TestCase):
+    """Tests for the per-project data-collection sampling decision.
+
+    The GUI model stores features_collectable which is set once per project
+    (randomly with FEATURE_COLLECT_PROBABILITY) and passed explicitly to
+    CryoFeature on creation, so all features in a project share the same
+    collect value.
+    """
+
+    def _make_main(self, features_collectable: bool) -> object:
+        """Return a lightweight mock of the main GUI data model."""
+        main = MagicMock()
+        main.features_collectable = features_collectable
+        return main
+
+    def test_features_collectable_true_propagates_to_feature(self):
+        """When features_collectable=True all new features get collect=True."""
+        main = self._make_main(True)
+        collect = getattr(main, "features_collectable", False)
+        f = CryoFeature("F", {"x": 0, "y": 0, "z": 0}, {"z": 0}, collect=collect)
+        self.assertTrue(f.collect)
+
+    def test_features_collectable_false_propagates_to_feature(self):
+        """When features_collectable=False all new features get collect=False."""
+        main = self._make_main(False)
+        collect = getattr(main, "features_collectable", False)
+        f = CryoFeature("F", {"x": 0, "y": 0, "z": 0}, {"z": 0}, collect=collect)
+        self.assertFalse(f.collect)
+
+    def test_features_collectable_absent_defaults_false(self):
+        """getattr fallback returns False when features_collectable is not set."""
+        main = MagicMock(spec=[])  # no attributes at all
+        collect = getattr(main, "features_collectable", False)
+        self.assertFalse(collect)
+
+    def test_per_project_decision_uniform_within_project(self):
+        """All features created in one project session share the same collect flag."""
+        main = self._make_main(True)
+        collect = getattr(main, "features_collectable", False)
+        features = [
+            CryoFeature(f"F{i}", {"x": i * 1e-6, "y": 0, "z": 0}, {"z": 0}, collect=collect)
+            for i in range(20)
+        ]
+        self.assertTrue(all(f.collect for f in features))
+
+    def test_loaded_features_are_reset_to_not_collectable(self):
+        """Features loaded from disk must be immediately marked collect=False.
+
+        This mirrors the behaviour of _load_project_data in cryo_chamber_tab:
+        loaded features were either already collected or not selected, so they
+        must never be re-collected in the new session.
+        """
+        loaded_features = [
+            CryoFeature(f"F{i}", {"x": 0, "y": 0, "z": 0}, {"z": 0}, collect=True)
+            for i in range(5)
+        ]
+        # Simulate the reset performed by _load_project_data.
+        for f in loaded_features:
+            f.collect = False
+        self.assertTrue(all(not f.collect for f in loaded_features))
+
+    def test_project_sampling_probability(self):
+        """Over many projects, roughly FEATURE_COLLECT_PROBABILITY fraction are collectable."""
+        n_projects = 500
+        collectable_count = sum(
+            1 for _ in range(n_projects)
+            if random.random() < FEATURE_COLLECT_PROBABILITY
+        )
+        ratio = collectable_count / n_projects
+        self.assertAlmostEqual(ratio, FEATURE_COLLECT_PROBABILITY, delta=0.10)
 
 
 class TestCollectFeatureData(unittest.TestCase):

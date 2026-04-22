@@ -25,7 +25,6 @@ import glob
 import json
 import logging
 import os
-import random
 import threading
 import time
 from concurrent import futures
@@ -180,7 +179,7 @@ class CryoFeature(object):
                  streams: Optional[List[Stream]] = None,
                  milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None,
                  correlation_data=None,
-                 collect: Optional[bool] = None):
+                 collect: bool = False):
         """
         :param name: (string) the feature name
         :param stage_position: (dict) the stage position of the feature (stage-bare)
@@ -188,8 +187,9 @@ class CryoFeature(object):
         :param streams: (List of StaticStream) list of acquired streams on this feature
         :param correlation_data: (Dict[str,FIBFMCorrelationData]) Dictionary mapping the feature status to
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
-        :param collect: (bool or None) Whether this feature is eligible for data collection.
-            If None (default), the flag is initialised randomly with FEATURE_COLLECT_PROBABILITY.
+        :param collect: (bool) Whether this feature is eligible for data collection.
+            Defaults to False.  The GUI sets this based on the per-project sampling
+            decision made when a project is opened or created.
         """
         self.name = model.StringVA(name)
         # FIXME: The 'position' parameter should eventually contain the SampleStage coordinates and not stage bare from the stage_position!
@@ -221,11 +221,8 @@ class CryoFeature(object):
         self.correlation_data = correlation_data
 
         # Whether this feature is eligible for data collection.
-        # Randomly assigned on creation with FEATURE_COLLECT_PROBABILITY; persisted in features.json.
-        if collect is None:
-            self.collect: bool = random.random() < FEATURE_COLLECT_PROBABILITY
-        else:
-            self.collect = collect
+        # Set by the GUI from the per-project sampling decision; persisted in features.json.
+        self.collect: bool = collect
 
         # attributes for automated milling
         self.path: str = None  # TODO:support path creation here, rather than on milling data save
@@ -369,7 +366,7 @@ class FeaturesDecoder(json.JSONDecoder):
             feature = CryoFeature(name=obj['name'],
                                   stage_position=stage_position,
                                   fm_focus_position=fm_focus_position,
-                                  collect=obj.get('collect', None)
+                                  collect=obj.get('collect', False)
                                   )
             feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
             feature.status.value = obj['status']
