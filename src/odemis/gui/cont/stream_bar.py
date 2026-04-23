@@ -1951,7 +1951,9 @@ class SparcStreamsController(StreamBarController):
             opm=main_data.opm,
             axis_map=axes,
             detvas=detvas,
-            streak_unit_vas=get_local_vas(main_data.streak_unit, main_data.hw_settings_config))
+            streak_unit_vas=get_local_vas(main_data.streak_unit, main_data.hw_settings_config),
+            streak_delay_hwvas=get_local_vas(main_data.streak_delay, main_data.hw_settings_config),
+        )
         self._set_default_spectrum_axes(ts_stream)
         # For safety, always start with the shutter closed.
         if model.hasVA(ts_stream, "detShutter"):

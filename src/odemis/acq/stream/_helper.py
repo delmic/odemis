@@ -816,8 +816,16 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
     * It's not possible to increase the MCPGain while the stream is paused.
     * The MCPGain of the hardware is also always set to 0 when not playing.
     """
-    def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay,
-                 streak_unit_vas, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter,
+                 streak_unit: model.HwComponent, streak_delay: model.HwComponent,
+                 streak_unit_vas: set, streak_delay_hwvas: set = None, **kwargs):
+        """
+        See LiveStream for the meaning of the common parameters.
+        :param streak_unit: the streak-unit (ie, fast scanner) which is used to control the time range
+        :param streak_delay: the streak-delay (ie, time offset) which is used to control the signal timing
+        :param streak_unit_vas: set of VAs of the streak unit that should be duplicated in the stream (see detvas)
+        :param streak_delay_hwvas: set of VAs of the streak delay that should *copied* on the stream (see hwdetvas)
+        """
 
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
@@ -832,9 +840,10 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         self.streak_unit = streak_unit
         self.streak_delay = streak_delay
 
-        # the VAs are used in SEMCCDMDStream (_sync.py)
+        # the VAs are shown to the user for controlling the hardware settings
         streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas)
         self._det_vas.update(streak_unit_vas)
+        self.hw_vas.update(self._getVAs(streak_delay, streak_delay_hwvas or set()))
 
         # Whenever .streakMode is disabled, or center wavelength is set to 0nm:
         # -> set .MCPGain = 0 and update .MCPGain.range
