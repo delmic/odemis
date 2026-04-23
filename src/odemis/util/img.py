@@ -1441,3 +1441,62 @@ def apply_zoom_on_image_coordinates(rect: List[int], z:int) -> List[int]:
     :return: (list of int) the rectangle in image pixel coordinates at the given zoom level
     """
     return [px // (2 ** z) for px in rect]
+
+
+def get_bounding_box_slice(target_x: int, target_y: int, pad_x: int, pad_y: int,
+                           shape_x: int, shape_y: int) -> tuple:
+    """
+    Generates a boundary-safe 3D slice object for extracting a region of interest.
+    Automatically clamps the bounding box to the image dimensions.
+
+    :param target_x: Target X pixel coordinate
+    :param target_y: Target Y pixel coordinate
+    :param pad_x: Two directional padding in X direction (pixels)
+    :param pad_y: Two directional padding in Y direction (pixels)
+    :param shape_x: Total width of the image (pixels)
+    :param shape_y: Total height of the image (pixels)
+    :returns: A tuple of slice objects (z_slice, y_slice, x_slice) for array indexing
+    """
+    y_start = max(0, target_y - pad_y)
+    y_end = min(shape_y, target_y + pad_y + 1)
+    x_start = max(0, target_x - pad_x)
+    x_end = min(shape_x, target_x + pad_x + 1)
+    return numpy.s_[:, y_start:y_end, x_start:x_end]
+
+
+def get_brightest_channel(sub_image_multi: numpy.ndarray) -> int:
+    """
+    Finds the index of the channel with the highest maximum intensity.
+    Useful for multi-channel imaging to select the brightest channel for analysis.
+
+    :param sub_image_multi: Multi-channel sub-image as (C, Z, Y, X) array
+    :returns: Index of the channel with the highest intensity
+    """
+    channel_maxes = numpy.max(sub_image_multi, axis=(1, 2, 3))
+    return int(numpy.argmax(channel_maxes))
+
+
+def compute_local_center_of_mass(sub_image: numpy.ndarray, roi_slice: tuple,
+                                 baseline_percentile: float = 95.0) -> Tuple[float, float, float]:
+    """
+    Computes center of mass with baselining and maps back to global pixel coordinates.
+    Uses the brightest pixels (above the baseline percentile) as weights for COM calculation,
+    effectively filtering background noise.
+
+    :param sub_image: Single-channel 3D sub-image as (Z, Y, X) array
+    :param roi_slice: Slice object returned from get_bounding_box_slice
+    :param baseline_percentile: Percentile threshold for background separation (0-100)
+    :returns: Tuple of (global_z, global_y, global_x) in pixel coordinates maintaining input order.
+    """
+    baseline = numpy.percentile(sub_image, baseline_percentile)
+    sub_image_weights = numpy.where(sub_image > baseline, sub_image - baseline, 0)
+    com_sub = scipy.ndimage.center_of_mass(numpy.asarray(sub_image_weights))
+
+    y_start = roi_slice[1].start
+    x_start = roi_slice[2].start
+
+    return (
+        com_sub[0],              # Global Pixel Z (array indices, not iso-voxel)
+        com_sub[1] + y_start,    # Global Pixel Y
+        com_sub[2] + x_start     # Global Pixel X
+    )
