@@ -21,16 +21,19 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 '''
 
+import functools
 import logging
 from typing import Tuple
 
 import numpy
+
 from odemis import model
-from odemis.gui.model import TabName
-from odemis.acq.stream import SEMCCDMDStream, ARSettingsStream
+from odemis.acq.stream import ARSettingsStream, SEMCCDMDStream
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.stream_bar import SparcStreamsController
+from odemis.gui.model.tab_gui_data import SparcAcquisitionGUIData
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_PIXEL_SIZE, MD_POS, MD_DIMS, MD_DESCRIPTION, MD_ROTATION
+from odemis.model import MD_DESCRIPTION, MD_DIMS, MD_PIXEL_SIZE, MD_POS, MD_ROTATION
 
 
 class SEMCLCCDStream(SEMCCDMDStream):
@@ -97,21 +100,21 @@ class CLiCCDPlugin(Plugin):
         if microscope and main_data.ccd and main_data.role.startswith("sparc"):
             self._tab = self.main_app.main_data.getTabByName(TabName.SPARC_ACQUI)
             stctrl = self._tab.streambar_controller
-            stctrl.add_action("CL intensity on CCD", self.addst)
+            act = functools.partial(self.addst, tab_data=self._tab.tab_data_model, stctrl=stctrl)
+            stctrl.add_action("CL intensity on CCD", act)
         else:
             logging.info("%s plugin cannot load as the microscope is not a SPARC with AR",
                          self.name)
         # TODO: also support same functionality with sp-ccd
 
-    def addst(self):
-        main_data = self.main_app.main_data
-        stctrl = self._tab.streambar_controller
+    def addst(self, tab_data: SparcAcquisitionGUIData, stctrl: SparcStreamsController, **kwargs):
+        main_data = tab_data.main
 
         axes = stctrl._filter_axes({"filter": ("band", main_data.light_filter)})
 
         # TODO: special live stream?
         ar_stream = ARSettingsStream(
-            "CL intensity on CCD",
+            stctrl.get_unique_stream_name("CL intensity on CCD"),
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
@@ -122,6 +125,9 @@ class CLiCCDPlugin(Plugin):
         )
         # TODO: Allow very large binning on the CCD
 
+        if kwargs.get("settings_entries"):
+            ar_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if model.hasVA(ar_stream, "detBinning"):
             b = ar_stream.detBinning.value
@@ -130,7 +136,7 @@ class CLiCCDPlugin(Plugin):
                 ar_stream.detResolution.value = ar_stream.detResolution.range[1]
 
         # Create the equivalent MDStream
-        sem_stream = self._tab.tab_data_model.semStream
+        sem_stream = tab_data.semStream
         sem_cl_stream = SEMCLCCDStream("SEM CLi CCD", [sem_stream, ar_stream])
 
         return stctrl._addRepStream(ar_stream, sem_cl_stream)

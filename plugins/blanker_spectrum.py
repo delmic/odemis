@@ -21,22 +21,26 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 
-from collections import OrderedDict
 import functools
 import logging
-from odemis import model, dataio
-from odemis.gui.model import TabName
+import os
+from collections import OrderedDict
+
+import wx
+
 import odemis
+from odemis import dataio, model
 from odemis.acq import calibration
-from odemis.acq.stream import SpectrumSettingsStream, SEMSpectrumMDStream
+from odemis.acq.stream import SEMSpectrumMDStream, SpectrumSettingsStream
 from odemis.dataio import get_available_formats
 from odemis.gui.conf import util
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.stream import StreamController
+from odemis.gui.cont.stream_bar import SparcStreamsController
+from odemis.gui.model.tab_gui_data import SparcAcquisitionGUIData
 from odemis.gui.plugin import Plugin
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import img
-import os
-import wx
 
 
 class BlSpectrumSettingsStream(SpectrumSettingsStream):
@@ -216,18 +220,32 @@ class BlExtraPlugin(Plugin):
             # Remove the standard action (which must have exactly the same name)
             stctrl.remove_action(actname)
 
-            act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
+            act = functools.partial(
+                self.addSpectrum,
+                name=actname,
+                detector=sptm,
+                tab_data=self._tab.tab_data_model,
+                stctrl=stctrl
+            )
             stctrl.add_action(actname, act)
 
-    def addSpectrum(self, name, detector):
+    def addSpectrum(
+        self,
+        name: str,
+        detector: model.DigitalCamera,
+        tab_data: SparcAcquisitionGUIData,
+        stctrl: SparcStreamsController,
+        **kwargs
+    ) -> StreamController:
         """
-        name (str): name of the stream
-        detector (DigitalCamera): spectrometer to acquire the spectrum
+        :param name: (str) name of the stream
+        :param detector: (DigitalCamera) spectrometer to acquire the spectrum
+        :param tab_data: (SparcAcquisitionGUIData) the data of the acquisition tab
+        :param stctrl: (SparcStreamsController) the SPARC stream controller to which the stream should be added
+        :param kwargs: other options, can contain "settings_entries"
         """
         logging.debug("Adding spectrum stream for %s", detector.name)
-
-        main_data = self.main_app.main_data
-        stctrl = self._tab.streambar_controller
+        main_data = tab_data.main
 
         spg = stctrl._getAffectingSpectrograph(detector, default=main_data.spectrograph)
 
@@ -253,7 +271,7 @@ class BlExtraPlugin(Plugin):
             blanker = None
 
         spec_stream = BlSpectrumSettingsStream(
-            name,
+            stctrl.get_unique_stream_name(name),
             detector,
             detector.data,
             main_data.ebeam,
@@ -265,8 +283,11 @@ class BlExtraPlugin(Plugin):
         )
         stctrl._set_default_spectrum_axes(spec_stream)
 
+        if kwargs.get("settings_entries"):
+            spec_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
-        sem_stream = self._tab.tab_data_model.semStream
+        sem_stream = tab_data.semStream
         sem_spec_stream = BlSEMSpectrumMDStream("SEM " + name, [sem_stream, spec_stream])
 
         ret = stctrl._addRepStream(spec_stream, sem_spec_stream)
