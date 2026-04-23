@@ -29,13 +29,14 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
+import random
 
 import wx
 
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.feature import load_project_data
+from odemis.acq.feature import FEATURE_COLLECT_PROBABILITY, load_project_data
 from odemis.acq.move import (
     ALIGNMENT,
     COATING,
@@ -383,6 +384,17 @@ class CryoChamberTab(Tab):
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
         self.txt_projectpath.Value = os.path.basename(self.conf.pj_last_path)
         self.tab_data_model.main.project_path.value = new_dir
+        # Decide once per project whether features created during this session are
+        # eligible for data collection.  Stored as a dynamic attribute — not part
+        # of the formal model — and read by add_new_feature via getattr.
+        self.tab_data_model.main.features_collectable = (
+            random.random() < FEATURE_COLLECT_PROBABILITY
+        )
+        logging.debug(
+            "Project '%s': features_collectable=%s",
+            os.path.basename(new_dir),
+            self.tab_data_model.main.features_collectable,
+        )
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):
@@ -517,7 +529,12 @@ class CryoChamberTab(Tab):
 
         if len(streams) > 0:
             correlation_tab.correlation_controller.add_streams(streams)
-        # load features
+        # load features — immediately mark all as not collectable.
+        # Loaded features were either already collected in a previous session or
+        # were never selected; the new per-project sampling decision (set in
+        # _change_project_conf above) applies only to features created after this.
+        for f in proj_data["features"]:
+            f.collect = False
         self.tab_data_model.main.features.value = proj_data["features"]
 
         # log project data
