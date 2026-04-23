@@ -19,9 +19,10 @@ jobs:
           IGNORED: ".*\n!.gitignore\nyarn.lock\npackage-lock.json\ngenerated/**"
 
         with:
+          # Philosophy: S should be reviewable in under 10 minutes, L takes more than an hour
           sizes: >
             {
               "0": "S",
-              "20": "M",
-              "100": "L"
+              "25": "M",
+              "400": "L"
             }
