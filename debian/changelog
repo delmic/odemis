@@ -1,3 +1,16 @@
+odemis (3.8.2-1) focal; urgency=medium
+
+  * New version: 3.8.2
+  * Main bug fixes:
+    - TMCM driver: handle more gracefully rare cases when the device would
+      temporarily not reply (METEOR/SPARC)
+    - METEOR: automatically detect best position to reference the filter wheel
+    - METEOR: on TFSv3 revert default SEM<>FM movement as, on some systems, the
+      safer movement was detected as "unsafe" by the SEM. The safer movement has
+      to be explicitly enabled via the z_low configuration.
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 24 Apr 2026 17:27:31 +0200
+
 odemis (3.8.1-1) focal; urgency=medium
 
   * New version: 3.8.1
