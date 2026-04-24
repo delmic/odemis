@@ -106,6 +106,8 @@ class DelayConnector(model.HwComponent):
         """
         Update the metadata of the component.
         Overrides the default implementation to check the MD_TIME_RANGE_TO_DELAY metadata.
+        If MD_TIME_RANGE_TO_DELAY is set for the first time, immediately updates triggerDelay
+        based on the current timeRange.
         :param md:
         """
         if model.MD_TIME_RANGE_TO_DELAY in md:
@@ -119,4 +121,8 @@ class DelayConnector(model.HwComponent):
                     raise ValueError(f"Trigger delay {delay} corresponding to time range {time_range} is not in "
                                      f"range {self.triggerDelay.range}.")
 
+        first_time = model.MD_TIME_RANGE_TO_DELAY not in self._metadata
         super().updateMetadata(md)
+
+        if first_time and model.MD_TIME_RANGE_TO_DELAY in md and self._streak_unit:
+            self._on_time_range(self._streak_unit.timeRange.value)
