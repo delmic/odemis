@@ -25,7 +25,7 @@ import statistics
 import threading
 import time
 from concurrent.futures import CancelledError, TimeoutError, ThreadPoolExecutor
-from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
+from concurrent.futures._base import CANCELLED, FINISHED, PENDING, RUNNING
 from enum import Enum
 from itertools import groupby
 from typing import Dict, List, Optional, Tuple, Union
@@ -146,6 +146,7 @@ class TiledAcquisitionTask(object):
         if future is not None:
             self._future.running_subf: future.Future = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
+            self._future._task_state = PENDING
 
         # Convert the region input into a polygon
         self._polygon = self._convert_region_to_polygon(region)
@@ -1235,6 +1236,7 @@ class AcquireOverviewTask(object):
         if future is not None:
             self._future.running_subf = model.InstantaneousFuture()
             self._future._task_lock = threading.Lock()
+            self._future._task_state = PENDING
         self.streams = streams
         self.areas = areas  # list of areas
         self._det = detector  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
