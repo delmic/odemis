@@ -1096,7 +1096,11 @@ class DelayGenerator(model.HwComponent):
                                      "Please check the calibration file for the trigger delay."
                                      % (delay, timeRange, self.triggerDelay.range))
 
+        is_first_time = model.MD_TIME_RANGE_TO_DELAY not in self._metadata
         super().updateMetadata(md)
+
+        if is_first_time and model.MD_TIME_RANGE_TO_DELAY in md and self._streak_unit:
+            self._on_time_range(self._streak_unit.timeRange.value)
 
     def GetTriggerRate(self) -> float:
         """
