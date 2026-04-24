@@ -34,3 +34,5 @@ MIRROR_NOT_REFD = 0
 MIRROR_PARKED = 1
 MIRROR_BAD = 2  # not parked, but not fully engaged either
 MIRROR_ENGAGED = 3
+
+PYRAMIDAL_CONVERSION_SUFFIX = "_pyramidal"
