@@ -149,13 +149,12 @@ def simulate_peak(amplitude: float,
 
     # Generate the 1D Gaussian peak across the x-dimension
     if width <= 0:
-        raise ValueError("width should be positive")
+        raise ValueError(f"width ({width}) should be positive")
 
     x = numpy.arange(shape[-1], dtype=numpy.float64)
     intensity = amplitude * (numpy.exp(-0.5 * ((x - x0) / width) ** 2))
 
     # Clip based on the actual dtype provided
-    dtype = numpy.dtype(dtype)
     info = numpy.iinfo(dtype) if numpy.issubdtype(dtype, numpy.integer) else numpy.finfo(dtype)
     intensity_clipped = numpy.clip(intensity, info.min, info.max)
     peak_1d = intensity_clipped.astype(dtype)

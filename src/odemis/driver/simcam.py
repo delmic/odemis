@@ -463,8 +463,8 @@ class Camera(model.DigitalCamera):
         noise = numpy.random.randint(0, noise_max, sim_img.shape, dtype=self._img.dtype)
 
         # final clamp to prevent overflow
-        dtype_max = numpy.iinfo(sim_img.dtype).max
-        sim_img += numpy.minimum(dtype_max - sim_img, noise)
+        dt_info = numpy.iinfo(sim_img.dtype) if numpy.issubdtype(sim_img.dtype, numpy.integer) else numpy.finfo(sim_img.dtype)
+        sim_img += numpy.minimum(dt_info.max - sim_img, noise)
 
         return sim_img
 
