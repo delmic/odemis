@@ -34,9 +34,11 @@ from scipy import ndimage
 from odemis import dataio, model, util
 from odemis.model import oneway
 from odemis.util.synthetic import ParabolicMirrorRayTracer
+from odemis.util.synthetic import simulate_peak
 
 ERROR_STATE_FILE = "simcam-hw.error"
-
+GOFFSET_TO_PIXEL = 0.25  # Conversion factor for grating offset to image pixels.
+PEAK_WIDTH = 2.5  # Width of the simulated spectrograph peak in pixels (before binning).
 
 class Camera(model.DigitalCamera):
     '''
@@ -179,6 +181,22 @@ class Camera(model.DigitalCamera):
             self._img_simulator = None
             self._mirror = None
 
+        try:
+            spectrograph = dependencies["spectrograph"]
+            if not (
+                    isinstance(spectrograph, model.ComponentBase)
+                    and hasattr(spectrograph, "axes")
+                    and isinstance(spectrograph.axes, dict)
+                    and "goffset" in spectrograph.axes):
+                raise ValueError((f"spectrograph {spectrograph} must have a 'goffset' attribute"))
+
+            self._spectrograph = spectrograph
+            logging.debug("Will simulate spectral peaks using spectrograph %s", spectrograph.name)
+
+        except (TypeError, KeyError):
+            logging.info("Will not simulate spectrograph peaks")
+            self._spectrograph = None
+
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
         self.data = SimpleDataFlow(self)
@@ -194,6 +212,8 @@ class Camera(model.DigitalCamera):
                                                        name="Creating and state error")
         self._error_creation_thread.daemon = True
         self._error_creation_thread.start()
+
+        self._min_val = self._img.min()
 
     def _setBinning(self, value):
         """
@@ -374,6 +394,11 @@ class Camera(model.DigitalCamera):
         center = self._img_res[0] / 2, self._img_res[1] / 2
         pixel_size = self._metadata.get(model.MD_PIXEL_SIZE, self.pixelSize.value)
 
+        # Extra translation to simulate stage movement
+        pos = self._metadata.get(model.MD_POS, (0, 0))
+        pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
+        stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
+
         if self._mirror:
             eff_pixel_size = [p * b for p, b in zip(pixel_size, binning)]
             self._img_simulator.resolution.value = res
@@ -382,11 +407,6 @@ class Camera(model.DigitalCamera):
             self._img = model.DataArray(sim_img, self._img.metadata)
             sim_img = self._img.copy()
         else:
-            # Extra translation to simulate stage movement
-            pos = self._metadata.get(model.MD_POS, (0, 0))
-            pxs = [p / b for p, b in zip(pixel_size, self.binning.value)]
-            stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
-
             # First and last index (eg, 0 -> 255)
             ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
                     center[1] + trans[1] + stage_shift[1] - (res[1] / 2) * binning[1],
@@ -413,12 +433,38 @@ class Camera(model.DigitalCamera):
                      [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
             sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
 
-        # Add some noise
+        # spectrograph peak simulation
+        if self._spectrograph:
+            current_offset = self._spectrograph.position.value["goffset"]
+
+            ccd_center_x = self._img_res[0] / 2  # find the x-coordinate of the center of the ccd
+            x0_px = ccd_center_x + current_offset * GOFFSET_TO_PIXEL
+            roi_left = center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0]
+
+            bin_x = binning[0]  # binning factor along x-axis
+            peak_center_binned = (x0_px - roi_left) / bin_x  # express the peak position in the ROI's coordinate system
+
+            logging.debug("Peak center: x0_px=%s, ROI left: ltrb0=%s, Peak center (binned): %s",
+                         x0_px, roi_left, peak_center_binned)
+
+            width_binned = PEAK_WIDTH / bin_x
+
+            peak = simulate_peak(amplitude=20000, x0=peak_center_binned, width=width_binned,
+                                shape=sim_img.shape, dtype=sim_img.dtype)
+
+            # simulation routine
+            sim_img = (peak + self._min_val).astype(self._img.dtype, copy=False)
+
+            # define max noise amplitude
         mx = self._img.max()
-        sim_img += numpy.random.randint(0, max(mx // 100, 10), sim_img.shape, dtype=sim_img.dtype)
-        # Clip, but faster than clip() on big array.
-        # There can still be some overflow, but let's just consider this "strong noise"
-        sim_img[sim_img > mx] = mx
+        noise_max = max(mx // 100, 10)
+
+            # generate noise and add directly
+        noise = numpy.random.randint(0, noise_max, sim_img.shape, dtype=self._img.dtype)
+
+        # final clamp to prevent overflow
+        dt_info = numpy.iinfo(sim_img.dtype) if numpy.issubdtype(sim_img.dtype, numpy.integer) else numpy.finfo(sim_img.dtype)
+        sim_img += numpy.minimum(dt_info.max - sim_img, noise)
 
         return sim_img
 

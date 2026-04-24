@@ -128,6 +128,43 @@ def psf_gaussian(
     numpy.rint(UINT16_MAX * out, out=out)
     return out.astype(numpy.uint16)
 
+def simulate_peak(amplitude: float,
+                  x0: float,
+                  width: float,
+                  shape: Union[int, Tuple[int, int]],
+                  dtype: numpy.dtype = numpy.uint16) -> numpy.ndarray:
+    """
+    Simulate a 1D Gaussian peak across the x-dimension of an image, with optional 2D image input for direct use when y > 1.
+    :param amplitude: the maximum intensity of the peak
+    :param x0: the center position of the peak along the x-axis
+    :param width: the standard deviation (width) of the Gaussian peak
+    :param shape: the shape of the output image (can be an int for 1D or a tuple for 2D)
+    :param dtype: the data type of the output array (default is numpy.uint16)
+    :return: a numpy array containing the simulated peak, either as a 1D Gaussian or directly from the provided image
+    """
+
+    # Standardize shape to a tuple, so we can index it
+    if isinstance(shape, (int, numpy.integer)):
+        shape = (shape,)
+
+    # Generate the 1D Gaussian peak across the x-dimension
+    if width <= 0:
+        raise ValueError(f"width ({width}) should be positive")
+
+    x = numpy.arange(shape[-1], dtype=numpy.float64)
+    intensity = amplitude * (numpy.exp(-0.5 * ((x - x0) / width) ** 2))
+
+    # Clip based on the actual dtype provided
+    info = numpy.iinfo(dtype) if numpy.issubdtype(dtype, numpy.integer) else numpy.finfo(dtype)
+    intensity_clipped = numpy.clip(intensity, info.min, info.max)
+    peak_1d = intensity_clipped.astype(dtype)
+
+    if len(shape) == 1:
+        return peak_1d
+    else:
+        # Duplicated along the y-dimension (shape[0])
+        return numpy.tile(peak_1d, (shape[0], 1))
+
 
 class ParabolicMirrorRayTracer:
     """
