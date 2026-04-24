@@ -898,10 +898,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         return self._transformFromSEMToMilling(sem_pos)
 
 
-# Minimum stage bare z height required to switch between FM and SEM postures
-Z_LOW = 0.027  # m, safe value provided by TFS on a Hydra Bio CX system which should also be compatible on other systems
-
-
 class MeteorTFS1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
         super().__init__(microscope)
@@ -1141,7 +1137,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 elif (type(self) == MeteorTFS3PostureManager):
                     stage_md = self.stage.getMetadata()
                     md_calib = stage_md[model.MD_CALIB]
-                    z_low = md_calib.get("z_low", Z_LOW)  # safe z to achieve before switching to SEM posture
+                    # If the CALIB has z_low defined, use a safer choreography, which first moves the
+                    # stage down before doing the rest of the moves. The only drawback is that this
+                    # safe Z depends on the microscope type, and some older microscopes (eg, some Aquilos)
+                    # detect such "out-of-reach" moves as "unsafe" and block them. So for compatibility,
+                    # the default is to move directly.
 
                     if (current_label in [SEM_IMAGING, MILLING, FIB_IMAGING]
                       and target == FM_IMAGING
@@ -1154,31 +1154,44 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                         sample_stage_pos = self.to_sample_stage_from_stage_position(target_pos_unfixed, posture=FM_IMAGING)
                         sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
                         self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
-                        # Stage switching based on Hydra Bio TFS assessment
-                        # move lower than 27 mm (z_low)
-                        # move r and t
-                        # move x and y
-                        # move all to final position (outside if else block to take other switching postures combinations)
-                        sub_moves.append((self.stage, {"z": z_low}))
-                        sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
-                        sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
 
+                        if "z_low" in md_calib:
+                            # Stage switching based on Hydra Bio TFS assessment
+                            # move lower than 27 mm (z_low)
+                            # move r and t
+                            # move x and y
+                            # move all to final position
+                            z_low: float = md_calib.get("z_low")  # safe z to achieve before switching to SEM posture
+                            sub_moves.append((self.stage, {"z": z_low}))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                            sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+                            sub_moves.append((self.stage, target_pos))  # Only moves the Z back
+                        else:
+                            # Old-style choreography, less safe, but doesn't get blocked by "safety" checks
+                            sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
                     elif (current_label == FM_IMAGING
                         and target in [SEM_IMAGING, MILLING, FIB_IMAGING]):
-                        # Stage switching based on Hydra Bio TFS assessment
-                        # If current z is more than safe value, move it to safe z value else skip it.
-                        # move x and y
-                        # move all to final position (outside if else block to take other switching postures combinations)
-                        if current_pos["z"] > z_low:
-                            sub_moves.append((self.stage, {"z": z_low}))
-                        sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
-
-                    sub_moves.append((self.stage, target_pos))
+                        if "z_low" in md_calib:
+                            # Stage switching based on Hydra Bio TFS assessment
+                            # If current z is more than safe value, move it to safe z value else skip it.
+                            # move x and y
+                            # move all to final position
+                            z_low: float = md_calib.get("z_low")  # safe z to achieve before switching to SEM posture
+                            if current_pos["z"] > z_low:
+                                sub_moves.append((self.stage, {"z": z_low}))
+                            sub_moves.append((self.stage, filter_dict({'x', 'y'}, target_pos)))
+                            sub_moves.append((self.stage, target_pos))
+                        else:
+                            # Old-style choreography, less safe, but doesn't get blocked by "safety" checks
+                            sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                            sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+                    else:  # Direct move between postures near SEM or near FM
+                        sub_moves.append((self.stage, target_pos))
 
                 if target == FM_IMAGING:
                     # Engage the focuser
                     sub_moves.append((self.focus, focus_active))
-
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
