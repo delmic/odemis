@@ -433,13 +433,15 @@ class TestHDF5IO(unittest.TestCase):
         # Try reading the metadata using the hdf5 module
         rdata = hdf5.read_data(FILENAME)
         self.assertEqual(len(rdata), 1)
-        for im in rdata:
+        for i, im in enumerate(rdata):
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], metadata[model.MD_DESCRIPTION])
             self.assertEqual(im.metadata[model.MD_POS], metadata[model.MD_POS])
             self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], metadata[model.MD_PIXEL_SIZE])
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], metadata[model.MD_ACQ_DATE])
             self.assertEqual(im.metadata[model.MD_EXP_TIME], metadata[model.MD_EXP_TIME])
             self.assertEqual(im.metadata[model.MD_EXTRA_SETTINGS], exp_extra_md)
+            self.assertEqual(im.metadata[model.MD_FILENAME], FILENAME)
+            self.assertEqual(im.metadata[model.MD_IN_FILE_INDEX], i)
 
     def testExportRead(self):
         """

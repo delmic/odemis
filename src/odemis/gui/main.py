@@ -263,6 +263,8 @@ class OdemisGUIApp(wx.App):
                 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
                 from odemis.gui.cont.tabs.fibsem_tab import FibsemTab
 
+                from odemis.gui.cont import features
+
                 tab_defs.extend([
                     {
                         "name": TabName.METEOR_CORRELATION.value,

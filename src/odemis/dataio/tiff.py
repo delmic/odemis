@@ -2632,6 +2632,15 @@ class AcquisitionDataTIFF(AcquisitionData):
         if len(data) == 1 and model.MD_DESCRIPTION not in data[0].metadata:
             data[0].metadata[model.MD_DESCRIPTION] = os.path.splitext(os.path.basename(filename))[0]
 
+        # Inject filename and in-file index for project management purposes
+        i = 0
+        for da in data:
+            if da is None:
+                continue
+            da.metadata[model.MD_FILENAME] = filename
+            da.metadata[model.MD_IN_FILE_INDEX] = i
+            i += 1
+
         AcquisitionData.__init__(self, tuple(data), tuple(thumbnails))
 
     def _getAllDataArrayShadows(self, filename: str, tfile, lock):

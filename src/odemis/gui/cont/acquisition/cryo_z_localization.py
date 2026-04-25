@@ -35,10 +35,11 @@ import wx
 from odemis import model
 from odemis.acq.align import z_localization
 from odemis.acq.align.z_localization import SUPERZ_THRESHOLD
-from odemis.acq.feature import Target, TargetType, save_features
+from odemis.acq.feature import Target, TargetType
 from odemis.acq.move import FM_IMAGING
 from odemis.acq.stream import FluoStream
 from odemis.gui import conf
+from odemis.gui.cont.features import save_project
 from odemis.gui.cont.multi_point_correlation import update_feature_correlation_target
 from odemis.gui.model import TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
@@ -242,7 +243,7 @@ class CryoZLocalizationController(object):
         """
         # Set the target Z ctrl with the focus position
         self._panel.ctrl_target_z.SetValue(target_coordinates[2])
-        save_features(self._tab.conf.pj_last_path, self._tab_data.main.features.value)
+        save_project(self._tab_data_model.main)
 
     def _on_ctrl_target_z_change(self) -> List[float]:
         """
@@ -493,7 +494,7 @@ class CryoZLocalizationController(object):
         feature.superz_stream_name = self._selected_stream.name.value
         # Save the stream name in the config file
         acq_conf = conf.get_acqui_conf()
-        save_features(acq_conf.pj_last_path, self._tab_data.main.features.value)
+        save_project(self._tab_data.main)
 
         stage_pos = feature.get_posture_position(FM_IMAGING)
         pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(stage_pos)

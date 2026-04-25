@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import copy
 import glob
-import json
 import logging
 import os
 import threading
@@ -30,7 +29,8 @@ import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from enum import Enum
-from typing import Dict, List, Tuple, Optional, Callable
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional, Callable, Iterable
 
 from odemis import model
 from odemis.acq.acqmng import (
@@ -52,7 +52,9 @@ from odemis.acq.move import (
 )
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream, StaticFluoStream
-from odemis.dataio import find_fittest_converter, get_available_formats
+from odemis.dataio import find_fittest_converter
+from odemis.gui.cont.cryo_project import IMG_FILENAME, IMG_IN_FILE_IDS, add_image
+from odemis.model import MD_IN_FILE_INDEX
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
@@ -172,13 +174,11 @@ class CryoFeature(object):
     def __init__(self, name: str,
                  stage_position: Dict[str, float],
                  fm_focus_position: Dict[str, float],
-                 streams: Optional[List[Stream]] = None,
                  milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None, correlation_data=None):
         """
         :param name: (string) the feature name
         :param stage_position: (dict) the stage position of the feature (stage-bare)
         :param fm_focus_position: (dict) the focus position of the feature
-        :param streams: (List of StaticStream) list of acquired streams on this feature
         :param correlation_data: (Dict[str,FIBFMCorrelationData]) Dictionary mapping the feature status to
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
         """
@@ -205,8 +205,8 @@ class CryoFeature(object):
         self.milling_tasks: Dict[str, MillingTaskSettings] = milling_tasks
 
         self.status = model.StringVA(FEATURE_ACTIVE)
-        # TODO: Handle acquired files
-        self.streams = streams if streams is not None else model.ListVA()
+        self.images = model.ListVA()
+        self.streams = model.ListVA()
         if correlation_data is None:
             correlation_data = {}
         self.correlation_data = correlation_data
@@ -224,7 +224,7 @@ class CryoFeature(object):
     def set_posture_position(self, posture: str, position: Dict[str, float]) -> None:
         """
         Set the stage position for the given posture.
-        :param posture: the posture to set the position for
+        :param posture: the posture to set the position forF
         :param position: the position to set
         """
         # TODO: once the stage has access to it, it should check that the position is within the
@@ -281,6 +281,48 @@ class CryoFeature(object):
         logging.info(f"Stage position for milling: {self.get_posture_position(MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
+def feature_decoder(feature_raw):
+    """
+    Json decoder for the CryoFeature class and its attributes
+    """
+    # Either the object is the feature list or the feature objects inside it
+    if not 'name' in feature_raw or not 'status' in feature_raw:
+        return
+
+    correlation_data = {}
+    if "correlation_data" in feature_raw:
+        correlation_data = feature_raw["correlation_data"]
+    stage_position = feature_raw['stage_position']
+    fm_focus_position = feature_raw['fm_focus_position']
+    posture_positions = feature_raw.get('posture_positions', {})
+    milling_task_json = feature_raw.get('milling_tasks', {})
+    feature = CryoFeature(name=feature_raw['name'],
+                          stage_position=stage_position,
+                          fm_focus_position=fm_focus_position
+                          )
+    feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
+    feature.status.value = feature_raw['status']
+    feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
+    feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
+    feature.path = feature_raw.get('path', None)
+    feature.superz_stream_name = feature_raw.get('superz_stream_name', None)
+    feature.superz_focused = feature_raw.get('superz_focused', None)
+
+    for image in feature_raw.get('images', []):
+        args = [feature.images.value, image[IMG_FILENAME]]
+        if IMG_IN_FILE_IDS in image:
+            args.append(image[IMG_IN_FILE_IDS])
+        add_image(*args)
+
+    # load the reference image
+    if feature.path:
+        filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
+        if os.path.exists(filename):
+            feature.reference_image = open_acquisition(filename)[0].getData()
+        else:
+            logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
+    return feature
+
 def get_feature_position_at_posture(pm: MicroscopePostureManager,
                                     feature: CryoFeature,
                                     posture: int,
@@ -308,140 +350,27 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
 
     return position
 
-def get_features_dict(features: List[CryoFeature]) -> Dict[str, str]:
-    """
-    Convert list of features to JSON serializable list of dict
-    :param features: list of CryoFeature
-    :return: list of JSON serializable features
-    """
-    flist = []
-    for feature in features:
-        feature_item = {'name': feature.name.value,
-                        'status': feature.status.value,
-                        'stage_position': feature.stage_position.value,
-                        'fm_focus_position': feature.fm_focus_position.value,
-                        'posture_positions': feature.posture_positions,
-                        "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
-                        'correlation_data': feature.correlation_data.to_dict() if feature.correlation_data  else {},
-                        'superz_stream_name': feature.superz_stream_name,
-                        'superz_focused': feature.superz_focused}
-        if feature.path:
-            feature_item['path'] = feature.path
-        flist.append(feature_item)
-    return {'feature_list': flist}
-
-
-class FeaturesDecoder(json.JSONDecoder):
-    """
-    Json decoder for the CryoFeature class and its attributes
-    """
-
-    def __init__(self, *args, **kwargs):
-        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
-
-    def object_hook(self, obj):
-        # Either the object is the feature list or the feature objects inside it
-        if 'name' in obj and 'status' in obj:
-            correlation_data = {}
-            if "correlation_data" in obj:
-                correlation_data = obj["correlation_data"]
-            stage_position = obj['stage_position']
-            fm_focus_position = obj['fm_focus_position']
-            posture_positions = obj.get('posture_positions', {})
-            milling_task_json = obj.get('milling_tasks', {})
-            feature = CryoFeature(name=obj['name'],
-                                  stage_position=stage_position,
-                                  fm_focus_position=fm_focus_position
-                                  )
-            feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
-            feature.status.value = obj['status']
-            feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
-            feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
-            feature.path = obj.get('path', None)
-            feature.superz_stream_name = obj.get('superz_stream_name', None)
-            feature.superz_focused = obj.get('superz_focused', None)
-
-            # load the reference image
-            if feature.path:
-                filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
-                if os.path.exists(filename):
-                    feature.reference_image = open_acquisition(filename)[0].getData()
-                else:
-                    logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
-            return feature
-        if 'feature_list' in obj:
-            return obj['feature_list']
-        return obj
-
-def save_features(project_dir: str, features: List[CryoFeature]) -> None:
-    """
-    Save the whole features list directly to the file
-    :param project_dir: directory to save the file to (typically project directory)
-    :param features: all the features to serialize
-    """
-    filename = os.path.join(project_dir, "features.json")
-    with open(filename, "w") as jsonfile:
-        json.dump(get_features_dict(features), jsonfile)
-
-
-def read_features(project_dir: str) -> List[CryoFeature]:
-    """
-    Deserialize and return the features list from the json file
-    :param project_dir: directory to read the file from (typically project directory)
-    :return: list of deserialized features
-    """
-    filename = os.path.join(project_dir, "features.json")
-    if not os.path.exists(filename):
-        raise ValueError(f"Features file doesn't exists in this location. {filename}")
-    with open(filename, "r") as jsonfile:
-        return json.load(jsonfile, cls=FeaturesDecoder)
-
-
-def load_feature_streams_from_disk(feature: "CryoFeature", path: str) -> None:
+def load_feature_streams_from_disk(feature: "CryoFeature") -> None:
     """
     Load the acquired stream files for a single feature from the project directory
     and append them to feature.streams.
 
     :param feature: the feature whose streams to load
-    :param path: path to the project directory containing the stream files
     """
-    stream_filenames = set()
-    glob_path = os.path.join(path, f"*-{glob.escape(feature.name.value)}-{{ext}}")
-    formats = get_available_formats(os.O_RDONLY, allowlossy=False).values()
-    formats_flat = [f"*{ext}" for sublist in formats for ext in sublist]
-    for ext in formats_flat:
-        stream_filenames.update(glob.glob(glob_path.format(ext=ext)))
+    for image in feature.images.value:
+        in_file_ids = image.get(IMG_IN_FILE_IDS)
+        if in_file_ids == []:  # Don't load when nothing of the image is used
+            continue
 
-    for fname in sorted(stream_filenames):
-        feature.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
+        das = open_acquisition(image[IMG_FILENAME])
 
+        # Recover ids in case missing (could be for legacy projects)
+        if in_file_ids is None:
+            in_file_ids = [d.metadata[model.MD_IN_FILE_INDEX] for d in das]
+            image[IMG_IN_FILE_IDS] = in_file_ids
 
-def load_project_data(path: str) -> dict:
-    """load meteor project data from a directory:
-    :param path: path to the project directory
-    :return: dictionary containing the loaded data (features and overviews)
-    """
-
-    # load overview images
-    overview_filenames = glob.glob(os.path.join(path, "*overview*.ome.tiff"))
-    overview_data = []
-    for fname in overview_filenames:
-        # note: we only load the overview data, as the conversion to streams
-        # is done in the localisation_tab.add_overview_data which also
-        # handles assigning the streams throughout the gui
-        overview_data.extend(open_acquisition(fname))
-
-    features = []
-    try:
-        # read features
-        features = read_features(path)
-    except ValueError:
-        logging.warning("No features.json file found in the project directory.")
-
-    # Feature streams are intentionally not loaded here; they are lazy-loaded
-    # on demand by CryoAcquiredStreamsController when a feature is selected.
-
-    return {"overviews": overview_data, "features": features}
+        das = [da for da in das if da.metadata.get(MD_IN_FILE_INDEX) in in_file_ids]
+        feature.streams.value.extend(data_to_static_streams(das))
 
 def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
     """
@@ -507,6 +436,7 @@ class CryoFeatureAcquisitionTask(object):
         self.filename = filename
         self._settings_obs = settings_obs
         self._per_feature_callback = per_feature_callback
+        self._current_feature_filename = None
 
         # autofocus settings
         self.use_autofocus = use_autofocus
@@ -597,11 +527,8 @@ class CryoFeatureAcquisitionTask(object):
 
         # export the data
         self._export_data(site, data)
-
-        # Convert the data to StaticStreams, and add them to the feature
-        new_streams = dataio.data_to_static_streams(data)
-        site.streams.value.extend(new_streams)
-        logging.info(f"The acquisition of {self.streams} for {site.name.value} is done")
+        # No need of converting to streams here, since our lazy-loading mechanism will do it later.
+        logging.info(f"The acquisition of images for {site.name.value} is done")
 
     def _run_autofocus(self, site: CryoFeature) -> None:
         """Run the autofocus for the given feature."""
@@ -825,6 +752,9 @@ class CryoFeatureAcquisitionTask(object):
             d.metadata[model.MD_DESCRIPTION] = f"{name}-{status}-{d.metadata[model.MD_DESCRIPTION]}"
 
         self.exporter.export(filename, data)
+        # Inject filename also into in-memory feature for project management purposes
+        add_image(feature.images.value, filename, set(range(len(data))))
+
         logging.info("Acquisition saved as file '%s'.", filename)
 
 
