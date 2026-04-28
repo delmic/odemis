@@ -30,8 +30,10 @@ from odemis.gui.win.thoughts import show_important_thought_dialog
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
+from odemis.gui.win.consent import ConsentDialog
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
+from odemis.util.datacollector import DataCollector
 import sys
 import threading
 import traceback
@@ -74,6 +76,7 @@ class OdemisGUIApp(wx.App):
         self._snapshot_controller = None
         self._temperature_controller = None
         self._menu_controller = None
+        self._data_collector = DataCollector()
         self.plugins = []  # List of instances of plugin.Plugins
 
         # User input devices
@@ -346,7 +349,7 @@ class OdemisGUIApp(wx.App):
             self.main_data.level.subscribe(self.on_level_va, init=True)
             log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
-            self._menu_controller = MenuController(self.main_data, self.main_frame)
+            self._menu_controller = MenuController(self.main_data, self.main_frame, self._data_collector)
             # Menu events
             self.main_frame.Bind(wx.EVT_MENU, self.on_close_window, id=self.main_frame.menu_item_quit.GetId())
 
@@ -377,6 +380,8 @@ class OdemisGUIApp(wx.App):
             # Due to a bug in wxPython, sometimes the .Maximize() at the beginning of the function
             # has no effect. So we call it after the Show() to be sure it works.
             wx.CallAfter(self.main_frame.Maximize)
+            wx.CallAfter(self._maybe_show_consent_dialog)
+
         except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
@@ -417,6 +422,27 @@ class OdemisGUIApp(wx.App):
         for tab in self.tab_controller.get_tabs():
             if hasattr(tab.panel, 'btn_log'):
                 tab.panel.btn_log.set_face_colour(colour)
+
+    @call_in_wx_main
+    def _maybe_show_consent_dialog(self) -> None:
+        """Show consent dialog when consent is undecided and prompt is due."""
+        try:
+            if not self._data_collector.should_prompt_for_consent():
+                return
+
+            remind_days = self._data_collector.get_consent_remind_days()
+            dlg = ConsentDialog(parent=self.main_frame, remind_days=remind_days)
+            result = dlg.ShowModal()
+            dlg.Destroy()
+
+            if result == ConsentDialog.RESULT_OPT_IN:
+                self._data_collector.set_consent(True)
+            elif result == ConsentDialog.RESULT_OPT_OUT:
+                self._data_collector.set_consent(False)
+            else:
+                self._data_collector.postpone_consent()
+        except Exception:
+            logging.exception("Failed to run data-collection consent prompt.")
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
