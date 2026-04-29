@@ -151,6 +151,9 @@ def iter_s3_objects(s3_client: Any, bucket: str, prefix: str) -> Iterator[Dict[s
         if not response.get("IsTruncated"):
             break
         token = response.get("NextContinuationToken")
+        if not token:
+            logging.warning("S3 list_objects_v2 returned IsTruncated=True but no NextContinuationToken; stopping pagination.")
+            break
 
 
 def should_download_key(key: str, event_filter: Optional[str], since_utc: Optional[datetime]) -> bool:
@@ -168,17 +171,6 @@ def should_download_key(key: str, event_filter: Optional[str], since_utc: Option
         if key_ts < since_utc:
             return False
     return True
-
-
-def create_s3_client_from_config(config: DataCollectorConfig) -> tuple[Any, str]:
-    """Create S3 client and return `(client, bucket)`."""
-    backend = config.get_upload_backend()
-    if not isinstance(backend, S3UploadBackend):
-        raise RuntimeError("Only S3 backend is supported for retrieval.")
-    # Accessing protected members intentionally to reuse existing backend setup.
-    client = backend._get_client()  # pylint: disable=protected-access
-    bucket = backend._bucket  # pylint: disable=protected-access
-    return client, bucket
 
 
 def parse_host_filters(value: Optional[str]) -> List[str]:
