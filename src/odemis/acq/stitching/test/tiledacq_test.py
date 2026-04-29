@@ -43,6 +43,7 @@ from odemis.acq.stitching import (
     acquireTiledArea,
 )
 from odemis.acq.stitching._tiledacq import (
+    START_INDEX,
     TiledAcquisitionTask,
     clip_tiling_bbox_to_range,
     get_fov,
@@ -185,10 +186,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         exp_shift = fov[0] * (1 - overlap), fov[1] * (1 - overlap)
         # move to starting position (left, top)
         starting_pos = tiled_acq_task._starting_pos
-        self.stage.moveAbs(starting_pos).result()
         logging.debug("Starting position: %s, expected shift per tile = %s", starting_pos, exp_shift)
-        # no change in movement
-        tiled_acq_task._moveToTile((0, 0), (0, 0), fov)
+        tiled_acq_task._moveToTile((0, 0), START_INDEX, fov)
         testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
 
         # Note that we cannot predict precisely, as the algorithm may choose to spread
@@ -218,14 +217,14 @@ class CRYOSECOMTestCase(unittest.TestCase):
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area, overlap=overlap, future=model.InstantaneousFuture())
-        sem_fov = tiled_acq_task._getFov(self.sem_streams[0])
+        sem_fov = tiled_acq_task.getFov(self.sem_streams[0])
 
         exp_sem_fov = (self.ebeam.shape[0] * self.ebeam.pixelSize.value[0],
                        self.ebeam.shape[1] * self.ebeam.pixelSize.value[1])
         self.assertEqual(len(sem_fov), 2)  # (float, float)
         (self.assertAlmostEqual(x, y) for x, y in zip(sem_fov, exp_sem_fov))
 
-        fm_fov = tiled_acq_task._getFov(self.fm_streams[0])
+        fm_fov = tiled_acq_task.getFov(self.fm_streams[0])
         self.assertEqual(len(fm_fov), 2)
         pixel_size = self.ccd.getMetadata()[model.MD_PIXEL_SIZE]
         exp_fm_fov = (self.ccd.shape[0] * pixel_size[0],
@@ -233,7 +232,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         (self.assertAlmostEqual(x, y) for x, y in zip(fm_fov, exp_fm_fov))
 
         with self.assertRaises(TypeError):
-            tiled_acq_task._getFov(None)
+            tiled_acq_task.getFov(None)
 
     def test_area(self):
         """
