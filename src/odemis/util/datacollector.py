@@ -119,8 +119,8 @@ class DataCollectorConfig:
     can be inspected and manually edited by a support engineer.  Example::
 
         [general]
-        # Data sharing consent: true, false, or commented-out (not yet decided).
-        consent = none
+        # Data sharing consent (true / false).
+        # consent = true
         #
         # Date after which the consent dialog will be shown again (YYYY-MM-DD).
         # reminder_date = 2026-05-07
@@ -158,7 +158,7 @@ class DataCollectorConfig:
         elif consent_val is False:
             consent_line = "consent = false"
         else:
-            consent_line = "consent = none"
+            consent_line = "# consent = true"
 
         if remind_val is not None:
             remind_line = f"reminder_date = {remind_val.strftime('%Y-%m-%d')}"
@@ -167,7 +167,7 @@ class DataCollectorConfig:
 
         content = (
             "[general]\n"
-            "# Data sharing consent (none / true / false).\n"
+            "# Data sharing consent (true / false).\n"
             f"{consent_line}\n"
             "#\n"
             "# Date after which the consent dialog will be shown again (YYYY-MM-DD).\n"
@@ -188,6 +188,8 @@ class DataCollectorConfig:
         try:
             return self._cp.getboolean("general", "consent")
         except (configparser.NoSectionError, configparser.NoOptionError):
+            return None
+        except ValueError:
             return None
 
     @consent.setter

@@ -34,13 +34,17 @@ from odemis.util.datacollector import DataCollectorConfig, S3UploadBackend
 
 def parse_since_utc(value: str) -> datetime:
     """Parse a date/datetime string to UTC-aware datetime.
-
-    Accepts ISO-8601 date (`YYYY-MM-DD`) and datetime (`YYYY-MM-DDTHH:MM:SS` with optional timezone).
+    :param value: ISO-8601 date (``YYYY-MM-DD``) or datetime
+                  (``YYYY-MM-DDTHH:MM:SS`` with optional timezone offset or ``Z`` suffix).
+    :returns: UTC-aware datetime.
     """
     text = value.strip()
     if len(text) == 10:
         parsed = datetime.strptime(text, "%Y-%m-%d")
         return parsed.replace(tzinfo=timezone.utc)
+    # datetime.fromisoformat() does not accept the 'Z' suffix in Python < 3.11.
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
     parsed = datetime.fromisoformat(text)
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)

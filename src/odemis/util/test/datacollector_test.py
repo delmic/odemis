@@ -71,11 +71,6 @@ class TestDataCollectorConfig(unittest.TestCase):
         cfg._read()
         return cfg
 
-    def test_consent_initially_none(self) -> None:
-        """Consent should be None when no config file exists."""
-        cfg = self._make_config()
-        self.assertIsNone(cfg.consent)
-
     def test_consent_round_trip(self) -> None:
         """Setting consent to True/False persists to disk and re-reads correctly."""
         cfg = self._make_config()
@@ -85,6 +80,22 @@ class TestDataCollectorConfig(unittest.TestCase):
         cfg.consent = False
         cfg3 = self._make_config()
         self.assertFalse(cfg3.consent)
+
+    def test_clear_consent_round_trip(self) -> None:
+        """Cleared consent writes a file that reloads as None (not a ValueError)."""
+        cfg = self._make_config()
+        cfg.consent = True
+        cfg.clear_consent()
+        cfg2 = self._make_config()
+        self.assertIsNone(cfg2.consent)
+
+    def test_legacy_consent_none_string_reads_as_none(self) -> None:
+        """A config with 'consent = none' (legacy format) must read as None."""
+        cfg = self._make_config()
+        cfg.file_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg.file_path.write_text("[general]\nconsent = none\n", encoding="utf-8")
+        cfg._cp.read(str(cfg.file_path))
+        self.assertIsNone(cfg.consent)
 
     def test_config_file_permissions(self) -> None:
         """Config file should be written with mode 0o600 (security requirement)."""
