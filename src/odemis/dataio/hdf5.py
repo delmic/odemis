@@ -1667,7 +1667,12 @@ def read_data(filename):
     # to do it without looking at the .filename attribute)
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
 
-    return _dataFromHDF5(filename)
+    data = _dataFromHDF5(filename)
+    # Inject filename and in-file index for project management purposes
+    for i, da in enumerate(data):
+        da.metadata[model.MD_FILENAME] = filename
+        da.metadata[model.MD_IN_FILE_INDEX] = i
+    return data
 
 
 def read_thumbnail(filename):

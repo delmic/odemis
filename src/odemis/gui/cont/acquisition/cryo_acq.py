@@ -54,6 +54,7 @@ from odemis.acq.stream import (
     Stream,
 )
 from odemis.gui import conf
+from odemis.gui.cont.cryo_project import save_project, IMG_FILENAME, IMG_IN_FILE_IDS, add_image
 from odemis.gui.model import TabName
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG, LICENCE_CORRELATION_ENABLED
@@ -68,6 +69,7 @@ from odemis.gui.util.widgets import (
     VigilantAttributeConnector,
 )
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
+from odemis.model import MD_FILENAME
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
 from odemis.util.filename import create_filename, guess_pattern, update_counter
@@ -583,6 +585,17 @@ class CryoAcquiController(object):
                 exporter.export(filename, data, thumb_nail)
                 logging.info("Acquisition saved as file '%s'.", filename)
 
+            # Inject filename and in-file index for project management purposes
+            # This is not being stored, but it is for in-memory streams
+            in_file_ids = []
+            for i, da in enumerate(data):
+                da.metadata[model.MD_FILENAME] = filename
+                da.metadata[model.MD_IN_FILE_INDEX] = i
+                in_file_ids.append(i)
+
+            add_image(self._tab_data.main.currentFeature.value.images.value, filename, in_file_ids)
+            save_project(self._tab_data.main)
+
             # TODO: make saving fibsem data optional
             # TODO: investigate using Cntrl + S to save?
             # update the filename
@@ -830,6 +843,11 @@ class CryoAcquiController(object):
         """
         das = self.overview_acqui_controller.open_acquisition_dialog()
         if das:
+            add_image(
+                self._tab_data.main.overviews.value,
+                das[0].metadata[MD_FILENAME], [da.metadata.get(model.MD_IN_FILE_INDEX) for da in das])
+            save_project(self._tab_data.main)
+
             self._tab.load_overview_data(das)
 
     def _on_tdct(self, _):

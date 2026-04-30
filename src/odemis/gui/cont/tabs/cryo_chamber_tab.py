@@ -29,13 +29,14 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
+from pathlib import Path
 
 import wx
 
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.feature import load_project_data
+from odemis.acq.feature import feature_decoder
 from odemis.acq.move import (
     ALIGNMENT,
     COATING,
@@ -59,6 +60,7 @@ from odemis.gui.comp.buttons import (
     BTN_TOGGLE_PROGRESS,
 )
 from odemis.gui.comp.edit_position_metadata import EditMeteorCalibrationDialog
+from odemis.gui.cont.cryo_project import load_project, IMG_IN_FILE_IDS, IMG_FILENAME, save_project
 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.cont.tabs.tab import Tab
@@ -69,7 +71,7 @@ from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import LoadProjectFileDialog, ShowChamberFileDialog
 from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
-from odemis.util.dataio import data_to_static_streams
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
 try:
@@ -473,7 +475,7 @@ class CryoChamberTab(Tab):
         self._change_project_conf(proj_path)
 
         # load project data
-        proj_data = load_project_data(proj_path)
+        proj_data = load_project(proj_path)
 
         # no data found in the project directory, not necessarily an error as the
         # user may create a project, but not have any data yet. so we just inform the user
@@ -501,8 +503,31 @@ class CryoChamberTab(Tab):
         except Exception:
             logging.info("Fibsem tab does not exists.")
 
+        # Load features
+        decoded_features = [feature_decoder(f) for f in proj_data["features"]]
+        self.tab_data_model.main.features.value = [df for df in decoded_features if df is not None]
+
         # Load overview streams in the Localization and Fibsem tabs
-        streams = data_to_static_streams(proj_data["overviews"])
+        self.tab_data_model.main.overviews.value = proj_data["overviews"]
+
+        overviews = []
+        for overview in self.tab_data_model.main.overviews.value:
+            in_file_ids = overview.get(IMG_IN_FILE_IDS)
+            if in_file_ids == []:  # If empty list, don't load at all
+                continue
+
+            overview_das = open_acquisition(overview[IMG_FILENAME])
+            # Recover ids in case missing (could be for legacy projects)
+            if in_file_ids is None:
+                in_file_ids = [d.metadata[model.MD_IN_FILE_INDEX]  for d in overview_das]
+                overview[IMG_IN_FILE_IDS] = in_file_ids
+                save_project(self.tab_data_model.main)
+            for ovd in overview_das:
+                # Only keep ones that were not deleted in the GUI before.
+                if ovd.metadata[model.MD_IN_FILE_INDEX] in in_file_ids:
+                    overviews.append(ovd)
+
+        streams = data_to_static_streams(overviews)
         for s in streams:
             s.name.value = "Overview " + s.name.value
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
@@ -517,8 +542,6 @@ class CryoChamberTab(Tab):
 
         if len(streams) > 0:
             correlation_tab.correlation_controller.add_streams(streams)
-        # load features
-        self.tab_data_model.main.features.value = proj_data["features"]
 
         # log project data
         logging.debug(f"Loaded project data from {proj_path}")

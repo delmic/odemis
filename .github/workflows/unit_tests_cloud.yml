@@ -219,6 +219,12 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/gui/test/cryo_stream_cleanup_test.py --verbose
 
+    - name: Run tests from odemis.gui.cont.cryo_project
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/gui/cont/test/cryo_project_test.py --verbose
+
     - name: Run mocked tests from odemis.acq.fastem
       if: ${{ !cancelled() }}
       run: |

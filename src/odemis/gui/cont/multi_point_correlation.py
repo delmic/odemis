@@ -36,10 +36,11 @@ import wx
 
 from odemis import model, util
 from odemis.acq.align.tdct import get_optimized_z_gauss, _convert_das_to_numpy_stack, run_tdct_correlation
-from odemis.acq.feature import save_features, FIBFMCorrelationData, Target, TargetType
+from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream, FluoStream
 from odemis.gui import conf
 from odemis.gui.model import CryoGUIData
+from odemis.gui.cont.features import save_project
 from odemis.gui.util import call_in_wx_main
 from odemis.model import ListVA
 from odemis.util.dataio import data_to_static_streams
@@ -146,7 +147,7 @@ def update_feature_correlation_target(correlation_target: FIBFMCorrelationData,
     correlation_target.fm_fiducials = fm_fiducials
 
     acq_conf = conf.get_acqui_conf()
-    save_features(acq_conf.pj_last_path, tab_data.main.features.value)
+    save_project(acq_conf.pj_last_path, tab_data.main.features.value, tab_data.main.overviews.value)
 
     return correlation_target
 

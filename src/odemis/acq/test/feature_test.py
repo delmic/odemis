@@ -18,7 +18,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-import json
 import logging
 import os
 import random
@@ -29,10 +28,6 @@ import numpy
 from odemis import model
 from odemis.acq.feature import (
     CryoFeature,
-    FeaturesDecoder,
-    get_features_dict,
-    read_features,
-    save_features,
     load_milling_tasks,
     FEATURE_READY_TO_MILL,
     MILLING,
@@ -59,33 +54,6 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
             if os.path.exists(filename):
                 os.remove(filename)
             os.rmdir(self.path)
-
-    def test_feature_encoder(self):
-        feature1 = CryoFeature("Feature-1", stage_position={"x": 0, "y": 0, "z": 0}, fm_focus_position={"z": 0})
-        feature2 = CryoFeature("Feature-2", stage_position={"x": 1e-3, "y": 1e-3, "z": 1e-3}, fm_focus_position={"z": 2e-3})
-        feature1.milling_tasks = {}
-        feature2.milling_tasks = {}
-        features = [feature1, feature2]
-        json_str = json.dumps(get_features_dict(features))
-        self.assertEqual(json_str, TEST_FEATURES_STR)
-
-    def test_feature_decoder(self):
-        features = json.loads(TEST_FEATURES_STR, cls=FeaturesDecoder)
-        self.assertEqual(len(features), 2)
-        self.assertEqual(features[0].name.value, "Feature-1")
-        self.assertEqual(features[0].status.value, "Active")
-        self.assertEqual(features[1].stage_position.value, {"x": 1e-3, "y": 1e-3, "z": 1e-3})
-        self.assertEqual(features[1].fm_focus_position.value, {"z": 2e-3})
-
-    def test_save_read_features(self):
-        feature1 = CryoFeature("Feature-1", stage_position={"x": 0, "y": 0, "z": 0}, fm_focus_position={"z": 0})
-        feature2 = CryoFeature("Feature-2", stage_position={"x": 1e-3, "y": 1e-3, "z": 1e-3}, fm_focus_position={"z": 2e-3})
-
-        features = [feature1, feature2]
-        save_features("", features)
-        r_features = read_features("")
-        self.assertEqual(len(features), len(r_features))
-        self.assertEqual(features[0].name.value, r_features[0].name.value)
 
     def test_feature_milling_tasks(self):
         feature = CryoFeature(

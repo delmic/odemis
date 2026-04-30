@@ -39,10 +39,12 @@ from odemis import model
 from odemis.acq.stream import StaticSEMStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.cryo_project import save_project, remove_image
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
 from odemis.acq.feature import CryoFeature, load_feature_streams_from_disk
+from odemis.model import MD_FILENAME, MD_IN_FILE_INDEX
 from odemis.util.dataio import data_to_static_streams
 
 # There are two kinds of controllers:
@@ -2167,8 +2169,20 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         # * .currentFeature: the current feature (can be None)
 
         self._current_feature = None  # The feature whose streams are currently loaded in memory
-
         tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+
+        stream_bar = getattr(self, "_stream_bar", None)
+        if stream_bar is not None:
+            stream_bar.set_on_user_remove_callback(self._on_user_stream_remove)
+
+    def _on_user_stream_remove(self, stream):
+        md = stream.raw[0].metadata
+        # Try to delete the image from either the feature or the overview images. We could try to differentiate the
+        # origin of the stream instead, but just trying both simplifies things.
+        if self._current_feature:
+            remove_image(self._current_feature.images.value, md[MD_FILENAME], [md[MD_IN_FILE_INDEX]])
+        remove_image(self._tab_data_model.main.overviews.value, md[MD_FILENAME], [md[MD_IN_FILE_INDEX]])
+        save_project(self._tab_data_model.main)
 
     def showOverviewStream(self, stream) -> StreamController:
         """
@@ -2330,7 +2344,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
             logging.warning("Cannot reload feature streams: no project path set")
             return
 
-        load_feature_streams_from_disk(feature, project_path)
+        load_feature_streams_from_disk(feature)
 
         # Verify feature still exists after loading (in case it was deleted during load)
         if feature not in self._tab_data_model.main.features.value:
@@ -2442,6 +2456,15 @@ class CryoFIBAcquiredStreamsController(CryoStreamsController):
         self.stream: Optional[StaticStream] = None  # The stream currently displayed, related the selected Feature
 
         tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+        stream_bar = getattr(self, "_stream_bar", None)
+
+        if stream_bar is not None:
+            stream_bar.set_on_user_remove_callback(self._on_user_stream_remove)
+
+    def _on_user_stream_remove(self, stream):
+        md = stream.raw[0].metadata
+        remove_image(self._tab_data_model.main.overviews.value, md[MD_FILENAME], [md[MD_IN_FILE_INDEX]])
+        save_project(self._tab_data_model.main)
 
     def showOverviewStream(self, stream) -> StreamController:
         """

@@ -20,15 +20,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-import copy
 import itertools
 import logging
 import os
 
 import wx
-from typing import Dict, List
 
-from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -37,12 +34,10 @@ from odemis.acq.feature import (
     FEATURE_ROUGH_MILLED,
     CryoFeature,
     get_feature_position_at_posture,
-    save_features,
     FIBFMCorrelationData,
     Target,
-    TargetType,
+    TargetType
 )
-from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.move import (
     FM_IMAGING,
     MILLING,
@@ -52,9 +47,11 @@ from odemis.acq.move import (
 )
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
+from odemis.gui.cont.cryo_project import save_project
 from odemis.gui.model import TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
+
 
 SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
 
@@ -135,6 +132,8 @@ class CryoFeatureController(object):
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
                 self._tab.milling_task_controller.draw_milling_tasks()
 
+            save_project(self._tab_data_model.main)
+
     def _on_btn_use_current_z(self, _):
         # Use current focus to set currently selected feature
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
@@ -191,7 +190,7 @@ class CryoFeatureController(object):
         f = self.pm.stage.moveAbs(position)
         f.result()
 
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        save_project(self._tab_data_model.main)
 
     def save_milling_position(self, evt: wx.Event):
         """
@@ -230,7 +229,7 @@ class CryoFeatureController(object):
                                 path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
                                 reference_image=stream.raw[0])
 
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        save_project(self._tab_data_model.main)
 
         # refresh current feature to update reference image and milling tasks
         self._tab_data_model.main.currentFeature.value = None
@@ -313,7 +312,7 @@ class CryoFeatureController(object):
             self._panel.cmb_features.Clear()
             # currentFeature should also have been set to None, which will disable the other widgets
             return
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        save_project(self._tab_data_model.main)
 
         # Make sure the current feature is selected
         self._update_feature_cmb_list()
@@ -402,13 +401,12 @@ class CryoFeatureController(object):
     def _on_feature_focus_pos(self, fm_focus_position: dict):
         # Set the feature Z ctrl with the focus position
         self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        save_project(self._tab_data_model.main)
 
     def _on_feature_name(self, _):
         # Force an update of the list of features
         self._on_features_changes(self._tab_data_model.main.features.value)
-
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        save_project(self._tab_data_model.main)
 
     def _on_cmb_feature_name_change(self):
         feature = self._tab_data_model.main.currentFeature.value
@@ -424,7 +422,7 @@ class CryoFeatureController(object):
         :param feature_status: (string) the updated feature status
         """
         self._panel.cmb_feature_status.SetValue(feature_status)
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+        save_project(self._tab_data_model.main)
 
     def _on_cmb_features_change(self, evt):
         """
