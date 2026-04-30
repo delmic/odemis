@@ -179,6 +179,7 @@ class DataCollectorConfig:
         os.chmod(str(self.file_path), 0o600)
 
     def _ensure_section(self, section: str) -> None:
+        """Ensure that *section* exists in the config, creating it if necessary."""
         if not self._cp.has_section(section):
             self._cp.add_section(section)
 
@@ -437,6 +438,14 @@ class S3UploadBackend:
         region: str = S3_REGION,
         bucket: str = S3_BUCKET,
     ) -> None:
+        """
+        Initialize the S3 upload backend with the given credentials and configuration.
+        :param access_key: AWS access key ID.
+        :param secret_key: AWS secret access key.
+        :param endpoint_url: Optional S3 endpoint URL (for custom S3-compatible storage).
+        :param region: AWS region name (default "eu-west-1").
+        :param bucket: S3 bucket name to upload to (default "delmic-odemis-collect").
+        """
         self._access_key = access_key
         self._secret_key = secret_key
         self._endpoint_url = endpoint_url
@@ -444,7 +453,7 @@ class S3UploadBackend:
         self._bucket = bucket
         self._client = None
 
-    def _get_client(self):
+    def _get_client(self) -> "boto3.client":
         """Return a cached boto3 S3 client."""
         if self._client is None:
             self._client = boto3.client(

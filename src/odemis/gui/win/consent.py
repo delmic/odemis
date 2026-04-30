@@ -14,6 +14,13 @@ class ConsentDialog(wx.Dialog):
     RESULT_REMIND_LATER = int(wx.NewIdRef())
 
     def __init__(self, parent: wx.Window, remind_days: int) -> None:
+        """
+        Initialize the consent dialog asking the user to opt in, opt out, or be reminded later 
+        about sharing anonymized data with Delmic.
+        
+        :param parent: The parent window.
+        :param remind_days: Number of days to remind the user later.
+        """
         title = "Share data with Delmic"
         super().__init__(parent, wx.ID_ANY, title=title, size=(560, -1))
 
@@ -47,13 +54,17 @@ class ConsentDialog(wx.Dialog):
         self.CentreOnParent()
 
     def _on_opt_in(self, _evt: wx.CommandEvent) -> None:
+        """User opts in to data sharing."""
         self.EndModal(self.RESULT_OPT_IN)
 
     def _on_opt_out(self, _evt: wx.CommandEvent) -> None:
+        """User opts out of data sharing."""
         self.EndModal(self.RESULT_OPT_OUT)
 
     def _on_remind_later(self, _evt: wx.CommandEvent) -> None:
+        """User chooses to be reminded later."""
         self.EndModal(self.RESULT_REMIND_LATER)
 
     def _on_close(self, _evt: wx.CloseEvent) -> None:
+        """User closes the dialog."""
         self.EndModal(self.RESULT_REMIND_LATER)

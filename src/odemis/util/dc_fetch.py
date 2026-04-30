@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 Retrieval helpers for downloading DataCollector ZIP samples from S3.
 """
 
-
 import argparse
 import logging
 from datetime import datetime, timezone
@@ -50,7 +49,6 @@ def parse_since_utc(value: str) -> datetime:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
 
-
 def parse_key_timestamp_utc(key: str) -> Optional[datetime]:
     """Parse `<event>-<YYYYMMDDTHHmmss>-<uuid>.zip` timestamp from key basename."""
     name = Path(key).name
@@ -67,7 +65,6 @@ def parse_key_timestamp_utc(key: str) -> Optional[datetime]:
         return None
     return parsed.replace(tzinfo=timezone.utc)
 
-
 def parse_key_event_name(key: str) -> Optional[str]:
     """Parse event name from `<event>-<YYYYMMDDTHHmmss>-<uuid>.zip` key basename."""
     name = Path(key).name
@@ -78,7 +75,6 @@ def parse_key_event_name(key: str) -> Optional[str]:
     if len(parts) != 3:
         return None
     return parts[0] or None
-
 
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser for `odemis-dc-fetch`."""
@@ -137,7 +133,6 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-
 def iter_s3_objects(s3_client: Any, bucket: str, prefix: str) -> Iterator[Dict[str, Any]]:
     """Iterate S3 objects under `prefix` using `list_objects_v2` pagination."""
     token: Optional[str] = None
@@ -155,7 +150,6 @@ def iter_s3_objects(s3_client: Any, bucket: str, prefix: str) -> Iterator[Dict[s
             logging.warning("S3 list_objects_v2 returned IsTruncated=True but no NextContinuationToken; stopping pagination.")
             break
 
-
 def should_download_key(key: str, event_filter: Optional[str], since_utc: Optional[datetime]) -> bool:
     """Return whether an S3 key should be downloaded by filters."""
     if not key.endswith(".zip"):
@@ -172,14 +166,12 @@ def should_download_key(key: str, event_filter: Optional[str], since_utc: Option
             return False
     return True
 
-
 def parse_host_filters(value: Optional[str]) -> List[str]:
     """Parse comma-separated host filters into normalized host IDs."""
     if not value:
         return []
     hosts = [part.strip().strip("/") for part in value.split(",")]
     return [host for host in hosts if host]
-
 
 def build_s3_client_from_config(
     config: DataCollectorConfig,
@@ -205,7 +197,6 @@ def build_s3_client_from_config(
         client_kwargs["region_name"] = backend._region  # pylint: disable=protected-access
     client = boto3.client("s3", **client_kwargs)
     return client, bucket
-
 
 def fetch_samples(
     event_filter: Optional[str],
@@ -260,7 +251,6 @@ def fetch_samples(
         "skipped_existing": skipped_existing,
         "failed": failed,
     }
-
 
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI entrypoint for retrieval flow."""

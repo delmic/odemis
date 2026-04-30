@@ -43,11 +43,12 @@ class MenuController(object):
     tab controller.
     """
 
-    def __init__(self, main_data, main_frame, data_collector: DataCollector):
+    def __init__(self, main_data, main_frame, data_collector):
         """ Binds the menu actions.
 
         main_data (MainGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the main frame of the GUI
+        data_collector (DataCollector): the data collector, used for the data sharing consent menu item
         """
         self._main_data = main_data
         self._main_frame = main_frame
