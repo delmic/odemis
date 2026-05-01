@@ -21,19 +21,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 import math
-from numpy import random
+import operator
+import unittest
+from pathlib import Path
+
 import numpy
+from numpy import random
 from numpy.random import shuffle
 from numpy.random import uniform
+
 from odemis.acq.align import coordinates
 from odemis.acq.align import transform
 from odemis.dataio import hdf5
 from odemis.util import spot
-import operator
-import unittest
-from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+TEST_IMAGE_PATH = Path(__file__).parent
 
 # @unittest.skip("skip")
 class TestDivideInNeighborhoods(unittest.TestCase):
@@ -48,7 +52,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
         """
-        grid_data = hdf5.read_data("grid_10x10.h5")
+        grid_data = hdf5.read_data(TEST_IMAGE_PATH /  "grid_10x10.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
@@ -64,7 +68,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input
         """
-        grid_data = hdf5.read_data("grid_10x10.h5")
+        grid_data = hdf5.read_data(TEST_IMAGE_PATH /  "grid_10x10.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
@@ -85,7 +89,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
         """
-        grid_data = hdf5.read_data("grid_missing_point.h5")
+        grid_data = hdf5.read_data(TEST_IMAGE_PATH /  "grid_missing_point.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
@@ -107,7 +111,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
         and contains cosmic ray
         """
-        grid_data = hdf5.read_data("grid_cosmic_ray.h5")
+        grid_data = hdf5.read_data(TEST_IMAGE_PATH /  "grid_cosmic_ray.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
@@ -129,7 +133,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input that
         misses one point and contains cosmic ray
         """
-        grid_data = hdf5.read_data("grid_cosmic_ray.h5")
+        grid_data = hdf5.read_data(TEST_IMAGE_PATH /  "grid_cosmic_ray.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 

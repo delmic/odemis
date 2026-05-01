@@ -249,3 +249,55 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/util/test/spot_test.py --verbose
 
+    - name: Run tests from odemis.model
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/model/test/components_test.py --verbose
+        python3 -m unittest src/odemis/model/test/dataflow_test.py --verbose
+        python3 -m unittest src/odemis/model/test/futures_test.py --verbose
+        python3 -m unittest src/odemis/model/test/remote_test.py --verbose
+        python3 -m unittest src/odemis/model/test/vattributes_test.py --verbose
+
+    - name: Run tests from odemis.acq.align
+      if: ${{ !cancelled() }}
+      timeout-minutes: 10
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        export TEST_NOHW=1
+        python3 -m unittest src/odemis/acq/align/test/coordinates_test.py --verbose
+        python3 -m unittest src/odemis/acq/align/test/keypoint_test.py --verbose
+        python3 -m unittest src/odemis/acq/align/test/shift_test.py --verbose
+        python3 -m unittest src/odemis/acq/align/test/transform_test.py --verbose
+
+    - name: Run tests from odemis.odemisd.mdupdater_test
+      if: ${{ !cancelled() }}
+      timeout-minutes: 10
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        export TEST_NOHW=1
+        python3 -m unittest src/odemis/odemisd/test/mdupdater_test.py --verbose
+
+    - name: Run additional tests from odemis.util.modelgen_test
+      if: ${{ !cancelled() }}
+      timeout-minutes: 10
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        export TEST_NOHW=1
+        python3 -m unittest src/odemis/odemisd/test/modelgen_test.py --verbose
+
+    - name: Run additional tests from odemis.util.angleres_test
+      if: ${{ !cancelled() }}
+      timeout-minutes: 10
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        export TEST_NOHW=1
+        python3 -m unittest src/odemis/util/test/angleres_test.py --verbose
+
+    - name: Run additional tests from odemis.util.synthetic_test
+      if: ${{ !cancelled() }}
+      timeout-minutes: 10
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        export TEST_NOHW=1
+        python3 -m unittest src/odemis/util/test/synthetic_test.py --verbose
