@@ -234,8 +234,9 @@ class ZStackAcquisitionTask(object):
                     except CancelledError:
                         raise
                     except Exception as e:
-                        logging.exception("The acquisition failed at the %s-th zlevel of the stream %s, because %s" % (
-                        i + 1, stream, e))
+                        logging.exception(f"The acquisition failed at the {i + 1}-th zlevel with "
+                                          f"data shape {data[0].shape if data else 'N/A'} of the stream {stream}, because {e}. "
+                                          f"The acquired zstack shape is {zstack[0].shape if zstack else 'N/A'}")
                         # TODO handle zstack assembling in case of error
                         return acquired_data, e
 
