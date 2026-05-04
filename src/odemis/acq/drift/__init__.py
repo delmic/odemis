@@ -20,19 +20,23 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+import datetime
 import itertools
 import logging
 import math
 import threading
-
+import os
 import numpy
 import cv2
 
 from odemis import model
 from odemis.acq.align.shift import MeasureShift
+from odemis.gui.util import get_picture_folder
 
 MIN_RESOLUTION = (20, 20)  # sometimes 8x8 works, but it's not reliable enough
 MAX_PIXELS = 128 ** 2  # px
+
+DRIFT_IMAGES_DIR = os.path.join(get_picture_folder(), "Drift Correction images")
 
 
 class AnchoredEstimator(object):
@@ -46,7 +50,7 @@ class AnchoredEstimator(object):
     to measure the drift.
     """
 
-    def __init__(self, scanner, detector, region, dwell_time, max_pixels=MAX_PIXELS, follow_drift=True):
+    def __init__(self, scanner, detector, region, dwell_time, max_pixels=MAX_PIXELS, follow_drift=True, save_images=False):
         """
         scanner (Emitter)
         detector (Detector)
@@ -63,6 +67,12 @@ class AnchoredEstimator(object):
         self._semd = detector
         self._dwell_time = dwell_time
         self._follow_drift = follow_drift
+        self._save_images = save_images
+        self._session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._image_counter = 0
+
+        if self._save_images:
+            os.makedirs(DRIFT_IMAGES_DIR, exist_ok=True)
 
         # Latest drift vector from the previous acquisition
         self.drift = (0, 0)  # in sem px
@@ -142,6 +152,15 @@ class AnchoredEstimator(object):
             data = self._semd.data.get(asap=False)
             if data.shape[::-1] != self._res:
                 logging.warning("Shape of data is %s instead of %s", data.shape[::-1], self._res)
+
+            # Save all the drift region scans for offline autocorrelation purposes
+            if self._save_images:
+                filename = os.path.join(DRIFT_IMAGES_DIR, f"drift_{self._session_id}_{self._image_counter:05d}.tif")
+                self._image_counter += 1
+
+                success = cv2.imwrite(filename, data)
+                if not success:
+                    logging.warning("Failed to save drift image %s", filename)
 
             # TODO: allow to record just every Nth image, and separately record the
             # drift after every measurement
