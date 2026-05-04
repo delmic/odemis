@@ -49,8 +49,6 @@ from odemis.util.datacollector import (
     _serialize,
 )
 
-logging.basicConfig(level=logging.DEBUG)
-
 
 class TestDataCollectorConfig(unittest.TestCase):
     """Tests for DataCollectorConfig read/write behaviour."""
@@ -544,13 +542,18 @@ class DataCollectorTest(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(str(self._tmp_dir), ignore_errors=True)
 
-    def test_record_returns_fast(self) -> None:
-        """record() must return to the caller in under 10 ms."""
+    def test_record_delegates_to_worker_queue(self) -> None:
+        """record() must enqueue the work item without serializing in the caller's thread.
+        """
         arr = numpy.zeros((256, 256), dtype=numpy.uint16)
-        t0 = time.monotonic()
+        q = self._collector._worker._queue
+        size_before = q.qsize()
         self._collector.record("perf_test", "1.0", {"image": arr})
-        elapsed_ms = (time.monotonic() - t0) * 1000
-        self.assertLess(elapsed_ms, 10.0, f"record() took {elapsed_ms:.1f} ms (limit: 10 ms)")
+        self.assertEqual(
+            q.qsize(),
+            size_before + 1,
+            "record() must delegate work to the background queue, not serialize inline",
+        )
 
     def test_serialize_creates_zip_with_metadata(self) -> None:
         """_serialize() produces a ZIP with valid metadata.json."""
@@ -617,6 +620,16 @@ class DataCollectorTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._collector.record("event", "1.0", {}, image_format="PNG")
 
+    def test_raises_for_none_image_format(self) -> None:
+        """record() raises ValueError, not AttributeError, when image_format is None."""
+        with self.assertRaises(ValueError):
+            self._collector.record("event", "1.0", {}, image_format=None)  # type: ignore[arg-type]
+
+    def test_raises_for_non_string_image_format(self) -> None:
+        """record() raises ValueError, not AttributeError, for a non-string image_format."""
+        with self.assertRaises(ValueError):
+            self._collector.record("event", "1.0", {}, image_format=42)  # type: ignore[arg-type]
+
     def test_validation_raises_even_when_consent_false(self) -> None:
         """Input validation fires before the consent gate."""
         self._cfg.consent = False
@@ -631,4 +644,5 @@ class DataCollectorTest(unittest.TestCase):
             self.fail(f"record() raised ValueError for valid HDF5 format: {exc}")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     unittest.main()

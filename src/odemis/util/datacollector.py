@@ -32,6 +32,7 @@ import json
 import logging
 import os
 import queue
+import re
 import shutil
 import socket
 import tempfile
@@ -81,6 +82,22 @@ _MAX_RETRY_DELAY_SECONDS = 3600.0
 # Default delay before re-prompting for consent after postpone.
 _DEFAULT_CONSENT_REMIND_DELTA = timedelta(days=30)
 REMINDER_DATE_KEY = "reminder_date"
+
+
+def _sanitize_filename(name: str) -> str:
+    """Return a filesystem-safe version of *name*.
+
+    Strips path components (prevents traversal) and replaces any character
+    that is not alphanumeric, ``-``, ``_``, or ``.`` with an underscore.
+
+    :param name: Raw name to sanitize.
+    :returns: Safe filename string; never empty (falls back to ``"_"``).
+    """
+    # Strip path components to prevent directory traversal.
+    name = os.path.basename(name.replace("\\", "/"))
+    # Replace characters unsafe in filenames.
+    name = re.sub(r"[^\w\-.]", "_", name)
+    return name or "_"
 
 
 def _search_credentials() -> dict:
@@ -311,8 +328,8 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
     uuid8 = sample_uuid.split("-")[0]
     timestamp_utc = datetime.now(timezone.utc)
     timestamp_str = timestamp_utc.strftime("%Y%m%dT%H%M%S")
-    # Limit event_name length so the filename stays within filesystem limits.
-    safe_event = item.event_name[:64] if item.event_name else "event"
+    # Sanitize and truncate event_name so the filename is always filesystem-safe.
+    safe_event = _sanitize_filename(item.event_name)[:64] if item.event_name else "event"
     zip_name = f"{safe_event}-{timestamp_str}-{uuid8}.zip"
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="dc_"))
@@ -326,7 +343,7 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
 
             elif isinstance(value, numpy.ndarray):
                 if item.image_format.upper() == "HDF5":
-                    arc_name = f"{key}.h5"
+                    arc_name = f"{_sanitize_filename(key)}.h5"
                     abs_path = tmp_dir / arc_name
                     try:
                         da = value if isinstance(value, model.DataArray) else model.DataArray(value)
@@ -335,7 +352,7 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
                         logging.exception("Failed to export DataArray to HDF5 at %s", abs_path)
                         abs_path = None
                 else:
-                    arc_name = f"{key}.ome.tiff"
+                    arc_name = f"{_sanitize_filename(key)}.ome.tiff"
                     abs_path = tmp_dir / arc_name
                     try:
                         da = value if isinstance(value, model.DataArray) else model.DataArray(value)
@@ -352,7 +369,7 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
                     payload_meta["export_error"] = True
 
             elif isinstance(value, (dict, list)):
-                arc_name = f"extra_{key}.json"
+                arc_name = f"extra_{_sanitize_filename(key)}.json"
                 abs_path = tmp_dir / arc_name
                 abs_path.write_text(json.dumps(value, default=str), encoding="utf-8")
                 extra_files.append((arc_name, abs_path))
@@ -582,18 +599,40 @@ class _BackgroundWorker:
     def _run(self) -> None:
         """Main loop: process items until the thread is stopped."""
         while True:
+            # Always drain the in-memory queue first with a non-blocking get so
+            # new record() calls are serialised to disk even when upload backoff
+            # is in progress.  Without this, the queue grows unbounded and
+            # queue.get() is never reached while pending ZIPs exist.
             try:
-                if self._process_pending_zips(self._queue_dir):
-                    continue
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                item = None
+
+            if item is not None:
+                try:
+                    self._process_work_item(item)
+                except Exception:
+                    logging.exception(
+                        "DataCollector error processing event '%s'", item.event_name
+                    )
+                continue  # immediately check for more queued items
+
+            # No in-memory items; try to upload pending ZIPs from disk.
+            try:
+                had_pending = self._process_pending_zips(self._queue_dir)
             except Exception:
                 logging.exception("DataCollector error while processing pending uploads")
                 self._schedule_retry()
+                had_pending = True
+
+            if had_pending:
                 continue
+
+            # Nothing pending; block briefly for new items to arrive.
             try:
                 item = self._queue.get(timeout=1.0)
             except queue.Empty:
                 continue
-
             try:
                 self._process_work_item(item)
             except Exception:
@@ -705,7 +744,7 @@ class DataCollector:
             raise ValueError("schema_version must be a non-empty string")
         if not isinstance(payload, dict):
             raise ValueError("payload must be a dict")
-        if image_format.upper() not in _VALID_IMAGE_FORMATS:
+        if not isinstance(image_format, str) or image_format.upper() not in _VALID_IMAGE_FORMATS:
             raise ValueError(
                 f"image_format must be one of {_VALID_IMAGE_FORMATS}, got {image_format!r}"
             )

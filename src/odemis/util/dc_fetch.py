@@ -233,14 +233,22 @@ def fetch_samples(
             if not key or not should_download_key(key, event_filter, since_utc):
                 continue
             matched += 1
-            destination = output_dir / Path(key).name
+            # Flatten the S3 key (e.g. "host/file.zip" → "host_file.zip") so
+            # files from different hosts never collide in the output directory.
+            flat_name = key.replace("/", "_")
+            destination = output_dir / flat_name
             if destination.exists():
                 skipped_existing += 1
                 continue
+            # Write to a .part file first so a failed download never leaves a
+            # truncated ZIP that would be mistaken for a complete file on retry.
+            tmp_dest = destination.with_suffix(".part")
             try:
-                s3_client.download_file(bucket, key, str(destination))
+                s3_client.download_file(bucket, key, str(tmp_dest))
+                tmp_dest.rename(destination)
                 downloaded += 1
             except Exception:
+                tmp_dest.unlink(missing_ok=True)
                 failed += 1
                 logging.exception("Failed to download key %s", key)
 

@@ -439,6 +439,8 @@ class OdemisGUIApp(wx.App):
                 self._data_collector.set_consent(False)
             else:
                 self._data_collector.postpone_consent()
+            # Sync the Help menu checkbox to reflect the persisted choice.
+            self._menu_controller.refresh_consent_menu_item()
         except Exception:
             logging.exception("Failed to run data-collection consent prompt.")
 

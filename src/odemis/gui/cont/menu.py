@@ -179,6 +179,16 @@ class MenuController(object):
         item.Check(self._data_collector.get_consent() is True)
         return item
 
+    def refresh_consent_menu_item(self) -> None:
+        """Sync the Help menu checkbox to the current consent state.
+
+        Call this after any external consent change (e.g. from the consent
+        dialog shown at startup) so the menu reflects the persisted value
+        without requiring a restart.
+        """
+        if self._consent_menu_item is not None:
+            self._consent_menu_item.Check(self._data_collector.get_consent() is True)
+
     def _on_toggle_data_sharing(self, evt):
         """Toggle data sharing consent from Help menu check item."""
         enabled = self._consent_menu_item.IsChecked()

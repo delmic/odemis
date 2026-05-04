@@ -15,9 +15,9 @@ class ConsentDialog(wx.Dialog):
 
     def __init__(self, parent: wx.Window, remind_days: int) -> None:
         """
-        Initialize the consent dialog asking the user to opt in, opt out, or be reminded later 
+        Initialize the consent dialog asking the user to opt in, opt out, or be reminded later
         about sharing anonymized data with Delmic.
-        
+
         :param parent: The parent window.
         :param remind_days: Number of days to remind the user later.
         """

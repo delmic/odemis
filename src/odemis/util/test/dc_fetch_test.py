@@ -103,7 +103,9 @@ class DCFetchTest(unittest.TestCase):
             self.assertEqual(result["matched"], 1)
             self.assertEqual(result["downloaded"], 1)
             self.assertEqual(result["failed"], 0)
-            self.assertTrue((output_dir / "evt-20260322T100000-aaaa1111.zip").exists())
+            # Key "host/evt-20260322T100000-aaaa1111.zip" is flattened to
+            # "host_evt-20260322T100000-aaaa1111.zip" to avoid host collisions.
+            self.assertTrue((output_dir / "host_evt-20260322T100000-aaaa1111.zip").exists())
 
     def test_fetch_samples_applies_host_filter_prefix(self) -> None:
         """Host filter should become the S3 list prefix."""
