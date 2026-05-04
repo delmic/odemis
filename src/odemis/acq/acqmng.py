@@ -166,6 +166,7 @@ class ZStackAcquisitionTask(object):
         """
         remaining_t = self.estimate_total_duration()
         acquired_data = []
+        exp = None
         # iterate through streams
         for stream in self._streams:
             zstack = []
@@ -201,6 +202,7 @@ class ZStackAcquisitionTask(object):
 
             else:
                 # for each stream, iterate through zlevels
+                z_exp = None  # tracks failure within this stream's z-stack
                 for i, z in enumerate(self._zlevels[stream]):
                     # move the focuser
                     self._actuator_f = stream.focuser.moveAbs({"z": z})
@@ -218,9 +220,10 @@ class ZStackAcquisitionTask(object):
                     try:
                         # acquire this single stream, and get the data
                         self._single_acqui_f = acquire([stream], self._settings_obs)
-                        data, exp = self._single_acqui_f.result()
-                        if exp:
-                            return acquired_data, exp
+                        data, z_exp = self._single_acqui_f.result()
+                        if z_exp:
+                            # exit the z-loop; partial z-stack will be assembled below
+                            break
                         # check if cancellation happened while the acquiring future is working
                         if self._future_state == CANCELLED:
                             raise CancelledError()
@@ -234,20 +237,53 @@ class ZStackAcquisitionTask(object):
                     except CancelledError:
                         raise
                     except Exception as e:
-                        logging.exception("The acquisition failed at the %s-th zlevel of the stream %s, because %s" % (
-                        i + 1, stream, e))
-                        # TODO handle zstack assembling in case of error
-                        return acquired_data, e
+                        logging.exception("The acquisition failed at the %s-th zlevel of the stream %s",
+                                          i + 1, stream.name.value)
+                        z_exp = e
+                        break  # exit the z-loop; partial z-stack will be assembled below
 
                     # only if there is data acquired
                     if data:
-                        zstack.append(data[0])
+                        da = data[0]
+                        # In case of partial error, the data might be empty
+                        if zstack and da.shape[-2:] != zstack[0].shape[-2:]:
+                            logging.error(
+                                "Z-level %d of stream %s has shape %s, inconsistent with "
+                                "first z-level shape %s; stopping z-stack acquisition",
+                                i + 1, stream.name.value, da.shape[-2:], zstack[0].shape[-2:]
+                            )
+                            z_exp = ValueError(
+                                "Z-level %d image shape %s is inconsistent with first "
+                                "z-level shape %s" % (i + 1, da.shape[-2:], zstack[0].shape[-2:])
+                            )
+                            break
+                        zstack.append(da)
+
                     # update the remaining time
                     remaining_t -= stream.estimateAcquisitionTime()
                     self._main_future.set_end_time(time.time() + remaining_t)
 
-                zcube = assembleZCube(zstack, self._zlevels[stream])
-                acquired_data.append(zcube)
+                # Assemble whatever z-levels were acquired (partial or complete).
+                if zstack:
+                    if len(zstack) < len(self._zlevels[stream]):
+                        logging.warning(
+                            "Partial z-stack for stream %s: assembling %d of %d levels",
+                            stream.name.value, len(zstack), len(self._zlevels[stream])
+                        )
+                    try:
+                        zcube = assembleZCube(zstack, self._zlevels[stream][:len(zstack)])
+                        acquired_data.append(zcube)
+                    except Exception as e:
+                        logging.exception("Failed to assemble z-stack for stream %s",
+                                          stream.name.value)
+                        if z_exp is None:
+                            z_exp = e
+                elif z_exp is None:
+                    logging.warning("All z-levels for stream %s returned empty data, skipping",
+                                    stream.name.value)
+
+                if z_exp is not None:
+                    return acquired_data, z_exp
 
         # state that the future has finished
         with self._future_lock:
