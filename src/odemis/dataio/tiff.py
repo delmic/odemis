@@ -2311,7 +2311,10 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
     write_rgb (boolean): True if the image is RGB, False if the image is grayscale
     pyramid (boolean): whether the file should be saved in the pyramid format or not.
       In this format, each image is saved along with different zoom levels
+    raise TypeError: If the array has dtype=object
     """
+    if arr.dtype == object:
+        raise TypeError("Cannot write array with dtype=object to TIFF file")
     # if not pyramid, just save the image in the TIFF file, and return
     if not pyramid:
         f.write_image(arr, compression=compression, write_rgb=write_rgb)
