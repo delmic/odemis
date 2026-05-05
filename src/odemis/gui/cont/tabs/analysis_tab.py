@@ -27,6 +27,8 @@ import collections
 import gc
 import logging
 import os.path
+from typing import List, Union
+
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -55,6 +57,7 @@ from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport
     AngularSpectrumViewport, ThetaViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings
+from odemis.gui.cont.tabs.stream_load_mixin import StreamLoadMixin
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_ACT_ZOOM_FIT, TOOL_RULER, TOOL_LABEL, \
     TOOL_NONE
@@ -62,7 +65,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
 
 
-class AnalysisTab(Tab):
+class AnalysisTab(StreamLoadMixin, Tab):
     """ Handle the loading and displaying of acquisition files
     """
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -92,7 +95,7 @@ class AnalysisTab(Tab):
         # TODO: automatically change the display type based on the acquisition
         # displayed
         tab_data = guimod.AnalysisGUIData(main_data)
-        super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super().__init__(name, button, panel, main_frame, tab_data)
         if main_data.role in ("sparc-simplex", "sparc", "sparc2"):
             # Different name on the SPARC to reflect the slightly different usage
             self.set_label("ANALYSIS")
@@ -318,14 +321,6 @@ class AnalysisTab(Tab):
     def _on_add_tileset(self):
         self.select_acq_file(extend=True, tileset=True)
 
-    def load_tileset(self, filenames, extend=False):
-        data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
-        self.display_new_data(filenames[0], data, extend=extend)
-
-    def load_data(self, filename, fmt=None, extend=False):
-        data = open_acquisition(filename, fmt)
-        self.display_new_data(filename, data, extend=extend)
-
     def _get_time_spectrum_streams(self, spec_streams):
         """
         Sort spectrum streams into the substreams according to types spectrum, temporal spectrum,
@@ -345,6 +340,17 @@ class AnalysisTab(Tab):
         # are considered temporal spectrum streams -> adapt StaticSpectrumStream
 
         return spectrum, temporalspectrum, timecorrelator, angularspectrum
+
+    @call_in_wx_main
+    def load_streams(self, das: List[Union[model.DataArray, model.DataArrayShadow]], filename, extend):
+        """
+        Method to streamline the loading/display of streams with other tabs, without breaking existing code.
+        :param das: the data to load
+        :param filename: name of the file containing the data, for information display purposes.
+        :param extend: if False, will ensure that the previous streams are closed.
+          If True, will add the new file to the current streams opened.
+        """
+        self.display_new_data(filename, das, extend)
 
     @call_in_wx_main
     def display_new_data(self, filename, data, extend=False):

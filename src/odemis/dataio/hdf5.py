@@ -1642,6 +1642,7 @@ def export(filename, data, thumbnail=None):
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
       be dropped silently.
     '''
+    filename = str(filename)
     # TODO: add an argument to not do any clever data aggregation?
     if not isinstance(data, (list, tuple)):
         # TODO should probably not enforce it: respect duck typing

@@ -228,12 +228,13 @@ def open_acquisition(filename: os.PathLike, fmt: Optional[str] = None) -> List[U
     return data
 
 
-def splitext(path):
+def splitext(path: os.PathLike) -> Tuple[str, str]:
     """
     Split a pathname into basename + ext (.XXX).
     Does pretty much the same as os.path.splitext, but handles "double" extensions
     like ".ome.tiff".
     """
+    path = str(path)
     root, ext = os.path.splitext(path)
 
     # See if there is a longer extension in the known formats

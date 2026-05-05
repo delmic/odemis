@@ -2363,6 +2363,7 @@ def export(
     :param pyramid: whether to export data as pyramid
     :param imagej: save the metadata in a format compatible with ImageJ
     """
+    filename = str(filename)
     if not isinstance(data, list):
         data = [data]
 
