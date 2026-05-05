@@ -20,6 +20,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import annotations  # allows the use of Python3.9 style typing in Python3.8
+
 import logging
 import queue
 import re
