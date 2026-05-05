@@ -2197,7 +2197,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
 
     def showFeatureStream(self, stream) -> StreamController:
         """
-        Shows an Feature stream (in the Acquired view)
+        Shows a Feature stream (in the Acquired view)
         Must be run in the main GUI thread.
         """
         # TODO: don't delete/create stream controller every time? Instead, we
