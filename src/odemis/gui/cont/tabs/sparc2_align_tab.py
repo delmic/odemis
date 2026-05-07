@@ -45,7 +45,7 @@ from odemis.acq.align.autofocus import (
     Sparc2AutoFocus,
     Sparc2ManualFocus,
 )
-from odemis.acq.align.goffset_ext import auto_align_grating_detector_offsets
+from odemis.acq.align.goffset import auto_align_grating_detector_offsets
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
 from odemis.gui.conf.data import get_hw_config, get_local_vas
@@ -869,6 +869,13 @@ class Sparc2AlignTab(Tab):
         # Auto-calibration button
         self.panel.btn_auto_calibrate.Bind(wx.EVT_BUTTON, self._on_btn_auto_calibrate)
 
+        # Auto-calibration state
+        self._auto_calibrate_future = model.InstantaneousFuture()
+
+        # Create progress timer ONCE
+        self._progress_timer = wx.Timer(self.panel)
+        self.panel.Bind(wx.EVT_TIMER, self._on_progress_timer, self._progress_timer)
+
     def _on_btn_auto_align(self, evt):
         """
         Handle the "Auto alignment" button click.
@@ -1550,6 +1557,9 @@ class Sparc2AlignTab(Tab):
         if hasattr(self, "_auto_calibrate_future") and not self._auto_calibrate_future.done():
             self._auto_calibrate_future.cancel()
 
+            if self._progress_timer.IsRunning():
+                self._progress_timer.Stop()
+
             self.panel.btn_auto_calibrate.SetLabel("Auto calibrate")
             self.panel.gauge_auto_calibrate.SetValue(0)
             return
@@ -1560,9 +1570,8 @@ class Sparc2AlignTab(Tab):
 
         wx.CallAfter(self._start_auto_calibration)
 
-        self._progress_timer = wx.Timer(self.panel)
-        self.panel.Bind(wx.EVT_TIMER, self._on_progress_timer, self._progress_timer)
-        self._progress_timer.Start(200)
+        if not self._progress_timer.IsRunning():
+            self._progress_timer.Start(200)
 
     def _start_auto_calibration(self):
         main = self.tab_data_model.main
@@ -1630,8 +1639,7 @@ class Sparc2AlignTab(Tab):
         finally:
             self._auto_calibrate_future = model.InstantaneousFuture()
 
-            if hasattr(self, "_progress_timer"):
-                self._progress_timer.Stop()
+            wx.CallAfter(self._progress_timer.Stop)
 
             wx.CallAfter(self.panel.btn_auto_calibrate.SetLabel, "Auto calibrate")
             wx.CallAfter(self.panel.gauge_auto_calibrate.SetValue, 0)

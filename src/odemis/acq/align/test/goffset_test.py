@@ -7,7 +7,6 @@ import os
 import unittest
 import logging
 import numpy as np
-import odemis
 
 from odemis import model
 from odemis.util import timeout
@@ -20,15 +19,8 @@ from odemis.acq.align.goffset_ext import(
     log_detector_state
 )
 
-
-
 from odemis.dataio import hdf5
-
-
 logging.getLogger().setLevel(logging.DEBUG)
-
-CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sim/sparc2-focus-test.odm.yaml"
 
 HOME_PATH = os.path.expanduser("~") + "/"
 H5_FILE_2d_NO_PEAK = HOME_PATH + "development/odemis/grating 2 1024x256/"
@@ -40,7 +32,6 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        #testing.start_backend(SPARC_CONFIG)
 
         cls.detector = model.getComponent(role="ccd")
         cls.spgr = model.getComponent(role="spectrograph")
@@ -66,6 +57,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         """
         Test peak detection on synthetic Gaussian data.
         """
+
         x = np.arange(200)
         true_center = 83.4
         spectrum = np.exp(-0.5*((x-true_center)/3.0)**2)
@@ -77,6 +69,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         """
         Test peak detection on 2D data (mean over axis).
         """
+
         x = np.arange(200)
         true_center = 120.0
         line = np.exp(-0.5*((x-true_center)/4.0)**2)
@@ -184,7 +177,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         start_goffset = self.spgr.position.value["goffset"]
 
-        f = sparc_auto_grating_offset(self.spgr, spccd, single_detector_mode=True, max_it=50)
+        f = sparc_auto_grating_offset(self.spgr, spccd, max_it=50)
         result = f.result(timeout=300)
         self.assertTrue(result, "Single-detector alignment failed")
 
@@ -237,7 +230,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         spccd = model.getComponent(role="sp-ccd")
         spccd.exposureTime.value = spccd.exposureTime.range[0]
 
-        # Ensure primary detector sets the grating first
+        # ensure primary detector sets the grating first
         try:
             self.selector.moveAbsSync({"rx": 0.0})
         except Exception:
@@ -247,13 +240,13 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         self.assertTrue(f_first.result(timeout=300), "First-detector alignment failed")
         grating_after_first = self.spgr.position.value["goffset"]
 
-        # Switch to secondary detector
+        # switch to secondary detector
         try:
             self.selector.moveAbsSync({"rx": 1.5707963267948966})
         except Exception:
             logging.debug("Selector move to secondary failed or not present; continuing")
 
-        # Measure peak before alignment on secondary detector
+        # measure peak before alignment on secondary detector
         data_before = spccd.data.get(asap=False)
         before_peak = float(find_peak_position(data_before))
 
@@ -261,16 +254,16 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         f_second = sparc_auto_grating_offset(self.spgr, spccd, max_it=50)
         self.assertTrue(f_second.result(timeout=600), "Second-detector alignment failed")
 
-        # Measure peak after alignment
+        # measure peak after alignment
         data_after = spccd.data.get(asap=False)
         after_peak = float(find_peak_position(data_after))
 
-        # Assert grating did not change
+        # assert grating did not change
         grating_after_second = self.spgr.position.value["goffset"]
         self.assertAlmostEqual(grating_after_first, grating_after_second, places=3,
             msg="Grating goffset changed when aligning second detector in multi-detector mode")
 
-        # Assert peak moved closer to center on the secondary detector
+        # assert peak moved closer to center on the secondary detector
         center = spccd.resolution.value[0] / 2
         before_dist = abs(before_peak - center)
         after_dist = abs(after_peak - center)
@@ -283,9 +276,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         of offsets when operating with a single detector and multiple gratings.
         """
 
-        #f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=[self.ccd], selector=self.selector)
         f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=self.detector, selector=self.selector)
-
         res = f.result(timeout=900)
 
         n_gratings = len(self.spgr.axes["grating"].choices)
@@ -299,11 +290,32 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         self.assertEqual(len(dets_first), n_detectors)
 
+    def test_single_detector_alignment_algorithm(self):
+
+        """
+        Test automatic alignment of the gratings using a single detector.
+        """
+
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=self.detector, selector=self.selector)
+        result = f.result(timeout=800)
+
+        self.assertTrue(result)
+
     def test_multi_detector_iteration(self):
+        """
+        Tests the auto-alignment sequence for a multi-detector setup.
+
+        Verifies that:
+        - Grating 1 aligns ALL detectors (calibrating the detector offsets).
+        - Subsequent gratings align ONLY the primary detector (calibrating the grating offsets).
+        - The total number of alignment runs is exactly as expected.
+        - The secondary detector receives valid optical data post-alignment.
+        """
+
         spccd = model.getComponent(role="sp-ccd")
         spccd.exposureTime.value = spccd.exposureTime.range[0]
 
-        detectors = [self.ccd, spccd]
+        detectors = [self.detector, spccd]
 
         # run alignment
         f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=detectors, selector=self.selector)
@@ -337,17 +349,17 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         data = spccd.data.get(asap=False)
 
         # check data is not flat
-        self.assertNotEqual(data.max(), data.min)
+        self.assertNotEqual(data.max(), data.min())
 
     def test_driver_raises_valueerror_on_hardware_limit(self):
         """
         Verifies the driver successfully raises a ValueError when computing
         an offset outside of the hardware limits.
         """
-        # A value guaranteed to exceed DET_OFFSET_MAX + GRAT_OFFSET_MAX
+        # out of bounds value
         out_of_bounds_target = 9999999.0
 
-        # Test method directly to ensure the new bounds-checking logic works
+        # test method directly to ensure the new bounds-checking logic works
         with self.assertRaises(ValueError, msg="Driver should raise ValueError for out-of-bounds offset"):
             self.spgr._doSetGoffsetAbs(out_of_bounds_target)
 
@@ -357,25 +369,25 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         Verifies that when a goffset move exceeds hardware limits and throws a ValueError,
         the alignment algorithm catches it gracefully instead of crashing.
         """
-        # Slightly misalign the peak so the algorithm wants to move
+        # slightly misalign the peak so the algorithm wants to move
         self.spgr.moveRelSync({"goffset": 50})
 
-        # Temporarily bypass the software axis range clamp to ensure the raw command
+        # temporarily bypass the software axis range clamp to ensure the raw command
         # reaches the hardware driver to trigger the ValueError
         original_range = self.spgr.axes["goffset"].range
 
         try:
             self.spgr.axes["goffset"].range = (-9999999.0, 9999999.0)
 
-            # Execute auto-alignment procedure
+            # execute auto-alignment procedure
             f = sparc_auto_grating_offset(self.spgr, self.detector, max_it=10, gain=99999.0)
             result = f.result(timeout=100)
 
-            # Driver should raise ValueError for out-of-bounds move, which should be caught by the alignment code,
+            # driver should raise ValueError for out-of-bounds move, which should be caught by the alignment code
             self.assertFalse(result, "Alignment should gracefully fail (return False) when blocked by hardware limits.")
 
         finally:
-            # Restore original software limits and position
+            # restore original software limits and position
             self.spgr.axes["goffset"].range = original_range
             self.spgr.moveAbsSync({"goffset": self._original_position["goffset"]})
 
@@ -407,12 +419,16 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         image = np.array(image)
 
-        # run your actual function
+        # run function
         peak_pos = find_peak_position(image)
 
         self.assertAlmostEqual(peak_pos, true_center, places=1)
 
     def test_no_peak_present_image(self):
+        """
+        Test peak detection on not-peak detector data.
+        """
+
         im_no_peak = hdf5.read_data(H5_FILE_2d_NO_PEAK + "no-peak-2d-1.h5")
         data = (im_no_peak[0].data)
 
@@ -428,7 +444,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         spectrum = np.squeeze(raw_data)
         if spectrum.ndim > 1:
-            # Average over the row dimension (256) to get the 1D spectrum (1024)
+            # convert 2D array into 1D by averaging
             spectrum = spectrum.mean(axis=0)
 
         clean_spec = spectrum - np.median(spectrum)
@@ -437,7 +453,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         snr = peak_val / (noise_std + 1e-6)
         peak_idx = np.argmax(clean_spec)
 
-        # Simple width estimation (standard deviation around peak)
+        # simple width estimation
         window = clean_spec[max(0, peak_idx - 2): min(len(clean_spec), peak_idx + 3)]
         x = np.arange(len(window))
         w = window - window.min()
@@ -447,7 +463,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
             var = np.sum(w * (x - mean) ** 2) / np.sum(w)
             width = np.sqrt(var)
 
-        # --- THE DEBUG LOGS ---
+        # debug logs
         logging.info("=" * 40)
         logging.info(f"IMAGE DEBUG SCORECARD")
         logging.info(f"Final Spectrum Shape: {spectrum.shape}")
@@ -458,7 +474,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         logging.info(f"Cleaned Spectrum Shape for Function: {spectrum.shape}")
 
-        # 3. Now pass the cleaned 1D array to your existing function
+        # pass the cleaned 1D array to the existing function
         present = peak_is_present(spectrum, snr_threshold=10.0, width_range=(0.5, 12.0))
 
         self.assertTrue(present, "Peak should have been detected in the cleaned spectrum.")
@@ -470,7 +486,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         Test cancelling alignment.
         """
         f = sparc_auto_grating_offset(self.spgr, self.detector)
-        # Wait for the result or a timeout
+        # wait for the result or a timeout
         try:
             f.result(timeout=5)
         except:

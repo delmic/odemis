@@ -10,10 +10,9 @@ from odemis import model
 from odemis.acq.align.autofocus import _mapDetectorToSelector
 from odemis.model import InstantaneousFuture
 from odemis.util import executeAsyncTask
+from odemis.util.peak import Smooth, Detect
 from scipy.optimize import curve_fit
 from typing import Any, Dict, List, Optional, Tuple, Union
-from scipy.ndimage import gaussian_filter1d
-
 
 MOVE_TIME_GRATING = 20  # s
 MOVE_TIME_DETECTOR = 5  # s
@@ -34,52 +33,43 @@ def gaussian(x: numpy.ndarray, amplitude: float, x0: float, width: float) -> num
     return intensity
 
 
-def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
+def find_peak_position(data: numpy.ndarray, window_radius: int = 15, snr_threshold: float = 10.0) -> float:
     """
     Finds the peak position in the given spectrum data.
-    It can handle both 1D and 2D data (in which case it averages over the first dimension).
+    It can handle both 1D and 2D data (in which case it uses Maximum Intensity Projection).
 
-    The function first identifies the absolute peak, then creates a window around it to minimize noise influence.
-    It then calculates a weighted average of the positions within this window, using the intensity values as weights.
-    For improved accuracy, it attempts to fit a Gaussian curve to the windowed data, estimating the peak's center, width
-    and amplitude.
+    The function first uses geometric shape-checking (Smooth and Detect) to accurately
+    find the peak index while ignoring high-amplitude 1-pixel noise spikes.
+    It then calculates a weighted average of the positions within a window, using the
+    intensity values as weights. For improved accuracy, it attempts to fit a Gaussian curve.
 
-    However, the curve fit can fail to converge or produce unreasonable results if the initial guess is poor, if there are
-    outliers, baseline trends, or if the data is too noisy. In such cases, the function falls back to using the weighted
-    average as the peak position estimate. The weighted average is more robust as it does not run an iterative optimizer,
-    so it has no convergence or numerical-optimization failure modes, but it may be less accurate if the peak is not well-defined
-    or if there are multiple peaks within the window.
-
-    :param data: 1D or 2D array containing the spectrum (if 2D, it will be averaged to 1D)
+    :param data: 1D or 2D array containing the spectrum
     :param window_radius: number of pixels on either side of the peak to include in the window for fitting (default: 15)
     :return: estimated peak position in pixels (float)
     :raises RuntimeError: if no significant peak is detected (SNR too low)
     """
 
-    if data.ndim == 2:
-        spectrum = data.mean(axis=0)  # squash data into a 1D array
-    else:
-        spectrum = data
+    raw_data = numpy.asarray(data, dtype=float)
+    spectrum = numpy.squeeze(raw_data)
 
-    # compute SNR by comparing the peak height above the median background to the background magnitude and returns
-    # False if that SNR is below the threshold. This helps reject cases with no real peak,
-    # where the Gaussian fit would fail or produce nonsense results.
+    # maximum intensity projection
+    if spectrum.ndim > 1:
+        spectrum = spectrum.max(axis=0)
 
-    # peak_value = float(spectrum.max())
-    # background = float(numpy.median(spectrum))
-    # snr = (peak_value - background) / (abs(background) + 1e-6)
+    # geometric smoothing and noise calculation
+    smoothed_data = Smooth(spectrum, window_len=11)
+    clean_data = smoothed_data - numpy.median(smoothed_data)
+    noise_std = numpy.std(clean_data)
 
-    spectrum = spectrum - numpy.median(spectrum)
-    noise_std = numpy.std(spectrum)
-    peak_height = spectrum.max()
-    snr = peak_height / (noise_std + 1e-6)
+    # detect peak
+    maxtab, _ = Detect(smoothed_data, lookahead=10, delta=(noise_std + 1e-6) * snr_threshold)
 
-    if snr < 10.0:  # tune threshold
-        raise RuntimeError("No peak detected (SNR too low)")
+    if not maxtab:
+        raise RuntimeError("No peak detected (SNR too low or peak geometry invalid)")
 
-    spectrum_smooth = gaussian_filter1d(spectrum, sigma=2)
-    peak_idx = int(numpy.argmax(spectrum_smooth))
-    # peak_idx = numpy.argmax(spectrum)  # find the absolute highest point
+    # sort peaks by intensity and grab the highest valid one
+    maxtab.sort(key=lambda x: x[1], reverse=True)
+    peak_idx = int(maxtab[0][0])
 
     # create a window around the peak
     start = max(0, peak_idx - window_radius)
@@ -94,15 +84,13 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
     # as the best estimate of the peak, since weighted average would be undefined
     if weights.sum() == 0:
         weighted_avg = float(peak_idx)
-        logging.info("Weighted average fallback: all window data <= 0, using peak_idx=%d as estimate",
-                     peak_idx)
+        logging.info("Weighted average fallback: all window data <= 0, using peak_idx=%d as estimate", peak_idx)
     else:
         weighted_avg = float(numpy.sum(window_idx * window_data) / numpy.sum(weights))
 
     # try Gaussian fit for better accuracy, but fallback to weighted average if it fails or is out of bounds
-
     try:
-        p0 = [window_data.max(), weighted_avg, 2.5]  # intial guess: [amplitude, center, width]
+        p0 = [window_data.max(), weighted_avg, 2.5]  # initial guess: [amplitude, center, width]
         popt, pcov = curve_fit(gaussian, window_idx, window_data, p0=p0)
         peak = popt[1]
 
@@ -110,7 +98,7 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
             return float(peak)
 
     except RuntimeError:
-        logging.info("Gaussian peak fit did not converge, falling back to weighted average")
+        logging.debug("Gaussian peak fit did not converge, falling back to weighted average")
 
     except ValueError:
         logging.exception("Gaussian peak fit failed due to invalid input")
@@ -118,60 +106,69 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15) -> float:
     return weighted_avg
 
 def peak_is_present(spectrum: numpy.ndarray,
-                    snr_threshold: float=5.0,
-                    width_range: Tuple[float, float]=(0.5, 12.0)) -> bool:
+                    snr_threshold: float = 10.0,
+                    width_range: Tuple[float, float] = (0.5, 12.0)) -> bool:
     """
        Test to decide whether spectral peak is present.
 
         The test uses:
-          - a simple SNR threshold comparing the maximum to the median background,
-          - a local width estimate computed from a small window around the peak to
-            reject hot pixels and extremely broad features.
+          - The proven Odemis Detect() algorithm for geometric shape verification.
+          - A dynamic SNR threshold to reject background noise.
+          - A local width estimate computed from a small window around the peak.
 
-    :param spectrum: 1D array containing the spectrum (intensity vs pixel)
-    :param snr_threshold: minimum required signal-to-noise ratio for a peak to be considered present (default: 1)
+    :param spectrum: 1D or 2D array containing the spectrum
+    :param snr_threshold: minimum required signal-to-noise ratio for a peak (default: 10.0)
     :param width_range: acceptable range of estimated peak widths in pixels (default: (0.5, 12.0))
     :return: True if a peak meeting the criteria is present, False otherwise
     """
 
-    # basic stats
-    # peak_value = float(spectrum.max())
-    # background = float(numpy.median(spectrum))
-    # snr = (peak_value - background) / (abs(background) + 1e-6)
+    raw_data = numpy.asarray(spectrum, dtype=float) # convert to float
+    spectrum_1d = numpy.squeeze(raw_data)  # remove any dummy dimensions
 
-    spectrum = spectrum - numpy.median(spectrum)
-    noise_std = numpy.std(spectrum)
-    peak_value = spectrum.max()
-    snr = peak_value / (noise_std + 1e-6)
+    # convert 2D data to 1D via MIP if it wasn't done by the caller
+    if spectrum_1d.ndim > 1:
+        spectrum_1d = spectrum_1d.max(axis=0)
 
-    if snr < snr_threshold:
+    smoothed_data = Smooth(spectrum_1d, window_len=11) # remove any hot pixels
+    clean_data = smoothed_data - numpy.median(smoothed_data)
+    noise_std = numpy.std(clean_data)
+
+    # use Detect to reject high-amplitude noise spikes that lack Gaussian geometry
+    maxtab, _ = Detect(smoothed_data, lookahead=10, delta=(noise_std + 1e-6) * snr_threshold)
+
+    if not maxtab:
         return False
 
-    # estimate width around the peak
-    spectrum_smooth = gaussian_filter1d(spectrum, sigma=2)
-    peak_idx = int(numpy.argmax(spectrum_smooth))
-    # peak_idx = int(numpy.argmax(spectrum))
-    if peak_idx < 1 or peak_idx > len(spectrum) - 2:
-        logging.debug("Peak too close to edge idx=%d len=%d", peak_idx, len(spectrum))
+    # get the best peak found
+    maxtab.sort(key=lambda x: x[1], reverse=True)
+    peak_idx = int(maxtab[0][0])
+    peak_value = maxtab[0][1]
+
+    if peak_idx < 1 or peak_idx > len(spectrum_1d) - 2:
+        logging.debug("Peak too close to edge idx=%d len=%d", peak_idx, len(spectrum_1d))
         return False
 
-    window = spectrum[peak_idx-2 : peak_idx+3]
+    # estimate width around the verified peak
+    window = spectrum_1d[peak_idx - 2: peak_idx + 3] # create 5-value window (2 on the left, 2 on the right of the peak)
     x = numpy.arange(len(window))
     w = window - window.min()
     if w.sum() == 0:
         return False
 
     mean = numpy.sum(x * w) / numpy.sum(w)
-    var = numpy.sum(w * (x - mean)**2) / numpy.sum(w)
+    var = numpy.sum(w * (x - mean) ** 2) / numpy.sum(w)
     width = numpy.sqrt(var)
+
+    snr = (peak_value - numpy.median(smoothed_data)) / (noise_std + 1e-6)
     present = width_range[0] <= width <= width_range[1]
+
     logging.debug("snr=%.2f width=%.2f present=%s", snr, width, present)
 
     return present
 
-
-def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture, step: int=2000) -> Tuple[float, float]:
-    """
+def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture,
+                                 step: int = 2000) -> Tuple[float, float]:
+    """"
     Coarse scan across the goffset axis until a real peak becomes visible.
 
     The function performs absolute moves across the configured goffset axis
@@ -197,7 +194,7 @@ def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture
         "Coarse local scan around goffset %.1f with step %.1f and max span %.1f",
         current, step, max_span)
 
-    # Build a sequence of positions: current, +step, -step, +2*step, -2*step, ...
+    # build a sequence of positions: current, +step, -step, +2*step, -2*step, ...
     positions = [current]
     k = 1
     while k * step <= max_span:
@@ -219,12 +216,13 @@ def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture
         logging.debug("Coarse scan move attempt to goffset %.3f", g)
         try:
             spgr.moveAbsSync({"goffset": g})
+            time.sleep(2) # give hardware time to stabilize
         except ValueError:
             logging.warning("Skipping invalid goffset %.3f (%s)", g, ValueError)
             continue
 
         data = detector.data.get(asap=False)
-        spectrum = data.mean(axis=0)
+        spectrum = data.max(axis=0) if data.ndim == 2 else data
 
         if peak_is_present(spectrum):
             peak = find_peak_position(data)
@@ -234,30 +232,30 @@ def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture
 
 def estimate_goffset_scale(spgr: model.Actuator,
                            detector: model.Detector,
-                           delta: float=5.0,
-                           retries: int=1) -> Tuple[float, float, float]:
+                           delta: float = 5.0,
+                           retries: int = 1) -> Tuple[float, float, float]:
     """
-    Estimate the scale factor between a change in the grating offset ('goffset')
-    and the resulting shift of the spectral peak on the detector.
+        Estimate the scale factor between a change in the grating offset ('goffset')
+        and the resulting shift of the spectral peak on the detector.
 
-    The function moves the actuator by a small step (delta) and measures the peak position before and after the move.
-    It calculates the ratio of pixel shift per unit of goffset. The actuator is returned to its original position
-    after measurement.
+        The function moves the actuator by a small step (delta) and measures the peak position before and after the move.
+        It calculates the ratio of pixel shift per unit of goffset. The actuator is returned to its original position
+        after measurement.
 
-    If the measured scale is unreasonably small or large, the function retries recursively
-    and falls back to a default value of 0.5 if necessary.
+        If the measured scale is unreasonably small or large, the function retries recursively
+        and falls back to a default value of 0.5 if necessary.
 
-    :param spgr: spectrograph
-    :param detector: detector
-    :param delta: The relative goffset step size to apply when measuring the scale (default: 5.0).
-                  The actual step may be negated to avoid exceeding hardware limits.
-    :param retries: number of retries allowed if the estimated scale is unreliable (default: 1).
+        :param spgr: spectrograph
+        :param detector: detector
+        :param delta: The relative goffset step size to apply when measuring the scale (default: 5.0).
+                      The actual step may be negated to avoid exceeding hardware limits.
+        :param retries: number of retries allowed if the estimated scale is unreliable (default: 1).
 
-    :return: Tuple (scale, p0, p1)
-         scale: estimated pixels per unit of goffset
-         p0: peak position at the initial goffset
-         p1: peak position after applying the test delta
-    """
+        :return: Tuple (scale, p0, p1)
+             scale: estimated pixels per unit of goffset
+             p0: peak position at the initial goffset
+             p1: peak position after applying the test delta
+        """
 
     # get initial state
     data0 = detector.data.get(asap=False)
@@ -292,7 +290,7 @@ def estimate_goffset_scale(spgr: model.Actuator,
     # If the retry still fails (raising a RuntimeError), we fall back to a default
     # scale value to ensure the algorithm can continue and avoid infinite recursion.
 
-    if abs(scale) < 1e-3 or abs(scale) > 10.0:
+    if abs(scale) < 1e-3 or abs(scale) > 2.0:
         logging.warning(
             "Unreliable scale estimate (%.4f). Retries left: %d",
             scale, retries)
@@ -306,10 +304,20 @@ def estimate_goffset_scale(spgr: model.Actuator,
     return scale, p0, p1
 
 def log_detector_state(caller: str, stage: str, detector: model.Detector, data: numpy.ndarray):
+    """
+    Log a compact summary of the detector data: min, max, mean, background, noise, peak and SNR.
+
+    :param caller: origin of the log message
+    :param stage: stage of the log message
+    :param detector: detector
+    :param data: data
+    :return: None
+    """
+
     shape = data.shape
 
-    # Keep consistent with detection pipeline
-    spectrum = data.mean(axis=0) if data.ndim == 2 else data
+    # convert 2D data to 1D if necessary
+    spectrum = data.max(axis=0) if data.ndim == 2 else data
 
     max_val = float(spectrum.max())
     min_val = float(spectrum.min())
@@ -392,9 +400,9 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
     logging.info("Running alignment | detector=%s |", detector.name)
 
     try:
-        center_target = detector.resolution.value[0] / 2
+        center_target = (detector.resolution.value[0] - 1) / 2
         data0 = detector.data.get(asap=False)
-        spectrum0 = data0.mean(axis=0) if data0.ndim == 2 else data0
+        spectrum0 = data0.max(axis=0) if data0.ndim == 2 else data0
 
         if peak_is_present(spectrum0):
             peak0 = find_peak_position(data0)
@@ -404,17 +412,6 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
             logging.debug("Initial read: no significant peak detected, scanning the axes")
             peak_present = False
             peak0 = None
-
-        # # initial read: try to get a valid peak without moving the grating
-        # try:
-        #     data0 = detector.data.get(asap=False)
-        #     peak0 = find_peak_position(data0)   # raises RuntimeError if no peak present
-        #     logging.debug("Initial read: peak0=%.2f px", peak0)
-        #     peak_present = True
-        # except RuntimeError:
-        #     logging.debug("Initial read: no significant peak detected, scanning the axes")
-        #     peak_present = False
-        #     peak0 = None
 
         # if peak present and already centered, do nothing
         if peak_present:
@@ -444,9 +441,6 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                 return True
 
         # peak is present and not centered -> estimate scale and center
-        # scale, p0, p1 = estimate_goffset_scale(spgr, detector)
-        # logging.info("Scale estimated: %.4f px/goffset | p0=%.2f p1=%.2f", scale, p0, p1)
-
         try:
             scale, p0, p1 = estimate_goffset_scale(spgr, detector)
             logging.info("Scale estimated: %.4f px/goffset | p0=%.2f p1=%.2f", scale, p0, p1)
@@ -471,14 +465,29 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
         for i in range(max_it):
             _checkCancelled(future)
 
+            # if the peak is lost during the iteration, retry twice before aborting.
             if i == 0:
                 peak_px = start_peak
             else:
-                data = detector.data.get(asap=False)
-                try:
-                    peak_px = find_peak_position(data)
-                except RuntimeError:
-                    logging.error("Peak re-acquisition failed during iteration %d — aborting", i)
+                max_retries = 2
+                peak_found = False
+
+                for attempt in range(max_retries + 1):
+                    data = detector.data.get(asap=False)
+                    try:
+                        peak_px = find_peak_position(data)
+                        peak_found = True
+                        break
+                    except RuntimeError:
+                        if attempt < max_retries:
+                            logging.warning("Peak lost in iteration %d. Settle and retry (%d/%d)...",
+                                            i, attempt + 1, max_retries)
+                            time.sleep(2)
+                        else:
+                            pass
+
+                if not peak_found:
+                    logging.error(f"Peak re-acquisition permanently failed during iteration {i} — aborting")
                     return False
 
             error_px = peak_px - center_target
@@ -486,15 +495,15 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
             if abs(error_px) <= tolerance_px:
                 return True
 
-            # Calculate required adjustment based on pixel error and scaling factor
+            # calculate required adjustment based on pixel error and scaling factor
             delta_goffset = -gain * (error_px / scale)
             current = spgr.position.value["goffset"]
 
-            # Clamp move to stay within the allowed goffset range.
-            # Ensures that we don't command a step that would exceed axis limits.
+            # clamp move to stay within the allowed goffset range
+            # ensures that we don't command a step that would exceed axis limits.
             delta_goffset = max(minv - current, min(maxv - current, delta_goffset))
 
-            # Accumulate the actual displacement for total movement tracking
+            # accumulate the actual displacement for total movement tracking
             total_goffset_displacement += delta_goffset
 
             logging.debug(
@@ -503,6 +512,7 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
 
             try:
                 spgr.moveRelSync({"goffset": delta_goffset})
+                time.sleep(0.2) # settle time for hardware to stabilize
             except ValueError:
                 logging.warning("Hardware offset limit reached: %s. Keeping max allowed move.", ValueError)
                 break
@@ -518,7 +528,6 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
     except Exception as e:
         logging.error("Alignment error: %s", e)
         raise
-
 
 def _cancel_sparc_auto_grating_offset(future: model.ProgressiveFuture) -> bool:
     """
@@ -559,19 +568,19 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
                                         selector: Optional[model.Actuator] = None,
                                         streams: Optional[List['Stream']] = None) -> model.ProgressiveFuture:
     """
-    Automatically align grating-detector offsets for all combinations of gratings and detectors.
-     - If a selector is provided, it will be used to switch between detectors for the first grating, then the first detector
-     will be used for all subsequent gratings.
-     - For multiple detectors, the grating alignment will only be adjusted for the first detector; subsequent detectors will
-     be aligned by adjusting the detector offset with the grating alignment fixed.
+        Automatically align grating-detector offsets for all combinations of gratings and detectors.
+         - If a selector is provided, it will be used to switch between detectors for the first grating, then the first detector
+         will be used for all subsequent gratings.
+         - For multiple detectors, the grating alignment will only be adjusted for the first detector; subsequent detectors will
+         be aligned by adjusting the detector offset with the grating alignment fixed.
 
-    :param spectrograph: spectrograph
-    :param detectors: list of detectors
-    :param selector: optional selector to switch between detectors
-    :param streams: optional list of streams to update with progress
-    :return: ProgressiveFuture that will resolve to a dict mapping (grating, detector)
-    :raises ValueError: if no detectors provided, or if multiple detectors provided without a selector
-    :raises CancelledError: if the operation is cancelled
+        :param spectrograph: spectrograph
+        :param detectors: list of detectors
+        :param selector: optional selector to switch between detectors
+        :param streams: optional list of streams to update with progress
+        :return: ProgressiveFuture that will resolve to a dict mapping (grating, detector)
+        :raises ValueError: if no detectors provided, or if multiple detectors provided without a selector
+        :raises CancelledError: if the operation is cancelled
     """
 
     if not isinstance(detectors, Iterable):
@@ -642,12 +651,12 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             return True
         return detector_to_selector[d] == selector.position.value[selector_axes]
 
-    # Calculate total steps for a simple progress bar
+    # calculate total steps for progress bar
     total_steps = len(detectors) + (len(gratings) - 1)
     current_step = 0
     future._progress = 0.0
 
-    # Start alignment for the first grating
+    # start alignment for the first grating
     try:
         g0 = gratings[0]
         logging.info("Starting alignment for initial grating: %s", g0)
@@ -673,7 +682,7 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             success = future._subfuture.result()
             results[(g0, d.name)] = success
 
-            # Update progress
+            # update progress
             current_step += 1
             future._progress = current_step / total_steps
 
@@ -696,7 +705,7 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             success = future._subfuture.result()
             results[(g, first_detector.name)] = success
 
-            # Update progress
+            # update progress
             current_step += 1
             future._progress = current_step / total_steps
 
