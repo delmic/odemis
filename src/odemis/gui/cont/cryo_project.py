@@ -138,7 +138,7 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
     overview_list = serialize_images(overviews)
     return {"version": PROJECT_VERSION, "features": feature_list, "overviews": overview_list}
 
-def add_image(images: list[dict], filename: os.PathLike, indices: Optional[Iterable[int]]=None):
+def add_image(images: List[dict], filename: os.PathLike, indices: Optional[Iterable[int]] = None):
     """
     Add image to a list of images
     :param images: list of images to append to
@@ -149,7 +149,7 @@ def add_image(images: list[dict], filename: os.PathLike, indices: Optional[Itera
     # Our naming schemes should not allow to add a duplicate filename, so that is not handled here
     images.append({IMG_FILENAME: filename, **({IMG_IN_FILE_IDS: set(indices)} if indices else {})})
 
-def remove_image(images: list[dict], filename: os.PathLike, indices: Optional[Iterable[int]] = None):
+def remove_image(images: List[dict], filename: os.PathLike, indices: Optional[Iterable[int]] = None):
     """
     Remove image from a list of images
     :param images: list of images to remove from
@@ -168,7 +168,7 @@ def remove_image(images: list[dict], filename: os.PathLike, indices: Optional[It
                     images.remove(im)
             break  # Nothing left to do
 
-def serialize_images(images: list[dict]) -> List[dict]:
+def serialize_images(images: List[dict]) -> List[dict]:
     """
     Convert a list of images into a serialized form
     :param images: list of images to serialize

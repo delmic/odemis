@@ -21,13 +21,12 @@ import re
 import time
 import unittest
 import warnings
-from unittest.case import skip
+from typing import Tuple
 
 import numpy
 
 from odemis import model
 from odemis.acq.align.shift import MeasureShift
-from odemis.dataio import tiff
 from odemis.driver import simcam, simulated
 from odemis.util import testing, timeout
 
@@ -489,7 +488,7 @@ class TestSimCamSpectrograph(unittest.TestCase):
         self.mock_spectrograph.position.value["goffset"] = 0.0
         time.sleep(0.1)
 
-    def _find_peak(self, image: numpy.ndarray) -> tuple[float, float, float]:
+    def _find_peak(self, image: numpy.ndarray) -> Tuple[float, float, float]:
         """
         Helper function to find the peak
         Returns weighted peak position, max profile value and mean profile value.
