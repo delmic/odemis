@@ -622,7 +622,7 @@ class AndorCam2(model.DigitalCamera):
             # This is in case the client sends multiple triggers before one image
             # is received.
             self._old_triggers = []
-            self._synchronized = False  # True if the acquisition must wait for an Event trigger
+            self._synchronized = TRIG_NONE  # Type of trigger to wait between each frame. TRIG_NONE = continuous
             self._num_no_gc = 0  # how many times the garbage collector was skipped
 
             # For temporary stopping the acquisition (kludge for the andorshrk
@@ -2021,6 +2021,8 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Using start/stop method for synchronized acquisition")
             self.atcore.SetAcquisitionMode(AndorV2DLL.AM_SINGLE)
             self.atcore.SetTriggerMode(AndorV2DLL.TM_INTERNAL)  # no trigger
+        else:
+            raise ValueError(f"Unexpected trigger_mode {trigger_mode}")
 
         return trigger_mode
 
@@ -2192,7 +2194,7 @@ class AndorCam2(model.DigitalCamera):
         # "some settings", so check one last time that it's really possible to use
         # software trigger. Or alternatively, maybe the previous settings didn't
         # allow software trigger, but the new ones do.
-        if (self._supports_soft_trigger and synchronized and
+        if (self._supports_soft_trigger and synchronized == TRIG_SW and
             (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE)
            ):
             logging.debug("Reconfiguring trigger mode as its availability has changed (readout rate = %s, gain = %s)",
@@ -2895,7 +2897,7 @@ class AndorCam2DataFlow(model.DataFlow):
                     comp.set_trigger(TRIG_SW)
                     self._sync_event.subscribe(comp)
             else:  # Non synchronized
-                comp.set_trigger(False)
+                comp.set_trigger(TRIG_NONE)
 
             # If the DF is synchronized, the subscribers probably don't want to
             # skip some data => disable discarding data
