@@ -1411,7 +1411,7 @@ def get_merged_raw_image(das: model.DataArrayShadow, z: int) -> model.DataArray:
     return mergeTiles(tiles)
 
 
-def get_tile_indices(rect: Tuple[int], tile_shape: Tuple[int]) -> Tuple[int, int, int, int]:
+def get_tile_indices(rect: Tuple[int, int, int, int], tile_shape: Tuple[int, int]) -> Tuple[int, int, int, int]:
     """Calculate the tile indices for the given rect and tile shape
     :param rect: the pixel coordinates to fetch the image
     :param tile_shape: the shape of the tiles
@@ -1431,7 +1431,7 @@ def get_tile_indices(rect: Tuple[int], tile_shape: Tuple[int]) -> Tuple[int, int
     return start_tile_x, start_tile_y, end_tile_x, end_tile_y
 
 
-def apply_zoom_on_image_coordinates(rect: List[int], z:int) -> List[int]:
+def apply_zoom_on_image_coordinates(rect: List[int], z: int) -> List[int]:
     """
     Given a rectangle in image pixel coordinates (at zoom level == 0),
     apply the zoom level to make the pixel size 2^z times larger.
