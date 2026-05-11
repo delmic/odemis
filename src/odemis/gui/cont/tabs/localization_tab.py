@@ -284,11 +284,15 @@ class LocalizationTab(Tab):
         # Create streams from data
         streams = data_to_static_streams(data)
         bbox = (None, None, None, None)  # ltrb in m
+        # Stop subscribing to streams, since the adjustment of the streams VA in the for-loop triggers a callback
+        # that deletes overviewStreams. This would cause all kinds of problems.
+        self._stop_streams_subscriber()
         for s in streams:
             s.name.value = "Overview " + s.name.value
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
             self.tab_data_model.overviewStreams.value.append(s)
+            # This would normally trigger a callback that deletes elements of overviewStreams, but we disabled it.
             self.tab_data_model.streams.value.insert(0, s)
             self._acquired_stream_controller.showOverviewStream(s)
 
@@ -303,6 +307,8 @@ class LocalizationTab(Tab):
                 bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
                         max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
 
+        # Resume subscribing to streams
+        self._start_streams_subscriber()
         # Recenter to the new content only
         if bbox[0] is not None:
             self.panel.vp_secom_tl.canvas.fit_to_bbox(bbox)
@@ -316,7 +322,10 @@ class LocalizationTab(Tab):
         # sync overview streams with correlation tab
         if len(streams) > 0 and self.main_data.role == "meteor":
             correlation_tab = self.main_data.getTabByName(TabName.METEOR_CORRELATION)
+            # Prevent race conditions and recursive triggers
+            correlation_tab.correlation_controller._stop_streams_subscriber()
             correlation_tab.correlation_controller.add_streams(streams)
+            correlation_tab.correlation_controller._start_streams_subscriber()
 
     def reset_live_streams(self):
         """
