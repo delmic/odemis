@@ -22,7 +22,7 @@ import unittest
 from unittest.case import skip
 
 
-logger = logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 
 # Test using the hardware
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
