@@ -1441,3 +1441,33 @@ def apply_zoom_on_image_coordinates(rect: List[int], z:int) -> List[int]:
     :return: (list of int) the rectangle in image pixel coordinates at the given zoom level
     """
     return [px // (2 ** z) for px in rect]
+
+
+def get_brightest_channel(sub_image_multi: numpy.ndarray) -> int:
+    """
+    Finds the index of the channel with the highest maximum intensity.
+    Useful for multi-channel imaging to select the brightest channel for analysis.
+
+    :param sub_image_multi: Multi-channel sub-image as (C, Z, Y, X) array
+    :returns: Index of the channel with the highest intensity
+    """
+    channel_maxes = numpy.max(sub_image_multi, axis=(1, 2, 3))
+    return int(numpy.argmax(channel_maxes))
+
+
+def compute_center_of_mass(image: numpy.ndarray,
+                           baseline_percentile: float = 95.0, roi_slice: tuple = None) -> Tuple[float, float, float]:
+    """
+    Computes center of mass with baselining.
+    Uses the brightest pixels (above the baseline percentile) as weights for COM calculation,
+    effectively filtering background noise.
+
+    :param image: Single-channel 3D sub-image as (Z, Y, X) array
+    :param baseline_percentile: Percentile threshold for background separation (0-100). Values lower than the baseline
+        will be discarded.
+    :returns: Tuple of (global_z, global_y, global_x) in pixel coordinates maintaining input order.
+    """
+    baseline = numpy.percentile(image, baseline_percentile)
+    image_weights = numpy.where(image > baseline, image - baseline, 0)
+    com = scipy.ndimage.center_of_mass(numpy.asarray(image_weights))
+    return com
