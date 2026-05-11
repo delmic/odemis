@@ -86,14 +86,14 @@
                                   <flag>wxALL|wxEXPAND</flag>
                                   <border>10</border>
                                 </object>
-                                <!-- Z-targeting button -->
+                                <!-- XYZ-targeting button -->
                                 <object class="sizeritem">
-                                  <object class="wxButton" name="btn_z_targeting">
-                                    <label>Refine Z</label>
+                                  <object class="wxButton" name="btn_xyz_targeting">
+                                    <label>Refine</label>
                                   </object>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="wxStaticText" name="txt_refinez_active">
+                                  <object class="wxStaticText" name="txt_refine_xyz_active">
                                   <label> </label>
                                   <fg>#E5E5E5</fg>
                                   <hidden>1</hidden>

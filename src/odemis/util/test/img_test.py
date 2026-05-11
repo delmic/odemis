@@ -2318,5 +2318,54 @@ class TestProjectYXC2RGB8(unittest.TestCase):
         # red becomes black (255*0, 0*1, 0*0), alpha preserved
         numpy.testing.assert_array_equal(out[1, 1], [0, 0, 0, 255])
 
+
+class TestCenterOfMassTargeting(unittest.TestCase):
+    """Test 3D Center of Mass methods."""
+
+    def test_brightest_channel(self):
+        """Test channel selection by maximum intensity."""
+        # 4D array: (C, Z, Y, X)
+        multi_channel = numpy.random.rand(3, 10, 20, 20)
+        multi_channel[1] = numpy.ones((10, 20, 20)) * 100  # Make channel 1 bright
+        best_c = img.get_brightest_channel(multi_channel)
+        self.assertEqual(best_c, 1)
+
+    def test_compute_local_center_of_mass_with_noise(self):
+        """Test COM computation correctly filters background noise."""
+        # Create 3D image with strong peak and weak noise
+        sub_image = numpy.zeros((10, 20, 20))
+        # Add signal (strong)
+        for z in range(4, 7):
+            for y in range(8, 13):
+                for x in range(8, 13):
+                    sub_image[z, y, x] = 100.0
+        # Add weak noise (much smaller than signal)
+        sub_image += numpy.random.rand(10, 20, 20) * 2.0
+
+        target_y = 5
+        target_x = 10
+        pad_y = 5
+        pad_x = 10
+        shape_y = 20
+        shape_x = 20
+        # Get boundary-safe slice & crop
+        y_start = max(0, target_y - pad_y)
+        y_end = min(shape_y, target_y + pad_y + 1)
+        x_start = max(0, target_x - pad_x)
+        x_end = min(shape_x, target_x + pad_x + 1)
+        roi = numpy.s_[:, y_start:y_end, x_start:x_end]
+
+        com = img.compute_center_of_mass(sub_image, baseline_ratio=0.95)
+        com_y_crop = com[1] + roi[1].start
+        com_x_crop = com[2] + roi[2].start
+
+        # COM z should be near peak (z=4-6, center at 5)
+        self.assertAlmostEqual(com[0], 5.0, delta=1.0)
+        # COM should be within the extracted ROI [5:16] range
+        self.assertGreaterEqual(com_x_crop, 5)
+        self.assertLess(com_x_crop, 16)
+        self.assertGreaterEqual(com_y_crop, 5)
+        self.assertLess(com_y_crop, 16)
+
 if __name__ == "__main__":
     unittest.main()
