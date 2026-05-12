@@ -775,42 +775,85 @@ class TestMicroscope(unittest.TestCase):
         self.assertAlmostEqual(estimated_time, 0)
 
 #### SCANNER
-    def test_scanner_component(self):
+    def test_beam_settings(self):
         # get initial values
         fov = self.scanner.horizontalFoV.value
-        dwell_time = self.scanner.dwellTime.value
         beam_current = self.scanner.probeCurrent.value
         voltage = self.scanner.accelVoltage.value
         scan_rotation = self.scanner.rotation.value
-        resolution = self.scanner.resolution.value
+        external = self.scanner.external.value
 
         # get new values (at range limit)
         fov_range = self.scanner.horizontalFoV.range
-        dwell_time_range = self.scanner.dwellTime.range
         beam_current_range = self.scanner.probeCurrent.range
         voltage_range = self.scanner.accelVoltage.range
         new_fov = fov_range[0]
-        new_dwell_time = dwell_time_range[0]
         new_beam_current = beam_current_range[0]
         new_voltage = voltage_range[0]
         new_scan_rotation = math.radians(180)
-        new_resolution = (3072, 2048)
-        new_pixel_size = (new_fov / new_resolution[0], new_fov / new_resolution[0])
+        new_external = not external
 
         # set new values
         self.scanner.horizontalFoV.value = new_fov
-        self.scanner.dwellTime.value = new_dwell_time
         self.scanner.probeCurrent.value = new_beam_current
         self.scanner.accelVoltage.value = new_voltage
         self.scanner.rotation.value = new_scan_rotation
-        self.scanner.resolution.value = new_resolution
+        self.scanner.external.value = new_external
 
         # assert values
         self.assertAlmostEqual(self.scanner.horizontalFoV.value, new_fov)
-        self.assertAlmostEqual(self.scanner.dwellTime.value, new_dwell_time)
         self.assertAlmostEqual(self.scanner.probeCurrent.value, new_beam_current)
         self.assertAlmostEqual(self.scanner.accelVoltage.value, new_voltage)
         self.assertAlmostEqual(self.scanner.rotation.value, new_scan_rotation)
+        self.assertEqual(self.scanner.external.value, new_external)
+
+        time.sleep(6)  # wait for VAs to update
+        self.assertAlmostEqual(self.scanner.horizontalFoV.value, new_fov)
+        self.assertAlmostEqual(self.scanner.probeCurrent.value, new_beam_current)
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, new_voltage)
+        self.assertAlmostEqual(self.scanner.rotation.value, new_scan_rotation)
+        self.assertEqual(self.scanner.external.value, new_external)
+
+        # reset to original values
+        self.scanner.horizontalFoV.value = fov
+        self.scanner.probeCurrent.value = beam_current
+        self.scanner.accelVoltage.value = voltage
+        self.scanner.rotation.value = scan_rotation
+        self.scanner.external.value = external
+
+        self.assertAlmostEqual(self.scanner.horizontalFoV.value, fov)
+        self.assertAlmostEqual(self.scanner.probeCurrent.value, beam_current)
+        self.assertAlmostEqual(self.scanner.accelVoltage.value, voltage)
+        self.assertAlmostEqual(self.scanner.rotation.value, scan_rotation)
+        self.assertEqual(self.scanner.external.value, external)
+
+    def test_scanner_settings(self):
+        # get initial values
+        fov = self.scanner.horizontalFoV.value
+        dwell_time = self.scanner.dwellTime.value
+        resolution = self.scanner.resolution.value
+
+        # get new values (at range limit)
+        dwell_time_range = self.scanner.dwellTime.range
+        new_dwell_time = dwell_time_range[0]
+        new_resolution = (3072, 2048)
+        new_pixel_size = (fov / new_resolution[0], fov / new_resolution[0])
+
+        # set new values
+        self.scanner.dwellTime.value = new_dwell_time
+        self.scanner.resolution.value = new_resolution
+
+        # assert values
+        self.assertAlmostEqual(self.scanner.dwellTime.value, new_dwell_time)
+        self.assertEqual(self.scanner.resolution.value, new_resolution)
+        pixelsize = self.scanner.pixelSize.value
+        scale = self.scanner.scale.value
+        scaled_pixelsize = (scale[0] * pixelsize[0], scale[1] * pixelsize[1])
+        self.assertEqual(scaled_pixelsize, new_pixel_size)
+        self.assertEqual(self.scanner._metadata[model.MD_PIXEL_SIZE], new_pixel_size)
+
+        time.sleep(6)  # wait for metadata to update
+        self.assertAlmostEqual(self.scanner.dwellTime.value, new_dwell_time)
         self.assertEqual(self.scanner.resolution.value, new_resolution)
         pixelsize = self.scanner.pixelSize.value
         scale = self.scanner.scale.value
@@ -819,18 +862,10 @@ class TestMicroscope(unittest.TestCase):
         self.assertEqual(self.scanner._metadata[model.MD_PIXEL_SIZE], new_pixel_size)
 
         # reset to original values
-        self.scanner.horizontalFoV.value = fov
         self.scanner.dwellTime.value = dwell_time
-        self.scanner.probeCurrent.value = beam_current
-        self.scanner.accelVoltage.value = voltage
-        self.scanner.rotation.value = scan_rotation
         self.scanner.resolution.value = resolution
 
-        self.assertAlmostEqual(self.scanner.horizontalFoV.value, fov)
         self.assertAlmostEqual(self.scanner.dwellTime.value, dwell_time)
-        self.assertAlmostEqual(self.scanner.probeCurrent.value, beam_current)
-        self.assertAlmostEqual(self.scanner.accelVoltage.value, voltage)
-        self.assertAlmostEqual(self.scanner.rotation.value, scan_rotation)
         self.assertEqual(self.scanner.resolution.value, resolution)
 
 ### DETECTOR
