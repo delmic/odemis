@@ -1,17 +1,18 @@
 # This workflow will check for exceptions to raise properly and do not generate syntax errors.
 # Also old code style using parenthesis in class definitions will be checked
+# This workflow runs py_compile on all modified Python files to catch syntax errors.
 
 name: Syntax checking
 
 on:
   [push, pull_request]
 jobs:
-  build:
+  mixup_check:
 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Check exceptions
       # Not related to tests, but to QA in general: Exceptions usually take only 1 argument
       # So a comma is probably a sign of syntax error and should be replaced by a %
@@ -54,3 +55,33 @@ jobs:
           fi
         done
         exit "$exit_code"
+
+  syntax_check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python_version: [ "3.8", "3.10", "3.12" ]
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+
+      - name: Setup Python environment
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Run py_compile on changed files
+        run: |
+          for changed_file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            if [[ $changed_file == *.py && -f "$changed_file" ]];
+            then
+              python -m py_compile "$changed_file"
+            fi
+          done
