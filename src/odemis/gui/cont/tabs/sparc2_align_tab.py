@@ -1575,28 +1575,57 @@ class Sparc2AlignTab(Tab):
 
     def _start_auto_calibration(self):
         main = self.tab_data_model.main
-        spectrograph = main.spectrograph
+        align_mode = self.tab_data_model.align_mode.value
+        opm = main.opm
 
-        # combine all detectors
+        # Set the optical path according to the align mode
+        if align_mode == "streak-align":
+            if (main.streak_ccd
+                    and main.spectrograph_ded
+                    and main.streak_ccd.name in main.spectrograph_ded.affects.value):
+                opath = "streak-focus-ext"
+            else:
+                opath = "streak-focus"
+        elif align_mode == "tunnel-lens-align":
+            opath = "spec-focus-ext"
+        elif align_mode in ("lens-align", "lens2-align", "light-in-align"):
+            opath = "spec-focus"
+        else:
+            logging.warning("Auto calibration requested not compatible with requested alignment mode %s. Do nothing.",
+                            align_mode)
+            return
+
+        # Pick the right hardware based on whether opath is external or internal
+        if opath in ("spec-focus-ext", "streak-focus-ext"):
+            bl = main.brightlight_ext
+            spectrograph = main.spectrograph_ded
+            selector = getattr(main, "spec_ded_det_selector", None)
+        else:
+            bl = main.brightlight
+            spectrograph = main.spectrograph
+            selector = getattr(main, "spec_det_selector", None)
+
+        if not bl or not spectrograph:
+            logging.error("Missing brightlight or spectrograph. Cannot start auto-calibration.")
+            return
+
+        # Combine all detectors
         detectors = getattr(main, "ccds", []) + getattr(main, "sp_ccds", [])
         if not detectors:
-            detectors = [main.ccd]
-
-        selector = getattr(main, "detector_selector", None)
+            detectors = [main.ccd] if main.ccd else []
 
         # If multiple detectors but no selector, only use the first detector
         if len(detectors) > 1 and selector is None:
-            logging.warning(
-                "Multiple detectors detected but no selector; aligning only the first detector")
+            logging.warning("Multiple detectors detected but no selector; aligning only the first detector")
             detectors = [detectors[0]]
 
         logging.info(
-            "Starting auto-calibration: detectors=%s selector=%s",
-            [d.name for d in detectors], selector.position.value if selector else None)
+            "Starting auto-calibration: detectors=%s selector=%s path=%s",
+            [d.name for d in detectors], selector.position.value if selector else None, opath)
 
         # Start alignment procedure
         self._auto_calibrate_future = auto_align_grating_detector_offsets(
-            spectrograph, detectors, selector=selector)
+            spectrograph, detectors, opm, opath, bl, selector=selector)
 
         # Bind progress & done callbacks
         self._auto_calibrate_future.add_done_callback(self._on_auto_calibrate_done)

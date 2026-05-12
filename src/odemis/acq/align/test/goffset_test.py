@@ -3,23 +3,23 @@
 Test Sparc auto grating offset alignment
 """
 
-import os
-import unittest
 import logging
 import numpy as np
+import os
+import threading
+import unittest
 
+from concurrent.futures import Future
+from concurrent.futures._base import RUNNING
 from odemis import model
 from odemis.util import timeout
-from odemis.acq.align.goffset_ext import(
-    find_peak_position,
-    peak_is_present,
-    estimate_goffset_scale,
-    sparc_auto_grating_offset,
-    auto_align_grating_detector_offsets,
-    log_detector_state
-)
-
+from odemis.acq.align.goffset import(find_peak_position, peak_is_present, estimate_goffset_scale,
+                                     sparc_auto_grating_offset, auto_align_grating_detector_offsets,
+                                     _do_auto_align_grating_detector_offsets, log_detector_state)
 from odemis.dataio import hdf5
+from odemis.model import ProgressiveFuture
+from unittest.mock import patch, MagicMock
+
 logging.getLogger().setLevel(logging.DEBUG)
 
 HOME_PATH = os.path.expanduser("~") + "/"
@@ -479,6 +479,70 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         self.assertTrue(present, "Peak should have been detected in the cleaned spectrum.")
 
+    @patch('odemis.acq.align.goffset.sparc_auto_grating_offset')
+    @patch('odemis.acq.align.goffset.light.turnOnLight')
+    @patch('odemis.acq.align.goffset.time.sleep')
+
+    def test_do_auto_align_mocked(self, mock_sleep, mock_turnOnLight, mock_sparc_offset):
+        """
+        Test the full auto-calibration sequence using mocked hardware to bypass
+        timeouts, sleep delays, and physical hardware requirements.
+        """
+
+        # set up mocked return values using standard python futures
+        fake_light_future = Future()
+        fake_light_future.set_result(True)
+        mock_turnOnLight.return_value = fake_light_future
+
+        fake_align_future = Future()
+        fake_align_future.set_result(True)
+        mock_sparc_offset.return_value = fake_align_future
+
+        # set up fake hardware
+        fake_spectrograph = MagicMock()
+
+        # Mock the initial position and the grating choices
+        fake_spectrograph.position.value = {"wavelength": 0, "grating": "grating1"}
+        fake_spectrograph.axes = {"grating": MagicMock(choices={"grating1": 0, "grating2": 1})}
+
+        fake_detector = MagicMock()
+        fake_detector.name = "fake_ccd"
+        fake_detector.data.get.return_value = np.zeros((1024,))
+
+        fake_opm = MagicMock()
+        fake_path_future = Future()
+        fake_path_future.set_result(True)
+        fake_opm.setPath.return_value = fake_path_future
+
+        fake_bl = MagicMock()
+        fake_bl.power.range = [0, 100]
+
+        main_future = ProgressiveFuture(start=0, end=100)
+        main_future._task_lock = threading.Lock()
+        main_future._task_state = RUNNING
+        main_future._subfuture = Future()
+
+        # run function
+        results = _do_auto_align_grating_detector_offsets(future=main_future, spectrograph=fake_spectrograph,
+                                                          detectors=[fake_detector], opm=fake_opm,
+                                                          align_mode="spec-focus", bl=fake_bl, selector=None,
+                                                          streams=[])
+
+        # Assertions
+        # did it try to turn on the light?
+        mock_turnOnLight.assert_called_once_with(fake_bl, fake_detector)
+
+        # did it set the optical path?
+        fake_opm.setPath.assert_called_once_with("spec-focus", detector=fake_detector)
+
+        # did it try to align both gratings we mocked?
+        self.assertEqual(mock_sparc_offset.call_count, 2)
+
+        # did it clean up and turn the light off in the finally block?
+        self.assertEqual(fake_bl.power.value, 0)
+
+        # check the final returned results dict
+        self.assertEqual(results, {("grating1", "fake_ccd"): True, ("grating2", "fake_ccd"): True})
 
     @timeout(100)
     def test_cancel(self):

@@ -6,6 +6,7 @@ import time
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
+from odemis.acq.align import light
 from odemis import model
 from odemis.acq.align.autofocus import _mapDetectorToSelector
 from odemis.model import InstantaneousFuture
@@ -565,6 +566,9 @@ def _total_alignment_time(n_gratings: int,
 
 def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
                                         detectors: Union[model.Detector, List[model.Detector]],
+                                        opm: 'OpticalPathManager',
+                                        align_mode: str,
+                                        bl: model.Emitter,
                                         selector: Optional[model.Actuator] = None,
                                         streams: Optional[List['Stream']] = None) -> model.ProgressiveFuture:
     """
@@ -576,6 +580,9 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
 
         :param spectrograph: spectrograph
         :param detectors: list of detectors
+        :param opm: OpticalPathManager
+        :param align_mode: optical alignment mode used to close slit/path
+        :param bl: brightlight emitter
         :param selector: optional selector to switch between detectors
         :param streams: optional list of streams to update with progress
         :return: ProgressiveFuture that will resolve to a dict mapping (grating, detector)
@@ -596,7 +603,7 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
     est_start = time.time() + 0.1
     n_gratings = len(spectrograph.axes["grating"].choices)
     n_detectors = len(detectors)
-    a_time = _total_alignment_time(n_gratings, n_detectors)
+    a_time = (_total_alignment_time(n_gratings, n_detectors) + 10)# estimated time to turn on light and close slit
     f = model.ProgressiveFuture(start=est_start, end=est_start + a_time)
     f._progress = 0.0
     f.task_canceller = _cancel_auto_align_grating_detector_offsets
@@ -604,12 +611,15 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
     f._task_lock = threading.Lock()
     f._task_state = RUNNING
     f._subfuture = InstantaneousFuture()
-    executeAsyncTask(f, _do_auto_align_grating_detector_offsets, args=(f, spectrograph, detectors, selector, streams))
+    executeAsyncTask(f, _do_auto_align_grating_detector_offsets, args=(f, spectrograph, detectors, opm, align_mode, bl, selector, streams))
     return f
 
 def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
                                             spectrograph: model.Actuator,
                                             detectors: List[model.Detector],
+                                            opm: 'OpticalPathManager',
+                                            align_mode: str,
+                                            bl: model.Emitter,
                                             selector: Optional[model.Actuator],
                                             streams: List['Stream'],
                                             stabilization_time: float = 10.0) -> Optional[Dict[Any, Any]]:
@@ -619,10 +629,14 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
      will be used for all subsequent gratings.
      - For multiple detectors, the grating alignment will only be adjusted for the first detector; subsequent detectors will
      be aligned by adjusting the detector offset with the grating alignment fixed.
+     - Before alignment, turn on the brightlight and closes the slit.
 
     :param future: ProgressiveFuture to update with progress and results
     :param spectrograph: spectrograph
     :param detectors: list of detectors
+    :param opm: OpticalPathManager
+    :param align_mode: optical alignment mode used to close slit/path
+    :param bl: brightlight emitter
     :param selector: optional selector to switch between detectors
     :param streams: optional list of streams to update with progress
     :param stabilization_time: time to wait after moving hardware before starting alignment (default: 15s)
@@ -658,6 +672,37 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
 
     # start alignment for the first grating
     try:
+        _checkCancelled(future)
+        logging.info("Preparing optical path and turning on light")
+
+        # make sure it's in 0th order (ie, show the image as-is), this also ensures the spectrograph
+        # is done with any previous actions.
+        spectrograph.moveAbsSync({"wavelength": 0})
+
+        # logging.info("Forcing brightlight ON") # bypassing sensor check for simulation
+        # bl.power.value = bl.power.range[1]
+        # time.sleep(1)
+
+        logging.info("Turning on brightlight")
+
+        future._subfuture = light.turnOnLight(bl, first_detector)
+
+        try:
+            future._subfuture.result(timeout=60)
+
+        except TimeoutError:
+            future._subfuture.cancel()
+            logging.warning("Brightlight did not confirm ON within 60s; continuing anyway")
+
+        _checkCancelled(future)
+
+        logging.info("Setting optical path to alignment mode: %s",align_mode)
+        future._subfuture = opm.setPath(align_mode,detector=first_detector)
+        future._subfuture.result()
+
+        _checkCancelled(future)
+        future._subfuture = InstantaneousFuture()
+
         g0 = gratings[0]
         logging.info("Starting alignment for initial grating: %s", g0)
 
@@ -719,6 +764,12 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
         raise
 
     finally:
+        logging.info("Turning off brightlight")
+        try:
+            bl.power.value = (bl.power.range[0])
+        except Exception:
+            logging.exception("Failed to turn off the light during alignment cleanup")
+
         spectrograph.moveAbsSync(original_pos)
         if selector:
             selector.moveAbsSync(original_selector)
