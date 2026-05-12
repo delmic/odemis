@@ -27,7 +27,7 @@ from unittest.case import skip
 import random
 
 
-logger = logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases

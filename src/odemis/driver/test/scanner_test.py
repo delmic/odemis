@@ -25,7 +25,7 @@ from odemis.driver import scanner, xt_client
 from odemis.driver import semcomedi
 from odemis.driver import simsem
 
-logger = logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = scanner.CompositedScanner
 
