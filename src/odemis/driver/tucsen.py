@@ -1880,7 +1880,15 @@ class FakeTUCamDLL:
         arr = numpy.empty((self._roi[3], self._roi[2]), dtype=numpy.uint16)
 
         # Basic: just a gradient
-        arr[:] = numpy.linspace(100, 2 ** 16 - 300, arr.shape[1])
+        if self._gain == 0:  # HDR
+            max_val = 2 ** 16 - 1
+        elif self._gain == 1:  # High gain
+            max_val = 2 ** 12 - 1
+        elif self._gain == 2:  # Low gain
+            max_val = 2 ** 12 - 1
+        else:  # HDR raw (or anything else that we don't care about)
+            max_val = 2 ** 16 - 1
+        arr[:] = numpy.linspace(100, max_val - 300, arr.shape[1])
 
         # Add some noise
         arr += numpy.random.randint(0, 200, arr.shape, dtype=arr.dtype)
@@ -2089,22 +2097,20 @@ class TUCam(model.DigitalCamera):
         # camera parameters: values to be set when update_settings() is called
         self._resolution_idx = 0  # 0 = 2048,2040 1 = 2048,2040 Enhance  2= 1024, 1020 2x2  3 = 512, 510 4x4
         self._translation = (0, 0)
-        self._roi = (0, 0, 2048, 2010)
+        self._roi = (0, 0, 2048, 2040)
         self._exposure_time = 1.0
+        self._gain = 1.4  # HDR (16 bits) by default
 
         # Keep track of previous settings applied to the hardware, to avoid unnecessary updates
         # Start with None to force initial update
         self._prev_resolution_idx = None
         self._prev_roi_trans = None
         self._prev_exposure_time = None
+        self._prev_gain = None
 
         # Max resolution depends on the binning, so to know the max resolution, need to set binning to 1x1
         max_res, _ = self._dll.get_max_resolution(0)
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(max_res)
-        self._dll.set_global_gain(0)  # HDR mode, 16 bits
-        # Note: the "IMGMODESELECT" property also affects the bit depth. By default, it is set to 2
-        # (HDR), which is what we want (16 bits).
-        self._metadata[model.MD_BPP] = 16
 
         # TODO: rolling shutter is disabled by default, but can be enabled via the TUIDC_ROLLINGSCANMODE
 
@@ -2113,8 +2119,23 @@ class TUCam(model.DigitalCamera):
 
         self._shape = max_res + (2 ** 16,)  # _shape always uses the hardware order
 
-        # The Dhyana supports changing from HDR to low/high gains 12 bits. We could provide a .gain
-        # VA to select between these settings, but it's typically not useful
+        # The Dhyana supports changing from HDR (low + high gain combined for 16 bits res), to
+        # low/high gains.
+        # TODO: detect the supported gains from the camera capabilities, and not hardcode them.
+        # Gain values come from the Dhyana 400BSI documentation
+        self._gain_to_idx = {  # gain value -> gain index, BPP
+            1.4: (0, 16),  # HDR (16 bits)
+            2.3: (1, 12),  # High gain (12 bits) - high sensitivity
+            0.9: (2, 12),  # Low gain (12 bits) - high speed
+        }
+        gains = {
+            1.4: "HDR (16 bits)",
+            2.3: "High gain (12 bits)",
+            0.9: "Low gain (12 bits)",
+        }
+        self.gain = model.FloatEnumerated(self._gain, choices=gains, unit="", setter=self._set_gain)
+        # Note: the "IMGMODESELECT" property also affects the bit depth. By default, it is set to 2
+        # (HDR), which is what we want (16 bits data).
 
         # Report the detector pixelSize
         psize = self._transposeSizeToUser(PXS_DHYANA_400BSI)
@@ -2231,6 +2252,17 @@ class TUCam(model.DigitalCamera):
         except (OSError, TUCamError) as ex:
             logging.exception("Failed to open Tucsen camera %s", device)
             raise model.HwError("No Tucsen camera found, check the camera is turned on") from ex
+
+    def _set_gain(self, gain: float) -> float:
+        """
+        Called when the "gain" VA is modified. It actually modifies the camera gain.
+
+        :param gain: the gain to set
+        :return: the gain that was actually set
+        """
+        self._gain = gain
+        self._should_apply_settings()
+        return gain
 
     # camera properties
     def _set_binning(self, value: Tuple[int, int]) -> Tuple[int, int]:
@@ -2385,6 +2417,14 @@ class TUCam(model.DigitalCamera):
         if (roi, trans) != self._prev_roi_trans:
             self._dll.set_roi(roi, trans)
             self._prev_roi_trans = (roi, trans)
+
+        gain = self._gain
+        if gain != self._prev_gain:
+            gain_idx, bpp = self._gain_to_idx[gain]
+            self._dll.set_global_gain(gain_idx)
+            self._metadata[model.MD_BPP] = bpp
+            self._metadata[model.MD_GAIN] = gain
+            self._prev_gain = gain
 
         exp_time = self._exposure_time
         if self._exposure_time != self._prev_exposure_time:

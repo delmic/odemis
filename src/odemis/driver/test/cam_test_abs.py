@@ -201,6 +201,29 @@ class VirtualTestCam(metaclass=ABCMeta):
         logging.debug("Got res of %s", da.shape)
         self.assertEqual(da.shape, exp_res)
 
+    def test_change_gain(self):
+        """
+        Try various gains, and check acquisition works with each of them
+        """
+        if not model.hasVA(self.camera, "gain") or self.camera.gain.readonly:
+            self.skipTest("Camera doesn't support setting gain")
+
+        if hasattr(self.camera.gain, "range"):
+            gain_range = self.camera.gain.range
+            gain_values = [gain_range[0], gain_range[1]]
+        elif hasattr(self.camera.gain, "choices"):
+            gain_values = self.camera.gain.choices
+        else:
+            self.skipTest("Camera doesn't support setting gain")
+
+        self.camera.exposureTime.value = 0.09
+        for g in gain_values:
+            self.camera.gain.value = g
+            actual_gain = self.camera.gain.value
+            da = self.camera.data.get()
+            time.sleep(0.05)
+            self.assertEqual(da.metadata[model.MD_GAIN], actual_gain)
+
     def test_translation(self):
         """
         test the translation VA (if available)
