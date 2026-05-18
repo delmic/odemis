@@ -1424,8 +1424,8 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
         # check if the centre pixel positions in stage_positions fall within the range of the selected ROI
         for pos in self.stage_positions:
             self.assertGreater(pos[0] + sstage_to_abs_shift[0], roi_rng[0][0])
-            self.assertLess(pos[0] + sstage_to_abs_shift[1], roi_rng[1][0])
-            self.assertGreater(pos[1] + sstage_to_abs_shift[0], roi_rng[0][1])
+            self.assertLess(pos[0] + sstage_to_abs_shift[0], roi_rng[1][0])
+            self.assertGreater(pos[1] + sstage_to_abs_shift[1], roi_rng[0][1])
             self.assertLess(pos[1] + sstage_to_abs_shift[1], roi_rng[1][1])
 
     def on_progress_update_stage(self, _, start, end):
