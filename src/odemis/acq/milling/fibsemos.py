@@ -235,13 +235,67 @@ def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> 'Micr
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
 
+def _format_preset(voltage: float, current: float) -> str:
+    """
+    Format voltage (V) and current (A) into a preset name string like '30 keV; 150 pA'.
+    Voltage is shown in eV below 1 keV, keV otherwise. Current is shown in pA, nA, or uA.
+
+    This format is a convention for Tescan preset names. Presets in the Tescan
+    software must be named following this convention so that fibsemOS can match
+    them correctly.
+
+    :param voltage: beam voltage in volts (must be a positive finite number).
+    :param current: beam current in amperes (must be a positive finite number).
+    :raises ValueError: if voltage or current are not positive finite numbers.
+    """
+    if not math.isfinite(voltage):
+        raise ValueError(f"Voltage must be a finite number, got {voltage!r}")
+    if voltage <= 0:
+        raise ValueError(f"Voltage must be positive, got {voltage!r}")
+    if not math.isfinite(current):
+        raise ValueError(f"Current must be a finite number, got {current!r}")
+    if current <= 0:
+        raise ValueError(f"Current must be positive, got {current!r}")
+
+    # Voltage: choose eV or keV based on order of magnitude
+    if voltage < 1000:
+        # eV range: [0, 1 keV)
+        voltage_str = f"{voltage:g} eV"
+    else:
+        # keV range: [1 keV, ...)
+        voltage_str = f"{voltage / 1000:g} keV"
+
+    # Current: pA, nA, or uA based on order of magnitude
+    if current < 1e-9:
+        # pA range: [0, 1 nA)
+        current_val = current * 1e12
+        unit = "pA"
+    elif current < 1e-6:
+        # nA range: [1 nA, 1 uA)
+        current_val = current * 1e9
+        unit = "nA"
+    else:
+        # uA range: [1 uA, ...)
+        current_val = current * 1e6
+        unit = "uA"
+    current_str = f"{current_val:g} {unit}"
+    return f"{voltage_str}; {current_str}"
+
 def convert_milling_settings(s: MillingSettings) -> 'FibsemMillingSettings':
-    """Convert Odemis milling settings to fibsemOS milling settings."""
+    """Convert Odemis milling settings to fibsemOS milling settings.
+
+    Both milling_current/milling_voltage and preset are populated because
+    fibsemOS uses them selectively depending on the microscope backend:
+    milling_current and milling_voltage are used by the TFS backend, while
+    preset (a human-readable string such as "30 keV; 150 pA") is used by the
+    Tescan backend.
+    """
     return FibsemMillingSettings(
         milling_current=s.current.value,
         milling_voltage=s.voltage.value,
         patterning_mode=s.mode.value,
         hfw=s.field_of_view.value,
+        preset=_format_preset(s.voltage.value, s.current.value)
     )
 
 # task converter
