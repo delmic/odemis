@@ -504,7 +504,7 @@ class SPARC2PolAnalyzerTestCase(BaseSPARCTestCase):
         # wait until it's over
         data, exp = f.result(timeout)
 
-        for l in ars.leeches:
+        for l in sas.leeches:
             l.series_complete(data)
 
         dur = time.time() - start
