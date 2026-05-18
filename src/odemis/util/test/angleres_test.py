@@ -22,8 +22,10 @@ If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 import unittest
+from pathlib import Path
 
 import numpy
+
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.model import MD_POL_MODE, MD_POL_S1
@@ -32,19 +34,21 @@ from odemis.util.img import RGB2Greyscale, ensure2DImage
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+TEST_IMAGE_PATH = Path(__file__).parent
+
 class TestAngleResolvedDataConversion(unittest.TestCase):
     """
     Test AngleResolved2Polar, AngleResolved2Rectangular and Rectangular2Polar.
     """
     def setUp(self):
-        data = hdf5.read_data("ar-example-input.h5")
+        data = hdf5.read_data(TEST_IMAGE_PATH / "ar-example-input.h5")
         self.data = data
 
-        data_inverted_mirror = hdf5.read_data("ar-inverted-mirror.h5")
+        data_inverted_mirror = hdf5.read_data(TEST_IMAGE_PATH / "ar-inverted-mirror.h5")
         self.data_invMir = data_inverted_mirror
 
         # test also for different polar parameters
-        data_mini = hdf5.read_data("ar-example-minimirror-input.h5")
+        data_mini = hdf5.read_data(TEST_IMAGE_PATH / "ar-example-minimirror-input.h5")
         self.data_mini = data_mini
 
         white_data_512 = model.DataArray(numpy.empty((512, 512), dtype="uint16"))
@@ -117,7 +121,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         data[0].shape = Y, X
         result = angleres.AngleResolved2Polar(data[0], 201)
 
-        desired_output = hdf5.read_data("desired201x201image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired201x201image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -129,7 +133,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         data_mini[0].shape = Y, X
         result = angleres.AngleResolved2Polar(data_mini[0], 201)
 
-        desired_output = hdf5.read_data("desired201x201imagemini.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired201x201imagemini.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -145,7 +149,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
         result = angleres.AngleResolved2Polar(data[0], 201)
 
-        desired_output = hdf5.read_data("desired201x201image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired201x201image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -261,7 +265,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         data[0].shape = Y, X
         result = angleres.AngleResolved2Polar(data[0], 201)
 
-        desired_output = hdf5.read_data("desired201x201image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired201x201image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -274,7 +278,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
         result = angleres.AngleResolved2Polar(data[0], 101)
 
-        desired_output = hdf5.read_data("desired100x100image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired100x100image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -290,7 +294,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
         result = angleres.AngleResolved2Polar(data[0], 1001)
 
-        desired_output = hdf5.read_data("desired1000x1000image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired1000x1000image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -303,7 +307,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
         result = angleres.AngleResolved2Polar(data[0], 2001)
 
-        desired_output = hdf5.read_data("desired2000x2000image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired2000x2000image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -316,7 +320,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         white_data_512 = self.white_data_512
         result = angleres.AngleResolved2Polar(white_data_512, 201)
 
-        desired_output = hdf5.read_data("desired_white_512.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired_white_512.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -329,7 +333,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         white_data_1024 = self.white_data_1024
         result = angleres.AngleResolved2Polar(white_data_1024, 201)
 
-        desired_output = hdf5.read_data("desired_white_1024.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired_white_1024.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -343,7 +347,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
 
         result = angleres.AngleResolved2Polar(white_data_2500, 2000)
 
-        desired_output = hdf5.read_data("desired_white_2500.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "desired_white_2500.h5")
 
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
@@ -360,7 +364,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         clean_data = angleres.ARBackgroundSubtract(data[0])
         result = angleres.AngleResolved2Polar(clean_data, 201)
 
-        desired_output = hdf5.read_data("substracted_background_image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "substracted_background_image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -377,7 +381,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         clean_data = angleres.ARBackgroundSubtract(data[0])
         result = angleres.AngleResolved2Polar(clean_data, 201)
 
-        desired_output = hdf5.read_data("substracted_background_image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "substracted_background_image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
@@ -412,7 +416,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         clean_data = angleres.ARBackgroundSubtract(data[0])
         result = angleres.AngleResolved2Polar(clean_data, 201)
 
-        desired_output = hdf5.read_data("substracted_background_image.h5")
+        desired_output = hdf5.read_data(TEST_IMAGE_PATH / "substracted_background_image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
