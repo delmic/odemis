@@ -261,16 +261,17 @@ class CaptionBar(wx.Window):
     or hide the associated panel. See panel_tab_sparc_acqui.xrc object cbar_acq_recipes.
     """
 
-    def __init__(self, parent, caption, collapsed, foldable=False):
+    def __init__(self, parent, caption, collapsed, foldable=False, id=wx.ID_ANY):
         """
         :param parent: Parent window (FoldPanelItem)
         :param caption: Header caption (str)
         :param collapsed: Draw the CaptionBar collapsed or not (boolean)
-        :param foldable: Whether the CaptionBar is foldable (boolean)
-
+        :param foldable: Whether the CaptionBar is foldable (boolean).
+                         Only used if the parent is not a FoldPanelItem.
+        :param id: Id of the CaptionBar, used for event handling (int)
         """
 
-        wx.Window.__init__(self, parent, wx.ID_ANY, pos=(0, 0),
+        wx.Window.__init__(self, parent, id, pos=(0, 0),
                            size=CAPTION_BAR_SIZE, style=wx.NO_BORDER)
 
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)

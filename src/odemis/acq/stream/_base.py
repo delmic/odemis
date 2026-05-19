@@ -24,7 +24,7 @@ import threading
 import time
 import weakref
 from collections.abc import Iterable
-from typing import Tuple, Optional
+from typing import List, Tuple, Optional
 
 import matplotlib
 import numpy
@@ -93,7 +93,7 @@ POL_MOVE_TIME = 6  # [s] extra time to move polarimetry hardware (value is very 
 SETTINGS_ORDER = ["excitation", "power", "emission"]
 # The below VAs are not important for loading the settings of a specific stream
 NON_SETTINGS_VA = ['acquisitionType', 'auto_bc', 'background', 'histogram', 'image', 'intensityRange', 'is_active',
-                   'roi', 'should_update', 'single_frame_acquisition', 'status', 'integrationCounts']
+                   'should_update', 'single_frame_acquisition', 'status', 'integrationCounts']
 
 
 class Stream(object):
@@ -1377,7 +1377,7 @@ class Stream(object):
         """Force the stream image to be updated"""
         self._shouldUpdateImage()
 
-    def _get_settings_order(self):
+    def _get_settings_order(self) -> List[str]:
         """
         Get the VAs for loading a stream setting and sort them, so it can applied in the given order while loading
         a stream later.
@@ -1423,9 +1423,9 @@ class Stream(object):
             try:
                 getattr(self, key).value = value
             except Exception:
-                logging.exception(
+                logging.warning(
                     "Failed to set %s setting %s to value %s",
-                    entries.get("class", self.__class__.__name__),
+                    self.__class__.__name__,
                     key,
                     value,
                 )

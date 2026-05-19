@@ -71,7 +71,7 @@ c = component.Container(
     'CaptionBar',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'],
-    params={'label': params.ParamText, 'collapsed': params.ParamBool}
+    params={'label': params.ParamText, 'collapsed': params.ParamBool, 'foldable': params.ParamBool}
 )
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.CaptionBarXmlHandler)

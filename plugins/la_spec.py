@@ -244,7 +244,9 @@ class SpecExtraPlugin(Plugin):
                 actname = "Large Area Spectrum"
             else:
                 actname = "Large Area Spectrum with %s" % (sptm.name,)
-            act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
+            act = functools.partial(
+                self.addSpectrum, name=actname, detector=sptm, tab_data=self._tab.tab_data_model, stctrl=stctrl
+            )
             stctrl.add_action(actname, act)
 
         # We "patch" the gui.conf.data for our special stream
@@ -278,10 +280,10 @@ class SpecExtraPlugin(Plugin):
         **kwargs
     ) -> StreamController:
         """
-        :param name: (str) name of the stream
-        :param detector: (DigitalCamera) spectrometer to acquire the spectrum
-        :param tab_data: (SparcAcquisitionGUIData) the data of the acquisition tab
-        :param stctrl: (SparcStreamsController) the SPARC stream controller to which the stream should be added
+        :param name: name of the stream
+        :param detector: spectrometer to acquire the spectrum
+        :param tab_data: the data of the acquisition tab
+        :param stctrl: the SPARC stream controller to which the stream should be added
         :param kwargs: other options, can contain "settings_entries"
         """
         logging.debug("Adding spectrum stream for %s", detector.name)
