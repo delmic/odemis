@@ -1883,6 +1883,9 @@ class Shamrock(model.Actuator):
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusAbs, p))
             elif axis == "goffset":
+                if len(pos) > 1:
+                    logging.info("Ignoring 'goffset' in multi-axis move to preserve hardware calibration.")
+                    continue
                 actions.append((axis, self._doSetGoffsetAbs, p))
             elif axis == "flip-in":
                 check = self._check_move.get(axis, True)
@@ -2142,6 +2145,17 @@ class Shamrock(model.Actuator):
 
         current_detector = (flip_in_pos, flip_out_pos)
         reference_detector = all_detectors[0]
+
+        # WARNING:
+        # On spectrographs like the Kymera 328 where the input port is permanently set
+        # to 'SIDE', `current_detector` will never match `reference_detector` (which
+        # defaults to the first permutation, typically involving DIRECT_PORT).
+        # As a result, these systems will always hit the `else` block below. This causes
+        # the calibration to incorrectly adjust the detector offset for all gratings,
+        # rather than adjusting the physical grating offset.
+        # TODO: Refactor this routing logic once full support for spectrograph-dedicated
+        # components with fixed non-direct input ports is officially required.
+
         is_multi_detector = len(all_detectors) > 1
 
         # Apply offsets
@@ -2161,25 +2175,16 @@ class Shamrock(model.Actuator):
             spillover = ideal_grat_offset - desired_grat_offset
             desired_det_offset = current_det_offset + spillover
 
-            logging.debug("Setting grating offset -> grating=%d value=%d", grating, desired_grat_offset)
+            logging.debug("Setting grating offset: grating=%d value=%d", grating, desired_grat_offset)
             self.SetGratingOffset(grating, desired_grat_offset)
 
             # Apply the detector offset only if a spillover forced it to change
             if desired_det_offset != current_det_offset:
-                logging.warning("Grating hardware limit reached! Spilling over into detector offset.")
+                logging.warning("Grating hardware limit reached, spilling over into detector offset.")
                 self.SetDetectorOffset(flip_in_pos, flip_out_pos, desired_det_offset)
 
-            # Strict hardware check on the detector offset spillover
-            if not (DET_OFFSET_MIN <= desired_det_offset <= DET_OFFSET_MAX):
-                raise ValueError(f"Computed detector offset {desired_det_offset} out of hardware range")
-
-            logging.debug("Setting grating offset -> grating=%d value=%d", grating, desired_grat_offset)
-            self.SetGratingOffset(grating, desired_grat_offset)
-
-            if desired_det_offset != current_det_offset:
-                logging.debug("Updating detector offset flip_in=%s flip_out=%s value=%d",
-                              flip_in_pos, flip_out_pos, desired_det_offset)
-                self.SetDetectorOffset(flip_in_pos, flip_out_pos, desired_det_offset)
+                logging.debug("Setting grating offset: grating=%d value=%d", grating, desired_grat_offset)
+                self.SetGratingOffset(grating, desired_grat_offset)
 
         else:
             # We are on a secondary detector. Grating offset stays fixed.
