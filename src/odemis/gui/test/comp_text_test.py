@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 # ===============================================================================
 import locale
-import logging
 import unittest
 
 import odemis.gui.test as test
@@ -90,16 +89,28 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 class NumberTextCtrlTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrcbutton_frame
 
-    def _check_wxpython_41(self):
+    def _simulate_typing(self, ctrl, text):
+        """Simulate typing into a NumberTextCtrl without requiring OS-level focus.
+
+        Replicates the same logic as the validator's on_char (regex-based character
+        filtering) + on_text_enter (value commit on Enter), using direct TextCtrl
+        APIs that don't depend on window focus.
         """
-        Skip the test if wxpython < 4.1.
-        """
-        # UIActionSimulator.Text() doesn't seem to work on wxPython 4.0.7,
-        # but it works again on wxPython 4.1.
-        # Note: on wxPython 4.0.7, this works well within Eclipse, but not from a terminal.
-        wx_ver = tuple(int(v) for v in wx.__version__.split("."))
-        if wx_ver < (4, 1, 0):
-            self.skipTest("Test case is known to fail on wxPython < 4.1 due to buggy UIActionSimulator")
+        for c in text:
+            if c == '\r':
+                # Simulate Enter key: commit the value
+                evt = wx.CommandEvent(wx.wxEVT_TEXT_ENTER, ctrl.Id)
+                ctrl.on_text_enter(evt)
+            else:
+                # Replicate validator's on_char logic: check if the character
+                # would be accepted by the entry_pattern regex
+                field_val = wx.TextCtrl.GetValue(ctrl)
+                start, end = ctrl.GetSelection()
+                candidate = field_val[:start] + c + field_val[end:]
+                validator = ctrl.GetValidator()
+                if not candidate or validator.entry_pattern.match(candidate):
+                    ctrl.WriteText(c)
+            test.gui_loop(0.02)
 
     def test_int_txt_ctrl(self):
 
@@ -114,20 +125,17 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         test.gui_loop(0.1)
         self.assertEqual(123456789, ctrl.GetValue())
 
-        # Create simulator and focus field
-        sim = wx.UIActionSimulator()
         # Focusing the field will select all the text in it
         ctrl.SetFocus()
-
-        self._check_wxpython_41()
-
-        # Type '1' followed by an [Enter]
         test.gui_loop(0.1)
-        sim.Char(ord('1'))
 
+        # Type '1' — value not yet committed
+        self._simulate_typing(ctrl, '1')
         test.gui_loop(0.1)
         self.assertEqual(123456789, ctrl.GetValue())
-        sim.Char(ord('\r'))
+
+        # Press Enter to commit
+        self._simulate_typing(ctrl, '\r')
 
         # The value should now be 1.0
         test.gui_loop(0.1)
@@ -143,18 +151,12 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
 
-        # Create simulator and focus the field
-        sim = wx.UIActionSimulator()
         # Focusing the field will select all the number in it, but not the unit (Mm)
         ctrl.SetFocus()
         test.gui_loop(0.1)
 
-        self._check_wxpython_41()
-
         # Set the value to 1 Mm (period should not register)
-        for c in "0.001\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(ctrl, "0.001\r")
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 1000000)
@@ -162,9 +164,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         ctrl.SetSelection(0, 20)
 
-        for c in "44m\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(ctrl, "44m\r")
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 44)
@@ -181,18 +181,12 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         test.gui_loop(0.1)
 
-        # Create simulator and focus the field
-        sim = wx.UIActionSimulator()
         # Focusing the field will select all the text in it
         ctrl.SetFocus()
         test.gui_loop(0.1)
 
-        self._check_wxpython_41()
-
         # Set the value to 1 px (minus and period should not register)
-        for c in "-0.001\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(ctrl, "-0.001\r")
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 1)
@@ -200,9 +194,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         ctrl.SetSelection(0, 20)
 
-        for c in "44px\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(ctrl, "44px\r")
 
         test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 44)
@@ -219,18 +211,12 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.assertEqual(mctrl.GetValue(), 123456789)
         self.assertEqual(mctrl.get_value_str(), "123.456789 Mm")
 
-        # Create simulator and focus the field
-        sim = wx.UIActionSimulator()
         # Focusing the field will select all the text in it
         mctrl.SetFocus()
         test.gui_loop(0.1)
 
-        self._check_wxpython_41()
-
         # Set the value to 0.001 Mm
-        for c in "0.001\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(mctrl, "0.001\r")
 
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
@@ -239,9 +225,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Move the caret to the start of the field
         mctrl.SetSelection(0, 0)
 
-        for c in "00000\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(mctrl, "00000\r")
 
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
@@ -251,9 +235,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         mctrl.SetSelection(0, 0)
 
         # Create illegal number => should revert to previous value
-        for c in "e\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(mctrl, "e\r")
 
         test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
@@ -268,9 +250,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         test.gui_loop(0.1)
         wctrl.SetSelection(0, 20)
 
-        for c in "44e-9W\r":
-            sim.Char(ord(c))
-            test.gui_loop(0.02)
+        self._simulate_typing(wctrl, "44e-9W\r")
 
         test.gui_loop(0.1)
         self.assertEqual(wctrl.GetValue(), 44e-9)
