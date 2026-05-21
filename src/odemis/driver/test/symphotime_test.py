@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 from odemis import model
 from odemis.driver import symphotime
-import os
 import pickle
 import threading
 import time
@@ -290,7 +289,11 @@ class TestSymphotime(unittest.TestCase):
         # Wait until the measurement completes
         time.sleep(5.0)
         self.det_live.data.unsubscribe(live_callback)
-        time.sleep(0.5)
+
+        # Wait up to 5s for measuring to stop
+        deadline = time.monotonic() + 5.0
+        while self.controller.isMeasuring() and time.monotonic() < deadline:
+            time.sleep(0.1)
         self.assertFalse(self.controller.isMeasuring())
 
         # Check that we did get some new count rates
