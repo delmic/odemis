@@ -81,7 +81,14 @@ class StartTestCase(unittest.TestCase):
         self._gui_thread = threading.Thread(target=thread_call, name="GUI/Back-end thread")
         self._gui_thread.daemon = False
         self._gui_thread.start()
-        time.sleep(30)  # Give the back-end & GUI time to properly start
+
+        # Poll for the window to appear, rather than using a fixed sleep
+        timeout = 60  # s
+        end_time = time.monotonic() + timeout
+        while time.monotonic() < end_time:
+            if find_window("Odemis"):
+                break
+            time.sleep(1)
 
         # assert start.get_notify_object()
         self.notify2_mocks['init'].assert_called_once_with('Odemis')
