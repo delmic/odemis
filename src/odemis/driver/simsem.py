@@ -572,7 +572,7 @@ class Detector(model.Detector):
             metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
 
             da = model.DataArray(sim_img, metadata)
-            duration = sim_img.size * dwell_time
+            duration = sim_img.size * dwell_time + res[1] * scanner.settleTime
             return da, duration
 
     def _simulate_fov(self):
