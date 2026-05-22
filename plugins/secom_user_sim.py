@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Provides tools to simulate a SECOM user, in order to test the GUI.
+# Provides tools to simulate a SECOM/METEOR user, in order to test the GUI.
 '''
 Created on 17 May 2018
 
@@ -30,13 +30,13 @@ import wx
 
 
 class SecomUserPlugin(Plugin):
-    name = "SECOM user simulator"
-    __version__ = "1.0"
+    name = "SECOM/METEOR user simulator"
+    __version__ = "1.1"
     __author__ = "Éric Piel"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):
-        super(SecomUserPlugin, self).__init__(microscope, main_app)
+        super().__init__(microscope, main_app)
         # Allow to run it on pretty much anything (excepted the viewer)
         if not microscope:
             return
@@ -75,8 +75,13 @@ class SecomUserPlugin(Plugin):
 
         main_data = self.main_app.main_data
         try:
-            # Switch to STREAMS tab
-            acq_tab = main_data.getTabByName(TabName.SECOM_LIVE)
+            # Switch to STREAMS tab (on SECOM) or to LOCALIZATION (on METEOR)
+            try:
+                acq_tab = main_data.getTabByName(TabName.SECOM_LIVE)
+            except LookupError:
+                acq_tab = main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
+                # fails if none of the tabs are found
+
             main_data.tab.value = acq_tab
             tab_data = acq_tab.tab_data_model
 
@@ -108,6 +113,19 @@ class SecomUserPlugin(Plugin):
                 logging.debug("Changed exposure time to %g s", exp)
 
                 # Wait a little while
+                if self._should_stop.wait(1):
+                    break
+
+                # Move the focus (back and forth, to make sure we never end too far)
+                focuser = fms.focuser
+                if focuser is not None:
+                    refocus_dist = random.uniform(-1e-6, 1e-6)  # m
+                    logging.debug("Moving focus back and forth by %g m", refocus_dist)
+                    focuser.moveRelSync({"z": refocus_dist})
+                    if self._should_stop.wait(1):
+                        break
+                    focuser.moveRelSync({"z": -refocus_dist})
+
                 if self._should_stop.wait(3):
                     break
 
