@@ -619,6 +619,14 @@ in a different order. It is possible to override the default dimension order by
 using the ``MD_DIMS`` metadata. For instance, RGB data is often stored with the
 channel as last dimension for display. Such case can be indicated with "YXC".
 
+.. note::
+
+       Because a DataArray's number of dimensions can vary, and ``MD_DIMS`` is often
+       unset by default, the "default order" is not always easy to infer from this
+       metadata directly. It is recommended to access it this way:
+
+       ``dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])``
+
 Convention about measurement units
 ==================================
 
