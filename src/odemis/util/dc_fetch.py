@@ -32,10 +32,11 @@ from odemis.util.datacollector import DataCollectorConfig, S3UploadBackend
 
 
 def parse_since_utc(value: str) -> datetime:
-    """Parse a date/datetime string to UTC-aware datetime.
-    :param value: ISO-8601 date (``YYYY-MM-DD``) or datetime
-                  (``YYYY-MM-DDTHH:MM:SS`` with optional timezone offset or ``Z`` suffix).
-    :returns: UTC-aware datetime.
+    """
+    Parse a date/datetime string to UTC-aware datetime.
+    :param value: ISO-8601 date (YYYY-MM-DD) or datetime
+                  (YYYY-MM-DDTHH:MM:SS with optional timezone offset or Z suffix).
+    :return: UTC-aware datetime.
     """
     text = value.strip()
     if len(text) == 10:
@@ -50,7 +51,11 @@ def parse_since_utc(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 def parse_key_timestamp_utc(key: str) -> Optional[datetime]:
-    """Parse `<event>-<YYYYMMDDTHHmmss>-<uuid>.zip` timestamp from key basename."""
+    """
+    Parse <event>-<YYYYMMDDTHHmmss>-<uuid>.zip timestamp from key basename.
+    :param key: S3 object key.
+    :return: Parsed UTC datetime, or None if parsing failed.
+    """
     name = Path(key).name
     if not name.endswith(".zip"):
         return None
@@ -66,7 +71,11 @@ def parse_key_timestamp_utc(key: str) -> Optional[datetime]:
     return parsed.replace(tzinfo=timezone.utc)
 
 def parse_key_event_name(key: str) -> Optional[str]:
-    """Parse event name from `<event>-<YYYYMMDDTHHmmss>-<uuid>.zip` key basename."""
+    """
+    Parse event name from <event>-<YYYYMMDDTHHmmss>-<uuid>.zip key basename.
+    :param key: S3 object key.
+    :return: Event name, or None if parsing failed.
+    """
     name = Path(key).name
     if not name.endswith(".zip"):
         return None
@@ -77,7 +86,10 @@ def parse_key_event_name(key: str) -> Optional[str]:
     return parts[0] or None
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    """Build CLI argument parser for `odemis-dc-fetch`."""
+    """
+    Build CLI argument parser for odemis-dc-fetch.
+    :return: Configured ArgumentParser instance.
+    """
     examples = (
         "Examples:\n"
         "  odemis-dc-fetch\n"
@@ -134,7 +146,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 def iter_s3_objects(s3_client: Any, bucket: str, prefix: str) -> Iterator[Dict[str, Any]]:
-    """Iterate S3 objects under `prefix` using `list_objects_v2` pagination."""
+    """
+    Iterate S3 objects under prefix using list_objects_v2 pagination.
+    :param s3_client: Boto3 S3 client instance.
+    :param bucket: S3 bucket name.
+    :param prefix: S3 prefix to filter objects.
+    :return: Iterator of S3 object dictionaries.
+    """
     token: Optional[str] = None
     while True:
         kwargs: Dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
@@ -151,7 +169,13 @@ def iter_s3_objects(s3_client: Any, bucket: str, prefix: str) -> Iterator[Dict[s
             break
 
 def should_download_key(key: str, event_filter: Optional[str], since_utc: Optional[datetime]) -> bool:
-    """Return whether an S3 key should be downloaded by filters."""
+    """
+    Return whether an S3 key should be downloaded by filters.
+    :param key: S3 object key.
+    :param event_filter: Optional event name filter.
+    :param since_utc: Optional UTC datetime filter.
+    :return: True if the key should be downloaded, False otherwise.
+    """
     if not key.endswith(".zip"):
         return False
     if event_filter:
@@ -167,7 +191,11 @@ def should_download_key(key: str, event_filter: Optional[str], since_utc: Option
     return True
 
 def parse_host_filters(value: Optional[str]) -> List[str]:
-    """Parse comma-separated host filters into normalized host IDs."""
+    """
+    Parse comma-separated host filters into normalized host IDs.
+    :param value: Comma-separated host filter string.
+    :return: List of normalized host IDs.
+    """
     if not value:
         return []
     hosts = [part.strip().strip("/") for part in value.split(",")]
@@ -179,7 +207,14 @@ def build_s3_client_from_config(
     endpoint_override: Optional[str] = None,
     region_override: Optional[str] = None,
 ) -> tuple[Any, str]:
-    """Build an S3 client using datacollector credentials with optional endpoint/bucket overrides."""
+    """
+    Build an S3 client using datacollector credentials with optional endpoint/bucket overrides.
+    :param config: DataCollectorConfig instance.
+    :param bucket_override: Optional S3 bucket name override.
+    :param endpoint_override: Optional S3 endpoint URL override.
+    :param region_override: Optional AWS region name override.
+    :return: Tuple of (Boto3 S3 client, bucket name).
+    """
     backend = config.get_upload_backend()
     if not isinstance(backend, S3UploadBackend):
         raise RuntimeError("Only S3 backend is supported for retrieval.")
@@ -207,7 +242,17 @@ def fetch_samples(
     endpoint_override: Optional[str] = None,
     region_override: Optional[str] = None,
 ) -> Dict[str, int]:
-    """Fetch matching samples from S3 into output directory."""
+    """
+    Fetch matching samples from S3 into output directory.
+    :param event_filter: Optional event name filter.
+    :param since_utc: Optional UTC datetime filter.
+    :param output_dir: Directory to save downloaded samples.
+    :param host_filter: Optional comma-separated host filter string.
+    :param bucket_override: Optional S3 bucket name override.
+    :param endpoint_override: Optional S3 endpoint URL override.
+    :param region_override: Optional AWS region name override.
+    :return: Dictionary with counts of listed, matched, downloaded, skipped, and failed samples.
+    """
     cfg = DataCollectorConfig()
     s3_client, bucket = build_s3_client_from_config(
         cfg,

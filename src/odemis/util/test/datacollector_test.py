@@ -2,6 +2,8 @@
 """
 Created on 11 March 2026
 
+@author: Karishma Kumar
+
 Copyright © 2026 Delmic
 
 This file is part of Odemis.
@@ -401,8 +403,8 @@ class TestUploadAndRetry(unittest.TestCase):
 class TestRealS3Integration(unittest.TestCase):
     """Real S3 integration tests for Phase 2 upload workflow.
 
-    Tests use the credentials from ``_CREDENTIALS_PATH`` and upload to
-    ``S3_TEST_BUCKET`` (not the production bucket).  The test class is
+    Tests use the credentials from _CREDENTIALS_PATH and upload to
+    S3_TEST_BUCKET (not the production bucket).  The test class is
     skipped automatically when the key file is absent.
     """
 

@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 Odemis Annotated Data Collection Framework.
 
-Provides a thread-safe, non-blocking ``DataCollector.record()`` call that any
+Provides a thread-safe, non-blocking DataCollector.record() call that any
 Odemis module can invoke to capture a labelled data sample. Serialisation
 happens asynchronously in a background daemon thread; the caller returns
 immediately.
@@ -85,13 +85,13 @@ REMINDER_DATE_KEY = "reminder_date"
 
 
 def _sanitize_filename(name: str) -> str:
-    """Return a filesystem-safe version of *name*.
+    """Return a filesystem-safe version of name.
 
     Strips path components (prevents traversal) and replaces any character
-    that is not alphanumeric, ``-``, ``_``, or ``.`` with an underscore.
+    that is not alphanumeric, -, _ or . with an underscore.
 
     :param name: Raw name to sanitize.
-    :returns: Safe filename string; never empty (falls back to ``"_"``).
+    :returns: Safe filename string; never empty (falls back to "_").
     """
     # Strip path components to prevent directory traversal.
     name = os.path.basename(name.replace("\\", "/"))
@@ -103,8 +103,8 @@ def _sanitize_filename(name: str) -> str:
 def _search_credentials() -> dict:
     """
     Load S3 credentials from the standard key-file location.
-    The key file is a JSON file containing ``access_key`` and ``secret_key``.
-    :returns: Dict with ``access_key`` and ``secret_key``.
+    The key file is a JSON file containing access_key and secret_key.
+    :returns: Dict with access_key and secret_key.
     :raises LookupError: If the key file is not found at the expected location.
     """
     if not os.path.isfile(_CREDENTIALS_PATH):
@@ -122,14 +122,14 @@ def _search_credentials() -> dict:
 class DataCollectorConfig:
     """Persistent configuration for the data-collection framework.
 
-    Backed by a ``configparser`` INI file at
-    ``~/.config/odemis/datacollector.config``.
+    Backed by a configparser INI file at
+    ~/.config/odemis/datacollector.config.
 
     Sections
     --------
-    ``[general]``
-        ``consent``       — ``true`` / ``false``/``none`` (not yet decided).
-        ``reminder_date`` — Date (``YYYY-MM-DD``) after which to re-prompt.
+    [general]
+        consent       — true / false/none (not yet decided).
+        reminder_date — Date (YYYY-MM-DD) after which to re-prompt.
                             Commented out when not applicable.
 
     The file is written in a human-readable format with inline comments so it
@@ -161,9 +161,9 @@ class DataCollectorConfig:
     def _write(self) -> None:
         """Write the config file with human-readable comments.
 
-        ``consent`` is always present as ``none`` / ``true`` / ``false``.
-        ``reminder_date`` is commented out until explicitly set, then written
-        in ``YYYY-MM-DD`` format.
+        consent is always present as none / true / false.
+        reminder_date is commented out until explicitly set, then written
+        in YYYY-MM-DD format.
         """
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -196,13 +196,19 @@ class DataCollectorConfig:
         os.chmod(str(self.file_path), 0o600)
 
     def _ensure_section(self, section: str) -> None:
-        """Ensure that *section* exists in the config, creating it if necessary."""
+        """
+        Ensure that section exists in the config, creating it if necessary.
+        :param section: Section name to ensure.
+        """
         if not self._cp.has_section(section):
             self._cp.add_section(section)
 
     @property
     def consent(self) -> Optional[bool]:
-        """Return the consent state, or ``None`` if not yet set."""
+        """
+        Get the consent state, or None if not yet set.
+        :return: True if consented, False if declined, None if undecided.
+        """
         try:
             return self._cp.getboolean("general", "consent")
         except (configparser.NoSectionError, configparser.NoOptionError):
@@ -212,6 +218,10 @@ class DataCollectorConfig:
 
     @consent.setter
     def consent(self, value: bool) -> None:
+        """
+        Set consent to true or false, and clear any reminder date.
+        :param value: True to opt in, False to opt out.
+        """
         with self._lock:
             self._ensure_section("general")
             self._cp.set("general", "consent", "true" if value else "false")
@@ -219,7 +229,10 @@ class DataCollectorConfig:
             self._write()
 
     def clear_consent(self) -> None:
-        """Unset consent so it becomes undecided again."""
+        """
+        Unset consent so it becomes undecided again.
+         :return: None
+        """
         with self._lock:
             self._ensure_section("general")
             self._cp.remove_option("general", "consent")
@@ -227,7 +240,10 @@ class DataCollectorConfig:
 
     @property
     def remind_date(self) -> Optional[datetime]:
-        """Return next reminder date as a UTC-aware datetime, or ``None`` when unset."""
+        """
+        Return next reminder date as a UTC-aware datetime, or None when unset.
+        :return: UTC datetime of next reminder, or None if not set.
+        """
         try:
             value = self._cp.get("general", REMINDER_DATE_KEY)
         except (configparser.NoSectionError, configparser.NoOptionError):
@@ -251,7 +267,10 @@ class DataCollectorConfig:
 
     @remind_date.setter
     def remind_date(self, value: Optional[datetime]) -> None:
-        """Persist next reminder UTC timestamp, or unset when ``None``."""
+        """
+        Persist next reminder UTC timestamp, or unset when None.
+        :param value: UTC datetime to set for next reminder, or None to unset.
+        """
         with self._lock:
             self._ensure_section("general")
             if value is None:
@@ -264,11 +283,12 @@ class DataCollectorConfig:
             self._write()
 
     def postpone_consent(self, remind_date: Optional[datetime] = None) -> None:
-        """Postpone consent prompt and clear current consent choice.
-
+        """
+        Postpone consent prompt and clear current consent choice.
         :param remind_date: UTC datetime after which the consent prompt should
-            be shown again.  Defaults to ``_DEFAULT_CONSENT_REMIND_DELTA``
-            from now when not specified.
+         be shown again.  Defaults to _DEFAULT_CONSENT_REMIND_DELTA
+         from now when not specified.
+        :return: None
         """
         if self.consent is False:
             return
@@ -283,7 +303,10 @@ class DataCollectorConfig:
             self._write()
 
     def should_prompt_for_consent(self) -> bool:
-        """Return whether the consent dialog should be shown now."""
+        """
+        Return whether the consent dialog should be shown now.
+        :return: True if the consent dialog should be shown, False otherwise.
+        """
         if self.consent is not None:
             return False
         remind_after = self.remind_date
@@ -292,7 +315,10 @@ class DataCollectorConfig:
         return datetime.now(timezone.utc) >= remind_after
 
     def get_upload_backend(self) -> "S3UploadBackend":
-        """Return the configured upload backend instance."""
+        """
+        Return the configured upload backend instance.
+        :return: Configured S3UploadBackend instance.
+        """
         credentials = _search_credentials()
         return S3UploadBackend(
             access_key=credentials["access_key"],
@@ -306,7 +332,6 @@ class DataCollectorConfig:
 @dataclass
 class _WorkItem:
     """A single data-collection event to be serialised and uploaded."""
-
     event_name: str
     schema_version: str
     payload: dict
@@ -315,11 +340,11 @@ class _WorkItem:
 
 
 def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
-    """Serialise *item* into a ZIP archive and place it in *queue_dir*.
-
+    """
+    Serialise item into a ZIP archive and place it in queue_dir.
     :param item: The work item to serialise.
     :param queue_dir: Directory where the finished ZIP is placed.
-    :returns: Path to the created ZIP file inside *queue_dir*.
+    :returns: Path to the created ZIP file inside queue_dir.
     :raises OSError: On disk errors (caller must handle).
     """
     queue_dir.mkdir(parents=True, exist_ok=True)
@@ -413,8 +438,8 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
 
 
 def _enforce_queue_limit(queue_dir: Path) -> None:
-    """Delete the oldest ZIP files if the queue exceeds 10% of partition space.
-
+    """
+    Delete the oldest ZIP files if the queue exceeds 10% of partition space.
     :param queue_dir: The staging directory to inspect.
     """
     if not queue_dir.exists():
@@ -471,7 +496,10 @@ class S3UploadBackend:
         self._client = None
 
     def _get_client(self) -> "boto3.client":
-        """Return a cached boto3 S3 client."""
+        """
+        Get a cached boto3 S3 client.
+         :return: boto3 S3 client instance.
+        """
         if self._client is None:
             self._client = boto3.client(
                 "s3",
@@ -483,26 +511,25 @@ class S3UploadBackend:
         return self._client
 
     def upload(self, local_path: Path, remote_key: str) -> None:
-        """Upload *local_path* to *remote_key* in the configured bucket."""
+        """Upload local_path to remote_key in the configured bucket."""
         client = self._get_client()
         client.upload_file(str(local_path), self._bucket, remote_key)
 
 
 def _upload(zip_path: Path, backend: S3UploadBackend) -> None:
-    """Upload *zip_path* with *backend* using the standard remote key."""
+    """Upload zip_path with backend using the standard remote key."""
     remote_key = f"{socket.gethostname()}/{zip_path.name}"
     backend.upload(zip_path, remote_key)
 
 
 class _BackgroundWorker:
-    """Daemon thread that consumes :class:`_WorkItem` objects from a queue.
-
-    For each item it calls :func:`_enforce_queue_limit`, :func:`_serialize`,
-    and :func:`_upload` in sequence.  After a successful upload the local ZIP
+    """
+    Daemon thread that consumes WorkItem objects from a queue.
+    For each item it calls _enforce_queue_limit, _serialize,
+    and _upload in sequence.  After a successful upload the local ZIP
     is deleted.  Exceptions are caught and logged so that the worker never
-    crashes the host application.
-
-    The thread is started lazily and restarted automatically if it dies.
+    crashes the host application.The thread is started lazily and restarted
+    automatically if it dies.
     """
 
     def __init__(self, config: DataCollectorConfig, queue_dir: Path = _DEFAULT_QUEUE_DIR) -> None:
@@ -514,16 +541,22 @@ class _BackgroundWorker:
         self._upload_backend: Optional[S3UploadBackend] = None
         self._next_retry_at: float = 0.0
         self._retry_delay: float = _INITIAL_RETRY_DELAY_SECONDS
+        """
+        Initialize the background worker with the given configuration and queue directory.
+        :param config: DataCollectorConfig instance for accessing configuration and upload backend.
+        :param queue_dir: Directory where ZIP files are staged for upload (default /var/log
+         /odemis/dc_queue).
+        """
 
     def enqueue(self, item: _WorkItem) -> None:
-        """Add *item* to the processing queue and ensure the thread is alive.
-
+        """Add item to the processing queue and ensure the thread is alive.
         :param item: The work item to enqueue.
         """
         self._ensure_thread()
         self._queue.put_nowait(item)
 
     def _ensure_thread(self) -> None:
+        """Start the background thread if it's not already running."""
         with self._lock:
             if self._thread is None or not self._thread.is_alive():
                 self._thread = threading.Thread(
@@ -559,10 +592,11 @@ class _BackgroundWorker:
         return sorted(queue_dir.glob("*.zip"), key=lambda p: p.stat().st_mtime)
 
     def _process_pending_zips(self, queue_dir: Path) -> bool:
-        """Upload pending ZIP files from *queue_dir*.
-
-        Returns ``True`` when pending work existed (including backoff wait),
-        otherwise ``False``.
+        """
+        Upload pending ZIP files from queue_dir.
+        :param queue_dir: Directory to scan for pending ZIP files.
+        :return: True when pending work existed (including backoff wait),
+         otherwise False.
         """
         pending = self._pending_zip_paths(queue_dir)
         if not pending:
@@ -675,14 +709,20 @@ class DataCollector:
         return self._config.consent  # type: ignore[union-attr]
 
     def should_prompt_for_consent(self) -> bool:
-        """Return whether a consent dialog should be shown to the user."""
+        """
+        Return whether a consent dialog should be shown to the user.
+        :return: True if the consent dialog should be shown, False otherwise.
+        """
         self._lazy_init()
         if not self._init_ok:
             return False
         return self._config.should_prompt_for_consent()  # type: ignore[union-attr]
 
     def set_consent(self, value: bool) -> None:
-        """Persist explicit user consent choice."""
+        """
+        Persist explicit user consent choice.
+        :param value: Boolean indicating user's consent choice.
+        """
         if not isinstance(value, bool):
             raise ValueError("value must be a bool")
         self._lazy_init()
@@ -691,11 +731,11 @@ class DataCollector:
         self._config.consent = value  # type: ignore[union-attr]
 
     def postpone_consent(self, remind_date: Optional[datetime] = None) -> None:
-        """Postpone consent prompt and clear current consent state.
-
+        """
+        Postpone consent prompt and clear current consent state.
         :param remind_date: UTC datetime after which the consent prompt should
-            be shown again.  Defaults to ``_DEFAULT_CONSENT_REMIND_DELTA`` from
-            now when not specified.
+         be shown again.  Defaults to _DEFAULT_CONSENT_REMIND_DELTA from
+         now when not specified.
         """
         self._lazy_init()
         if not self._init_ok:
@@ -703,9 +743,9 @@ class DataCollector:
         self._config.postpone_consent(remind_date=remind_date)  # type: ignore[union-attr]
 
     def get_consent_remind_days(self) -> int:
-        """Return the number of days used for the consent remind-later interval.
-
-        :returns: Integer number of days in the default remind delta.
+        """
+        Return the number of days used for the consent remind-later interval.
+        :return: Integer number of days in the default remind delta.
         """
         return int(_DEFAULT_CONSENT_REMIND_DELTA.days)
 
@@ -716,26 +756,25 @@ class DataCollector:
         payload: dict,
         image_format: str = "TIFF",
     ) -> None:
-        """Capture an annotated data sample at a software event.
-
+        """
+        Capture an annotated data sample at a software event.
         Returns immediately (non-blocking). Serialisation and upload happen
         asynchronously in a background thread.  If consent has not been
         granted, this is a no-op.  This function never raises (beyond the
         input validation below); all errors are logged and suppressed.
-
         :param event_name: Human-readable event identifier, e.g.
-            ``"z_stack_acquired"``.  Must be a non-empty string.
-        :param schema_version: Payload schema version string, e.g. ``"1.0"``.
-            Must be a non-empty string.
+         "z_stack_acquired".  Must be a non-empty string.
+        :param schema_version: Payload schema version string, e.g. "1.0".
+         Must be a non-empty string.
         :param payload: Dict of arbitrary values.  Must be a dict.  Supported
-            value types:
-            - Python primitives (str, int, float, bool, None) — inlined in
-              ``metadata.json``
-            - :class:`odemis.model.DataArray` / :class:`numpy.ndarray` —
-              exported as TIFF or HDF5 side-car
-            - dict / list — written as ``extra_<key>.json`` side-car
-        :param image_format: Format for DataArray export.  ``"TIFF"``
-            (default) or ``"HDF5"``.
+         value types:
+         - Python primitives (str, int, float, bool, None) — inlined in
+           metadata.json
+         - :class:odemis.model.DataArray / :class:numpy.ndarray —
+            exported as TIFF or HDF5 side-car
+            - dict / list — written as extra_<key>.json side-car
+        :param image_format: Format for DataArray export.  "TIFF"
+         (default) or "HDF5".
         :raises ValueError: If any input parameter is invalid.
         """
         if not isinstance(event_name, str) or not event_name:

@@ -27,6 +27,7 @@ from odemis.gui.comp import popup
 import odemis.gui.conf
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
+from odemis.gui.model.main_gui_data import MainGUIData
 from odemis.gui.util import call_in_wx_main
 from odemis.util.datacollector import DataCollector
 from odemis.util import driver
@@ -43,12 +44,13 @@ class MenuController(object):
     tab controller.
     """
 
-    def __init__(self, main_data, main_frame, data_collector):
-        """ Binds the menu actions.
+    def __init__(self, main_data: MainGUIData, main_frame: wx.Frame, data_collector: DataCollector):
+        """
+        Binds the menu actions.
 
-        main_data (MainGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the main frame of the GUI
-        data_collector (DataCollector): the data collector, used for the data sharing consent menu item
+        :param main_data: The representation of the microscope GUI.
+        :param main_frame: The main frame of the GUI.
+        :param data_collector: The data collector, used for the data sharing consent menu item.
         """
         self._main_data = main_data
         self._main_frame = main_frame
@@ -169,8 +171,12 @@ class MenuController(object):
             menu.Remove(main_frame.menu_item_show_correlation)
             main_frame.menu_item_show_correlation.Destroy()
 
-    def _append_data_sharing_menu_item(self, main_frame):
-        """Append and initialize Help menu checkbox for data sharing consent."""
+    def _append_data_sharing_menu_item(self, main_frame: wx.Frame) -> wx.MenuItem | None:
+        """
+        Append and initialize Help menu checkbox for data sharing consent.
+        :param main_frame: The main application frame.
+        :return: The created menu item, or None if the Help menu is not available.
+        """
         help_menu = main_frame.menu_item_about.GetMenu()
         if help_menu is None:
             return None
@@ -181,7 +187,6 @@ class MenuController(object):
 
     def refresh_consent_menu_item(self) -> None:
         """Sync the Help menu checkbox to the current consent state.
-
         Call this after any external consent change (e.g. from the consent
         dialog shown at startup) so the menu reflects the persisted value
         without requiring a restart.
