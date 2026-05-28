@@ -24,26 +24,40 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Various helper functions that have a generic usefulness
 # Warning: do not put anything that has dependencies on non default python modules
 
-import inspect
 import itertools
 import logging
 import math
-import queue
-import signal
-import sys
-import threading
-import time
-import types
-import weakref
 from collections.abc import Mapping
-from concurrent.futures import CancelledError
-from functools import wraps
-from typing import Iterable, Tuple, TypeVar, Callable, List, Optional
+from typing import Iterable, Tuple, TypeVar
 
 import numpy
-from decorator import decorator
 
-from . import weak
+from .concurrent import (  # noqa: F401
+    BackgroundWorker,
+    RepeatingTimer,
+    bindFuture,
+    executeAsyncTask,
+    inspect_getmembers,
+    limit_invocation,
+    timeout,
+)
+# Re-export from sub-modules for backward compatibility
+from .geometry import (  # noqa: F401
+    INSIDE, LEFT, RIGHT, LOWER, UPPER,
+    clip_line,
+    expand_rect,
+    get_polygon_bbox,
+    intercept_of_line,
+    intersect,
+    is_point_in_rect,
+    normalize_rect,
+    perpendicular_distance,
+    project_point_on_line,
+    rect_intersect,
+    rotate_rect,
+    separate_rect_rotation,
+    slope_of_line,
+)
 
 # Used in the type signature of `pairwise()` below such that we can define the
 # return type as a function of the input type.
@@ -71,9 +85,9 @@ def get_best_dtype_for_acc(idtype, count):
     else:
         maxval = numpy.iinfo(idtype).max * count
         if idtype.kind == "i":
-            maxval = -maxval # force an signed int
+            maxval = -maxval  # force an signed int
 
-        if -2**63 <= maxval < 2**64:
+        if -2 ** 63 <= maxval < 2 ** 64:
             # Anything bigger, numpy returns a Python integer type (very slow & big)
             adtype = numpy.min_scalar_type(maxval)
         else:
@@ -94,9 +108,9 @@ def index_closest(val, l):
     Works also with dict and tuples.
     """
     if isinstance(l, dict):
-        return min(l.items(), key=lambda x:abs(x[1] - val))[0]
+        return min(l.items(), key=lambda x: abs(x[1] - val))[0]
     else:
-        return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
+        return min(enumerate(l), key=lambda x: abs(x[1] - val))[0]
 
 
 def round_up_to_multiple(v: float, m: float) -> float:
@@ -123,7 +137,7 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     return math.isclose(a, b, rel_tol=rtol, abs_tol=atol)
 
 
-def rot_almost_equal(a: float, b: float, atol: float=1e-18, rtol: float=1e-7) -> bool:
+def rot_almost_equal(a: float, b: float, atol: float = 1e-18, rtol: float = 1e-7) -> bool:
     """
     Check the rotation difference between two radian angles is within a margin
     a: an angle, in radians
@@ -221,6 +235,7 @@ def sorted_according_to(la, lb):
     lb (list or tuple): a list the same values as la, but in the order expected
     return (list): la sorted according to lb
     """
+
     def index_in_lb(e):
         """ return the position of the element in lb """
         try:
@@ -229,318 +244,6 @@ def sorted_according_to(la, lb):
             return len(lb) + 1
 
     return sorted(la, key=index_in_lb)
-
-
-def rect_intersect(ra, rb):
-    """
-    Computes the rectangle representing the intersection area of two rectangles
-    (aligned along the axes).
-    ra (tuple of 4 floats): position of the first rectangle left, top, right, bottom
-    rb (tuple of 4 floats): position of the second rectangle
-    return (None or tuple of 4 floats): None if there is no intersection, or
-     the rectangle representing the intersection
-    Note that the rectangles can have the top/bottom and left/right in any order,
-    but the return value will always have top < bottom and left < right.
-    """
-
-    # Make sure that t<b and l<r
-    ra = (min(ra[0], ra[2]), min(ra[1], ra[3]),
-          max(ra[0], ra[2]), max(ra[1], ra[3]))
-
-    rb = (min(rb[0], rb[2]), min(rb[1], rb[3]),
-          max(rb[0], rb[2]), max(rb[1], rb[3]))
-
-    # Any intersection?
-    if ra[0] >= rb[2] or ra[2] <= rb[0] or ra[1] >= rb[3] or ra[3] <= rb[1]:
-        return None
-
-    inter = (max(ra[0], rb[0]), max(ra[1], rb[1]),
-             min(ra[2], rb[2]), min(ra[3], rb[3]))
-
-    return inter
-
-
-def perpendicular_distance(start, end, point):
-    """
-    Computes the perpendicular distance between a line segment and a point (in 2D space).
-    start (float, float): beginning of the line segment
-    end (float, float): end of the line segment
-    point (float, float): point anywhere in space
-    return (0 <= float): distance
-    """
-    x1, y1 = start
-    x2, y2 = end
-    x3, y3 = point
-
-    # Find the closest point on the segment
-    px = x2 - x1
-    py = y2 - y1
-    v = px * px + py * py
-
-    if v == 0:
-        # If start and end are the same point => it's also the closest point
-        u = 0  # any value works
-    else:
-        u = ((x3 - x1) * px + (y3 - y1) * py) / v
-        u = min(max(u, 0), 1)
-
-    x = x1 + u * px
-    y = y1 + u * py
-
-    # Compute the distance between the external point and the closest point
-    dx = x - x3
-    dy = y - y3
-    return math.hypot(dx, dy)
-
-
-INSIDE, LEFT, RIGHT, LOWER, UPPER = 0, 1, 2, 4, 8
-
-
-def clip_line(xmin, ymax, xmax, ymin, x1, y1, x2, y2):
-    """ Clip a line to a rectangular area
-
-    This implements the Cohen-Sutherland line clipping algorithm. Although it's not the most
-    efficient clipping algorithm, it was chosen because it's best at cheaply determining the trivial
-    cases (line being completely inside or outside the bounding box).
-
-    Code based on https://github.com/scienceopen/cv-utils/blob/master/lineClipping.py
-    Copyright (c) 2014 Michael Hirsch
-
-    """
-
-    def _get_pos(xa, ya):
-        p = INSIDE  # default is inside
-
-        # consider x
-        if xa < xmin:
-            p |= LEFT
-        elif xa > xmax:
-            p |= RIGHT
-
-        # consider y
-        if ya < ymin:
-            p |= LOWER  # bitwise OR
-        elif ya > ymax:
-            p |= UPPER  # bitwise OR
-        return p
-
-    # check for trivially outside lines
-    k1 = _get_pos(x1, y1)
-    k2 = _get_pos(x2, y2)
-
-    while (k1 | k2) != 0:  # if both points are inside box (0000) , ACCEPT trivial whole line in box
-
-        # if line trivially outside window, REJECT
-        if (k1 & k2) != 0:
-            return None, None, None, None
-
-        # this is not a bitwise or, it's the word "or"
-        opt = k1 or k2  # take first non-zero point, short circuit logic
-        if opt & UPPER:
-            x = x1 + (x2 - x1) * (ymax - y1) / (y2 - y1)
-            y = ymax
-        elif opt & LOWER:
-            x = x1 + (x2 - x1) * (ymin - y1) / (y2 - y1)
-            y = ymin
-        elif opt & RIGHT:
-            y = y1 + (y2 - y1) * (xmax - x1) / (x2 - x1)
-            x = xmax
-        elif opt & LEFT:
-            y = y1 + (y2 - y1) * (xmin - x1) / (x2 - x1)
-            x = xmin
-        else:
-            raise RuntimeError('Undefined clipping state')
-
-        if opt == k1:
-            x1, y1 = x, y
-            k1 = _get_pos(x1, y1)
-        elif opt == k2:
-            x2, y2 = x, y
-            k2 = _get_pos(x2, y2)
-
-    return int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2))
-
-
-def intersect(ra, rb):
-    """
-    Computes the intersection between two rectangles of the form (left, top, width, height)
-    """
-
-    ax, ay, aw, ah = ra
-    bx, by, bw, bh = rb
-
-    # Return None if there's no intersection
-    if ax >= bx + bw or ay >= by + bh or bx >= ax + aw or by >= ay + ah:
-        return None
-
-    # Calculate the intersection's top left and width and height
-    ix = max(ax, bx)
-    iy = max(ay, by)
-    iw = min(ax + aw, bx + bw) - ix
-    ih = min(ay + ah, by + bh) - iy
-
-    return ix, iy, iw, ih
-
-
-def normalize_rect(rect):
-    """ Ensure that the given rectangle actually is defined by xmin, ymin, xmax, ymax
-    so that y1 < y2 and x1 < x2.
-
-    rect (iterable of 4 floats): x1, y1, x2, y2
-    return (iterable of 4 floats): xmin, ymin, xmax, ymax
-
-    """
-
-    x1, y1, x2, y2 = rect
-    if x1 > x2:
-        x1, x2 = x2, x1
-    if y1 > y2:
-        y1, y2 = y2, y1
-
-    # Re-create the result using the same type as the `rect` parameter
-    return type(rect)((x1, y1, x2, y2))
-
-
-def is_point_in_rect(p, rect):
-    """
-    Check if a point is inside in a rectangle.
-
-    p (tuple of 2 floats): x, y coordinates of point
-    rect (tuple of 4 floats): minx, miny, maxx, maxy positions of rectangle
-    return (bool): True if point is in rectangle, False otherwise
-    """
-    minx, miny, maxx, maxy = rect
-    return minx <= p[0] <= maxx and miny <= p[1] <= maxy
-
-
-def expand_rect(rect, margin):
-    """
-    Expand a rectangle by a fixed margin.
-
-    rect (tuple of 4 floats): minx, miny, maxx, maxy positions of rectangle
-    margin (float): margin to increase rectangle by
-    return (tuple of 4 floats): minx, miny, maxx, maxy positions of adjusted rectangle
-    """
-    minx, miny, maxx, maxy = rect
-    return minx - margin, miny - margin, maxx + margin, maxy + margin
-
-
-def rotate_rect(rect: Tuple[float, float, float, float],
-                angle: float,
-                center: Optional[Tuple[float, float]] = None
-                ) -> List[Tuple[float, float]]:
-    """
-    Rotate a rectangle (aligned on the axes) around a center point.
-    :param rect: minx, miny, maxx, maxy positions of rectangle
-    :param angle: angle of rotation in radians
-    :param center: x, y coordinates of center point. If None, the rectangle center is used.
-    :return: position (x, y) of the 4 corners of the rotated rectangle (ordered clockwise, starting from minx, miny)
-    """
-    minx, miny, maxx, maxy = rect
-    if center is None:
-        center = ((minx + maxx) / 2, (miny + maxy) / 2)
-    cx, cy = center
-
-    corners = [(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)]
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
-
-    rotated_corners = []
-    for x, y in corners:
-        # Translate point to origin
-        x -= cx
-        y -= cy
-
-        # Rotate point
-        x_new = x * cos_a - y * sin_a
-        y_new = x * sin_a + y * cos_a
-
-        # Translate point back
-        x_new += cx
-        y_new += cy
-
-        rotated_corners.append((x_new, y_new))
-
-    return rotated_corners
-
-
-def separate_rect_rotation(corners: List[Tuple[float, float]],
-                           ) -> Tuple[Tuple[float, float, float, float], float]:
-    """
-    Given a rectangle defined by its 4 corner points, return a rectangle aligned with the axes
-    plus an angle of rotation to be applied around the center.
-    It assumes the corners correspond to a rotated rectangle (no noise).
-    :param corners: position (x, y) of the 4 corners of the rectangle. The order is:
-     +---------------------> X
-     |   0 -------------- 1
-     |   |                |
-     |   |                |
-     |   |                |
-     V   3 -------------- 2
-     Y
-    :return:
-      * rect (minx, miny, maxx, maxy): positions of the rectangle aligned with the axes
-      * angle: rotation in radians (between 0 and 2pi)
-    """
-    # Compute the rotation as the angle from corner 0 to corner 1
-    x0, y0 = corners[0]
-    x1, y1 = corners[1]
-    if x0 == x1 and y0 == y1:
-        # If corners 0 & 1 are at the same position (meaning it's extremely thin rectangle), it's
-        # not possible to deduce the rotation from them. So instead, we use corners 0 & 3 + 90° to define
-        # the rotation.
-        x3, y3 = corners[3]
-        if x1 == x3 and y1 == y3:  # It's just a point => let's say the rotation is 0
-            return (x1, y1, x3, y3), 0.0
-        angle = (math.atan2(y3 - y0, x3 - x0) - math.pi / 2) % (2 * math.pi)
-    else:
-        angle = math.atan2(y1 - y0, x1 - x0) % (2 * math.pi)
-        x3, y3 = corners[3]
-
-    # Rotate the first and third corner back to align with the axes
-    cx = (x0 + corners[2][0]) / 2
-    cy = (y0 + corners[2][1]) / 2
-
-    cos_a = math.cos(-angle)
-    sin_a = math.sin(-angle)
-
-    rect = []
-    for x, y in (corners[0], corners[2]):
-        # Translate point to origin
-        x -= cx
-        y -= cy
-
-        # Rotate point
-        x_new = x * cos_a - y * sin_a
-        y_new = x * sin_a + y * cos_a
-
-        # Translate point back
-        rect.append(x_new + cx)
-        rect.append(y_new + cy)
-
-    rect = normalize_rect(tuple(rect))
-    return rect, angle
-
-
-def get_polygon_bbox(coordinates):
-    """
-    Get the maximum and minimum values for a and b from a list of tuples
-    with shape: [(a1,b1), (a2,b2), ....., (an,bn)]
-
-    :param coordinates: (list of nested tuples (a,b))
-    :return: a_min, b_min, a_max, b_max
-    """
-    if len(coordinates) <= 1:
-        raise ValueError(f"Coordinates contains {len(coordinates)} elements, two or more are required.")
-
-    for coordinate in coordinates:
-        if len(coordinate) != 2:
-            raise ValueError(f"The function only works for 2D coordinates, coordinate: {coordinate} has {len(coordinate)} dimensions.")
-
-    maximum = list(map(max, zip(*coordinates)))
-    minimum = list(map(min, zip(*coordinates)))
-
-    return minimum[0], minimum[1], maximum[0], maximum[1]
 
 
 def find_plot_content(xd, yd):
@@ -579,434 +282,3 @@ def find_plot_content(xd, yd):
         iright = len(yd) - 1
 
     return xd[ileft], xd[iright]
-
-
-def _li_thread(delay, q):
-
-    try:
-        exect = time.time()
-        while True:
-            # read the latest arguments in the queue (if there are more)
-            t, f, args, kwargs = q.get() # first wait until there is something
-            if t is None:
-                return
-
-            # wait until it's time for it
-            next_t = (min(exect, t) + delay)
-            while True: # discard arguments if there is newer calls already queued
-                sleep_t = next_t - time.time()
-                if sleep_t > 0:
-                    # logging.debug("waiting %f s until executing call", sleep_t)
-                    # time.sleep(sleep_t)
-                    timeout = sleep_t
-                    block = True
-                else: # just check one last time
-                    block = False
-                    timeout = None
-
-                try:
-                    t, f, args, kwargs = q.get(block=block, timeout=timeout)
-                    if t is None: # Sign that we should stop (object is gone)
-                        return
-                    # logging.debug("Overriding call with call at %f", t)
-                except queue.Empty:
-                    break
-
-            try:
-                exect = time.time()
-                # logging.debug("executing function %s with a delay of %f s", f.__name__, exect - t)
-                f(*args, **kwargs)
-            except Exception:
-                logging.exception("During limited invocation call")
-
-            # clean up early, to avoid possible cyclic dep on the instance
-            del f, args, kwargs
-
-    finally:
-        logging.debug("Ending li thread")
-
-
-def limit_invocation(delay_s):
-    """ This decorator limits how often a method will be executed.
-
-    The first call will always immediately be executed. The last call will be
-    delayed 'delay_s' seconds at the most. In between the first and last calls,
-    the method will be executed at 'delay_s' intervals. In other words, it's
-    a rate limiter.
-
-    :param delay_s: (float) The minimum interval between executions in seconds.
-
-    Note that the method might be called in a separate thread. In wxPython, you
-    might need to decorate it by @call_in_wx_main to ensure it is called in the GUI
-    thread.
-
-    """
-
-    if delay_s > 5:
-        logging.warning("Warning! Long delay interval. Please consider using "
-                     "an interval of 5 or less seconds")
-
-    def li_dec(f):
-        # Share a lock on the class (as it's not easy on the instance)
-        # Note: we can only do this at init, after it's impossible to add/set
-        # attribute on an method
-        f._li_lock = threading.Lock()
-
-        # Hacky way to store value per instance and per methods
-        last_call_name = '%s_lim_inv_last_call' % f.__name__
-        queue_name = '%s_lim_inv_queue' % f.__name__
-        wr_name = '%s_lim_inv_wr' % f.__name__
-
-        @wraps(f)
-        def limit(self, *args, **kwargs):
-            if inspect.isclass(self):
-                raise ValueError("limit_invocation decorators should only be "
-                                 "assigned to instance methods!")
-
-            now = time.time()
-            with f._li_lock:
-                # If the function was called later than 'delay_s' seconds ago...
-                if (hasattr(self, last_call_name) and
-                    now - getattr(self, last_call_name) < delay_s):
-                    # logging.debug('Delaying method call')
-                    try:
-                        q = getattr(self, queue_name)
-                    except AttributeError:
-                        # Create everything need
-                        q = queue.Queue()
-                        setattr(self, queue_name, q)
-
-                        # Detect when instance of self is dereferenced
-                        # and kill thread then
-                        def on_deref(obj):
-                            # logging.debug("object %r gone", obj)
-                            q.put((None, None, None, None)) # ask the thread to stop
-
-                        wref = weakref.ref(self, on_deref)
-                        setattr(self, wr_name, wref)
-
-                        t = threading.Thread(target=_li_thread,
-                                             name="li thread for %s" % f.__name__,
-                                             args=(delay_s, q))
-                        t.daemon = True
-                        t.start()
-
-                    q.put((now, f, (self,) + args, kwargs))
-                    setattr(self, last_call_name, now + delay_s)
-                    return
-                else:
-                    # execute method call now
-                    setattr(self, last_call_name, now)
-
-            return f(self, *args, **kwargs)
-        return limit
-    return li_dec
-
-
-# inspect.getmembers() in Python 3.10 and prior has an issue when __getattr__ is modified.
-if sys.version_info >= (3, 11):
-    def inspect_getmembers(object, predicate=None):
-        return inspect.getmembers(object, predicate)
-else:
-    def inspect_getmembers(object, predicate=None):
-        """
-        Fix for the corresponding function in inspect. If we modify __getattr__ of a function, inspect.getmembers()
-        doesn't work as intended (a TypeError is raised). The change consists of one line (highlighted below).
-        https://stackoverflow.com/questions/54478679/workaround-for-getattr-special-method-breaking-inspect-getmembers-in-pytho
-        """
-        # Line below adds inspect. reference to isclass()
-        if inspect.isclass(object):
-            # Line below adds inspect. reference to getmro()
-            mro = (object,) + inspect.getmro(object)
-        else:
-            mro = ()
-        results = []
-        processed = set()
-        names = dir(object)
-        # :dd any DynamicClassAttributes to the list of names if object is a class;
-        # this may result in duplicate entries if, for example, a virtual
-        # attribute with the same name as a DynamicClassAttribute exists
-        try:
-            for base in object.__bases__:
-                for k, v in base.__dict__.items():
-                    if isinstance(v, types.DynamicClassAttribute):
-                        names.append(k)
-        #################################################################
-        ### Modification to inspect.getmembers: also catch TypeError here
-        #################################################################
-        except (AttributeError, TypeError):
-            pass
-        for key in names:
-            # First try to get the value via getattr.  Some descriptors don't
-            # like calling their __get__ (see bug #1785), so fall back to
-            # looking in the __dict__.
-            try:
-                value = getattr(object, key)
-                # handle the duplicate key
-                if key in processed:
-                    raise AttributeError
-            except AttributeError:
-                for base in mro:
-                    if key in base.__dict__:
-                        value = base.__dict__[key]
-                        break
-                else:
-                    # could be a (currently) missing slot member, or a buggy
-                    # __dir__; discard and move on
-                    continue
-            if not predicate or predicate(value):
-                results.append((key, value))
-            processed.add(key)
-        results.sort(key=lambda pair: pair[0])
-        return results
-
-
-
-# TODO: only works on Unix, needs a fallback on windows (at least, don't complain)
-# from http://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
-# see http://code.activestate.com/recipes/577853-timeout-decorator-with-multiprocessing/
-# for other implementation
-def timeout(seconds):
-    """
-    timeout decorator. Stops a function from executing after a given time. The
-      function will raise an exception in this case.
-    seconds (0 < float): time in second before the timeout
-    """
-    assert seconds > 0
-    def handle_timeout(signum, frame):
-        logging.info("Stopping function after timeout of %g s", seconds)
-        raise TimeoutError("Function took more than %g s to execute" % seconds)
-
-    def wrapper(f, *args, **kwargs):
-        prev_handler = signal.signal(signal.SIGALRM, handle_timeout)
-        try:
-            signal.setitimer(signal.ITIMER_REAL, seconds) # same as alarm, but accepts float
-            return f(*args, **kwargs)
-        finally:
-            signal.setitimer(signal.ITIMER_REAL, 0)
-            signal.signal(signal.SIGALRM, prev_handler)
-
-    return decorator(wrapper)
-
-
-class RepeatingTimer(threading.Thread):
-    """
-    An almost endless timer thread.
-    It stops when calling cancel() or the callback disappears.
-    """
-    def __init__(self, period, callback, name="TimerThread"):
-        """
-        period (float): time in second between two calls
-        callback (callable): function to call
-        name (str): fancy name to give to the thread
-        """
-        threading.Thread.__init__(self, name=name)
-        self.callback = weak.WeakMethod(callback)
-        self.period = period
-        self.daemon = True
-        self._must_stop = threading.Event()
-
-    def run(self):
-        # use the timeout as a timer
-        try:
-            wait_time = self.period
-            while not self._must_stop.wait(wait_time):
-                tstart = time.time()
-                try:
-                    self.callback()
-                except weak.WeakRefLostError:
-                    # it's gone, it's over
-                    return
-                wait_time = max(0, (tstart + self.period) - time.time())
-        except Exception:
-            logging.exception("Failure while calling repeating timer '%s'", self.name)
-        finally:
-            logging.debug("Repeating timer thread '%s' over", self.name)
-
-    def cancel(self):
-        self._must_stop.set()
-
-
-class BackgroundWorker:
-    """
-    A simple background worker that runs a function in a separate thread.
-    It can be used to run a function asynchronously without blocking the main thread.
-    """
-    def __init__(self, discard_old: bool = True):
-        """
-        :param discard_old: If True, the worker will discard any old work that is still in the queue
-        """
-        self.discard_old = discard_old
-        self._work_queue = queue.Queue()  # Tuple[callable, *args, **kwargs] or None
-        self._thread = None  # Thread that runs the background worker
-
-    def schedule_work(self, fn: Callable, *args, **kwargs):
-        """
-        :param fn: function to run in the background
-        :param args: positional arguments to pass to the function
-        :param kwargs: keyword arguments to pass to the function
-        """
-        if self._thread is None or not self._thread.is_alive():
-            self._thread = threading.Thread(target=self._runner)
-            self._thread.daemon = True
-            self._thread.start()
-
-        self._work_queue.put((fn, args, kwargs))
-
-    def terminate(self):
-        """
-        Stops the background worker thread, and wait until it is done.
-        If self.discard_old is True, then queued work will be discarded. Otherwise, it will wait
-        until all queued work is done (within 5s).
-        """
-        if self._thread is not None:
-            self._work_queue.put(None)
-            self._thread.join(5)
-            if self._thread.is_alive():
-                logging.warning("BackgroundWorker thread did not finish in time")
-            else:
-                self._thread = None
-
-    def _runner(self):
-        """
-        The main loop of the background worker. It runs in a separate thread.
-        It processes the work queue and executes the functions in the background.
-        """
-        fn = None
-        try:
-            while True:
-                work = self._work_queue.get()  # Wait until there is work to do
-                if work is None:  # Stop signal
-                    return
-                fn, args, kwargs = work
-
-                if self.discard_old:
-                    # Pick any new work that is already in the queue
-                    try:
-                        while True:
-                            work = self._work_queue.get(block=False)
-                            if work is None:  # Stop signal
-                                return
-                            fn, args, kwargs = work
-                    except queue.Empty:
-                        pass  # No more work in the queue => everything is fine
-
-                fn(*args, **kwargs)
-        except Exception:
-            logging.exception("Error in BackgroundWorker with function %s", fn)
-        finally:
-            logging.debug("BackgroundWorker thread finished")
-
-
-def executeAsyncTask(future, fn, args=(), kwargs=None):
-    """
-    Execute a task in a separate thread. To follow the state of execution,
-      the given future is bound to it. Handy to run a Future without an executor.
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    args, kwargs: passed to the fn
-    returns Thread: the thread running the task
-    """
-    if kwargs is None:
-        kwargs = {}
-    thread = threading.Thread(target=bindFuture,
-                              name="Future runner",
-                              args=(future, fn),
-                              kwargs={"args": args, "kwargs": kwargs})
-    thread.start()
-    return thread
-
-
-def bindFuture(future, fn, args=(), kwargs=None):
-    """
-    Start and follow a task by connecting it to a Future. It takes care of
-      updating the state of the future based on the call status. It is blocking
-      until the task is finished (or cancelled), so usually, it is called as
-      main target of a (separate) thread.
-    Based on the standard futures code _WorkItem.run()
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    *args, **kwargs: passed to the fn
-    returns None: when the task is over (or cancelled)
-    """
-    if kwargs is None:
-        kwargs = {}
-    if not future.set_running_or_notify_cancel():
-        return
-
-    try:
-        result = fn(*args, **kwargs)
-    except CancelledError:
-        # cancelled via the future (while running) => it's all already handled
-        pass
-    except BaseException:
-        e, tb = sys.exc_info()[1:]
-        try:
-            future.set_exception_info(e, tb)
-        except AttributeError:  # Old futures (<v3) only had the non-traceback version
-            future.set_exception(e)
-    else:
-        future.set_result(result)
-
-
-def slope_of_line(point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
-    """
-    Calculate the slope of a line passing through two given points.
-    """
-    if point1[0] == point2[0]:  # Vertical line
-        slope = math.inf  # Slope is undefined for vertical lines
-    else:
-        slope = (point2[1] - point1[1]) / (point2[0] - point1[0])
-    return slope
-
-
-def intercept_of_line(point: Tuple[float, float], slope: float) -> float:
-    """
-    Calculate the intercept of a line passing through a given point with a specified slope.
-
-    :param point: The coordinates of the point through which the line passes.
-    :param slope: The slope of the line.
-
-    Note:
-        The equation of a line in slope-intercept form is y = mx + c, where:
-            - y is the vertical position of a point on the line.
-            - x is the horizontal position of a point on the line.
-            - m is the slope of the line.
-            - c is the y-intercept of the line, indicating where the line intersects the y-axis.
-
-        For vertical lines, since the slope is undefined, the x-coordinate of the point is returned
-        instead, representing the x-intercept where the line intersects the x-axis.
-    """
-    if math.isinf(slope):  # line is vertical
-        intercept = point[0]  # x-intercept for vertical line
-    else:
-        intercept = point[1] - slope * point[0]  # y-intercept for non-vertical line
-    return intercept
-
-
-def project_point_on_line(
-        point: Tuple[float, float], line_slope: float, line_intercept: float
-    ) -> Tuple[float, float]:
-    """
-    Calculate the projection of a point on a line.
-
-    :param point: The coordinates (x, y) of the point to be projected on the line.
-    :param line_slope: The slope of the line.
-    :param line_intercept: The intercept of the line.
-
-    :returns: The coordinates of the projected point on the line.
-
-    Note:
-        The projected point is basically the intersection point of the line
-        passing through the given point and perpendicular to the given line.
-
-        x_projected = x + m * (y - c) / (1 + m^2)
-        y_projected = m * x_projected + c
-    """
-    if math.isinf(line_slope):  # Vertical line
-        x_projected = line_intercept
-        y_projected = point[1]
-    else:
-        x_projected = (point[0] + line_slope * (point[1] - line_intercept)) / (1 + line_slope**2)
-        y_projected = line_slope * x_projected + line_intercept
-    return (x_projected, y_projected)
