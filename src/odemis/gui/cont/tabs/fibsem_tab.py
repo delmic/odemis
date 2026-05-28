@@ -195,7 +195,7 @@ class FibsemTab(Tab):
         self._update_milling_angle(None)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_posture)
         self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem_posture)
-        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        self.tab_data_model.streams.subscribe(self._remove_deleted_acquired_streams)
 
     @call_in_wx_main
     def _on_view(self, view):
@@ -298,7 +298,7 @@ class FibsemTab(Tab):
             correlation_tab.correlation_controller.add_streams(streams)
 
     @call_in_wx_main
-    def _on_acquired_streams(self, streams):
+    def _remove_deleted_acquired_streams(self, streams):
         """
         Filter out deleted acquired streams (features and overview) from their respective origin
         :param streams: list(Stream) updated list of tab streams
@@ -323,10 +323,10 @@ class FibsemTab(Tab):
             self._streambar_controller.update_stream_settings()
 
     def _stop_streams_subscriber(self):
-        self.tab_data_model.streams.unsubscribe(self._on_acquired_streams)
+        self.tab_data_model.streams.unsubscribe(self._remove_deleted_acquired_streams)
 
     def _start_streams_subscriber(self):
-        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        self.tab_data_model.streams.subscribe(self._remove_deleted_acquired_streams)
 
     def on_dbl_click(self, evt):
 
