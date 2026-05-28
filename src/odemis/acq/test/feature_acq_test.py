@@ -120,8 +120,8 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
         # move to FM IMAGING posture
         pm = MicroscopePostureManager(model.getMicroscope())
 
-        if pm.getCurrentPostureLabel() != FM_IMAGING:
-            f = pm.cryoSwitchSamplePosition(FM_IMAGING)
+        if pm.get_current_posture_label() != FM_IMAGING:
+            f = pm.cryo_switch_sample_position(FM_IMAGING)
             f.result()
 
         f = acquire_at_features(
@@ -205,7 +205,7 @@ class TestCryoFeaturePosturePositions(unittest.TestCase):
             self.assertTrue(isNearPosition(ppos,
                                            feature.get_posture_position(posture),
                                            axes=self.all_axes))
-            self.assertEqual(self.pm.getCurrentPostureLabel(ppos), posture)
+            self.assertEqual(self.pm.get_current_posture_label(ppos), posture)
 
 
 if __name__ == "__main__":

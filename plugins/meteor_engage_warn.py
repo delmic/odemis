@@ -78,7 +78,7 @@ class MeteorEngageWarnPlugin(Plugin):
         pos_str = "\n". join(pos_str)
 
         # Guess (back) which position the users wants to go to
-        target_pos = self.main_app.main_data.posture_manager.getCurrentPostureLabel(end_pos)
+        target_pos = self.main_app.main_data.posture_manager.get_current_posture_label(end_pos)
         stage = self.main_app.main_data.stage_bare
         if target_pos == FM_IMAGING:
             warn_msg = FM_WARN_MSG

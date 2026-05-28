@@ -70,7 +70,7 @@ LINEAR_AXES = {'x', 'y', 'z', 'm'}
 ROTATION_AXES = {'rx', 'ry', 'rz', 'rm'}
 
 # Tolerance for the difference between the current position and the target position
-# these should only be used for TFS1MeteorPostureManager _transformFromSEMToMeteor / _transformFromMeteorToSEM
+# these should only be used for TFS1MeteorPostureManager _transform_from_sem_to_fm / _transform_from_fm_to_sem
 ATOL_ROTATION_TRANSFORM = 0.04  # rad ~2.5 deg
 ATOL_LINEAR_TRANSFORM = 5e-6  # 5 um
 
@@ -125,7 +125,7 @@ class MicroscopePostureManager:
         pass
 
     @abstractmethod
-    def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
+    def get_current_posture_label(self, pos: Dict[str, float] = None) -> int:
         """
         Determine where lies the current stage position
         :param pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses the
@@ -134,7 +134,7 @@ class MicroscopePostureManager:
         """
         pass
 
-    def cryoSwitchSamplePosition(self, target: int):
+    def cryo_switch_sample_position(self, target: int):
         """
         Provide the ability to switch between different positions, without bumping into anything.
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
@@ -143,25 +143,25 @@ class MicroscopePostureManager:
         ValueError exception
         """
         f = model.CancellableFuture()
-        f.task_canceller = self._cancelCryoMoveSample
+        f.task_canceller = self._cancel_cryo_move_sample
         f._task_state = RUNNING
         f._task_lock = threading.Lock()
         f._running_subf = model.InstantaneousFuture()
         # Run in separate thread
-        executeAsyncTask(f, self._doCryoSwitchSamplePosition, args=(f, target))
+        executeAsyncTask(f, self._do_cryo_switch_sample_position, args=(f, target))
         return f
 
     @abstractmethod
-    def _doCryoSwitchSamplePosition(self, future, target_pos: int):
+    def _do_cryo_switch_sample_position(self, future, target_pos: int):
         """
-        Do the actual switching procedure for cryoSwitchSamplePosition
+        Do the actual switching procedure for cryo_switch_sample_position
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
            ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
         """
         pass
 
-    def getMovementProgress(self, current_pos: Dict[str, float], start_pos: Dict[str, float],
+    def get_movement_progress(self, current_pos: Dict[str, float], start_pos: Dict[str, float],
                             end_pos: Dict[str, float]) -> Union[float, None]:
         """
         Compute the position on the path between start and end positions of a stage movement (such as LOADING to IMAGING)
@@ -172,9 +172,9 @@ class MicroscopePostureManager:
         :return: (0<=float<=1, or None) Ratio of the progress, None if it's too far away from of the path
         """
         # Get distance for current point in respect to start and end
-        from_start = self._getDistance(start_pos, current_pos)
-        to_end = self._getDistance(current_pos, end_pos)
-        total_length = self._getDistance(start_pos, end_pos)
+        from_start = self._get_distance(start_pos, current_pos)
+        to_end = self._get_distance(current_pos, end_pos)
+        total_length = self._get_distance(start_pos, end_pos)
         if total_length == 0:  # same value
             return 1
         # Check if current position is on the line from start to end position
@@ -184,7 +184,7 @@ class MicroscopePostureManager:
         else:
             return None
 
-    def _getDistance(self, start: dict, end: dict) -> float:
+    def _get_distance(self, start: dict, end: dict) -> float:
         """
         Calculate the difference between two 3D postures with x, y, z, m, rx, ry, rz, rm axes
         or a subset of these axes. If there are no common axes between the two passed
@@ -239,9 +239,9 @@ class MicroscopePostureManager:
             missing_keys = required_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
-    def _cancelCryoMoveSample(self, future):
+    def _cancel_cryo_move_sample(self, future):
         """
-        Canceller of _doCryoSwitchAlignPosition and _doCryoSwitchSamplePosition tasks
+        Canceller of _do_cryo_switch_align_position and _do_cryo_switch_sample_position tasks
         """
         logging.debug("Cancelling cryo switch move...")
 
@@ -306,7 +306,7 @@ class MicroscopePostureManager:
         """
         Update the current posture of the microscope
         """
-        self.current_posture.value = self.getCurrentPostureLabel(position)
+        self.current_posture.value = self.get_current_posture_label(position)
 
 
 class MeteorPostureManager(MicroscopePostureManager):
@@ -378,26 +378,26 @@ class MeteorPostureManager(MicroscopePostureManager):
         # set the transforms between different postures
         self._posture_transforms = {
             FM_IMAGING: {
-                SEM_IMAGING: self._transformFromMeteorToSEM,
-                MILLING: self._transformFromMeteorToMilling,
-                FIB_IMAGING: self._transformFromMeteorToFIB,
+                SEM_IMAGING: self._transform_from_fm_to_sem,
+                MILLING: self._transform_from_fm_to_milling,
+                FIB_IMAGING: self._transform_from_fm_to_fib,
             },
             SEM_IMAGING: {
-                FM_IMAGING: self._transformFromSEMToMeteor,
-                MILLING: self._transformFromSEMToMilling,
-                FIB_IMAGING: self._transformFromSEMToFIB,
+                FM_IMAGING: self._transform_from_sem_to_fm,
+                MILLING: self._transform_from_sem_to_milling,
+                FIB_IMAGING: self._transform_from_sem_to_fib,
             },
             MILLING: {
-                SEM_IMAGING: self._transformFromMillingToSEM,
-                FM_IMAGING: self._transformFromMillingToFM,
+                SEM_IMAGING: self._transform_from_milling_to_sem,
+                FM_IMAGING: self._transform_from_milling_to_fm,
                 # milling position can be dynamically updated, so we need to support this recalculation
-                MILLING: self._transformFromSEMToMilling,
-                FIB_IMAGING: self._transformFromMillingToFIB,
+                MILLING: self._transform_from_sem_to_milling,
+                FIB_IMAGING: self._transform_from_milling_to_fib,
             },
             FIB_IMAGING: {
-                SEM_IMAGING: self._transformFromFIBToSEM,
-                FM_IMAGING: self._transformFromFIBToMeteor,
-                MILLING: self._transformFromFIBToMilling,
+                SEM_IMAGING: self._transform_from_fib_to_sem,
+                FM_IMAGING: self._transform_from_fib_to_fm,
+                MILLING: self._transform_from_fib_to_milling,
             },
             UNKNOWN: {
                 UNKNOWN: lambda x: x
@@ -410,7 +410,7 @@ class MeteorPostureManager(MicroscopePostureManager):
                                         stage_bare=self.stage,
                                         posture_manager=self)
 
-    def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
+    def get_current_posture_label(self, pos: Dict[str, float] = None) -> int:
         """
         Detects the current stage position of meteor
         :param pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses the
@@ -437,14 +437,14 @@ class MeteorPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def getCurrentGridLabel(self) -> Optional[int]:
+    def get_current_grid_label(self) -> Optional[int]:
         """
         Detects which grid on the sample shuttle of meteor being viewed
         :return: (GRID_* or None) the guessed grid. If current posture doesn't allow to distinguish,
         for instance because it's in LOADING posture, None is returned.
         """
         current_pos = self.stage.position.value
-        current_posture = self.getCurrentPostureLabel(current_pos)
+        current_posture = self.get_current_posture_label(current_pos)
         if current_posture not in self.postures:
             logging.warning("Cannot detect current grid in posture %s",
                             POSITION_NAMES[current_posture])
@@ -468,8 +468,8 @@ class MeteorPostureManager(MicroscopePostureManager):
                             POSITION_NAMES[current_posture], ex)
             return None
 
-        distance_to_grid1 = self._getDistance(current_pos, grid1_pos)
-        distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
+        distance_to_grid1 = self._get_distance(current_pos, grid1_pos)
+        distance_to_grid2 = self._get_distance(current_pos, grid2_pos)
 
         return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
 
@@ -525,7 +525,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         else:
             raise ValueError(f"posture {POSITION_NAMES.get(posture, posture)} not supported for orientation retrieval")
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def get_target_position(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
@@ -534,7 +534,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         pass
 
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
             meteor/FM imaging area.
@@ -556,7 +556,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: rotations})
         return angle
 
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
             to the SEM imaging area.
@@ -782,7 +782,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param posture: (int) the target posture of the stage
         :return: stage-bare position in the target posture"""
 
-        position_posture = self.getCurrentPostureLabel(pos)
+        position_posture = self.get_current_posture_label(pos)
 
         logging.info(f"Position Posture: {POSITION_NAMES[position_posture]}, Target Posture: {POSITION_NAMES[posture]}")
 
@@ -801,7 +801,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         return tf(pos)
 
-    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from sem imaging to milling position
         :param pos: (dict str->float) the current stage position
@@ -813,7 +813,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         return position
 
-    def _transformFromMillingToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_milling_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from milling to sem imaging position
         :param pos: (dict str->float) the current stage position
@@ -825,27 +825,27 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         return position
 
-    def _transformFromMeteorToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from fm imaging to milling position
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
         # simple chain of fm->sem->milling
-        sem_pos = self._transformFromMeteorToSEM(pos)
-        return self._transformFromSEMToMilling(sem_pos)
+        sem_pos = self._transform_from_fm_to_sem(pos)
+        return self._transform_from_sem_to_milling(sem_pos)
 
-    def _transformFromMillingToFM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_milling_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from milling to fm imaging position
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
         # simple chain of milling->sem->fm
-        sem_pos = self._transformFromMillingToSEM(pos)
-        return self._transformFromSEMToMeteor(sem_pos)
+        sem_pos = self._transform_from_milling_to_sem(pos)
+        return self._transform_from_sem_to_fm(sem_pos)
 
-    def _transformFromSEMToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from SEM imaging to FIB imaging position
         :param pos: (dict str->float) the current stage position
@@ -853,7 +853,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         raise NotImplementedError()
 
-    def _transformFromFIBToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fib_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from FIB imaging to SEM imaging position
         :param pos: (dict str->float) the current stage position
@@ -861,7 +861,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         raise NotImplementedError()
 
-    def _transformFromMeteorToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from meteor to FIB imaging position
         :param pos: (dict str->float) the current stage position
@@ -869,7 +869,7 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         raise NotImplementedError()
 
-    def _transformFromFIBToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fib_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from FIB imaging to meteor position
         :param pos: (dict str->float) the current stage position
@@ -877,25 +877,25 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         raise NotImplementedError()
 
-    def _transformFromMillingToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_milling_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from milling to fib imaging position"
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
         # simple chain of milling->sem->fib
-        sem_pos = self._transformFromMillingToSEM(pos)
-        return self._transformFromSEMToFIB(sem_pos)
+        sem_pos = self._transform_from_milling_to_sem(pos)
+        return self._transform_from_sem_to_fib(sem_pos)
 
-    def _transformFromFIBToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fib_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the stage position from fib imaging to milling position"
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
         # simple chain of fib->sem->milling
-        sem_pos = self._transformFromFIBToSEM(pos)
-        return self._transformFromSEMToMilling(sem_pos)
+        sem_pos = self._transform_from_fib_to_sem(pos)
+        return self._transform_from_sem_to_milling(sem_pos)
 
 
 class MeteorTFS1PostureManager(MeteorPostureManager):
@@ -919,7 +919,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def get_target_position(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
@@ -928,7 +928,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         """
         stage_md = self.stage.getMetadata()
         stage_position = self.stage.position.value
-        current_posture = self.getCurrentPostureLabel(stage_position)
+        current_posture = self.get_current_posture_label(stage_position)
         end_pos = None
 
         if target_pos_lbl in (GRID_1, GRID_2):
@@ -976,7 +976,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     # correction/shifting parameters existing in metadata "FM_POS_ACTIVE".
     # This correction parameters can change every session. They are calibrated
     # at the beginning of each run.
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
@@ -1024,7 +1024,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     # The rotation angles are 180 degree around rz axis, and a rotation angle
     # around rx axis which should also be calibrated at the beginning of the run.
     # The rx angle is actually the same as the milling angle.
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
@@ -1066,9 +1066,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _do_cryo_switch_sample_position(self, future, target):
         """
-        Do the actual switching procedure for cryoSwitchSamplePosition
+        Do the actual switching procedure for cryo_switch_sample_position
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, SEM_IMAGING, FM_IMAGING.
         """
@@ -1087,7 +1087,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             sub_moves = []  # list of tuples (component, position)
 
             # get the current label
-            current_label = self.getCurrentPostureLabel()
+            current_label = self.get_current_posture_label()
             current_name = POSITION_NAMES[current_label]
 
             if current_label == target:
@@ -1095,7 +1095,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
 
             # get the set point position
             current_pos = self.stage.position.value
-            target_pos = self.getTargetPosition(target)
+            target_pos = self.get_target_position(target)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -1104,7 +1104,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 logging.warning("Moving stage while current position is unknown.")
                 if target not in (LOADING, SEM_IMAGING):
                     logging.debug("Moving first to SEM_IMAGING position")
-                    target_pos_sem = self.getTargetPosition(SEM_IMAGING)
+                    target_pos_sem = self.get_target_position(SEM_IMAGING)
                     if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                         sub_moves.append((self.focus, focus_deactive))
                     sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
@@ -1150,7 +1150,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                         # We record it by computing its projection in FM sample coordinates, without the fixed plane
                         # correction. As Z is the same for SEM, Milling or FIB, and it's fine to just use SEM to Meteor
                         # for all occasions.
-                        target_pos_unfixed = self._transformFromSEMToMeteor(current_pos, fix_fm_plane=False)
+                        target_pos_unfixed = self._transform_from_sem_to_fm(current_pos, fix_fm_plane=False)
                         sample_stage_pos = self.to_sample_stage_from_stage_position(target_pos_unfixed, posture=FM_IMAGING)
                         sample_stage_pos = {"z": sample_stage_pos["z"]}  # Drop x and y, to make clear only z is used
                         self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_DEACTIVE: sample_stage_pos})
@@ -1239,17 +1239,17 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             self.postures.append(FIB_IMAGING)
 
         # Hack warning: during initialization of the transforms, the offset is computed by calling
-        # to_posture(), which calls _transformFromSEMToMeteor() for the SEM->FM transform. If
+        # to_posture(), which calls _transform_from_sem_to_fm() for the SEM->FM transform. If
         # MD_FM_POS_SAMPLE_ACTIVE is already present, the fix_fm_plane logic is triggered, which
         # uses the sample plane transformations, which aren't fully initialized yet. This can cause
         # an incorrect offset computation, and eventually an incorrect movement to FM.
         # To avoid this, we temporarily set to_posture() to not use the fix_fm_plane logic.
-        _transformFromSEMToMeteorNoFixFM = functools.partial(self._transformFromSEMToMeteor, fix_fm_plane=False)
-        self._posture_transforms[SEM_IMAGING][FM_IMAGING] = _transformFromSEMToMeteorNoFixFM
+        _transform_from_sem_to_fm_no_fix_fm = functools.partial(self._transform_from_sem_to_fm, fix_fm_plane=False)
+        self._posture_transforms[SEM_IMAGING][FM_IMAGING] = _transform_from_sem_to_fm_no_fix_fm
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
         # Reset to the standard function (with fixed FM plane)
-        self._posture_transforms[SEM_IMAGING][FM_IMAGING] = self._transformFromSEMToMeteor
+        self._posture_transforms[SEM_IMAGING][FM_IMAGING] = self._transform_from_sem_to_fm
 
         # If there is no known fixed sample z for FM, compute it here and store it for later use
         if not stage_md.get(model.MD_FM_POS_SAMPLE_ACTIVE):
@@ -1257,12 +1257,12 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             # Pick a sane default for the sample stage z using grid 1.
             sem_grid1_pos = dict(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
             sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-            sem_grid1_pos_fm = self._transformFromSEMToMeteor(sem_grid1_pos, fix_fm_plane=False)
+            sem_grid1_pos_fm = self._transform_from_sem_to_fm(sem_grid1_pos, fix_fm_plane=False)
             fixed_fm_sample = self.to_sample_stage_from_stage_position(sem_grid1_pos_fm, posture=FM_IMAGING)
             fixed_fm_sample = {"z": fixed_fm_sample["z"]}  # Drop x and y, to make clear only z is used
             self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: fixed_fm_sample})
 
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
+    def _transform_from_sem_to_fm(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the meteor/FM imaging area.
         :param pos: the initial stage position.
@@ -1294,7 +1294,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         return transformed_pos
 
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
@@ -1318,7 +1318,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         return transformed_pos
 
-    def _transformFromFIBToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fib_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the FIB imaging area to the
         meteor/FM imaging area.
@@ -1326,18 +1326,18 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         :return: (dict str->float) the transformed position.
         """
         # TODO: check this is correct
-        return self._transformFromSEMToMeteor(self._transformFromFIBToSEM(pos))
+        return self._transform_from_sem_to_fm(self._transform_from_fib_to_sem(pos))
 
-    def _transformFromMeteorToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area to the FIB imaging area.
         :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
         # TODO: check this is correct
-        return self._transformFromSEMToFIB(self._transformFromMeteorToSEM(pos))
+        return self._transform_from_sem_to_fib(self._transform_from_fm_to_sem(pos))
 
-    def _transformFromSEMToFIB(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from SEM imaging to the FIB imaging area.
         :param pos: (dict str->float) the initial stage position.
@@ -1353,7 +1353,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
         transformed_pos["y"] = -transformed_pos["y"]
         return transformed_pos
 
-    def _transformFromFIBToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fib_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from FIB imaging to the SEM imaging area.
         :param pos: (dict str->float) the initial stage position.
@@ -1370,7 +1370,7 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         return transformed_pos
 
-    def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_chamber_to_stage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from chamber to stage bare coordinates.
         Used for moving the stage vertically in the chamber.
         :param shift: The shift to be transformed
@@ -1433,7 +1433,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             missing_keys = required_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def get_target_position(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
@@ -1441,7 +1441,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
-        current_position = self.getCurrentPostureLabel()
+        current_position = self.get_current_posture_label()
         end_pos = None
 
         if target_pos_lbl == LOADING:
@@ -1461,21 +1461,21 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                     # if at loading and fm is pressed, choose grid1 by default
                     sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
                     sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-                    fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
+                    fm_target_pos = self._transform_from_sem_to_fm(sem_grid1_pos)
                 elif current_position == SEM_IMAGING:
-                    fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+                    fm_target_pos = self._transform_from_sem_to_fm(self.stage.position.value)
                 end_pos = fm_target_pos
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
                 sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
                 sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
-                end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
+                end_pos = self._transform_from_sem_to_fm(sem_grid1_pos)
             elif target_pos_lbl == GRID_2:
                 sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
                 sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
-                end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
+                end_pos = self._transform_from_sem_to_fm(sem_grid2_pos)
             elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+                end_pos = self._transform_from_fm_to_sem(self.stage.position.value)
 
         if end_pos is None:
             raise ValueError("Unknown target position {} when in {}".format(
@@ -1490,7 +1490,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
     # the current position and some calibrated values existing in metadata "CALIB".
     # The rotations are 180 degree around the rm axis, and a calibrated angle around the rx axis.
     # These angles exist in the metadata "FM_POS_ACTIVE".
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
@@ -1546,7 +1546,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
     # the current position and some calibrated values existing in metadata "CALIB".
     # The rotations are 180 degree around the rm axis, and a calibrated angle around the rx axis.
     # These angles exist in the metadata "FM_POS_ACTIVE" and "SEM_POS_ACTIVE".
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
@@ -1592,7 +1592,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Return transformed_pos (containing the new x, y, m, rx, rm coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _do_cryo_switch_sample_position(self, future, target):
         try:
             try:
                 target_name = POSITION_NAMES[target]
@@ -1609,14 +1609,14 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             sub_moves = []  # list of tuples (component, position)
 
             # get the current label
-            current_label = self.getCurrentPostureLabel()
+            current_label = self.get_current_posture_label()
             current_name = POSITION_NAMES[current_label]
 
             if current_label == target:
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            target_pos = self.get_target_position(target)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -1625,7 +1625,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 logging.warning("Moving stage while current position is unknown.")
                 if target not in (LOADING, SEM_IMAGING):
                     logging.debug("Moving first to SEM_IMAGING position")
-                    target_pos_sem = self.getTargetPosition(SEM_IMAGING)
+                    target_pos_sem = self.get_target_position(SEM_IMAGING)
                     if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
                     sub_moves.append((stage, filter_dict({'z', 'm'}, target_pos)))
@@ -1659,7 +1659,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                         # but will go through SEM_IMAGING first. But just in case, we handle the case
                         # where the current position is LOADING and the target is FM_IMAGING, do the following:
                         # First switch from Loading to SEM_IMAGING
-                        sem_int_posit = self.getTargetPosition(SEM_IMAGING)
+                        sem_int_posit = self.get_target_position(SEM_IMAGING)
                         sub_moves.append((stage, filter_dict({'rx'}, sem_int_posit)))
                         sub_moves.append((stage, filter_dict({'rm', 'x', 'y'}, sem_int_posit)))
                         sub_moves.append((stage, filter_dict({'m', 'z'}, sem_int_posit)))
@@ -1857,7 +1857,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             missing_keys = required_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def get_target_position(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
@@ -1866,7 +1866,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """
         stage_md = self.stage.getMetadata()
         stage_position = self.stage.position.value
-        current_posture = self.getCurrentPostureLabel(stage_position)
+        current_posture = self.get_current_posture_label(stage_position)
 
         if target_pos_lbl in (GRID_1, GRID_2):
             # Go to grid center: only works if in a supported sample stage posture
@@ -1892,7 +1892,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return end_pos
 
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
@@ -1946,7 +1946,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
     # the current position and some calibrated values existing in metadata "CALIB".
     # The rotations are 180 degree around the rm axis, and a calibrated angle around the rx axis.
     # These angles exist in the metadata "FM_POS_ACTIVE" and "SEM_POS_ACTIVE".
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
@@ -1992,7 +1992,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _transformFromSEMToMilling(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
         milling imaging area.
@@ -2040,7 +2040,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _transformFromMillingToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_milling_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the milling imaging area
         to the SEM imaging area.
@@ -2084,7 +2084,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _do_cryo_switch_sample_position(self, future, target):
         try:
             target_name = POSITION_NAMES[target]
         except KeyError:
@@ -2100,14 +2100,14 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
             # get the current label
             current_pos = self.stage.position.value
-            current_posture = self.getCurrentPostureLabel(current_pos)
+            current_posture = self.get_current_posture_label(current_pos)
             current_name = POSITION_NAMES[current_posture]
 
             if current_posture == target:
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            target_pos = self.get_target_position(target)
 
             # In many cases, to move safely, we force the stage Z to go down first + extra margin,
             # do the actual moves, and then move back up. But on Tescan (stage-bare), the Z axis
@@ -2127,7 +2127,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 logging.warning("Moving stage while current position is unknown (at %s).", current_pos)
                 if target not in (LOADING, SEM_IMAGING):
                     logging.debug("Moving first to SEM_IMAGING position")
-                    target_pos_sem = self.getTargetPosition(SEM_IMAGING)
+                    target_pos_sem = self.get_target_position(SEM_IMAGING)
                     if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                         sub_moves.append((self.focus, focus_deactive))
 
@@ -2211,7 +2211,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     raise CancelledError()
                 future._task_state = FINISHED
 
-    def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_chamber_to_stage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from stage bare to chamber coordinates.
         Used for moving the stage vertically in the chamber.
         For tescan, the z-axis is already aligned with the chamber axis,
@@ -2287,7 +2287,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
                                 SEM_IMAGING: tf_sem_inv,
                                 UNKNOWN: tf_id}
 
-    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+    def get_target_position(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
@@ -2295,7 +2295,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
-        current_position = self.getCurrentPostureLabel()
+        current_position = self.get_current_posture_label()
         end_pos = None
 
         # SEM posture + grid center
@@ -2314,16 +2314,16 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
             elif target_pos_lbl == FM_IMAGING:
                 if current_position == LOADING:
                     # if at loading and fm is pressed, choose grid1 by default
-                    end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_1))
+                    end_pos = self._transform_from_sem_to_fm(get_sem_grid(GRID_1))
                 else:
-                    end_pos = self._transformFromSEMToMeteor(self.stage.position.value)
+                    end_pos = self._transform_from_sem_to_fm(self.stage.position.value)
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
-                end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_1))
+                end_pos = self._transform_from_sem_to_fm(get_sem_grid(GRID_1))
             elif target_pos_lbl == GRID_2:
-                end_pos = self._transformFromSEMToMeteor(get_sem_grid(GRID_2))
+                end_pos = self._transform_from_sem_to_fm(get_sem_grid(GRID_2))
             elif target_pos_lbl == SEM_IMAGING:
-                end_pos = self._transformFromMeteorToSEM(self.stage.position.value)
+                end_pos = self._transform_from_fm_to_sem(self.stage.position.value)
 
         if end_pos is None:
             raise ValueError(
@@ -2332,7 +2332,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
 
         return end_pos
 
-    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_sem_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
@@ -2375,7 +2375,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
@@ -2415,9 +2415,9 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target_posture: int):
+    def _do_cryo_switch_sample_position(self, future, target_posture: int):
         """
-        Do the actual switching procedure for cryoSwitchSamplePosition
+        Do the actual switching procedure for cryo_switch_sample_position
         :param future: cancellable future of the move
         :param target_posture: target posture
         """
@@ -2431,7 +2431,7 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
             sub_moves: List[Tuple[model.Actuator, Dict[str, float]]] = []  # series of component + position
             current_name = POSITION_NAMES[self.current_posture.value]
 
-            target_position = self.getTargetPosition(target_posture)  # raises an exception if move is unsupported
+            target_position = self.get_target_position(target_posture)  # raises an exception if move is unsupported
 
             if target_posture in (GRID_1, GRID_2):
                 sub_moves.append((self.stage, target_position))
@@ -2467,14 +2467,14 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
                     raise CancelledError()
                 future._task_state = FINISHED
 
-    def _transformFromChamberToStage(self, shift: Dict[str, float]) -> Dict[str, float]:
+    def _transform_from_chamber_to_stage(self, shift: Dict[str, float]) -> Dict[str, float]:
         """Transform the shift from stage bare to chamber coordinates.
         Used for moving the stage vertically in the chamber.
         Should not be used in JEOL1 configuration.
         :param shift: The shift to be transformed
         :return: The transformed shift
         """
-        raise NotImplementedError("_transformFromChamberToStage is not used in JEOL1 configuration")
+        raise NotImplementedError("_transform_from_chamber_to_stage is not used in JEOL1 configuration")
 
 
 class SampleStage(model.Actuator):
@@ -2541,7 +2541,7 @@ class SampleStage(model.Actuator):
         """
         # Explicitly computes the posture, as .current_posture is updated by a subscriber that might be
         # called after this one.
-        posture = self._pm.getCurrentPostureLabel(pos_dep)
+        posture = self._pm.get_current_posture_label(pos_dep)
         if posture not in self._pm.postures:
             logging.info("Not updating stage sample position for unsupported posture %s", posture)
             return
@@ -2628,7 +2628,7 @@ class SampleStage(model.Actuator):
         """
         # TODO: account for scan rotation
         # transform the shift from stage bare to chamber coordinates
-        vshift = self._pm._transformFromChamberToStage(shift)
+        vshift = self._pm._transform_from_chamber_to_stage(shift)
         return self._stage_bare.moveRel(vshift)
 
     def stop(self, axes=None):

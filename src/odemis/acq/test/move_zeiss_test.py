@@ -57,9 +57,9 @@ class TestMeteorZeiss1Move(move_tfs1_test.TestMeteorTFS1Move):
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
 
-    def test_transformFromSEMToMeteor(self):
+    def test_transform_from_sem_to_fm(self):
         """
-        Test the keys in stage position for _transformFromSEMToMeteor.
+        Test the keys in stage position for _transform_from_sem_to_fm.
         """
         stage_md = self.stage.getMetadata()
         grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
@@ -67,31 +67,31 @@ class TestMeteorZeiss1Move(move_tfs1_test.TestMeteorTFS1Move):
         # Above position are updated in linear axes and do not have rotation axes,
         # so should raise KeyError when rotation axes are accessed
         with self.assertRaises(KeyError):
-            self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+            self.posture_manager._transform_from_sem_to_fm(grid1_pos)
         with self.assertRaises(KeyError):
-            self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+            self.posture_manager._transform_from_sem_to_fm(grid2_pos)
 
         # update the stage with rotation axes
         grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
         grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
 
         # check if no error is raised (test fails if error is raised)
-        fm_grid_1_pos = self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+        fm_grid_1_pos = self.posture_manager._transform_from_sem_to_fm(grid1_pos)
         self.stage.moveAbs(fm_grid_1_pos).result()
-        current_grid = self.posture_manager.getCurrentGridLabel()
+        current_grid = self.posture_manager.get_current_grid_label()
         self.assertEqual(GRID_1, current_grid)
-        fm_grid_2_pos = self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+        fm_grid_2_pos = self.posture_manager._transform_from_sem_to_fm(grid2_pos)
         self.stage.moveAbs(fm_grid_2_pos).result()
-        current_grid = self.posture_manager.getCurrentGridLabel()
+        current_grid = self.posture_manager.get_current_grid_label()
         self.assertEqual(GRID_2, current_grid)
 
     def test_unknown_label_at_initialization(self):
         # Find a position that is not in any defined posture i.e. it is outside the imaging range
         arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0e-3}
         self.stage.moveAbs(arbitrary_position).result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        current_imaging_mode = self.posture_manager.get_current_posture_label()
         self.assertEqual(UNKNOWN, current_imaging_mode)
-        current_grid = self.posture_manager.getCurrentGridLabel()
+        current_grid = self.posture_manager.get_current_grid_label()
         self.assertEqual(current_grid, None)
 
 

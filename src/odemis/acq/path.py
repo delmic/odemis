@@ -1156,11 +1156,11 @@ class _MimasOpticalPathManager(OpticalPathManager):
 
         # Only accept moving if the stage is already within the "IMAGING" area (which means FM_IMAGING & MILLING)
         # as this means the stage will not move, but only the optical lens.
-        current_pos = self._posture_manager.getCurrentPostureLabel()
+        current_pos = self._posture_manager.get_current_posture_label()
         if current_pos not in (IMAGING, FM_IMAGING, MILLING):
             logging.warning("Optical path cannot be changed while in position %s", POSITION_NAMES[current_pos])
             return
 
-        f = self._posture_manager.cryoSwitchSamplePosition(mode_position)
+        f = self._posture_manager.cryo_switch_sample_position(mode_position)
         f.result()
         logging.debug("Move to position %s completed", mode_position)

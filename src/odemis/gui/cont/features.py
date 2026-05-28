@@ -148,7 +148,7 @@ class CryoFeatureController(object):
         if not feature:
             return
 
-        current_posture = self.pm.getCurrentPostureLabel()
+        current_posture = self.pm.get_current_posture_label()
         if self._main_data_model.microscope.role != "meteor":
             role = self._main_data_model.microscope.role
             logging.info(f"Currently under {POSITION_NAMES[current_posture]}, moving to feature position is not yet supported for {role}.")
@@ -263,7 +263,7 @@ class CryoFeatureController(object):
             self._panel.ctrl_feature_z.Enable(enable)
             self._panel.btn_use_current_z.Enable(enable)
         if self.acqui_mode is guimod.AcquiMode.FIBSEM:
-            current_posture = self.pm.getCurrentPostureLabel()
+            current_posture = self.pm.get_current_posture_label()
             # TODO: check if current position is near the feature position, if not, disable and show warning to user
             # TODO: acquire a new fib image for the reference, dont use the existing.
             self._panel.btn_feature_save_position.Enable(enable and current_posture == MILLING)

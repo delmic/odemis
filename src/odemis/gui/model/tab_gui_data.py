@@ -329,7 +329,7 @@ class CryoGUIData(MicroscopyGUIData):
         """
         # set the posture position
         pm = self.main.posture_manager
-        posture = pm.getCurrentPostureLabel(stage_position)
+        posture = pm.get_current_posture_label(stage_position)
 
         if not f_name:
             existing_names = [f.name.value for f in self.main.features.value]

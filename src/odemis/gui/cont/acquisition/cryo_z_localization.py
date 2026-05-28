@@ -205,7 +205,7 @@ class CryoZLocalizationController(object):
         if not target:
             return None
 
-        current_posture = self._tab_data.main.posture_manager.getCurrentPostureLabel()
+        current_posture = self._tab_data.main.posture_manager.get_current_posture_label()
         fm_focus_position = {'z': target.coordinates.value[2]}
         # move to target focus position
         logging.info(f"Moving to focus position: {fm_focus_position}, Target: {target.name.value}")

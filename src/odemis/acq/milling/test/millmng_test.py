@@ -163,7 +163,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         f.result()
 
         # move to fm imaging
-        f = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
+        f = self.pm.cryo_switch_sample_position(FM_IMAGING)
         f.result()
 
         f = run_automated_milling(
@@ -178,7 +178,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         with self.assertRaises(ValueError):
             f.result()
 
-        f = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        f = self.pm.cryo_switch_sample_position(SEM_IMAGING)
         f.result()
 
         f = run_automated_milling(
@@ -231,11 +231,11 @@ class TestAutomatedMillingManager(unittest.TestCase):
         features = deepcopy(self.features)
 
         # Make sure to start from a valid SEM position. If due to a previous test the stage would be at an UNKNOWN
-        # posture, the cryoSwitchSamplePosition could fail.
+        # posture, the cryo_switch_sample_position could fail.
         f = self.pm.stage.moveAbs(self.sem_grid1)
         f.result()
 
-        f = self.pm.cryoSwitchSamplePosition(MILLING)
+        f = self.pm.cryo_switch_sample_position(MILLING)
         f.result()
 
         f = run_automated_milling(

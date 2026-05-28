@@ -41,7 +41,7 @@ METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 class TestGetDifferenceFunction(unittest.TestCase):
     """
-    This class is to test _getDistance() function in the move module
+    This class is to test _get_distance() function in the move module
     """
 
     @classmethod
@@ -57,21 +57,21 @@ class TestGetDifferenceFunction(unittest.TestCase):
         pos1 = numpy.array([point1[a] for a in list(point1.keys())])
         pos2 = numpy.array([point2[a] for a in list(point2.keys())])
         expected_distance = scipy.spatial.distance.euclidean(pos1, pos2)
-        actual_distance = self.posture_manager._getDistance(point1, point2)
+        actual_distance = self.posture_manager._get_distance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_linear_axes_but_without_difference(self):
         point1 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
         point2 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
         expected_distance = 0
-        actual_distance = self.posture_manager._getDistance(point1, point2)
+        actual_distance = self.posture_manager._get_distance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_linear_axes_but_without_common_axes(self):
         point1 = {'x': 0.023, 'y': 0.032}
         point2 = {'x': 0.023, 'y': 0.032, 'z': 1}
         expected_distance = 0
-        actual_distance = self.posture_manager._getDistance(point1, point2)
+        actual_distance = self.posture_manager._get_distance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_rotation_axes(self):
@@ -79,11 +79,11 @@ class TestGetDifferenceFunction(unittest.TestCase):
         point2 = {'rx': numpy.radians(60), 'rz': 0}  # 60 degree
         # the rotation difference is 30 degree
         exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
-        act_rot_dist = self.posture_manager._getDistance(point2, point1)
+        act_rot_dist = self.posture_manager._get_distance(point2, point1)
         self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
         # Same in the other direction
-        act_rot_dist = self.posture_manager._getDistance(point2, point1)
+        act_rot_dist = self.posture_manager._get_distance(point2, point1)
         self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
     def test_rotation_axes_no_difference(self):
@@ -91,11 +91,11 @@ class TestGetDifferenceFunction(unittest.TestCase):
         point2 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
         # the rotation difference is 0 degree
         exp_rot_error = 0
-        act_rot_error = self.posture_manager._getDistance(point2, point1)
+        act_rot_error = self.posture_manager._get_distance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error)
 
         # Same in the other direction
-        act_rot_error = self.posture_manager._getDistance(point1, point2)
+        act_rot_error = self.posture_manager._get_distance(point1, point2)
         self.assertAlmostEqual(exp_rot_error, act_rot_error)
 
     def test_rotation_axes_missing_axis(self):
@@ -103,18 +103,18 @@ class TestGetDifferenceFunction(unittest.TestCase):
         # No rx => doesn't count it
         point2 = {'rz': numpy.radians(60)}  # 60 degree
         exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
-        act_rot_dist = self.posture_manager._getDistance(point2, point1)
+        act_rot_dist = self.posture_manager._get_distance(point2, point1)
         self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
         # Same in the other direction
-        act_rot_dist = self.posture_manager._getDistance(point2, point1)
+        act_rot_dist = self.posture_manager._get_distance(point2, point1)
         self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
     def test_no_common_axes(self):
         point1 = {'rx': numpy.radians(30), 'rz': numpy.radians(30)}
         point2 = {'x': 0.082, 'y': 0.01}
         with self.assertRaises(ValueError):
-            self.posture_manager._getDistance(point1, point2)
+            self.posture_manager._get_distance(point1, point2)
 
     def test_lin_rot_axes(self):
         point1 = {'rx': 0, 'rz': numpy.radians(30), 'x': -0.02, 'y': 0.05, 'z': 0.019}
@@ -122,42 +122,42 @@ class TestGetDifferenceFunction(unittest.TestCase):
         # The rotation difference is 30 degree
         # The linear difference is 0.01
         exp_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30) + 0.01
-        act_dist = self.posture_manager._getDistance(point1, point2)
+        act_dist = self.posture_manager._get_distance(point1, point2)
         self.assertAlmostEqual(exp_dist, act_dist)
 
         # Same in the other direction
-        act_dist = self.posture_manager._getDistance(point2, point1)
+        act_dist = self.posture_manager._get_distance(point2, point1)
         self.assertAlmostEqual(exp_dist, act_dist)
 
     def test_get_progress(self):
         """
-        Test getMovementProgress function behaves as expected
+        Test get_movement_progress function behaves as expected
         """
         start_point = {'x': 0, 'y': 0, 'z': 0}
         end_point = {'x': 2, 'y': 2, 'z': 2}
         current_point = {'x': 1, 'y': 1, 'z': 1}
-        progress = self.posture_manager.getMovementProgress(current_point, start_point, end_point)
+        progress = self.posture_manager.get_movement_progress(current_point, start_point, end_point)
         self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
 
         current_point = {'x': .998, 'y': .999, 'z': .999}  # slightly off the line
-        progress = self.posture_manager.getMovementProgress(current_point, start_point, end_point)
+        progress = self.posture_manager.get_movement_progress(current_point, start_point, end_point)
         self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
 
         current_point = {'x': 3, 'y': 3, 'z': 3}  # away from the line
-        progress = self.posture_manager.getMovementProgress(current_point, start_point, end_point)
+        progress = self.posture_manager.get_movement_progress(current_point, start_point, end_point)
         self.assertIsNone(progress)
 
         current_point = {'x': 1, 'y': 1, 'z': 3}  # away from the line
-        progress = self.posture_manager.getMovementProgress(current_point, start_point, end_point)
+        progress = self.posture_manager.get_movement_progress(current_point, start_point, end_point)
         self.assertIsNone(progress)
 
         current_point = {'x': -1, 'y': 0, 'z': 0}  # away from the line
-        progress = self.posture_manager.getMovementProgress(current_point, start_point, end_point)
+        progress = self.posture_manager.get_movement_progress(current_point, start_point, end_point)
         self.assertIsNone(progress)
 
     def test_get_progress_lin_rot(self):
         """
-        Test getMovementProgress return sorted values along a path with linear and
+        Test get_movement_progress return sorted values along a path with linear and
         rotational axes.
         """
         # Test also rotations
@@ -168,18 +168,18 @@ class TestGetDifferenceFunction(unittest.TestCase):
         end_point = {'x': 2, 'rx': 0.2, 'rz': -0.2}
 
         # start_point = 0 < Point 1 < Point 2 < Point 3 < 1 = end_point
-        progress_0 = self.posture_manager.getMovementProgress(start_point, start_point, end_point)
+        progress_0 = self.posture_manager.get_movement_progress(start_point, start_point, end_point)
         self.assertAlmostEqual(progress_0, 0)
 
-        progress_1 = self.posture_manager.getMovementProgress(point_1, start_point, end_point)
+        progress_1 = self.posture_manager.get_movement_progress(point_1, start_point, end_point)
 
         # Point 2 should be in the middle
-        progress_2 = self.posture_manager.getMovementProgress(point_2, start_point, end_point)
+        progress_2 = self.posture_manager.get_movement_progress(point_2, start_point, end_point)
         self.assertTrue(util.almost_equal(progress_2, 0.5, rtol=RTOL_PROGRESS))
 
-        progress_3 = self.posture_manager.getMovementProgress(point_3, start_point, end_point)
+        progress_3 = self.posture_manager.get_movement_progress(point_3, start_point, end_point)
 
-        progress_end = self.posture_manager.getMovementProgress(end_point, start_point, end_point)
+        progress_end = self.posture_manager.get_movement_progress(end_point, start_point, end_point)
         self.assertAlmostEqual(progress_end, 1)
 
         assert progress_0 < progress_1 < progress_2 < progress_3 < progress_end

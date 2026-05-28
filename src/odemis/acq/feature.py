@@ -696,7 +696,7 @@ class CryoFeatureAcquisitionTask(object):
                     raise CancelledError()
 
                 # move to FM IMAGING posture
-                current_posture = self.pm.getCurrentPostureLabel()
+                current_posture = self.pm.get_current_posture_label()
                 logging.debug(f"Current Posture: {POSITION_NAMES[current_posture]}")
 
                 if current_posture != FM_IMAGING:
@@ -705,7 +705,7 @@ class CryoFeatureAcquisitionTask(object):
                     logging.debug(
                         f"Moving to {POSITION_NAMES[FM_IMAGING]} from {POSITION_NAMES[current_posture]}"
                     )
-                    self._future.running_subf = self.pm.cryoSwitchSamplePosition(FM_IMAGING)
+                    self._future.running_subf = self.pm.cryo_switch_sample_position(FM_IMAGING)
                     self._future.running_subf.result()
 
             for feature in self.features:

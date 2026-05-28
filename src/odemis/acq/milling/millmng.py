@@ -345,7 +345,7 @@ class AutomatedMillingManager(object):
             self.current_workflow = workflow_task.value
             logging.info(f"Starting {task_num}/{len(self.task_list)}: {self.current_workflow} for {len(self.features)} features...")
 
-            current_posture = self.pm.getCurrentPostureLabel()
+            current_posture = self.pm.get_current_posture_label()
             if current_posture not in [SEM_IMAGING, MILLING]:
                 error_text = (f"Current posture is {POSITION_NAMES[current_posture]}. "
                                "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
