@@ -1,3 +1,18 @@
+odemis (3.8.3-1) focal; urgency=medium
+
+  * New version: 3.8.3
+  * Main bug fixes:
+    - METEOR Advanced: deleting the latest created fiducial could fail.
+    - METEOR Advanced: Adjusting the FIB/SEM coincidence point using Alt+right
+      click now only moves Z, and not X.
+    - xt_client driver: don't complain the move didn't reach the requested
+      position when the rotation is different by 360°.
+    - Tucsen cameras don't support resolution with an odd number of pixels so
+      automatically adjust to an even number.
+    - Bug reporter: avoid storing twice the same microscope file.
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 28 May 2026 16:37:40 +0200
+
 odemis (3.8.2-1) focal; urgency=medium
 
   * New version: 3.8.2
