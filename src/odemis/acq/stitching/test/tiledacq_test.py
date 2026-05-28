@@ -177,7 +177,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         Test moving the stage to a tile based on its index
         """
-        self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
+        self.posture_manager.cryo_switch_sample_position(FM_IMAGING).result()
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,

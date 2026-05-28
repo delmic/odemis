@@ -169,7 +169,7 @@ class MimasAlignTab(Tab):
         # starting the first move, add a "done_callback" to handle the moves in
         # the background.
 
-        current_pos_label = self.posture_manager.getCurrentPostureLabel()
+        current_pos_label = self.posture_manager.get_current_posture_label()
 
         if current_pos_label not in (FM_IMAGING, MILLING):
             logging.warning("Cannot reset Z alignment while current position is %s.",
@@ -220,7 +220,7 @@ class MimasAlignTab(Tab):
         self.panel.btn_position_opt.SetValue(0)
 
         # create a future and update the appropriate controls after it is called
-        self._move_future = self.posture_manager.cryoSwitchSamplePosition(MILLING)
+        self._move_future = self.posture_manager.cryo_switch_sample_position(MILLING)
         self._move_future.add_done_callback(self._on_pos_move_done)
 
     def _set_flm_alignment_mode(self, evt):
@@ -233,7 +233,7 @@ class MimasAlignTab(Tab):
         self.panel.btn_position_fib.SetValue(0)
 
         # create a future and update the appropriate controls after it is called
-        self._move_future = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        self._move_future = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
         self._move_future.add_done_callback(self._on_pos_move_done)
 
     @call_in_wx_main
@@ -252,7 +252,7 @@ class MimasAlignTab(Tab):
         self.tab_data_model.main.is_acquiring.value = False
 
         # Automatically activates the Optical stream at the end of a move
-        current_pos_label = self.posture_manager.getCurrentPostureLabel()
+        current_pos_label = self.posture_manager.get_current_posture_label()
         if current_pos_label == FM_IMAGING:
             self._opt_spe.stream.should_update.value = True
 
@@ -292,7 +292,7 @@ class MimasAlignTab(Tab):
         disabling other buttons.
         """
         # Check the status of objective/aligner
-        current_pos_label = self.posture_manager.getCurrentPostureLabel()
+        current_pos_label = self.posture_manager.get_current_posture_label()
 
         # turn green from orange icon when the position is reached
         # Keep the current button pressed and other buttons unpressed - toggle switch action

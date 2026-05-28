@@ -694,9 +694,9 @@ class MeteorTestCase(unittest.TestCase):
         cls.fm_focus_pos = 0.5e-6  # arbitrary current focus position
         # MD_POS in the stream metadata should be in the same reference as the focuser, so we need to switch to the
         # FM Imaging position such that MD_POS metadata exists in the acquired data.
-        cls.posture_manager.cryoSwitchSamplePosition(LOADING).result()
-        cls.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING).result()
-        cls.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
+        cls.posture_manager.cryo_switch_sample_position(LOADING).result()
+        cls.posture_manager.cryo_switch_sample_position(SEM_IMAGING).result()
+        cls.posture_manager.cryo_switch_sample_position(FM_IMAGING).result()
 
     def setUp(self):
         self._nb_updates = 0

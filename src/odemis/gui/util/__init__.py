@@ -290,7 +290,7 @@ def enable_tab_on_stage_position(tab, posture_manager, target, tooltip=None):
     :param target: (list) target position labels for which the tab button is enabled [IMAGING, FM_IMAGING]
     :param tooltip: (str or None) Tooltip message to show when disabled
     """
-    within_target = posture_manager.getCurrentPostureLabel() in target
+    within_target = posture_manager.get_current_posture_label() in target
     tab.should_be_enabled = within_target
     tab.button.Enable(within_target)
 

@@ -586,7 +586,7 @@ class CryoChamberTab(Tab):
         if not self._start_pos or not self._end_pos:
             return
         # Get the ratio of the current position in respect to the start/end position
-        val = self.posture_manager.getMovementProgress(pos, self._start_pos, self._end_pos)
+        val = self.posture_manager.get_movement_progress(pos, self._start_pos, self._end_pos)
         if val is None:
             return
         val = min(max(0, int(round(val * 100))), 100)
@@ -720,7 +720,7 @@ class CryoChamberTab(Tab):
                             break
 
             # Turn on (green) the Grid button
-            current_grid_label = self.posture_manager.getCurrentGridLabel()
+            current_grid_label = self.posture_manager.get_current_grid_label()
             btn = self._grid_btns.get(current_grid_label)
             self._toggle_grid_buttons(btn)
 
@@ -893,7 +893,7 @@ class CryoChamberTab(Tab):
         self._start_pos = self._stage.position.value
         current_posture = self.posture_manager.current_posture.value
         # determine the end position for the gauge
-        end_pos = self.posture_manager.getTargetPosition(self._target_posture)
+        end_pos = self.posture_manager.get_target_position(self._target_posture)
 
         if self._role == 'enzel':
             if (
@@ -911,7 +911,7 @@ class CryoChamberTab(Tab):
                 return None
 
         self._end_pos = end_pos
-        return self.posture_manager.cryoSwitchSamplePosition(self._target_posture)
+        return self.posture_manager.cryo_switch_sample_position(self._target_posture)
 
     @call_in_wx_main
     def _on_posture(self, posture: int) -> None:

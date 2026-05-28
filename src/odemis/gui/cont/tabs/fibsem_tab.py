@@ -373,7 +373,7 @@ class FibsemTab(Tab):
         # update stage pos label
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
-        posture = self.pm.getCurrentPostureLabel(pos)  # Cannot use current_posture as it may be not yet updated
+        posture = self.pm.get_current_posture_label(pos)  # Cannot use current_posture as it may be not yet updated
         pos_name = POSITION_NAMES[posture]
 
         # TODO: move this to legend.py
@@ -413,7 +413,7 @@ class FibsemTab(Tab):
 
     def _update_milling_angle(self, evt: wx.Event):
         # Check if already at milling posture
-        already_at_milling = self.pm.getCurrentPostureLabel() == MILLING
+        already_at_milling = self.pm.get_current_posture_label() == MILLING
 
         # update the metadata of the stage
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
@@ -442,13 +442,13 @@ class FibsemTab(Tab):
             self._move_to_milling_posture(None)
 
     def _move_to_milling_posture(self, evt: wx.Event):
-        self._posture_switch_future = self.pm.cryoSwitchSamplePosition(MILLING)
+        self._posture_switch_future = self.pm.cryo_switch_sample_position(MILLING)
 
         # Do NOT call f.result(). Instead, add a callback:
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
     def _move_to_sem_posture(self, evt: wx.Event):
-        self._posture_switch_future = self.pm.cryoSwitchSamplePosition(SEM_IMAGING)
+        self._posture_switch_future = self.pm.cryo_switch_sample_position(SEM_IMAGING)
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
     @call_in_wx_main

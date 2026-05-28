@@ -49,7 +49,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         # Switch to FM imaging as the focus position will be its "good" position
         # and simulator will autofocus in (almost) focussed images
-        cls.meteor_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
+        cls.meteor_manager.cryo_switch_sample_position(FM_IMAGING).result()
 
         # Assumes the stage is referenced
         cls.init_pos = (cls.stage.position.value["x"], cls.stage.position.value["y"])
