@@ -1209,6 +1209,9 @@ class Scanner(model.Emitter):
                                                   unit="m", readonly=True)
         self._updateDepthOfField()
 
+        emode = self._isExternal()
+        self.external = model.BooleanVA(emode, setter=self._setExternal)
+
         if has_detector:
 
             # dwell time
@@ -1320,6 +1323,10 @@ class Scanner(model.Emitter):
             if is_blanked != self.blanker.value:
                 self.blanker._value = is_blanked
                 self.blanker.notify(is_blanked)
+            is_external = self._isExternal()
+            if is_external != self.external.value:
+                self.external._value = is_external
+                self.external.notify(is_external)
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
@@ -1425,6 +1432,25 @@ class Scanner(model.Emitter):
     def _setBeamPower(self, on: bool) -> bool:
         self.parent.set_beam_power(on, channel=self.channel)
         return self.parent.get_beam_is_on(self.channel)
+
+    def _isExternal(self) -> bool:
+        """
+        :return: True if the scan mode is 'external', False if the scan mode is different from 'external'.
+        """
+        return self.parent.get_scan_mode(channel=self.channel).lower() == "external"
+
+    def _setExternal(self, external: bool) -> bool:
+        """
+        Switching between internal and external control of the SEM.
+
+        :param external: True is external, False is full frame mode.
+        :return: True if the scan mode should be 'external'.
+            False if the scan mode should be internally controlled by the SEM.
+        """
+        scan_mode = "external" if external else "full_frame"
+        self.parent.set_scan_mode(scan_mode, channel=self.channel)
+        return external
+
 
 class Detector(model.Detector):
     """
