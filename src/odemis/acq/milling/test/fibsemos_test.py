@@ -49,7 +49,7 @@ from odemis.acq.milling.patterns import (
 from odemis.acq.milling.tasks import MillingSettings, MillingTaskSettings
 from odemis import model
 from odemis.acq.feature import CryoFeature
-from odemis.acq.milling.fibsemos import _get_reference_image
+from odemis.acq.milling.fibsemos import _format_preset, _get_reference_image
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -160,6 +160,8 @@ class TestConvertMillingSettings(unittest.TestCase):
         self.assertAlmostEqual(converted.milling_voltage, dummy_settings.voltage.value)
         self.assertEqual(converted.patterning_mode, dummy_settings.mode.value)
         self.assertAlmostEqual(converted.hfw, dummy_settings.field_of_view.value)
+        # preset string must be set and match voltage/current formatting
+        self.assertEqual(converted.preset, "30 keV; 1 nA")
 
 class TestConvertTaskToMillingStage(unittest.TestCase):
 
@@ -197,6 +199,8 @@ class TestConvertTaskToMillingStage(unittest.TestCase):
         # Check milling settings conversion
         self.assertAlmostEqual(stage.milling.milling_current, dummy_milling.current.value)
         self.assertAlmostEqual(stage.milling.milling_voltage, dummy_milling.voltage.value)
+        # preset must propagate through task to stage conversion
+        self.assertEqual(stage.milling.preset, "30 keV; 1 nA")
 
         # Check pattern conversion: since we passed a rectangle, expect RectanglePattern output.
         self.assertIsInstance(stage.pattern, RectanglePattern)
