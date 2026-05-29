@@ -1,4 +1,5 @@
 # Configuration for a simulated SPARC v2 system, using the NIDAQmx simulator for the DAQ board
+# Similar to sparc2-nidaq-sim, but with a scan stage and *without* hardware synchronization SEM scanner -> CCD.
 "SPARCv2 NIDAQmx": {
     class: Microscope,
     role: sparc2,
@@ -94,18 +95,6 @@
             2: [True, True, "external"],  # High when scanning, High when VA set to True
             3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
         },
-        image_ttl: {
-            pixel: {  # Hardware synchronization pixel -> CCD trigger
-                 ports: [0, 7],
-                 affects: ["Spectrometer Vis-NIR", "Camera"],
-            },
-            line: {
-                 ports: [1],
-            },
-            frame: {
-                 ports: [6],
-            },
-        },
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
@@ -165,6 +154,16 @@
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
     },
+}
+
+"Scan Stage": { # wrapper to be able to scan with the stage instead of the e-beam
+    class: actuator.MultiplexActuator,
+    role: scan-stage,
+    dependencies: {"x": "Sample Stage", "y": "Sample Stage"},
+    init: {
+        axes_map: {"x": "x", "y": "y"},
+    },
+    affects: ["Sample Stage"],
 }
 
 "Sample Stage": {
