@@ -1858,12 +1858,12 @@ class SEMMDStream(MultipleDetectorStream):
 
                 # Compensate for the drift
                 if self._dc_estimator:
-                    tot_drift = self._dc_estimator.tot_drift
-                    scan_vector, clipped_drift = scan.shift_scan_vector(self._emitter, scan_vector, -tot_drift)
-                    if tot_drift != clipped_drift:
+                    drift_comp = (-self._dc_estimator.tot_drift[0], -self._dc_estimator.tot_drift[1])
+                    scan_vector, clipped_drift = scan.shift_scan_vector(self._emitter, scan_vector, drift_comp)
+                    if drift_comp != clipped_drift:
                         logging.error("Drift of %s px caused acquisition region out "
                                       "of bounds: limited to %s px",
-                                      tot_drift, clipped_drift)
+                                      drift_comp, clipped_drift)
 
                 self._emitter.scanPath.value = scan_vector
 
