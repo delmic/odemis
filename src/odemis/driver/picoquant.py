@@ -2335,7 +2335,7 @@ class HH400(PicoBase):
             0 = falling
             1 = rising
         """
-        self.SetMarkerEdges(self._idx, me0, me1, me2, me3)
+        self._dll.SetMarkerEdges(self._idx, me0, me1, me2, me3)
 
     def SetMarkerEnable(self, en0, en1, en2, en3):
         """
