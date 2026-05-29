@@ -30,16 +30,17 @@ odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
 import argparse
 import logging
 import math
+import operator
+import sys
+
 import numpy
+from PIL import Image
+
 from odemis import model
 from odemis.acq.align import coordinates, transform, spot
 from odemis.acq.align.find_overlay import GridScanner
 from odemis.dataio import hdf5
 from odemis.util import img
-import operator
-from scipy import misc
-import sys
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -118,7 +119,8 @@ def main(args):
             rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 1] *= 0.5
             rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 2] *= 0.5
 
-        misc.imsave('spots_image.png', rgb_optical)
+        rgb_optical_img = Image.fromarray(rgb_optical)
+        rgb_optical_img.save('spots_image.png')
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
@@ -166,8 +168,12 @@ def main(args):
         for ta in overlay_coordinates:
             rgb_optical[ta[0] - 1:ta[0] + 1, ta[1] - 1:ta[1] + 1, 1] = 255
 
-        misc.imsave('overlay_image.png', rgb_optical)
-        misc.imsave('optical_image.png', optical_image)
+        rgb_optical_img = Image.fromarray(rgb_optical)
+        rgb_optical_img.save('overlay_image.png')
+
+        optical_img = Image.fromarray(optical_image)
+        optical_img.save('optical_image.png')
+
         logging.debug("Done. Check electron_image.png, optical_image.png and overlay_image.png.")
 
     except:
