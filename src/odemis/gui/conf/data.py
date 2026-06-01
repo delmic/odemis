@@ -495,7 +495,40 @@ HW_SETTINGS_CONFIG = {
             ("shutter", {
                 "tooltip": "Checked means the shutter is closed, and protects the camera from the light.",
             }),
+            # From the streak-delay (Note: because they are "hwvas", they are always shown at the top of the stream)
+            ("triggerDelay", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+            }),
+            ("phaseLock", {
+                "tooltip": "Activate phase-locking of the streak-unit to the blanker signal",
+            }),
         )),
+    "streak-delay": {
+        # Some streak-delays (eg, DG645) have a lot of extra settings, which are typically not useful
+        # so hide them to avoid taking extra space
+        "delayB": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "delayC": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "delayD": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "delayE": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "delayF": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "delayG": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "delayH": {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+    },
     r"spectrometer.*":
         OrderedDict((
             ("exposureTime", {
