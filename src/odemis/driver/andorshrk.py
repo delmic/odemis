@@ -1869,8 +1869,10 @@ class Shamrock(model.Actuator):
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
-        ordered_axes = util.sorted_according_to(pos.keys(), ("grating", "wavelength"))
+        ordered_axes = util.sorted_according_to(pos.keys(), ("flip-in", "flip-out", "grating", "wavelength"))
         actions = []
+        goffset_action = None
+
         for axis in ordered_axes:
             p = pos[axis]
             if axis == "grating":
@@ -1883,10 +1885,7 @@ class Shamrock(model.Actuator):
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusAbs, p))
             elif axis == "goffset":
-                if len(pos) > 1:
-                    logging.info("Ignoring 'goffset' in multi-axis move to preserve hardware calibration.")
-                    continue
-                actions.append((axis, self._doSetGoffsetAbs, p))
+                goffset_action = (axis, self._doSetGoffsetAbs, p)
             elif axis == "flip-in":
                 check = self._check_move.get(axis, True)
                 actions.append((axis, self._doSetFlipper, INPUT_FLIPPER, p, check))
@@ -1899,6 +1898,9 @@ class Shamrock(model.Actuator):
             elif axis in self._iris_names.values():
                 iris_id = [k for k, v in self._iris_names.items() if v == axis][0]
                 actions.append((axis, self._doSetIrisAbs, iris_id, p))
+
+        if goffset_action:
+            actions.append(goffset_action)
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
@@ -1962,6 +1964,10 @@ class Shamrock(model.Actuator):
             self.SetGrating(g)
             # This is a trick, to immediately report the new position, in case
             # getPixelToWavelength() uses it. It's not notified.
+
+            # Allow residual mechanical vibrations to settle after the heavy turret rotates
+            # This time was needed when testing on hardware in the office and might be left out.
+            time.sleep(5)
             self.position._value["grating"] = g
 
             # By default the Shamrock library keeps the same wavelength
