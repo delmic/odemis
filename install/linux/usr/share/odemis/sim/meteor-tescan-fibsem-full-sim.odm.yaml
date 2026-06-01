@@ -79,7 +79,7 @@
         port: "/dev/fake6",
         address: null,
         axes: ["x", "y", "z", "rx", "rz"],
-        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
+        ustepsize: [1.e-6, 1.e-6, 1.e-6, 1.2e-4, 1.2e-4], # unit/µstep, 10x faster than real life values for simulation purposes
         rng: [[ -50.e-3, 50.e-3 ],
               [ -50.e-3, 50.e-3 ],
               [ 0, 94.e-3 ],
@@ -102,13 +102,13 @@
         # Z range is based on centering a sample at the FIB/SEM coincident point at a Z coordinate of ~ 30 mm:
         SEM_IMAGING_RANGE: {
             "x": [-13.e-3, 7.e-3],
-            "y": [-20.e-3, 20.e-3],
+            "y": [-25.e-3, 20.e-3],
             "z": [28.e-3, 38.e-3]  # NOTE: increased max z, since grid 1 center was outside
         },
         FM_IMAGING_RANGE: {
             "x": [44.e-3, 55.e-3],
-            "y": [-23.e-3, 3.e-3],
-            "z": [28.e-3, 32.e-3]
+            "y": [-23.e-3, 8.e-3],
+            "z": [28.e-3, 37.e-3]
         },
         # Grid centers in SEM range, at rx = FAV_SEM_POS_ACTIVE,
         # These values are based on the expectation from the CAD model. Recalibrate for each system:
@@ -145,7 +145,7 @@
         FAV_FM_POS_ACTIVE: {"rx": 0.261799, "rz": 4.9567353}, # 15° tilt, 284° rotation
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
         # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
-        FAV_MILL_POS_ACTIVE: {"mill_angle": 0.174532925, "rz": 4.9567353}, # Milling angle = 10°, 284° rotation
+        FAV_MILL_POS_ACTIVE: { "mill_angle": 0.174532925, "rz": 1.815142 }, # Milling angle = 10°, 104° rotation
     },
 }
 
@@ -164,8 +164,9 @@
     role: lens,
     init: {
         mag: 50.0, # ratio, (actually of the complete light path)
-        na: 0.8, # ratio, numerical aperture
+        na: 0.5, # ratio, numerical aperture
         ri: 1.0, # ratio, refractive index
+        wd: 10.6e-3,  # m, working distance
     },
     affects: ["Camera"],
 }
@@ -293,7 +294,7 @@
         # Loading position to retract lens
         FAV_POS_DEACTIVE: {'z': -11.5e-3},
         # Initial active position (close from the sample, but not too close, for safety)
-        FAV_POS_ACTIVE: {'z': 1.69e-3}
+        FAV_POS_ACTIVE: {'z': 1.69e-3},
     },
     affects: ["Camera"],
 }

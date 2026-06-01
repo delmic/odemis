@@ -190,6 +190,7 @@ class MetadataUpdater(model.Component):
         # List of direct VA -> MD mapping
         md_va_list = {"numericalAperture": model.MD_LENS_NA,
                       "refractiveIndex": model.MD_LENS_RI,
+                      "workingDistance": model.MD_LENS_WD,
                       "xMax": model.MD_AR_XMAX,
                       "holeDiameter": model.MD_AR_HOLE_DIAMETER,
                       "focusDistance": model.MD_AR_FOCUS_DISTANCE,
