@@ -1986,7 +1986,6 @@ class AsmApiException(Exception):
         url = url
         status_code = response.status_code
         reason = response.reason
-        expected_status = expected_status
 
         try:
             content_translated = json.loads(response.content)
