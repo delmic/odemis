@@ -1983,10 +1983,8 @@ class AsmApiException(Exception):
         :param response (requests.models.Response object): full/raw response from the ASM API
         :param expected_status (int): the expected status code
         """
-        url = url
         status_code = response.status_code
         reason = response.reason
-        expected_status = expected_status
 
         try:
             content_translated = json.loads(response.content)
