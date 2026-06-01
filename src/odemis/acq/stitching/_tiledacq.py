@@ -553,15 +553,18 @@ class TiledAcquisitionTask(object):
         das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] \
                not in (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
 
-        def leader_quality(da):
+        def leader_quality(da: model.DataArray) -> float:
             """
-            return int: The bigger the more leadership
+            Estimate how good a data is for computing registration between tiles.
+            It favors images with more pixels, and EM images over others (as they typically have
+            more contrast and smaller pixel size).
+            :return: (> 0) The bigger, the better (at "leading" the stitching)
             """
             # For now, we prefer a lot the EM images, because they are usually the
             # one with the smallest FoV and the most contrast
             if da.metadata[model.MD_ACQ_TYPE] == model.MD_AT_EM:
                 return numpy.prod(da.shape)  # More pixel to find the overlap
-            elif da.metadata[model.MD_ACQ_TYPE]:
+            else:
                 # A lot less likely
                 return numpy.prod(da.shape) / 100
 
