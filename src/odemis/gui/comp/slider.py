@@ -575,6 +575,7 @@ class NumberSlider(Slider):
     def __del__(self):
         if self.linked_field:
             self.linked_field.Unbind(wx.EVT_COMMAND_ENTER, self._update_slider)
+        super().__del__()
 
     def _update_slider(self, evt):
         """ Private event handler called when the slider should be updated, for
