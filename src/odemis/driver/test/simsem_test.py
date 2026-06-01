@@ -31,7 +31,6 @@ import pickle
 import threading
 import time
 import unittest
-from unittest.case import skip
 
 import numpy
 
@@ -152,9 +151,8 @@ class TestSEM(unittest.TestCase):
 
     def compute_expected_duration(self):
         dwell = self.scanner.dwellTime.value
-        settle = 5.e-6
         size = self.scanner.resolution.value
-        return size[0] * size[1] * dwell + size[1] * settle
+        return size[0] * size[1] * dwell + size[1] * self.scanner.settleTime
 
     def test_acquire_full(self):
         self.scanner.resolution.value = self.scanner.resolution.range[1]
