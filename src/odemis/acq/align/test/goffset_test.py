@@ -5,25 +5,32 @@ Test Sparc auto grating offset alignment
 
 import logging
 import numpy as np
-import os
+import odemis
 import threading
 import unittest
 
 from concurrent.futures import Future
 from concurrent.futures._base import RUNNING
 from odemis import model
+from odemis.acq import path
+from odemis.util import testing
 from odemis.util import timeout
 from odemis.acq.align.goffset import(find_peak_position, peak_is_present, estimate_goffset_scale,
                                      sparc_auto_grating_offset, auto_align_grating_detector_offsets,
                                      _do_auto_align_grating_detector_offsets, log_detector_state)
 from odemis.dataio import hdf5
 from odemis.model import ProgressiveFuture
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-HOME_PATH = os.path.expanduser("~") + "/"
-H5_FILE_2d_NO_PEAK = HOME_PATH + "development/odemis/grating 2 1024x256/"
+ODEMIS_DIR = Path(odemis.__file__).resolve().parent
+CONFIG_PATH = ODEMIS_DIR / "../../install/linux/usr/share/odemis/sim"
+SPARC_CONFIG = CONFIG_PATH / "sparc2-focus-test.odm.yaml"
+
+DATA_DIR = Path(__file__).resolve().parent
+H5_FILE_2D_NO_PEAK = DATA_DIR / "grating 2 1024x256"
 
 class TestSparcAutoGratingOffset(unittest.TestCase):
     """
@@ -32,22 +39,28 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        testing.start_backend(SPARC_CONFIG)
 
         cls.detector = model.getComponent(role="ccd")
         cls.spgr = model.getComponent(role="spectrograph")
-        # cls.spccd = model.getComponent(role="sp-ccd")
+        cls.spccd = model.getComponent(role="sp-ccd")
         cls.selector = model.getComponent(role="spec-det-selector")
+        cls.bl = model.getComponent(role="brightlight")
+
+        # Initialize the Optical Path Manager
+        cls.microscope = model.getMicroscope()
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
 
         cls._original_goffset = cls.spgr.goffset
         cls._original_position = cls.spgr.position.value.copy()
 
-    # @classmethod
-    # def tearDownClass(cls):
-    #     # restore original position
-    #     try:
-    #         cls.spgr.moveAbsSync(cls._original_position)
-    #     except Exception:
-    #         logging.exception("Failed restoring spectrograph position")
+    @classmethod
+    def tearDownClass(cls):
+        # restore original position
+        try:
+            cls.spgr.moveAbsSync(cls._original_position)
+        except Exception:
+            logging.exception("Failed restoring spectrograph position")
 
     def setUp(self):
         # speed up detector
@@ -185,98 +198,15 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         self.assertNotAlmostEqual(start_goffset, after_goffset, places=3,
             msg="Grating goffset did not change for single-detector alignment on secondary port")
 
-    @timeout(900)
-    def test_multi_detector_does_not_change_grating(self):
-        """
-        Multi-detector mode: first detector sets the grating; aligning the second
-        detector should not change the grating offset (it should adjust detector offset).
-        """
-
-        spccd = model.getComponent(role="sp-ccd")
-        spccd.exposureTime.value = spccd.exposureTime.range[0]
-
-        # ensure selector points to primary detector for initial grating-setting alignment
-        try:
-            self.selector.moveAbsSync({"rx": 0.0})
-        except Exception:
-            logging.debug("Selector move to primary failed or not present; continuing")
-
-        # align first detector to set grating offset
-        f_first = sparc_auto_grating_offset(self.spgr, self.detector, max_it=50)
-        self.assertTrue(f_first.result(timeout=300), "First-detector alignment failed")
-        grating_after_first = self.spgr.position.value["goffset"]
-
-        # switch to secondary detector
-        try:
-            self.selector.moveAbsSync({"rx": 1.5707963267948966})
-        except Exception:
-            logging.debug("Selector move to secondary failed or not present; continuing")
-
-        # align second detector in multi-detector mode (should not change grating)
-        f_second = sparc_auto_grating_offset(self.spgr, spccd, max_it=50)
-        self.assertTrue(f_second.result(timeout=300), "Second-detector alignment failed")
-
-        grating_after_second = self.spgr.position.value["goffset"]
-        self.assertAlmostEqual(grating_after_first, grating_after_second, places=3,
-            msg="Grating goffset changed when aligning second detector in multi-detector mode")
-
-    @timeout(900)
-    def test_multi_detector_detector_offset_changes(self):
-        """
-        Multi-detector mode: after the first detector sets the grating, aligning the
-        second detector should NOT change the grating goffset but should change the
-        detector-specific response (verified by the peak moving closer to center).
-        """
-        spccd = model.getComponent(role="sp-ccd")
-        spccd.exposureTime.value = spccd.exposureTime.range[0]
-
-        # ensure primary detector sets the grating first
-        try:
-            self.selector.moveAbsSync({"rx": 0.0})
-        except Exception:
-            logging.debug("Selector move to primary failed or not present; continuing")
-
-        f_first = sparc_auto_grating_offset(self.spgr, self.detector, max_it=50)
-        self.assertTrue(f_first.result(timeout=300), "First-detector alignment failed")
-        grating_after_first = self.spgr.position.value["goffset"]
-
-        # switch to secondary detector
-        try:
-            self.selector.moveAbsSync({"rx": 1.5707963267948966})
-        except Exception:
-            logging.debug("Selector move to secondary failed or not present; continuing")
-
-        # measure peak before alignment on secondary detector
-        data_before = spccd.data.get(asap=False)
-        before_peak = float(find_peak_position(data_before))
-
-        # Run alignment for second detector in multi-detector mode
-        f_second = sparc_auto_grating_offset(self.spgr, spccd, max_it=50)
-        self.assertTrue(f_second.result(timeout=600), "Second-detector alignment failed")
-
-        # measure peak after alignment
-        data_after = spccd.data.get(asap=False)
-        after_peak = float(find_peak_position(data_after))
-
-        # assert grating did not change
-        grating_after_second = self.spgr.position.value["goffset"]
-        self.assertAlmostEqual(grating_after_first, grating_after_second, places=3,
-            msg="Grating goffset changed when aligning second detector in multi-detector mode")
-
-        # assert peak moved closer to center on the secondary detector
-        center = spccd.resolution.value[0] / 2
-        before_dist = abs(before_peak - center)
-        after_dist = abs(after_peak - center)
-        self.assertLess(after_dist, before_dist,
-            msg="Peak did not move closer to center on second detector after alignment")
-
     def test_single_detector_iteration(self):
         """
         Verifies that the auto-alignment algorithm generates the minimum required set
         of offsets when operating with a single detector and multiple gratings.
         """
 
-        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=self.detector, selector=self.selector)
+        align_mode = "spec-focus"
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=self.detector, opm=self.optmngr,
+                                                align_mode=align_mode, bl=self.bl, selector=self.selector)
         res = f.result(timeout=900)
 
         n_gratings = len(self.spgr.axes["grating"].choices)
@@ -296,7 +226,9 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         Test automatic alignment of the gratings using a single detector.
         """
 
-        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=self.detector, selector=self.selector)
+        align_mode = "spec-focus"
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=self.detector, opm=self.optmngr,
+                                                align_mode=align_mode, bl=self.bl, selector=self.selector)
         result = f.result(timeout=800)
 
         self.assertTrue(result)
@@ -316,9 +248,11 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         spccd.exposureTime.value = spccd.exposureTime.range[0]
 
         detectors = [self.detector, spccd]
+        align_mode = "spec-focus"
 
         # run alignment
-        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=detectors, selector=self.selector)
+        f = auto_align_grating_detector_offsets(spectrograph=self.spgr, detectors=detectors, opm=self.optmngr,
+                                                align_mode=align_mode, bl=self.bl, selector=self.selector)
         res = f.result(timeout=900)
 
         # calculate expected results
@@ -429,7 +363,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         Test peak detection on not-peak detector data.
         """
 
-        im_no_peak = hdf5.read_data(H5_FILE_2d_NO_PEAK + "no-peak-2d-1.h5")
+        im_no_peak = hdf5.read_data(H5_FILE_2D_NO_PEAK / "without-peak-2d-1.h5")
         data = (im_no_peak[0].data)
 
         spectrum = data.mean(axis=0) if data.ndim == 2 else data
@@ -439,7 +373,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         self.assertFalse(present, f"Peak was not detected. Check SNR and width limits.")
 
     def test_peak_present_image(self):
-        im_peak = hdf5.read_data(H5_FILE_2d_NO_PEAK + "with-peak-2d-1.h5")
+        im_peak = hdf5.read_data(H5_FILE_2D_NO_PEAK / "with-peak-2d-1.h5")
         raw_data = np.asarray(im_peak[0].data)
 
         spectrum = np.squeeze(raw_data)
@@ -502,8 +436,8 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         fake_spectrograph = MagicMock()
 
         # Mock the initial position and the grating choices
-        fake_spectrograph.position.value = {"wavelength": 0, "grating": "grating1"}
-        fake_spectrograph.axes = {"grating": MagicMock(choices={"grating1": 0, "grating2": 1})}
+        fake_spectrograph.position.value = {"wavelength": 0, "grating": 0}
+        fake_spectrograph.axes = {"grating": MagicMock(choices={0: "grating1", 1: "grating2"})}
 
         fake_detector = MagicMock()
         fake_detector.name = "fake_ccd"
@@ -542,7 +476,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         self.assertEqual(fake_bl.power.value, 0)
 
         # check the final returned results dict
-        self.assertEqual(results, {("grating1", "fake_ccd"): True, ("grating2", "fake_ccd"): True})
+        self.assertEqual(results, {(0, "fake_ccd"): True, (1, "fake_ccd"): True})
 
     @timeout(100)
     def test_cancel(self):

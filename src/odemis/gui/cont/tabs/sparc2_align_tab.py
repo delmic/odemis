@@ -867,14 +867,13 @@ class Sparc2AlignTab(Tab):
         # TODO: Use a toggle button to show the background is in use or not?
 
         # Auto-calibration button
-        self.panel.btn_auto_calibrate.Bind(wx.EVT_BUTTON, self._on_btn_auto_calibrate)
+        self.panel.btn_auto_calibrate.Bind(wx.EVT_BUTTON, self._on_btn_grating_calibration)
 
         # Auto-calibration state
-        self._auto_calibrate_future = model.InstantaneousFuture()
+        self._grating_calibration_future = model.InstantaneousFuture()
 
-        # Create progress timer ONCE
-        self._progress_timer = wx.Timer(self.panel)
-        self.panel.Bind(wx.EVT_TIMER, self._on_progress_timer, self._progress_timer)
+        # Create progress timer
+        self._pfc_grating_calibration = None
 
     def _on_btn_auto_align(self, evt):
         """
@@ -1551,29 +1550,18 @@ class Sparc2AlignTab(Tab):
 
 
     # Auto-Calibration
-    def _on_btn_auto_calibrate(self, evt):
-
-        # Check if there's a process running, if so, cancel and reset
-        if hasattr(self, "_auto_calibrate_future") and not self._auto_calibrate_future.done():
-            self._auto_calibrate_future.cancel()
-
-            if self._progress_timer.IsRunning():
-                self._progress_timer.Stop()
-
-            self.panel.btn_auto_calibrate.SetLabel("Auto calibrate")
-            self.panel.gauge_auto_calibrate.SetValue(0)
+    def _on_btn_grating_calibration(self, evt):
+        if not self._grating_calibration_future.done():
+            self._grating_calibration_future.cancel()
             return
 
-        # Reset progress bar
+        # Otherwise, prepare the UI and start a new calibration
         self.panel.gauge_auto_calibrate.SetValue(0)
         self.panel.btn_auto_calibrate.SetLabel("Cancel")
 
-        wx.CallAfter(self._start_auto_calibration)
+        wx.CallAfter(self._start_grating_calibration)
 
-        if not self._progress_timer.IsRunning():
-            self._progress_timer.Start(200)
-
-    def _start_auto_calibration(self):
+    def _start_grating_calibration(self):
         main = self.tab_data_model.main
         align_mode = self.tab_data_model.align_mode.value
         opm = main.opm
@@ -1620,55 +1608,32 @@ class Sparc2AlignTab(Tab):
             detectors = [detectors[0]]
 
         logging.info(
-            "Starting auto-calibration: detectors=%s selector=%s path=%s",
+            "Starting grating calibration: detectors=%s selector=%s path=%s",
             [d.name for d in detectors], selector.position.value if selector else None, opath)
 
         # Start alignment procedure
-        self._auto_calibrate_future = auto_align_grating_detector_offsets(
+        self._grating_calibration_future = auto_align_grating_detector_offsets(
             spectrograph, detectors, opm, opath, bl, selector=selector)
 
         # Bind progress & done callbacks
-        self._auto_calibrate_future.add_done_callback(self._on_auto_calibrate_done)
+        self._grating_calibration_future.add_done_callback(self._on_grating_calibration_done)
         self.panel.btn_auto_calibrate.SetLabel("Cancel")
 
-    def _on_progress_timer(self, evt):
-        if not hasattr(self, "_auto_calibrate_future"):
-            return
+        self._pfc_grating_calibration = ProgressiveFutureConnector(self._grating_calibration_future,
+                                                                   self.panel.gauge_auto_calibrate)
 
-        f = self._auto_calibrate_future
-
-        if f.done():
-            self._progress_timer.Stop()
-            self.panel.gauge_auto_calibrate.SetValue(100)
-            return
-
-        # Fetch where the backend logic says we are
-        target_val = int(getattr(f, "_progress", 0.0) * 100)
-        current_val = self.panel.gauge_auto_calibrate.GetValue()
-
-        # Smooth UI trick:
-        # If we are behind the target, catch up quickly.
-        if current_val < target_val:
-            self.panel.gauge_auto_calibrate.SetValue(current_val + 1)
-
-        # If we are caught up, STILL allow the bar to creep up to 5% ahead of the target.
-        # This ensures the bar instantly starts moving to ~4% while waiting
-        # for the hardware's 10-second stabilization time.
-        elif current_val < (target_val + 4) and current_val < 95:
-            self.panel.gauge_auto_calibrate.SetValue(current_val + 1)
-
-    def _on_auto_calibrate_done(self, f):
+    def _on_grating_calibration_done(self, f):
         try:
             result = f.result()
-            logging.info("Auto calibration finished: %s", result)
+            logging.info("Grating calibration finished: %s", result)
         except CancelledError:
-            logging.info("Auto calibration cancelled")
+            logging.info("Grating calibration cancelled")
         except Exception:
-            logging.exception("Auto calibration failed")
-        finally:
-            self._auto_calibrate_future = model.InstantaneousFuture()
+            logging.exception("Grating calibration failed")
 
-            wx.CallAfter(self._progress_timer.Stop)
+        finally:
+            self._grating_calibration_future = model.InstantaneousFuture()
+            self._pfc_grating_calibration = None
 
             wx.CallAfter(self.panel.btn_auto_calibrate.SetLabel, "Auto calibrate")
             wx.CallAfter(self.panel.gauge_auto_calibrate.SetValue, 0)
