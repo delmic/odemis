@@ -93,16 +93,12 @@
 # On some configuration, there is a dedicated camera for the acquisition of the
 # spectra, otherwise 'Camera' is used.
 "Spectral Camera": {
-    class: andorcam2.AndorCam2,
+    class: simcam.Camera,
     role: sp-ccd,
-    power_supplier: "Power Control Unit",
     init: {
-        device: "fake",
-        transp: [-1, 2], # if mirrored on X axis
+        image: "sparc-spec-sim.h5",
     },
-    properties: {
-        targetTemperature: -60, # °C
-    },
+    dependencies: {spectrograph: "Spectrograph"},
 }
 
 "Spectrometer IR": {
