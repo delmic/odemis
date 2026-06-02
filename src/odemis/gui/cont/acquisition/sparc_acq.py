@@ -155,14 +155,14 @@ class SparcAcquiController(object):
         tab_data.streams.subscribe(self._onStreams, init=True)
         # also listen to .semStream, which is not in .streams
         for va in self._get_settings_vas(tab_data.semStream):
-            va.subscribe(self._onAnyVA)
+            va.subscribe(self._recalculate_acquisition_time)
 
         # Extra options affecting the acquisitions globally
-        tab_data.pcdActive.subscribe(self._onAnyVA)
-        tab_data.useScanStage.subscribe(self._onAnyVA)
-        tab_data.driftCorrector.roi.subscribe(self._onAnyVA)
-        tab_data.driftCorrector.period.subscribe(self._onAnyVA)
-        tab_data.driftCorrector.dwellTime.subscribe(self._onAnyVA)
+        tab_data.pcdActive.subscribe(self._recalculate_acquisition_time)
+        tab_data.useScanStage.subscribe(self._recalculate_acquisition_time)
+        tab_data.driftCorrector.roi.subscribe(self._recalculate_acquisition_time)
+        tab_data.driftCorrector.period.subscribe(self._recalculate_acquisition_time)
+        tab_data.driftCorrector.dwellTime.subscribe(self._recalculate_acquisition_time)
 
         self._roa.subscribe(self._onROA, init=True)
         if tab_data.roa_rotation is not None:
@@ -214,19 +214,20 @@ class SparcAcquiController(object):
         # remove subscription for streams that were deleted
         for s in (self._prev_streams - streams):
             for va in self._get_settings_vas(s):
-                va.unsubscribe(self._onAnyVA)
+                va.unsubscribe(self._recalculate_acquisition_time)
 
         # add subscription for new streams
         for s in (streams - self._prev_streams):
             for va in self._get_settings_vas(s):
-                va.subscribe(self._onAnyVA)
+                va.subscribe(self._recalculate_acquisition_time)
 
         self._prev_streams = streams
         self.update_acquisition_time()  # to update the message
 
-    def _onAnyVA(self, val):
+    def _recalculate_acquisition_time(self, val):
         """
-        Called whenever a VA which might affect the acquisition is modified
+        Recalculate and update the estimated acquisition time whenever a
+        VA that affects the acquisition duration is modified.
         """
         self.update_acquisition_time()  # to update the message
 

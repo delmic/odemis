@@ -80,6 +80,43 @@ For e.g. 1.2 the implementation of public and private attributes
           print('alias : ', self._alias)
 
 
+Subscriber Callback Naming
+==========================
+
+Callbacks passed to ``.subscribe()`` should always be private methods (leading ``_``) written
+in ``snake_case``. The name should make the purpose clear without having to read the
+implementation. There are two acceptable strategies, ordered by preference:
+
+1. **Action-oriented** — name the callback after what it *does*. This is the preferred style
+   whenever the callback has a clear, single responsibility.
+
+   .. code-block:: python
+
+       # Good: the name tells you what happens when streams change
+       self.tab_data_model.streams.subscribe(self._remove_deleted_acquired_streams)
+
+       # Good: the name tells you what the debug VA triggers
+       main_data.debug.subscribe(self._toggle_fps_overlay)
+
+2. **Trigger-oriented** — name the callback after *when* it is called, using the
+   ``_on_<observable>`` pattern. This is acceptable when the callback is generic or
+   delegates to another method that carries the descriptive name.
+
+   .. code-block:: python
+
+       # Acceptable: generic handler that just calls update_acquisition_time()
+       self.driftCorrector.roi.subscribe(self._on_drift_corrector_change)
+
+       # Acceptable: handler recenters the view, but the trigger name is clear
+       self.view.view_pos.subscribe(self._on_view_pos)
+
+**Avoid** names that mix both strategies badly — e.g. ``_on_acquired_streams`` subscribed to
+*all* streams, or ``_onAnyVA`` subscribed to seven unrelated VAs. These leave the reader
+unable to understand either the trigger or the action.
+
+**Avoid** camelCase (``_onViewPos``) and missing leading underscores (``on_hrange``), both of
+which are inconsistent with the rest of the codebase.
+
 Docstrings
 ==================
 

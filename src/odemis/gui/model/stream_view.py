@@ -172,12 +172,12 @@ class StreamView(View):
             self.zPos = zPos
 
         self.mpp.subscribe(self._onMpp, init=True)
-        self.view_pos.subscribe(self._onViewPos, init=True)
+        self.view_pos.subscribe(self._on_view_pos, init=True)
 
     def _onFovBuffer(self, fov):
         self._updateStreamsViewParams()
 
-    def _onViewPos(self, view_pos):
+    def _on_view_pos(self, view_pos):
         self._updateStreamsViewParams()
 
     def _onMpp(self, mpp):

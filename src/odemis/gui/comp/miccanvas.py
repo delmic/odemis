@@ -185,7 +185,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # doesn't update the canvas anymore
             tab_data = self._tab_data_model
             tab_data.tool.unsubscribe(self._on_tool)
-            tab_data.main.debug.unsubscribe(self._on_debug)
+            tab_data.main.debug.unsubscribe(self._toggle_fps_overlay)
             self._tab_data_model = None
 
     def clear(self):
@@ -209,7 +209,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._tab_data_model = tab_data
 
         self.view.mpp.subscribe(self._on_view_mpp, init=True)
-        self.view.view_pos.subscribe(self._onViewPos)
+        self.view.view_pos.subscribe(self._on_view_pos)
         # Update new position immediately, so that fit_to_content() directly
         # gets the correct center
         phys_pos = self.view.view_pos.value
@@ -230,7 +230,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.view.show_pixelvalue.subscribe(self._on_pixel_value_show, init=True)
 
-        tab_data.main.debug.subscribe(self._on_debug, init=True)
+        tab_data.main.debug.subscribe(self._toggle_fps_overlay, init=True)
 
         # Only create the overlays which could possibly be used
         tools_possible = set(tab_data.tool.choices)
@@ -352,7 +352,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.remove_view_overlay(self._pixelvalue_ol)
 
     @ignore_dead
-    def _on_debug(self, activated):
+    def _toggle_fps_overlay(self, activated):
         """ Called when GUI debug mode changes => display FPS overlay """
         if activated:
             if self._fps_ol is None:
@@ -640,7 +640,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if img is not None:
                 self.view.thumbnail.value = img
 
-    def _onViewPos(self, phys_pos):
+    def _on_view_pos(self, phys_pos):
         """
         When the view position is updated: recenter the view
         phys_pos (tuple of 2 float): X/Y in physical coordinates (m)
@@ -660,7 +660,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # in case we are not attached to a view yet (shouldn't happen)
         super(DblMicroscopeCanvas, self).recenter_buffer(phys_pos)
         if self.view:
-            # This will call _onViewPos() -> recenter_buffer(), but as
+            # This will call _on_view_pos() -> recenter_buffer(), but as
             # recenter_buffer() has already been called with this position,
             # nothing will happen
             self.view.view_pos.value = phys_pos

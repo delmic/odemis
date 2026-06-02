@@ -141,7 +141,7 @@ class LocalizationTab(Tab):
         self._feature_panel_controller = CryoFeatureController(tab_data, panel, self,
                                                                mode=guimod.AcquiMode.FLM)
         self._zloc_controller = CryoZLocalizationController(tab_data, panel, self)
-        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        self.tab_data_model.streams.subscribe(self._remove_deleted_acquired_streams)
         self.conf = conf.get_acqui_conf()
 
         # Toolbar
@@ -407,7 +407,7 @@ class LocalizationTab(Tab):
         wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
 
     @call_in_wx_main
-    def _on_acquired_streams(self, streams):
+    def _remove_deleted_acquired_streams(self, streams):
         """
         Filter out deleted acquired streams (features and overview) from their respective origin
         :param streams: list(Stream) updated list of tab streams
@@ -451,10 +451,10 @@ class LocalizationTab(Tab):
         self.panel.vp_secom_tr.canvas.fit_view_to_content()
 
     def _stop_streams_subscriber(self):
-        self.tab_data_model.streams.unsubscribe(self._on_acquired_streams)
+        self.tab_data_model.streams.unsubscribe(self._remove_deleted_acquired_streams)
 
     def _start_streams_subscriber(self):
-        self.tab_data_model.streams.subscribe(self._on_acquired_streams)
+        self.tab_data_model.streams.subscribe(self._remove_deleted_acquired_streams)
 
     def _on_acquisition(self, is_acquiring):
         # When acquiring, the tab is automatically disabled and should be left as-is

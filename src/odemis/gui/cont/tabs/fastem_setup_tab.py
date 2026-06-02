@@ -141,10 +141,10 @@ class FastEMSetupTab(Tab):
 
         # For Optical Autofocus calibration
         self.tab_data.main.is_acquiring.subscribe(
-            self._on_is_acquiring
+            self._toggle_controls_on_calibration
         )  # enable/disable button if acquiring
         self.tab_data.is_calibrating.subscribe(
-            self._on_is_acquiring
+            self._toggle_controls_on_calibration
         )  # enable/disable button if calibrating
 
         # Acquisition controller
@@ -230,12 +230,12 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.pause()
 
         # calibrate
-        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.unsubscribe(self._toggle_controls_on_calibration)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
         # make sure the acquire/tab buttons are disabled
         self.tab_data.is_calibrating.value = True
-        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.subscribe(self._toggle_controls_on_calibration)
         self.reference_stage_future = self.tab_data.main.stage.reference({"x", "y"})
         self.reference_stage_future.add_done_callback(self._on_reference_stage_done)
         self._update_button_controls(self.btn_reference_stage)
@@ -281,12 +281,12 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.enable(False)
         self.sem_stream_cont.stream_panel.enable(False)
         # calibrate
-        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.unsubscribe(self._toggle_controls_on_calibration)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
         # make sure the acquire/tab buttons are disabled
         self.tab_data.is_calibrating.value = True
-        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.subscribe(self._toggle_controls_on_calibration)
         logging.debug("Starting Optical Autofocus calibration")
         # Start alignment
         f = fastem.align(
@@ -358,12 +358,12 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.pause()
 
         # calibrate
-        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.unsubscribe(self._toggle_controls_on_calibration)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
         # make sure the acquire/tab buttons are disabled
         self.tab_data.is_calibrating.value = True
-        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.subscribe(self._toggle_controls_on_calibration)
         f = fastem.align(
             self.tab_data.main.ebeam,
             self.tab_data.main.multibeam,
@@ -416,12 +416,12 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.pause()
 
         # calibrate
-        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.unsubscribe(self._toggle_controls_on_calibration)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
         # make sure the acquire/tab buttons are disabled
         self.tab_data.is_calibrating.value = True
-        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.subscribe(self._toggle_controls_on_calibration)
         self.autobc_future = self.sem_stream_cont.stream.detector.applyAutoContrastBrightness()
         self.autobc_future.add_done_callback(self._on_autobc_done)
         self._update_button_controls(self.btn_autobc)
@@ -464,12 +464,12 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.pause()
 
         # calibrate
-        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.unsubscribe(self._toggle_controls_on_calibration)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
         # make sure the acquire/tab buttons are disabled
         self.tab_data.is_calibrating.value = True
-        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.tab_data.is_calibrating.subscribe(self._toggle_controls_on_calibration)
         f = fastem.align(
             self.tab_data.main.ebeam,
             self.tab_data.main.multibeam,
@@ -528,7 +528,7 @@ class FastEMSetupTab(Tab):
         self.sem_stream_cont.stream_panel.Refresh()
 
     @call_in_wx_main
-    def _on_is_acquiring(self, mode):
+    def _toggle_controls_on_calibration(self, mode):
         """
         Enable or disable relevant wx objects depending on whether
         a calibration or acquisition is already ongoing or not.

@@ -966,10 +966,10 @@ class ARLiveViewport(LiveViewport):
 
     def setView(self, view, tab_data):
         super(ARLiveViewport, self).setView(view, tab_data)
-        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+        view.lastUpdate.subscribe(self._update_play_overlay_visibility, init=True)
 
-    def _on_stream_update(self, _):
-        """ Hide the play icon overlay if no stream are present """
+    def _update_play_overlay_visibility(self, _):
+        """ Hide the play icon overlay if no streams are present """
         if self._view is None:  # In case it's called after being destroyed
             return
         show = len(self._view.stream_tree) > 0
@@ -1014,10 +1014,10 @@ class EKLiveViewport(LiveViewport):
 
     def setView(self, view, tab_data):
         super(EKLiveViewport, self).setView(view, tab_data)
-        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+        view.lastUpdate.subscribe(self._update_play_overlay_visibility, init=True)
 
-    def _on_stream_update(self, _):
-        """ Hide the play icon overlay if no stream are present """
+    def _update_play_overlay_visibility(self, _):
+        """ Hide the play icon overlay if no streams are present """
         if self._view is None:  # In case it's called after being destroyed
             return
         show = len(self._view.stream_tree) > 0
@@ -1118,10 +1118,10 @@ class AngularResolvedViewport(ViewPort):
             logging.debug("Disconnecting %s from ARRawViewport", self._projection)
             if hasattr(self._projection, 'polarization'):
                 logging.debug("Disconnecting %s from polarization VA", proj)
-                self._stream.polarization.unsubscribe(self.on_va_change)
+                self._stream.polarization.unsubscribe(self._update_legend_on_projection_change)
             if hasattr(self._projection, 'polarimetry'):
                 logging.debug("Disconnecting %s from polarimetry VA", proj)
-                self._stream.polarimetry.unsubscribe(self.on_va_change)
+                self._stream.polarimetry.unsubscribe(self._update_legend_on_projection_change)
 
         # Connect the new stream
         self._stream, self._projection = get_original_stream(proj), proj
@@ -1137,7 +1137,7 @@ class AngularResolvedViewport(ViewPort):
                     choices = POL_POSITIONS  # use the ordered tuple to keep legend ordered later
                 cur_value = self._stream.polarization.value
                 self.update_legend_choices(choices, cur_value, name)
-                self._projection.polarization.subscribe(self.on_va_change)
+                self._projection.polarization.subscribe(self._update_legend_on_projection_change)
                 self.bottom_legend.Show(True)
             elif hasattr(proj, "polarimetry"):
                 logging.debug("Connecting %s to polarimetry VA", proj)
@@ -1152,7 +1152,7 @@ class AngularResolvedViewport(ViewPort):
                     ("Degrees of polarization", (MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP)),
                 ))
                 self.update_legend_choices(choices, cur_value, name)
-                self._projection.polarimetry.subscribe(self.on_va_change)
+                self._projection.polarimetry.subscribe(self._update_legend_on_projection_change)
                 self.bottom_legend.Show(True)
             # if no polarization/polarimetry VA or if no stream (= None)
             else:
@@ -1175,7 +1175,7 @@ class AngularResolvedViewport(ViewPort):
         elif hasattr(self._projection, "polarimetry"):
             self._stream.polarimetry.value = pos
 
-    def on_va_change(self, pos):
+    def _update_legend_on_projection_change(self, pos):
         """
         Called when the VA value has changed.
         Sets the correct selection in the legend if the VA was
@@ -1243,9 +1243,9 @@ class PlotViewport(ViewPort):
 
         # For the play/pause icon
         view.stream_tree.should_update.subscribe(self._on_streams_play, init=True)
-        view.stream_tree.flat.subscribe(self._on_stream_update, init=True)
+        view.stream_tree.flat.subscribe(self._update_play_overlay_visibility, init=True)
 
-    def _on_stream_update(self, projs):
+    def _update_play_overlay_visibility(self, projs):
         """
         Hide the play icon overlay if no stream are present (or they are all static)
         """
@@ -1377,12 +1377,12 @@ class NavigablePlotViewport(PlotViewport):
         super(NavigablePlotViewport, self).__init__(*args, **kwargs)
 
         self.hrange = model.TupleVA(None, setter=self.set_hrange)
-        self.hrange.subscribe(self.on_hrange)
+        self.hrange.subscribe(self._update_horizontal_axis_display)
         self.hrange_lock = model.BooleanVA(False)
         self.bottom_legend.lock_va = self.hrange_lock
 
         self.vrange = model.TupleVA(None, setter=self.set_vrange)
-        self.vrange.subscribe(self.on_vrange)
+        self.vrange.subscribe(self._update_vertical_axis_display)
         self.vrange_lock = model.BooleanVA(False)
         self.left_legend.lock_va = self.vrange_lock
 
@@ -1452,7 +1452,7 @@ class NavigablePlotViewport(PlotViewport):
             raise ValueError("Bad horizontal range: %s > %s" % (hrange[0], hrange[1]))
         return hrange
 
-    def on_hrange(self, hrange):
+    def _update_horizontal_axis_display(self, hrange):
         """
         Refreshes the plot and axis legend displays with the new scale
         """
@@ -1474,7 +1474,7 @@ class NavigablePlotViewport(PlotViewport):
             raise ValueError("Bad vertical range: %s > %s" % (vrange[0], vrange[1]))
         return vrange
 
-    def on_vrange(self, vrange):
+    def _update_vertical_axis_display(self, vrange):
         """
         Refreshes the plot and axis legend displays with the new scale
         """
@@ -2159,7 +2159,7 @@ class TwoDViewPort(ViewPort):
 
         # For the play/pause icon
         view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
-        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+        view.lastUpdate.subscribe(self._update_play_overlay_visibility, init=True)
 
     def _on_stream_play(self, is_playing):
         """
@@ -2167,9 +2167,9 @@ class TwoDViewPort(ViewPort):
         """
         self.canvas.play_overlay.hide_pause(is_playing)
 
-    def _on_stream_update(self, _):
+    def _update_play_overlay_visibility(self, _):
         """
-        Hide the play icon overlay if no stream are present (or they are all static)
+        Hide the play icon overlay if no streams are present (or they are all static)
         """
         ss = self._view.getStreams()
         if len(ss) > 0:
