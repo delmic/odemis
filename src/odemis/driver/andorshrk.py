@@ -1869,9 +1869,8 @@ class Shamrock(model.Actuator):
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
-        ordered_axes = util.sorted_according_to(pos.keys(), ("flip-in", "flip-out", "grating", "wavelength"))
+        ordered_axes = util.sorted_according_to(pos.keys(), ("flip-in", "flip-out", "grating", "wavelength", "goffset"))
         actions = []
-        goffset_action = None
 
         for axis in ordered_axes:
             p = pos[axis]
@@ -1885,7 +1884,7 @@ class Shamrock(model.Actuator):
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusAbs, p))
             elif axis == "goffset":
-                goffset_action = (axis, self._doSetGoffsetAbs, p)
+                actions.append((axis, self._doSetGoffsetAbs, p))
             elif axis == "flip-in":
                 check = self._check_move.get(axis, True)
                 actions.append((axis, self._doSetFlipper, INPUT_FLIPPER, p, check))
@@ -1898,9 +1897,6 @@ class Shamrock(model.Actuator):
             elif axis in self._iris_names.values():
                 iris_id = [k for k, v in self._iris_names.items() if v == axis][0]
                 actions.append((axis, self._doSetIrisAbs, iris_id, p))
-
-        if goffset_action:
-            actions.append(goffset_action)
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
@@ -1965,9 +1961,6 @@ class Shamrock(model.Actuator):
             # This is a trick, to immediately report the new position, in case
             # getPixelToWavelength() uses it. It's not notified.
 
-            # Allow residual mechanical vibrations to settle after the heavy turret rotates
-            # This time was needed when testing on hardware in the office and might be left out.
-            time.sleep(5)
             self.position._value["grating"] = g
 
             # By default the Shamrock library keeps the same wavelength
@@ -1988,6 +1981,10 @@ class Shamrock(model.Actuator):
 
         self._restoreFocus()
         self._updatePosition(must_notify=True)
+
+        # Allow residual mechanical vibrations to settle after the heavy turret rotates
+        # This time was needed when testing on hardware in the office and seems to be long enough for all cases.
+        time.sleep(5)
 
     def _doSetFocusRel(self, shift):
         # it's only now that we can check the goal (absolute) position is wrong
@@ -2131,26 +2128,13 @@ class Shamrock(model.Actuator):
         current_grat_offset = self.GetGratingOffset(grating)
         current_det_offset = self.GetDetectorOffset(flip_in_pos, flip_out_pos)
 
-        logging.debug("Current goffset: %d (Grat: %d, Det: %d)",
-                      (current_grat_offset + current_det_offset),
-                      current_grat_offset, current_det_offset)
-
-        # The detector offset compensates for small inaccuracies introduced by the flip-mirror mechanism.
-        # This value is normally stable and seldom requires re-adjustment.
-
-        # Get all detectors
-        input_ports = [DIRECT_PORT]
-        if "flip-in" in self.axes:
-            input_ports.append(self.GetFlipperMirror(INPUT_FLIPPER))
-
-        output_ports = [DIRECT_PORT]
-        if "flip-out" in self.axes:
-            output_ports.append(self.GetFlipperMirror(OUTPUT_FLIPPER))
-
-        all_detectors = [(i, o) for i in input_ports for o in output_ports]
+        logging.debug("Current goffset: %d (grating: %d, goffset: %d, doffset: %d), flip_in: %d, flip_out: %d)",
+            current_grat_offset + current_det_offset, grating, current_grat_offset, current_det_offset,
+            flip_in_pos, flip_out_pos)
 
         current_detector = (flip_in_pos, flip_out_pos)
-        reference_detector = all_detectors[0]
+        reference_detector = (DIRECT_PORT, DIRECT_PORT)
+        is_multi_detector = ("flip-in" in self.axes or "flip-out" in self.axes)
 
         # WARNING:
         # On spectrographs like the Kymera 328 where the input port is permanently set
@@ -2161,8 +2145,6 @@ class Shamrock(model.Actuator):
         # rather than adjusting the physical grating offset.
         # TODO: Refactor this routing logic once full support for spectrograph-dedicated
         # components with fixed non-direct input ports is officially required.
-
-        is_multi_detector = len(all_detectors) > 1
 
         # Apply offsets
         # For the first detector (doesn't matter to which port it's connected), the grating offset is adjusted for
@@ -2186,15 +2168,14 @@ class Shamrock(model.Actuator):
 
             # Apply the detector offset only if a spillover forced it to change
             if desired_det_offset != current_det_offset:
-                logging.warning("Grating hardware limit reached, spilling over into detector offset.")
+                logging.warning("Grating hardware limit reached, spilling over into detector offset. Check alignment again.")
                 self.SetDetectorOffset(flip_in_pos, flip_out_pos, desired_det_offset)
-
-                logging.debug("Setting grating offset: grating=%d value=%d", grating, desired_grat_offset)
-                self.SetGratingOffset(grating, desired_grat_offset)
 
         else:
             # We are on a secondary detector. Grating offset stays fixed.
             # The entire requested change must be absorbed by the detector offset.
+            # The detector offset compensates for small inaccuracies introduced by the flip-mirror mechanism.
+            # This value is normally stable and seldom requires re-adjustment.
             desired_det_offset = target_offset - current_grat_offset
 
             if not (DET_OFFSET_MIN <= desired_det_offset <= DET_OFFSET_MAX):
