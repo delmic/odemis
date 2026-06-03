@@ -300,6 +300,21 @@
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
+                    <object class="CaptionBar" name="cbar_acq_recipes">
+                      <label>ACQUISITION RECIPES</label>
+                      <foldable>1</foldable>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_acq_recipes">
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
                     <object class="CaptionBar">
                       <label>ACQUISITION</label>
                       <fg>#1A1A1A</fg>

@@ -251,20 +251,27 @@ class FoldPanelItem(wx.Panel):
 
 
 class CaptionBar(wx.Window):
-    """ A small button like header window that displays the :py:class:`FoldPanelItem`'s title and
+    """
+    A small button like header window that displays the :py:class:`FoldPanelItem`'s title and
     allows it to fold and unfold.
 
+    It can also be used as a standalone CaptionBar along with a panel, without the need of having
+    FoldPanelItem as its parent . In that case, the folding and unfolding events will be sent
+    to the parent of the CaptionBar, and the parent can decide how to handle them ideally to show
+    or hide the associated panel. See panel_tab_sparc_acqui.xrc object cbar_acq_recipes.
     """
 
-    def __init__(self, parent, caption, collapsed):
+    def __init__(self, parent, caption, collapsed, foldable=False, id=wx.ID_ANY):
         """
         :param parent: Parent window (FoldPanelItem)
         :param caption: Header caption (str)
         :param collapsed: Draw the CaptionBar collapsed or not (boolean)
-
+        :param foldable: Whether the CaptionBar is foldable (boolean).
+                         Only used if the parent is not a FoldPanelItem.
+        :param id: Id of the CaptionBar, used for event handling (int)
         """
 
-        wx.Window.__init__(self, parent, wx.ID_ANY, pos=(0, 0),
+        wx.Window.__init__(self, parent, id, pos=(0, 0),
                            size=CAPTION_BAR_SIZE, style=wx.NO_BORDER)
 
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
@@ -277,6 +284,7 @@ class CaptionBar(wx.Window):
         self._caption = caption
         self._mouse_hovering = False
         self._logo = None  # wx.Bitmap or None
+        self._foldable = foldable or isinstance(self.Parent, FoldPanelItem)
 
         # Set Icons
         self._icon_size = wx.Size(16, 16)
@@ -288,7 +296,7 @@ class CaptionBar(wx.Window):
 
         self.Bind(wx.EVT_PAINT, self.on_paint)
 
-        if isinstance(self.Parent, FoldPanelItem):
+        if self._foldable:
             self.Bind(wx.EVT_MOUSE_EVENTS, self.on_mouse_event)
 
     def set_caption(self, caption):
@@ -349,13 +357,17 @@ class CaptionBar(wx.Window):
                            -self._icon_size.x - CAPTION_PADDING_RIGHT,
                           (win_rect.Height - self._logo.Height) // 2)
 
-        # Only draw the icon if it's part of a FoldPanelItem
-        if isinstance(self.Parent, FoldPanelItem):
+        # Only draw the icon if it's foldable
+        if self._foldable:
             # draw small icon, either collapsed or expanded
             # based on the state of the bar.
             index = self._collapsed
 
-            x_pos = (self.Parent.Size.x - self._icon_size.x - CAPTION_PADDING_RIGHT)
+            if isinstance(self.Parent, FoldPanelItem):
+                x_pos = (self.Parent.Size.x - self._icon_size.x - CAPTION_PADDING_RIGHT)
+            else:
+                # In the case of a standalone CaptionBar, the icon is drawn relative to the CaptionBar itself
+                x_pos = (self.Size.x - self._icon_size.x - CAPTION_PADDING_RIGHT)
 
             self._foldIcons.Draw(
                 index, dc, x_pos,
@@ -438,12 +450,15 @@ class CaptionBar(wx.Window):
         if isinstance(self.Parent, FoldPanelItem) and not self.Parent.has_vert_scrollbar():
             padding_right += SCROLLBAR_WIDTH
 
-        x_pos = self.Parent.Parent.Size.x - self._icon_size.x - padding_right
+        if isinstance(self.Parent, FoldPanelItem):
+            x_pos = self.Parent.Parent.Size.x - self._icon_size.x - padding_right
+        else:
+            # In the case of a standalone CaptionBar, the icon is drawn relative to the CaptionBar itself
+            x_pos = self.Size.x - self._icon_size.x - padding_right
 
         rect.SetX(x_pos)
         rect.SetWidth(self._icon_size.x + padding_right)
         self.RefreshRect(rect)
-
 
 class CaptionBarEvent(wx.PyCommandEvent):
     """ Custom event class containing extra data """

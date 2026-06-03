@@ -1441,6 +1441,8 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.fp_settings_gun_exciter = xrc.XRCCTRL(self, "fp_settings_gun_exciter")
         self.fp_settings_ebeam_blanker = xrc.XRCCTRL(self, "fp_settings_ebeam_blanker")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
+        self.cbar_acq_recipes = xrc.XRCCTRL(self, "cbar_acq_recipes")
+        self.pnl_acq_recipes = xrc.XRCCTRL(self, "pnl_acq_recipes")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -18152,6 +18154,21 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar" name="cbar_acq_recipes">
+                      <label>ACQUISITION RECIPES</label>
+                      <foldable>1</foldable>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_acq_recipes">
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
                   <object class="sizeritem">
                     <object class="CaptionBar">
                       <label>ACQUISITION</label>

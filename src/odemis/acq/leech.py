@@ -29,6 +29,7 @@ import numpy
 from odemis import model
 from odemis.acq import drift
 from odemis.acq.stream import UNDEFINED_ROI
+from odemis.acq.stream._base import NON_SETTINGS_VA
 
 
 # Helper function for code using the leeches
@@ -157,6 +158,9 @@ class AnchorDriftCorrector(LeechAcquirer):
         # period is the (approximate) time between two acquisition of the
         #  anchor (and drift compensation). The exact period is determined so
         #  that it fits with the region of acquisition.
+        # name: is not needed as such, but have it to comply with Stream.get_settings_entries
+        # Stream.set_settings_entries functions. The leech settings along with the stream settings
+        # form a recipe for the acquisition, and it's easier to have all the settings in the same format.
         # Note: the scale used for the acquisition of the anchor region is
         #  selected by the AnchoredEstimator, to be as small as possible while
         #  still not scanning too many pixels.
@@ -168,6 +172,7 @@ class AnchorDriftCorrector(LeechAcquirer):
                                                range=scanner.dwellTime.range, unit="s")
         # in seconds, default to "fairly frequent" to work hopefully in most cases
         self.period = model.FloatContinuous(10, range=(0.1, 1e6), unit="s")
+        self.name = model.StringVA("Anchor drift corrector")
 
     @property
     def drift(self):
@@ -351,6 +356,36 @@ class AnchorDriftCorrector(LeechAcquirer):
         self._period_acq = None
         # TODO: add (a copy of) self.raw to the das? Or in series_complete()
         return None
+
+    def get_settings_entries(self) -> dict:
+        """
+        Get the settings of the leech as a dict of entries.
+        The format of the dict is the same as the one returned by Stream.get_settings_entries.
+        """
+        entries = {}
+        all_vas = model.getVAs(self)
+        settings_vas = set(all_vas.keys()).difference(NON_SETTINGS_VA)
+        for va_name in settings_vas:
+            entries.update({va_name: getattr(self, va_name).value})
+        entries["class"] = self.__class__.__name__
+        return entries
+
+    def set_settings_entries(self, entries: dict):
+        """
+        Set the settings of the leech from a dict of entries.
+        The format of the dict is the same as the one returned by Stream.get_settings_entries.
+        """
+        for key, value in entries.items():
+            if key in ("name", "class"):
+                continue
+
+            if isinstance(value, list) and all(isinstance(x, (int, float)) for x in value):
+                value = tuple(value)
+
+            try:
+                getattr(self, key).value = value
+            except Exception:
+                logging.exception("Failed to set %s setting %s to value %s", entries.get("class", self.__class__.__name__), key, value)
 
 
 class ProbeCurrentAcquirer(LeechAcquirer):

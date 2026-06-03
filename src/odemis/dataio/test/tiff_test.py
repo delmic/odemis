@@ -29,7 +29,7 @@ import time
 import unittest
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from unittest.case import skip
+# from unittest.case import skip
 
 import libtiff
 import libtiff.libtiff_ctypes as T  # for the constant names
@@ -501,6 +501,40 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(bin_str, exp_bin)
 
         imo.close()
+
+    def test_read_and_save_md_acq_recipes(self):
+        """
+        Checks that MD_ACQ_RECIPES metadata is saved and read back correctly.
+        """
+        size = (512, 256)
+        dtype = numpy.dtype("uint16")
+        metadata = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "fake hw",
+                    model.MD_DESCRIPTION: "test acq recipes",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5),
+                    model.MD_POS: (1e-3, -30e-3),
+                    model.MD_EXP_TIME: 1.2,
+                    model.MD_ACQ_RECIPES: "recipe1, recipe2",
+                    }
+
+        data = model.DataArray(numpy.zeros(size[::-1], dtype), metadata=metadata)
+
+        # export
+        tiff.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), 1)
+
+        im = rdata[0]
+        self.assertEqual(im.metadata[model.MD_ACQ_RECIPES], metadata[model.MD_ACQ_RECIPES])
 
 #    @skip("simple")
     def testExportRead(self):

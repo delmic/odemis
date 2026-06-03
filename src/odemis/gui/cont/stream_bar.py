@@ -32,18 +32,20 @@ from typing import Optional
 
 import wx
 
+import odemis
 import odemis.acq.stream as acqstream
+import odemis.gui
 import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
+from odemis.acq.feature import CryoFeature, load_feature_streams_from_disk
 from odemis.acq.stream import StaticSEMStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.cont.cryo_project import save_project, remove_image
+from odemis.gui.cont.cryo_project import remove_image, save_project
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
-from odemis.acq.feature import CryoFeature, load_feature_streams_from_disk
 from odemis.model import MD_FILENAME, MD_IN_FILE_INDEX
 from odemis.util.dataio import data_to_static_streams
 
@@ -231,6 +233,22 @@ class StreamBarController(object):
         """
         assert policy in (SCHED_LAST_ONE, SCHED_ALL)
         self._sched_policy = policy
+
+    def get_unique_stream_name(self, name: str) -> str:
+        """
+        Ensure the stream name is unique among existing streams.
+        If not, append a number.
+        :param name: requested stream name
+        :return: unique name
+        """
+        existing = {s.name.value for s in self._tab_data_model.streams.value}
+        if name not in existing:
+            return name
+        # If not unique, append a number, until no such name exist
+        i = 1
+        while f"{name} {i}" in existing:
+            i += 1
+        return f"{name} {i}"
 
     def _createAddStreamActions(self):
         """
@@ -1506,7 +1524,7 @@ class SparcStreamsController(StreamBarController):
             self.add_action(actname, act)
 
         if main_data.streak_ccd:
-            self.add_action("Temporal spectrum", self.addTemporalSpectrum)
+            self.add_action("Temporal Spectrum", self.addTemporalSpectrum)
 
         if main_data.isAngularSpectrumSupported():
             self.add_action("AR Spectrum", self.addAngularSpectrum)
@@ -1584,10 +1602,18 @@ class SparcStreamsController(StreamBarController):
         raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
     def _add_sem_stream(self, name, detector, **kwargs):
-
-        # Only put some local VAs, the rest should be global on the SE stream
-        emtvas = get_local_vas(self._main_data_model.ebeam, self._main_data_model.hw_settings_config)
-        emtvas &= {"resolution", "dwellTime", "scale"}
+        # Only put the VAs that do directly define the image as local, everything
+        # else should be global. The advantage is double: the global VAs will
+        # set the hardware even if another stream (also using the e-beam) is
+        # currently playing, and if the VAs are changed externally, the settings
+        # will be displayed correctly (and not reset the values on next play).
+        emtvas = set()
+        hwemtvas = set()
+        for vaname in get_local_vas(self._main_data_model.ebeam, self._main_data_model.hw_settings_config):
+            if vaname in ("resolution", "dwellTime", "scale"):
+                emtvas.add(vaname)
+            else:
+                hwemtvas.add(vaname)
 
         s = acqstream.SEMStream(
             name,
@@ -1595,9 +1621,25 @@ class SparcStreamsController(StreamBarController):
             detector.data,
             self._main_data_model.ebeam,
             focuser=self._main_data_model.ebeam_focus,
+            hwemtvas=hwemtvas,
             emtvas=emtvas,
             detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
         )
+
+        # Check the settings are proper for a survey stream (as they could be
+        # left over from spot mode)
+        # => full FoV + not too high scale + short dwell time
+        if hasattr(s, "emtDwellTime"):
+            s.emtDwellTime.value = s.emtDwellTime.clip(1e-6)
+        if hasattr(s, "emtScale"):
+            s.emtScale.value = s.emtScale.clip((8, 8))
+            sem_scale = s.emtScale.value
+        else:
+            sem_scale = 1, 1
+        if hasattr(s, "emtResolution"):
+            max_res = s.emtResolution.range[1]
+            res = max_res[0] // sem_scale[0], max_res[1] // sem_scale[1]
+            s.emtResolution.value = s.emtResolution.clip(res)
 
         # If the detector already handles brightness and contrast, don't do it by default
         # TODO: check if it has .applyAutoContrast() instead (once it's possible)
@@ -1606,6 +1648,10 @@ class SparcStreamsController(StreamBarController):
             model.hasVA(detector, "brightness")):
             s.auto_bc.value = False
             s.intensityRange.value = (0, 255)
+
+        sse = kwargs.pop("settings_entries", None)
+        if sse is not None:
+            s.set_settings_entries(sse)
 
         # add the stream to the acquisition set
         self._tab_data_model.acquisitionStreams.add(s)
@@ -1684,7 +1730,7 @@ class SparcStreamsController(StreamBarController):
 
         return stream_cont
 
-    def addAR(self):
+    def addAR(self, **kwargs):
         """ Create a camera stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
@@ -1698,7 +1744,7 @@ class SparcStreamsController(StreamBarController):
         axes = self._filter_axes({"filter": ("band", main_data.light_filter)})
 
         ar_stream = acqstream.ARSettingsStream(
-            "Angle-resolved",
+            self.get_unique_stream_name("Angle-resolved"),
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
@@ -1716,6 +1762,9 @@ class SparcStreamsController(StreamBarController):
                 ar_stream.detBinning.value = ar_stream.detBinning.clip((1, 1))
                 ar_stream.detResolution.value = ar_stream.detResolution.range[1]
 
+        if kwargs.get("settings_entries"):
+            ar_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
@@ -1728,7 +1777,7 @@ class SparcStreamsController(StreamBarController):
 
         if model.hasVA(main_data.ebic, "resolution") and model.hasVA(main_data.ebic, "dwellTime"):
             ebic_stream = acqstream.IndependentEBICStream(
-                "EBIC",
+                self.get_unique_stream_name("EBIC"),
                 main_data.ebic,
                 main_data.ebic.data,
                 main_data.ebeam,
@@ -1739,7 +1788,7 @@ class SparcStreamsController(StreamBarController):
             )
         else:
             ebic_stream = acqstream.EBICSettingsStream(
-                "EBIC",
+                self.get_unique_stream_name("EBIC"),
                 main_data.ebic,
                 main_data.ebic.data,
                 main_data.ebeam,
@@ -1748,6 +1797,9 @@ class SparcStreamsController(StreamBarController):
                 emtvas={"dwellTime"},
                 detvas=get_local_vas(main_data.ebic, main_data.hw_settings_config),
             )
+
+        if kwargs.get("settings_entries"):
+            ebic_stream.set_settings_entries(kwargs["settings_entries"])
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1760,7 +1812,7 @@ class SparcStreamsController(StreamBarController):
             ebic_stream.roi.value = (0, 0, 1, 1)
         return self._addRepStream(ebic_stream, sem_ebic_stream, play=False)
 
-    def addCLIntensity(self):
+    def addCLIntensity(self, **kwargs):
         """ Create a CLi stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
@@ -1776,7 +1828,7 @@ class SparcStreamsController(StreamBarController):
         axes = self._filter_axes(axes)
 
         cli_stream = acqstream.CLSettingsStream(
-            "CL intensity",
+            self.get_unique_stream_name("CL intensity"),
             main_data.cld,
             main_data.cld.data,
             main_data.ebeam,
@@ -1791,6 +1843,9 @@ class SparcStreamsController(StreamBarController):
         # Special "safety" feature to avoid having a too high gain at start
         if hasattr(cli_stream, "detGain"):
             cli_stream.detGain.value = cli_stream.detGain.range[0]
+
+        if kwargs.get("settings_entries"):
+            cli_stream.set_settings_entries(kwargs["settings_entries"])
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1808,7 +1863,7 @@ class SparcStreamsController(StreamBarController):
             cli_stream.roi.value = (0, 0, 1, 1)
         return ret
 
-    def addSpectrum(self, name=None, detector=None):
+    def addSpectrum(self, name=None, detector=None, **kwargs):
         """
         Create a Spectrum stream and add to to all compatible viewports
         name (str or None): name of the stream to be created
@@ -1843,7 +1898,7 @@ class SparcStreamsController(StreamBarController):
                 break
 
         spec_stream = acqstream.SpectrumSettingsStream(
-            name,
+            self.get_unique_stream_name(name),
             detector,
             detector.data,
             main_data.ebeam,
@@ -1856,6 +1911,9 @@ class SparcStreamsController(StreamBarController):
         )
         self._set_default_spectrum_axes(spec_stream)
 
+        if kwargs.get("settings_entries"):
+            spec_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
 
@@ -1864,7 +1922,7 @@ class SparcStreamsController(StreamBarController):
 
         return self._addRepStream(spec_stream, sem_spec_stream)
 
-    def addAngularSpectrum(self):
+    def addAngularSpectrum(self, **kwargs):
         """
         Creates an angular spectrum stream and adds to all compatible viewports
         """
@@ -1892,7 +1950,7 @@ class SparcStreamsController(StreamBarController):
         axes = self._filter_axes(axes)
 
         as_stream = acqstream.AngularSpectrumSettingsStream(
-            "AR Spectrum",
+            self.get_unique_stream_name("AR Spectrum"),
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
@@ -1906,13 +1964,16 @@ class SparcStreamsController(StreamBarController):
         )
         self._set_default_spectrum_axes(as_stream)
 
+        if kwargs.get("settings_entries"):
+            as_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_as_stream = acqstream.SEMAngularSpectrumMDStream("SEM AngularSpectrum", [sem_stream, as_stream])
 
         return self._addRepStream(as_stream, sem_as_stream)
 
-    def addTemporalSpectrum(self):
+    def addTemporalSpectrum(self, **kwargs):
         """
         Create a temporal spectrum stream and add to all compatible viewports
         """
@@ -1943,7 +2004,7 @@ class SparcStreamsController(StreamBarController):
                 break
 
         ts_stream = acqstream.TemporalSpectrumSettingsStream(
-            "Temporal Spectrum",
+            self.get_unique_stream_name("Temporal Spectrum"),
             main_data.streak_ccd,
             main_data.streak_ccd.data,
             main_data.ebeam,
@@ -1961,13 +2022,16 @@ class SparcStreamsController(StreamBarController):
         if model.hasVA(ts_stream, "detShutter"):
             ts_stream.detShutter.value = True
 
+        if kwargs.get("settings_entries"):
+            ts_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_ts_stream = acqstream.SEMTemporalSpectrumMDStream("SEM TempSpec", [sem_stream, ts_stream])
 
         return self._addRepStream(ts_stream, sem_ts_stream)
 
-    def addMonochromator(self):
+    def addMonochromator(self, **kwargs):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
@@ -1991,7 +2055,7 @@ class SparcStreamsController(StreamBarController):
         axes = self._filter_axes(axes)
 
         monoch_stream = acqstream.MonochromatorSettingsStream(
-            "Monochromator",
+            self.get_unique_stream_name("Monochromator"),
             main_data.monochromator,
             main_data.monochromator.data,
             main_data.ebeam,
@@ -2003,6 +2067,9 @@ class SparcStreamsController(StreamBarController):
         )
         self._set_default_spectrum_axes(monoch_stream)
 
+        if kwargs.get("settings_entries"):
+            monoch_stream.set_settings_entries(kwargs["settings_entries"])
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator",
@@ -2012,7 +2079,7 @@ class SparcStreamsController(StreamBarController):
                                   play=False
                                   )
 
-    def addTimeCorrelator(self):
+    def addTimeCorrelator(self, **kwargs):
         """ Create a Time Correlator stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
@@ -2039,7 +2106,7 @@ class SparcStreamsController(StreamBarController):
         axes = self._filter_axes(axes)
 
         tc_stream = acqstream.ScannedTemporalSettingsStream(
-            "Time Correlator",
+            self.get_unique_stream_name("Time Correlator"),
             main_data.time_correlator,
             main_data.time_correlator.data,
             main_data.ebeam,
@@ -2047,6 +2114,9 @@ class SparcStreamsController(StreamBarController):
             axis_map=axes,
             detvas=get_local_vas(main_data.time_correlator, main_data.hw_settings_config)
         )
+
+        if kwargs.get("settings_entries"):
+            tc_stream.set_settings_entries(kwargs["settings_entries"])
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream

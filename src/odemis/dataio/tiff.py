@@ -843,6 +843,10 @@ def _updateMDFromOME(root, das):
             if shear is not None:
                 md[model.MD_SHEAR] = float(shear.text)
 
+            acq_recipes = mapa.find(".//M[@K='AcquisitionRecipes']")
+            if acq_recipes is not None:
+                md[model.MD_ACQ_RECIPES] = acq_recipes.text
+
         except (AttributeError, KeyError, ValueError):
             pass
 
@@ -1573,7 +1577,8 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     map_annotation = None
     if (model.MD_EXTRA_SETTINGS in globalMD or
         model.MD_ROTATION in globalMD or
-        model.MD_SHEAR in globalMD):
+        model.MD_SHEAR in globalMD or
+        model.MD_ACQ_RECIPES in globalMD):
 
         # get the extra settings from the global metadata
         sett = globalMD.get(model.MD_EXTRA_SETTINGS, {})
@@ -1603,6 +1608,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         if model.MD_SHEAR in globalMD:
             m = ET.SubElement(value, "M", attrib={"K": model.MD_SHEAR})
             m.text = "%.15f" % globalMD[model.MD_SHEAR]
+        if model.MD_ACQ_RECIPES in globalMD:
+            m = ET.SubElement(value, "M", attrib={"K": "AcquisitionRecipes"})
+            m.text = globalMD[model.MD_ACQ_RECIPES]
 
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.

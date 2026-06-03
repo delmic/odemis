@@ -19,6 +19,8 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from typing import Tuple
+
 import wx
 from decorator import decorator
 
@@ -584,5 +586,19 @@ class SettingsPanel(wx.Panel):
         self.gb_sizer.Add(run_btn, (self.num_rows, 2), span=(1, 1),
                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         return lbl_ctrl, run_btn
+
+    @control_bookkeeper
+    def add_btn(self, label_text: str, btn_label: str) -> Tuple[wx.StaticText, ImageTextButton]:
+        """
+        Add a generic button with a label and the corresponding side label to the gridbag sizer.
+        :param label_text: label text to display
+        :param btn_label: label for the button
+        :returns: side label and button
+        """
+        lbl_ctrl = self._add_side_label(label_text)
+        btn = ImageTextButton(self, label=btn_label, height=16, style=wx.ALIGN_CENTER)
+        self.gb_sizer.Add(btn, (self.num_rows, 2), span=(1, 1),
+                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        return lbl_ctrl, btn
 
 # END Control methods

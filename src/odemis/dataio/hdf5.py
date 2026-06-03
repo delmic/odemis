@@ -772,6 +772,8 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "InputSlitWidth", model.MD_INPUT_SLIT_WIDTH, converter=float)
         # extra settings
         read_metadata(pdgroup, i, md, "ExtraSettings", model.MD_EXTRA_SETTINGS, converter=json.loads)
+        # acquisition recipes
+        read_metadata(pdgroup, i, md, "AcquisitionRecipes", model.MD_ACQ_RECIPES, converter=convert_to_str)
 
     return das
 
@@ -1140,6 +1142,8 @@ def _add_image_metadata(group, image, mds):
     binning, st_binning = [], []
     # input slit width: (float) the width of the entrance slit of the spectrograph
     input_slit_width, st_input_slit_width = [], []
+    # acquisition recipes: (string) the acquisition recipes used for the acquisition
+    acq_recipes, st_acq_recipes = [], []
 
     for md in mds:
         # dwell time ebeam or exposure time # if both not there -> append_metadata() will set entry to invalid
@@ -1178,6 +1182,8 @@ def _add_image_metadata(group, image, mds):
         append_metadata(st_binning, binning, md, model.MD_BINNING, default_value=(1, 1))
         # Input slit width
         append_metadata(st_input_slit_width, input_slit_width, md, model.MD_INPUT_SLIT_WIDTH, default_value=0)
+        # acquisition recipes
+        append_metadata(st_acq_recipes, acq_recipes, md, model.MD_ACQ_RECIPES)
 
     # integration time
     set_metadata(gp, "IntegrationTime", st_its, its)
@@ -1212,7 +1218,8 @@ def _add_image_metadata(group, image, mds):
     set_metadata(gp, "Binning", st_binning, binning)
     # Input slit width
     set_metadata(gp, "InputSlitWidth", st_input_slit_width, input_slit_width)
-
+    # Acquisition recipes
+    set_metadata(gp, "AcquisitionRecipes", st_acq_recipes, acq_recipes)
 
 def append_metadata(status_list, value_list, md, md_key, default_value=""):
     """

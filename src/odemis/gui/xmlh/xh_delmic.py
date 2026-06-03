@@ -158,11 +158,12 @@ class CaptionBarXmlHandler(xrc.XmlResourceHandler):
     # Process XML parameters and create the object
     @apply_hidden
     def DoCreateResource(self):
-        parent = self.GetParentAsWindow()
         w = fpb.CaptionBar(
-                        parent,
+                        self.GetParentAsWindow(),
                         self.GetText('label'),
-                        self.GetBool('collapsed')
+                        self.GetBool('collapsed'),
+                        foldable=self.GetBool('foldable'),
+                        id=self.GetID(),
         )
         self.SetupWindow(w)
         return w

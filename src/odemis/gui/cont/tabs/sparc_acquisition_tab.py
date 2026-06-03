@@ -28,24 +28,37 @@ import logging
 
 import wx
 
-from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
-from odemis.gui.cont.settings import EBeamBlankerSettingsController, GunExciterSettingsController
-from odemis.gui.cont.stream_bar import SparcStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
+from odemis import model
 from odemis.acq import leech
-from odemis.acq.stream import SpectrumStream, TemporalSpectrumStream, \
-    EMStream, \
-    AngularSpectrumStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
-    ScannedTemporalSettingsStream
+from odemis.acq.stream import (
+    AngularSpectrumStream,
+    ARSettingsStream,
+    CLSettingsStream,
+    EMStream,
+    MonochromatorSettingsStream,
+    ScannedTemporalSettingsStream,
+    SpectrumStream,
+    TemporalSpectrumStream,
+)
 from odemis.gui.comp import popup
-from odemis.gui.comp.viewport import MicroscopeViewport, \
-    PlotViewport, TemporalSpectrumViewport
-from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
+from odemis.gui.comp.viewport import (
+    MicroscopeViewport,
+    PlotViewport,
+    TemporalSpectrumViewport,
+)
+from odemis.gui.conf.data import get_stream_settings_config
+from odemis.gui.cont.recipes import SparcRecipesController
+from odemis.gui.cont.settings import (
+    EBeamBlankerSettingsController,
+    GunExciterSettingsController,
+)
+from odemis.gui.cont.stream_bar import SparcStreamsController
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.model import TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_NONE
+from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import call_in_wx_main
 
 
@@ -56,57 +69,13 @@ class SparcAcquisitionTab(Tab):
         self.set_label("ACQUISITION")
 
         # Create the streams (first, as SEM viewport needs SEM concurrent stream):
-        # * SEM (survey): live stream displaying the current SEM view (full FoV)
         # * Spot SEM: live stream to set e-beam into spot mode
         # * SEM (concurrent): SEM stream used to store SEM settings for final acquisition.
         #           That's tab_data.semStream
+        # * SEM (survey): live stream displaying the current SEM view (full FoV)
         # When one new stream is added, it actually creates two streams:
         # * XXXSettingsStream: for the live view and the settings
         # * MDStream: for the acquisition (view)
-
-        # Only put the VAs that do directly define the image as local, everything
-        # else should be global. The advantage is double: the global VAs will
-        # set the hardware even if another stream (also using the e-beam) is
-        # currently playing, and if the VAs are changed externally, the settings
-        # will be displayed correctly (and not reset the values on next play).
-        emtvas = set()
-        hwemtvas = set()
-        for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
-            if vaname in ("resolution", "dwellTime", "scale"):
-                emtvas.add(vaname)
-            else:
-                hwemtvas.add(vaname)
-
-        # This stream is used both for rendering and acquisition
-        sem_stream = acqstream.SEMStream(
-            "Secondary electrons survey",
-            main_data.sed,
-            main_data.sed.data,
-            main_data.ebeam,
-            focuser=main_data.ebeam_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=None,
-            emtvas=emtvas,
-            detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
-        )
-
-        # Check the settings are proper for a survey stream (as they could be
-        # left over from spot mode)
-        # => full FoV + not too high scale + short dwell time
-        if hasattr(sem_stream, "emtDwellTime"):
-            sem_stream.emtDwellTime.value = sem_stream.emtDwellTime.clip(1e-6)
-        if hasattr(sem_stream, "emtScale"):
-            sem_stream.emtScale.value = sem_stream.emtScale.clip((8, 8))
-            sem_scale = sem_stream.emtScale.value
-        else:
-            sem_scale = 1, 1
-        if hasattr(sem_stream, "emtResolution"):
-            max_res = sem_stream.emtResolution.range[1]
-            res = max_res[0] // sem_scale[0], max_res[1] // sem_scale[1]
-            sem_stream.emtResolution.value = sem_stream.emtResolution.clip(res)
-
-        tab_data.acquisitionStreams.add(sem_stream)  # it should also be saved
-
         tab_data.fovComp = main_data.ebeam
         # This stream is a bit tricky, because it will play (potentially)
         # simultaneously as another one, and it changes the SEM settings at
@@ -142,17 +111,11 @@ class SparcAcquisitionTab(Tab):
 
         # drift correction is disabled until a ROI is selected
         tab_data.driftCorrector.roi.value = acqstream.UNDEFINED_ROI
-        # Set anchor region dwell time to the same value as the SEM survey
-        sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
-        # Add the SEM stream to the view
-        tab_data.streams.value.append(sem_stream)
         # To make sure the spot mode is stopped when the tab loses focus
         tab_data.streams.value.append(spot_stream)
 
         viewports = panel.pnl_sparc_grid.viewports
-
-        tab_data.streams.subscribe(self._arrangeViewports, init=True)
 
         for vp in viewports[:4]:
             assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
@@ -211,6 +174,14 @@ class SparcAcquisitionTab(Tab):
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
+        # Create Stream Bar Controller
+        self._stream_controller = SparcStreamsController(
+            tab_data,
+            panel.pnl_sparc_streams,
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
+        )
+
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
             (
@@ -232,6 +203,16 @@ class SparcAcquisitionTab(Tab):
 
         self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
+        # The sem stream is always visible, so add it by default
+        sem_stream_cont = self._stream_controller._add_sem_stream("Secondary electrons survey", main_data.sed, add_to_view=True)
+        sem_stream_cont.stream_panel.show_remove_btn(False)
+        sem_stream_cont.stream_panel.show_visible_btn(False)
+        self.sem_stream = sem_stream_cont.stream
+
+        tab_data.streams.subscribe(self._arrangeViewports, init=True)
+        # Set anchor region dwell time to the same value as the SEM survey
+        self.sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
+
         # Toolbar
         self.tb = self.panel.sparc_acq_toolbar
         for t in guimod.TOOL_ORDER:
@@ -250,19 +231,6 @@ class SparcAcquisitionTab(Tab):
 
         if main_data.ebeam_blanker and main_data.streak_unit:
             main_data.ebeam_blanker.power.subscribe(self._on_ebeam_blanker)
-
-        # Create Stream Bar Controller
-        self._stream_controller = SparcStreamsController(
-            tab_data,
-            panel.pnl_sparc_streams,
-            ignore_view=True,  # Show all stream panels, independent of any selected viewport
-            view_ctrl=self.view_controller,
-        )
-
-        # The sem stream is always visible, so add it by default
-        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
-        sem_stream_cont.stream_panel.show_remove_btn(False)
-        sem_stream_cont.stream_panel.show_visible_btn(False)
 
         # FIXME
         # Display on the SEM live stream panel, the extra settings of the SEM concurrent stream
@@ -341,6 +309,15 @@ class SparcAcquisitionTab(Tab):
             tab_data,
             panel,
             self._stream_controller
+        )
+
+        # Acquisition recipes
+        self._recipes_controller = SparcRecipesController(
+            tab_data,
+            panel,
+            self.sem_stream,
+            self._stream_controller,
+            self._acquisition_controller
         )
 
         # Force SEM view fit to content when magnification is updated
@@ -425,6 +402,8 @@ class SparcAcquisitionTab(Tab):
 
         self._ebeam_blanker_ctrl.enable(not is_acquiring)
         self.tb.enable(not is_acquiring)
+        self.import_btn.Enable(not is_acquiring)
+        self.export_btn.Enable(not is_acquiring)
         self.panel.vp_sparc_tl.Enable(not is_acquiring)
         # TODO: Leave the canvas accessible, but only forbid moving the stage and
         # if the mpp changes, do not update the horizontalFoV of the e-beam.
