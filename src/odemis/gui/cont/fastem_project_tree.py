@@ -254,6 +254,15 @@ class FastEMTreeNode:
                 return found
         return None
 
+    def cleanup(self):
+        """Unsubscribe VAs and clear callback to prevent stale references."""
+        if self.row:
+            self.row.roa.name.unsubscribe(self._on_name_change)
+            self.row.roa.slice_index.unsubscribe(self._on_slice_index_change)
+            if self.row.parent_name is not None:
+                self.row.parent_name.unsubscribe(self._on_parent_name_change)
+        self._on_change_callback = None
+
     def delete_node(self, name: str) -> bool:
         """
         Deletes a node by its name.
@@ -270,9 +279,15 @@ class FastEMTreeNode:
                     for grandchild in child.children:
                         if parent_node and parent_node.can_have_child(grandchild.type):
                             parent_node.add_child(grandchild)
+                        else:
+                            for node in grandchild.get_all_nodes():
+                                node.cleanup()
+                    # Detach reparented nodes so _remove_tree_node won't clear their node_window
+                    child.children = [gc for gc in child.children if gc.parent_node == child]
                 # Remove the child node from the children list
                 if self._on_change_callback:
                     self._on_change_callback(NodeChangeType.DELETE_NODE, child)
+                child.cleanup()
                 del self.children[i]
                 return True
 
@@ -297,9 +312,15 @@ class FastEMTreeNode:
                     for grandchild in child.children:
                         if parent_node and parent_node.can_have_child(grandchild.type):
                             parent_node.add_child(grandchild)
+                        else:
+                            for node in grandchild.get_all_nodes():
+                                node.cleanup()
+                    # Detach reparented nodes so _remove_tree_node won't clear their node_window
+                    child.children = [gc for gc in child.children if gc.parent_node == child]
                 # Remove the child node from the children list
                 if self._on_change_callback:
                     self._on_change_callback(NodeChangeType.DELETE_NODE, child)
+                child.cleanup()
                 del self.children[i]
                 return True
 
@@ -608,7 +629,8 @@ class FastEMProjectTreeCtrl(CustomTreeCtrl):
         item = self._find_item_by_node(node)
         if item:
             self.Delete(item)
-            del self.node_window[node]
+            for n in node.get_all_nodes():
+                self.node_window.pop(n, None)
 
     def _reparent_tree_node(self, node: FastEMTreeNode):
         """
