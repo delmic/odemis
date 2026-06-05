@@ -631,8 +631,8 @@ class GridBase(Grid):
             return  # Out of range, do nothing
         self.DeleteRows(pos=index, numRows=1)
         row = self.rows.pop(index)
-        for idx, remaining_row in enumerate(self.rows):
-            remaining_row.index = idx
+        for idx in range(index, len(self.rows)):
+            self.rows[idx].index = idx
         row.roa.shape.points.unsubscribe(row.roa.on_points)
         row.roa.shape.points.unsubscribe(self._row_shape_points_sub_callback[row])
         row.roa.shape.selected.unsubscribe(self._row_shape_selected_sub_callback[row])
