@@ -15201,6 +15201,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <object class="sizeritem">
                     <object class="wxStaticText">
                       <label>Grating Center</label>
+                      <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
                         <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -15216,6 +15217,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Auto center</label>
+                          <tooltip>Attempts to auto-calibrate the zero-th order peak for grating alignment.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>

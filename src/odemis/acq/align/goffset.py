@@ -191,7 +191,9 @@ def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture
     current = float(spgr.position.value["goffset"])
     goffset_min, goffset_max = spgr.axes["goffset"].range
     max_span = goffset_max - goffset_min  # Search far enough around the current position to cover the full axis range.
-    step = abs(step) if step != 0 else max_span / 100.0
+
+    if step is None:
+        step = max_span / 100.0
 
     logging.debug("Coarse local scan around goffset %.1f with step %.1f and max span %.1f",
                   current, step, max_span)
