@@ -45,6 +45,7 @@ from odemis.acq.align.autofocus import (
     Sparc2AutoFocus,
     Sparc2ManualFocus,
 )
+from odemis.acq.align.goffset import auto_align_grating_detector_offsets
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.comp import popup
 from odemis.gui.conf.data import get_hw_config, get_local_vas
@@ -865,6 +866,15 @@ class Sparc2AlignTab(Tab):
         # TODO: Auto remove the background when the image shape changes?
         # TODO: Use a toggle button to show the background is in use or not?
 
+        # Auto-calibration button
+        self.panel.btn_auto_grating_center.Bind(wx.EVT_BUTTON, self._on_btn_grating_calibration)
+
+        # Auto-calibration state
+        self._grating_calibration_future = model.InstantaneousFuture()
+
+        # To hold the progressive future connector during calibration
+        self._pfc_grating_calibration = None
+
     def _on_btn_auto_align(self, evt):
         """
         Handle the "Auto alignment" button click.
@@ -1537,6 +1547,96 @@ class Sparc2AlignTab(Tab):
             logging.exception("Failed changing alignment mode.")
         else:
             logging.debug("Optical path was updated.")
+
+
+    # Auto-Calibration
+    def _on_btn_grating_calibration(self, evt):
+        if not self._grating_calibration_future.done():
+            self._grating_calibration_future.cancel()
+            return
+
+        # Otherwise, prepare the UI and start a new calibration
+        self.panel.gauge_auto_grating_center.SetValue(0)
+        self.panel.btn_auto_grating_center.SetLabel("Cancel")
+
+        wx.CallAfter(self._start_grating_calibration)
+
+    def _start_grating_calibration(self):
+        main = self.tab_data_model.main
+        align_mode = self.tab_data_model.align_mode.value
+        opm = main.opm
+
+        # Set the optical path according to the align mode
+        if align_mode == "streak-align":
+            if (main.streak_ccd
+                    and main.spectrograph_ded
+                    and main.streak_ccd.name in main.spectrograph_ded.affects.value):
+                opath = "streak-focus-ext"
+            else:
+                opath = "streak-focus"
+        elif align_mode == "tunnel-lens-align":
+            opath = "spec-focus-ext"
+        elif align_mode in ("lens-align", "lens2-align", "light-in-align"):
+            opath = "spec-focus"
+        else:
+            logging.warning("Auto calibration requested not compatible with requested alignment mode %s. Do nothing.",
+                            align_mode)
+            return
+
+        # Pick the right hardware based on whether opath is external or internal
+        if opath in ("spec-focus-ext", "streak-focus-ext"):
+            bl = main.brightlight_ext
+            spectrograph = main.spectrograph_ded
+            selector = getattr(main, "spec_ded_det_selector", None)
+        else:
+            bl = main.brightlight
+            spectrograph = main.spectrograph
+            selector = getattr(main, "spec_det_selector", None)
+
+        if not bl or not spectrograph:
+            logging.error("Missing brightlight or spectrograph. Cannot start auto-calibration.")
+            return
+
+        # Combine all detectors
+        detectors = getattr(main, "ccds", []) + getattr(main, "sp_ccds", [])
+        if not detectors:
+            detectors = [main.ccd] if main.ccd else []
+
+        # If multiple detectors but no selector, only use the first detector
+        if len(detectors) > 1 and selector is None:
+            logging.warning("Multiple detectors detected but no selector; aligning only the first detector")
+            detectors = [detectors[0]]
+
+        logging.info(
+            "Starting grating calibration: detectors=%s selector=%s path=%s",
+            [d.name for d in detectors], selector.position.value if selector else None, opath)
+
+        # Start alignment procedure
+        self._grating_calibration_future = auto_align_grating_detector_offsets(
+            spectrograph, detectors, opm, opath, bl, selector=selector)
+
+        # Bind progress & done callbacks
+        self._grating_calibration_future.add_done_callback(self._on_grating_calibration_done)
+        self.panel.btn_auto_grating_center.SetLabel("Cancel")
+
+        self._pfc_grating_calibration = ProgressiveFutureConnector(self._grating_calibration_future,
+                                                                   self.panel.gauge_auto_grating_center)
+
+    def _on_grating_calibration_done(self, f):
+        try:
+            result = f.result()
+            logging.info("Grating calibration finished: %s", result)
+        except CancelledError:
+            logging.info("Grating calibration cancelled")
+        except Exception:
+            logging.exception("Grating calibration failed")
+
+        finally:
+            self._grating_calibration_future = model.InstantaneousFuture()
+            self._pfc_grating_calibration = None
+
+            wx.CallAfter(self.panel.btn_auto_grating_center.SetLabel, "Auto center")
+            wx.CallAfter(self.panel.gauge_auto_grating_center.SetValue, 0)
 
     @call_in_wx_main
     def _on_lens_align_done(self, f):
