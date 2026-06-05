@@ -259,7 +259,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Focus</label>
+                      <label>Spectrograph Focus</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -407,7 +407,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Calibrate</label>
+                      <label>Grating Center</label>
                       <font>
                         <size>16</size>
                         <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -419,10 +419,10 @@
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_auto_calibrate">
+                        <object class="ImageTextButton" name="btn_auto_grating_center">
                           <height>24</height>
                           <face_colour>def</face_colour>
-                          <label>Auto calibrate</label>
+                          <label>Auto center</label>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -434,7 +434,7 @@
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxGauge" name="gauge_auto_calibrate">
+                        <object class="wxGauge" name="gauge_auto_grating_center">
                           <size>-1,10</size>
                           <range>100</range>
                           <value>0</value>

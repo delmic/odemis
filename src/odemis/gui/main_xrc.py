@@ -1282,8 +1282,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.cmb_focus_gratings_label = xrc.XRCCTRL(self, "cmb_focus_gratings_label")
         self.cmb_focus_gratings = xrc.XRCCTRL(self, "cmb_focus_gratings")
         self.pnl_calibrate = xrc.XRCCTRL(self, "pnl_calibrate")
-        self.btn_auto_calibrate = xrc.XRCCTRL(self, "btn_auto_calibrate")
-        self.gauge_auto_calibrate = xrc.XRCCTRL(self, "gauge_auto_calibrate")
+        self.btn_auto_grating_center = xrc.XRCCTRL(self, "btn_auto_grating_center")
+        self.gauge_auto_grating_center = xrc.XRCCTRL(self, "gauge_auto_grating_center")
         self.pnl_focus_ext = xrc.XRCCTRL(self, "pnl_focus_ext")
         self.btn_autofocus_ext = xrc.XRCCTRL(self, "btn_autofocus_ext")
         self.gauge_autofocus_ext = xrc.XRCCTRL(self, "gauge_autofocus_ext")
@@ -15052,7 +15052,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Focus</label>
+                      <label>Spectrograph Focus</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -15200,7 +15200,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Calibrate</label>
+                      <label>Grating Center</label>
                       <font>
                         <size>16</size>
                         <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
@@ -15212,10 +15212,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_auto_calibrate">
+                        <object class="ImageTextButton" name="btn_auto_grating_center">
                           <height>24</height>
                           <face_colour>def</face_colour>
-                          <label>Auto calibrate</label>
+                          <label>Auto center</label>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -15227,7 +15227,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxGauge" name="gauge_auto_calibrate">
+                        <object class="wxGauge" name="gauge_auto_grating_center">
                           <size>-1,10</size>
                           <range>100</range>
                           <value>0</value>

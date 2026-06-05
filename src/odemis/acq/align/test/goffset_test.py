@@ -17,7 +17,7 @@ from odemis.util import testing
 from odemis.util import timeout
 from odemis.acq.align.goffset import(find_peak_position, peak_is_present, estimate_goffset_scale,
                                      sparc_auto_grating_offset, auto_align_grating_detector_offsets,
-                                     _do_auto_align_grating_detector_offsets, log_detector_state)
+                                     _do_auto_align_grating_detector_offsets)
 from odemis.dataio import hdf5
 from odemis.model import ProgressiveFuture
 from pathlib import Path
@@ -163,7 +163,6 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         direction = 1 if (current + delta < goffset_max) else -1
 
         test_data = self.detector.data.get(asap=False)
-        log_detector_state("TEST", "INITIAL", self.detector, test_data)
 
         self.spgr.moveRelSync({"goffset": delta * direction})
         logging.info("Test: after misalign move, spgr.position.gooffset = %s", self.spgr.position.value["goffset"])
@@ -415,8 +414,6 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
     @patch('odemis.acq.align.goffset.sparc_auto_grating_offset')
     @patch('odemis.acq.align.goffset.light.turnOnLight')
-    @patch('odemis.acq.align.goffset.time.sleep')
-
     def test_do_auto_align_mocked(self, mock_sleep, mock_turnOnLight, mock_sparc_offset):
         """
         Test the full auto-calibration sequence using mocked hardware to bypass

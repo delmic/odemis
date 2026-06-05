@@ -4,7 +4,7 @@ import threading
 import time
 
 from collections.abc import Iterable
-from concurrent.futures import CancelledError
+from concurrent.futures import CancelledError, TimeoutError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 from odemis.acq.align import light
 from odemis import model
@@ -169,7 +169,7 @@ def peak_is_present(spectrum: numpy.ndarray,
     return present
 
 def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture,
-                                 step: int = 2000) -> Tuple[float, float]:
+                                 step: Optional[float] = None) -> Tuple[float, float]:
     """"
     Coarse scan across the goffset axis until a real peak becomes visible.
 
@@ -189,12 +189,12 @@ def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture
     """
 
     current = float(spgr.position.value["goffset"])
-    step = abs(step) if step != 0 else 2000.0
-    max_span = 200000.0  # limit how far we wander from the current valid position
+    goffset_min, goffset_max = spgr.axes["goffset"].range
+    max_span = goffset_max - goffset_min  # Search far enough around the current position to cover the full axis range.
+    step = abs(step) if step != 0 else max_span / 100.0
 
-    logging.debug(
-        "Coarse local scan around goffset %.1f with step %.1f and max span %.1f",
-        current, step, max_span)
+    logging.debug("Coarse local scan around goffset %.1f with step %.1f and max span %.1f",
+                  current, step, max_span)
 
     # build a sequence of positions: current, +step, -step, +2*step, -2*step, ...
     positions = [current]
@@ -648,10 +648,6 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             future._subfuture.cancel()
             logging.warning("Brightlight did not confirm ON within 60s; continuing anyway")
 
-        except Exception as e:
-            # This catches any other errors the hardware might throw
-            logging.warning(f"Brightlight encountered an error: {e}. Continuing anyway.")
-
         _checkCancelled(future)
 
         logging.info("Setting optical path to alignment mode: %s",align_mode)
@@ -729,7 +725,7 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
     finally:
         logging.info("Turning off brightlight")
         try:
-            bl.power.value = (bl.power.range[0])
+            bl.power.value = bl.power.range[0]
         except Exception:
             logging.exception("Failed to turn off the light during alignment cleanup")
 

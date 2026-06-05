@@ -867,12 +867,12 @@ class Sparc2AlignTab(Tab):
         # TODO: Use a toggle button to show the background is in use or not?
 
         # Auto-calibration button
-        self.panel.btn_auto_calibrate.Bind(wx.EVT_BUTTON, self._on_btn_grating_calibration)
+        self.panel.btn_auto_grating_center.Bind(wx.EVT_BUTTON, self._on_btn_grating_calibration)
 
         # Auto-calibration state
         self._grating_calibration_future = model.InstantaneousFuture()
 
-        # Create progress timer
+        # To hold the progressive future connector during calibration
         self._pfc_grating_calibration = None
 
     def _on_btn_auto_align(self, evt):
@@ -1556,8 +1556,8 @@ class Sparc2AlignTab(Tab):
             return
 
         # Otherwise, prepare the UI and start a new calibration
-        self.panel.gauge_auto_calibrate.SetValue(0)
-        self.panel.btn_auto_calibrate.SetLabel("Cancel")
+        self.panel.gauge_auto_grating_center.SetValue(0)
+        self.panel.btn_auto_grating_center.SetLabel("Cancel")
 
         wx.CallAfter(self._start_grating_calibration)
 
@@ -1617,10 +1617,10 @@ class Sparc2AlignTab(Tab):
 
         # Bind progress & done callbacks
         self._grating_calibration_future.add_done_callback(self._on_grating_calibration_done)
-        self.panel.btn_auto_calibrate.SetLabel("Cancel")
+        self.panel.btn_auto_grating_center.SetLabel("Cancel")
 
         self._pfc_grating_calibration = ProgressiveFutureConnector(self._grating_calibration_future,
-                                                                   self.panel.gauge_auto_calibrate)
+                                                                   self.panel.gauge_auto_grating_center)
 
     def _on_grating_calibration_done(self, f):
         try:
@@ -1635,8 +1635,8 @@ class Sparc2AlignTab(Tab):
             self._grating_calibration_future = model.InstantaneousFuture()
             self._pfc_grating_calibration = None
 
-            wx.CallAfter(self.panel.btn_auto_calibrate.SetLabel, "Auto calibrate")
-            wx.CallAfter(self.panel.gauge_auto_calibrate.SetValue, 0)
+            wx.CallAfter(self.panel.btn_auto_grating_center.SetLabel, "Auto center")
+            wx.CallAfter(self.panel.gauge_auto_grating_center.SetValue, 0)
 
     @call_in_wx_main
     def _on_lens_align_done(self, f):
