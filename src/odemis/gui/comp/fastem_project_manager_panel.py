@@ -695,8 +695,6 @@ class FastEMProjectManagerPanel:
         }
         self.import_export_manager = ProjectManagerImportExport(self)
 
-        self.is_active_project_delete_button_pressed = False
-        self.is_import_btn_pressed = False
         self.detached_frame = None
         self.detached = False
         self._shape_points_sub_callback = {}
@@ -779,11 +777,12 @@ class FastEMProjectManagerPanel:
         if not filepath:
             return
 
-        self.is_import_btn_pressed = True
+        self.tab_data.shapes.unsubscribe(self._on_shapes)
         try:
             self.import_export_manager.import_from_file(filepath)
         finally:
-            self.is_import_btn_pressed = False
+            self.previous_shapes = set(self.tab_data.shapes.value.copy())
+            self.tab_data.shapes.subscribe(self._on_shapes)
 
     def _on_move_up(self, evt):
         """Moves selected row/s up in the grid."""
@@ -1087,9 +1086,6 @@ class FastEMProjectManagerPanel:
 
         self.previous_shapes = new_shapes
 
-        if self.is_import_btn_pressed:
-            return
-
         if len(added_shape) == 1:
             shape = added_shape.pop()
             logging.debug("Shape creation in progress.")
@@ -1103,23 +1099,22 @@ class FastEMProjectManagerPanel:
                 shape.points.subscribe(sub_callback)
         if len(removed_shape) == 1:
             shape = removed_shape.pop()
-            # Handle wx.WXK_DELETE pressed, undo or redo in ShapesOverlay
-            if not self.is_active_project_delete_button_pressed:
-                logging.debug("Shape deletion in progress.")
-                self.tab_data.project_tree_sb.delete_node_by_shape(shape)
-                self.tab_data.project_tree_mb.delete_node_by_shape(shape)
-                row = self.project_toas_tab.grid.get_row_by_shape(shape)
-                if row:
-                    self.project_toas_tab.grid.delete_row(row.index)
-                row = self.project_ribbons_tab.grid.get_row_by_shape(shape)
-                if row:
-                    self.project_ribbons_tab.grid.delete_row(row.index)
-                row = self.project_sections_tab.grid.get_row_by_shape(shape)
-                if row:
-                    self.project_sections_tab.grid.delete_row(row.index)
-                row = self.project_roas_tab.grid.get_row_by_shape(shape)
-                if row:
-                    self.project_roas_tab.grid.delete_row(row.index)
+            # Undo or redo in ShapesOverlay
+            logging.debug("Shape deletion in progress.")
+            self.tab_data.project_tree_sb.delete_node_by_shape(shape)
+            self.tab_data.project_tree_mb.delete_node_by_shape(shape)
+            row = self.project_toas_tab.grid.get_row_by_shape(shape)
+            if row:
+                self.project_toas_tab.grid.delete_row(row.index)
+            row = self.project_ribbons_tab.grid.get_row_by_shape(shape)
+            if row:
+                self.project_ribbons_tab.grid.delete_row(row.index)
+            row = self.project_sections_tab.grid.get_row_by_shape(shape)
+            if row:
+                self.project_sections_tab.grid.delete_row(row.index)
+            row = self.project_roas_tab.grid.get_row_by_shape(shape)
+            if row:
+                self.project_roas_tab.grid.delete_row(row.index)
             if shape in self._shape_points_sub_callback:
                 del self._shape_points_sub_callback[shape]
 
@@ -1185,7 +1180,6 @@ class FastEMProjectManagerPanel:
 
     def _on_active_project_add_button_ctrl(self, evt):
         """Handles the event when the '+' button is pressed, adding a new project."""
-        self.is_active_project_delete_button_pressed = False
         value = wx.GetTextFromUser(
             "Enter new project:",
             parent=self.active_project_add_button_ctrl,
@@ -1282,33 +1276,24 @@ class FastEMProjectManagerPanel:
 
     def _on_active_project_delete_button_ctrl(self, evt):
         """Handles the event when the 'Bin' button is pressed, removing a project."""
-        self.is_active_project_delete_button_pressed = True
         ctrl = self.active_project_ctrl
         value = ctrl.GetValue()
-        if value in ctrl.GetStrings():
-            ctrl.Delete(ctrl.GetStrings().index(value))
-            project_node_sb = self.tab_data.project_tree_sb.find_node(value)
-            project_node_mb = self.tab_data.project_tree_mb.find_node(value)
-            toas = project_node_sb.find_nodes_by_type(NodeType.TOA)
-            ribbons = project_node_mb.find_nodes_by_type(NodeType.RIBBON)
-            sections = project_node_mb.find_nodes_by_type(NodeType.SECTION)
-            roas = project_node_mb.find_nodes_by_type(NodeType.ROA)
-            for toa in toas:
-                ovv_ss = self.main_data.overview_streams.value.copy()
-                if toa.row.roa.shape in ovv_ss:
-                    del ovv_ss[toa.row.roa.shape]
-                    self.main_data.overview_streams.value = ovv_ss
-                toa.row.roa.shape.cnvs.remove_shape(toa.row.roa.shape)
-                toa.row.roa.shape = None
-            for ribbon in ribbons:
-                ribbon.row.roa.shape.cnvs.remove_shape(ribbon.row.roa.shape)
-                ribbon.row.roa.shape = None
-            for section in sections:
-                section.row.roa.shape.cnvs.remove_shape(section.row.roa.shape)
-                section.row.roa.shape = None
-            for roa in roas:
-                roa.row.roa.shape.cnvs.remove_shape(roa.row.roa.shape)
-                roa.row.roa.shape = None
+        projects = list(ctrl.GetStrings())
+        if value not in projects:
+            return
+
+        self.tab_data.shapes.unsubscribe(self._on_shapes)
+        try:
+            ctrl.Delete(projects.index(value))
+            # Use grids for cleanup (unsubscribes, overview_streams, canvas removal)
+            toas_grid, ribbons_grid, sections_grid, roas_grid = self.project_grids_data[value]
+            # Delete all rows in reverse order to avoid index shifting
+            for grid in (toas_grid, ribbons_grid, sections_grid, roas_grid):
+                while grid.rows:
+                    row = grid.rows[-1]
+                    if row.roa.shape in self._shape_points_sub_callback:
+                        del self._shape_points_sub_callback[row.roa.shape]
+                    grid.delete_row(row.index)
             self.tab_data.project_tree_sb.delete_node(value)
             self.tab_data.project_tree_mb.delete_node(value)
             del self.tab_data.project_settings_data.value[value]
@@ -1317,6 +1302,11 @@ class FastEMProjectManagerPanel:
             ctrl.SetValue("")
             self.setup_grid_for_project("")
             self.tab_data.current_project.value = ""
+        except Exception:
+            logging.exception("An error occurred while deleting the project.")
+        finally:
+            self.previous_shapes = set(self.tab_data.shapes.value.copy())
+            self.tab_data.shapes.subscribe(self._on_shapes)
 
     def _on_active_project(self, evt):
         """Handles changes in the active project, including selection and renaming."""
