@@ -48,7 +48,12 @@ AXIS_PARAMS = {
     7: "Standby current",
     12: "Right limit switch disable",
     13: "Left limit switch disable",
+    15: "Acceleration A1",
+    16: "Velocity V1",
     17: "Maximum deceleration",
+    18: "Deceleration D1",
+    19: "Velocity VSTART",
+    20: "Velocity VSTOP",
     24: "Right limit switch polarity",
     25: "Left limit switch polarity",
     140: "Microstep resolution",
@@ -102,21 +107,23 @@ OUT_CONFIG_DEFAULT = {
 }
 
 # Models which don't support axis param storage
-NO_AXIS_STORAGE = {1211, 3214}
+NO_AXIS_STORAGE = {1211, 3214, 6214}
 
 # List of axis params which are _not_ present (per model)
 MISSING_AXIS_PARAMS = {
     1211: {149, 153, 154, 200},
     3214: {149, 153, 154, 200},
-    1140: {17, 24, 25, 26, 31, 251},
-    3110: {17, 24, 25, 26, 31, 201, 212, 251},
-    6110: {17, 24, 25, 26, 31, 201, 212, 251},
+    6214: {149, 153, 154, 200},
+    1140: {15, 16, 17, 18, 19, 20, 24, 25, 26, 31, 251},
+    3110: {15, 16, 17, 18, 19, 20, 24, 25, 26, 31, 201, 212, 251},
+    6110: {15, 16, 17, 18, 19, 20, 24, 25, 26, 31, 201, 212, 251},
 }
 
 # List of global params which are _not_ present (per model)
 MISSING_GLOBAL_PARAMS = {
     1211: {(0, 79), (0, 90)},
     3214: {(0, 79), (0, 90)},
+    6214: {(0, 79), (0, 90)},
     1140: {},
     3110: {},
     6110: {},
