@@ -243,7 +243,7 @@ class CryoZLocalizationController(object):
         """
         # Set the target Z ctrl with the focus position
         self._panel.ctrl_target_z.SetValue(target_coordinates[2])
-        save_project(self._tab_data_model.main)
+        save_project(self._tab_data.main)
 
     def _on_ctrl_target_z_change(self) -> List[float]:
         """

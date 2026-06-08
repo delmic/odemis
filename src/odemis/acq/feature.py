@@ -811,7 +811,8 @@ def acquire_at_features(
 
 
 class Target:
-    def __init__(self, x: float, y: float, z: float, name: str, type: TargetType, index: int, fm_focus_position: float, superz_focused: Optional[bool] = None):
+    def __init__(self, x: float, y: float, z: float, name: str, type: TargetType, index: int, fm_focus_position: float,
+                 superz_focused: Optional[bool] = None, needs_refinement: Optional[bool] = False) -> None:
         """
         Target class to store the target information for multipoint correlation. The target can be a fiducial, point of
         interest, surface fiducial, projected fiducial or projected point of interest. The target information is used to
@@ -826,6 +827,7 @@ class Target:
         :param fm_focus_position: position of the focus (objective in cased of Meteor) in meters
         :param superz_focused: True if super z focus has high accuracy, False otherwise. If None, it means that the
           super z focus was not used.
+        :param needs_refinement: Whether target needs further algorithmic refinement.
         """
         self.coordinates = model.ListVA((x, y, z), unit="m")
         self.type = model.VAEnumerated(type, choices={t for t in TargetType})
@@ -833,6 +835,8 @@ class Target:
         self.index = model.IntContinuous(index, range=(1, 99))
         self.fm_focus_position = model.FloatVA(fm_focus_position, unit="m")
         self.superz_focused = superz_focused
+        # No need to store this on disk, so leaving it out of to/from_dict methods
+        self.needs_refinement = model.BooleanVA(needs_refinement)
 
     def to_dict(self) -> dict:
         return {

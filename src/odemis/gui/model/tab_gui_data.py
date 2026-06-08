@@ -292,11 +292,11 @@ class CryoGUIData(MicroscopyGUIData):
             t_name = make_unique_name("FM-1", existing_names)
             index = int(re.search(TARGET_INDEX, t_name).group(1))
             target = Target(x, y, z=z_val, name=t_name, type=type,
-                            index=index, fm_focus_position=fm_focus_position)
+                            index=index, fm_focus_position=fm_focus_position, needs_refinement=True)
 
         elif type == TargetType.PointOfInterest:
             target = Target(x, y, z=z_val, name="POI-1", type=type,
-                            index=1, fm_focus_position=fm_focus_position)
+                            index=1, fm_focus_position=fm_focus_position, needs_refinement=True)
 
         elif type == TargetType.SurfaceFiducial:
             target = Target(x, y, z=0, name="FIB_surface", type=type, index=1,

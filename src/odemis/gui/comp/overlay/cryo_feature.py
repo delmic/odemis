@@ -509,6 +509,7 @@ class CryoCorrelationPointsOverlay(WorldOverlay, DragMixin):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 else:
                     self.tab_data.add_new_target(p_pos[0], p_pos[1], type=TargetType.PointOfInterest)
+
             elif self._mode == MODE_EDIT_REFRACTIVE_INDEX and TargetType.SurfaceFiducial in self.allowed_targets:
                 # Check for existing surface fiducial in order to change the position or introduce a new one.
                 existing_surface = next((target for target in self.tab_data.main.targets.value if target.type.value == TargetType.SurfaceFiducial), None)
