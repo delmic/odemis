@@ -41,13 +41,14 @@ import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.acq.stream import OpticalStream, EMStream, StaticStream
 from odemis.gui.cont.correlation import CorrelationController
+from odemis.gui.cont.tabs.stream_load_mixin import StreamLoadMixin
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
 
 
-class CorrelationTab(Tab):
+class CorrelationTab(StreamLoadMixin, Tab):
 
     def __init__(self, name: str,
                  button: odemis.gui.comp.buttons.TabButton,
@@ -166,14 +167,6 @@ class CorrelationTab(Tab):
     def _on_add_tileset(self) -> None:
         self.select_acq_file(extend=True, tileset=True)
 
-    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
-        data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
-        self.load_streams(data)
-
-    def load_data(self, filename: str, fmt: str = None, extend: bool = False) -> None:
-        data = open_acquisition(filename, fmt)
-        self.load_streams(data)
-
     def select_acq_file(self, extend: bool = False, tileset: bool = False):
         """ Open an image file using a file dialog box
 
@@ -218,13 +211,13 @@ class CorrelationTab(Tab):
                 extend = True  # If multiple files loaded, the first one is considered main one
 
     @call_in_wx_main
-    def load_streams(self, data: List[model.DataArray]) -> None:
+    def load_streams(self, das: List[model.DataArray], **_) -> None:
         """ Load the data in the overview viewports
-        :param data: (list[model.DataArray]) list of data arrays to load as streams
+        :param das: (list[model.DataArray]) list of data arrays to load as streams
         """
 
         # Create streams from data, add to correlation controller
-        streams = data_to_static_streams(data)
+        streams = data_to_static_streams(das)
         self.correlation_controller.add_streams(streams)
 
         # fit to content

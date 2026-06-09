@@ -109,6 +109,7 @@ def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=
     allowlossy: cf get_available_formats()
     returns (dataio. Module): the right exporter
     """
+    filename = str(filename)
     fn_low = filename.lower() # case insensitive
     # If filename is a bytes, .startswith()/.endswith() functions implicitly
     # decode with ascii. This fails in case of non-ascii characters. As in
