@@ -587,7 +587,7 @@ class AlignmentDataCollectorDialog(wx.Dialog):
         l_values: list,
         s_values: list,
         z_values: list,
-    ) -> Tuple[numpy.ndarray, list[int]]:
+    ) -> Tuple[numpy.ndarray, List[int]]:
         """
         Generates an acquisition path by traversing concentric shells around the
         aligned mirror position. Uses a triple snake pattern to minimize movement:
