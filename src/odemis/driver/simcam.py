@@ -190,7 +190,7 @@ class Camera(model.DigitalCamera):
                     and hasattr(spectrograph, "axes")
                     and isinstance(spectrograph.axes, dict)
                     and "goffset" in spectrograph.axes):
-                raise ValueError((f"spectrograph {spectrograph} must have a 'goffset' attribute"))
+                raise ValueError(f"spectrograph {spectrograph} must have a 'goffset' attribute")
 
             self._spectrograph = spectrograph
             logging.debug("Will simulate spectral peaks using spectrograph %s", spectrograph.name)
@@ -215,7 +215,8 @@ class Camera(model.DigitalCamera):
         self._error_creation_thread.daemon = True
         self._error_creation_thread.start()
 
-        self._min_val = self._img.min()
+        self._min_val = self._img.min().tolist()
+        self._max_val = self._img.max().tolist()
 
     def _setBinning(self, value):
         """
@@ -334,16 +335,6 @@ class Camera(model.DigitalCamera):
         else:
             img = gen_img
 
-        # Simulate changing the exposure time exp/self._orig_exp (without overflow, but clipping)
-        orig_dtype = img.dtype
-        img = img * float(exp/self._orig_exp)  # forces to a float dtype, so that it doesn't overflow
-        # Revert to original type, with data clipped
-        if orig_dtype.kind in "biu":
-            idtype = numpy.iinfo(orig_dtype)
-            img = img.clip(idtype.min, idtype.max).astype(orig_dtype)
-        else:  # float
-            img = img.astype(orig_dtype)
-
         img = model.DataArray(img, metadata)
 
         # send the new image (if anyone is interested)
@@ -383,7 +374,7 @@ class Camera(model.DigitalCamera):
         """
         self._img = new_img
 
-    def _simulate(self):
+    def _simulate(self) -> model.DataArray:
         """
         Simulate the image based on the current settings of the camera.
         If a mirror is defined, use ray tracing to simulate the image.
@@ -402,12 +393,11 @@ class Camera(model.DigitalCamera):
         stage_shift = pos[0] / pxs[0], -pos[1] / pxs[1]  # Y goes opposite
 
         if self._mirror:
-            eff_pixel_size = [p * b for p, b in zip(pixel_size, binning)]
             self._img_simulator.resolution.value = res
-            self._img_simulator.pixel_size.value = eff_pixel_size
+            self._img_simulator.pixel_size.value = pixel_size
             sim_img = self._img_simulator.simulate(self._mirror.position.value)
-            self._img = model.DataArray(sim_img, self._img.metadata)
-            sim_img = self._img.copy()
+            sim_img = model.DataArray(sim_img, self._img.metadata)
+            self._max_val = sim_img.max().tolist()
         else:
             # First and last index (eg, 0 -> 255)
             ltrb = [center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0],
@@ -435,8 +425,8 @@ class Camera(model.DigitalCamera):
                      [int(round(ltrb[1] + i * binning[1])) for i in range(res[1])])
             sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
 
-        # spectrograph peak simulation
-        if self._spectrograph:
+        # spectrograph peak simulation (if at 0th order)
+        if self._spectrograph and self._spectrograph.position.value["wavelength"] < 10e-9:
             current_offset = self._spectrograph.position.value["goffset"]
 
             ccd_center_x = self._img_res[0] / 2  # find the x-coordinate of the center of the ccd
@@ -450,19 +440,29 @@ class Camera(model.DigitalCamera):
                          x0_px, roi_left, peak_center_binned)
 
             width_binned = PEAK_WIDTH / bin_x
-
             peak = simulate_peak(amplitude=20000, x0=peak_center_binned, width=width_binned,
-                                shape=sim_img.shape, dtype=sim_img.dtype)
+                                 shape=sim_img.shape, dtype=sim_img.dtype)
 
             # simulation routine
             sim_img = (peak + self._min_val).astype(self._img.dtype, copy=False)
+            sim_img = model.DataArray(sim_img)
 
-            # define max noise amplitude
-        mx = self._img.max()
-        noise_max = max(mx // 100, 10)
+        # Simulate changing the exposure time exp/self._orig_exp (without overflow, but clipping)
+        exp = self.exposureTime.value
+        orig_dtype = sim_img.dtype
+        sim_img = sim_img * float(exp / self._orig_exp)  # forces to a float dtype, so that it doesn't overflow
+        # Revert to original type, with data clipped
+        if orig_dtype.kind in "iu":
+            idtype = numpy.iinfo(orig_dtype)
+            sim_img = sim_img.clip(idtype.min, idtype.max).astype(orig_dtype)
+        else:  # float
+            sim_img = sim_img.astype(orig_dtype)
 
-            # generate noise and add directly
-        noise = numpy.random.randint(0, noise_max, sim_img.shape, dtype=self._img.dtype)
+        # define max noise amplitude
+        noise_max = max(self._max_val // 100, 10)
+
+        # generate noise and add directly
+        noise = numpy.random.randint(0, noise_max, sim_img.shape, dtype=sim_img.dtype)
 
         # final clamp to prevent overflow
         dt_info = numpy.iinfo(sim_img.dtype) if numpy.issubdtype(sim_img.dtype, numpy.integer) else numpy.finfo(sim_img.dtype)

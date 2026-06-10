@@ -34,6 +34,14 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = simcam.Camera
 KWARGS_FOCUS = {"name": "focus", "role": "overview-focus", "axes": ["z"], "ranges": {"z": [0, 0.012]}}
+KWARGS_SPECTROGRAPH = {"name": "spectrograph", "role": "spectrograph",
+                       "axes": ["wavelength", "goffset"],
+                       "ranges": {"wavelength": (0, 1e-6), "goffset": (-1000, 1000)}}
+KWARGS_MIRROR = {"name": "mirror", "role": "mirror",
+                 "axes": ["x", "y", "z"],
+                 "ranges": {"x": (-5e-3, 5e-3), "y": (-5e-3, 5e-3), "z": (-5e-3, 5e-3)}}
+POS_MIRROR_GOOD = {"x": 1e-6, "y": -20e-6, "z": 1e-3}
+POS_MIRROR_NEAR = {"x": 1e-6, "y": -19e-6, "z": 1.01e-3}
 KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
 KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h5")
 KWARGS_MOVE = dict(name="camera", role="ccd", image="songbird-sim-ccd.h5", max_res=(300, 350))
@@ -456,6 +464,51 @@ class TestSimCamWithPolarization(unittest.TestCase):
         testing.assert_array_not_equal(im_horizontal, im_vertical)
 
 
+class TestSimCamMirror(unittest.TestCase):
+    """
+    Test the Camera "mirror" dependency, which activates ParabolicMirrorRayTracer-based
+    image simulation instead of the standard background image crop.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.focus = simulated.Stage(**KWARGS_FOCUS)
+        cls.mirror = simulated.Stage(**KWARGS_MIRROR)
+        cls.mirror.updateMetadata({model.MD_FAV_POS_ACTIVE: POS_MIRROR_GOOD})
+        cls.camera = CLASS(dependencies={"focus": cls.focus, "mirror": cls.mirror},
+                           **KWARGS_MOVE)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.camera.terminate()
+        cls.mirror.terminate()
+
+    def setUp(self) -> None:
+        self.camera.binning.value = (1, 1)
+        self.camera.resolution.value = self.camera.resolution.range[1]
+        self.camera.exposureTime.value = 0.05
+        # Reset mirror to the aligned (good) position.
+        self.mirror.moveAbsSync(POS_MIRROR_GOOD)
+
+    def test_acquire(self) -> None:
+        """
+        Verify that an image can be acquired when the mirror dependency is active,
+        and that it is a DataArray with the expected dtype.
+        """
+        image = self.camera.data.get(asap=False)
+
+        self.assertIsInstance(image, model.DataArray)
+        self.assertEqual(image.shape, self.camera.resolution.value[::-1])
+        self.assertEqual(image.dtype, numpy.uint16)
+        self.assertGreater(image.max(), 0, "Ray-traced image should contain non-zero values")
+
+        self.mirror.moveAbsSync(POS_MIRROR_NEAR)
+        image = self.camera.data.get(asap=False)
+        self.assertIsInstance(image, model.DataArray)
+        self.assertEqual(image.shape, self.camera.resolution.value[::-1])
+        self.assertEqual(image.dtype, numpy.uint16)
+
+
 class TestSimCamSpectrograph(unittest.TestCase):
 
     @classmethod
@@ -463,29 +516,31 @@ class TestSimCamSpectrograph(unittest.TestCase):
         """
         Validate spectrograph goffset peak simulation in SimCam.
         """
-
-        class MockSpectrograph(model.Component):
-            def __init__(self, name="mock_spectrograph"):
-                super().__init__(name)
-                self.axes = {"goffset": None}
-                self.position = type('obj', (object,), {'value': {"goffset": 0.0}})()
-
         cls.focus = simulated.Stage(**KWARGS_FOCUS)
-        cls.mock_spectrograph = MockSpectrograph()
+        cls.spectrograph = simulated.Stage(**KWARGS_SPECTROGRAPH)
 
-        cls.camera = CLASS(dependencies={"focus": cls.focus, "spectrograph": cls.mock_spectrograph},
+        # Place spectrograph at 0th order (wavelength=0.0, goffset=0.0).
+        # Direct position update avoids waiting for slow simulated movements.
+        cls.spectrograph._position["wavelength"] = 0.0
+        cls.spectrograph._position["goffset"] = 0.0
+        cls.spectrograph._updatePosition()
+
+        cls.camera = CLASS(dependencies={"focus": cls.focus, "spectrograph": cls.spectrograph},
                                **KWARGS_MOVE)
 
     @classmethod
     def tearDownClass(cls) -> None:
         cls.camera.terminate()
+        cls.spectrograph.terminate()
 
     def setUp(self) -> None:
         self.camera.binning.value = (1, 1)
         self.camera.translation.value = (0, 0)
         self.camera.resolution.value = self.camera.resolution.range[1]
         self.camera.exposureTime.value = 0.05
-        self.mock_spectrograph.position.value["goffset"] = 0.0
+        self.spectrograph._position["wavelength"] = 0.0
+        self.spectrograph._position["goffset"] = 0.0
+        self.spectrograph._updatePosition()
         time.sleep(0.1)
 
     def _find_peak(self, image: numpy.ndarray) -> Tuple[float, float, float]:
@@ -510,16 +565,51 @@ class TestSimCamSpectrograph(unittest.TestCase):
 
         return weighted_average, p_max, profile.mean()
 
+    def test_standard_image_at_nonzero_wavelength(self):
+        """
+        Test that when wavelength is non-zero (e.g. 500 nm), the standard
+        background image is returned instead of the peak-simulated image.
+
+        The peak image (wavelength=0.0) has a narrow bright column giving a high
+        max-to-mean ratio on the column profile. The standard image has a uniform
+        profile with a ratio close to 1.
+        """
+        # At wavelength=0.0 (0th order), sim_img is replaced by a narrow Gaussian peak.
+        image_peak = self.camera.data.get(asap=False)
+
+        # At wavelength=500e-9 the peak simulation is skipped and sim_img is a
+        # crop of the standard _img.
+        self.spectrograph._position["wavelength"] = 500e-9
+        self.spectrograph._updatePosition()
+        image_standard = self.camera.data.get(asap=False)
+
+        def _profile_ratio(image: numpy.ndarray) -> float:
+            """Return the max-to-mean ratio of the column profile."""
+            profile = image.astype(float).mean(axis=0)
+            return float(profile.max() / profile.mean())
+
+        ratio_peak = _profile_ratio(image_peak)
+        ratio_standard = _profile_ratio(image_standard)
+
+        # Peak image has a narrow bright column: ratio should be >> 1.
+        self.assertGreater(ratio_peak, 5,
+                           "Peak image should have a high max/mean profile ratio")
+        # Standard image has a uniform profile: ratio should be close to 1.
+        self.assertLess(ratio_standard, 2,
+                        "Standard image should have a low max/mean profile ratio")
+
     def test_spectrograph_with_goffset(self):
         move = 300
         expected_ratio = 0.25
 
-        self.mock_spectrograph.position.value["goffset"] = 0.0
+        self.spectrograph._position["goffset"] = 0.0
+        self.spectrograph._updatePosition()
         image_0 = self.camera.data.get()
         date_0 = image_0.metadata[model.MD_ACQ_DATE]
 
         # change offset
-        self.mock_spectrograph.position.value["goffset"] = move
+        self.spectrograph._position["goffset"] = move
+        self.spectrograph._updatePosition()
 
         # obtain new image
         image_new = self.camera.data.get(asap=False)
