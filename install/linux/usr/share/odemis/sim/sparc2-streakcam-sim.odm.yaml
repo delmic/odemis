@@ -239,11 +239,13 @@
     affects: ["SEM E-beam", "Streak Readout CCD", "SEM Detector", "CL Detector", "EBIC"],
 }
 
-# simple simulated streak camera
+# Streak camera simulator using the HPDTASim (RemoteEx protocol)
 "Streak Camera": {
-    class: simstreakcam.StreakCamera,
+    class: hamamatsurx.StreakCamera,
     role: streak-cam,
     init: {
+        host: "fake-synchroscan",  # starts a local HPDTA simulator
+        port: 11001,
     },
     children: {
         readoutcam: "Streak Readout CCD",
@@ -255,31 +257,13 @@
     },
 }
 
-# for testing with real HW
-#"Streak Camera": {
-#    class: hamamatsurx.StreakCamera,
-#    role: streak-cam,
-#    init: {
-#        host: "172.16.4.2",  # Braunschweig System
-#        port: 1001
-#    },
-#    children: {
-#        readoutcam: "Streak Readout CCD",
-#        delaybox: "Streak Delay Generator",
-#        streakunit: "Streak Unit"
-#    },
-#    dependencies: {
-#        spectrograph: "Spectrograph"
-#    },
-#}
-
 "Streak Readout CCD": {
     role: streak-ccd,
     init: {
-        image: "sparc-ar-mirror-align.h5",  # only for simulator!  TODO replace with streak image
-#       device: 0,
         transp: [-1, 2], # if mirrored on X axis
+        can_photon_counting: true,
     },
+    dependencies: {spectrograph: "Spectrograph"},
     metadata: {
         CALIB: {"intensity_limit": 50000},  # counts/s, high max to not trigger easily the safety check
     },
@@ -288,7 +272,14 @@
 "Streak Unit": {
     role: streak-unit,
     init: {
-#        settings_ini: "C:\ProgramData\Hamamatsu\HPDTA\SingleSweep.ini" # path of the .ini file for HPDTA to run
+        # Arbitrary value -> range
+        "time_ranges": {
+            1: 78.e-12,
+            2: 235.e-12,
+            3: 720.e-12,
+            4: 1600.e-12,
+            5: 3600.e-12,
+        },
     },
     affects: ["Streak Readout CCD"],
 }
