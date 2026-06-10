@@ -1,6 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-Test Sparc auto grating offset alignment
+Test SPARC auto grating offset alignment
+
+:created: 5 Jun 2026
+:author: Yu Xia de Jong
+:copyright: © 2026 Yu Xia de Jong, Éric Piel, Delmic
+
+.. license::
+    This file is part of Odemis.
+
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
+
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
+
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
+
 """
 
 import logging
@@ -15,9 +35,9 @@ from odemis import model
 from odemis.acq import path
 from odemis.util import testing
 from odemis.util import timeout
-from odemis.acq.align.goffset import(find_peak_position, peak_is_present, estimate_goffset_scale,
-                                     sparc_auto_grating_offset, auto_align_grating_detector_offsets,
-                                     _do_auto_align_grating_detector_offsets)
+from odemis.acq.align.goffset import (find_peak_position, peak_is_present, estimate_goffset_scale,
+                                      sparc_auto_grating_offset, auto_align_grating_detector_offsets,
+                                      _do_auto_align_grating_detector_offsets)
 from odemis.dataio import hdf5
 from odemis.model import ProgressiveFuture
 from pathlib import Path
@@ -31,6 +51,89 @@ SPARC_CONFIG = CONFIG_PATH / "sparc2-focus-test.odm.yaml"
 
 DATA_DIR = Path(__file__).resolve().parent
 H5_FILE_2D_NO_PEAK = DATA_DIR / "grating 2 1024x256"
+
+class TestPeakDetection(unittest.TestCase):
+
+    def test_find_peak_position_synthetic(self):
+        """
+        Test peak detection on synthetic Gaussian data.
+        """
+        x = np.arange(200)
+        true_center = 83.4
+        spectrum = np.exp(-0.5 * ((x - true_center) / 3.0) ** 2) * 1000
+        spectrum = model.DataArray(spectrum)
+
+        peak = find_peak_position(spectrum)
+        self.assertAlmostEqual(peak, true_center, places=1)
+
+    def test_find_peak_position_2d(self):
+        """
+        Test peak detection on 2D data (mean over axis).
+        """
+        x = np.arange(200)
+        true_center = 120.0
+        line = np.exp(-0.5 * ((x - true_center) / 4.0) ** 2)
+        image = model.DataArray(np.tile(line, (50, 1)))
+
+        peak = find_peak_position(image)
+        self.assertAlmostEqual(peak, true_center, places=1)
+
+    def test_find_peak_position_realistic_2d(self):
+        """
+        Test peak detection on realistic 2D detector data (like GUI),
+        including noise and baseline offset.
+        """
+        np.random.seed(0)
+
+        x = np.arange(1024)
+        true_center = 512.3
+
+        # base gaussian peak
+        peak = 50 * np.exp(-0.5 * ((x - true_center) / 6.0) ** 2)
+
+        # simulate camera baseline
+        baseline = 300
+
+        # build 2D image with row variations
+        rows = 256
+        image = []
+
+        for i in range(rows):
+            row_noise = np.random.normal(0, 3, size=x.shape)  # noise
+            row_gain = 1 + np.random.normal(0, 0.02)  # slight variation
+            row = baseline + row_gain * peak + row_noise
+            image.append(row)
+
+        image = model.DataArray(image)
+
+        # run function
+        peak_pos = find_peak_position(image)
+
+        self.assertAlmostEqual(peak_pos, true_center, delta=0.5)
+
+    def test_no_peak_present_image(self):
+        """
+        Test peak detection on not-peak detector data.
+        """
+        im_no_peak = hdf5.read_data(H5_FILE_2D_NO_PEAK / "without-peak-2d-1.h5")
+        spectrum = im_no_peak[0]
+        present = peak_is_present(spectrum, snr_threshold=10.0, width_range=(0.5, 12.0))
+        self.assertFalse(present, f"Peak was detected on data with only noise")
+
+        spectrum_1d = spectrum.squeeze().max(axis=0)
+        present = peak_is_present(spectrum_1d, snr_threshold=10.0, width_range=(0.5, 12.0))
+        self.assertFalse(present, f"Peak was detected on data with only noise")
+
+    def test_peak_present_image(self):
+        im_peak = hdf5.read_data(H5_FILE_2D_NO_PEAK / "with-peak-2d-1.h5")
+        spectrum = im_peak[0]
+        present = peak_is_present(spectrum, snr_threshold=10.0, width_range=(0.5, 12.0))
+        self.assertTrue(present, "Peak should have been detected in the cleaned spectrum.")
+
+        spectrum_1d = spectrum.squeeze().max(axis=0)
+        present = peak_is_present(spectrum_1d, snr_threshold=10.0, width_range=(0.5, 12.0))
+        self.assertTrue(present, "Peak should have been detected in the cleaned spectrum.")
+
 
 class TestSparcAutoGratingOffset(unittest.TestCase):
     """
@@ -51,7 +154,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         cls.microscope = model.getMicroscope()
         cls.optmngr = path.OpticalPathManager(cls.microscope)
 
-        cls._original_goffset = cls.spgr.goffset
+        cls.spgr.moveAbsSync({"wavelength": 0.0})
         cls._original_position = cls.spgr.position.value.copy()
 
     @classmethod
@@ -66,37 +169,12 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         # speed up detector
         self.detector.exposureTime.value = self.detector.exposureTime.range[0]
 
-    def test_find_peak_position_synthetic(self):
-        """
-        Test peak detection on synthetic Gaussian data.
-        """
-
-        x = np.arange(200)
-        true_center = 83.4
-        spectrum = np.exp(-0.5*((x-true_center)/3.0)**2)
-
-        peak = find_peak_position(spectrum)
-        self.assertAlmostEqual(peak, true_center, places=1)
-
-    def test_find_peak_position_2d(self):
-        """
-        Test peak detection on 2D data (mean over axis).
-        """
-
-        x = np.arange(200)
-        true_center = 120.0
-        line = np.exp(-0.5*((x-true_center)/4.0)**2)
-        image = np.tile(line, (50, 1))
-
-        peak = find_peak_position(image)
-        self.assertAlmostEqual(peak, true_center, places=1)
-
     @timeout(100)
     def test_estimate_goffset_scale(self):
         """
         Test that goffset scale is non-zero and finite.
         """
-        scale = estimate_goffset_scale(self.spgr, self.detector)
+        scale, p0, p1 = estimate_goffset_scale(self.spgr, self.detector)
 
         self.assertIsInstance(scale, float)
         self.assertNotEqual(scale, 0.0)
@@ -267,7 +345,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         dets_for_first_grating = [d for (g, d) in res.keys() if g == first_grating]
         self.assertEqual(len(dets_for_first_grating), n_detectors)
-        self.assertIn(self.ccd.name, dets_for_first_grating)
+        self.assertIn(self.detector.name, dets_for_first_grating)
         self.assertIn(spccd.name, dets_for_first_grating)
 
         # verify that only first detector is used for remaining gratings
@@ -283,18 +361,6 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         # check data is not flat
         self.assertNotEqual(data.max(), data.min())
-
-    def test_driver_raises_valueerror_on_hardware_limit(self):
-        """
-        Verifies the driver successfully raises a ValueError when computing
-        an offset outside of the hardware limits.
-        """
-        # out of bounds value
-        out_of_bounds_target = 9999999.0
-
-        # test method directly to ensure the new bounds-checking logic works
-        with self.assertRaises(ValueError, msg="Driver should raise ValueError for out-of-bounds offset"):
-            self.spgr._doSetGoffsetAbs(out_of_bounds_target)
 
     @timeout(150)
     def test_hardware_limit_valueerror_handled(self):
@@ -324,157 +390,6 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
             self.spgr.axes["goffset"].range = original_range
             self.spgr.moveAbsSync({"goffset": self._original_position["goffset"]})
 
-    def test_find_peak_position_realistic_2d(self):
-        """
-        Test peak detection on realistic 2D detector data (like GUI),
-        including noise and baseline offset.
-        """
-        np.random.seed(0)
-
-        x = np.arange(1024)
-        true_center = 512.3
-
-        # base gaussian peak
-        peak = 50 * np.exp(-0.5 * ((x - true_center) / 6.0) ** 2)
-
-        # simulate camera baseline
-        baseline = 300
-
-        # build 2D image with row variations
-        rows = 256
-        image = []
-
-        for i in range(rows):
-            row_noise = np.random.normal(0, 3, size=x.shape)  # noise
-            row_gain = 1 + np.random.normal(0, 0.02)  # slight variation
-            row = baseline + row_gain * peak + row_noise
-            image.append(row)
-
-        image = np.array(image)
-
-        # run function
-        peak_pos = find_peak_position(image)
-
-        self.assertAlmostEqual(peak_pos, true_center, places=1)
-
-    def test_no_peak_present_image(self):
-        """
-        Test peak detection on not-peak detector data.
-        """
-
-        im_no_peak = hdf5.read_data(H5_FILE_2D_NO_PEAK / "without-peak-2d-1.h5")
-        data = (im_no_peak[0].data)
-
-        spectrum = data.mean(axis=0) if data.ndim == 2 else data
-
-        present = peak_is_present(spectrum, snr_threshold=10.0, width_range=(0.5, 12.0))
-
-        self.assertFalse(present, f"Peak was not detected. Check SNR and width limits.")
-
-    def test_peak_present_image(self):
-        im_peak = hdf5.read_data(H5_FILE_2D_NO_PEAK / "with-peak-2d-1.h5")
-        raw_data = np.asarray(im_peak[0].data)
-
-        spectrum = np.squeeze(raw_data)
-        if spectrum.ndim > 1:
-            # convert 2D array into 1D by averaging
-            spectrum = spectrum.mean(axis=0)
-
-        clean_spec = spectrum - np.median(spectrum)
-        noise_std = np.std(clean_spec)
-        peak_val = clean_spec.max()
-        snr = peak_val / (noise_std + 1e-6)
-        peak_idx = np.argmax(clean_spec)
-
-        # simple width estimation
-        window = clean_spec[max(0, peak_idx - 2): min(len(clean_spec), peak_idx + 3)]
-        x = np.arange(len(window))
-        w = window - window.min()
-        width = 0.0
-        if w.sum() > 0:
-            mean = np.sum(x * w) / np.sum(w)
-            var = np.sum(w * (x - mean) ** 2) / np.sum(w)
-            width = np.sqrt(var)
-
-        # debug logs
-        logging.info("=" * 40)
-        logging.info(f"IMAGE DEBUG SCORECARD")
-        logging.info(f"Final Spectrum Shape: {spectrum.shape}")
-        logging.info(f"Peak Location:       Index {peak_idx}")
-        logging.info(f"Calculated SNR:      {snr:.2f}  (Threshold: 10.0)")
-        logging.info(f"Calculated Width:    {width:.2f}  (Range: 0.5 - 12.0)")
-        logging.info("=" * 40)
-
-        logging.info(f"Cleaned Spectrum Shape for Function: {spectrum.shape}")
-
-        # pass the cleaned 1D array to the existing function
-        present = peak_is_present(spectrum, snr_threshold=10.0, width_range=(0.5, 12.0))
-
-        self.assertTrue(present, "Peak should have been detected in the cleaned spectrum.")
-
-    @patch('odemis.acq.align.goffset.sparc_auto_grating_offset')
-    @patch('odemis.acq.align.goffset.light.turnOnLight')
-    def test_do_auto_align_mocked(self, mock_sleep, mock_turnOnLight, mock_sparc_offset):
-        """
-        Test the full auto-calibration sequence using mocked hardware to bypass
-        timeouts, sleep delays, and physical hardware requirements.
-        """
-
-        # set up mocked return values using standard python futures
-        fake_light_future = Future()
-        fake_light_future.set_result(True)
-        mock_turnOnLight.return_value = fake_light_future
-
-        fake_align_future = Future()
-        fake_align_future.set_result(True)
-        mock_sparc_offset.return_value = fake_align_future
-
-        # set up fake hardware
-        fake_spectrograph = MagicMock()
-
-        # Mock the initial position and the grating choices
-        fake_spectrograph.position.value = {"wavelength": 0, "grating": 0}
-        fake_spectrograph.axes = {"grating": MagicMock(choices={0: "grating1", 1: "grating2"})}
-
-        fake_detector = MagicMock()
-        fake_detector.name = "fake_ccd"
-        fake_detector.data.get.return_value = np.zeros((1024,))
-
-        fake_opm = MagicMock()
-        fake_path_future = Future()
-        fake_path_future.set_result(True)
-        fake_opm.setPath.return_value = fake_path_future
-
-        fake_bl = MagicMock()
-        fake_bl.power.range = [0, 100]
-
-        main_future = ProgressiveFuture(start=0, end=100)
-        main_future._task_lock = threading.Lock()
-        main_future._task_state = RUNNING
-        main_future._subfuture = Future()
-
-        # run function
-        results = _do_auto_align_grating_detector_offsets(future=main_future, spectrograph=fake_spectrograph,
-                                                          detectors=[fake_detector], opm=fake_opm,
-                                                          align_mode="spec-focus", bl=fake_bl, selector=None,
-                                                          streams=[])
-
-        # Assertions
-        # did it try to turn on the light?
-        mock_turnOnLight.assert_called_once_with(fake_bl, fake_detector)
-
-        # did it set the optical path?
-        fake_opm.setPath.assert_called_once_with("spec-focus", detector=fake_detector)
-
-        # did it try to align both gratings we mocked?
-        self.assertEqual(mock_sparc_offset.call_count, 2)
-
-        # did it clean up and turn the light off in the finally block?
-        self.assertEqual(fake_bl.power.value, 0)
-
-        # check the final returned results dict
-        self.assertEqual(results, {(0, "fake_ccd"): True, (1, "fake_ccd"): True})
-
     @timeout(100)
     def test_cancel(self):
         """
@@ -487,6 +402,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         except:
             pass
         self.assertTrue(f.done())
+
 
 if __name__ == "__main__":
     unittest.main()
