@@ -67,6 +67,21 @@ DELAY_NAMES = {
     "Delay H": "delayH",
 }
 
+# Commands that can be passed to queue_img as Tuple[CMD_*, ...].
+# For CMD_IMG, the extra elements are the image event arguments (previously passed as a list).
+# For all other commands, no extra arguments are passed.
+CMD_QUIT = "Q"
+CMD_STOP = "F"
+CMD_SW_TRIGGER = "T"
+CMD_IMG = "I"
+CMD_START = "S"
+
+
+class TerminationRequested(Exception):
+    """
+    Acquisition thread termination requested.
+    """
+    pass
 
 class RemoteExError(IOError):
     def __init__(self, errno, *args, **kwargs):
@@ -98,15 +113,17 @@ class ReadoutCamera(model.DigitalCamera):
     Represents Hamamatsu readout camera.
     """
 
-    def __init__(self, name, role, parent,
+    def __init__(self, name: str, role: str, parent: model.HwComponent,
                  spectrograph: Optional[model.HwComponent] = None,
+                 can_photon_counting: bool = False,
                  **kwargs):
         """ Initializes the Hamamatsu OrcaFlash readout camera.
-        :param name: (str) as in Odemis
-        :param role: (str) as in Odemis
+        :param name: as in Odemis
+        :param role: as in Odemis
         :param parent: class StreakCamera
         :param spectrograph: should provide .position and getPixelToWavelength() to
         obtain the wavelength list.
+        :param can_photon_counting: whether the camera supports photon counting
         :param transp: (int, int) transpose the resolution from the camera to the user (see Detector)
         """
         self.parent = parent
@@ -192,10 +209,35 @@ class ReadoutCamera(model.DigitalCamera):
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
 
         range_exp = self._getCamExpTimeRange()
-        self._exp_time = self.GetCamExpTime()
-        self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
+        exp_time = self.GetCamExpTime()
+        self.exposureTime = model.FloatContinuous(exp_time, range_exp, unit="s", setter=self._setCamExpTime)
         self._metadata[model.MD_EXP_TIME] = self.exposureTime.value
         # Note: timeRange of streakunit > exposureTime readoutcam is possible and okay.
+
+        if can_photon_counting:
+            # When set, the photon-counting procedure is used to do acquisition.
+            # Changing while acquiring is not supported.
+            self.photonCounting = model.BooleanVA(False, setter=self._set_photon_counting)
+            # Number of exposures during photon-counting. It has no effect when photon-counting acquisition
+            # is disabled.
+            count_range = self._get_exposure_count_range()
+            integ_count = self._get_exposure_count()
+            self.pcIntegrationCounts = model.IntContinuous(integ_count, count_range, unit="",
+                                                           setter=self._set_exposure_count)
+            # Dedicated exposure time for photon-counting mode
+            range_exp = self._get_pc_exp_time_range()
+            exp_time = self._get_pc_exp_time()
+            self.pcExposureTime = model.FloatContinuous(exp_time, range_exp, unit="s", setter=self._set_pc_exp_time)
+
+            theshold_range = self._get_threshold_range()
+            threshold = self._get_pc_threshold()
+            self.pcThreshold = model.IntContinuous(threshold, theshold_range, unit="counts", setter=self._set_pc_threshold)
+
+            # Refresh regularly the values. Only done for photon-counting values, because these
+            # values are typically modified directly in HPDTA by the user during calibration.
+            self._va_poll = util.RepeatingTimer(5, self._update_settings,
+                                                "Readout cam settings polling")
+            self._va_poll.start()
 
         self.readoutRate = model.VigilantAttribute(425000000, unit="Hz", readonly=True)  # MHz
         self._metadata[model.MD_READOUT_TIME] = 1 / self.readoutRate.value  # s
@@ -209,10 +251,11 @@ class ReadoutCamera(model.DigitalCamera):
         self._sync_event = None
         self.softwareTrigger = model.Event()
         # queue events starting an acquisition (advantageous when event.notify is called very fast)
-        self.queue_events = collections.deque()
+        self._queue_events = collections.deque()
         self._acq_sync_lock = threading.Lock()
 
         self.t_image = None  # thread for reading images from the RingBuffer
+        self._update_monitor_mode(False)
 
         self.data = StreakCameraDataFlow(self._start, self._stop, self._sync)
 
@@ -224,8 +267,18 @@ class ReadoutCamera(model.DigitalCamera):
 
         # terminate image thread
         if self.t_image and self.t_image.is_alive():
-            self.parent.queue_img.put(None)  # Special message to request end of the thread
+            self.parent.queue_img.put((CMD_QUIT,))  # Special message to request end of the thread
             self.t_image.join(5)
+
+        # Just in case the acquisition thread failed, directly stop the acquisition
+        try:
+            self.parent.AcqStop()
+        except Exception:
+            pass
+
+        if self._va_poll.is_alive():
+            self._va_poll.cancel()
+            self._va_poll.join(1)
 
         super().terminate()
 
@@ -241,6 +294,31 @@ class ReadoutCamera(model.DigitalCamera):
             del self._metadata[model.MD_WL_LIST]  # remove WL list from MD if empty
         else:
             self._metadata[model.MD_WL_LIST] = wll
+
+    def _update_settings(self) -> None:
+        """
+        Read the photon-counting settings from HPDTA and reflect them on the VAs
+        """
+        logging.debug("Updating readout cam photon-counting settings")
+        try:
+            exp_time = self._get_pc_exp_time()
+            if exp_time != self.pcExposureTime.value:
+                self.pcExposureTime._value = exp_time
+                self.pcExposureTime.notify(exp_time)
+
+            count = self._get_exposure_count()
+            if count != self.pcIntegrationCounts.value:
+                self.pcIntegrationCounts._value = count
+                self.pcIntegrationCounts.notify(count)
+
+            threshold = self._get_pc_threshold()
+            if threshold != self.pcThreshold.value:
+                self.pcThreshold._value = threshold
+                self.pcThreshold.notify(threshold)
+
+        except Exception:
+            logging.exception("Unexpected failure when polling photon-counting settings")
+
 
     def _getReadoutCamBinningChoices(self):
         """
@@ -283,9 +361,10 @@ class ReadoutCamera(model.DigitalCamera):
         # If camera is acquiring, it is essential to stop cam first and then change binning.
         # Currently, this only affects the Alignment tab, where camera is continuously acquiring.
         if self.data.active:  # Note: not thread save -> change # TODO use update_settings()
+            self._stop()
             self.parent.AcqStop()
             self.parent.CamParamSet("Setup", "Binning", binning)
-            self.parent.StartAcquisition("Live")
+            self._start()
         else:
             self.parent.CamParamSet("Setup", "Binning", binning)
 
@@ -326,15 +405,40 @@ class ReadoutCamera(model.DigitalCamera):
 
         return res
 
+    def _set_photon_counting(self, value: bool) -> bool:
+        """
+        Sets the photon-counting mode for the camera.
+        :param value: (bool) True to enable photon-counting, False to disable
+        :return: current photon-counting mode
+        """
+        if value == self.photonCounting.value:
+            return value
+
+        if self.data.active:
+            # We could support it, but it's a lot of extra complexity to the code, and in reality, never used.
+            logging.warning("Photon-counting mode changed to %s while acquiring: not supported", value)
+
+        # On HPDTA, the exposure time is different setting in photon-counting mode. Typically, in
+        # photon-counting mode, a very short exposure time is used.
+        # TODO: To make it easier for the user, automatically read the exposure time corresponding
+        # to the mode, and switch the value of exposureTime. BUT that only works if the .exposureTime
+        # doesn't set always both exposure times!
+        # However, it can be annoying to automatically set back previous settings, as the order
+        # would matter (ie, photonCounting must be set first, otherwise it resets the exposure Time)
+
+        return value
+
     def _getCamExpTimeRange(self):
         """
         Get min and max values for the camera exposure time.
         :return: tuple containing min and max exposure time
         """
-        exp = self.parent.CamParamInfoEx("Live", "Exposure")  # returns list
-        # Values in returned list "exp" are in order. 1st - 4th values see CamParamInfoEx.
-        min_value = exp[4]
-        max_value = exp[-1]
+        # Although it returns list of possible exposure times, any value between the smallest and
+        # largest value is accepted.
+        exp = self.parent.CamParamInfoEx("Live", "Exposure")
+        # Values in returned list "exp" are in order.
+        min_value = exp[4]  # First exposure time, eg "1200 us"
+        max_value = exp[-1]  # Last/longest exposure time, eg "1 s"
 
         min_value_raw, min_unit = min_value.split(' ')[0:2]
         max_value_raw, max_unit = max_value.split(' ')[0:2]
@@ -344,7 +448,7 @@ class ReadoutCamera(model.DigitalCamera):
 
         return min_exp, max_exp
 
-    def GetCamExpTime(self):
+    def GetCamExpTime(self) -> float:
         """
         Get the camera exposure time.
         Converts the provided value received from RemoteEx into sec.
@@ -354,13 +458,13 @@ class ReadoutCamera(model.DigitalCamera):
         try:
             exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
         except Exception:
-            raise IOError("Exposure time of %s is not supported for read-out camera." % exp_time_raw)
+            raise IOError("Exposure time of %s failed to be converted to a float" % exp_time_raw)
 
         return exp_time
 
-    def _setCamExpTime(self, value):
+    def _setCamExpTime(self, value: float) -> float:
         """
-        Set the camera exposure time.
+        Set the camera exposure time in photon-counting mode.
         Converts the time range in sec into a for RemoteEx readable format.
         :param value: (float) exposure time to be set
         :return: (float) current exposure time
@@ -372,11 +476,145 @@ class ReadoutCamera(model.DigitalCamera):
 
         # Note: RemoteEx uses different exposure times depending on acquisition mode
         # If we support e.g. photon counting, we need to specify a different location in RemoteEx.
-        # For now location is always "Live"
+        # See pcExposureTime.
         self.parent.CamParamSet("Live", "Exposure", exp_time_raw)
-        self._metadata[model.MD_EXP_TIME] = value  # update MD
 
-        return value
+        # Although it is associated to a list, almost any value is accepted, with just a small rounding.
+        exp_time = self.GetCamExpTime()
+        return exp_time
+
+    def _get_pc_exp_time_range(self) -> Tuple[float, float]:
+        """
+        Get min and max values for the camera exposure time.
+        :return: tuple containing min and max exposure time
+        """
+        exp = self.parent.CamParamInfoEx("PC", "Exposure")  # returns list of possible exposure times
+        # Values in returned list "exp" are in order.
+        min_value = exp[4]  # First exposure time, eg "1200 us"
+        max_value = exp[-1]  # Last/longest exposure time, eg "1 s"
+
+        min_value_raw, min_unit = min_value.split(' ')[0:2]
+        max_value_raw, max_unit = max_value.split(' ')[0:2]
+
+        min_exp = self.parent.convertUnit2Time(min_value_raw, min_unit)
+        max_exp = self.parent.convertUnit2Time(max_value_raw, max_unit)
+
+        return min_exp, max_exp
+
+    def _get_pc_exp_time(self) -> float:
+        """
+        Get the camera exposure time in photon-counting mode
+        Converts the provided value received from RemoteEx into sec.
+        :return: (float) exposure time in sec
+        """
+        exp_time_raw = self.parent.CamParamGet("PC", "Exposure")[0].split(' ')
+        try:
+            exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
+        except Exception:
+            raise IOError("Exposure time of %s failed to be converted to a float" % exp_time_raw)
+
+        return exp_time
+
+    def _set_pc_exp_time(self, value: float) -> float:
+        """
+        Set the camera exposure time in photon-counting mode.
+        Converts the time range in sec into a for RemoteEx readable format.
+        :param value: (float) exposure time to be set
+        :return: (float) current exposure time
+        """
+        try:
+            exp_time_raw = self.parent.convertTime2Unit(value)
+        except Exception:
+            raise IOError("Exposure time of %s sec is not supported for read-out camera." % value)
+
+        try:
+            self.parent.CamParamSet("PC", "Exposure", exp_time_raw)
+        except Exception:
+            logging.warning("Failed to set exposure time for photon-counting mode.")
+
+        exp_time = self._get_pc_exp_time()
+        return exp_time
+
+    def _get_exposure_count(self) -> int:
+        """
+        Reads the current exposure count from the camera, in photon-counting mode.
+        """
+        count = self.parent.CamParamGet("PC", "NrExposures")
+        return int(count[0])
+
+    def _get_exposure_count_range(self) -> Tuple[int, int]:
+        """
+        Get min and max values for the camera exposure count, in photon-counting mode.
+        :return: tuple containing min and max exposure count
+        """
+        count_info = self.parent.CamParamInfoEx("PC", "NrExposures")
+        min_value = int(count_info[3])
+        max_value = int(count_info[4])
+
+        return min_value, max_value
+
+    def _set_exposure_count(self, count: int) -> int:
+        """
+        Sets the exposure count for the camera, in photon-counting mode.
+        :param count: requested exposure count
+        :return: actual exposure count
+        """
+        self.parent.CamParamSet("PC", "NrExposures", str(count))
+        return count  # Any value in range is accepted, so no need to read it back
+
+    def _get_threshold_range(self) -> Tuple[int, int]:
+        """
+        Get min and max values for the camera threshold, in photon-counting mode.
+        :return: tuple containing min and max threshold
+        """
+        thresh_info = self.parent.CamParamInfoEx("PC", "Threshold")
+        min_value = int(thresh_info[3])
+        max_value = int(thresh_info[4])
+
+        return min_value, max_value
+
+    def _get_pc_threshold(self) -> int:
+        """
+        Get the camera threshold in photon-counting mode.
+        :return: (int) threshold in counts
+        """
+        threshold = self.parent.CamParamGet("PC", "Threshold")
+        return int(threshold[0])
+
+    def _set_pc_threshold(self, threshold: int) -> int:
+        """
+        Set the camera threshold in photon-counting mode.
+        :param threshold: (int) threshold in counts
+        :return: (int) actual threshold set
+        """
+        self.parent.CamParamSet("PC", "Threshold", str(threshold))
+        return threshold  # Any value in range is accepted, so no need to read it back
+
+    def _update_monitor_mode(self, active: bool, photon_counting: bool = False) -> None:
+        """
+        Update the image monitoring mode of HPDTA, to receive the correct image, depending on the
+        acquisition mode.
+        :param active: (bool) True if acquisition is active, False otherwise
+        :param photon_counting: (bool) True if photon-counting mode is enabled, False otherwise
+        """
+        if active:
+            if photon_counting:
+                # Receive the final image, once the acquisition stops.
+                # In photon-counting, the intermediary images are not useful. We acquire one image
+                # at a time.
+                self.parent.AcqLiveMonitor("Off")
+                self.parent.AcqAcqMonitor("EndAcq")
+                # Typically, each acquisition is opened in a separate window, and if too many windows
+                # are opened (19), the acquisition can fail.
+                self.parent.ImgParamSet("AcquireToSameWindow", "1")
+            else:
+                # For standard mode, use the "live" mode to get a fluid image.
+                # The last image is the same as the latest from the ring buffer, so we don't need it.
+                self.parent.AcqLiveMonitor("RingBuffer", nbBuffers=3)
+                self.parent.AcqAcqMonitor("Off")
+        else:
+            self.parent.AcqLiveMonitor("Off")
+            self.parent.AcqAcqMonitor("Off")
 
     def _start(self):
         """
@@ -384,20 +622,12 @@ class ReadoutCamera(model.DigitalCamera):
         """
         # restart thread in case it was terminated
         if not self.t_image or not self.t_image.is_alive():
-            # start thread, which keeps reading the dataport when an image/scaling table has arrived
-            # after commandport thread to be able to set the RingBuffer
-            # AcqLiveMonitor writes images to Ringbuffer, which we can read from
-            # only works if we use "Live" or "SingleLive" mode
-
-            self.parent.AcqLiveMonitor("RingBuffer", nbBuffers=3)
-            self.t_image = threading.Thread(target=self._getDataFromBuffer)
+            # start acquisition thread, which waits for monitor messages that indicate an image
+            # is available.
+            self.t_image = threading.Thread(target=self._acquire)
             self.t_image.start()
 
-        # Note: no function to get current acqMode.
-        # Note: Acquisition mode, needs to be before exposureTime!
-        # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
-        if self._sync_event is None:  # do not care about synchronization, start acquire
-            self.parent.StartAcquisition("Live")
+        self.parent.queue_img.put((CMD_START,))
 
         # Force trigger rate reading
         try:
@@ -416,8 +646,7 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Stop the acquisition.
         """
-        self.parent.AcqStop()
-        self.parent.queue_img.put("F")  # Flush, to stop reading all images still in the ring buffer
+        self.parent.queue_img.put((CMD_STOP,))
         # Note: set MCPGain to zero after acquiring for HW safety reasons
         self.parent._streakunit.MCPGain.value = 0
 
@@ -451,8 +680,8 @@ class ReadoutCamera(model.DigitalCamera):
         Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify()).
         """
         logging.debug("Event triggered to start a new synchronized acquisition.")
-        self.queue_events.append(time.time())
-        self.parent.queue_img.put("start")
+        self._queue_events.append(time.time())
+        self.parent.queue_img.put((CMD_SW_TRIGGER,))
 
     # override
     def updateMetadata(self, md):
@@ -507,7 +736,74 @@ class ReadoutCamera(model.DigitalCamera):
 
         return table
 
-    def _getDataFromBuffer(self):
+    def _get_acq_msg(self, **kwargs) -> Tuple[str, ...]:
+        """
+        Read one message from the acquisition queue
+        :return: message
+        :raises queue.Empty: if no message on the queue
+        :raise TerminationRequested: if CMD_QUIT is received
+        """
+        while True:
+            cmd, *args = self.parent.queue_img.get(**kwargs)
+            if cmd in (CMD_START, CMD_SW_TRIGGER, CMD_STOP, CMD_SW_TRIGGER, CMD_IMG, CMD_QUIT):
+                logging.debug("Acq received message %s", cmd)
+                break
+            else:
+                logging.warning("Acq received unexpected message %s, skipping", cmd)
+                # wait for a new message
+
+        if cmd == CMD_QUIT:
+            raise TerminationRequested()
+
+        return (cmd, *args)
+
+    def _acquire(self):
+        """
+        Acquisition thread. Runs all the time, until receive a GEN_QUIT message.
+        Managed via the .queue_img queue, by passing CMD_* messages.
+        """
+        try:
+            while True: # Waiting/Acquiring loop
+                # Wait until we have a start (or terminate) message
+                photon_counting = self._acq_wait_start()
+
+                # acquisition loop (until stop requested)
+                self._acquire_images(photon_counting)
+
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception:
+            logging.exception("Failure in acquisition thread")
+
+        logging.debug("Acquisition thread ended")
+
+    def _acq_wait_start(self) -> bool:
+        """
+        Blocks until the acquisition should start.
+        It flushes the previous CMD_IMG (monitor) messages too.
+        Note: it expects that the acquisition is stopped.
+        raise TerminationRequested: if a terminate message was received
+        """
+        while True:
+            cmd, *args = self._get_acq_msg(block=True)
+            if cmd == CMD_START:
+                logging.debug("Acquisition started")
+                break
+            # Either a (duplicated) Stop or a trigger => we don't care
+            logging.debug("Skipped message %s as acquisition is stopped", cmd)
+
+        # Not synchronized => start immediately
+        photon_counting = hasattr(self, "photonCounting") and self.photonCounting.value
+        self._update_monitor_mode(active=True, photon_counting=photon_counting)
+        if not self._sync_event:
+            if photon_counting:
+                self.parent.StartAcquisition("PC")
+            else:
+                self.parent.StartAcquisition("Live")
+
+        return photon_counting
+
+    def _acquire_images(self, photon_counting: bool):
         """
         This method runs in a separate thread and waits for messages in queue indicating
         that some data was received. The image is then received from the device via the dataport IP socket or
@@ -515,119 +811,226 @@ class ReadoutCamera(model.DigitalCamera):
         It corrects the vertical time information. The table contains the actual timestamps for each px.
         The camera should already be prepared with a RingBuffer.
         """
-        logging.debug("Starting data thread.")
-        time.sleep(1)  # TODO: why? => Document.
+        logging.debug("Starting data reception.")
 
+        # TODO: handle changing synchronization while acquiring. It could be done by sending
+        # a CMD message to report that the synchronization has changed. Currently changing the
+        # synchronization during, or even just after stopping a photon-counting acqusition can
+        # end-up with a long time (~10s) for the thread to catch up with the state.
+        # TODO: handle settings change during the acquisition. See the binning change hack. This
+        # could be done by (yet again) another CMD message to report that the settings have changed.
         is_receiving_image = False  # used during synchronised acquisition
+
+        # When the acquisition is triggered per frame, store the start time of the frame for the metadata.
+        # In case, it's "live", then the frame start will be computed from the time the image is received,
+        # which is a little bit less accurate.
+        if photon_counting:
+            acq_start_t = time.time()
+        else:
+            acq_start_t = None
 
         try:
             while True:
+                # In synchronized mode, with previous image received => need to wait for next trigger
                 if self._sync_event and not is_receiving_image:
-                    timeout = 2
+                    # Wait until HPDTA is ready again: there is no "pending" command (ie, either running or about to run)
+                    timeout = 2  # s
                     start = time.time()
                     while int(self.parent.AsyncCommandStatus()[0]):
-                        time.sleep(0)
-                        logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
-                        if time.time() > start + timeout:  # most likely camera is in live-mode, so stop camera
+                        time.sleep(1e-3)
+                        if time.time() > start + timeout:
+                            logging.info("Asynchronous RemoteEx command still in process after %g s. "
+                                         "Stopping acquisition to reset state.", timeout)
+                            # most likely camera is in live-mode, so stop camera, and wait a bit more
                             self.parent.AcqStop()
                             start = time.time()
+
+                    # Start next acquisition, if a trigger event was received.
+                    # This handles all the cases (event delayed or not), because the message wait
+                    # function gets a trigger event, it jumps back to the beginning of this while loop.
                     try:
-                        event_time = self.queue_events.popleft()
-                        logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
-                        self.parent.AcqStart("SingleLive")  # should never be a different
+                        event_time = self._queue_events.popleft()
+                        acq_start_t = time.time()
+                        logging.info("Starting acquisition delayed by %g s.", acq_start_t - event_time)
+                        if photon_counting:
+                            self.parent.AcqStart("PC")
+                        else:
+                            self.parent.AcqStart("SingleLive")
                         is_receiving_image = True
                     except IndexError:
-                        # No event (yet) => fine
+                        # No event (yet) => fine, will wait via queue_img for CMD_SW_TRIGGER.
                         pass
 
-                if self._sync_event:
-                    timeout = max(self.exposureTime.value * 2, 1)  # wait at least 1s
+                if self._sync_event and is_receiving_image:
+                    if photon_counting:
+                        acq_time = self.exposureTime.value * self.pcIntegrationCounts.value
+                    else:
+                        acq_time = self.exposureTime.value
+
+                    timeout = max(acq_time * 2, 1)  # wait at least 1s
                 else:
                     timeout = None
 
+                # Check for the communication queue:
+                # * (CMD_IMG, *args) -> monitor message from HPDTA = a new image is available
+                # * (CMD_*,) -> from the Odemis backend, to report a change in acqusition, or trigger event
                 try:
-                    rargs = self.parent.queue_img.get(block=True, timeout=timeout)  # block until receive something
+                    cmd, *args = self._get_acq_msg(block=True, timeout=timeout)
                 except queue.Empty:
                     logging.warning("Failed to receive image from streak ccd. Timed out after %f s. Will try again.",
                                     timeout)
                     is_receiving_image = False
+                    acq_start_t = None
                     continue
 
-                logging.debug("Received img message %s", rargs)
-
-                if rargs is None:  # if message is None end the thread
-                    return
-
-                if self._sync_event:  # synchronized mode
-                    if rargs == "start":
-                        logging.info("Received event trigger")
-                        continue
+                if cmd == CMD_SW_TRIGGER:
+                    if not self._sync_event:
+                        logging.warning("Received a trigger event, but no sync event is set. Ignoring.")
                     else:
-                        logging.info("Get the synchronized image.")
-                else:  # non-sync mode
-                    while not self.parent.queue_img.empty():
+                        logging.info("Received event trigger")
+                    continue
+                elif cmd == CMD_STOP:
+                    return
+                elif cmd == CMD_IMG:  # info from the HPDTA image monitor
+                    rargs = args
+                else:
+                    logging.warning("Received unknown command %s from queue_img, skipping.", cmd)
+                    continue
+
+                # If live mode, and multiple images are in the queue, flush all but the last one
+                if not self._sync_event:
+                    while True:
                         # keep reading to check if there might be a newer image for display
                         # in case we are too slow with reading
-                        rargs = self.parent.queue_img.get(block=False)
+                        try:
+                            cmd, *args = self._get_acq_msg(block=False)
+                        except queue.Empty:
+                            break  # no more images in queue
 
-                        if rargs is None:  # if message is None end the thread
+                        if cmd == CMD_START:
+                            logging.debug("Received start command, but acquisition already started. Ignoring.")
+                            continue  # ignore, acquisition was already started
+                        elif cmd == CMD_SW_TRIGGER:
+                            logging.warning("Received a trigger event, but no sync event is set. Ignoring.")
+                            continue
+                        elif cmd == CMD_STOP:
                             return
-                    logging.info("No more images in queue, so get the image.")
+                        elif cmd == CMD_IMG:  # info from the HPDTA image monitor
+                            logging.debug("Discarding previous image")
+                            rargs = args
+                        else:
+                            logging.warning("Received unknown command %s from queue_img, skipping.",
+                                            cmd)
+                            continue
+                    logging.info("No more images in queue, will read the latest one.")
 
-                if rargs == "F":  # Flush => the previous images are from the previous acquisition
-                    logging.debug("Acquisition was stopped so flush previous images.")
-                    continue
-
-                reception_time_image = time.time()
-
-                # get the image from the buffer
-                img_num = rargs[1]
-                img_info = self.parent.ImgRingBufferGet("Data", img_num)
-
-                if not img_info:  # TODO check if this ever happens in log and if not remove!
-                    logging.warning("Image info received from buffer is empty!")
-                    continue
-
-                img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive (uint16)
-                img_num_actual = img_info[4]
-
-                img = b""
                 try:
-                    while len(img) < img_size:  # wait until all bytes are received
-                        img += self.parent._dataport.recv(img_size)
-                except socket.timeout as msg:
-                    logging.error("Did not receive an image: %s", msg)
-                    continue
+                    image = self._get_image(rargs, acq_start_t, photon_counting)  # get the image and metadata from the buffer
+                    self.data.notify(image)  # send to the listeners of the DataFlow
+                except (OSError, TimeoutError) as ex:
+                    logging.warning("Failed to receive image: %s", ex)
+                finally:
+                    is_receiving_image = False
 
-                image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
-                image.shape = (int(img_info[1]), int(img_info[0]))
-                logging.debug("Requested image number %s, received number %s of shape %s.",
-                              img_num, img_num_actual, image.shape)
+                # Photon-counting mode always only acquire a single image, so if no synchronization
+                # is used, we need to start a new acquisition
+                if photon_counting and not self._sync_event:
+                    acq_start_t = time.time()
+                    self.parent.StartAcquisition("PC")
 
-                # Get the scaling table to correct the time axis
-                if self.parent._streakunit.streakMode.value:
-                    # There should be no sync problem, as we only receive images and scaling table via the dataport
-                    try:
-                        # TODO only request scaling table if corresponding MD not available for this time range
-                        self._metadata[model.MD_TIME_LIST] = self._get_time_scale()
-                    except Exception:
-                        logging.exception("Failed to get scaling table")
-                else:
-                    # remove MD_TIME_LIST if not applicable
-                    self._metadata.pop(model.MD_TIME_LIST, None)
-
-                md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
-                self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
-                md[model.MD_ACQ_DATE] = reception_time_image - md[model.MD_EXP_TIME] + md[model.MD_READOUT_TIME]
-                dataarray = model.DataArray(self._transposeDAToUser(image), md)
-                self.data.notify(dataarray)  # pass the new image plus MD to the callback fct
-
-                is_receiving_image = False
-
-        except Exception:
-            logging.exception("Readout camera data thread failed.")
         finally:
-            logging.info("Readout camera data thread ended.")
+            self.parent.AcqStop()
+            self._update_monitor_mode(active=False)
+
+    def _get_image(self, event_args: List[str], acq_start_t: Optional[float], photon_counting: bool) -> model.DataArray:
+        """
+        Receive an image corresponding to the monitor event from HPDTA
+        :param event_args: monitor event information, as received from HPDTA
+        :param acq_start_t: time when the acquisition started, or None if not known
+        :param photon_counting: True if photon-counting mode is enabled, False otherwise
+        :return: the DataArray
+        :raise OSError: if the image could not be received
+        :raise TimeoutError: if the image could not be received in time
+        """
+        reception_time_image = time.time()
+
+        # Getting the image is slightly different depending on the type of monitor
+        # We use the "event" to differenciate: "ringbuffer" if LiveMonitor, and
+        # "Endacq" or "Endpart" if AcqMonitor
+        event = event_args[0].lower()
+        if event == "ringbuffer":  # From AcqLiveMonitor
+            img_num = event_args[1]
+            img_info = self.parent.ImgRingBufferGet("Data", img_num)
+            # returns: iDX,iDY,BBP,Type,seqnumber,timestamp
+            img_num_actual = img_info[4]
+            if img_num != img_num_actual:
+                logging.warning(
+                    "Requested image number %s, but received number %s. Will use it anyway.",
+                    img_num, img_num_actual)
+        elif event in ("endacq", "endpart"):  # From AcqAcqMonitor
+            img_info = self.parent.ImgDataGet("current", "data")
+            # returns: iDX,iDY,BBP,Type . Example: 672,508,2,0
+        else:
+            raise OSError(f"Received unknown event {event} from queue_img, skipping.")
+
+        if not img_info:  # TODO check if this ever happens in log and if not, remove!
+            raise OSError("Image info received from buffer is empty!")
+
+        img_bpp = int(img_info[2])
+        if img_bpp != 2:
+            logging.warning("Received image with unexpected depth of %s bytes, will try to read it anyway",
+                img_bpp)
+            # TODO: also handle img_bpp == 1 and 4.
+
+        img_size = int(img_info[0]) * int(img_info[1]) * img_bpp  # num of bytes we need to receive (uint16)
+
+        img = b""
+        try:
+            while len(img) < img_size:  # wait until all bytes are received
+                img += self.parent._dataport.recv(img_size)
+        except socket.timeout as msg:
+            raise TimeoutError(f"Did not receive an image: {msg}")
+
+        image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
+        image.shape = (int(img_info[1]), int(img_info[0]))  # Y, X
+        logging.debug("Received image of shape %s.", image.shape)
+
+        # Get the scaling table to correct the time axis
+        if self.parent._streakunit.streakMode.value:
+            # There should be no sync problem, as we only receive images and scaling table via the dataport
+            try:
+                # TODO only request scaling table if corresponding MD not available for this time range
+                self._metadata[model.MD_TIME_LIST] = self._get_time_scale()
+            except Exception:
+                logging.exception("Failed to get scaling table")
+        else:
+            # remove MD_TIME_LIST if not applicable
+            self._metadata.pop(model.MD_TIME_LIST, None)
+
+        md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
+        if photon_counting:
+            # Save the extra metadata for photon-counting mode.
+            # Don't trust .pcIntegrationCounts & .exposureTime too much, as the user might have changed in HPDTA
+            try:
+                exposure_count = self._get_exposure_count()
+                exp_time_raw = self.parent.CamParamGet("PC", "Exposure")[0].split(' ')
+                exp_time_pc = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
+                md[model.MD_EXP_TIME] = exp_time_pc * exposure_count  # Total exposure time
+                md[model.MD_INTEGRATION_COUNT] = exposure_count
+            except Exception:
+                logging.exception("Failed to get photon-counting metadata.")
+        else:  # Standard acquisition => use the "Live" settings
+            exp_time_raw = self.parent.CamParamGet("Live", "Exposure")[0].split(' ')
+            exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
+            md[model.MD_EXP_TIME] = exp_time
+
+        self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
+        if acq_start_t is not None:
+            md[model.MD_ACQ_DATE] = acq_start_t
+        else:
+            md[model.MD_ACQ_DATE] = reception_time_image - md[model.MD_EXP_TIME] + md[model.MD_READOUT_TIME]
+
+        return model.DataArray(self._transposeDAToUser(image), md)
 
 
 class StreakUnit(model.HwComponent):
@@ -1265,8 +1668,9 @@ class StreakCamera(model.HwComponent):
         # collect responses (error_code = 0-3,6-10) from commandport
         self.queue_command_responses = queue.Queue(maxsize=0)  # List[str]
         # log messages (error_code = 4,5) from commandport
-        self.queue_img = queue.Queue(maxsize=0)  # str, messages indicating a new image is ready
         self.queue_log = []  # List[str], to hold the latest log messages (error codes 4 & 5)
+        # Communication with the acquisition thread:
+        self.queue_img = queue.Queue(maxsize=0)  # Tuple[CMD_*, ...] where extra elements are command arguments
 
         self.should_listen = True  # used in readCommandResponse thread
 
@@ -1276,7 +1680,9 @@ class StreakCamera(model.HwComponent):
         # Note: start HPDTA after initializing queue and command and receiver threads
         # but before image thread and initializing children.
         # Note: if already running, it will return ["parameters ignored"] and continue
-        self.AppStart(settings_ini)  # Note: comment out for testing in order to not start a new App
+        # TODO: add an option to allow showing the dialogs? the drawback is that all dialogs are
+        # shown and all operations are blocked, including closing the app.
+        self.AppStart(visible=True, ini_file=settings_ini, no_dialog=True)  # Note: comment out for testing in order to not start a new App
 
         try:
             # Detect when a device is not turned on, or the wrong sweep unit is selected.
@@ -1294,6 +1700,12 @@ class StreakCamera(model.HwComponent):
                 raise model.HwError("HPDTA software didn't find the license. Check the USB dongle is plugged in.")
             vinfo = self.AppInfo("Version")
             self._swVersion = vinfo[0]
+
+            # don't send warning when closing the app with unsaved images. In remote mode, we never
+            # need to save on the images on the streak camera computer.
+            self.ImgParamSet("WarnWhenUnsaved", "0")
+
+            # TODO: grap the queue logs in a separate thread?
 
             children = children or {}
             dependencies = dependencies or {}
@@ -1478,7 +1890,7 @@ class StreakCamera(model.HwComponent):
         This method runs in a separate thread and continuously listens for messages returned from
         the device via the commandport IP socket.
         The messages are made available either on .queue_command_responses (for the standard responses)
-        or .queue_img (for messages related to the images).
+        or .queue_img (for messages related to the images, as Tuple[CMD_*, ...]).
         """
         try:
             responses = ""  # received data not yet processed
@@ -1541,8 +1953,8 @@ class StreakCamera(model.HwComponent):
 
                     if error_code in (4, 5):
                         # A new image is available on the dataport => Send to the special queue
-                        if error_code == 4 and rfunc == "Livemonitor":
-                            self.queue_img.put(rargs)
+                        if error_code == 4 and rfunc in ("Livemonitor", "Acqmonitor"):
+                            self.queue_img.put((CMD_IMG, *rargs))
                         else:
                             self.queue_log.append(msg_splitted)
                             if len(self.queue_log) > LOG_QUEUE_MAX_SIZE:
@@ -1572,9 +1984,9 @@ class StreakCamera(model.HwComponent):
             start = time.time()
             timeout = 5
             while int(self.AsyncCommandStatus()[0]):
-                time.sleep(0)
+                time.sleep(1e-3)
                 if time.time() > start + timeout:
-                    logging.error("Could not start acquisition.")
+                    logging.error("Could not start acquisition, HPDTA still processing command.")
                     return
             self.AcqStart(AcqMode)
 
@@ -1602,24 +2014,33 @@ class StreakCamera(model.HwComponent):
 
     # === Application commands ========================================================
 
-    def AppStart(self, ini_file: str = None):
+    def AppStart(self, visible: bool = True, ini_file: str = None, no_dialog: bool = True):
         """
         Start RemoteEx. If the application is already running, it will not do anything.
         Blocks until the application is started.
         :param ini_file: (str) path to the INI file for HPDTA, default is HDPTA8.INI
+        :param no_dialog: if False, the HPDTA application will communicate with the user by normal message
+        boxes. Otherwise, all messages that are normally shown are only sent to the RemoteEx client
+        with error code 5.
         """
         # The function accepts up to 4 arguments: fVisible, sINIFile, fNoDialogs, iEncoding
+        # fVisible: 0 = invisible, 1 = visible (default)
+        # sINIFile: ini file (Default is HDPTA8.INI). Warning INI != HWP (although the
+        # HWP file also follows the INI syntax, so it will not complain!). However, the INI file
+        # points towards the hardware profile (HWprofile) file.
+        # fNoDialogs: False = show dialogs, True = no dialogs (default)
         logging.debug("Starting RemoteEx App.")
         if ini_file is None:
-            # need ~15 s when starting App -> use larger timeout
-            self.sendCommand("AppStart", timeout=30)
+            ini_file = ""
         else:
-            # First argument: fVisible: 0 = invisible, 1 = visible (default)
-            # Second argument: ini file (Default is HDPTA8.INI). Warning INI != HWP (although the
-            # HWP file also follows the INI syntax, so it will not complain!). However, the INI file
-            # points towards the hardware profile (HWprofile) file.
             logging.debug("Starting with ini file: %s", ini_file)
-            self.sendCommand("AppStart", "1", ini_file, timeout=30)
+
+        self.sendCommand("AppStart",
+                         "1" if visible else "0",
+                         ini_file,
+                         "1" if no_dialog else "0",
+                         timeout=30)
+
 
     def AppEnd(self):
         """Close RemoteEx."""
@@ -1888,7 +2309,7 @@ class StreakCamera(model.HwComponent):
         # Note: args can be only one argument
         if nbBuffers is not None and monitorType == "RingBuffer":
             args = (str(nbBuffers),)
-        return self.sendCommand("acqLiveMonitor", monitorType, *args)
+        return self.sendCommand("AcqLiveMonitor", monitorType, *args)
 
     def AcqLiveMonitorTSInfo(self):
         """Correlates the current time with the timestamp. It outputs the current time and the time stamp.
@@ -1903,7 +2324,7 @@ class StreakCamera(model.HwComponent):
                         Unix or Linux: Seconds and μseconds since 01.01.1970"""
         self.sendCommand("AcqLiveMonitorTSFormat", format)
 
-    def AcqAcqMonitor(self, type):
+    def AcqAcqMonitor(self, type: str) -> List[str]:
         """Starts a mode which returns information on every new image or part image acquired in
         Acquire/Analog Integration or Photon counting mode (Acquisition monitoring).
         :param type: (str)
@@ -2428,7 +2849,7 @@ class StreakCamera(model.HwComponent):
             args += (filename,)
         return self.sendCommand("ImgRingBufferGet", type, seqNumber, *args)
 
-    def ImgDataGet(self, destination, type, *args):
+    def ImgDataGet(self, destination: str, type: str, *args) -> List[str]:
         """
 
         :param destination: (str)
