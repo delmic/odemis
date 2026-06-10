@@ -2,15 +2,6 @@
 "SPARCv2 EK + Streakcam": {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Spectrometer Vis-NIR",
-               "Camera", "CL Detector", "Spectrograph",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Mirror Actuators in XY referential",
-               "Slit", "CL Selector", "CL Filter Wheel",
-               "Lens1 Mover", "Lens2 Switch",
-               "Streak Readout CCD", "Streak Delay Generator", "Streak Unit",
-               "Streak Lens"],
 }
 
 # Light (lamp with known spectrum)
@@ -150,9 +141,11 @@
 
 # simple simulated streak camera
 "Streak Camera": {
-    class: simstreakcam.StreakCamera,
+    class: hamamatsurx.StreakCamera,
     role: streak-cam,
     init: {
+        host: "fake-singlesweep",  # starts a local HPDTA simulator
+        port: 11001,
     },
     children: {
         readoutcam: "Streak Readout CCD",
@@ -164,33 +157,13 @@
     },
 }
 
-# for testing with real HW
-#"Streak Camera": {
-#    class: hamamatsurx.StreakCamera,
-#    role: streak-cam,
-#    init: {
-#        host: "172.16.4.2",  # Braunschweig System
-#        port: 1001
-#    },
-#    children: {
-#        readoutcam: "Streak Readout CCD",
-#        delaybox: "Streak Delay Generator",
-#        streakunit: "Streak Unit"
-#    },
-#    dependencies: {
-#        spectrograph: "Spectrograph"
-#    },
-#}
-
 "Streak Readout CCD": {
     role: streak-ccd,
     init: {
-        image: "sparc-ar-mirror-align.h5",  # only for simulator!  TODO replace with streak image
-#       device: 0,
         transp: [-1, 2], # if mirrored on X axis
+        can_photon_counting: true,
     },
-#    dependencies: {spectrograph: "Spectrograph"},
-    # TODO does not work for now as modelgen says no component named spectrograph found
+    dependencies: {spectrograph: "Spectrograph"},
 }
 
 "Streak Unit": {
