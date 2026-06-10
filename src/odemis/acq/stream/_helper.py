@@ -24,7 +24,7 @@ import threading
 import time
 from abc import abstractmethod
 from functools import wraps
-from typing import Tuple, Any, Dict, List, Optional, Callable
+from typing import Tuple, Any, Dict, List, Optional, Callable, Set
 
 import numpy
 
@@ -818,8 +818,8 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
     """
     def __init__(self, name, detector, dataflow, emitter,
                  streak_unit: model.HwComponent, streak_delay: model.HwComponent,
-                 streak_unit_vas: set[str],
-                 streak_delay_hwvas: Optional[set[str]] = None,
+                 streak_unit_vas: Set[str],
+                 streak_delay_hwvas: Optional[Set[str]] = None,
                  **kwargs):
         """
         See LiveStream for the meaning of the common parameters.
