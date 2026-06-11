@@ -21,7 +21,7 @@ import unittest
 import odemis
 from odemis import model
 from odemis.acq.stream import FluoStream
-from odemis.acq.stream_settings import StreamSettingsConfig, get_settings_order
+from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -132,7 +132,7 @@ class TestAcquiredStreamSettings(unittest.TestCase):
         # get the saved data from the JSON file
         data = self.acq_settings.config_data[index]
         # check the values of the given stream with the values saved in the JSON file
-        settings_order = get_settings_order(fms)
+        settings_order = fms._get_settings_order()
         for key in settings_order:
             self.assertEqual(data[key], getattr(fms, key).value)
 
@@ -155,7 +155,7 @@ class TestAcquiredStreamSettings(unittest.TestCase):
         self.acq_settings.apply_settings(fms, "fluo")
         index = self.acq_settings._get_config_index(self.acq_settings.config_data, "fluo")
         data = self.acq_settings.config_data[index]
-        settings_order = get_settings_order(fms)
+        settings_order = fms._get_settings_order()
         for key in settings_order:
             self.assertEqual(getattr(fms, key).value, data[key])
 
@@ -183,7 +183,7 @@ class TestAcquiredStreamSettings(unittest.TestCase):
                                  "detExposureTime"]
         fms = FluoStream("fluo", self.ccd, self.ccd.data,
                          self.light, self.filter, focuser=self.focus, detvas={"exposureTime"})
-        settings_order = get_settings_order(fms)
+        settings_order = fms._get_settings_order()
         is_missing_settings = set(required_setting_keys).difference(settings_order)
         # Check if all required settings are present
         self.assertTrue(is_missing_settings == set())
