@@ -138,6 +138,117 @@ class TestDataCollectorConfig(unittest.TestCase):
         cfg.remind_date = datetime.now(timezone.utc) - timedelta(seconds=1)
         self.assertTrue(cfg.should_prompt_for_consent())
 
+    def test_set_consent_with_expiry_stores_fields(self) -> None:
+        """set_consent_with_expiry should enable consent and set consent_date."""
+        cfg = self._make_config()
+        expiry = datetime.now(timezone.utc) + timedelta(days=1)
+        cfg.set_consent_with_expiry(expiry)
+
+        self.assertTrue(cfg.consent)
+        stored_date = cfg.consent_date
+        self.assertIsNotNone(stored_date)
+        self.assertAlmostEqual(stored_date.timestamp(), expiry.timestamp(), delta=2)
+
+    def test_set_consent_with_expiry_clears_remind_date(self) -> None:
+        """set_consent_with_expiry should clear any previously set reminder_date."""
+        cfg = self._make_config()
+        cfg.remind_date = datetime.now(timezone.utc) + timedelta(days=5)
+        cfg.set_consent_with_expiry(datetime.now(timezone.utc) + timedelta(days=1))
+        self.assertIsNone(cfg.remind_date)
+
+
+class TestTemporaryConsentAndProbability(unittest.TestCase):
+    """Tests for set_temporary_consent and record() expiry/probability logic."""
+
+    def setUp(self) -> None:
+        self._tmp_dir = Path(tempfile.mkdtemp(prefix="dc_tmp_consent_"))
+        self._queue_dir = self._tmp_dir / "queue"
+        self._queue_dir.mkdir(parents=True, exist_ok=True)
+
+        cfg = DataCollectorConfig.__new__(DataCollectorConfig)
+        cfg.file_path = self._tmp_dir / "datacollector.config"
+        import threading
+        cfg._cp = configparser.ConfigParser(interpolation=None)
+        cfg._lock = threading.Lock()
+        cfg._read()
+        self._cfg = cfg
+
+        self._dc = DataCollector.__new__(DataCollector)
+        self._dc._config = cfg
+        self._dc._worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)
+        self._dc._init_ok = True
+        import threading as _threading
+        self._dc._init_lock = _threading.Lock()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(str(self._tmp_dir), ignore_errors=True)
+
+    def test_set_temporary_consent_enables_consent_with_expiry(self) -> None:
+        """set_temporary_consent(1) should set consent=True and consent_date ~24h ahead."""
+        before = datetime.now(timezone.utc) + timedelta(hours=23, minutes=59)
+        self._dc.set_temporary_consent(days=1)
+        after = datetime.now(timezone.utc) + timedelta(hours=24, seconds=5)
+
+        self.assertTrue(self._cfg.consent)
+        stored = self._cfg.consent_date
+        self.assertIsNotNone(stored)
+        self.assertGreaterEqual(stored, before)
+        self.assertLessEqual(stored, after)
+
+    def test_set_temporary_consent_1day_uses_full_probability(self) -> None:
+        """record() should enqueue all events when consent_date is ~1 day away."""
+        self._dc.set_temporary_consent(days=1)
+
+        enqueue_calls = []
+        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+
+        trials = 20
+        for i in range(trials):
+            self._dc.record("full_event", "1.0", {"i": i})
+
+        self.assertEqual(len(enqueue_calls), trials,
+                         "All events should be enqueued when consent expires within 1 day")
+
+    def test_set_temporary_consent_multiday_uses_default_probability(self) -> None:
+        """record() should sample ~10% when consent_date is more than 1 day away."""
+        future = datetime.now(timezone.utc) + timedelta(days=30)
+        self._cfg.set_consent_with_expiry(future)
+
+        enqueue_calls = []
+        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+
+        trials = 5000
+        for i in range(trials):
+            self._dc.record("sampled_event", "1.0", {"i": i})
+
+        ratio = len(enqueue_calls) / trials
+        # Allow ±5% around the 10% target.
+        self.assertGreater(ratio, 0.05, f"Sampling ratio {ratio:.2%} too low")
+        self.assertLess(ratio, 0.15, f"Sampling ratio {ratio:.2%} too high")
+
+    def test_record_auto_expires_consent_and_skips(self) -> None:
+        """record() should set consent=False and skip when consent_date has passed."""
+        expired = datetime.now(timezone.utc) - timedelta(seconds=1)
+        self._cfg.set_consent_with_expiry(expired)
+
+        enqueue_calls = []
+        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+
+        self._dc.record("expired_event", "1.0", {"x": 1})
+
+        self.assertFalse(self._cfg.consent)
+        self.assertEqual(len(enqueue_calls), 0, "record() should not enqueue after expiry")
+
+    def test_record_no_consent_is_noop(self) -> None:
+        """record() should be a no-op when consent is False."""
+        self._cfg.consent = False
+
+        enqueue_calls = []
+        self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
+
+        self._dc.record("no_consent_event", "1.0", {"x": 1})
+        self.assertEqual(len(enqueue_calls), 0)
+
 
 class TestSerialize(unittest.TestCase):
     """Tests for _serialize() — ZIP structure and metadata correctness."""
@@ -524,6 +635,7 @@ class DataCollectorTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp_dir = Path(tempfile.mkdtemp(prefix="dc_test_"))
         self._queue_dir = self._tmp_dir / "queue"
+        self._queue_dir.mkdir(parents=True, exist_ok=True)
 
         cfg = DataCollectorConfig.__new__(DataCollectorConfig)
         cfg.file_path = self._tmp_dir / "datacollector.config"
@@ -532,6 +644,9 @@ class DataCollectorTest(unittest.TestCase):
         cfg._lock = threading.Lock()
         cfg._read()
         cfg.consent = True
+        # Use 100% collection probability so queue-delegation tests are deterministic.
+        expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+        cfg.set_consent_with_expiry(expiry)
         self._cfg = cfg
 
         worker = _BackgroundWorker(cfg, queue_dir=self._queue_dir)

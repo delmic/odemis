@@ -378,7 +378,6 @@ class OdemisGUIApp(wx.App):
             # Due to a bug in wxPython, sometimes the .Maximize() at the beginning of the function
             # has no effect. So we call it after the Show() to be sure it works.
             wx.CallAfter(self.main_frame.Maximize)
-            wx.CallAfter(self._maybe_show_consent_dialog)
 
         except Exception:
             self.excepthook(*sys.exc_info())
@@ -420,29 +419,6 @@ class OdemisGUIApp(wx.App):
         for tab in self.tab_controller.get_tabs():
             if hasattr(tab.panel, 'btn_log'):
                 tab.panel.btn_log.set_face_colour(colour)
-
-    @call_in_wx_main
-    def _maybe_show_consent_dialog(self) -> None:
-        """Show consent dialog when consent is undecided and prompt is due."""
-        try:
-            if not self._data_collector.should_prompt_for_consent():
-                return
-
-            remind_days = self._data_collector.get_consent_remind_days()
-            dlg = ConsentDialog(parent=self.main_frame, remind_days=remind_days)
-            result = dlg.ShowModal()
-            dlg.Destroy()
-
-            if result == ConsentDialog.RESULT_OPT_IN:
-                self._data_collector.set_consent(True)
-            elif result == ConsentDialog.RESULT_OPT_OUT:
-                self._data_collector.set_consent(False)
-            else:
-                self._data_collector.postpone_consent()
-            # Sync the Help menu checkbox to reflect the persisted choice.
-            self._menu_controller.refresh_consent_menu_item()
-        except Exception:
-            logging.exception("Failed to run data-collection consent prompt.")
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """

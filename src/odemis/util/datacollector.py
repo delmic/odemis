@@ -32,6 +32,7 @@ import json
 import logging
 import os
 import queue
+import random
 import re
 import shutil
 import socket
@@ -82,6 +83,13 @@ _MAX_RETRY_DELAY_SECONDS = 3600.0
 # Default delay before re-prompting for consent after postpone.
 _DEFAULT_CONSENT_REMIND_DELTA = timedelta(days=30)
 REMINDER_DATE_KEY = "reminder_date"
+CONSENT_DATE_KEY = "consent_date"
+
+# Collection probability: fraction of record() calls that are actually uploaded.
+# 100% when consent expires within 1 day (1-day trial), 10% otherwise.
+_DEFAULT_COLLECTION_PROBABILITY = 0.10
+_FULL_COLLECTION_PROBABILITY = 1.0
+_ONE_DAY_SECONDS = 86400.0
 
 
 def _sanitize_filename(name: str) -> str:
@@ -128,9 +136,12 @@ class DataCollectorConfig:
     Sections
     --------
     [general]
-        consent       — true / false/none (not yet decided).
-        reminder_date — Date (YYYY-MM-DD) after which to re-prompt.
-                            Commented out when not applicable.
+        consent       — true / false / none (not yet decided).
+        reminder_date — Date (ISO UTC) after which to re-prompt.
+                        Commented out when not applicable.
+        consent_date  — Date (ISO UTC) until which consent is active.
+                        Consent auto-expires to False after this date.
+                        Commented out when not applicable.
 
     The file is written in a human-readable format with inline comments so it
     can be inspected and manually edited by a support engineer.  Example::
@@ -140,7 +151,10 @@ class DataCollectorConfig:
         # consent = true
         #
         # Date after which the consent dialog will be shown again (YYYY-MM-DD).
-        # reminder_date = 2026-05-07
+        # reminder_date =
+        #
+        # Date until which consent is active (ISO UTC). Auto-expires to false.
+        # consent_date =
     """
 
     file_name: str = "datacollector.config"
@@ -162,13 +176,13 @@ class DataCollectorConfig:
         """Write the config file with human-readable comments.
 
         consent is always present as none / true / false.
-        reminder_date is commented out until explicitly set, then written
-        in YYYY-MM-DD format.
+        reminder_date and consent_date are commented out when not set.
         """
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
         consent_val = self.consent
         remind_val = self.remind_date
+        consent_date_val = self.consent_date
 
         if consent_val is True:
             consent_line = "consent = true"
@@ -182,6 +196,11 @@ class DataCollectorConfig:
         else:
             remind_line = "# reminder_date = "
 
+        if consent_date_val is not None:
+            consent_date_line = f"consent_date = {consent_date_val.isoformat()}"
+        else:
+            consent_date_line = "# consent_date = "
+
         content = (
             "[general]\n"
             "# Data sharing consent (true / false).\n"
@@ -189,6 +208,9 @@ class DataCollectorConfig:
             "#\n"
             "# Date after which the consent dialog will be shown again (YYYY-MM-DD).\n"
             f"{remind_line}\n"
+            "#\n"
+            "# Date until which consent is active (ISO UTC). Auto-expires to false.\n"
+            f"{consent_date_line}\n"
         )
 
         with open(str(self.file_path), "w") as fh:
@@ -219,7 +241,7 @@ class DataCollectorConfig:
     @consent.setter
     def consent(self, value: bool) -> None:
         """
-        Set consent to true or false, and clear any reminder date.
+        Set consent to true or false, and clear any reminder date and consent expiry.
         :param value: True to opt in, False to opt out.
         """
         with self._lock:
@@ -300,6 +322,52 @@ class DataCollectorConfig:
             self._ensure_section("general")
             self._cp.remove_option("general", "consent")
             self._cp.set("general", REMINDER_DATE_KEY, remind_date.astimezone(timezone.utc).isoformat())
+            self._write()
+
+    @property
+    def consent_date(self) -> Optional[datetime]:
+        """
+        Return the consent expiry date as a UTC-aware datetime, or None when unset.
+        When this date is reached, consent automatically expires to False.
+        :return: UTC datetime of consent expiry, or None if not set.
+        """
+        try:
+            value = self._cp.get("general", CONSENT_DATE_KEY)
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        for fmt in ("%Y-%m-%d", None):
+            try:
+                if fmt:
+                    parsed = datetime.strptime(value, fmt)
+                else:
+                    parsed = datetime.fromisoformat(value)
+                if parsed.tzinfo is None:
+                    return parsed.replace(tzinfo=timezone.utc)
+                return parsed.astimezone(timezone.utc)
+            except ValueError:
+                continue
+        return None
+
+    def set_consent_with_expiry(self, consent_date: datetime) -> None:
+        """
+        Enable consent until consent_date, then auto-expire to False.
+
+        When less than one day remains until consent_date, record() uses 100%
+        collection probability; otherwise the default 10% applies.
+
+        :param consent_date: UTC datetime after which consent is revoked automatically.
+        :return: None
+        """
+        if consent_date.tzinfo is None:
+            consent_date = consent_date.replace(tzinfo=timezone.utc)
+        with self._lock:
+            self._ensure_section("general")
+            self._cp.set("general", "consent", "true")
+            self._cp.remove_option("general", REMINDER_DATE_KEY)
+            self._cp.set("general", CONSENT_DATE_KEY, consent_date.astimezone(timezone.utc).isoformat())
             self._write()
 
     def should_prompt_for_consent(self) -> bool:
@@ -742,6 +810,23 @@ class DataCollector:
             return
         self._config.postpone_consent(remind_date=remind_date)  # type: ignore[union-attr]
 
+    def set_temporary_consent(self, days: int = 1) -> None:
+        """
+        Enable consent for the specified number of days, after which it
+        auto-expires to False.
+
+        When days == 1, the remaining time at the moment record() is called
+        will be ≤ 1 day, so 100% collection probability applies throughout.
+        When days > 1, the default 10% probability applies until the final day.
+
+        :param days: Number of days the temporary consent is active.
+        """
+        self._lazy_init()
+        if not self._init_ok:
+            return
+        consent_date = datetime.now(timezone.utc) + timedelta(days=days)
+        self._config.set_consent_with_expiry(consent_date=consent_date)  # type: ignore[union-attr]
+
     def get_consent_remind_days(self) -> int:
         """
         Return the number of days used for the consent remind-later interval.
@@ -762,6 +847,10 @@ class DataCollector:
         asynchronously in a background thread.  If consent has not been
         granted, this is a no-op.  This function never raises (beyond the
         input validation below); all errors are logged and suppressed.
+
+        Collection probability is applied before enqueuing: 100% when
+        temporary consent (1-day) is active, 10% otherwise.
+
         :param event_name: Human-readable event identifier, e.g.
          "z_stack_acquired".  Must be a non-empty string.
         :param schema_version: Payload schema version string, e.g. "1.0".
@@ -797,6 +886,30 @@ class DataCollector:
             if not consent:
                 logging.debug(
                     "DataCollector: consent=%s, skipping event '%s'.", consent, event_name
+                )
+                return
+
+            # Auto-expire temporary consent when past the consent_date.
+            consent_date = self._config.consent_date  # type: ignore[union-attr]
+            now = datetime.now(timezone.utc)
+            if consent_date is not None and now >= consent_date:
+                self._config.consent = False  # type: ignore[union-attr]
+                logging.info(
+                    "DataCollector: temporary consent expired; consent set to False."
+                )
+                return
+
+            # Apply collection probability: 100% if consent expires within 1 day,
+            # 10% otherwise (no consent_date = permanent opt-in).
+            if consent_date is not None and (consent_date - now).total_seconds() <= _ONE_DAY_SECONDS:
+                probability = _FULL_COLLECTION_PROBABILITY
+            else:
+                probability = _DEFAULT_COLLECTION_PROBABILITY
+
+            if random.random() >= probability:
+                logging.debug(
+                    "DataCollector: event '%s' not sampled (%.0f%% collection probability).",
+                    event_name, probability * 100,
                 )
                 return
 

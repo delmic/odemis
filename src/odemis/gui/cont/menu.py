@@ -194,10 +194,41 @@ class MenuController(object):
         if self._consent_menu_item is not None:
             self._consent_menu_item.Check(self._data_collector.get_consent() is True)
 
+    @call_in_wx_main
     def _on_toggle_data_sharing(self, evt):
-        """Toggle data sharing consent from Help menu check item."""
-        enabled = self._consent_menu_item.IsChecked()
-        self._data_collector.set_consent(enabled)
+        """Show consent dialog when the data-sharing menu item is clicked."""
+        try:
+            message = ("Allow Odemis to send selected acquisition data to Delmic, "
+            "including example images and interaction logs (e.g., alignment steps, point-of-interest placements). "
+            "A random sample (eg, 10%) of workflow data may be included. This data is used solely to improve "
+            "Odemis algorithms and user experience. Data is stored securely on EU servers, accessible "
+            "only to designated Delmic analysts, and never shared with third parties. "
+            "By opting in, you confirm you have the authority to make this decision for your institution"
+            " and that sharing this data is permitted under your institution's data policies.\n\n"
+            "\"Remind me after one day\" enables sharing for 24 hours with 100% collection, "
+            "then automatically disables it.")
+
+            dlg = wx.MessageDialog(
+                self._main_frame,
+                message=message,
+                caption="Share data with Delmic",
+                style=wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION
+            )
+            dlg.SetYesNoCancelLabels(yes="Opt in", no="Opt out", cancel="Remind me after one day")
+            response = dlg.ShowModal()
+            dlg.Destroy()
+
+            if response == wx.ID_YES:
+                self._data_collector.set_consent(True)
+            elif response == wx.ID_NO:
+                self._data_collector.set_consent(False)
+            elif response == wx.ID_CANCEL:
+                self._data_collector.set_temporary_consent(days=1)
+            # Sync the Help menu checkbox to reflect the persisted choice.
+            self.refresh_consent_menu_item()
+        except Exception:
+            logging.exception("Failed to run data-collection consent prompt.")
+
         evt.Skip()
 
     def _on_update(self, evt):
