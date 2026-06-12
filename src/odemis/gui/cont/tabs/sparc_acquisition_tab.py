@@ -402,8 +402,8 @@ class SparcAcquisitionTab(Tab):
 
         self._ebeam_blanker_ctrl.enable(not is_acquiring)
         self.tb.enable(not is_acquiring)
-        self.import_btn.Enable(not is_acquiring)
-        self.export_btn.Enable(not is_acquiring)
+        self._recipes_controller.import_btn.Enable(not is_acquiring)
+        self._recipes_controller.export_btn.Enable(not is_acquiring)
         self.panel.vp_sparc_tl.Enable(not is_acquiring)
         # TODO: Leave the canvas accessible, but only forbid moving the stage and
         # if the mpp changes, do not update the horizontalFoV of the e-beam.
