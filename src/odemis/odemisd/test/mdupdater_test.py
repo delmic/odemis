@@ -25,7 +25,7 @@ import unittest.mock
 import numpy
 
 from odemis import model
-from odemis.driver import static
+from odemis.driver import simsem, static
 from odemis.model import Microscope
 from odemis.odemisd.mdupdater import MetadataUpdater
 from odemis.util import mock
@@ -86,6 +86,90 @@ class MDUpdaterTest(unittest.TestCase):
             self.assertEqual(md_ccd[model.MD_AR_MIRROR_BOTTOM], exp_mir_bot)
 
             mdup.terminate()
+
+
+class EbeamMDUpdaterTest(unittest.TestCase):
+    """
+    Tests for e-beam metadata propagation via MetadataUpdater, using mock components.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Create a minimal sparc2 microscope
+        cls.mic = Microscope("Fake SPARC2", "sparc2")
+
+        # Create a SimSEM with an e-beam scanner and an se-detector child
+        cls.sem = simsem.SimSEM(
+            "SEM",
+            "sem",
+            children={
+                "scanner": {"name": "e-beam scanner", "role": "e-beam"},
+                "detector0": {"name": "se-detector", "role": "se-detector"},
+            }
+        )
+        cls.ebeam = next(c for c in cls.sem.children.value if c.role == "e-beam")
+
+        # Create a fake CCD that will be affected by the e-beam
+        img = model.DataArray(numpy.empty((512, 768), dtype=numpy.uint16))
+        cls.ccd = mock.FakeCCD(img)
+
+        cls.ebeam.affects.value = [cls.ccd.name, "se-detector"]
+
+        # Mock model.getComponent() so MetadataUpdater can resolve component names
+        all_comps = list(cls.sem.children.value) + [cls.sem, cls.ccd]
+
+        def fake_get_component(name):
+            for c in all_comps:
+                if c.name == name:
+                    return c
+            raise LookupError(f"no component {name}")
+
+        cls._patch_get_component = unittest.mock.patch.object(model, "getComponent", fake_get_component)
+        cls._patch_get_component.start()
+
+        cls.mdup = MetadataUpdater("MDUpdater", cls.mic)
+        cls.mic.alive.value = set(cls.sem.children.value) | {cls.ccd}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.mdup.terminate()
+        cls.sem.terminate()
+        cls._patch_get_component.stop()
+
+    def test_ebeam_beam_params_on_detector(self):
+        """
+        Verify that when probeCurrent or accelVoltage change on the e-beam,
+        MD_BEAM_CURRENT and MD_BEAM_VOLTAGE are updated on the affected detectors.
+        """
+        # Both VAs must be present on the simulated e-beam
+        self.assertTrue(model.hasVA(self.ebeam, "probeCurrent"),
+                        "e-beam has no probeCurrent VA")
+        self.assertTrue(model.hasVA(self.ebeam, "accelVoltage"),
+                        "e-beam has no accelVoltage VA")
+
+        # After setup, the metadata should already be populated (init=True on subscribe)
+        md = self.ccd.getMetadata()
+        self.assertIn(model.MD_BEAM_CURRENT, md,
+                      "MD_BEAM_CURRENT not set on CCD after startup")
+        self.assertIn(model.MD_BEAM_VOLTAGE, md,
+                      "MD_BEAM_VOLTAGE not set on CCD after startup")
+        self.assertAlmostEqual(md[model.MD_BEAM_CURRENT], self.ebeam.probeCurrent.value)
+        self.assertAlmostEqual(md[model.MD_BEAM_VOLTAGE], self.ebeam.accelVoltage.value)
+
+        # Change probeCurrent => MD_BEAM_CURRENT must be updated
+        new_current = self.ebeam.probeCurrent.choices - {self.ebeam.probeCurrent.value}
+        new_current = next(iter(new_current))  # pick any value different from current
+        self.ebeam.probeCurrent.value = new_current
+        md = self.ccd.getMetadata()
+        self.assertAlmostEqual(md[model.MD_BEAM_CURRENT], new_current)
+
+        # Change accelVoltage => MD_BEAM_VOLTAGE must be updated
+        orig_voltage = self.ebeam.accelVoltage.value
+        voltage_range = self.ebeam.accelVoltage.range
+        new_voltage = voltage_range[1] if orig_voltage == voltage_range[0] else voltage_range[0]
+        self.ebeam.accelVoltage.value = new_voltage
+        md = self.ccd.getMetadata()
+        self.assertAlmostEqual(md[model.MD_BEAM_VOLTAGE], new_voltage)
 
 
 if __name__ == "__main__":
