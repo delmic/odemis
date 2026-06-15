@@ -342,13 +342,18 @@ class AnalysisTab(StreamLoadMixin, Tab):
         return spectrum, temporalspectrum, timecorrelator, angularspectrum
 
     @call_in_wx_main
-    def load_streams(self, das: List[Union[model.DataArray, model.DataArrayShadow]], filename, extend):
+    def load_streams(
+        self,
+        das: List[Union[model.DataArray, model.DataArrayShadow]],
+        filename: os.PathLike,
+        extend: bool = False
+    ) -> None:
         """
         Method to streamline the loading/display of streams with other tabs, without breaking existing code.
         :param das: the data to load
         :param filename: name of the file containing the data, for information display purposes.
         :param extend: if False, will ensure that the previous streams are closed.
-          If True, will add the new file to the current streams opened.
+          If True, will add the new file to the current streams opened. Default is False.
         """
         self.display_new_data(filename, das, extend)
 
