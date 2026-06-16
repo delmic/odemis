@@ -185,15 +185,6 @@ class MenuController(object):
         item.Check(self._data_collector.get_consent() is True)
         return item
 
-    def refresh_consent_menu_item(self) -> None:
-        """Sync the Help menu checkbox to the current consent state.
-        Call this after any external consent change (e.g. from the consent
-        dialog shown at startup) so the menu reflects the persisted value
-        without requiring a restart.
-        """
-        if self._consent_menu_item is not None:
-            self._consent_menu_item.Check(self._data_collector.get_consent() is True)
-
     @call_in_wx_main
     def _on_toggle_data_sharing(self, evt):
         """Show consent dialog when the data-sharing menu item is clicked."""
@@ -202,7 +193,7 @@ class MenuController(object):
             "including example images and interaction logs (e.g., alignment steps, point-of-interest placements). "
             "A random sample (eg, 10%) of workflow data may be included. This data is used solely to improve "
             "Odemis algorithms and user experience. Data is stored securely on EU servers, accessible "
-            "only to designated Delmic analysts, and never shared with third parties. "
+            "only to designated Delmic analysts, and never shared with third parties.\n\n"
             "By opting in, you confirm you have the authority to make this decision for your institution"
             " and that sharing this data is permitted under your institution's data policies.\n\n"
             "\"Remind me after one day\" enables sharing for 24 hours with 100% collection, "
@@ -225,11 +216,10 @@ class MenuController(object):
             elif response == wx.ID_CANCEL:
                 self._data_collector.set_temporary_consent(days=1)
             # Sync the Help menu checkbox to reflect the persisted choice.
-            self.refresh_consent_menu_item()
+            if self._consent_menu_item is not None:
+                self._consent_menu_item.Check(self._data_collector.get_consent() is True)
         except Exception:
             logging.exception("Failed to run data-collection consent prompt.")
-
-        evt.Skip()
 
     def _on_update(self, evt):
         import odemis.gui.util.updater as updater

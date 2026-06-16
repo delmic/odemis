@@ -55,8 +55,7 @@ import numpy
 
 import odemis
 from odemis import model
-from odemis.dataio import hdf5
-from odemis.dataio import tiff
+from odemis.dataio import hdf5, tiff
 
 
 # S3 bucket name — shared production bucket, created once by the dev team.
@@ -75,7 +74,7 @@ _CREDENTIALS_PATH = "/usr/share/odemis/datacollector.key"
 
 # Default paths
 _CONF_DIR = os.path.join(os.path.expanduser("~"), ".config", "odemis")
-_DEFAULT_QUEUE_DIR = Path("/var/log/odemis/dc_queue")
+_DEFAULT_QUEUE_DIR = Path("~/.local/share/odemis/dc_queue")
 
 _VALID_IMAGE_FORMATS = ("TIFF", "HDF5")
 _INITIAL_RETRY_DELAY_SECONDS = 30.0
@@ -106,7 +105,6 @@ def _sanitize_filename(name: str) -> str:
     # Replace characters unsafe in filenames.
     name = re.sub(r"[^\w\-.]", "_", name)
     return name or "_"
-
 
 def _search_credentials() -> dict:
     """
@@ -156,7 +154,6 @@ class DataCollectorConfig:
         # Date until which consent is active (ISO UTC). Auto-expires to false.
         # consent_date =
     """
-
     file_name: str = "datacollector.config"
 
     def __init__(self) -> None:
@@ -168,53 +165,38 @@ class DataCollectorConfig:
     def _read(self) -> None:
         """Read the config file if it exists; otherwise leave defaults."""
         if self.file_path.exists():
-            self._cp.read(str(self.file_path))
+            self._cp.read(self.file_path)
         else:
             logging.info("No datacollector config found; using defaults.")
 
     def _write(self) -> None:
-        """Write the config file with human-readable comments.
-
-        consent is always present as none / true / false.
-        reminder_date and consent_date are commented out when not set.
-        """
+        """Write the current config to file, creating parent directories if needed."""
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_section("general")
 
-        consent_val = self.consent
-        remind_val = self.remind_date
-        consent_date_val = self.consent_date
-
-        if consent_val is True:
-            consent_line = "consent = true"
-        elif consent_val is False:
-            consent_line = "consent = false"
+        # consent
+        if self.consent is None:
+            self._cp.remove_option("general", "consent")
         else:
-            consent_line = "# consent = true"
+            self._cp.set("general", "consent", "true" if self.consent else "false")
 
-        if remind_val is not None:
-            remind_line = f"reminder_date = {remind_val.strftime('%Y-%m-%d')}"
+        # reminder_date
+        if self.remind_date is None:
+            self._cp.remove_option("general", REMINDER_DATE_KEY)
         else:
-            remind_line = "# reminder_date = "
+            remind_utc = self.remind_date.astimezone(timezone.utc)
+            self._cp.set("general", REMINDER_DATE_KEY, remind_utc.isoformat())
 
-        if consent_date_val is not None:
-            consent_date_line = f"consent_date = {consent_date_val.isoformat()}"
+        # consent_date
+        if self.consent_date is None:
+            self._cp.remove_option("general", CONSENT_DATE_KEY)
         else:
-            consent_date_line = "# consent_date = "
+            consent_utc = self.consent_date.astimezone(timezone.utc)
+            self._cp.set("general", CONSENT_DATE_KEY, consent_utc.isoformat())
 
-        content = (
-            "[general]\n"
-            "# Data sharing consent (true / false).\n"
-            f"{consent_line}\n"
-            "#\n"
-            "# Date after which the consent dialog will be shown again (YYYY-MM-DD).\n"
-            f"{remind_line}\n"
-            "#\n"
-            "# Date until which consent is active (ISO UTC). Auto-expires to false.\n"
-            f"{consent_date_line}\n"
-        )
+        with self.file_path.open("w", encoding="utf-8") as fh:
+            self._cp.write(fh)
 
-        with open(str(self.file_path), "w") as fh:
-            fh.write(content)
         os.chmod(str(self.file_path), 0o600)
 
     def _ensure_section(self, section: str) -> None:
@@ -248,6 +230,7 @@ class DataCollectorConfig:
             self._ensure_section("general")
             self._cp.set("general", "consent", "true" if value else "false")
             self._cp.remove_option("general", REMINDER_DATE_KEY)
+            self._cp.remove_option("general", CONSENT_DATE_KEY)
             self._write()
 
     def clear_consent(self) -> None:
@@ -442,7 +425,7 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
                         da = value if isinstance(value, model.DataArray) else model.DataArray(value)
                         hdf5.export(str(abs_path), da)
                     except Exception:
-                        logging.exception("Failed to export DataArray to HDF5 at %s", abs_path)
+                        logging.warning("Failed to export DataArray to HDF5 at %s", abs_path, exc_info=True)
                         abs_path = None
                 else:
                     arc_name = f"{_sanitize_filename(key)}.ome.tiff"
@@ -451,7 +434,7 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
                         da = value if isinstance(value, model.DataArray) else model.DataArray(value)
                         tiff.export(str(abs_path), da)
                     except Exception:
-                        logging.exception("Failed to export DataArray to TIFF at %s", abs_path)
+                        logging.warning("Failed to export DataArray to TIFF at %s", abs_path, exc_info=True)
                         abs_path = None
 
                 if abs_path is not None and abs_path.exists():
@@ -474,7 +457,7 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
                 try:
                     payload_meta[key] = str(value)
                 except Exception:
-                    # TODO add logging
+                    logging.warning("Failed to convert payload key '%s' to string", key, exc_info=True)
                     payload_meta[key] = "<unserializable>"
 
         metadata = {
@@ -595,9 +578,8 @@ class _BackgroundWorker:
     Daemon thread that consumes WorkItem objects from a queue.
     For each item it calls _enforce_queue_limit, _serialize,
     and _upload in sequence.  After a successful upload the local ZIP
-    is deleted.  Exceptions are caught and logged so that the worker never
-    crashes the host application.The thread is started lazily and restarted
-    automatically if it dies.
+    is deleted.  Exceptions are caught and logged, but never directly shown to the user.
+    The thread is started lazily and restarted automatically if it dies.
     """
 
     def __init__(self, config: DataCollectorConfig, queue_dir: Path = _DEFAULT_QUEUE_DIR) -> None:
@@ -678,7 +660,7 @@ class _BackgroundWorker:
         try:
             backend = self._get_upload_backend()
         except Exception:
-            logging.exception("DataCollector failed to initialize upload backend")
+            logging.warning("DataCollector failed to initialize upload backend", exc_info=True)
             self._schedule_retry()
             return True
         for zip_path in pending:
@@ -687,7 +669,9 @@ class _BackgroundWorker:
                 zip_path.unlink(missing_ok=True)
                 self._reset_retry()
             except Exception:
-                logging.exception("DataCollector upload failed for %s", zip_path.name)
+                logging.warning(
+                    "DataCollector upload failed for %s", zip_path.name, exc_info=True
+                )
                 self._schedule_retry()
                 return True
         return True
@@ -714,16 +698,15 @@ class _BackgroundWorker:
                 try:
                     self._process_work_item(item)
                 except Exception:
-                    logging.exception(
-                        "DataCollector error processing event '%s'", item.event_name
-                    )
+                    logging.warning("DataCollector error processing event '%s'",
+                                    item.event_name, exc_info=True)
                 continue  # immediately check for more queued items
 
             # No in-memory items; try to upload pending ZIPs from disk.
             try:
                 had_pending = self._process_pending_zips(self._queue_dir)
             except Exception:
-                logging.exception("DataCollector error while processing pending uploads")
+                logging.warning("DataCollector error while processing pending uploads", exc_info=True)
                 self._schedule_retry()
                 had_pending = True
 
@@ -738,8 +721,8 @@ class _BackgroundWorker:
             try:
                 self._process_work_item(item)
             except Exception:
-                logging.exception(
-                    "DataCollector error processing event '%s'", item.event_name
+                logging.warning(
+                    "DataCollector error processing event '%s'", item.event_name, exc_info=True
                 )
 
 
@@ -765,7 +748,7 @@ class DataCollector:
                 self._init_ok = True
                 logging.debug("DataCollector initialised.")
             except Exception:
-                logging.exception(
+                logging.warning(
                     "DataCollector failed to initialise; all record() calls will be no-ops."
                 )
 
@@ -919,8 +902,8 @@ class DataCollector:
                 payload=payload,
                 image_format=image_format,
             )
-            self._worker.enqueue(item)  # type: ignore[union-attr]
+            self._worker.enqueue(item)
         except Exception:
-            logging.exception(
-                "Unexpected error in DataCollector.record(); event '%s' dropped.", event_name
+            logging.warning(
+                "Unexpected error in DataCollector.record(); event '%s' dropped.", event_name, exc_info=True
             )
