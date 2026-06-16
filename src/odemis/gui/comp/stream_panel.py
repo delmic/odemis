@@ -178,7 +178,7 @@ class StreamPanelHeader(wx.Control):
     def _add_label_ctrl(self):
         """ Add a label control to the header panel """
         label_ctrl = wx.StaticText(self, wx.ID_ANY, self.Parent.stream.name.value,
-                                   style=wx.ST_ELLIPSIZE_END)
+                                   style=wx.ST_ELLIPSIZE_MIDDLE)
         # In case the name is too long, at least we can see it full with a mouse hover
         label_ctrl.SetToolTip(self.Parent.stream.name.value)
         label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
