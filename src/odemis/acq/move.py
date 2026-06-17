@@ -1120,7 +1120,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         elif source_posture == FIB_VIEW_FM and target_posture != MILLING:
             return False
         elif source_posture == LOADING:
-            # From loading, we always allow to go to SEM imaging
             if target_posture == SEM_IMAGING:
                 return True
             # When we are at the loading position, we internally work with the SEM imaging source posture
@@ -1128,7 +1127,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             else:
                 source_posture = SEM_IMAGING
 
-        # Otherwise, check for availability in posture transforms
+        # Check for availability in posture transforms
         transform_available = bool(
             self._posture_transforms.get(source_posture, {}).get(target_posture, False)
         )

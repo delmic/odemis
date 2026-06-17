@@ -115,6 +115,8 @@ class xrcfr_correlation(wx.Dialog):
         self.vp_correlation_tl = xrc.XRCCTRL(self, "vp_correlation_tl")
         self.vp_correlation_tr = xrc.XRCCTRL(self, "vp_correlation_tr")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.bmp_fm_posture = xrc.XRCCTRL(self, "bmp_fm_posture")
+        self.lbl_fm_posture = xrc.XRCCTRL(self, "lbl_fm_posture")
         self.fp_correlation_panel = xrc.XRCCTRL(self, "fp_correlation_panel")
         self.pnl_correlation = xrc.XRCCTRL(self, "pnl_correlation")
         self.btn_delete_row = xrc.XRCCTRL(self, "btn_delete_row")
@@ -1999,6 +2001,35 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
+                    <border>10</border>
+                    <flag>wxALL</flag>
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <border>10</border>
+                        <flag>wxRIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                        <object class="wxStaticText">
+                          <label>FM acquired at</label>
+                          <fg>#DDDDDD</fg>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticBitmap" name="bmp_fm_posture">
+                          <bitmap>______img_icon_ico_meteorimaging_png</bitmap>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <flag>wxALIGN_CENTER_VERTICAL</flag>
+                        <object class="wxStaticText" name="lbl_fm_posture">
+                          <label>posture</label>
+                          <fg>#777777</fg>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem" name="fp_correlation_panel">
                         <object class="wxPanel" name="pnl_correlation">
@@ -2134,6 +2165,26 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
   </object>
 </resource>'''
 
+    ______img_icon_ico_meteorimaging_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00(\x00\x00\x00(\x08\x04\x00\x00\x00&\xf7\
+p\xe6\x00\x00\x01;IDATH\xc7c\xf8\xcf@]\xc80j\xe0\xc86\xd0#\xd2\xb3\xdc\x1b\
+\x03z\x96\xbb\x97;z\x93e`\xe0\xfe\x88\xff\x91\xff#\xfe\x87#A\x10?\xe8\xbf\
+\xc7\x02\xb2\x0c\x8c\xd8\x9f\xf0?\xe1\xec\xfd\xc8U\xe1`\x18\xb9*fU\xc2\
+\xab\x04\xa0\xa1\xbe\xe4\x19\x18\xb9?\xe9\xe2\xff\xa8/~\xea0\x910\xeb\xc4\
+?I\xff\xa3)1\x10\xa4\xdd\xff\x8c6\x1b\x88\x1f\xca\x1fy\x1f"B\x81\x81)@O\
+\x87\xfd\xf7j\x03\xf1\x83\x97\xc6\xffO\xa6\xdc\xc0\xe4\xff\xb1\xff\x83\xff\
+\xfa:\x05\xc6\xc5\xfc\x07\xf1)6\x10dD\xec\xff\xc8\xc71\x1fa<\x8a\x0d\x04\
+\x19\x92\xf8\x1f\xc1\xa6\x82\x81\xc8p\xd4\xc0Q\x03\xf1\x1a\x18\xda\x9b\x80\
+\xc5\xc0D`!\xe6\x95G\x96\x81\x0c\x8cQ\xd3\x12\xb1\xb8/\xa0\x9e\xec*\x00\
+\xddH\xc2\xc6\x11\xacS\x90\x8d$\xc68"*)\x90\x91\x09\xc0\x90K \xca8\xa2j\
+\xbd\x06\xa6\x90\x9a\xf0\x99\xa13\xfd\xb3\x07o\xbd\xec\xe9\xeb\xbb\xcak\
+\x95\x8b\x05\xd5\x0c\xf4w\x0f\xfd\x1f\xf0\xdfC\x9dj\x06\x86
+E\xfe\x0b\xfa\xd0\xc0D\xc50\x0c\xbb\xe3\xbf\x87\xaam\x1b\xff\xe5\x90\x9a\
+\x8fj\x06z\x15\xb9\x06R\xd5@g[\x07\x19\xaa\x1a\xe8\xc9>|\x1a\x9c\x00\xd1\
+"s\x15\xed\xb3\x01\xef\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     ______img_icon_ico_trash_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -2144,6 +2195,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 \x00\x00\x00IEND\xaeB`\x82'''
 
     wx.MemoryFSHandler.AddFile('XRC/dialog_correlation_tdct/dialog_correlation_tdct_xrc', bytearray(dialog_correlation_tdct_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/dialog_correlation_tdct/______img_icon_ico_meteorimaging_png', bytearray(______img_icon_ico_meteorimaging_png))
     wx.MemoryFSHandler.AddFile('XRC/dialog_correlation_tdct/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
     __res.Load('memory:XRC/dialog_correlation_tdct/dialog_correlation_tdct_xrc')
 
