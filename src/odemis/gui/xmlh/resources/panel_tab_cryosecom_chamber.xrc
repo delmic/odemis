@@ -186,9 +186,9 @@
 											</object>
                                             <object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_fib_view_fm">
-													<icon>../../img/icon/ico_meteorimaging_milling.png</icon>
-													<icon_progress>../../img/icon/ico_meteorimaging_milling_orange.png</icon_progress>
-													<icon_on>../../img/icon/ico_meteorimaging_milling_green.png</icon_on>
+													<icon>../../img/icon/ico_meteor_fib_view_fm.png</icon>
+													<icon_progress>../../img/icon/ico_meteor_fib_view_fm_orange.png</icon_progress>
+													<icon_on>../../img/icon/ico_meteor_fib_view_fm_green.png</icon_on>
 													<height>48</height>
 													<face_colour>def</face_colour>
 													<label>FIB-VIEW FM</label>

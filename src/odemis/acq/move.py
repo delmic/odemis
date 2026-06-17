@@ -159,7 +159,7 @@ class MicroscopePostureManager:
         Do the actual switching procedure for cryo_switch_sample_position
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
-           ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
+           ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING, FIB_VIEW_FM.
         """
         pass
 
@@ -427,7 +427,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             },
             UNKNOWN: {
                 UNKNOWN: lambda x: x
-         }
+            },
         }
 
     def create_sample_stage(self):
@@ -1101,8 +1101,12 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param target_posture: the target posture
         :return: whether it is allowed to move from source to target posture
         """
+        # Grids are an edge case, since it is basically a movement within the current posture,
+        # but we typically allow grid movement when we are at a non-loading and known posture.
+        if target_posture in [GRID_1, GRID_2] and source_posture not in [LOADING, UNKNOWN]:
+            return True
         # Always allow to "stay" at the posture
-        if source_posture == target_posture:
+        elif source_posture == target_posture:
             return True
         # It is always accepted to go to the loading position.
         elif target_posture == LOADING:
@@ -1110,25 +1114,19 @@ class MeteorPostureManager(MicroscopePostureManager):
         # From unknown position we never allow moves, except to the loading position, which we handled above.
         elif source_posture == UNKNOWN:
             return False
-        # Grids are an edge case, since it is basically a movement within the current posture,
-        # but we typically allow grid movement when we are at a non-loading and known posture.
-        elif source_posture not in [LOADING, UNKNOWN] and target_posture in [GRID_1, GRID_2]:
-            return True
         # For FIB-view FM we only allow to go to and from the milling posture.
         elif source_posture != MILLING and target_posture == FIB_VIEW_FM:
             return False
-        elif source_posture == FIB_VIEW_FM and target_posture not in [MILLING, GRID_1, GRID_2]:
+        elif source_posture == FIB_VIEW_FM and target_posture != MILLING:
             return False
         elif source_posture == LOADING:
-            # From loading, we always allow to go to SEM imaging
             if target_posture == SEM_IMAGING:
                 return True
-            # When we are at the loading position, we internally work with the SEM imaging source posture
-            # to go to the desired target posture
-            elif target_posture not in [GRID_1, GRID_2]:
+            else:
+                # The sem posture is used as a reference when going from the loading position to any other posture.
                 source_posture = SEM_IMAGING
 
-        # Otherwise, check for availability in posture transforms
+        # Check for availability in posture transforms
         transform_available = bool(
             self._posture_transforms.get(source_posture, {}).get(target_posture, False)
         )
