@@ -36,13 +36,15 @@ from odemis.acq.milling.patterns import (
 class MillingSettings:
     """Represents milling settings for a single milling task"""
 
-    def __init__(self, current: float, voltage: float, field_of_view: float, mode: str = "Serial", channel: str = "ion", align: bool = True):
+    def __init__(self, current: float, voltage: float, field_of_view: float, mode: str = "Serial",
+                 channel: str = "ion", align: bool = True, spot_size: float = 5.0e-09):
         self.current = model.FloatContinuous(current, unit="A", range=(20e-12, 120e-9))
         self.voltage = model.FloatContinuous(voltage, unit="V", range=(0, 30e3))
         self.field_of_view = model.FloatContinuous(field_of_view, unit="m", range=(50e-06, 960e-06))
         self.mode = model.StringEnumerated(mode, choices={"Serial", "Parallel"})
         self.channel = model.StringEnumerated(channel, choices={"ion"})
-        self.align = model.BooleanVA(align) # align at the milling current
+        self.align = model.BooleanVA(align)  # align at the milling current
+        self.spot_size = model.FloatContinuous(spot_size, unit="m", range=(5.0e-09, 1.0e-06))  # FIB beam spot size (diameter)
 
     def to_dict(self) -> dict:
         return {"current": self.current.value,
@@ -50,7 +52,8 @@ class MillingSettings:
                 "field_of_view": self.field_of_view.value,
                 "mode": self.mode.value,
                 "channel": self.channel.value,
-                "align": self.align.value}
+                "align": self.align.value,
+                "spot_size": self.spot_size.value}
 
     @staticmethod
     def from_dict(data: dict) -> "MillingSettings":
@@ -59,7 +62,8 @@ class MillingSettings:
                                 field_of_view=data["field_of_view"],
                                 mode=data.get("mode", "Serial"),
                                 channel=data.get("channel", "ion"),
-                                align=data.get("align", True)
+                                align=data.get("align", True),
+                                spot_size=data.get("spot_size", 5.0e-09)
                                 )
 
     def __repr__(self):

@@ -14,6 +14,7 @@
     field_of_view: 8e-05
     mode: 'Serial'
     channel: 'ion'
+    spot_size: 5.0e-09
   patterns:
     - name: 'Microexpansion'
       width: 0.5e-06
@@ -31,6 +32,7 @@
     field_of_view: 8e-05
     mode: 'Serial'
     channel: 'ion'
+    spot_size: 5.0e-09
   patterns:
     - name: 'Rough Trench'
       width: 1.0e-05
@@ -48,6 +50,7 @@
     field_of_view: 8e-05
     mode: 'Serial'
     channel: 'ion'
+    spot_size: 5.0e-09
   patterns:
     - name: 'Rough Trench 02'
       width: 9.5e-6
@@ -65,6 +68,7 @@
     field_of_view: 8e-05
     mode: 'Serial'
     channel: 'ion'
+    spot_size: 5.0e-09
   patterns:
     - name: 'Polishing Trench 01'
       width: 9.0e-06
@@ -82,6 +86,7 @@
     field_of_view: 8e-05
     mode: 'Serial'
     channel: 'ion'
+    spot_size: 5.0e-09
   patterns:
     - name: 'Polishing Trench 02'
       width: 8.5e-06
