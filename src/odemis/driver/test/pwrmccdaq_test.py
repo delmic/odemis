@@ -56,6 +56,20 @@ CONFIG_LIGHT_DEVICE = {
                 "di_channels": {13: ["interlockTriggered", False], 14: ["mirrorParked", True]},
 }
 
+CONFIG_CONTROLLER_DEVICE = {
+    "name": "ND Filter",
+    "role": "nd-filter",
+    "mcc_device": "fake",
+    # DO channel 0 (Port A, bit 0) controls the filter
+    "do_axes": {0: ["nd-filter", "on", "off", 0.1]},
+    # Simulator mirrors Port A bit 0 -> Port B bit 0, which is DI channel 8
+    "di_feedback": {"nd-filter": [8, True]},
+    # DI channel 9 (Port B, bit 1) monitors the interlock.
+    # Simulator mirrors DO channel 1 (Port A, bit 1) -> DI channel 9 (Port B, bit 1).
+    "di_channels": {9: ["interlockTriggered", True]},
+}
+
+
 
 class TestMCCDeviceLight(unittest.TestCase):
     """
@@ -250,6 +264,82 @@ class TestMCCDeviceLight(unittest.TestCase):
     def tearDown(self):
         if self.mcc_device:
             self.mcc_device.terminate()
+
+
+class TestMCCDeviceDIOActuator(unittest.TestCase):
+    """
+    All test cases from this class are executed with a simulated device.
+    The simulator mirrors DO channels 0-7 (Port A) to DI channels 8-15 (Port B).
+    """
+    def setUp(self):
+        self.controller = pwrmccdaq.MCCDeviceDIOActuator(**CONFIG_CONTROLLER_DEVICE)
+
+    def tearDown(self):
+        if self.controller:
+            self.controller.terminate()
+
+    def test_initial_state(self):
+        """Check that all axes start in the low (off) position."""
+        self.assertEqual(self.controller.position.value["nd-filter"], "off")
+
+    def test_move_abs(self):
+        """Test moving the axis to both positions."""
+        # Move to "on" (high)
+        f = self.controller.moveAbs({"nd-filter": "on"})
+        f.result(timeout=5)
+        self.assertEqual(self.controller.position.value["nd-filter"], "on")
+
+        # Move back to "off" (low)
+        f = self.controller.moveAbs({"nd-filter": "off"})
+        f.result(timeout=5)
+        self.assertEqual(self.controller.position.value["nd-filter"], "off")
+
+    def test_move_abs_invalid(self):
+        """Test that moving to an invalid position raises ValueError."""
+        with self.assertRaises(ValueError):
+            self.controller.moveAbs({"nd-filter": "invalid"})
+
+    def test_interlock(self):
+        """
+        Test that the interlockTriggered VA updates when the interlock DI channel changes.
+        The simulator mirrors DO channel 1 (Port A, bit 1) to DI channel 9 (Port B, bit 1).
+        """
+        # Check the VA is registered and polling thread is running
+        self.assertTrue(model.hasVA(self.controller, "interlockTriggered"))
+        self.assertTrue(self.controller._status_thread.is_alive())
+
+        # Initially the interlock should not be triggered
+        time.sleep(0.15)  # let the polling thread do one cycle
+        self.assertFalse(self.controller.interlockTriggered.value)
+
+        # Simulate an interlock signal by writing to DO channel 1 (Port A, bit 1),
+        # which the simulator mirrors to DI channel 9 (Port B, bit 1)
+        port, bit = self.controller.channel_to_port(1)
+        with self.controller._connection_lock:
+            self.controller.device.DBitOut(port, bit, 1)
+        time.sleep(0.15)  # wait longer than the poll interval
+
+        self.assertTrue(self.controller.interlockTriggered.value)
+
+        # Release the interlock
+        with self.controller._connection_lock:
+            self.controller.device.DBitOut(port, bit, 0)
+        time.sleep(0.15)
+
+        self.assertFalse(self.controller.interlockTriggered.value)
+
+    def test_terminate(self):
+        """Test that terminate() resets all outputs to low."""
+        f = self.controller.moveAbs({"nd-filter": "on"})
+        f.result(timeout=5)
+        self.assertEqual(self.controller.position.value["nd-filter"], "on")
+
+        self.controller.terminate()
+        # After terminate, the DO pin should be low
+        port, bit = self.controller.channel_to_port(0)
+        val = self.controller.device.DBitIn(port, bit)
+        self.assertEqual(val, 0)
+        self.controller = None  # prevent tearDown from calling terminate() again
 
 
 if __name__ == "__main__":

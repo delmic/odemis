@@ -364,6 +364,231 @@ class MCCDeviceLight(Emitter, MCCDevice):
                     self.device.DBitOut(port, bit, new_bit_value)
 
 
+class MCCDeviceDIOActuator(model.Actuator, MCCDevice):
+    """
+    Actuator with binary (ON/OFF) axes controlled via MCC DAQ digital outputs,
+    with position feedback via separate digital inputs.
+    Follows the same pattern as TMCM do_axes for binary axis control.
+    """
+
+    def __init__(self, name: str, role: str, mcc_device: Optional[str],
+                 do_axes: Dict[int, Tuple[str, str, str, float]],
+                 di_feedback: Dict[str, Tuple[int, bool]],
+                 di_channels: Dict[int, Tuple[str, bool]] = {},
+                 **kwargs):
+        """
+        :param mcc_device: serial number or None for auto-detect.
+            If "fake" is passed the simulator is used.
+        :param do_axes:
+            Digital output channel -> [axis_name, high_position_name, low_position_name, transition_duration_s].
+            Each entry defines a binary axis controlled via a DO channel.
+            Example: {0: ["nd-filter", "on", "off", 0.5]}
+            The axis will have two choices: "on" and "off" (or any two string values).
+            The transition_duration is the time (s) to wait for the physical mechanism to settle.
+        :param di_feedback:
+            axis_name -> [DI channel number, ttl_high].
+            The DI channel used to read back the actual position of the axis.
+            ttl_high=True means DI high corresponds to the "high" position of the axis.
+            Example: {"nd-filter": [8, True]}
+        :param di_channels: refer to MCCDevice parent.
+            Additional DI channels for general status monitoring (e.g., interlock).
+        """
+        # Validate do_axes
+        if not do_axes:
+            raise ValueError("do_axes must define at least one axis")
+
+        self._do_axes = {}  # int (channel) -> (axis_name, hpos, lpos, duration)
+        self._name_to_do_channel = {}  # str (axis_name) -> int (DO channel)
+        self._di_feedback = {}  # str (axis_name) -> (int DI channel, bool ttl_high)
+
+        axes_def = {}
+        for channel, axis_info in do_axes.items():
+            if len(axis_info) != 4:
+                raise ValueError(
+                    f"do_axes expects [name, high_pos, low_pos, duration] for channel {channel}, "
+                    f"got {axis_info}")
+            an, hpos, lpos, dur = axis_info
+            if an in self._name_to_do_channel:
+                raise ValueError(f"Axis '{an}' specified multiple times in do_axes")
+            if not 0 <= dur < 1000:
+                raise ValueError(f"Axis '{an}' duration {dur} should be between 0 and 1000 s")
+            if hpos == lpos:
+                raise ValueError(f"Axis '{an}' high and low positions must be different")
+
+            self._do_axes[channel] = (an, hpos, lpos, dur)
+            self._name_to_do_channel[an] = channel
+            axes_def[an] = model.Axis(choices={lpos, hpos})
+
+        # Validate di_feedback
+        for an, fb_info in di_feedback.items():
+            if an not in self._name_to_do_channel:
+                raise ValueError(f"di_feedback references unknown axis '{an}'")
+            if len(fb_info) != 2:
+                raise ValueError(
+                    f"di_feedback expects [channel, ttl_high] for axis '{an}', got {fb_info}")
+            di_ch, ttl_high = fb_info
+            self._di_feedback[an] = (di_ch, ttl_high)
+
+        # Merge feedback DI channels into di_channels so MCCDevice configures them as inputs.
+        # Use internal names that won't conflict with user-provided di_channels.
+        all_di_channels = dict(di_channels)
+        for an, (di_ch, ttl_high) in self._di_feedback.items():
+            if di_ch in all_di_channels:
+                raise ValueError(
+                    f"di_feedback channel {di_ch} for axis '{an}' conflicts with di_channels")
+            # Add a hidden DI channel for feedback; the VA name is internal
+            all_di_channels[di_ch] = [f"_feedback_{an}", ttl_high]
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+        MCCDevice.__init__(self, name, role, mcc_device, all_di_channels)
+
+        self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+        # Set all outputs to low (safe state) at init
+        for channel, (an, hpos, lpos, dur) in self._do_axes.items():
+            port, bit = self.channel_to_port(channel)
+            with self._connection_lock:
+                self.device.DBitOut(port, bit, 0)
+
+        self.position = model.VigilantAttribute({}, readonly=True)
+        self._updatePosition()
+
+        self._metadata = {model.MD_HW_NAME: f"{self.device.getManufacturer()} "
+                                            f"{self.device.getProduct()} "
+                                            f"{self.device.getSerialNumber()}"}
+        self._swVersion = odemis.__version__
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+
+    def _updatePosition(self):
+        """Read the actual position from the DI feedback channels."""
+        pos = {}
+        for channel, (an, hpos, lpos, _) in self._do_axes.items():
+            if an in self._di_feedback:
+                di_ch, ttl_high = self._di_feedback[an]
+                port, bit = self.channel_to_port(di_ch)
+                with self._connection_lock:
+                    val = self.device.DBitIn(port, bit)
+                if bool(val) == ttl_high:
+                    pos[an] = hpos
+                else:
+                    pos[an] = lpos
+            else:
+                # No feedback channel: report based on what was last written
+                port, bit = self.channel_to_port(channel)
+                with self._connection_lock:
+                    val = self.device.DBitIn(port, bit)
+                pos[an] = hpos if val else lpos
+
+        self.position._set_value(pos, force_write=True)
+        logging.debug(f"Updated position: {pos}")
+
+    def _createMoveFuture(self):
+        """Return a CancellableFuture for a move."""
+        f = model.CancellableFuture()
+        f._moving_lock = threading.Lock()
+        f._must_stop = threading.Event()
+        f._was_stopped = False
+        f.task_canceller = self._cancelCurrentMove
+        return f
+
+    @model.isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        f = self._createMoveFuture()
+        self._executor.submitf(f, self._doMoveAbs, f, pos)
+        return f
+
+    moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
+
+    @model.isasync
+    def moveRel(self, shift):
+        raise NotImplementedError("Relative move is not supported on binary axes")
+
+    moveRel.__doc__ = model.Actuator.moveRel.__doc__
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+
+    def _checkMoveAbs(self, pos):
+        for axis, val in pos.items():
+            if axis not in self.axes:
+                raise ValueError(f"Unknown axis '{axis}'")
+            axis_def = self.axes[axis]
+            if hasattr(axis_def, "choices") and val not in axis_def.choices:
+                raise ValueError(
+                    f"Unsupported position '{val}' for axis '{axis}', "
+                    f"choices are {axis_def.choices}")
+
+    def _doMoveAbs(self, future, pos):
+        """
+        Blocking and cancellable absolute move.
+        Sets the DO pin and waits for the transition duration.
+        """
+        with future._moving_lock:
+            end = 0
+            for an, v in pos.items():
+                channel = self._name_to_do_channel[an]
+                _, hpos, _, dur = self._do_axes[channel]
+
+                port, bit = self.channel_to_port(channel)
+                new_val = int(v == hpos)
+                logging.debug("Setting DO channel %d to %d for axis '%s' -> '%s'",
+                              channel, new_val, an, v)
+                with self._connection_lock:
+                    self.device.DBitOut(port, bit, new_val)
+                end = max(end, time.time() + dur)
+
+            # Wait for the transition, checking for cancellation
+            self._waitEndMove(future, end)
+
+        logging.debug("Move successfully completed")
+
+    def _waitEndMove(self, future, end):
+        """
+        Wait until the transition duration has elapsed or cancellation is requested.
+        """
+        while not future._must_stop.is_set():
+            left = end - time.time()
+            if left <= 0:
+                break
+            sleept = max(0.001, min(left / 2, 0.1))
+            future._must_stop.wait(sleept)
+        else:
+            future._was_stopped = True
+            raise model.CancelledError()
+
+        self._updatePosition()
+
+    def _cancelCurrentMove(self, future):
+        """Cancel the current move."""
+        future._must_stop.set()
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling current move")
+            return future._was_stopped
+
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+
+        # Set all outputs to low (safe state) on shutdown
+        if self.device:
+            for channel in self._do_axes:
+                port, bit = self.channel_to_port(channel)
+                try:
+                    with self._connection_lock:
+                        self.device.DBitOut(port, bit, 0)
+                except Exception:
+                    logging.warning("Failed to reset DO channel %d on terminate", channel)
+
+        super().terminate()
+
+
 class MCCDeviceSimulator:
     """
     A really basic and simple interface to simulate a USB-1208LS device with
