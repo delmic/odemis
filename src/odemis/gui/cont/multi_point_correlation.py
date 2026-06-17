@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import annotations  # allows the use of Python3.9 style typing in Python3.8
 
 import logging
+import math
 import queue
 import re
 import threading
@@ -32,6 +33,14 @@ from typing import List, Union, Optional, Tuple
 
 import numpy
 import wx
+from odemis.util.transform import SimilarityTransform
+
+from odemis.acq.align.transform import CalculateTransform
+
+from odemis.gui.img import getBitmap
+
+from odemis.acq.move import POSITION_NAMES, FM_IMAGING, FIB_VIEW_FM
+
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
@@ -68,8 +77,12 @@ RIM_COR_DEFAULT = 0.495  # See MD_RIM_COR. This value works fine for 50x objecti
 # conditions to convert between physical and pixel coordinate systems in order for multipoint correlation to operate.
 # For coordinate conversions, we assume the pixels in 3D are isosymmetric
 # i.e. size in pixel[0]=pixel[1]=pixel[2].
-COM_ROI_PADDING = 12  # Padding (pixels) for center of mass ROI extraction
+REFINE_SEARCH_RANGE = 2.5e-6  # m, search range for fiducial refinement
 # TODO: Could adapt padding based on pixel spacing for more flexibility if needed
+
+# If the milling angle of a FIB image and an FM z-stack are below the tolerance, they are considered to be matching.
+MILLING_ANGLE_TOLERANCE = math.radians(0.1)  # Now 0.1 degree, but this depends on stage accuracy, so might need to update this later.
+
 
 def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False) \
         -> Optional[Tuple[float, float, float]]:
@@ -168,6 +181,41 @@ class CorrelationPointsController:
         self._main_data_model = self._tab_data_model.main
         self._panel = frame
         self._viewports = frame.pnl_correlation_grid.viewports
+
+        streams = self._main_data_model.currentFeature.value.streams.value
+        z_stacks = [s for s in streams if isinstance(s, StaticFluoStream) and hasattr(s, "zIndex")]
+        pm = self._main_data_model.posture_manager
+        # Determine milling angle of reference FIB image, directly accessing without safeguards, since earlier checks
+        # should have made sure everything is present.
+        fib_pos = self._main_data_model.currentFeature.value.reference_image.metadata[model.MD_STAGE_POSITION_RAW]
+        fib_rx = fib_pos["rx"]
+        fib_mill_angle = pm.calculate_milling_angle(stage_tilt=fib_rx, column_tilt=pm.fib_column_tilt)
+        # Iterate over al z-stacks and check if there are any that are acquired at the milling angle matching the
+        # reference FIB image.
+        z_stacks_at_milling = []
+        for z_stack in z_stacks:
+            # Directly indexing without safeguards, since everything should be there.
+            z_stack_rx = z_stack.getRawMetadata()[0][model.MD_STAGE_POSITION_RAW]["rx"]
+            z_stack_mill_angle = pm.calculate_milling_angle(stage_tilt=z_stack_rx, column_tilt=pm.fm_column_tilt)
+            # Consider a z-stack to be acquired at milling angle when they are close.
+            if math.isclose(fib_mill_angle, z_stack_mill_angle, rel_tol=MILLING_ANGLE_TOLERANCE):
+                z_stacks_at_milling.append(z_stack)
+
+        at_fib_view_fm = False
+        if any(z_stacks_at_milling):
+            at_fib_view_fm = True
+
+        self.at_fib_view_fm = model.BooleanVA(at_fib_view_fm)
+
+        if self.at_fib_view_fm.value:
+            self._panel.lbl_fm_posture.SetLabel(POSITION_NAMES[FIB_VIEW_FM])
+            bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm.png")
+            self._panel.bmp_fm_posture.SetBitmap(bmp_fib_view_fm)
+        else:
+            self._panel.lbl_fm_posture.SetLabel(POSITION_NAMES[FM_IMAGING])
+            bmp_fm_imaging = getBitmap("icon/ico_meteorimaging.png")
+            self._panel.bmp_fm_posture.SetBitmap(bmp_fm_imaging)
+
         self.grid_targets = (TargetType.PointOfInterest, TargetType.Fiducial, TargetType.FibFiducial)
 
         lens_md = self._main_data_model.lens.getMetadata()
@@ -209,6 +257,10 @@ class CorrelationPointsController:
         self.grid.Bind(wx.EVT_KEY_DOWN, self._on_key_down_grid)
         self.grid.EnableEditing(True)
 
+        # Hide the z-column for the FIB-view FM workflow, since we only perform 2d correlation.
+        if self.at_fib_view_fm.value:
+            self.hide_grid_column(3)
+
         # Parameters to keep track of the latest changes and process the correlation result with the latest change
         self.correlation_txt = self._panel.txt_correlation_rms
         self.correlation_txt.Show(True)
@@ -225,10 +277,7 @@ class CorrelationPointsController:
         self.previous_group: Optional[tuple[tuple[int], tuple[float]]] = None
 
         # Interpolate the fm streams such that the pixel size in z is the same as in x and y
-        streams_list = []
-        for stream in self._tab_data_model.main.currentFeature.value.streams.value:
-            if isinstance(stream, StaticFluoStream) and hasattr(stream, "zIndex"):
-                streams_list.append(StaticFluoStream(stream.name.value, stream.raw[0]))
+        streams_list = z_stacks_at_milling if self.at_fib_view_fm.value else z_stacks
 
         self.streams_list = streams_list
         self.correlation_target = self._tab_data_model.main.currentFeature.value.correlation_data
@@ -248,6 +297,31 @@ class CorrelationPointsController:
         self._add_stream_group()
 
         self._panel.fp_correlation_panel.Show(True)
+
+    @call_in_wx_main
+    def hide_grid_column(self, col_idx: int) -> None:
+        """
+        Hides the provided grid column and redistributes the remaining column widths to fill the available space.
+        :param col_idx: Column index to hide
+        """
+        # Hide the column
+        self.grid.HideCol(col_idx)
+        # Gather only the columns that are currently visible
+        visible_cols = [c for c in range(self.grid.GetNumberCols()) if self.grid.IsColShown(c)]
+
+        if not visible_cols:
+            return
+
+        # Determine usable display width
+        grid_width, _ = self.grid.GetClientSize()
+        usable_width = grid_width - self.grid.GetRowLabelSize()
+        # Divide width evenly (using integer division to avoid fractional pixels)
+        even_width = usable_width // len(visible_cols)
+        # Update sizes
+        for c in visible_cols:
+            self.grid.SetColSize(c, even_width)
+
+        self.grid.ForceRefresh()
 
     @call_in_wx_main
     def _on_fm_streams_visiblity(self, stream_projections: ListVA) -> None:
@@ -391,12 +465,13 @@ class CorrelationPointsController:
 
     def check_correlation_conditions(self) -> bool:
         """
-        Minimum 4 FIB and FM fiducials and 1 POI in FM are required to run the correlation.
+        Minimum 2 or 4 FIB and FM fiducials depending on FM posture and 1 POI in FM are required to run the correlation.
         :return: (bool) True if the conditions are met, False otherwise
         """
+        min_fiducials = 2 if self.at_fib_view_fm.value else 4
         if self.correlation_target:
-            if ((len(self.correlation_target.fib_fiducials) >= 4 and
-                 len(self.correlation_target.fm_fiducials) >= 4 and len(self.correlation_target.fm_pois) >= 1 and
+            if ((len(self.correlation_target.fib_fiducials) >= min_fiducials and
+                 len(self.correlation_target.fm_fiducials) >= min_fiducials and len(self.correlation_target.fm_pois) >= 1 and
                  len(self._tab_data_model.views.value[0].stream_tree) > 0) and self.correlation_target.fib_stream and
                     (len(self.correlation_target.fm_fiducials) == len(self.correlation_target.fib_fiducials))):
                 return True
@@ -404,7 +479,7 @@ class CorrelationPointsController:
                 self.correlation_target.clear()
                 self._tab_data_model.projected_points = []
                 self.correlation_txt.SetLabel("To run correlation, please add \n"
-                                              "minimum 4 FIB-FM fiducial pairs, 1 POI in FM.")
+                                              f"minimum {min_fiducials} FIB-FM fiducial pairs, 1 POI in FM.")
                 self._panel.Layout()
                 # Update the FIB viewport because it shows the output overlays
                 # It is the second viewport out of total two viewports
@@ -442,10 +517,15 @@ class CorrelationPointsController:
     def _process_latest_change(self):
         """Process the latest change in the queue."""
         self.is_processing = True
-        self._do_correlation()
+        if self.at_fib_view_fm.value:
+            self._do_2d_correlation()
+        else:
+            self._do_3d_correlation()
+
         rms = self.correlation_target.correlation_result["output"]["error"]["rms_error"]
         wx.CallAfter(self.correlation_txt.SetLabel,
                      f"Correlation RMS Deviation : {readable_str(rms, sig=3)}")
+
         # Display the output in the relevant views
         self._viewports[1].canvas.Refresh()
         self.is_processing = False  # Mark that processing is complete
@@ -461,8 +541,58 @@ class CorrelationPointsController:
         self._tab_data_model.views.value[0].stream_tree.flat.unsubscribe(self._on_fm_streams_visiblity)
         self.worker_thread.join(5)
 
-    def _do_correlation(self):
-        """Run the correlation between the FIB and FM images."""
+    def _do_2d_correlation(self):
+        """Run the 2d correlation between the FIB and FM images."""
+        index_order = []  # append the same index order to the projected points as the input fiducials
+        fib_coords = []
+        fm_coords = []
+
+        for fib_coord in self.correlation_target.fib_fiducials:
+            index_order.append(fib_coord.index.value)
+            fib_coord_px = self.correlation_target.fib_stream.getPixelCoordinates(fib_coord.coordinates.value[0:2], check_bbox=False)
+            fib_coords.append(fib_coord_px)
+
+        for fm_coord in self.correlation_target.fm_fiducials:
+            fm_coord_px = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], fm_coord.coordinates.value)[:2]
+            fm_coords.append(fm_coord_px)
+
+        fib_coords = numpy.array(fib_coords, dtype=numpy.float32)
+        fm_coords = numpy.array(fm_coords, dtype=numpy.float32)
+        # Perform registration
+        transform = SimilarityTransform.from_pointset(fm_coords, fib_coords)
+        poi_coord = self.correlation_target.fm_pois[0]
+        poi_coord_px = get_pixel_3d_coordinates(self.correlation_target.fm_streams[0], poi_coord.coordinates.value)[:2]
+        poi_transformed = transform.apply(poi_coord_px)
+
+        projected_poi = self.correlation_target.fib_stream.getPhysicalCoordinates(poi_transformed)
+        projected_poi_target = Target(x=projected_poi[0], y=projected_poi[1], z=0, name="PPOI",
+                                      type=TargetType.ProjectedPOI,
+                                      index=1,
+                                      fm_focus_position=0)
+        # Apply coordinates
+        self._tab_data_model.projected_points = [projected_poi_target]
+        self.correlation_target.fib_projected_pois = [projected_poi_target]
+
+        # Project other points for visualization
+        # Update the output parameters of the correlation
+        self.correlation_target.fib_projected_fiducials = []
+        fm_coords_transformed = transform.apply(fm_coords)
+        for i, point in enumerate(fm_coords_transformed):
+            p_pos = self.correlation_target.fib_stream.getPhysicalCoordinates(point)
+            target = Target(x=p_pos[0], y=p_pos[1], z=0, name="PP" + str(index_order[i]),
+                            type=TargetType.ProjectedFiducial, index=index_order[i],
+                            fm_focus_position=0)
+            self._tab_data_model.projected_points.append(target)
+            self.correlation_target.fib_projected_fiducials.append(target)
+
+        rms = numpy.mean(((fib_coords - fm_coords_transformed) ** 2) ** 0.5)
+        # Fill in error metric in similar way to 3d correlation, for consistency
+        self.correlation_target.correlation_result = {
+            "output": {"error": {"rms_error": rms}},
+        }
+
+    def _do_3d_correlation(self):
+        """Run the 3d correlation between the FIB and FM images."""
         # Modify the input data to match the required format to run 3DCT
         fm_das = [stream.raw[0] for stream in self.correlation_target.fm_streams]
         fm_image = _convert_das_to_numpy_stack(fm_das)
@@ -859,10 +989,12 @@ class CorrelationPointsController:
             raw_multi = numpy.asarray([s.raw[0] for s in streams])
             shape_y, shape_x = raw_multi.shape[-2], raw_multi.shape[-1]
             # Get boundary-safe slice & crop
-            y_start = max(0, target_y - COM_ROI_PADDING)
-            y_end = min(shape_y, target_y + COM_ROI_PADDING + 1)
-            x_start = max(0, target_x - COM_ROI_PADDING)
-            x_end = min(shape_x, target_x + COM_ROI_PADDING + 1)
+            pixel_size = streams[0].getRawMetadata()[0][model.MD_PIXEL_SIZE][0]  # Always present, so direct indexing
+            pixel_padding = int(REFINE_SEARCH_RANGE / pixel_size)
+            y_start = max(0, target_y - pixel_padding)
+            y_end = min(shape_y, target_y + pixel_padding + 1)
+            x_start = max(0, target_x - pixel_padding)
+            x_end = min(shape_x, target_x + pixel_padding + 1)
             roi = numpy.s_[:, y_start:y_end, x_start:x_end]
             multi_crop = raw_multi[(slice(None),) + roi]  # We search along all stack slices (first axis)
             # Find best channel and compute COM

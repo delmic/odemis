@@ -165,7 +165,7 @@ class LocalizationTab(Tab):
 
         # Current posture indicator initialization
         self.bmp_fm_imaging = getBitmap("icon/ico_meteorimaging_green.png")
-        self.bmp_fib_view_fm = getBitmap("icon/ico_meteorimaging_milling_green.png")
+        self.bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm_green.png")
 
         # Will create SEM stream with all settings local
         emtvas = set()
