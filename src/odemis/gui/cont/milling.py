@@ -67,6 +67,9 @@ MILLING_COLOURS_CANONICAL = {
     "Microexpansion": "#FFA500",
     "Fiducial": "#FF69B4",
 }
+# Step sizes to move the milling patterns horizontally
+MOVE_DELTA_X_SHORT = 1  # px
+MOVE_DELTA_X_LONG = 5  # px
 
 def _get_milling_colour(task_name: str, idx: int) -> str:
     """Get the colour based on the task name or index"""
@@ -181,6 +184,7 @@ class MillingTaskController:
         )
         self.canvas.add_world_overlay(self.rectangles_overlay)
         self.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down) # bind the mouse down event
+        self.canvas.Bind(wx.EVT_CHAR, self.on_char)
 
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
@@ -338,6 +342,72 @@ class MillingTaskController:
             # TODO: validate whether the pattern is within the image bounds before moving it
             # move selected stream to position
             self.move_milling_tasks(pos_to_relative(p_pos, feature.reference_image))
+            return
+
+        # super event passthrough
+        evt.Skip()
+
+    def on_char(self, evt: wx.Event) -> None:
+        """
+        Handle keyboard button presses to move the milling pattern horizontally with the keyboard arrows,
+        when control or control combination is used.
+        :param evt: the event
+        """
+        # event data
+        key = evt.GetKeyCode()
+        shift_mod = evt.ShiftDown()
+        ctrl_mod = evt.ControlDown()
+
+        # pass through event, if not a valid arrow key is pressed
+        valid_keys = [wx.WXK_LEFT, wx.WXK_RIGHT]
+        if key not in valid_keys:
+            evt.Skip()
+            return
+
+        active_canvas = evt.GetEventObject()
+        logging.debug(f"keyboard button pressed event, canvas: {active_canvas}")
+
+        feature = self._tab_data.main.currentFeature.value
+
+        # check if control is pressed, and if a stream is selected
+        if (ctrl_mod
+                and self.allow_milling_pattern_move
+                and feature and feature.reference_image is not None
+        ):
+            # move in small step when both ctrl and shift are pressed, bigger step with only ctrl
+            if shift_mod:
+                step_px = MOVE_DELTA_X_SHORT
+            else:
+                step_px = MOVE_DELTA_X_LONG
+            ref_img = feature.reference_image
+            if key == wx.WXK_LEFT:
+                view_dx = -step_px
+            elif key == wx.WXK_RIGHT:
+                view_dx = step_px
+            else:
+                view_dx = 0
+
+            # Move all milling patterns within all milling tasks together as a group.
+            # Each pattern's center is shifted by the same view-coordinate distance,
+            # so everything moves as one unit (no individual pattern movement).
+            # This ensures the entire milling setup stays aligned.
+            for task in self.milling_tasks.values():
+                for pattern in task.patterns:
+                    selected_center_rel = pattern.center.value
+                    offset = active_canvas.get_half_buffer_size()
+                    center_phys = pos_to_absolute(selected_center_rel, ref_img)
+                    center_view = active_canvas.phys_to_view(center_phys, offset)
+                    new_center_view = (center_view[0] + view_dx, center_view[1])
+                    new_center_phys = active_canvas.view_to_phys(new_center_view, offset)
+                    logging.debug(f"Move milling pattern {pattern.name.value} horizontally from physical position"
+                                  f" {center_phys}, to new position {new_center_phys}")
+
+                    # move selected pattern to position
+                    relative_pos = pos_to_relative(new_center_phys, feature.reference_image)
+                    pattern.center.value = relative_pos
+
+            save_project(self._tab_data.main)
+            self.draw_milling_tasks()
             return
 
         # super event passthrough
