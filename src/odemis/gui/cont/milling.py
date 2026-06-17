@@ -100,13 +100,28 @@ def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
 def rectangle_pattern_to_shape(canvas,
                         ref_img: model.DataArray,
                         pattern: RectanglePatternParameters,
+                        spot_size: float,
                         colour: str = "#FFFF00",
                         name: str = None) -> EditableShape:
-    """Convert a rectangle pattern to a shape"""
-    rect = RectangleOverlay(cnvs=canvas, colour = colour, show_selection_points = False)
+    """
+    Convert a rectangle pattern to a shape, taking spot size of the beam into account.
+
+    :param canvas: Canvas object to draw shapes on
+    :param ref_img: Reference image on which the shapes are drawn
+    :param pattern: provide type of shape and its parameters
+    :param spot_size: spot size in m (beam diameter)
+    :param colour: colour of the shape
+    :param name: name of the shape, e.g. Rough Milling, Polishing etc.
+    """
+    rect = RectangleOverlay(cnvs=canvas, colour=colour, show_selection_points=False)
     width = pattern.width.value
     height = pattern.height.value
-    x, y = pos_to_absolute(pattern.center.value, ref_img) # image coordinates -> physical coordinates
+    # Expand each dimension by the spot size (diameter) to circumscribe the beam path
+    # Since spot_size is the beam diameter, the beam will affect the area by half the spot size on each side
+    # of the rectangle, so we add the full spot size to each dimension.
+    width_expanded = width + spot_size
+    height_expanded = height + spot_size
+    x, y = pos_to_absolute(pattern.center.value, ref_img)  # image coordinates -> physical coordinates
     if name is not None:
         rect.name.value = name
 
@@ -115,10 +130,10 @@ def rectangle_pattern_to_shape(canvas,
     # |     |
     # 4  -  3
 
-    rect.p_point1 = Vec(x - width / 2, y + height / 2)
-    rect.p_point2 = Vec(x + width / 2, y + height / 2)
-    rect.p_point3 = Vec(x + width / 2, y - height / 2)
-    rect.p_point4 = Vec(x - width / 2, y - height / 2)
+    rect.p_point1 = Vec(x - width_expanded / 2, y + height_expanded / 2)
+    rect.p_point2 = Vec(x + width_expanded / 2, y + height_expanded / 2)
+    rect.p_point3 = Vec(x + width_expanded / 2, y - height_expanded / 2)
+    rect.p_point4 = Vec(x - width_expanded / 2, y - height_expanded / 2)
 
     # required for initialisation?
     rect._phys_to_view()
@@ -224,9 +239,8 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        pattern_parameters = ["width", "height", "depth", "spacing"] # TODO: add milling params
-        # milling params: current, voltage, field of view, mode
-        milling_parameters = ["current", "align", "mode"]
+        pattern_parameters = ["width", "height", "depth", "spacing"]
+        milling_parameters = ["current", "align", "mode", "spot_size"]
 
         # Note: always create all the panels, but hide for which the task is not selected.
         # This way, when a task is selected, we can just show the panel without having to create it.
@@ -273,7 +287,7 @@ class MillingTaskController:
                 self.controls[task_name][f"{param}_connector"] = _va_connector
 
                 # VA connector, bind events
-                getattr(milling, param).subscribe(self._on_patterns)
+                val.subscribe(self._on_patterns)
 
             if not task.selected:
                 panel.Hide()
@@ -415,6 +429,7 @@ class MillingTaskController:
                                             canvas=self.canvas,
                                             ref_img=feature.reference_image,
                                             pattern=pshape,
+                                            spot_size=task.milling.spot_size.value,
                                             colour=_get_milling_colour(task_name, i),
                                             name=name)
                     self.rectangles_overlay.add_shape(shape)
@@ -512,8 +527,8 @@ class MillingTaskController:
         """
         Updates milling time and availability of the mill button when there's an update on the patterns
         """
-
         logging.warning(f"Pattern updated: {dat}")
+        save_project(self._tab_data.main)
         self.draw_milling_tasks()
 
     def _cancel_milling_series(self, _):
