@@ -590,21 +590,45 @@ class MetadataUpdater(model.Component):
 
         return True
 
-    def observeEbeam(self, ebeam, comp_affected):
-        """Add ebeam rotation to multibeam metadata to make sure that the thumbnails
-        are displayed correctly."""
+    def observeEbeam(self, ebeam: model.HwComponent, comp_affected: model.HwComponent) -> bool:
+        """
+        Update metadata of components affected by the e-beam when its parameters change.
 
-        if comp_affected.role != "multibeam":
-            return False
+        Propagates probeCurrent and accelVoltage to all affected components.
+        Additionally, for multibeam components, propagates the beam rotation.
 
-        def updateRotation(rot, comp_affected=comp_affected):
-            md = {model.MD_ROTATION: rot}
-            comp_affected.updateMetadata(md)
+        :param ebeam: the e-beam scanner component
+        :param comp_affected: a component affected by the e-beam
+        :return: True if at least one VA is observed, False otherwise
+        """
+        observed = False
 
-        ebeam.rotation.subscribe(updateRotation, init=True)
-        self._onTerminate.append((ebeam.rotation.unsubscribe, (updateRotation,)))
+        # Map of VA name -> metadata key for VAs that are directly copied
+        va_md_map = {
+            "probeCurrent": model.MD_BEAM_CURRENT,
+            "accelVoltage": model.MD_BEAM_VOLTAGE,
+        }
 
-        return True
+        for va_name, md_key in va_md_map.items():
+            if model.hasVA(ebeam, va_name):
+                def updateBeamParam(val, md_key=md_key, comp_affected=comp_affected):
+                    comp_affected.updateMetadata({md_key: val})
+
+                va = getattr(ebeam, va_name)
+                va.subscribe(updateBeamParam, init=True)
+                self._onTerminate.append((va.unsubscribe, (updateBeamParam,)))
+                observed = True
+
+        if comp_affected.role == "multibeam":
+            def updateRotation(rot, comp_affected=comp_affected):
+                md = {model.MD_ROTATION: rot}
+                comp_affected.updateMetadata(md)
+
+            ebeam.rotation.subscribe(updateRotation, init=True)
+            self._onTerminate.append((ebeam.rotation.unsubscribe, (updateRotation,)))
+            observed = True
+
+        return observed
 
     def terminate(self):
         self._mic.alive.unsubscribe(self._onAlive)

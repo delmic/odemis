@@ -281,11 +281,14 @@ class StreamController(object):
         elif model.MD_DWELL_TIME in md:
             self.add_metadata(model.MD_DWELL_TIME, md[model.MD_DWELL_TIME], 's')
 
-        if model.MD_EBEAM_VOLTAGE in md:
-            self.add_metadata("Acceleration voltage", md[model.MD_EBEAM_VOLTAGE], 'V')
+        # On the SPARC, the CL streams (eg, spectrum) also have the beam voltage and current metadata,
+        # but it's not helpful to show it, as it's always the same as the associated SEM streams
+        if self.stream.acquisitionType.value in (model.MD_AT_EM, model.MD_AT_FIB):
+            if model.MD_BEAM_VOLTAGE in md:
+                self.add_metadata("Acceleration voltage", md[model.MD_BEAM_VOLTAGE], 'V')
 
-        if model.MD_EBEAM_CURRENT in md:
-            self.add_metadata("Emission current", md[model.MD_EBEAM_CURRENT], 'A')
+            if model.MD_BEAM_CURRENT in md:
+                self.add_metadata("Emission current", md[model.MD_BEAM_CURRENT], 'A')
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
