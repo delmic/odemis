@@ -606,7 +606,7 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
     :raises CancelledError: if the operation is cancelled
     """
 
-    results: dict[tuple, bool] = {}
+    results: Dict[tuple, bool] = {}
     original_pos = {k: v for k, v in spectrograph.position.value.items()
                     if k in ("wavelength", "grating")}
 

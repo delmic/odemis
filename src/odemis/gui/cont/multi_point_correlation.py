@@ -28,7 +28,7 @@ import re
 import threading
 import time
 from enum import Enum
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional, Tuple, Dict, Set
 
 import numpy
 import wx
@@ -219,10 +219,9 @@ class CorrelationPointsController:
         # Create a dictionary to hold the groups of streams based on their shape and centre position
         # The keys will be tuples of (shape, position)
         # The values will be sets of stream indices
-        self.stream_groups: Optional[
-            dict[tuple[tuple[int], tuple[float]], list[int]]] = None  # Dictionary to hold the stream groups
+        self.stream_groups: Optional[Dict[Tuple[Tuple[int, ...], Tuple[float, float]], Set[int]]] = None
         # Key of the selected group chosen previously
-        self.previous_group: Optional[tuple[tuple[int], tuple[float]]] = None
+        self.previous_group: Optional[Tuple[Tuple[int, ...], Tuple[float, float]]] = None
 
         # Interpolate the fm streams such that the pixel size in z is the same as in x and y
         streams_list = []
