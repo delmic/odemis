@@ -32,6 +32,29 @@ from odemis.driver import pwrmccdaq
 logging.getLogger().setLevel(logging.DEBUG)
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
+CONFIG_ND_FILTER = {
+    "name": "ND Filter",
+    "role": "nd-filter",
+    "axes": {
+        "nd-filter1": {
+            "do": 0,       # Port A, bit 0
+            "low": 0.0,
+            "high": 1.57,
+            "unit": "rad",
+            "duration": 0.1,
+            "di": 8,       # Simulator mirrors Port A bit 0 -> Port B bit 0 = DI channel 8
+            "di_inverted": False,
+        },
+        "nd-filter2": {
+            "do": 1,
+            "low": 0.0,
+            "high": 1.57,
+            "unit": "rad",
+            "duration": 0.5,
+        },
+    },
+}
+
 CONFIG_LIGHT_DEVICE = {
                 "name": "Laser Hub", "role": "light",
                 "mcc_device": None,
@@ -54,21 +77,8 @@ CONFIG_LIGHT_DEVICE = {
                 # the DI ports 13 or 14.
                 # For hardware testing, connect pins 26 and 27 with 37 and 38 respectively on the board.
                 "di_channels": {13: ["interlockTriggered", False], 14: ["mirrorParked", True]},
+                "children": {"actuator": CONFIG_ND_FILTER},
 }
-
-CONFIG_CONTROLLER_DEVICE = {
-    "name": "ND Filter",
-    "role": "nd-filter",
-    "mcc_device": "fake",
-    # DO channel 0 (Port A, bit 0) controls the filter
-    "do_axes": {0: ["nd-filter", "on", "off", 0.1]},
-    # Simulator mirrors Port A bit 0 -> Port B bit 0, which is DI channel 8
-    "di_feedback": {"nd-filter": [8, True]},
-    # DI channel 9 (Port B, bit 1) monitors the interlock.
-    # Simulator mirrors DO channel 1 (Port A, bit 1) -> DI channel 9 (Port B, bit 1).
-    "di_channels": {9: ["interlockTriggered", True]},
-}
-
 
 
 class TestMCCDeviceLight(unittest.TestCase):
@@ -257,6 +267,114 @@ class TestMCCDeviceLight(unittest.TestCase):
         self.assertTrue(self.mcc_device._status_thread.terminated)
         self.assertFalse(self.mcc_device._status_thread.is_alive())
 
+    def test_child_nd_filter_port_conflict(self):
+        """DO and DI channels on the same port must raise ValueError."""
+        MOD_CONFIG = copy.deepcopy(CONFIG_LIGHT_DEVICE)
+        MOD_CONFIG["children"]["actuator"] = copy.deepcopy(CONFIG_ND_FILTER)
+        # Both do=0 (Port A) and di=1 (Port A) — same port, should fail
+        MOD_CONFIG["children"]["actuator"]["axes"]["nd-filter1"]["di"] = 1
+        with self.assertRaises(ValueError):
+            pwrmccdaq.MCCDeviceLight(**MOD_CONFIG)
+
+    def test_child_nd_filter_di_conflict_with_parent(self):
+        """DI channel of actuator axis must not overlap with parent di_channels."""
+        MOD_CONFIG = copy.deepcopy(CONFIG_LIGHT_DEVICE)
+        # Channel 13 is already used as a parent di_channel (interlockTriggered)
+        MOD_CONFIG["children"]["actuator"]["axes"]["nd-filter1"]["di"] = 13
+        with self.assertRaises(ValueError):
+            pwrmccdaq.MCCDeviceLight(**MOD_CONFIG)
+
+    def test_child_nd_filter(self):
+        """
+        Test the ND filter actuator child of the MCCDeviceLight.
+        """
+        self._create_device()
+        actuator = None
+        for child in self.mcc_device.children.value:
+            if child.name == CONFIG_ND_FILTER["name"]:
+                actuator = child
+                break
+
+        self.assertIsInstance(actuator, model.Actuator)
+        self.assertIsInstance(actuator, pwrmccdaq.MCCDeviceDIOActuator)
+
+    def test_child_nd_filter_move(self):
+        """
+        Test the ND filter actuator child of the MCCDeviceLight.
+        Covers both an axis with DI feedback and one without.
+        """
+        self._create_device()
+        actuator = None
+        for child in self.mcc_device.children.value:
+            if child.name == CONFIG_ND_FILTER["name"]:
+                actuator = child
+                break
+
+        d_nd_filter1 = CONFIG_ND_FILTER["axes"]["nd-filter1"]["duration"]
+        d_nd_filter2 = CONFIG_ND_FILTER["axes"]["nd-filter2"]["duration"]
+        max_duration = max(d_nd_filter1, d_nd_filter2)
+
+        # Move nd-filter (has DI feedback) to high
+        start = time.time()
+        f = actuator.moveAbs({"nd-filter1": 1.57})
+        f.result()
+        self.assertGreaterEqual(time.time() - start, d_nd_filter1)
+        self.assertEqual(actuator.position.value["nd-filter1"], 1.57)
+
+        # Move nd-filter back to low
+        start = time.time()
+        f = actuator.moveAbs({"nd-filter1": 0.0})
+        f.result()
+        self.assertGreaterEqual(time.time() - start, d_nd_filter1)
+        self.assertEqual(actuator.position.value["nd-filter1"], 0.0)
+
+        # Move filter2 (no DI feedback) to high — position is inferred from DO readback
+        start = time.time()
+        f = actuator.moveAbs({"nd-filter2": 1.57})
+        f.result()
+        self.assertGreaterEqual(time.time() - start, d_nd_filter2)
+        self.assertEqual(actuator.position.value["nd-filter2"], 1.57)
+
+        # Move filter2 back to low
+        start = time.time()
+        f = actuator.moveAbs({"nd-filter2": 0.0})
+        f.result()
+        self.assertGreaterEqual(time.time() - start, d_nd_filter2)
+        self.assertEqual(actuator.position.value["nd-filter2"], 0.0)
+
+        # Move both filters to high
+        start = time.time()
+        f = actuator.moveAbs({"nd-filter1": 1.57, "nd-filter2": 1.57})
+        f.result()
+        self.assertGreaterEqual(time.time() - start, max_duration)
+        self.assertEqual(actuator.position.value["nd-filter1"], 1.57)
+        self.assertEqual(actuator.position.value["nd-filter2"], 1.57)
+
+        # Move both filters back to low
+        start = time.time()
+        f = actuator.moveAbs({"nd-filter1": 0.0, "nd-filter2": 0.0})
+        f.result()
+        self.assertGreaterEqual(time.time() - start, max_duration)
+        self.assertEqual(actuator.position.value["nd-filter1"], 0.0)
+        self.assertEqual(actuator.position.value["nd-filter2"], 0.0)
+
+    def test_child_nd_filter_invalid_move(self):
+        """
+        Test the ND filter actuator child of the MCCDeviceLight.
+        """
+        self._create_device()
+        actuator = None
+        for child in self.mcc_device.children.value:
+            if child.name == CONFIG_ND_FILTER["name"]:
+                actuator = child
+                break
+
+        with self.assertRaises(ValueError):
+            actuator.moveAbs({"nd-filter": 0.5})
+
+        with self.assertRaises(ValueError):
+            actuator.moveAbs({"nd-filter1": 2.0})  # exceeds high limit
+
     def _create_device(self):
         self.mcc_device = pwrmccdaq.MCCDeviceLight(**CONFIG_LIGHT_DEVICE)
         time.sleep(1)  # wait long enough until everything is set in the MCCDeviceDIStatus thread
@@ -264,82 +382,6 @@ class TestMCCDeviceLight(unittest.TestCase):
     def tearDown(self):
         if self.mcc_device:
             self.mcc_device.terminate()
-
-
-class TestMCCDeviceDIOActuator(unittest.TestCase):
-    """
-    All test cases from this class are executed with a simulated device.
-    The simulator mirrors DO channels 0-7 (Port A) to DI channels 8-15 (Port B).
-    """
-    def setUp(self):
-        self.controller = pwrmccdaq.MCCDeviceDIOActuator(**CONFIG_CONTROLLER_DEVICE)
-
-    def tearDown(self):
-        if self.controller:
-            self.controller.terminate()
-
-    def test_initial_state(self):
-        """Check that all axes start in the low (off) position."""
-        self.assertEqual(self.controller.position.value["nd-filter"], "off")
-
-    def test_move_abs(self):
-        """Test moving the axis to both positions."""
-        # Move to "on" (high)
-        f = self.controller.moveAbs({"nd-filter": "on"})
-        f.result(timeout=5)
-        self.assertEqual(self.controller.position.value["nd-filter"], "on")
-
-        # Move back to "off" (low)
-        f = self.controller.moveAbs({"nd-filter": "off"})
-        f.result(timeout=5)
-        self.assertEqual(self.controller.position.value["nd-filter"], "off")
-
-    def test_move_abs_invalid(self):
-        """Test that moving to an invalid position raises ValueError."""
-        with self.assertRaises(ValueError):
-            self.controller.moveAbs({"nd-filter": "invalid"})
-
-    def test_interlock(self):
-        """
-        Test that the interlockTriggered VA updates when the interlock DI channel changes.
-        The simulator mirrors DO channel 1 (Port A, bit 1) to DI channel 9 (Port B, bit 1).
-        """
-        # Check the VA is registered and polling thread is running
-        self.assertTrue(model.hasVA(self.controller, "interlockTriggered"))
-        self.assertTrue(self.controller._status_thread.is_alive())
-
-        # Initially the interlock should not be triggered
-        time.sleep(0.15)  # let the polling thread do one cycle
-        self.assertFalse(self.controller.interlockTriggered.value)
-
-        # Simulate an interlock signal by writing to DO channel 1 (Port A, bit 1),
-        # which the simulator mirrors to DI channel 9 (Port B, bit 1)
-        port, bit = self.controller.channel_to_port(1)
-        with self.controller._connection_lock:
-            self.controller.device.DBitOut(port, bit, 1)
-        time.sleep(0.15)  # wait longer than the poll interval
-
-        self.assertTrue(self.controller.interlockTriggered.value)
-
-        # Release the interlock
-        with self.controller._connection_lock:
-            self.controller.device.DBitOut(port, bit, 0)
-        time.sleep(0.15)
-
-        self.assertFalse(self.controller.interlockTriggered.value)
-
-    def test_terminate(self):
-        """Test that terminate() resets all outputs to low."""
-        f = self.controller.moveAbs({"nd-filter": "on"})
-        f.result(timeout=5)
-        self.assertEqual(self.controller.position.value["nd-filter"], "on")
-
-        self.controller.terminate()
-        # After terminate, the DO pin should be low
-        port, bit = self.controller.channel_to_port(0)
-        val = self.controller.device.DBitIn(port, bit)
-        self.assertEqual(val, 0)
-        self.controller = None  # prevent tearDown from calling terminate() again
 
 
 if __name__ == "__main__":
