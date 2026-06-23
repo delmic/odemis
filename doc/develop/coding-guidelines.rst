@@ -159,8 +159,9 @@ For example, when type information is refined in the docstring.
         return True
 
 
-In test classes, it is recommended to have one-line docstring for each test method. For very short and obvious
-tests, where the function name explain what all it does, then in such cases, the docstring can be omitted.
+In test classes, it is recommended to add a one-line docstring for each test method when it improves clarity.
+For very short and obvious tests, where the function name already explains the behavior, the docstring can be omitted.
+Because test methods typically only take ``self`` and do not return a value, type hints in the function signature are not required.
 
 For e.g. 2.3 the test class should be defined as
 
