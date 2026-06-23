@@ -236,7 +236,7 @@ class DataCollectorConfig:
     def clear_consent(self) -> None:
         """
         Unset consent so it becomes undecided again.
-         :return: None
+        :return: None
         """
         with self._lock:
             self._ensure_section("general")

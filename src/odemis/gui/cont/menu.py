@@ -171,7 +171,7 @@ class MenuController(object):
             menu.Remove(main_frame.menu_item_show_correlation)
             main_frame.menu_item_show_correlation.Destroy()
 
-    def _append_data_sharing_menu_item(self, main_frame: wx.Frame) -> wx.MenuItem | None:
+    def _append_data_sharing_menu_item(self, main_frame: wx.Frame) -> wx.MenuItem:
         """
         Append and initialize Help menu checkbox for data sharing consent.
         :param main_frame: The main application frame.

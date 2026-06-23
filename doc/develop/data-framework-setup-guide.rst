@@ -1,431 +1,425 @@
 Odemis Data Collection Framework — Setup Guide
-==============================================
+===============================================
 
-| Audience : Software / support engineers setting up data collection on
-  an
-| Odemis installation or on a developer workstation.
+**Audience:** Software and support engineers setting up data collection on an
+Odemis installation or on a developer workstation.
 
-Note - all commands are in bash, all the lines need to be entered line
-by line unless mentioned otherwise
+.. note::
+   All commands are Bash. Enter them line by line unless stated otherwise.
 
-| This guide covers:
-| Prerequisites
-| Installing the boto3 package
-| Creating and installing the credentials key file
-| Setting up the local queue directory (dc_queue)
-| Verifying the configuration file
-| Test-bucket vs production-bucket mode
-| Running the unit tests
-| Quick smoke-test with odemis-dc-fetch
-| Troubleshooting
+This guide covers:
+
+- Prerequisites
+- Installing the boto3 package
+- Creating and installing the credentials key file
+- Setting up the local queue directory (``dc_queue``)
+- Verifying the configuration file
+- Test-bucket vs production-bucket mode
+- Running the unit tests
+- Quick smoke-test with ``odemis-dc-fetch``
+- Troubleshooting
+
 
 Prerequisites
-----------------
+-------------
 
-- Ubuntu 22.04 LTS (or later)
-- Odemis installed from the debian package (or source checkout)
-- AWS S3 credentials (access_key + secret_key) for the target bucket. Obtain
-  these from a Delmic software engineer; they are NOT stored in this repository.
-- Write access to /usr/share/odemis/ (for the key file)
+- Ubuntu 22.04 LTS or later
+- Odemis installed from the Debian package or a source checkout
+- AWS S3 credentials (``access_key`` + ``secret_key``) for the target bucket.
+  Obtain these from a Delmic software engineer; they are **not** stored in this
+  repository.
+- Write access to ``/usr/share/odemis/`` (for the key file)
 
-Installing the boto3 package
--------------------------------
 
-boto3 is the AWS SDK for Python used to upload data to S3.
+Installing the boto3 Package
+-----------------------------
 
-| When installed via the Odemis debian package it is listed as a
-  dependency and
-| will be pulled in automatically:
+``boto3`` is the AWS SDK for Python used to upload data to S3.
 
-::
+When installed via the Odemis Debian package it is listed as a dependency and
+will be pulled in automatically:
 
-   sudo apt update  
+.. code-block:: bash
+
+   sudo apt update
    sudo apt install python3-boto3
 
 To verify the installation:
 
-::
+.. code-block:: bash
 
-   python3 \-c "import boto3; print(boto3.\_\_version\_\_)"
+   python3 -c "import boto3; print(boto3.__version__)"
 
-| If the command prints a version string (e.g. “1.28.0”) the package is
-  ready.
-| If it raises ImportError, re-run the apt install command above.
+If the command prints a version string (e.g. ``1.28.0``) the package is ready.
+If it raises ``ImportError``, re-run the ``apt install`` command above.
 
-Installing the credentials key file
---------------------------------------
 
-The framework reads S3 credentials from a single JSON file at:
+Installing the Credentials Key File
+-------------------------------------
 
-::
-
-   /usr/share/odemis/datacollector.key
+The framework reads S3 credentials from a single JSON file at: /usr/share/odemis/datacollector.key
 
 The file must contain exactly the following two keys:
 
-::
+.. code-block:: json
 
-   { "access\_key": "\<AWS\_ACCESS\_KEY\_ID\>","secret\_key":"\<AWS\_SECRET\_ACCESS\_KEY\>" }
+   { "access_key": "<AWS_ACCESS_KEY_ID>", "secret_key": "<AWS_SECRET_ACCESS_KEY>" }
 
-| Obtain the actual key values from a Delmic software engineer. Do NOT
-  commit
-| them to any repository or share them over unencrypted channels.
+Obtain the actual key values from a Delmic software engineer. Do **not** commit
+them to any repository or share them over unencrypted channels.
 
--——— PRODUCTION SETUP -———
 
-| Contact a software engineer who has access to the AWS IAM console
-| to get key pair.
+Production Setup
+~~~~~~~~~~~~~~~~
 
-Steps:
+Contact a software engineer who has access to the AWS IAM console to get the
+key pair, then run the following commands line by line:
 
-::
+.. code-block:: bash
 
-   \# Create the file (replace the placeholder values with the real keys) line by line
-
-1. | sudo tee /usr/share/odemis/datacollector.key > /dev/null << ‘EOF’
-
-2. { “access_key”: “<PRODUCTION_ACCESS_KEY_ID>”,“secret_key”:
-   “<PRODUCTION_SECRET_ACCESS_KEY>”}
-
+   # Create the file — replace placeholder values with the real keys
+   sudo tee /usr/share/odemis/datacollector.key > /dev/null << 'EOF'
+   { "access_key": "<PRODUCTION_ACCESS_KEY_ID>", "secret_key": "<PRODUCTION_SECRET_ACCESS_KEY>" }
    EOF
 
-   | # Restrict access: readable only by root and the odemis process
-     user in bash (Can be copied together)
-   | sudo chmod 600 /usr/share/odemis/datacollector.key
-   | sudo chown root:root /usr/share/odemis/datacollector.key
+   # Restrict access: readable only by root and the odemis process user
+   sudo chmod 600 /usr/share/odemis/datacollector.key
+   sudo chown root:root /usr/share/odemis/datacollector.key
 
--——— TEST / DEVELOPER SETUP -———
 
-| Use the test IAM credentials (scoped to “delmic-odemis-collect-test”).
-  Ask a
-| software engineer for the test key pair. The setup steps are
-  identical:
+Test / Developer Setup
+~~~~~~~~~~~~~~~~~~~~~~
 
-::
+Use the test IAM credentials scoped to ``delmic-odemis-collect-test``. Ask a
+software engineer for the test key pair. The setup steps are identical:
 
-   \# Create the file (replace the placeholder values with the real keys) line by line
+.. code-block:: bash
 
-3. | sudo tee /usr/share/odemis/datacollector.key > /dev/null << ‘EOF’
-
-4. { “access_key”: “<TEST_ACCESS_KEY_ID>”,“secret_key”:
-   “<TEST_SECRET_ACCESS_KEY>”}
-
+   # Create the file — replace placeholder values with the real keys
+   sudo tee /usr/share/odemis/datacollector.key > /dev/null << 'EOF'
+   { "access_key": "<TEST_ACCESS_KEY_ID>", "secret_key": "<TEST_SECRET_ACCESS_KEY>" }
    EOF
 
-   | # Restrict access: readable only by root and the odemis process
-     user in bash (Can be copied together)
-   | sudo chmod 600 /usr/share/odemis/datacollector.key
-   | sudo chown root:root /usr/share/odemis/datacollector.key
+   # Restrict access: readable only by root and the odemis process user
+   sudo chmod 600 /usr/share/odemis/datacollector.key
+   sudo chown root:root /usr/share/odemis/datacollector.key
 
-| **IMPORTANT**: Even with test credentials installed, the framework
-  still targets
-| the PRODUCTION bucket by default. You must also set the environment
-  variable
-| described in Section 6 to redirect uploads to the test bucket.
+.. important::
+   Even with test credentials installed, the framework still targets the
+   **production** bucket by default. You must also set the environment variable
+   described in :ref:`test-bucket-mode` to redirect uploads to the test bucket.
 
-.. _section-1:
 
-Setting up the local queue directory (dc_queue)
---------------------------------------------------
+Setting up the Local Queue Directory (dc_queue)
+-------------------------------------------------
 
-| Skip for Production setup
-| -——— TEST / DEVELOPER SETUP -———
-| The framework stages serialised ZIP archives in a local directory
-  before
-| uploading them. The default path is:
+.. note::
+   This section applies to the **test / developer setup** only. Skip it for a
+   production installation.
 
-::
+The framework stages serialised ZIP archives in a local directory before
+uploading them. The default path is:
 
-   /.local/share/odemis/dc\_queue
+.. code-block:: text
 
-| This directory is created automatically by the framework at runtime if
-  it does
-| not exist, as long as the parent /.local/share/odemis/ is writable by the
-  process.
+   ~/.local/share/odemis/dc_queue
 
-| For a standard Odemis installation /.local/share/odemis/ is already created
-  by the
-| package post-install script. If that is not the case, create it
-  manually:
+This directory is created automatically by the framework at runtime if it does
+not exist, as long as the parent ``~/.local/share/odemis/`` is writable by the
+process.
 
-::
+For a standard Odemis installation ``~/.local/share/odemis/`` is already
+created by the package post-install script. If that is not the case, create it
+manually:
 
-   sudo mkdir \-p /.local/share/odemis/dc\_queue  
-   sudo chown $USER:$USER /.local/share/odemis/dc\_queue  
-   sudo chmod 750 /.local/share/odemis/dc\_queue
+.. code-block:: bash
 
--——— Queue disk limit -———
+   sudo mkdir -p ~/.local/share/odemis/dc_queue
+   sudo chown $USER:$USER ~/.local/share/odemis/dc_queue
+   sudo chmod 750 ~/.local/share/odemis/dc_queue
 
-| The framework automatically enforces a soft limit of 10 % of the
-  partition’s
-| total disk space on /.local/share/odemis/dc_queue. When the limit is
-  exceeded, the
-| oldest ZIP files are deleted with a WARNING log entry.
 
-- Production: /.local/share/odemis/ is normally on the main OS partition.
-  No special configuration is required.
+Queue Disk Limit
+~~~~~~~~~~~~~~~~
 
-- Test / developer workstation: the queue directory may be redirected to a
-  temporary location by instantiating `_BackgroundWorker` with a custom
-  `queue_dir` argument (used in unit tests). For manual testing with the
-  real Odemis GUI, the default path is always used.
+The framework automatically enforces a soft limit of 10 % of the partition's
+total disk space on ``~/.local/share/odemis/dc_queue``. When the limit is
+exceeded, the oldest ZIP files are deleted with a ``WARNING`` log entry.
 
--——— Inspecting queued files -———
+- **Production:** ``~/.local/share/odemis/`` is normally on the main OS
+  partition. No special configuration is required.
+- **Test / developer workstation:** the queue directory may be redirected to a
+  temporary location by instantiating ``_BackgroundWorker`` with a custom
+  ``queue_dir`` argument (used in unit tests). For manual testing with the real
+  Odemis GUI, the default path is always used.
 
-::
 
-   ls \-lh /.local/share/odemis/dc\_queue/
+Inspecting Queued Files
+~~~~~~~~~~~~~~~~~~~~~~~
 
-| Files follow the naming convention:
-| <event_name>-<YYYYMMDDTHHmmss>-<uuid8>.zip
+.. code-block:: bash
 
-| Any file ending in “.tmp” is an incomplete write left over from a
-  crash; the
-| framework removes such files on startup. You can delete them manually
-  if
-| Odemis is not running:
+   ls -lh ~/.local/share/odemis/dc_queue/
 
-::
+Files follow the naming convention::
 
-   rm \-f /.local/share/odemis/dc\_queue/\*.tmp
+   <event_name>-<YYYYMMDDTHHmmss>-<uuid8>.zip
 
-Verifying the configuration file
------------------------------------
+Any file ending in ``.tmp`` is an incomplete write left over from a crash; the
+framework removes such files on startup. You can delete them manually if Odemis
+is not running:
+
+.. code-block:: bash
+
+   rm -f ~/.local/share/odemis/dc_queue/*.tmp
+
+
+Verifying the Configuration File
+----------------------------------
 
 The per-user consent state is stored in:
 
-::
+.. code-block:: text
 
-   \~/.config/odemis/datacollector.config
+   ~/.config/odemis/datacollector.config
 
-| This file is created automatically the first time the user interacts
-  with the
-| consent dialog (opt in, opt out, or remind later). Its permissions are
-  always
-| set to 0600 (owner read/write only) by the framework.
+This file is created automatically the first time the user interacts with the
+consent dialog (opt in, opt out, or remind later). Its permissions are always
+set to ``0600`` (owner read/write only) by the framework.
 
 A typical file after opt-in looks like:
 
-::
+.. code-block:: ini
 
-   \[general\]  
-   \# Data sharing consent (none / true / false).  
-   consent \= true  
-   \#  
-   \# Date after which the consent dialog will be shown again (YYYY-MM-DD).  
-   \# reminder\_date \=
+   [general]
+   # Data sharing consent (none / true / false).
+   consent = true
 
-To check the current consent state without starting Odemis (copied
-together in bash):
+To check the current consent state without starting Odemis:
 
-::
+.. code-block:: bash
 
-   python3 \-c "  
-   from odemis.util.datacollector import DataCollectorConfig  
-   cfg \= DataCollectorConfig()  
-   print('consent:', cfg.consent)  
-   print('should\_prompt:', cfg.should\_prompt\_for\_consent())  
+   python3 -c "
+   from odemis.util.datacollector import DataCollectorConfig
+   cfg = DataCollectorConfig()
+   print('consent:', cfg.consent)
+   print('should_prompt:', cfg.should_prompt_for_consent())
    "
 
-To manually reset consent (forces the dialog to appear on the next
-launch, copied together in bash):
+To manually reset consent (forces the dialog to appear on the next launch):
 
-::
+.. code-block:: bash
 
-   python3 \-c "  
-   from odemis.util.datacollector import DataCollectorConfig  
-   cfg \= DataCollectorConfig()  
-   cfg.clear\_consent()  
-   print('Consent cleared.')  
+   python3 -c "
+   from odemis.util.datacollector import DataCollectorConfig
+   cfg = DataCollectorConfig()
+   cfg.clear_consent()
+   print('Consent cleared.')
    "
 
-Test-bucket vs production-bucket mode
-----------------------------------------
 
--——— Production (default) -———
+.. _test-bucket-mode:
 
-| Bucket : delmic-odemis-collect
-| Region : eu-west-1
+Test-Bucket vs Production-Bucket Mode
+---------------------------------------
 
-| This is the default when the framework starts normally. No environment
-| variable needs to be set. Use the production IAM credentials in the
-  key file
-| (Section 3).
+Production (Default)
+~~~~~~~~~~~~~~~~~~~~~
 
--——— Test / developer mode -———
+- **Bucket:** ``delmic-odemis-collect``
+- **Region:** ``eu-west-1``
 
-| Bucket : delmic-odemis-collect-test
-| Region : eu-west-1
+This is the default when the framework starts normally. No environment variable
+needs to be set. Use the production IAM credentials in the key file
+(see `Installing the Credentials Key File`_).
 
-| Set the following environment variable before starting Odemis (or any
-  script
-| that calls record()):
 
-::
+Test / Developer Mode
+~~~~~~~~~~~~~~~~~~~~~~
 
-   export TEST\_DATACOLLECTION=1
+- **Bucket:** ``delmic-odemis-collect-test``
+- **Region:** ``eu-west-1``
 
-The framework logs the following INFO message when test mode is active:
+Set the following environment variable before starting Odemis (or any script
+that calls ``record()``):
 
-::
+.. code-block:: bash
 
-   DataCollector: TEST\_DATACOLLECTION=1 — using test bucket 'delmic-odemis-collect-test'
+   export TEST_DATACOLLECTION=1
 
-To run the data collection within a single shell session in test mode:
+The framework logs the following ``INFO`` message when test mode is active::
 
-::
+   DataCollector: TEST_DATACOLLECTION=1 — using test bucket 'delmic-odemis-collect-test'
 
-   TEST\_DATACOLLECTION=1 python3 \<your\_script\_or\_odemis\_launcher\>
+To run data collection within a single shell session in test mode:
 
-| IMPORTANT: The test bucket credentials (access_key / secret_key in the
-  key
-| file) must be scoped to the TEST bucket by the Delmic AWS admin. If
-  you
-| install production credentials and set TEST_DATACOLLECTION=1, uploads
-  will
-| fail with an AccessDenied error because the IAM policy only permits
-  writes to
-| the production prefix.
+.. code-block:: bash
 
-Running the unit tests
--------------------------
+   TEST_DATACOLLECTION=1 python3 <your_script_or_odemis_launcher>
 
-| Unit tests run without any hardware and without a real S3 connection.
-| All upload calls are mocked.
+.. important::
+   The test bucket credentials (``access_key`` / ``secret_key`` in the key
+   file) must be scoped to the **test** bucket by the Delmic AWS admin. If you
+   install production credentials and set ``TEST_DATACOLLECTION=1``, uploads
+   will fail with an ``AccessDenied`` error because the IAM policy only permits
+   writes to the production prefix.
 
-::
 
-   \# From the repository root  
-   env TEST\_NOHW=1 python3 src/odemis/util/test/datacollector\_test.py
+Running the Unit Tests
+-----------------------
+
+Unit tests run without any hardware and without a real S3 connection. All
+upload calls are mocked.
+
+.. code-block:: bash
+
+   # From the repository root
+   env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py
 
 To run a specific test class or method:
 
-::
+.. code-block:: bash
 
-   env TEST\_NOHW=1 python3 src/odemis/util/test/datacollector\_test.py \\  
-       DataCollectorTest.test\_record\_returns\_fast
+   env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py \
+       DataCollectorTest.test_record_returns_fast
 
-   env TEST\_NOHW=1 python3 src/odemis/util/test/datacollector\_test.py \\  
-       TestSerialize.test\_metadata\_json\_envelope\_fields
+   env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py \
+       TestSerialize.test_metadata_json_envelope_fields
 
--——— Real S3 integration tests -———
 
-| The class TestRealS3Integration uploads to the TEST bucket and cleans
-  up after
-| itself. It requires:
-| • boto3 installed
-| • /usr/share/odemis/datacollector.key present with TEST bucket
-  credentials
-| • TEST_DATACOLLECTION=1 is NOT needed here — the test class hard-codes
-  the
-| test bucket directly
+Real S3 Integration Tests
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-::
+The class ``TestRealS3Integration`` uploads to the test bucket and cleans up
+after itself. It requires:
 
-   env TEST\_NOHW=1 python3 src/odemis/util/test/datacollector\_test.py \\  
+- ``boto3`` installed
+- ``/usr/share/odemis/datacollector.key`` present with test bucket credentials
+- ``TEST_DATACOLLECTION=1`` is **not** needed here — the test class hard-codes
+  the test bucket directly
+
+.. code-block:: bash
+
+   env TEST_NOHW=1 python3 src/odemis/util/test/datacollector_test.py \
        TestRealS3Integration
 
 If the key file is absent, this class is skipped automatically.
 
-Quick smoke-test with odemis-dc-fetch
-----------------------------------------
 
-| After a successful upload (production or test), use the retrieval
-  script to
-| confirm objects landed in S3. The retrieval script can only be used by
-  aws profile of data analyst. In other words, the access and secret key
-  will decide if it is possible to fetch the data.
+Quick Smoke-Test with odemis-dc-fetch
+---------------------------------------
 
-::
+After a successful upload (production or test), use the retrieval script to
+confirm objects landed in S3. The retrieval script can only be used with an AWS
+profile that has data-analyst read access; the ``access_key`` / ``secret_key``
+in the key file determine whether fetching is permitted.
 
-   python3 scripts/odemis-dc-fetch.py \\  
-       \--bucket delmic-odemis-collect \\  
-       \--region eu-west-1 \\  
-       \--output ./dc\_samples\_test
+.. code-block:: bash
+
+   odemis-dc-fetch \
+       --bucket delmic-odemis-collect \
+       --region eu-west-1 \
+       --output ./dc_samples_test
 
 Filter by event name and date:
 
-::
+.. code-block:: bash
 
-   python3 scripts/odemis-dc-fetch.py \\  
-       \--bucket delmic-odemis-collect-test \\  
-       \--region eu-west-1 \\  
-       \--event feature\_collected \\  
-       \--since 2026-04-01 \\  
-       \--output ./dc\_samples\_test
+   odemis-dc-fetch \
+       --bucket delmic-odemis-collect-test \
+       --region eu-west-1 \
+       --event feature_collected \
+       --since 2026-04-01 \
+       --output ./dc_samples_test
 
-| The script prints a one-line summary:
-| listed=N matched=N downloaded=N skipped_existing=N failed=0
+The script prints a one-line summary::
 
-| If “failed” is non-zero, check the log output for AccessDenied or
-  network
-| errors and verify the key file credentials.
+   listed=N matched=N downloaded=N skipped_existing=N failed=0
+
+If ``failed`` is non-zero, check the log output for ``AccessDenied`` or network
+errors and verify the key file credentials.
+
 
 Troubleshooting
-------------------
+----------------
 
-| Problem : boto3 ImportError when starting Odemis
-| Solution: sudo apt install python3-boto3
+**Problem:** ``boto3 ImportError`` when starting Odemis.
 
--———
+**Solution:** ``sudo apt install python3-boto3``
 
-| Problem : LookupError: S3 credentials key file not found at
-| /usr/share/odemis/datacollector.key
-| Solution: Create the key file as described in Section 3.
+----
 
--———
+**Problem:** ``LookupError: S3 credentials key file not found at /usr/share/odemis/datacollector.key``
 
-| Problem : botocore.exceptions.ClientError: AccessDenied
-| Cause : The IAM key in the key file does not have permission to write
-  to
-| the bucket being targeted.
-| Solution: Ensure the key file contains credentials matching the target
-  bucket
-| (production key → production bucket, test key → test bucket).
-| Check whether TEST_DATACOLLECTION=1 is set unexpectedly.
+**Solution:** Create the key file as described in
+`Installing the Credentials Key File`_.
 
--———
+----
 
-| Problem : Uploads never happen; queue fills up
-| Cause : Network is unavailable or credentials are wrong.
-| Solution: Check the Odemis log for “DataCollector upload failed”
-  entries.
-| The framework retries with exponential back-off (30 s → 60 s → …
-| up to 1 h). Pending ZIPs remain in /.local/share/odemis/dc_queue/ and
-| are flushed oldest-first once connectivity is restored.
+**Problem:** ``botocore.exceptions.ClientError: AccessDenied``
 
--———
+**Cause:** The IAM key in the key file does not have permission to write to the
+bucket being targeted.
 
-| Problem : “Queue limit exceeded: removed oldest sample” appears in the
-  log
-| Cause : The queue directory has grown beyond 10 % of the partition.
-| Solution: Check disk space (df -h /.local/share/odemis/dc_queue). Consider
-| moving /.local/share/odemis/ to a larger partition, or investigate why
-| uploads are not succeeding (credentials, network).
+**Solution:** Ensure the key file contains credentials matching the target
+bucket (production key → production bucket, test key → test bucket). Check
+whether ``TEST_DATACOLLECTION=1`` is set unexpectedly.
 
--———
+----
 
-| Problem : Consent dialog does not appear on first launch
-| Cause : ~/.config/odemis/datacollector.config already contains a
-  consent
-| value (e.g. from a previous installation).
-| Solution: Reset consent manually (see Section 5) or delete the config
-  file:
-| rm ~/.config/odemis/datacollector.config
+**Problem:** Uploads never happen; queue fills up.
 
--———
+**Cause:** Network is unavailable or credentials are wrong.
 
-| Problem : TEST_DATACOLLECTION=1 is set but uploads still go to
-  production
-| Solution: This cannot happen — the environment variable is read at the
-  moment
-| get_upload_backend() is called, which is lazy (first upload attempt).
-| Verify the variable is exported in the same shell/environment that
-| runs the Odemis process.
+**Solution:** Check the Odemis log for ``DataCollector upload failed`` entries.
+The framework retries with exponential back-off (30 s → 60 s → ... up to 1 h).
+Pending ZIPs remain in ``~/.local/share/odemis/dc_queue/`` and are flushed
+oldest-first once connectivity is restored.
 
--———
+----
 
-| Problem : \*.tmp files accumulate in dc_queue
-| Cause : Odemis crashed mid-write.
-| Solution: Stop Odemis, then: rm -f /.local/share/odemis/dc_queue/\*.tmp
-| The framework also cleans these up automatically on the next startup.
+**Problem:** ``Queue limit exceeded: removed oldest sample`` appears in the log.
+
+**Cause:** The queue directory has grown beyond 10 % of the partition.
+
+**Solution:** Check disk space with ``df -h ~/.local/share/odemis/dc_queue``.
+Consider moving ``~/.local/share/odemis/`` to a larger partition, or
+investigate why uploads are not succeeding (credentials, network).
+
+----
+
+**Problem:** Consent dialog does not appear on first launch.
+
+**Cause:** ``~/.config/odemis/datacollector.config`` already contains a consent
+value (e.g. from a previous installation).
+
+**Solution:** Reset consent manually (see `Verifying the Configuration File`_)
+or delete the config file:
+
+.. code-block:: bash
+
+   rm ~/.config/odemis/datacollector.config
+
+----
+
+**Problem:** ``TEST_DATACOLLECTION=1`` is set but uploads still go to
+production.
+
+**Solution:** This cannot happen — the environment variable is read at the
+moment ``get_upload_backend()`` is called, which is lazy (first upload attempt).
+Verify the variable is exported in the same shell/environment that runs the
+Odemis process.
+
+----
+
+**Problem:** ``*.tmp`` files accumulate in ``dc_queue``.
+
+**Cause:** Odemis crashed mid-write.
+
+**Solution:** Stop Odemis, then:
+
+.. code-block:: bash
+
+   rm -f ~/.local/share/odemis/dc_queue/*.tmp
+
+The framework also cleans these up automatically on the next startup.
