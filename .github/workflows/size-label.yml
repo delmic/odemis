@@ -16,8 +16,9 @@ jobs:
 
           # Provide a newline-separated list of files or glob patterns to ignore.
           # Lines starting with '!' are always included.
-          IGNORED: ".*\n!.gitignore\nyarn.lock\npackage-lock.json\ngenerated/**"
-
+          IGNORED: |
+            src/odemis/gui/win/dialog_xrc.py
+            src/odemis/gui/win/main_xrc.py
         with:
           # Philosophy: S should be reviewable in under 10 minutes, L takes more than an hour
           sizes: >
