@@ -32,7 +32,7 @@ import time
 import unittest
 import uuid
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -104,57 +104,16 @@ class TestDataCollectorConfig(unittest.TestCase):
         mode = stat.S_IMODE(os.stat(str(cfg.file_path)).st_mode)
         self.assertEqual(mode, 0o600)
 
-    def test_postpone_consent_sets_due_and_clears_consent(self) -> None:
-        """Postponing should clear consent and schedule next reminder."""
-        cfg = self._make_config()
-        cfg.consent = True
-        cfg.postpone_consent()
-        self.assertIsNone(cfg.consent)
-        remind_after = cfg.remind_date
-        self.assertIsNotNone(remind_after)
-        self.assertGreater(remind_after, datetime.now(timezone.utc))
-
-    def test_postpone_does_not_override_explicit_opt_out(self) -> None:
-        """Postpone should not schedule reminders when consent is explicitly False."""
-        cfg = self._make_config()
-        cfg.consent = False
-        cfg.postpone_consent()
-        self.assertFalse(cfg.consent)
-        self.assertIsNone(cfg.remind_date)
-        self.assertFalse(cfg.should_prompt_for_consent())
-
-    def test_should_prompt_for_consent_logic(self) -> None:
-        """Prompt logic follows consent and remind-after semantics."""
-        cfg = self._make_config()
-        self.assertTrue(cfg.should_prompt_for_consent())
-
-        cfg.consent = True
-        self.assertFalse(cfg.should_prompt_for_consent())
-
-        cfg.clear_consent()
-        cfg.remind_date = datetime.now(timezone.utc) + timedelta(days=1)
-        self.assertFalse(cfg.should_prompt_for_consent())
-
-        cfg.remind_date = datetime.now(timezone.utc) - timedelta(seconds=1)
-        self.assertTrue(cfg.should_prompt_for_consent())
-
     def test_set_consent_with_expiry_stores_fields(self) -> None:
         """set_consent_with_expiry should enable consent and set consent_date."""
         cfg = self._make_config()
-        expiry = datetime.now(timezone.utc) + timedelta(days=1)
+        expiry = date.today() + timedelta(days=1)
         cfg.set_consent_with_expiry(expiry)
 
         self.assertTrue(cfg.consent)
         stored_date = cfg.consent_date
         self.assertIsNotNone(stored_date)
-        self.assertAlmostEqual(stored_date.timestamp(), expiry.timestamp(), delta=2)
-
-    def test_set_consent_with_expiry_clears_remind_date(self) -> None:
-        """set_consent_with_expiry should clear any previously set reminder_date."""
-        cfg = self._make_config()
-        cfg.remind_date = datetime.now(timezone.utc) + timedelta(days=5)
-        cfg.set_consent_with_expiry(datetime.now(timezone.utc) + timedelta(days=1))
-        self.assertIsNone(cfg.remind_date)
+        self.assertEqual(stored_date, expiry)
 
 
 class TestTemporaryConsentAndProbability(unittest.TestCase):
@@ -184,16 +143,15 @@ class TestTemporaryConsentAndProbability(unittest.TestCase):
         shutil.rmtree(str(self._tmp_dir), ignore_errors=True)
 
     def test_set_temporary_consent_enables_consent_with_expiry(self) -> None:
-        """set_temporary_consent(1) should set consent=True and consent_date ~24h ahead."""
-        before = datetime.now(timezone.utc) + timedelta(hours=23, minutes=59)
+        """set_temporary_consent(1) should set consent=True and consent_date to next local day."""
+        expected_day = datetime.now().astimezone().date() + timedelta(days=1)
         self._dc.set_temporary_consent(days=1)
-        after = datetime.now(timezone.utc) + timedelta(hours=24, seconds=5)
 
         self.assertTrue(self._cfg.consent)
         stored = self._cfg.consent_date
         self.assertIsNotNone(stored)
-        self.assertGreaterEqual(stored, before)
-        self.assertLessEqual(stored, after)
+        # Midnight roll-over during the call is possible; allow +1 day tolerance.
+        self.assertIn(stored, {expected_day, expected_day + timedelta(days=1)})
 
     def test_set_temporary_consent_1day_uses_full_probability(self) -> None:
         """record() should enqueue all events when consent_date is ~1 day away."""
@@ -211,7 +169,7 @@ class TestTemporaryConsentAndProbability(unittest.TestCase):
 
     def test_set_temporary_consent_multiday_uses_default_probability(self) -> None:
         """record() should sample ~10% when consent_date is more than 1 day away."""
-        future = datetime.now(timezone.utc) + timedelta(days=30)
+        future = date.today() + timedelta(days=30)
         self._cfg.set_consent_with_expiry(future)
 
         enqueue_calls = []
@@ -228,7 +186,7 @@ class TestTemporaryConsentAndProbability(unittest.TestCase):
 
     def test_record_auto_expires_consent_and_skips(self) -> None:
         """record() should set consent=False and skip when consent_date has passed."""
-        expired = datetime.now(timezone.utc) - timedelta(seconds=1)
+        expired = datetime.now().astimezone().date() - timedelta(days=1)
         self._cfg.set_consent_with_expiry(expired)
 
         enqueue_calls = []
@@ -645,7 +603,7 @@ class DataCollectorTest(unittest.TestCase):
         cfg._read()
         cfg.consent = True
         # Use 100% collection probability so queue-delegation tests are deterministic.
-        expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+        expiry = date.today() + timedelta(days=1)
         cfg.set_consent_with_expiry(expiry)
         self._cfg = cfg
 

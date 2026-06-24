@@ -196,7 +196,7 @@ class MenuController(object):
             "only to designated Delmic analysts, and never shared with third parties.\n\n"
             "By opting in, you confirm you have the authority to make this decision for your institution"
             " and that sharing this data is permitted under your institution's data policies.\n\n"
-            "\"Remind me after one day\" enables sharing for 24 hours with 100% collection, "
+            "\"Enable for one day\" enables sharing for 24 hours with 100% collection, "
             "then automatically disables it.")
 
             dlg = wx.MessageDialog(
@@ -205,7 +205,7 @@ class MenuController(object):
                 caption="Share data with Delmic",
                 style=wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION
             )
-            dlg.SetYesNoCancelLabels(yes="Opt in", no="Opt out", cancel="Remind me after one day")
+            dlg.SetYesNoCancelLabels(yes="Opt in", no="Opt out", cancel="Enable for one day")
             response = dlg.ShowModal()
             dlg.Destroy()
 

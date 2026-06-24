@@ -42,7 +42,7 @@ import time
 import uuid
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -79,16 +79,12 @@ _DEFAULT_QUEUE_DIR = Path("~/.local/share/odemis/dc_queue")
 _VALID_IMAGE_FORMATS = ("TIFF", "HDF5")
 _INITIAL_RETRY_DELAY_SECONDS = 30.0
 _MAX_RETRY_DELAY_SECONDS = 3600.0
-# Default delay before re-prompting for consent after postpone.
-_DEFAULT_CONSENT_REMIND_DELTA = timedelta(days=30)
-REMINDER_DATE_KEY = "reminder_date"
 CONSENT_DATE_KEY = "consent_date"
 
 # Collection probability: fraction of record() calls that are actually uploaded.
 # 100% when consent expires within 1 day (1-day trial), 10% otherwise.
 _DEFAULT_COLLECTION_PROBABILITY = 0.10
 _FULL_COLLECTION_PROBABILITY = 1.0
-_ONE_DAY_SECONDS = 86400.0
 
 
 def _sanitize_filename(name: str) -> str:
@@ -135,8 +131,6 @@ class DataCollectorConfig:
     --------
     [general]
         consent       — true / false / none (not yet decided).
-        reminder_date — Date (ISO UTC) after which to re-prompt.
-                        Commented out when not applicable.
         consent_date  — Date (ISO UTC) until which consent is active.
                         Consent auto-expires to False after this date.
                         Commented out when not applicable.
@@ -148,10 +142,7 @@ class DataCollectorConfig:
         # Data sharing consent (true / false).
         # consent = true
         #
-        # Date after which the consent dialog will be shown again (YYYY-MM-DD).
-        # reminder_date =
-        #
-        # Date until which consent is active (ISO UTC). Auto-expires to false.
+        # Date until which consent is active (ISO). Auto-expires to false.
         # consent_date =
     """
     file_name: str = "datacollector.config"
@@ -176,23 +167,22 @@ class DataCollectorConfig:
 
         # consent
         if self.consent is None:
-            self._cp.remove_option("general", "consent")
+            try:
+                self._cp.remove_option("general", "consent")
+            except configparser.NoOptionError:
+                pass
         else:
             self._cp.set("general", "consent", "true" if self.consent else "false")
 
-        # reminder_date
-        if self.remind_date is None:
-            self._cp.remove_option("general", REMINDER_DATE_KEY)
+        # consent_date (stored as local date: YYYY-MM-DD)
+        consent_day = self.consent_date
+        if consent_day is None:
+            try:
+                self._cp.remove_option("general", CONSENT_DATE_KEY)
+            except configparser.NoOptionError:
+                pass
         else:
-            remind_utc = self.remind_date.astimezone(timezone.utc)
-            self._cp.set("general", REMINDER_DATE_KEY, remind_utc.isoformat())
-
-        # consent_date
-        if self.consent_date is None:
-            self._cp.remove_option("general", CONSENT_DATE_KEY)
-        else:
-            consent_utc = self.consent_date.astimezone(timezone.utc)
-            self._cp.set("general", CONSENT_DATE_KEY, consent_utc.isoformat())
+            self._cp.set("general", CONSENT_DATE_KEY, consent_day.isoformat())
 
         with self.file_path.open("w", encoding="utf-8") as fh:
             self._cp.write(fh)
@@ -223,15 +213,18 @@ class DataCollectorConfig:
     @consent.setter
     def consent(self, value: bool) -> None:
         """
-        Set consent to true or false, and clear any reminder date and consent expiry.
+        Set consent to true or false, and clear consent expiry. If none, the consent is cleared
+         and becomes undecided.
         :param value: True to opt in, False to opt out.
         """
         with self._lock:
             self._ensure_section("general")
-            self._cp.set("general", "consent", "true" if value else "false")
-            self._cp.remove_option("general", REMINDER_DATE_KEY)
-            self._cp.remove_option("general", CONSENT_DATE_KEY)
-            self._write()
+            if value is None:
+                self.clear_consent()
+            else:
+                self._cp.set("general", "consent", "true" if value else "false")
+                self._cp.remove_option("general", CONSENT_DATE_KEY)
+                self._write()
 
     def clear_consent(self) -> None:
         """
@@ -241,78 +234,15 @@ class DataCollectorConfig:
         with self._lock:
             self._ensure_section("general")
             self._cp.remove_option("general", "consent")
+            self._cp.remove_option("general", CONSENT_DATE_KEY)
             self._write()
 
     @property
-    def remind_date(self) -> Optional[datetime]:
+    def consent_date(self) -> Optional[date]:
         """
-        Return next reminder date as a UTC-aware datetime, or None when unset.
-        :return: UTC datetime of next reminder, or None if not set.
-        """
-        try:
-            value = self._cp.get("general", REMINDER_DATE_KEY)
-        except (configparser.NoSectionError, configparser.NoOptionError):
-            return None
-        value = value.strip()
-        if not value:
-            return None
-        # Accept simple YYYY-MM-DD as well as full ISO 8601.
-        for fmt in ("%Y-%m-%d", None):
-            try:
-                if fmt:
-                    parsed = datetime.strptime(value, fmt)
-                else:
-                    parsed = datetime.fromisoformat(value)
-                if parsed.tzinfo is None:
-                    return parsed.replace(tzinfo=timezone.utc)
-                return parsed.astimezone(timezone.utc)
-            except ValueError:
-                continue
-        return None
-
-    @remind_date.setter
-    def remind_date(self, value: Optional[datetime]) -> None:
-        """
-        Persist next reminder UTC timestamp, or unset when None.
-        :param value: UTC datetime to set for next reminder, or None to unset.
-        """
-        with self._lock:
-            self._ensure_section("general")
-            if value is None:
-                self._cp.remove_option("general", REMINDER_DATE_KEY)
-            else:
-                if value.tzinfo is None:
-                    value = value.replace(tzinfo=timezone.utc)
-                value_utc = value.astimezone(timezone.utc)
-                self._cp.set("general", REMINDER_DATE_KEY, value_utc.isoformat())
-            self._write()
-
-    def postpone_consent(self, remind_date: Optional[datetime] = None) -> None:
-        """
-        Postpone consent prompt and clear current consent choice.
-        :param remind_date: UTC datetime after which the consent prompt should
-         be shown again.  Defaults to _DEFAULT_CONSENT_REMIND_DELTA
-         from now when not specified.
-        :return: None
-        """
-        if self.consent is False:
-            return
-        if remind_date is None:
-            remind_date = datetime.now(timezone.utc) + _DEFAULT_CONSENT_REMIND_DELTA
-        elif remind_date.tzinfo is None:
-            remind_date = remind_date.replace(tzinfo=timezone.utc)
-        with self._lock:
-            self._ensure_section("general")
-            self._cp.remove_option("general", "consent")
-            self._cp.set("general", REMINDER_DATE_KEY, remind_date.astimezone(timezone.utc).isoformat())
-            self._write()
-
-    @property
-    def consent_date(self) -> Optional[datetime]:
-        """
-        Return the consent expiry date as a UTC-aware datetime, or None when unset.
+        Return the consent expiry date as a local-date value, or None when unset.
         When this date is reached, consent automatically expires to False.
-        :return: UTC datetime of consent expiry, or None if not set.
+        :return: Local date of consent expiry, or None if not set.
         """
         try:
             value = self._cp.get("general", CONSENT_DATE_KEY)
@@ -321,49 +251,29 @@ class DataCollectorConfig:
         value = value.strip()
         if not value:
             return None
-        for fmt in ("%Y-%m-%d", None):
-            try:
-                if fmt:
-                    parsed = datetime.strptime(value, fmt)
-                else:
-                    parsed = datetime.fromisoformat(value)
-                if parsed.tzinfo is None:
-                    return parsed.replace(tzinfo=timezone.utc)
-                return parsed.astimezone(timezone.utc)
-            except ValueError:
-                continue
+        # Preferred format: YYYY-MM-DD (local date only).
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            pass
+
         return None
 
-    def set_consent_with_expiry(self, consent_date: datetime) -> None:
+    def set_consent_with_expiry(self, consent_date: date) -> None:
         """
-        Enable consent until consent_date, then auto-expire to False.
+        Enable consent until consent_date (inclusive), then auto-expire to False.
 
-        When less than one day remains until consent_date, record() uses 100%
-        collection probability; otherwise the default 10% applies.
+        When consent_date is today or tomorrow, record() uses 100% collection
+        probability; otherwise the default 10% applies.
 
-        :param consent_date: UTC datetime after which consent is revoked automatically.
+        :param consent_date: Local date after which consent is revoked automatically.
         :return: None
         """
-        if consent_date.tzinfo is None:
-            consent_date = consent_date.replace(tzinfo=timezone.utc)
         with self._lock:
             self._ensure_section("general")
             self._cp.set("general", "consent", "true")
-            self._cp.remove_option("general", REMINDER_DATE_KEY)
-            self._cp.set("general", CONSENT_DATE_KEY, consent_date.astimezone(timezone.utc).isoformat())
+            self._cp.set("general", CONSENT_DATE_KEY, consent_date.isoformat())
             self._write()
-
-    def should_prompt_for_consent(self) -> bool:
-        """
-        Return whether the consent dialog should be shown now.
-        :return: True if the consent dialog should be shown, False otherwise.
-        """
-        if self.consent is not None:
-            return False
-        remind_after = self.remind_date
-        if remind_after is None:
-            return True
-        return datetime.now(timezone.utc) >= remind_after
 
     def get_upload_backend(self) -> "S3UploadBackend":
         """
@@ -414,27 +324,28 @@ def _serialize(item: _WorkItem, queue_dir: Path) -> Path:
         extra_files: list = []  # list of (arcname, abs_path)
 
         for key, value in item.payload.items():
+            abs_path = None
             if value is None or isinstance(value, (str, int, float, bool)):
                 payload_meta[key] = value
 
             elif isinstance(value, numpy.ndarray):
                 if item.image_format.upper() == "HDF5":
-                    arc_name = f"{_sanitize_filename(key)}.h5"
-                    abs_path = tmp_dir / arc_name
-                    try:
-                        da = value if isinstance(value, model.DataArray) else model.DataArray(value)
-                        hdf5.export(str(abs_path), da)
-                    except Exception:
-                        logging.warning("Failed to export DataArray to HDF5 at %s", abs_path, exc_info=True)
-                        abs_path = None
+                    exporter = hdf5
+                elif item.image_format.upper() == "TIFF":
+                    exporter = tiff
                 else:
-                    arc_name = f"{_sanitize_filename(key)}.ome.tiff"
+                    logging.warning("DataArray not in valid format", exc_info=True)
+                    exporter = None
+
+                if exporter is not None:
+                    ext = exporter.EXTENSIONS[0]
+                    arc_name = f"{_sanitize_filename(key)}.{ext}"
                     abs_path = tmp_dir / arc_name
                     try:
                         da = value if isinstance(value, model.DataArray) else model.DataArray(value)
                         tiff.export(str(abs_path), da)
                     except Exception:
-                        logging.warning("Failed to export DataArray to TIFF at %s", abs_path, exc_info=True)
+                        logging.warning("Failed to export DataArray to %s at %s",  ext, abs_path, exc_info=True)
                         abs_path = None
 
                 if abs_path is not None and abs_path.exists():
@@ -515,7 +426,7 @@ def _enforce_queue_limit(queue_dir: Path) -> None:
             size = oldest.stat().st_size
             oldest.unlink()
             total_size -= size
-            logging.warning("Queue limit exceeded: removed oldest sample %s", oldest.name)
+            logging.info("Queue limit exceeded: removed oldest sample %s", oldest.name)
         except OSError:
             logging.warning("Could not remove queue file %s", oldest)
 
@@ -753,21 +664,24 @@ class DataCollector:
                 )
 
     def get_consent(self) -> Optional[bool]:
-        """Return current consent state from configuration."""
+        """Return current consent state and auto-expire temporary consent when needed."""
         self._lazy_init()
         if not self._init_ok:
             return None
-        return self._config.consent  # type: ignore[union-attr]
+        consent = self._config.consent
+        if consent is not True:
+            return consent
 
-    def should_prompt_for_consent(self) -> bool:
-        """
-        Return whether a consent dialog should be shown to the user.
-        :return: True if the consent dialog should be shown, False otherwise.
-        """
-        self._lazy_init()
-        if not self._init_ok:
+        consent_day = self._config.consent_date
+        if consent_day is None:
+            return True
+
+        today_local = datetime.now().astimezone().date()
+        if today_local > consent_day:
+            self._config.consent = False
+            logging.info("DataCollector: temporary consent expired; consent set to False.")
             return False
-        return self._config.should_prompt_for_consent()  # type: ignore[union-attr]
+        return True
 
     def set_consent(self, value: bool) -> None:
         """
@@ -779,19 +693,7 @@ class DataCollector:
         self._lazy_init()
         if not self._init_ok:
             return
-        self._config.consent = value  # type: ignore[union-attr]
-
-    def postpone_consent(self, remind_date: Optional[datetime] = None) -> None:
-        """
-        Postpone consent prompt and clear current consent state.
-        :param remind_date: UTC datetime after which the consent prompt should
-         be shown again.  Defaults to _DEFAULT_CONSENT_REMIND_DELTA from
-         now when not specified.
-        """
-        self._lazy_init()
-        if not self._init_ok:
-            return
-        self._config.postpone_consent(remind_date=remind_date)  # type: ignore[union-attr]
+        self._config.consent = value
 
     def set_temporary_consent(self, days: int = 1) -> None:
         """
@@ -807,15 +709,8 @@ class DataCollector:
         self._lazy_init()
         if not self._init_ok:
             return
-        consent_date = datetime.now(timezone.utc) + timedelta(days=days)
-        self._config.set_consent_with_expiry(consent_date=consent_date)  # type: ignore[union-attr]
-
-    def get_consent_remind_days(self) -> int:
-        """
-        Return the number of days used for the consent remind-later interval.
-        :return: Integer number of days in the default remind delta.
-        """
-        return int(_DEFAULT_CONSENT_REMIND_DELTA.days)
+        consent_day = datetime.now().astimezone().date() + timedelta(days=days)
+        self._config.set_consent_with_expiry(consent_date=consent_day)
 
     def record(
         self,
@@ -843,8 +738,8 @@ class DataCollector:
          - Python primitives (str, int, float, bool, None) — inlined in
            metadata.json
          - :class:odemis.model.DataArray / :class:numpy.ndarray —
-            exported as TIFF or HDF5 side-car
-            - dict / list — written as extra_<key>.json side-car
+            exported as TIFF or HDF5 files
+            - dict / list — written as extra_<key>.json
         :param image_format: Format for DataArray export.  "TIFF"
          (default) or "HDF5".
         :raises ValueError: If any input parameter is invalid.
@@ -865,26 +760,22 @@ class DataCollector:
             if not self._init_ok:
                 return
 
-            consent = self._config.consent  # type: ignore[union-attr]
+            consent = self.get_consent()
             if not consent:
                 logging.debug(
                     "DataCollector: consent=%s, skipping event '%s'.", consent, event_name
                 )
                 return
 
-            # Auto-expire temporary consent when past the consent_date.
-            consent_date = self._config.consent_date  # type: ignore[union-attr]
-            now = datetime.now(timezone.utc)
-            if consent_date is not None and now >= consent_date:
-                self._config.consent = False  # type: ignore[union-attr]
-                logging.info(
-                    "DataCollector: temporary consent expired; consent set to False."
-                )
-                return
-
             # Apply collection probability: 100% if consent expires within 1 day,
             # 10% otherwise (no consent_date = permanent opt-in).
-            if consent_date is not None and (consent_date - now).total_seconds() <= _ONE_DAY_SECONDS:
+            consent_day = self._config.consent_date
+            if consent_day is not None:
+                days_left = (consent_day - datetime.now().astimezone().date()).days
+            else:
+                days_left = None
+
+            if days_left is not None and days_left <= 1:
                 probability = _FULL_COLLECTION_PROBABILITY
             else:
                 probability = _DEFAULT_COLLECTION_PROBABILITY

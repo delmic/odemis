@@ -184,15 +184,15 @@ The per-user consent state is stored in:
    ~/.config/odemis/datacollector.config
 
 This file is created automatically the first time the user interacts with the
-consent dialog (opt in, opt out, or remind later). Its permissions are always
-set to ``0600`` (owner read/write only) by the framework.
+consent dialog from the menu. Its permissions are always set to ``0600``
+(owner read/write only) by the framework.
 
 A typical file after opt-in looks like:
 
 .. code-block:: ini
 
    [general]
-   # Data sharing consent (none / true / false).
+   # Data sharing consent (true / false).
    consent = true
 
 To check the current consent state without starting Odemis:
@@ -203,10 +203,9 @@ To check the current consent state without starting Odemis:
    from odemis.util.datacollector import DataCollectorConfig
    cfg = DataCollectorConfig()
    print('consent:', cfg.consent)
-   print('should_prompt:', cfg.should_prompt_for_consent())
    "
 
-To manually reset consent (forces the dialog to appear on the next launch):
+To manually reset consent:
 
 .. code-block:: bash
 
@@ -263,6 +262,26 @@ To run data collection within a single shell session in test mode:
    install production credentials and set ``TEST_DATACOLLECTION=1``, uploads
    will fail with an ``AccessDenied`` error because the IAM policy only permits
    writes to the production prefix.
+
+
+Managing Consent
+----------------
+
+The data collection consent dialog is accessed via the Odemis menu. Users have
+three options:
+
+- **Opt In:** Enable data collection permanently.
+- **Opt Out:** Disable data collection permanently.
+- **Consent for One Day:** Enable data collection temporarily for one day only.
+  After the specified day, consent automatically expires to disabled.
+
+When temporary consent is active and less than one day remains, the collection
+sampling rate increases to 100% to prioritize data collection. Otherwise, a
+default 10% sampling rate applies.
+
+When consent is active, collected data is staged in the queue directory and
+uploaded to S3 in the background. When consent is disabled, no data is collected
+or uploaded.
 
 
 Running the Unit Tests
@@ -386,19 +405,6 @@ oldest-first once connectivity is restored.
 Consider moving ``~/.local/share/odemis/`` to a larger partition, or
 investigate why uploads are not succeeding (credentials, network).
 
-----
-
-**Problem:** Consent dialog does not appear on first launch.
-
-**Cause:** ``~/.config/odemis/datacollector.config`` already contains a consent
-value (e.g. from a previous installation).
-
-**Solution:** Reset consent manually (see `Verifying the Configuration File`_)
-or delete the config file:
-
-.. code-block:: bash
-
-   rm ~/.config/odemis/datacollector.config
 
 ----
 
