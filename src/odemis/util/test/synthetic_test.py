@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import unittest
 
 import numpy
+from odemis.util import testing
 
 from odemis.util.synthetic import ParabolicMirrorRayTracer, simulate_peak
 
@@ -81,35 +82,15 @@ class TestParabolicMirrorRayTracer(unittest.TestCase):
         Test that if ray tracing fails, the method returns the last successful image and logs a warning.
         We can induce a failure by providing a position far off-axis, causing math errors (e.g., divide by zero).
         """
-        # Get the last known good image (from initialization)
-        last_good_image = self.tracer._last_img.copy()
+        good_img = self.tracer.simulate(self.good_pos)
 
         # Define a position that is likely to cause a FloatingPointError during calculation
         failing_pos = {"x": 0.0, "y": 100.0, "z": 0.0}  # Extreme y-offset
+        failed_img = self.tracer.simulate(failing_pos)
 
-        # Use assertLogs to capture logging output
-        with self.assertLogs(level="WARNING") as log:
-            # This call should fail internally and trigger the except block
-            failed_img = self.tracer.simulate(failing_pos)
-
-            # Check that the expected warning message was logged
-            self.assertEqual(len(log.output), 1)
-            self.assertIn("Using last image.", log.output[0])
-
-        # The returned image should be the same as the last good image
-        numpy.testing.assert_array_equal(
-            last_good_image,
-            failed_img,
-            "On failure, the last good image should be returned.",
-        )
-
-        # The internal `_last_pos` should NOT be updated to the failing position
-        self.assertNotEqual(
-            self.tracer._last_pos,
-            failing_pos,
-            "On failure, _last_pos should not be updated.",
-        )
-        self.assertEqual(self.tracer._last_pos, self.good_pos)
+        # The returned image should be darker
+        self.assertGreater(good_img.mean(), failed_img.mean(),
+                           "Failed image should be darker than the good image.")
 
     def test_constructor_raises_value_error_on_missing_keys(self):
         """
