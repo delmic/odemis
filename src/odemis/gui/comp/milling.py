@@ -67,6 +67,7 @@ class MillingTaskPanel(wx.Panel):
             "current": {"label": "Current", "accuracy": 2, "unit": "A"},
             "align": {"label": "Align at milling current"},
             "mode": {"label": "Milling mode"},
+            "spot_size": {"label": "Spot Size", "accuracy": 2, "unit": "m"},
             "width": {"label": "Width", "accuracy": 2, "unit": "m"},
             "height": {"label": "Height", "accuracy": 2, "unit": "m"},
             "depth": {"label": "Depth", "accuracy": 2, "unit": "m"},
@@ -83,8 +84,7 @@ class MillingTaskPanel(wx.Panel):
                 continue
 
             conf = CONFIG.get(param, {})
-            label = conf.get("label", param)
-            del conf["label"]
+            label = conf.pop("label", None)
 
             val = getattr(task.milling, param)
             self._add_value_field(label, val, conf, param=param)
@@ -97,8 +97,7 @@ class MillingTaskPanel(wx.Panel):
                 continue
 
             conf = CONFIG.get(param, {})
-            label = conf.get("label", param)
-            del conf["label"]
+            label = conf.pop("label", None)
 
             val = getattr(pattern, param)
             self._add_value_field(label, val, conf, param=param)
