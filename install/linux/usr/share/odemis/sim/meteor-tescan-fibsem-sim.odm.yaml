@@ -457,7 +457,7 @@
     },
     init: {
       axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
-        shear: [0, -1], # (0, -1/tan(45°)) 
+        shear: [0, -1], # (0, -1/tan(45°))
         scale: [-1.4142135623730951, -1], # (-1/sin(45°), -1)
     },
     }
