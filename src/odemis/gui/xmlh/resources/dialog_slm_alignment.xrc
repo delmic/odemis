@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource class="wxFrame" version="2.5.3.0"
+  xmlns="http://www.wxwidgets.org/wxxrc">
+  <object class="wxDialog" name="fr_slm_alignment">
+    <object class="wxFlexGridSizer">
+      <cols>3</cols>
+      <rows>1</rows>
+      <growablecols>1</growablecols>
+      <growablerows>0</growablerows>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_slm_alignment_left">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <border>10</border>
+              <flag>wxALL|wxEXPAND</flag>
+              <object class="wxButton" name="btn_fine_alignment">
+                <label>Fine Alignment</label>
+                <font>
+                    <size>12</size>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <border>10</border>
+              <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
+              <object class="wxStaticText" name="txt_stage_moving">
+                <label></label>
+                <font>
+                    <size>12</size>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <fg>#DDDDDD</fg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <border>10</border>
+              <flag>wxALL|wxEXPAND</flag>
+              <proportion>1</proportion>
+              <object class="wxStaticText" name="txt_slm_workflow">
+                <label>SLM Alignment Workflow:
+1. Locate and move to an empty area
+2. Mill fibucial
+3. Play SLM reflection stream, focus on the center of the fibucial
+4. Using fine alignment, click on the center of the fibucial</label>
+<!--                <style>wxTE_MULTILINE|wxTE_READONLY|wxBORDER_SIMPLE</style>-->
+                <font>
+                    <size>12</size>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <fg>#DDDDDD</fg>
+<!--                <bg>#222222</bg>-->
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <minsize>350,-1</minsize>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_slm_alignment_grid">
+          <object class="LiveViewport" name="vp_slm_fm_live">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_slm_fib_live">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxScrolledWindow" name="scr_win_slm_right">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="FoldPanelBar">
+                <object class="FoldPanelItem" name="fp_slm_alignment_streams">
+                  <object class="StreamBar" name="pnl_slm_alignment_streams">
+                    <size>300,-1</size>
+                    <fg>#7F7F7F</fg>
+                    <bg>#333333</bg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <label>STREAMS</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#555555</bg>
+                </object>
+                <object class="FoldPanelItem" name="fp_slm_alignment_milling">
+                  <object class="wxPanel" name="pnl_slm_fiducial_milling">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                        <object class="wxPanel" name="pnl_slm_milling_task">
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                        <object class="wxStaticText" name="txt_slm_milling_est_time">
+                          <label>Fiducial cross ready</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <object class="wxButton" name="btn_slm_run_milling">
+                          <label>Run Milling</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
+                        <object class="wxButton" name="btn_slm_milling_cancel">
+                          <label>Cancel Milling</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                    </object>
+                    <bg>#333333</bg>
+                  </object>
+                  <label>MILLING</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#555555</bg>
+                </object>
+                <spacing>0</spacing>
+                <leftspacing>0</leftspacing>
+                <rightspacing>0</rightspacing>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>380,-1</size>
+          <minsize>340,-1</minsize>
+          <bg>#333333</bg>
+          <style>wxVSCROLL</style>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <title>SLM Alignment</title>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+    </font>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
+  </object>
+</resource>
+

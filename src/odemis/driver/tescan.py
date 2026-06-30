@@ -567,6 +567,9 @@ class SEM(model.HwComponent):
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # trans = self.pixelToPhy(pxs_pos)
+            # shifted_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # updated_phy_pos =  shifted_pos[0] - self.shift.value[0], shifted_pos[1] - self.shift.value[1]
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
@@ -1293,6 +1296,8 @@ class Scanner(model.Emitter):
 
         rotation_degrees = math.degrees(value)
         self._device_handler.SetImageRot(rotation_degrees)
+        with self.parent._acq_progress_lock:
+            self._updateShift()
         return value
 
     def pixelToPhy(self, px_pos):

@@ -1,4 +1,5 @@
 from .dialog_secom_acq import SecomAcqDialogBase
+from .dialog_slm_alignment import DialogSlmAlignment
 from .dialog_overview_acq import OverviewAcqDialogBase
 from .dialog_correlation_tdct import TDCorrelationDialogBase
 from .frame_main import MainFrame
@@ -25,6 +26,7 @@ from .panel_tab_sparc2_align import PnlTabSparc2Align
 __all__ = [
     "SecomAcqDialogBase",
     "TDCorrelationDialogBase",
+    "DialogSlmAlignment",
     "MainFrame",
     "OverviewAcqDialogBase",
     "PluginDialogBase",
