@@ -247,6 +247,7 @@ class ParabolicMirrorRayTracer:
         self.alpha = numpy.deg2rad(136)
 
         self._aligned_pos = self._last_pos = good_pos
+        self._last_res = self.resolution.value
         self._last_img = self._get_ray_traced_pattern()
         self.resolution.subscribe(self._update_range)
         self.pixel_size.subscribe(self._update_range)
@@ -672,7 +673,8 @@ class ParabolicMirrorRayTracer:
         :param current_pos: Current positions with keys 'x', 'y', 'z' (floats, in meters).
         :return: 2D array representing the simulated intensity pattern on the camera.
         """
-        if self._last_pos != current_pos:
+        res = self.resolution.value
+        if self._last_pos != current_pos or self._last_res != res:
             try:
                 logging.debug("Simulating new ray-traced image")
                 dx = self._aligned_pos["x"] - current_pos["x"]
@@ -681,7 +683,9 @@ class ParabolicMirrorRayTracer:
                 with numpy.errstate(all="raise"):
                     self._last_img = self._get_ray_traced_pattern(dx, dy, dz)
                 self._last_pos = current_pos.copy()
+                self._last_res = res
             except Exception as e:
                 logging.warning(f"Ray tracing failed with error: {e}. Using last image.")
+                return numpy.zeros(self.resolution.value[::-1], dtype=numpy.uint16)
 
         return self._last_img.copy()
