@@ -816,14 +816,16 @@ def Subtract(a, b):
         return a - b
 
 
-def Bin(data, binning):
+def Bin(data: model.DataArray, binning: Tuple[int, int], dtype: numpy.dtype = None
+        ) -> model.DataArray:
     """
     Combines adjacent pixels together, by summing them, in a similar way that
       it's done on a CCD.
     data (DataArray of shape YX): the data to bin. The dimensions should be
       multiple of the binning.
     binning (1<=int, 1<=int): binning in X and Y
-    return (DataArray of shape Y'X', with the same dtype as data): all cluster of
+    :param dtype: output dtype to use, the default is to use the same as the input data.
+    return (DataArray of shape Y'X'): all cluster of
       pixels of binning are summed into a single pixel. If it goes above the maximum
       value, it's clipped to this maximum value.
       The metadata PIXEL_SIZE and BINNING are updated (multiplied by the binning).
@@ -833,7 +835,10 @@ def Bin(data, binning):
       then the data is clipped to 0 and MD_BASELINE adjusted (increased).
     """
     assert data.ndim == 2
-    orig_dtype = data.dtype
+    if dtype is None:
+        out_dtype = data.dtype
+    else:
+        out_dtype = numpy.dtype(dtype)
     orig_shape = data.shape
     if binning[0] < 1 or binning[1] < 1:
         raise ValueError("Binning must be > 0, but got %s" % (binning,))
@@ -874,9 +879,13 @@ def Bin(data, binning):
         pass
 
     # If int, revert to original type, with data clipped (not overflowing)
-    if orig_dtype.kind in "biu":
-        idtype = numpy.iinfo(orig_dtype)
-        data = data.clip(idtype.min, idtype.max).astype(orig_dtype)
+    if out_dtype.kind in "iu":
+        idtype = numpy.iinfo(out_dtype)
+        data = data.clip(idtype.min, idtype.max).astype(out_dtype)
+    elif out_dtype.kind == 'b':
+        data = data.clip(0, 1).astype(out_dtype)
+    else:
+        data = data.astype(out_dtype, copy=False)
 
     return data
 

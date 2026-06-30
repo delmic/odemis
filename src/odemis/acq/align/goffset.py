@@ -1,3 +1,27 @@
+"""
+SPARC auto grating offset alignment
+
+:created: 5 Jun 2026
+:author: Yu Xia de Jong
+:copyright: © 2026 Yu Xia de Jong, Éric Piel, Delmic
+
+This file is part of Odemis.
+
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
+
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
+
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
+
 import logging
 import numpy
 import threading
@@ -10,7 +34,7 @@ from odemis.acq.align import light
 from odemis import model
 from odemis.acq.align.autofocus import _mapDetectorToSelector
 from odemis.model import InstantaneousFuture
-from odemis.util import executeAsyncTask
+from odemis.util import executeAsyncTask, img
 from odemis.util.peak import Smooth, Detect
 from scipy.optimize import curve_fit
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -34,7 +58,7 @@ def gaussian(x: numpy.ndarray, amplitude: float, x0: float, width: float) -> num
     return intensity
 
 
-def find_peak_position(data: numpy.ndarray, window_radius: int = 15, snr_threshold: float = 10.0) -> float:
+def find_peak_position(spectrum: numpy.ndarray, window_radius: int = 15, snr_threshold: float = 10.0) -> float:
     """
     Finds the peak position in the given spectrum data.
     It can handle both 1D and 2D data (in which case it uses Maximum Intensity Projection).
@@ -44,26 +68,24 @@ def find_peak_position(data: numpy.ndarray, window_radius: int = 15, snr_thresho
     It then calculates a weighted average of the positions within a window, using the
     intensity values as weights. For improved accuracy, it attempts to fit a Gaussian curve.
 
-    :param data: 1D or 2D array containing the spectrum
+    :param spectrum: 1D or 2D array containing the spectrum
     :param window_radius: number of pixels on either side of the peak to include in the window for fitting (default: 15)
     :return: estimated peak position in pixels (float)
     :raises RuntimeError: if no significant peak is detected (SNR too low)
     """
-
-    raw_data = numpy.asarray(data, dtype=float)
-    spectrum = numpy.squeeze(raw_data)
-
-    # The maximum intensity projection (MIP) is used as it retains the exact maximum intensity value of the peak,
-    # as opposed to mean averaging, which flattens sharp spikes, blending the high-intensity peak with the surrounding
-    # low-intensity baseline noise. MIP maximises SNR and guarantees that the pixel location of the highest intensity
-    # is preserved.
-    if spectrum.ndim > 1:
-        spectrum = spectrum.max(axis=0)
+    spectrum = numpy.squeeze(spectrum)  # remove any dummy dimensions
+    if spectrum.ndim > 1:  # 2D
+        # Convert to 1D by binning along the vertical axis (as done in the spectrum acquisition)
+        if not isinstance(spectrum, model.DataArray):
+            spectrum = model.DataArray(spectrum)
+        spectrum = img.Bin(spectrum, (1, spectrum.shape[0]), dtype=numpy.float64)
+        spectrum = numpy.squeeze(spectrum)
+    else:
+        spectrum = spectrum.astype(numpy.float64, copy=False)
 
     # geometric smoothing and noise calculation
     smoothed_data = Smooth(spectrum, window_len=11)
-    clean_data = smoothed_data - numpy.median(smoothed_data)
-    noise_std = numpy.std(clean_data)
+    noise_std = float(numpy.std(smoothed_data - spectrum))
 
     # detect peak
     maxtab, _ = Detect(smoothed_data, lookahead=10, delta=(noise_std + 1e-6) * snr_threshold)
@@ -125,17 +147,18 @@ def peak_is_present(spectrum: numpy.ndarray,
     :param width_range: acceptable range of estimated peak widths in pixels (default: (0.5, 12.0))
     :return: True if a peak meeting the criteria is present, False otherwise
     """
-
-    raw_data = numpy.asarray(spectrum, dtype=float) # convert to float
-    spectrum_1d = numpy.squeeze(raw_data)  # remove any dummy dimensions
-
-    # convert 2D data to 1D via MIP if it wasn't done by the caller
-    if spectrum_1d.ndim > 1:
-        spectrum_1d = spectrum_1d.max(axis=0)
+    spectrum = numpy.squeeze(spectrum)  # remove any dummy dimensions
+    if spectrum.ndim > 1:  # 2D
+        # Convert to 1D by binning along the vertical axis (as done in the spectrum acquisition)
+        if not isinstance(spectrum, model.DataArray):
+            spectrum = model.DataArray(spectrum)
+        spectrum_1d = img.Bin(spectrum, (1, spectrum.shape[0]), dtype=numpy.float64)
+        spectrum_1d = numpy.squeeze(spectrum_1d)
+    else:
+        spectrum_1d = spectrum.astype(numpy.float64, copy=False)
 
     smoothed_data = Smooth(spectrum_1d, window_len=11) # remove any hot pixels
-    clean_data = smoothed_data - numpy.median(smoothed_data)
-    noise_std = numpy.std(clean_data)
+    noise_std = float(numpy.std(smoothed_data - spectrum_1d))
 
     # use Detect to reject high-amplitude noise spikes that lack Gaussian geometry
     maxtab, _ = Detect(smoothed_data, lookahead=10, delta=(noise_std + 1e-6) * snr_threshold)
@@ -225,9 +248,7 @@ def coarse_scan_goffset_for_peak(spgr, detector, future: model.ProgressiveFuture
             continue
 
         data = detector.data.get(asap=False)
-        spectrum = data.max(axis=0) if data.ndim == 2 else data
-
-        if peak_is_present(spectrum):
+        if peak_is_present(data):
             peak = find_peak_position(data)
             return g, peak
 
@@ -368,9 +389,8 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
     try:
         center_target = (detector.resolution.value[0] - 1) / 2
         data0 = detector.data.get(asap=False)
-        spectrum0 = data0.max(axis=0) if data0.ndim == 2 else data0
 
-        if peak_is_present(spectrum0):
+        if peak_is_present(data0):
             peak0 = find_peak_position(data0)
             logging.debug("Initial read: peak0=%.2f px", peak0)
             peak_present = True
@@ -645,7 +665,6 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
 
         try:
             future._subfuture.result(timeout=60)
-
         except TimeoutError:
             future._subfuture.cancel()
             logging.warning("Brightlight did not confirm ON within 60s; continuing anyway")
@@ -673,16 +692,8 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             if selector:
                 selector.moveAbsSync({selector_axes: detector_to_selector[d]})
 
-            if d is first_detector:
-                logging.info("Primary detector: using grating alignment (goffset)")
-                future._subfuture = (sparc_auto_grating_offset(spectrograph,d))
-
-            else:
-                logging.info("Secondary detector: using detector-offset alignment")
-                future._subfuture = (sparc_auto_detector_offset(spectrograph, d))
-
-            success = future._subfuture.result()
-            results[(g0, d.name)] = success
+            future._subfuture = sparc_auto_grating_offset(spectrograph, d)
+            results[(g0, d.name)] = future._subfuture.result()
 
             # update progress
             current_step += 1
@@ -705,8 +716,7 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             logging.info("Starting alignment | Detector: %s | Grating: %s", first_detector.name, g)
 
             future._subfuture = sparc_auto_grating_offset(spectrograph, first_detector)
-            success = future._subfuture.result()
-            results[(g, first_detector.name)] = success
+            results[(g, first_detector.name)] = future._subfuture.result()
 
             # update progress
             current_step += 1

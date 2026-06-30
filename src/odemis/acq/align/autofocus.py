@@ -1217,12 +1217,12 @@ def CLSpotsAutoFocus(
 def _mapDetectorToSelector(
         selector: model.Actuator,
         detectors: List[model.Detector]
-) -> Tuple[str, Dict[str, Any]]:
+) -> Tuple[str, Dict[model.Detector, float]]:
     """
     Maps detector to selector positions
     returns:
        axis: the selector axis to use
-       position_map: detector name -> selector position
+       position_map: detector -> selector position
     """
     # We pick the right axis by assuming that it's the only one which has
     # choices, and the choices are a dict pos -> detector name.
