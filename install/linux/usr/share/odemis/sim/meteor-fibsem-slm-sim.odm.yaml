@@ -1,0 +1,509 @@
+# Simulates a METEOR on TFS SEM, with control of the FIB (milling)
+# It requires the separate xtadapter-autoscript simulator. To start it, do:
+# python3 path/to/xtlib-adapter/xtadapter/server_sim.py --type autoscript --port 4243
+
+"METEOR TFSv3 FIB Sim": {
+    class: Microscope,
+    role: meteor,
+}
+
+"FIBSEM": {
+  class: autoscript_client.SEM,
+  role: fibsem,
+  init: {
+    # address: "192.168.6.5",  # real
+    address: "localhost",    # simulator
+    port: "4243"
+  },
+  children: {
+    stage: "Stage",
+    sem-scanner: "Electron-Beam",
+    sem-detector: "Electron-Detector",
+    sem-focus: "Electron-Focus",
+    fib-scanner: "Ion-Beam",
+    fib-detector: "Ion-Detector",
+    fib-focus: "Ion-Focus",
+  }
+}
+
+"Electron-Beam": {
+    role: e-beam,
+    init: {
+        hfw_nomag: 0.25, # hfw when mag == 1x
+    },
+    properties: {
+        # Set scan rotation to 180°, which is the standard, to ensure the camera
+        # rotation is matching.
+        rotation: 3.141592653589,  # rad, 180°
+    },
+}
+
+"Electron-Detector": {
+    role: se-detector,
+    init: {},
+    properties: {
+        # medianFilter: 3,
+    },
+}
+
+"Electron-Focus": {
+    role: ebeam-focus,
+    init: {},
+    affects: ["Electron-Beam"]
+}
+
+"Ion-Beam": {
+    role: "ion-beam",
+    init: {
+        hfw_nomag: 0.25, # hfw when mag == 1x
+    },
+    properties: {
+        # Set scan rotation to 180°, which is the standard, to ensure the camera
+        # rotation is matching.
+        rotation: 3.141592653589,  # rad, 180°
+    },
+}
+
+"Ion-Detector": {
+    role: "se-detector-ion",
+    init: {},
+    properties: {
+        medianFilter: 3,
+    },
+}
+
+"Ion-Focus": {
+    role: ion-focus,
+    init: {},
+    affects: ["Ion-Beam"]
+}
+
+# Normally provided by the SEM
+"Stage": {
+    role: stage-bare,
+    init: {
+    },
+    metadata: {
+        # Loading position:
+        FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 29.e-3 },
+        # XYZ ranges for SEM & METEOR
+        SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 37.e-3]},
+        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-30.e-3, 25.e-3], "z": [15.e-3, 34.e-3]},
+        # Grid centers in SEM range
+        # Adjusted so that at init (0,0,0), it's at the Grid 1.
+        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 32.e-3}, "GRID 2": {'x': 5.0e-3, 'y': 0, 'z': 32.e-3}},
+        CALIB: {
+            "version": "tfs_3",
+            "z_low": 27.e-3,
+            "dx": 0.0506252, "dy": 0.0049832,  # mirroring values between SEM - METEOR
+            "pre-tilt": 0.6108652381980153,  # rad, 35°
+            "use_linked_sem_focus_compensation": True,  # if True, use SEM-Eucentric-Focus
+            "SEM-Eucentric-Focus": 7.0e-3, # m, fixed e-beam focus position, aquilos=7.0e-3, hydra=4.0e-3
+        },
+        # Active tilting (rx) & rotation(rz) angles positions when switching between SEM & FM.
+        FAV_FM_POS_ACTIVE: {"rx": 0.2967059728390360  , "rz":  3.141592653589793}, # 17° - 180°
+        FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
+        FAV_FIB_POS_ACTIVE: {"rx": 0.29670597283903605 , "rz": 3.141592653589793},
+        FAV_MILL_POS_ACTIVE: {"mill_angle": 0.2443461, "rz": 0},  # milling angle (14°) is the angle between ion beam column and sample plane
+    },
+}
+
+"Light Source": {
+    class: omicronxx.HubxX,
+    role: light,
+    init: {
+        port: "/dev/fakehub", # Simulator
+        #port: "/dev/ttyFTDI*",
+        },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    metadata: {
+        # Refractive index mismatch correction factor
+        RIM_COR : 0.495,  # generally for 50x lens use 0.495, 100x0.9 na use 0.6
+    },
+    affects: ["Camera"]
+}
+
+# Normally a IDS uEye or Zyla
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Camera": {
+    class: simcam.Camera,
+    role: ccd,
+    dependencies: {focus: "Optical Focus"},
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
+         ROTATION: -0.099484,  # [rad] (=-5.7°)
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["fw"],
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    dependencies: {"slave": "Optical Actuators"},
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
+    affects: ["Camera"],
+}
+
+# Controller for the stigmator
+"Stigmator Actuator": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        # address: 8,
+        port: "/dev/fake", # Simulator
+        address: null, # Simulator
+        axes: ["stig"],
+        ustepsize: [27.2e-6], # [rad/µstep]
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"stig": 0}, #digital output used to switch on/off sensor
+    },
+}
+
+# Backlash corrected actuators for Stigmator
+"AntiBacklash for Stigmator": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            "stig": 20.e-3,  # rad of move
+        },
+    },
+    children: {"slave": "Stigmator Actuator"},
+}
+
+"Stigmator": {
+    class: actuator.RotationActuator,
+    role: stigmator,
+    affects: ["Camera"],
+    children: {"rz": "AntiBacklash for Stigmator"},
+    init: {
+        axis_name: "stig",
+        #cycle: 2 * pi, # rad
+        # ref_start: null, # rad, value to where start the referencing, default is to start at 5% of cycle
+    },
+    metadata: {
+        POS_COR: -0.5,  # rad, adjustment needed for 0 = no astigmatism
+        # Z localization calibration: stigmator angle -> calibration
+        CALIB: {
+            1.e-09: {'angle':0.08726,
+                    'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,  'd': 638.8463397122532,  'w0': 11.560179003062268},
+                    'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,  'd': 425.6030263781317, 'w0': 11.332043010740446},
+                    'feature_angle': -3.1416,
+                    'upsample_factor': 5,
+                    'z_least_confusion': 9.418563712742548e-07,
+                    'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
+            },
+            10.e-09: {'angle':0.17453,
+                    'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,  'd': 638.8463397122532,  'w0': 11.560179003062268},
+                    'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,  'd': 425.6030263781317, 'w0': 11.332043010740446},
+                    'feature_angle': -3.1416,
+                    'upsample_factor': 5,
+                    'z_least_confusion': 9.418563712742548e-07,
+                    'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
+            },
+        },
+    },
+}
+
+# CLS3252dsc-1
+"Optical Focus": {
+    class: smaract.MCS2,
+    role: focus,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        # TODO: check speed/accel
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-15.e-3, 5.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -11.5e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': 1.69e-3}
+    },
+    affects: ["Camera"],
+}
+
+## Lens arm coincident component controlled by TMCM 6214
+# actuator, antibacklash actuator, the proper component with the role
+# copy of mirror seen in sparc
+
+# Controller for moving the 'Redux' stage
+# DIP must be configured with address 4 (= 0010000)
+# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
+"SLM Lens Arm": {
+    class: tmcm.TMCLController,
+    role: "lens-arm-coincident",
+    init: {
+#        port: "/dev/ttyTMCM*",
+#        address: 4,
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["s", "l"],
+        # ustepsize: [5.9e-9, 5.9e-9], # m/µstep
+        ustepsize: [100.e-6, 100.e-6],
+        refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        FAV_POS_ACTIVE: {"l": 0.069007226, "s": 0.0027454942},  # m, m
+        FAV_POS_DEACTIVE:{"l":0, "s": 0},
+    },
+}
+
+# SLM Optical path comp
+"SLM Light Source": {
+    class: omicronxx.HubxX,
+    role: light-coincident,
+    init: {
+        port: "/dev/fakehub", # Simulator
+        #port: "/dev/ttyFTDI*",
+        },
+    affects: ["SLM Camera"],
+}
+
+"SLM Optical Objective": {
+    class: static.OpticalLens,
+    role: lens-coincident,
+    init: {
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    metadata: {
+        # Refractive index mismatch correction factor
+        RIM_COR : 0.495,  # generally for 50x lens use 0.495, 100x0.9 na use 0.6
+    },
+    affects: ["SLM Camera"]
+}
+
+# Normally a IDS uEye or Zyla
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"SLM Camera": {
+    class: simcam.Camera,
+    role: ccd-coincident,
+    dependencies: {focus: "SLM Optical Focus"},
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
+         ROTATION: -0.099484,  # [rad] (=-5.7°)
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"SLM Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["fw"],
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"SLM AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    dependencies: {"slave": "SLM Optical Actuators"},
+}
+
+"SLM Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter-coincident,
+    dependencies: {"band": "SLM AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
+    affects: ["SLM Camera"],
+}
+
+# CLS3252dsc-1
+"SLM Optical Focus": {
+    class: smaract.MCS2,
+    role: focus-coincident,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        # TODO: check speed/accel
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-15.e-3, 5.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -11.5e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': 1.69e-3}
+    },
+    affects: ["SLM Camera"],
+}
+
+# Internal wrapper exposing lens-arm long axis and objective focus z as a
+# 2-axis stage for Y/Z linking.
+"SLM LZ Axes": {
+    class: actuator.MultiplexActuator,
+    role: null,
+    dependencies: {
+        "l": "SLM Lens Arm",
+        "z": "SLM Optical Focus",
+    },
+    init: {
+        axes_map: {
+            "l": "l",
+            "z": "z",
+        },
+    },
+}
+
+"Linked LZ": {
+    class: actuator.ConvertStage,
+    role: null,
+    dependencies: {
+        "under": "SLM LZ Axes",
+    },
+    init: {
+      axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
+      rotation: -0.8034946943806713, # rad , -45°
+    },
+}
+
+"SLM Alignment Stage": {
+    class: actuator.MultiplexActuator,
+    role: align-coincident,
+    dependencies: {
+        "x": "SLM Lens Arm",
+        "y": "Linked LZ",
+        "z": "SLM Optical Focus",
+    },
+    init: {
+        axes_map: {
+            "x": "s", # direct SLM alignment x
+            "y": "x", # linked combination of lens-arm l and objective z
+            "z": "z", # direct objective z
+        },
+    },
+    affects: ["SLM Camera"],
+    metadata: {
+        # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
+        POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-10.e-3, 20.e-3]}
+    },
+}
+
