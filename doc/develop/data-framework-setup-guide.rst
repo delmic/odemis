@@ -25,7 +25,8 @@ Prerequisites
 
 - Ubuntu 22.04 LTS or later
 - Odemis installed from the Debian package or a source checkout
-- AWS S3 credentials (``access_key`` + ``secret_key``) for the target bucket.
+- AWS S3 credentials (``access_key`` + ``secret_key``) for the target bucket
+  (typically upload-only IAM keys).
   Obtain these from a Delmic software engineer; they are **not** stored in this
   repository.
 - Write access to ``/usr/share/odemis/`` (for the key file)
@@ -65,8 +66,13 @@ The file must contain exactly the following two keys:
 
    { "access_key": "<AWS_ACCESS_KEY_ID>", "secret_key": "<AWS_SECRET_ACCESS_KEY>" }
 
-Obtain the actual key values from a Delmic software engineer. Do **not** commit
-them to any repository or share them over unencrypted channels.
+Obtain the actual key values from a Delmic software engineer. These keys are
+typically scoped to upload-only access (no read/retrieve), so internal sharing
+over standard channels is lower risk than full-access AWS credentials.
+
+Do **not** commit these keys to git repositories (especially public remotes).
+Public repository scrapers continuously harvest AWS key patterns, and committing
+keys can also trigger GitHub secret-scanning/security warnings.
 
 
 Production Setup
@@ -195,27 +201,6 @@ A typical file after opt-in looks like:
    # Data sharing consent (true / false).
    consent = true
 
-To check the current consent state without starting Odemis:
-
-.. code-block:: bash
-
-   python3 -c "
-   from odemis.util.datacollector import DataCollectorConfig
-   cfg = DataCollectorConfig()
-   print('consent:', cfg.consent)
-   "
-
-To manually reset consent:
-
-.. code-block:: bash
-
-   python3 -c "
-   from odemis.util.datacollector import DataCollectorConfig
-   cfg = DataCollectorConfig()
-   cfg.clear_consent()
-   print('Consent cleared.')
-   "
-
 
 .. _test-bucket-mode:
 
@@ -330,8 +315,9 @@ Quick Smoke-Test with odemis-dc-fetch
 
 After a successful upload (production or test), use the retrieval script to
 confirm objects landed in S3. The retrieval script can only be used with an AWS
-profile that has data-analyst read access; the ``access_key`` / ``secret_key``
-in the key file determine whether fetching is permitted.
+profile that has data-analyst read access; the upload key in
+``/usr/share/odemis/datacollector.key`` is typically write-only and usually
+does not grant retrieval rights.
 
 .. code-block:: bash
 
@@ -361,12 +347,6 @@ errors and verify the key file credentials.
 
 Troubleshooting
 ----------------
-
-**Problem:** ``boto3 ImportError`` when starting Odemis.
-
-**Solution:** ``sudo apt install python3-boto3``
-
-----
 
 **Problem:** ``LookupError: S3 credentials key file not found at /usr/share/odemis/datacollector.key``
 
@@ -402,30 +382,14 @@ oldest-first once connectivity is restored.
 **Cause:** The queue directory has grown beyond 10 % of the partition.
 
 **Solution:** Check disk space with ``df -h ~/.local/share/odemis/dc_queue``.
-Consider moving ``~/.local/share/odemis/`` to a larger partition, or
-investigate why uploads are not succeeding (credentials, network).
-
+Investigate why uploads are not succeeding (credentials, network).
 
 ----
 
 **Problem:** ``TEST_DATACOLLECTION=1`` is set but uploads still go to
 production.
 
-**Solution:** This cannot happen — the environment variable is read at the
+**Solution:** The environment variable is read at the
 moment ``get_upload_backend()`` is called, which is lazy (first upload attempt).
 Verify the variable is exported in the same shell/environment that runs the
 Odemis process.
-
-----
-
-**Problem:** ``*.tmp`` files accumulate in ``dc_queue``.
-
-**Cause:** Odemis crashed mid-write.
-
-**Solution:** Stop Odemis, then:
-
-.. code-block:: bash
-
-   rm -f ~/.local/share/odemis/dc_queue/*.tmp
-
-The framework also cleans these up automatically on the next startup.

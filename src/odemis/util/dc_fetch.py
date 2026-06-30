@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import boto3
+
 from odemis.util.datacollector import DataCollectorConfig, S3UploadBackend
 
 
@@ -52,6 +54,12 @@ def parse_since_utc(value: str) -> datetime:
 def parse_key_timestamp_utc(key: str) -> Optional[datetime]:
     """
     Parse <event>-<YYYYMMDDTHHmmss>-<uuid>.zip timestamp from key basename.
+
+    The S3 object key is the full path-like key in the bucket, for example:
+    ``meteor-5099/z_stack_acquired-20260322T104530-a1b2c3d4.zip``.
+    In this format, ``meteor-5099/`` is the host prefix and the basename is
+    ``z_stack_acquired-20260322T104530-a1b2c3d4.zip``.
+
     :param key: S3 object key.
     :return: Parsed UTC datetime, or None if parsing failed.
     """
@@ -72,6 +80,13 @@ def parse_key_timestamp_utc(key: str) -> Optional[datetime]:
 def parse_key_event_name(key: str) -> Optional[str]:
     """
     Parse event name from <event>-<YYYYMMDDTHHmmss>-<uuid>.zip key basename.
+
+    Example key:
+    ``meteor-5099/z_stack_acquired-20260322T104530-a1b2c3d4.zip``
+
+    Parsed event name from the basename:
+    ``z_stack_acquired``
+
     :param key: S3 object key.
     :return: Event name, or None if parsing failed.
     """
@@ -110,7 +125,7 @@ def iter_s3_objects(s3_client: Any, bucket: str, prefix: str) -> Iterator[Dict[s
 def should_download_key(key: str, event_filter: Optional[str], since_utc: Optional[datetime]) -> bool:
     """
     Return whether an S3 key should be downloaded by filters.
-    :param key: S3 object key.
+    :param key: S3 object key (for example: ``meteor-5099/z_stack_acquired-20260322T104530-a1b2c3d4.zip``).
     :param event_filter: Optional event name filter.
     :param since_utc: Optional UTC datetime filter.
     :return: True if the key should be downloaded, False otherwise.
@@ -159,7 +174,6 @@ def build_s3_client_from_config(
         raise RuntimeError("Only S3 backend is supported for retrieval.")
     endpoint_url = endpoint_override or backend._endpoint_url  # pylint: disable=protected-access
     bucket = bucket_override or backend._bucket  # pylint: disable=protected-access
-    import boto3
     client_kwargs: Dict[str, Any] = {
         "endpoint_url": endpoint_url,
         "aws_access_key_id": backend._access_key,  # pylint: disable=protected-access
