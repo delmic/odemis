@@ -85,6 +85,7 @@ class PnlTabFibsemTest(unittest.TestCase):
             "btn_feature_save_position",
             "btn_switch_sem_imaging",
             "btn_switch_milling",
+            "btn_slm_alignment",
             "ctrl_milling_angle",
             "fp_settings_secom_optical",
             "fp_secom_streams",
@@ -160,6 +161,7 @@ class PnlTabFibsemTest(unittest.TestCase):
             self.panel.btn_snap_patterns_to_feature.GetLabel(),
             "Recenter on Feature",
         )
+        self.assertFalse(self.panel.btn_slm_alignment.IsShown())
         self.assertEqual(self.panel.gauge_cryosecom_acq.GetRange(), 100)
         self.assertEqual(self.panel.gauge_automated_milling.GetRange(), 100)
         self.assertEqual(self.panel.gauge_milling_series.GetRange(), 100)
