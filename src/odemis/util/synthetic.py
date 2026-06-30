@@ -685,7 +685,7 @@ class ParabolicMirrorRayTracer:
                 self._last_pos = current_pos.copy()
                 self._last_res = res
             except Exception as e:
-                logging.warning(f"Ray tracing failed with error: {e}. Using last image.")
+                logging.warning(f"Ray tracing failed with error: {e}, returning dark image.")
                 return numpy.zeros(self.resolution.value[::-1], dtype=numpy.uint16)
 
         return self._last_img.copy()
