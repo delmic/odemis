@@ -102,12 +102,13 @@ OUT_CONFIG_DEFAULT = {
 }
 
 # Models which don't support axis param storage
-NO_AXIS_STORAGE = {1211, 3214}
+NO_AXIS_STORAGE = {1211, 3214, 6214}
 
 # List of axis params which are _not_ present (per model)
 MISSING_AXIS_PARAMS = {
     1211: {149, 153, 154, 200},
     3214: {149, 153, 154, 200},
+    6214: {149, 153, 154, 200},
     1140: {17, 24, 25, 26, 31, 251},
     3110: {17, 24, 25, 26, 31, 201, 212, 251},
     6110: {17, 24, 25, 26, 31, 201, 212, 251},
@@ -117,6 +118,7 @@ MISSING_AXIS_PARAMS = {
 MISSING_GLOBAL_PARAMS = {
     1211: {(0, 79), (0, 90)},
     3214: {(0, 79), (0, 90)},
+    6214: {(0, 79), (0, 90)},
     1140: {},
     3110: {},
     6110: {},
