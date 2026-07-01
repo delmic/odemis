@@ -25,6 +25,7 @@ This document covers the main aspects of development with Odemis.
     gui
     plugins
     utils
+    data-framework-setup-guide
     microscope
     documentation
 ..    testing

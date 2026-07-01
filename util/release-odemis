@@ -34,6 +34,12 @@ fi
 
 cd ~/development/odemis
 
+# Ensure datacollector key is present before release operations start.
+if [ ! -f install/linux/usr/share/odemis/datacollector.key ]; then
+    echo "Missing required file: install/linux/usr/share/odemis/datacollector.key"
+    exit 1
+fi
+
 if ! git remote get-url upstream > /dev/null ; then
     echo "Need to have a upstream remote (typically pointing to git@github.com:delmic/odemis.git)"
     exit 1
@@ -105,6 +111,12 @@ cd ~/development/pkg-native/odemis
 git fetch
 git checkout $VBRANCH
 git pull
+
+# Check again in the build tree that the packaged key file exists.
+if [ ! -f install/linux/usr/share/odemis/datacollector.key ]; then
+    echo "Missing required file in build tree: install/linux/usr/share/odemis/datacollector.key"
+    exit 1
+fi
 
 BPVERSION=$(dpkg-parsechangelog -S Version) # should start with "$RELVER-1"
 if [[ "$BPVERSION" != "$PVERSION" ]]; then
