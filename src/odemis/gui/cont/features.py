@@ -39,11 +39,12 @@ from odemis.acq.feature import (
     TargetType
 )
 from odemis.acq.move import (
+    FIB_IMAGING,
+    FIB_VIEW_FM,
     FM_IMAGING,
     MILLING,
     POSITION_NAMES,
     SEM_IMAGING,
-    FIB_IMAGING,
 )
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
@@ -53,7 +54,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 
-SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
+SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING, FIB_VIEW_FM]
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements

@@ -184,7 +184,30 @@
 												<border>10</border>
 												<cellpos>1,0</cellpos>
 											</object>
-											<object class="sizeritem">
+                                            <object class="sizeritem">
+												<object class="ProgressRadioButton" name="btn_switch_fib_view_fm">
+													<icon>../../img/icon/ico_meteor_fib_view_fm.png</icon>
+													<icon_progress>../../img/icon/ico_meteor_fib_view_fm_orange.png</icon_progress>
+													<icon_on>../../img/icon/ico_meteor_fib_view_fm_green.png</icon_on>
+													<height>48</height>
+													<face_colour>def</face_colour>
+													<label>FIB-VIEW FM</label>
+													<fg>#1A1A1A</fg>
+													<font>
+														<size>11</size>
+														<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+													</font>
+													<style>wxALIGN_CENTRE</style>
+													<hidden>1</hidden>
+													<XRCED>
+														<assign_var>1</assign_var>
+													</XRCED>
+												</object>
+												<flag>wxALL|wxEXPAND</flag>
+												<border>10</border>
+												<cellpos>1,1</cellpos>
+											</object>
+                                            <object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_fib_imaging">
 													<icon>../../img/icon/ico_imaging.png</icon>
 													<icon_progress>../../img/icon/ico_imaging_orange.png</icon_progress>
@@ -205,7 +228,7 @@
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>1,1</cellpos>
+												<cellpos>2,0</cellpos>
 											</object>
 											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_grid1">
@@ -228,7 +251,7 @@
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>2,0</cellpos>
+												<cellpos>3,0</cellpos>
 											</object>
 											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_grid2">
@@ -251,7 +274,7 @@
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>2,1</cellpos>
+												<cellpos>3,1</cellpos>
 											</object>
 											<vgap>5</vgap>
 											<hgap>20</hgap>
