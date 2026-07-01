@@ -43,7 +43,7 @@ class OpticalLens(model.HwComponent):
     It should "affect" the detector on which it's in front of.
     """
 
-    def __init__(self, name, role, mag, mag_choices=None, na=0.95, ri=1,
+    def __init__(self, name, role, mag, mag_choices=None, na=0.95, ri=1, wd=None,
                  pole_pos=None, mirror_pos_top=None, mirror_pos_bottom=None,
                  x_max=None, hole_diam=None,
                  focus_dist=None, parabola_f=None, rotation=None,
@@ -55,6 +55,7 @@ class OpticalLens(model.HwComponent):
           If None, the magnification will be allowed for any value between 1e-3 to 1e6.
         na (float > 0): numerical aperture
         ri (0.01 < float < 100): refractive index
+        wd (0.1e-3 < float < 100e-3): working distance
         pole_pos (2 floats >= 0): position of the pole on the CCD (in px, without
           binning, with the top-left pixel as origin).
           Used for angular resolved imaging on SPARC (only). cf MD_AR_POLE
@@ -105,6 +106,8 @@ class OpticalLens(model.HwComponent):
 
         self.numericalAperture = model.FloatContinuous(na, range=(1e-6, 1e3), unit="")
         self.refractiveIndex = model.FloatContinuous(ri, range=(0.01, 10), unit="")
+        if wd is not None:
+            self.workingDistance = model.FloatContinuous(wd, range=(0.1e-3, 100e-3), unit="m")
 
         if pole_pos is not None:
             # Use 1 million as the arbitrary max value (increase if you have a bigger CCD!)

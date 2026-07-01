@@ -29,7 +29,6 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
-from pathlib import Path
 
 import wx
 
@@ -40,13 +39,14 @@ from odemis.acq.feature import feature_decoder
 from odemis.acq.move import (
     ALIGNMENT,
     COATING,
+    FIB_IMAGING,
     FM_IMAGING,
+    FIB_VIEW_FM,
     GRID_1,
     GRID_2,
     LOADING,
     LOADING_PATH,
     MILLING,
-    FIB_IMAGING,
     POSITION_NAMES,
     SEM_IMAGING,
     THREE_BEAMS,
@@ -74,6 +74,7 @@ from odemis.util import almost_equal
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
+
 try:
     from odemis.acq.align.tdct import parse_3dct_yaml_file
 except ImportError as e:
@@ -205,6 +206,7 @@ class CryoChamberTab(Tab):
                 SEM_IMAGING: self.panel.btn_switch_sem_imaging,
                 FM_IMAGING: self.panel.btn_switch_fm_imaging,
                 MILLING: self.panel.btn_switch_milling,
+                FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
                 FIB_IMAGING: self.panel.btn_switch_fib_imaging,
            }
             # Remove the ones which are not supported on this system
@@ -228,7 +230,8 @@ class CryoChamberTab(Tab):
                 LOADING: self.panel.btn_switch_loading_chamber_tab,
                 COATING: self.panel.btn_switch_coating_chamber_tab,
                 FM_IMAGING: self.panel.btn_switch_optical_chamber_tab,
-                MILLING: self.panel.btn_switch_milling_chamber_tab
+                MILLING: self.panel.btn_switch_milling_chamber_tab,
+                FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
             }
 
             self._grid_btns = {}
@@ -661,7 +664,7 @@ class CryoChamberTab(Tab):
             self._enable_advanced_controls(self._current_posture == SEM_IMAGING)
         elif self._role == "meteor":
             self._control_warning_msg(self._current_posture)
-        elif self._role == 'mimas':
+        elif self._role == 'mimas':  # Old mimas, not to be confused with the new mimas (to be replaced)
             pass
 
     def _enable_position_controls(self, current_posture: int):
@@ -696,8 +699,18 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             # enabling/disabling meteor buttons
-            for button in itertools.chain(self.position_btns.values(), self._grid_btns.values()):
-                button.Enable(current_posture != UNKNOWN)
+            for button_posture, button in itertools.chain(self.position_btns.items(), self._grid_btns.items()):
+                switch_allowed = self.posture_manager.is_posture_switch_allowed(current_posture, button_posture)
+                button.Enable(switch_allowed)
+
+                # Hardcoding the tooltip for the disabled FM Milling state here, for lack of a better mechanism.
+                if button_posture == FIB_VIEW_FM and not switch_allowed:
+                    button.SetToolTip(
+                        f"The {POSITION_NAMES[FIB_VIEW_FM]} posture can only be reached "
+                        f"from the {POSITION_NAMES[MILLING]} posture"
+                    )
+                else:
+                    button.SetToolTip("")
 
             # turn on (green) the current position button green
             btn = self.position_btns.get(current_posture)
@@ -724,7 +737,7 @@ class CryoChamberTab(Tab):
             btn = self._grid_btns.get(current_grid_label)
             self._toggle_grid_buttons(btn)
 
-        elif self._role == 'mimas':
+        elif self._role == 'mimas':  # Old mimas, not to be confused with the new mimas (to be replaced)
             # enabling/disabling mimas buttons
             for movement, button in self.position_btns.items():
                 if current_posture == UNKNOWN:
@@ -904,8 +917,8 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING, FIB_IMAGING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING]
+                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING, FIB_IMAGING, FIB_VIEW_FM]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING, FIB_VIEW_FM]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None

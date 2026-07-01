@@ -5,6 +5,8 @@
 # images, and optimize them for size. (It used to do more, but that's not needed anymore.)
 # Call like:
 # ./util/groom-img.py -s src/odemis/gui/img/
+# Note that calling the script on a subfolder is the preferred way of running it.
+# Calling it on the Odemis root for instance, is known to have issues.
 
 import argparse
 import os

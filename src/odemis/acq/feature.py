@@ -372,6 +372,8 @@ def load_feature_streams_from_disk(feature: "CryoFeature") -> None:
             image[IMG_IN_FILE_IDS] = in_file_ids
 
         das = [da for da in das if da.metadata.get(MD_IN_FILE_INDEX) in in_file_ids]
+
+
         feature.streams.value.extend(data_to_static_streams(das))
 
 def add_feature_info_to_filename(feature: CryoFeature, filename: str) -> str:
