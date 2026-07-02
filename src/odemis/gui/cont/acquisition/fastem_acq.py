@@ -444,20 +444,17 @@ class FastEMOverviewAcquiController(object):
         self.gauge_acq.Range = 1
         self.gauge_acq.Value = 0
 
-        acq_futures = {}
         focussed_view = self._main_tab_data.focussedView.value
         num = int(focussed_view.name.value)
         current_sample = self._tab_data_model.main.current_sample.value
         region = current_sample.scintillators[num].shape.get_region()
         try:
-            f = fastem.acquireTiledArea(
+            self.acq_future = fastem.acquireTiledArea(
                 self._tab_data_model.semStream, self._main_data_model.stage, region,
                 overlap=self._overlap, centered_acq=True,
             )
-            f.add_done_callback(partial(self.on_acquisition_done, num=num))
-            acq_futures[f] = f.start_time - f.end_time
-            self.acq_future = model.ProgressiveBatchFuture(acq_futures)
-            self.acq_future.add_done_callback(self.full_acquisition_done)
+            self.acq_future.add_done_callback(partial(self.on_acquisition_done, num=num))
+            self.acq_future.add_done_callback(self.reset_acquisition_gui)
             self._fs_connector = ProgressiveFutureConnector(
                 self.acq_future, self.gauge_acq, self.lbl_acqestimate
             )
@@ -509,10 +506,10 @@ class FastEMOverviewAcquiController(object):
             self._main_data_model.overview_streams.value = ovv_ss
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def full_acquisition_done(self, future):
+    def reset_acquisition_gui(self, future):
         """
-        Callback called when the acquisition of all selected overview images is finished
-        (either successfully or cancelled).
+        Callback called when the overview image acquisition is finished (either successfully or cancelled),
+        to reset the GUI to be ready for the next acquisition.
         """
         try:
             future.result()
