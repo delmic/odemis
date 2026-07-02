@@ -1,1 +1,60 @@
-{"feature_list": [{"name": "Feature-1", "status": "Active", "stage_position": {"x": 0, "y": 0, "z": 0}, "fm_focus_position": {"z": 0}, "posture_positions": {}, "milling_tasks": {}, "correlation_data": {}, "superz_stream_name": null, "superz_focused": null}, {"name": "Feature-2", "status": "Active", "stage_position": {"x": 0.001, "y": 0.001, "z": 0.001}, "fm_focus_position": {"z": 0.002}, "posture_positions": {}, "milling_tasks": {}, "correlation_data": {}, "superz_stream_name": null, "superz_focused": null}]}
+{
+  "feature_list": [
+    {
+      "name": "Feature-1",
+      "status": "Active",
+      "stage_position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "fm_focus_position": {
+        "z": 0
+      },
+      "posture_positions": {
+        "6": {
+          "x": -0.0025671009727332894,
+          "y": -0.01352806261222967,
+          "z": 0.035643287346918615,
+          "rx": 0.698132,
+          "rz": 1.815142
+        },
+        "7": {
+          "x": 0.056360544064287234,
+          "y": -0.0230574389890373,
+          "z": 0.017492744342672853,
+          "rx": 0.261799,
+          "rz": 4.9567353
+        },
+        "5": {
+          "x": -0.002611,
+          "y": 2.37e-5,
+          "z": 0.029058399999999998,
+          "rx": 0.261804,
+          "rz": 4.956732
+        }
+      },
+      "milling_tasks": {},
+      "correlation_data": {},
+      "superz_stream_name": null,
+      "superz_focused": null
+    },
+    {
+      "name": "Feature-2",
+      "status": "Active",
+      "stage_position": {
+        "x": 0.001,
+        "y": 0.001,
+        "z": 0.001
+      },
+      "fm_focus_position": {
+        "z": 0.002
+      },
+      "posture_positions": {},
+      "milling_tasks": {},
+      "correlation_data": {},
+      "superz_stream_name": null,
+      "superz_focused": null
+    }
+  ]
+}

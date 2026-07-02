@@ -78,7 +78,10 @@
     init: {
         image: "sparc-spec-sim.h5",
     },
-    dependencies: {focus: "Spectrograph focus"}
+    dependencies: {
+        focus: "Spectrograph focus",  # blur the image based on the focus position
+        spectrograph: "Spectrograph",  # at wavelength = 0, shows a peak controlled by grating offset
+    },
 }
 
 "Spectrometer Vis-NIR": {

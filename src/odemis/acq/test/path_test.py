@@ -28,7 +28,7 @@ import unittest
 import odemis
 from odemis import model
 from odemis.acq import path, stream
-from odemis.acq.move import (FM_IMAGING, LOADING, MicroscopePostureManager)
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
 from odemis.util import testing
 

@@ -32,7 +32,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
-from odemis.acq.move import FIB_IMAGING, MILLING, MILLING_RANGE, POSITION_NAMES, SEM_IMAGING
+from odemis.acq.move import Posture, MILLING_RANGE
 from odemis.acq.stream import (
     FIBStream,
     LiveStream,
@@ -366,7 +366,7 @@ class FibsemTab(Tab):
         guiutil.enable_tab_on_stage_position(
             tab=self,
             posture_manager=self.pm,
-            target=[SEM_IMAGING, MILLING, FIB_IMAGING],
+            target=[Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING],
             tooltip="FIBSEM tab is only available at SEM position"
         )
 
@@ -374,7 +374,7 @@ class FibsemTab(Tab):
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
         posture = self.pm.get_current_posture_label(pos)  # Cannot use current_posture as it may be not yet updated
-        pos_name = POSITION_NAMES[posture]
+        pos_name = posture.value
 
         # TODO: move this to legend.py
         r = units.readable_str(rz, sig=3)
@@ -396,15 +396,15 @@ class FibsemTab(Tab):
 
         # update the stage position buttons
         if self._posture_switch_future.done():
-            self.panel.btn_switch_sem_imaging.Enable(posture in [SEM_IMAGING, MILLING])
-            self.panel.btn_switch_milling.Enable(posture in [SEM_IMAGING, MILLING])
-            self.panel.ctrl_milling_angle.Enable(posture in [SEM_IMAGING, MILLING])
+            self.panel.btn_switch_sem_imaging.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
+            self.panel.btn_switch_milling.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
+            self.panel.ctrl_milling_angle.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
 
-            if posture == SEM_IMAGING:
+            if posture == Posture.SEM_IMAGING:
                 self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
             else:
                 self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_OFF)
-            if posture == MILLING:
+            if posture == Posture.MILLING:
                 self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
             else:
                 self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
@@ -413,12 +413,12 @@ class FibsemTab(Tab):
 
     def _update_milling_angle(self, evt: wx.Event):
         # Check if already at milling posture
-        already_at_milling = self.pm.get_current_posture_label() == MILLING
+        already_at_milling = self.pm.get_current_posture_label() == Posture.MILLING
 
         # update the metadata of the stage
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
         self.pm.milling_angle.value = milling_angle  # this will call the setter in the move posture manager and handle md update
-        md = self.pm.get_posture_orientation(MILLING)
+        md = self.pm.get_posture_orientation(Posture.MILLING)
         stage_tilt = md["rx"]
         self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
                                                  f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
@@ -430,10 +430,10 @@ class FibsemTab(Tab):
         logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
         # NOTE: use stage_tilt, not milling_angle
         for feature in self.main_data.features.value:
-            milling_position = feature.get_posture_position(MILLING)
+            milling_position = feature.get_posture_position(Posture.MILLING)
             if milling_position is not None:
                 milling_position["rx"] = stage_tilt
-                feature.set_posture_position(MILLING, milling_position)
+                feature.set_posture_position(Posture.MILLING, milling_position)
 
         if already_at_milling:
             # Normally this happens automatically when clicking the ProgressRadioButton, but since we are now not
@@ -442,13 +442,13 @@ class FibsemTab(Tab):
             self._move_to_milling_posture(None)
 
     def _move_to_milling_posture(self, evt: wx.Event):
-        self._posture_switch_future = self.pm.cryo_switch_sample_position(MILLING)
+        self._posture_switch_future = self.pm.cryo_switch_sample_position(Posture.MILLING)
 
         # Do NOT call f.result(). Instead, add a callback:
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
     def _move_to_sem_posture(self, evt: wx.Event):
-        self._posture_switch_future = self.pm.cryo_switch_sample_position(SEM_IMAGING)
+        self._posture_switch_future = self.pm.cryo_switch_sample_position(Posture.SEM_IMAGING)
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
     @call_in_wx_main

@@ -32,7 +32,7 @@ import odemis.acq.stream as acqstream
 from odemis import model
 from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Target, TargetType
 from odemis.acq.align.z_localization import ensure_stig_calib_format
-from odemis.acq.move import FM_IMAGING, SEM_IMAGING
+from odemis.acq.move import Posture
 from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
@@ -336,7 +336,7 @@ class CryoGUIData(MicroscopyGUIData):
             # if the focus position is not provided:
             # at FM posture: use the current focus position
             # otherwise: use the active focus position
-            if posture == FM_IMAGING:
+            if posture == Posture.FM_IMAGING:
                 fm_focus_position = self.main.focus.position.value
             else:
                 md = self.main.focus.getMetadata()
@@ -447,7 +447,7 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.zPos.clip_on_range = True
         self.streams.subscribe(self._on_stream_change, init=True)
 
-        self.view_posture = model.VigilantAttribute(FM_IMAGING)
+        self.view_posture = model.VigilantAttribute(Posture.FM_IMAGING)
 
     def _on_stream_change(self, streams):
         _update_zpos_params(self.zPos, streams)
@@ -489,7 +489,7 @@ class CryoFIBSEMGUIData(CryoGUIData):
         # milling patterns
         self.patterns = model.ListVA()
 
-        self.view_posture = model.VigilantAttribute(SEM_IMAGING)
+        self.view_posture = model.VigilantAttribute(Posture.SEM_IMAGING)
 
     def _on_project_path_change(self, _):
         config = conf.get_acqui_conf()
@@ -626,7 +626,7 @@ class CryoChamberGUIData(CryoGUIData):
 
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
-        self.view_posture = VigilantAttribute(FM_IMAGING)
+        self.view_posture = VigilantAttribute(Posture.FM_IMAGING)
         # self.main.posture_manager.current_posture.subscribe(self._on_posture_change, init=True) # TODO: enable once new pm is merged
 
     def _on_posture_change(self, posture):

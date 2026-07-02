@@ -23,18 +23,7 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (
-    FM_IMAGING,
-    FIB_VIEW_FM,
-    GRID_1,
-    LOADING,
-    MILLING,
-    MeteorTescan1PostureManager,
-    MicroscopePostureManager,
-    POSITION_NAMES,
-    SEM_IMAGING,
-    UNKNOWN,
-)
+from odemis.acq.move import Posture, MeteorTescan1PostureManager, MicroscopePostureManager
 from odemis.acq.test import move_tfs1_test, move_tfs3_test
 from odemis.util import testing
 
@@ -97,32 +86,32 @@ class TestMeteorTescan1Move(move_tfs1_test.TestMeteorTFS1Move):
             self.stage.moveAbs(sem_position).result()
             current_stage_position = self.stage.position.value
             current_imaging_mode = self.posture_manager.get_current_posture_label()
-            self.assertEqual(SEM_IMAGING, current_imaging_mode)
+            self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
             for axis in sem_position.keys():
                 self.assertAlmostEqual(sem_position[axis], current_stage_position[axis], places=4)
             # move to fm
-            f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+            f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
             f.result()
             current_imaging_mode = self.posture_manager.get_current_posture_label()
-            self.assertEqual(FM_IMAGING, current_imaging_mode)
+            self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
             fm_position = fm_positions[i]
             current_stage_position = self.stage.position.value
             for axis in fm_position.keys():
                 self.assertAlmostEqual(fm_position[axis], current_stage_position[axis], places=4)
             # move back to sem
-            f = self.posture_manager.cryo_switch_sample_position(SEM_IMAGING)
+            f = self.posture_manager.cryo_switch_sample_position(Posture.SEM_IMAGING)
             f.result()
             current_stage_position = self.stage.position.value
             current_imaging_mode = self.posture_manager.get_current_posture_label()
-            self.assertEqual(SEM_IMAGING, current_imaging_mode)
+            self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
             for axis in sem_position.keys():
                 self.assertAlmostEqual(sem_position[axis], current_stage_position[axis], places=4)
 
     def test_rel_move_fm_posture(self):
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
 
         # relative moves in sample stage coordinates
         sample_stage_moves = [
@@ -170,7 +159,7 @@ class TestMeteorTescan1Move(move_tfs1_test.TestMeteorTFS1Move):
         arbitrary_position = {'rx': 0.0, 'rz': math.radians(-60), 'x': 0, 'y': 0, 'z': 40.e-3}
         self.stage.moveAbs(arbitrary_position).result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(UNKNOWN, current_imaging_mode)
+        self.assertEqual(Posture.UNKNOWN, current_imaging_mode)
         current_grid = self.posture_manager.get_current_grid_label()
         self.assertEqual(current_grid, None)
 
@@ -205,7 +194,7 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         cls.stage_loading = cls.stage_md[model.MD_FAV_POS_DEACTIVE]
 
         # Reset to loading position (in case the backend was already running and in a different posture)
-        f = cls.pm.cryo_switch_sample_position(LOADING)
+        f = cls.pm.cryo_switch_sample_position(Posture.LOADING)
         f.result()
 
     def test_fixed_fm_z(self):
@@ -220,7 +209,7 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
     def test_stage_to_chamber(self):
         # Override, as Tescan has different behaviour: the Z axis is inversely connected the chamber Z
         # go to sem imaging
-        f = self.pm.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.pm.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
         time.sleep(0.1)
 
@@ -231,10 +220,10 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         testing.assert_pos_almost_equal(zshift, {"x": shift["x"], "z": -shift["z"]})
 
     def test_rel_move_fm_posture(self):
-        f = self.pm.cryo_switch_sample_position(FM_IMAGING)
+        f = self.pm.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         current_imaging_mode = self.pm.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
 
         # relative moves in sample stage coordinates
         sample_stage_moves = [
@@ -263,20 +252,20 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
             self.skipTest("Shutter not available")
 
         # Move to safe start position
-        self.pm.cryo_switch_sample_position(LOADING).result()
+        self.pm.cryo_switch_sample_position(Posture.LOADING).result()
 
         # Ensure shutter is engaged before engaging the objective, to make it more interesting
         self.pm.shutter.value = True  # True = engaged (closed)
         # Move to FM_IMAGING and check shutter is retracted
-        self.pm.cryo_switch_sample_position(FM_IMAGING).result()
+        self.pm.cryo_switch_sample_position(Posture.FM_IMAGING).result()
         self.assertEqual(self.pm.shutter.value, False, "Shutter should be retracted for FM")
 
         # Move to MILLING and check shutter is in auto mode
-        self.pm.cryo_switch_sample_position(MILLING).result()
+        self.pm.cryo_switch_sample_position(Posture.MILLING).result()
         self.assertEqual(self.pm.shutter.value, None, "Shutter should be in auto mode")
 
         # Move back to SEM_IMAGING and check shutter mode is unaltered (auto)
-        self.pm.cryo_switch_sample_position(SEM_IMAGING).result()
+        self.pm.cryo_switch_sample_position(Posture.SEM_IMAGING).result()
         self.assertEqual(self.pm.shutter.value, None, "Shutter should remain in auto mode for SEM")
 
     def test_milling_angle_callback(self):
@@ -291,19 +280,19 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
 
     def test_milling_angle_stable_pos(self):
         # Make sure to start from a valid position
-        self.pm.cryo_switch_sample_position(LOADING).result()
+        self.pm.cryo_switch_sample_position(Posture.LOADING).result()
         # Transform to milling posture
-        self.pm.cryo_switch_sample_position(MILLING).result()
+        self.pm.cryo_switch_sample_position(Posture.MILLING).result()
         # Store shorthand for sample stage
         sample_stage = self.pm.sample_stage
         # Take note of sample stage pos
         initial_sample_stage_pos = sample_stage.position.value
         # Switch to SEM posture
-        self.pm.cryo_switch_sample_position(SEM_IMAGING).result()
+        self.pm.cryo_switch_sample_position(Posture.SEM_IMAGING).result()
         # Compare sample stage pos to previous pos
         testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
         # Switch back to milling posture
-        self.pm.cryo_switch_sample_position(MILLING).result()
+        self.pm.cryo_switch_sample_position(Posture.MILLING).result()
         testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
         # TODO: uncomment the following section once all the sample stage problems are resolved
         # # Now change milling angle to check stability; sample stage pos should remain the same.
@@ -319,22 +308,22 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
 
     def test_fib_view_fm_movements(self):
         """Test that milling <> fib-view fm switches work as expected"""
-        self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]]).result()
-        self.pm.cryo_switch_sample_position(MILLING).result()
+        self.stage_bare.moveAbs(self.stage_grid_centers[Posture.GRID_1]).result()
+        self.pm.cryo_switch_sample_position(Posture.MILLING).result()
         initial_pos = self.stage_bare.position.value
-        self.assertEqual(self.pm.current_posture.value, MILLING)
+        self.assertEqual(self.pm.current_posture.value, Posture.MILLING)
 
-        self.pm.cryo_switch_sample_position(FIB_VIEW_FM).result()
+        self.pm.cryo_switch_sample_position(Posture.FIB_VIEW_FM).result()
         resulting_posture = self.pm.get_current_posture_label()
-        self.assertEqual(resulting_posture, FIB_VIEW_FM)
+        self.assertEqual(resulting_posture, Posture.FIB_VIEW_FM)
 
         # Verify that directly going from fib-view fm to fm imaging is not allowed
         with self.assertRaises(ValueError):
-            self.pm.cryo_switch_sample_position(FM_IMAGING).result()
+            self.pm.cryo_switch_sample_position(Posture.FM_IMAGING).result()
 
-        self.pm.cryo_switch_sample_position(MILLING).result()
+        self.pm.cryo_switch_sample_position(Posture.MILLING).result()
         resulting_posture = self.pm.get_current_posture_label()
-        self.assertEqual(resulting_posture, MILLING)
+        self.assertEqual(resulting_posture, Posture.MILLING)
         final_pos = self.stage_bare.position.value
         testing.assert_pos_almost_equal(initial_pos, final_pos)
 

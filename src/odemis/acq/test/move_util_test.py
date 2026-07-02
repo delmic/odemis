@@ -25,9 +25,7 @@ import scipy
 import odemis
 from odemis import model
 from odemis import util
-from odemis.acq.move import ( RTOL_PROGRESS,
-                             ROT_DIST_SCALING_FACTOR,
-                             ATOL_LINEAR_TRANSFORM, ATOL_ROTATION_TRANSFORM)
+from odemis.acq.move import RTOL_PROGRESS, ROT_DIST_SCALING_FACTOR, ATOL_LINEAR_TRANSFORM, ATOL_ROTATION_TRANSFORM
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.driver import isNearPosition

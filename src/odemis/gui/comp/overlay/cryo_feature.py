@@ -36,7 +36,7 @@ from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.model import TabName, TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
-from odemis.acq.move import MicroscopePostureManager, POSITION_NAMES, SEM_IMAGING, FM_IMAGING, UNKNOWN
+from odemis.acq.move import Posture, MicroscopePostureManager
 
 
 MODE_EDIT_FEATURES = 1
@@ -78,7 +78,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self.tab_data.view_posture.subscribe(self._on_view_posture_change, init=True)
 
         # get the tab based on the view posture
-        self.tab_name = TabName.METEOR_FIBSEM.value if self.view_posture == SEM_IMAGING else TabName.CRYOSECOM_LOCALIZATION.value
+        self.tab_name = TabName.METEOR_FIBSEM.value if self.view_posture == Posture.SEM_IMAGING else TabName.CRYOSECOM_LOCALIZATION.value
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         if self._selected_tool_va:
@@ -171,7 +171,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 #self.cnvs.view.moveStageTo((view_pos["x"], view_pos["y"]))
                 self.pm.stage.moveAbs(position_bare)
                 # if fm imaging, move focus too
-                if self.pm.current_posture.value == FM_IMAGING:
+                if self.pm.current_posture.value == Posture.FM_IMAGING:
                     self.tab_data.main.focus.moveAbs(feature.fm_focus_position.value)
                 self.tab_data.main.currentFeature.value = feature
             else:
@@ -250,7 +250,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         # only possible to set the position in FM, so it's never needed to ask the user.
         # TODO: only ask if the posture had been set explicitly in a different posture previously.
         if len(self.pm.postures) > 2:
-            current_posture_name = POSITION_NAMES.get(self.pm.current_posture.value, "current posture")
+            current_posture_name = self.pm.current_posture.value.value
             box = wx.MessageDialog(wx.GetApp().main_frame,
                                 message=f"Do you want to update this feature position only for {current_posture_name} "
                                          "or recalculate for all other postures?",
@@ -263,7 +263,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         for posture in self.pm.postures:
             if posture != self.pm.current_posture.value:
-                logging.info(f"updating {posture} for {self._selected_feature.name.value}")
+                logging.info(f"updating {posture.value} for {self._selected_feature.name.value}")
                 get_feature_position_at_posture(pm=self.pm,
                                                 feature=self._selected_feature,
                                                 posture=posture,
@@ -281,7 +281,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         # TODO: can be dropped once the CryoFeature class has a position in (absolute) sample stage
         #  coordinates, and it's used in this overlay.
-        if self.pm.current_posture.value == UNKNOWN:
+        if self.pm.current_posture.value == Posture.UNKNOWN:
             return None
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
@@ -320,7 +320,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if not self.show:
             return
 
-        if self.pm.current_posture.value == UNKNOWN:
+        if self.pm.current_posture.value == Posture.UNKNOWN:
             logging.debug("Not drawing features, current posture is UNKNOWN")
             return
 
@@ -406,7 +406,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         :raise IndexError: if the current posture is UNKNOWN
         """
         posture = self.pm.current_posture.value
-        if posture == UNKNOWN:
+        if posture == Posture.UNKNOWN:
             raise IndexError("Cannot get feature position at unknown posture")
 
         return get_feature_position_at_posture(
