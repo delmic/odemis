@@ -71,7 +71,7 @@
         FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
         # Grid centers in SEM range
         # Adjusted so that at init (0,0,0), it's at the Grid 1.
-        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0}, "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
+        SAMPLE_CENTERS: {"grid 1": {'x': 0, 'y': 0, 'z': 0}, "grid 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
         # Mirroring values between SEM - METEOR
         POS_COR: [0.02447, -0.000017],
         # Active tilting (rx) & rotation (rz) angles positions when switching between SEM & FM, in radians.

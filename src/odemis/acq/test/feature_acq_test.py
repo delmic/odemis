@@ -37,11 +37,7 @@ from odemis.acq.stream import FluoStream
 from odemis.util import testing
 from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import open_acquisition
-from odemis.acq.move import (MicroscopePostureManager,
-                             MeteorTFS3PostureManager,
-                             GRID_1, SEM_IMAGING,
-                             FM_IMAGING, POSITION_NAMES,
-                             isNearPosition)
+from odemis.acq.move import Posture, MicroscopePostureManager, MeteorTFS3PostureManager, isNearPosition
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -83,9 +79,9 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
                                        zstep=cls.zparams["zstep"])
 
         # get stage positions
-        sem_pos_grid1 = cls.stage.getMetadata()[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-        sem_pos_grid1.update(cls.pm.get_posture_orientation(SEM_IMAGING))
-        fm_pos_grid1 = cls.pm.to_posture(sem_pos_grid1, FM_IMAGING)
+        sem_pos_grid1 = cls.stage.getMetadata()[model.MD_SAMPLE_CENTERS][Posture.GRID_1]
+        sem_pos_grid1.update(cls.pm.get_posture_orientation(Posture.SEM_IMAGING))
+        fm_pos_grid1 = cls.pm.to_posture(sem_pos_grid1, Posture.FM_IMAGING)
 
         fm_pos_grid1_p1 = fm_pos_grid1.copy()
         fm_pos_grid1_p2 = fm_pos_grid1.copy()
@@ -120,8 +116,8 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
         # move to FM IMAGING posture
         pm = MicroscopePostureManager(model.getMicroscope())
 
-        if pm.get_current_posture_label() != FM_IMAGING:
-            f = pm.cryo_switch_sample_position(FM_IMAGING)
+        if pm.get_current_posture_label() != Posture.FM_IMAGING:
+            f = pm.cryo_switch_sample_position(Posture.FM_IMAGING)
             f.result()
 
         f = acquire_at_features(
@@ -178,8 +174,8 @@ class TestCryoFeaturePosturePositions(unittest.TestCase):
     def test_feature_posture_positions(self):
         """Test the multi-posture feature positions, and transforming between them"""
         # stage position: sem imaging, grid-1
-        pos = self.stage_grid_centers[POSITION_NAMES[GRID_1]]
-        pos.update(self.pm.get_posture_orientation(SEM_IMAGING))
+        pos = self.stage_grid_centers[Posture.GRID_1]
+        pos.update(self.pm.get_posture_orientation(Posture.SEM_IMAGING))
 
         # set the stage position
         feature = CryoFeature("Feature-1",
@@ -187,12 +183,12 @@ class TestCryoFeaturePosturePositions(unittest.TestCase):
                               fm_focus_position={"z": 1.69e-3})
 
         # get posture position
-        feature.set_posture_position(posture=SEM_IMAGING, position=pos)
-        sem_pos = feature.get_posture_position(SEM_IMAGING)
+        feature.set_posture_position(posture=Posture.SEM_IMAGING, position=pos)
+        sem_pos = feature.get_posture_position(Posture.SEM_IMAGING)
         self.assertTrue(isNearPosition(sem_pos, pos, axes=self.all_axes))
 
         # doesn't exist yet, return None
-        fm_pos = feature.get_posture_position(FM_IMAGING)
+        fm_pos = feature.get_posture_position(Posture.FM_IMAGING)
         self.assertIsNone(fm_pos)
 
         # convert the stage position to all supported postures

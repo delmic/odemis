@@ -45,7 +45,7 @@ from odemis.acq.feature import (
     acquire_at_features,
     add_feature_info_to_filename,
 )
-from odemis.acq.move import FM_IMAGING, FIB_VIEW_FM, POSITION_NAMES
+from odemis.acq.move import Posture
 from odemis.acq.stream import (
     BrightfieldStream,
     FluoStream,
@@ -778,7 +778,7 @@ class CryoAcquiController(object):
         # Only show a tooltip when at FM Milling. The other option, while acquiring, is quite obvious.
         if pm.at_fib_view_fm_posture(pm.stage.position.value):
             self._panel.btn_acquire_overview.SetToolTip(
-                f"Overview acquisition is not available when at {POSITION_NAMES[FIB_VIEW_FM]} posture"
+                f"Overview acquisition is not available when at {Posture.FIB_VIEW_FM.value} posture"
             )
         else:
             self._panel.btn_acquire_overview.SetToolTip("")
@@ -890,14 +890,14 @@ class CryoAcquiController(object):
                     if correlation_dict.fm_pois:
                         # Update feature position according to POI in FM
                         pm = self._tab_data.main.posture_manager
-                        feature_stage_bare = feature.get_posture_position(FM_IMAGING)
+                        feature_stage_bare = feature.get_posture_position(Posture.FM_IMAGING)
                         poi = correlation_dict.fm_pois[0]
                         poi_coords = poi.coordinates.value
-                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=FM_IMAGING)
+                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=Posture.FM_IMAGING)
                         new_feature_stage_bare = pm.from_sample_stage_to_stage_position({"x":poi_coords[0],
                                                                                     "y":poi_coords[1],
-                                                                                    "z":sample_pos["z"]}, posture=FM_IMAGING)
-                        feature.posture_positions[FM_IMAGING].update(new_feature_stage_bare)
+                                                                                    "z":sample_pos["z"]}, posture=Posture.FM_IMAGING)
+                        feature.posture_positions[Posture.FM_IMAGING].update(new_feature_stage_bare)
                         feature.fm_focus_position.value = {"z": poi_coords[2]}
                     # Draw milling position in FIBSEM tab around the projected POI
                     target = correlation_dict.fib_projected_pois[0]

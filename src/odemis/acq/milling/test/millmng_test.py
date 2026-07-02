@@ -37,16 +37,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling, status_map
 from odemis.acq.milling.tasks import load_milling_tasks
-from odemis.acq.move import (
-    FM_IMAGING,
-    GRID_1,
-    GRID_2,
-    MILLING,
-    POSITION_NAMES,
-    SEM_IMAGING,
-    MeteorTFS3PostureManager,
-    MicroscopePostureManager,
-)
+from odemis.acq.move import Posture, MeteorTFS3PostureManager, MicroscopePostureManager
 from odemis.acq.stream import FIBStream, SEMStream
 from odemis.util import testing
 
@@ -112,11 +103,11 @@ class TestAutomatedMillingManager(unittest.TestCase):
                                     model.MD_PIXEL_SIZE: (pixelsize, pixelsize),
                                           })
 
-        pos_sem_grid1 = cls.stage_grid_centers[POSITION_NAMES[GRID_1]]
-        pos_sem_grid1.update(cls.pm.get_posture_orientation(SEM_IMAGING))
+        pos_sem_grid1 = cls.stage_grid_centers[Posture.GRID_1]
+        pos_sem_grid1.update(cls.pm.get_posture_orientation(Posture.SEM_IMAGING))
 
-        pos_sem_grid2 = cls.stage_grid_centers[POSITION_NAMES[GRID_2]]
-        pos_sem_grid2.update(cls.pm.get_posture_orientation(SEM_IMAGING))
+        pos_sem_grid2 = cls.stage_grid_centers[Posture.GRID_2]
+        pos_sem_grid2.update(cls.pm.get_posture_orientation(Posture.SEM_IMAGING))
 
         cls.sem_grid1 = pos_sem_grid1
         cls.sem_grid2 = pos_sem_grid2
@@ -134,7 +125,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
             )
             # set milling tasks
             feature.save_milling_task_data(
-                stage_position=cls.pm.to_posture(pos, MILLING),
+                stage_position=cls.pm.to_posture(pos, Posture.MILLING),
                 path=os.path.join(cls.project_path, feature.name.value),
                 reference_image=image,
                 milling_tasks=cls.milling_tasks,
@@ -163,7 +154,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         f.result()
 
         # move to fm imaging
-        f = self.pm.cryo_switch_sample_position(FM_IMAGING)
+        f = self.pm.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
 
         f = run_automated_milling(
@@ -178,7 +169,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         with self.assertRaises(ValueError):
             f.result()
 
-        f = self.pm.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.pm.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
 
         f = run_automated_milling(
@@ -235,7 +226,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         f = self.pm.stage.moveAbs(self.sem_grid1)
         f.result()
 
-        f = self.pm.cryo_switch_sample_position(MILLING)
+        f = self.pm.cryo_switch_sample_position(Posture.MILLING)
         f.result()
 
         f = run_automated_milling(

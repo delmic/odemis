@@ -24,7 +24,7 @@ import math
 
 from odemis import model
 from odemis.gui.model import TabName
-from odemis.acq.move import FM_IMAGING, SEM_IMAGING
+from odemis.acq.move import Posture
 from odemis.gui.plugin import Plugin
 from odemis.util.units import readable_str
 from typing import Dict
@@ -80,7 +80,7 @@ class MeteorEngageWarnPlugin(Plugin):
         # Guess (back) which position the users wants to go to
         target_pos = self.main_app.main_data.posture_manager.get_current_posture_label(end_pos)
         stage = self.main_app.main_data.stage_bare
-        if target_pos == FM_IMAGING:
+        if target_pos == Posture.FM_IMAGING:
             warn_msg = FM_WARN_MSG
             # Check the deviation in rotation angle when
             # switching from SEM to FM,
@@ -94,7 +94,7 @@ class MeteorEngageWarnPlugin(Plugin):
             if not math.isclose(current_angle, fav_angle):
                 warn_msg = ("The current rotation value is different from the desired value. The switching behavior"
                             " may not be proper.\n\n") + FM_WARN_MSG
-        elif target_pos == SEM_IMAGING:
+        elif target_pos == Posture.SEM_IMAGING:
             warn_msg = SEM_WARN_MSG
         else:
             logging.warning("Unexpected target position %s", target_pos)

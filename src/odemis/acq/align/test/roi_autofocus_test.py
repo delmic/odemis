@@ -21,7 +21,7 @@ import odemis
 from odemis import model
 from odemis.acq.align.autofocus import estimateAutoFocusTime
 from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
-from odemis.acq.move import FM_IMAGING, MicroscopePostureManager
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.linalg import generate_triangulation_points
 
@@ -49,7 +49,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         # Switch to FM imaging as the focus position will be its "good" position
         # and simulator will autofocus in (almost) focussed images
-        cls.meteor_manager.cryo_switch_sample_position(FM_IMAGING).result()
+        cls.meteor_manager.cryo_switch_sample_position(Posture.FM_IMAGING).result()
 
         # Assumes the stage is referenced
         cls.init_pos = (cls.stage.position.value["x"], cls.stage.position.value["y"])

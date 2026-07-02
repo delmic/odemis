@@ -26,11 +26,38 @@ from packaging.version import Version
 from pathlib import Path
 from typing import Dict, List, Iterable, Optional
 
+from odemis.acq.move import Posture
+
 PROJECT_NAME = "project.json"
 PROJECT_VERSION = "1.0"
 LEGACY_PROJECT_NAME = "features.json"
 IMG_FILENAME = "filename"
 IMG_IN_FILE_IDS = "in_file_indices"
+
+LEGACY_POSTURE_REGISTRY = {
+    # --- Integers ---
+    -1: Posture.UNKNOWN,
+    0: Posture.LOADING,
+    1: Posture.IMAGING,
+    2: Posture.ALIGNMENT,
+
+    3: Posture.COATING,
+    4: Posture.LOADING_PATH,
+    5: Posture.MILLING,
+    6: Posture.SEM_IMAGING,
+
+    7: Posture.FM_IMAGING,
+    8: Posture.GRID_1,
+    9: Posture.GRID_2,
+    10: Posture.THREE_BEAMS,
+
+    11: Posture.FIB_IMAGING,
+    12: Posture.FIB_VIEW_FM,
+
+    # --- Legacy Strings ---
+    # Example:
+    # "fm milling": Posture.FIB_VIEW_FM,
+}
 
 def save_project(main_data: "CryoMainGUIData") -> None:
     """
@@ -105,6 +132,17 @@ def load_project(project_dir: os.PathLike) -> dict:
     # Feature streams are intentionally not loaded here; they are lazy-loaded
     # on demand by CryoAcquiredStreamsController when a feature is selected.
 
+    # Try to recover from the legacy posture integer definitions
+    for feature in features:
+        for posture_key in list(feature["posture_positions"].keys()):
+            try:
+                # If the key is an integer, we need to convert to the new definition
+                posture_key_int = int(posture_key)
+            except ValueError:
+                continue
+
+            new_posture_ley = LEGACY_POSTURE_REGISTRY[posture_key_int].value
+            feature["posture_positions"][new_posture_ley] = feature["posture_positions"].pop(posture_key)
     return {"overviews": overviews, "features": features}
 
 def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:

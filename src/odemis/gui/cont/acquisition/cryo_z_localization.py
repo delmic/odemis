@@ -36,7 +36,7 @@ from odemis import model
 from odemis.acq.align import z_localization
 from odemis.acq.align.z_localization import SUPERZ_THRESHOLD
 from odemis.acq.feature import Target, TargetType
-from odemis.acq.move import FM_IMAGING
+from odemis.acq.move import Posture
 from odemis.acq.stream import FluoStream
 from odemis.gui import conf
 from odemis.gui.cont.features import save_project
@@ -210,7 +210,7 @@ class CryoZLocalizationController(object):
         # move to target focus position
         logging.info(f"Moving to focus position: {fm_focus_position}, Target: {target.name.value}")
         # move focus only if we are in FM imaging posture
-        if current_posture == FM_IMAGING:
+        if current_posture == Posture.FM_IMAGING:
             self._tab_data.main.focus.moveAbs(fm_focus_position)
 
     def _on_btn_use_current_target_z(self, evt) -> None:
@@ -488,7 +488,7 @@ class CryoZLocalizationController(object):
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             raise ValueError("Select a feature first to specify the Z localization in X/Y")
-        if self._tab_data.main.posture_manager.current_posture.value != FM_IMAGING:
+        if self._tab_data.main.posture_manager.current_posture.value != Posture.FM_IMAGING:
             raise ValueError("The current posture is not FM imaging, cannot do Z localization")
 
         feature.superz_stream_name = self._selected_stream.name.value
@@ -496,7 +496,7 @@ class CryoZLocalizationController(object):
         acq_conf = conf.get_acqui_conf()
         save_project(self._tab_data.main)
 
-        stage_pos = feature.get_posture_position(FM_IMAGING)
+        stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
         pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(stage_pos)
 
         # Disable the GUI and show the progress bar

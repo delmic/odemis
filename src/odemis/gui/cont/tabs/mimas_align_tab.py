@@ -38,7 +38,7 @@ from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
-from odemis.acq.move import MILLING, IMAGING, FM_IMAGING, POSITION_NAMES
+from odemis.acq.move import Posture
 from odemis.acq.stream import OpticalStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.tabs.tab import Tab
@@ -126,8 +126,8 @@ class MimasAlignTab(Tab):
         self._opt_spe.stream_panel.show_remove_btn(False)
 
         # buttons icons of MIMAS alignment tab
-        self.position_btns = {FM_IMAGING: panel.btn_position_opt,
-                              MILLING: panel.btn_position_fib}
+        self.position_btns = {Posture.FM_IMAGING: panel.btn_position_opt,
+                              Posture.MILLING: panel.btn_position_fib}
         panel.btn_position_opt.Bind(wx.EVT_BUTTON, self._set_flm_alignment_mode)
         panel.btn_position_fib.Bind(wx.EVT_BUTTON, self._set_fib_mode)
         # future to handle the move
@@ -171,9 +171,9 @@ class MimasAlignTab(Tab):
 
         current_pos_label = self.posture_manager.get_current_posture_label()
 
-        if current_pos_label not in (FM_IMAGING, MILLING):
+        if current_pos_label not in (Posture.FM_IMAGING, Posture.MILLING):
             logging.warning("Cannot reset Z alignment while current position is %s.",
-                            POSITION_NAMES[current_pos_label])
+                            current_pos_label.value)
             return
 
         # Move the Z stage back to the original position (same as the "focus"
@@ -192,15 +192,15 @@ class MimasAlignTab(Tab):
         align_md = self._aligner.getMetadata()
         align_pos = align_md[model.MD_FAV_POS_ALIGN]
 
-        if current_pos_label == FM_IMAGING:
+        if current_pos_label == Posture.FM_IMAGING:
             f_aligner_mv = self._aligner.moveAbs(align_pos)
             self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: align_pos})
-        elif current_pos_label == MILLING:
+        elif current_pos_label == Posture.MILLING:
             align_pos_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             f_aligner_mv = self._aligner.moveAbs(align_pos_deactive)
             self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: align_pos})
         else:
-            raise ValueError(f"Unexpected position {current_pos_label}")
+            raise ValueError(f"Unexpected position {current_pos_label.value}")
 
         # Wait for all the moves to be completed
         f_stage.result()
@@ -220,7 +220,7 @@ class MimasAlignTab(Tab):
         self.panel.btn_position_opt.SetValue(0)
 
         # create a future and update the appropriate controls after it is called
-        self._move_future = self.posture_manager.cryo_switch_sample_position(MILLING)
+        self._move_future = self.posture_manager.cryo_switch_sample_position(Posture.MILLING)
         self._move_future.add_done_callback(self._on_pos_move_done)
 
     def _set_flm_alignment_mode(self, evt):
@@ -233,7 +233,7 @@ class MimasAlignTab(Tab):
         self.panel.btn_position_fib.SetValue(0)
 
         # create a future and update the appropriate controls after it is called
-        self._move_future = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        self._move_future = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         self._move_future.add_done_callback(self._on_pos_move_done)
 
     @call_in_wx_main
@@ -253,7 +253,7 @@ class MimasAlignTab(Tab):
 
         # Automatically activates the Optical stream at the end of a move
         current_pos_label = self.posture_manager.get_current_posture_label()
-        if current_pos_label == FM_IMAGING:
+        if current_pos_label == Posture.FM_IMAGING:
             self._opt_spe.stream.should_update.value = True
 
         # Make sure the button turns green
@@ -300,7 +300,7 @@ class MimasAlignTab(Tab):
 
         for btn in self.position_btns.values():
             # Disable if in some odd position (and enable back otherwise)
-            btn.Enable(current_pos_label in (FM_IMAGING, MILLING, IMAGING))
+            btn.Enable(current_pos_label in (Posture.FM_IMAGING, Posture.MILLING, Posture.IMAGING))
 
             if btn == currently_pressed:
                 btn.SetValue(2)  # Completed
@@ -310,7 +310,7 @@ class MimasAlignTab(Tab):
                 btn.SetValue(0)
 
         # Only allow playing the optical stream when in optical mode
-        if current_pos_label == FM_IMAGING:
+        if current_pos_label == Posture.FM_IMAGING:
             self._opt_spe.resume()
         else:
             self._opt_spe.pause()
@@ -330,7 +330,7 @@ class MimasAlignTab(Tab):
         """
         Called when the stage, or aligner are moved, enable the tab if position is imaging mode, disable otherwise
         """
-        targets = (MILLING, FM_IMAGING, IMAGING)
+        targets = (Posture.MILLING, Posture.FM_IMAGING, Posture.IMAGING)
         guiutil.enable_tab_on_stage_position(self,
                                              self.posture_manager,
                                              target=targets,

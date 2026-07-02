@@ -38,14 +38,7 @@ from odemis.acq.feature import (
     Target,
     TargetType
 )
-from odemis.acq.move import (
-    FIB_IMAGING,
-    FIB_VIEW_FM,
-    FM_IMAGING,
-    MILLING,
-    POSITION_NAMES,
-    SEM_IMAGING,
-)
+from odemis.acq.move import Posture
 from odemis.gui import model as guimod
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.cont.cryo_project import save_project
@@ -54,7 +47,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 
-SUPPORTED_POSTURES = [SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING, FIB_VIEW_FM]
+SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -152,7 +145,7 @@ class CryoFeatureController(object):
         current_posture = self.pm.get_current_posture_label()
         if self._main_data_model.microscope.role != "meteor":
             role = self._main_data_model.microscope.role
-            logging.info(f"Currently under {POSITION_NAMES[current_posture]}, moving to feature position is not yet supported for {role}.")
+            logging.info(f"Currently under {current_posture.value}, moving to feature position is not yet supported for {role}.")
             self._display_go_to_feature_warning()
             return
 
@@ -160,11 +153,11 @@ class CryoFeatureController(object):
         fm_focus_position = feature.fm_focus_position.value
 
         # move to feature position
-        logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {POSITION_NAMES[current_posture]}")
+        logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {current_posture.value}")
         self.pm.stage.moveAbs(stage_position)
 
         # if fm imaging, move focus too
-        if current_posture == FM_IMAGING:
+        if current_posture == Posture.FM_IMAGING:
             self._main_data_model.focus.moveAbs(fm_focus_position)
 
         return
@@ -176,7 +169,7 @@ class CryoFeatureController(object):
         """
 
         if posture not in SUPPORTED_POSTURES:
-            logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
+            logging.warning(f"Invalid posture: {posture.value}, supported postures are: {SUPPORTED_POSTURES}")
             return
 
         # get the position at the posture
@@ -185,7 +178,7 @@ class CryoFeatureController(object):
                                                    posture=posture,
                                                    recalculate=recalculate)
 
-        logging.info(f"Moving to {POSITION_NAMES[posture]} position: {position}")
+        logging.info(f"Moving to {posture.value} position: {position}")
 
         # move the stage
         f = self.pm.stage.moveAbs(position)
@@ -247,7 +240,7 @@ class CryoFeatureController(object):
 
     def _on_posture_change(self, posture: int):
         if posture not in SUPPORTED_POSTURES:
-            logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
+            logging.warning(f"Invalid posture: {posture.value}, supported postures are: {[p.value for p in SUPPORTED_POSTURES]}")
             return
         self._enable_feature_ctrls(True)
 
@@ -267,8 +260,8 @@ class CryoFeatureController(object):
             current_posture = self.pm.get_current_posture_label()
             # TODO: check if current position is near the feature position, if not, disable and show warning to user
             # TODO: acquire a new fib image for the reference, dont use the existing.
-            self._panel.btn_feature_save_position.Enable(enable and current_posture == MILLING)
-            if current_posture is not MILLING:
+            self._panel.btn_feature_save_position.Enable(enable and current_posture == Posture.MILLING)
+            if current_posture is not Posture.MILLING:
                 self._panel.btn_feature_save_position.SetToolTip("Move to the milling posture to save the position.")
 
     def _update_feature_cmb_list(self):
@@ -367,8 +360,8 @@ class CryoFeatureController(object):
             targets = []
             if self.correlation_target.fm_fiducials:
                 targets.append(self.correlation_target.fm_fiducials)
-            stage_pos = feature.get_posture_position(FM_IMAGING)
-            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=FM_IMAGING)
+            stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
+            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=Posture.FM_IMAGING)
             feature_focus = feature.fm_focus_position.value
 
             poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],

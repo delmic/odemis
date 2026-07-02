@@ -39,7 +39,7 @@ from odemis.acq.align.transform import CalculateTransform
 
 from odemis.gui.img import getBitmap
 
-from odemis.acq.move import POSITION_NAMES, FM_IMAGING, FIB_VIEW_FM
+from odemis.acq.move import Posture
 
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -84,7 +84,7 @@ REFINE_SEARCH_RANGE = 2.5e-6  # m, search range for fiducial refinement
 MILLING_ANGLE_TOLERANCE = math.radians(0.1)  # Now 0.1 degree, but this depends on stage accuracy, so might need to update this later.
 
 
-def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False) \
+def get_pixel_3d_coordinates(stream: FluoStream, p_pos: Tuple[float, float, float], check_bbox: bool = False)\
         -> Optional[Tuple[float, float, float]]:
     """
     Translate 3D physical coordinates into 3D pixel coordinates.
@@ -208,11 +208,11 @@ class CorrelationPointsController:
         self.at_fib_view_fm = model.BooleanVA(at_fib_view_fm)
 
         if self.at_fib_view_fm.value:
-            self._panel.lbl_fm_posture.SetLabel(POSITION_NAMES[FIB_VIEW_FM])
+            self._panel.lbl_fm_posture.SetLabel(Posture.FIB_VIEW_FM.value)
             bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm.png")
             self._panel.bmp_fm_posture.SetBitmap(bmp_fib_view_fm)
         else:
-            self._panel.lbl_fm_posture.SetLabel(POSITION_NAMES[FM_IMAGING])
+            self._panel.lbl_fm_posture.SetLabel(Posture.FM_IMAGING.value)
             bmp_fm_imaging = getBitmap("icon/ico_meteorimaging.png")
             self._panel.bmp_fm_posture.SetBitmap(bmp_fm_imaging)
 
@@ -672,13 +672,13 @@ class CorrelationPointsController:
             try:
                 self._tab_data_model.main.targets.value.remove(target)
             except ValueError:
-                logging.warning("Target surface fiducial %s not found in the targets list.", target.name.value)
+                logging.warning("Target surface fiducial %s not found in the targets list.", target.value.value)
             self._tab_data_model.main.currentTarget.value = None
         else:
             # Find the row which contains the current target, and delete both the row and the target itself
             for row in range(self.grid.GetNumberRows()):
                 if self._selected_target_in_grid(target, row):
-                    logging.debug(f"Deleting target: {target.name.value}")
+                    logging.debug(f"Deleting target: {target.value.value}")
                     # The VA subcribers will take care of updating the grid
                     self._tab_data_model.main.targets.value.remove(target)
                     self._tab_data_model.main.currentTarget.value = None
@@ -723,7 +723,7 @@ class CorrelationPointsController:
             return False
 
         if target.index.value == int(self.grid.GetCellValue(row, GridColumns.Index.value)) and (
-                self.grid.GetCellValue(row, GridColumns.Type.value) in target.name.value):
+                self.grid.GetCellValue(row, GridColumns.Type.value) in target.value.value):
             return True
 
         return grid_selection
@@ -749,7 +749,7 @@ class CorrelationPointsController:
 
                 current_name_type = re.search(FIDUCIAL_PATTERN, current_name).group()
                 for target in self._tab_data_model.main.targets.value:
-                    target_name_type = re.search(FIDUCIAL_PATTERN, target.name.value).group()
+                    target_name_type = re.search(FIDUCIAL_PATTERN, target.value.value).group()
                     if target_name_type == current_name_type:
                         indices.append(target.index.value)
                         if target.index.value == int(new_value):
@@ -796,7 +796,7 @@ class CorrelationPointsController:
                     self._tab_data_model.main.currentTarget.value.coordinates.value[1] = p_coord[1]
                 elif col_name == GridColumns.Z.name and (
                         self._tab_data_model.main.currentTarget.value.type.value != TargetType.FibFiducial):
-                    self._tab_data_model.main.currentTarget.value.coordinates.value[2] = \
+                    self._tab_data_model.main.currentTarget.value.coordinates.value[2] =\
                     get_physical_3d_coordinates(self.correlation_target.fm_streams[0], (x, y, float(new_value)))[2]
             except ValueError:
                 wx.MessageBox("X, Y, Z values must be a float!", "Invalid Input", wx.OK | wx.ICON_ERROR)
@@ -947,7 +947,7 @@ class CorrelationPointsController:
                 self.grid.SetCellValue(current_row_count, GridColumns.Y.value,
                                        f"{pixel_coords[1]:.{GRID_PRECISION}f}")
                 self.grid.SetCellValue(current_row_count, GridColumns.Index.value, str(target.index.value))
-                self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.name.value)
+                self.grid.SetCellValue(current_row_count, GridColumns.Type.value, target.value.value)
 
             self._reorder_grid()
         finally:
@@ -1067,10 +1067,10 @@ class CorrelationPointsController:
 
         # Renumber sequentially and update names preserving the prefix (if present)
         for new_idx, target in enumerate(fm_fiducials, start=1):
-            old_name = target.name.value
+            old_name = target.value.value
             old_name_type = re.search(FIDUCIAL_PATTERN, old_name).group()
             target.index.value = new_idx
-            target.name.value = old_name_type + str(target.index.value)
+            target.value.value = old_name_type + str(target.index.value)
 
         # Update the correlation_target and persist features
         logging.debug(f"Renumbered FM fiducials on GUI start to contiguous indices 1..{len(fm_fiducials)}")

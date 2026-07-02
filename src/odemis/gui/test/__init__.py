@@ -34,7 +34,7 @@ import wx
 
 import odemis.gui.model as gmodel
 from odemis import model
-from odemis.acq.move import FM_IMAGING, MeteorTFS3PostureManager
+from odemis.acq.move import Posture, MeteorTFS3PostureManager
 from odemis.driver.tmcm import TMCLController
 from odemis.gui.model import MainGUIData
 from odemis.gui.xmlh import odemis_get_test_resources
@@ -235,8 +235,8 @@ class GuiTestCase(unittest.TestCase):
                 "dx": 0.0506252, "dy": 0.0049832,  # mirroring values between SEM - METEOR
                 "pre-tilt": 0.6108652381980153,  # rad, 35°
             },
-            model.MD_SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0},
-                                      "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
+            model.MD_SAMPLE_CENTERS: {"grid 1": {'x': 0, 'y': 0, 'z': 0},
+                                      "grid 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
             model.MD_FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313, "rz": 5.06145},
             model.MD_FAV_SEM_POS_ACTIVE: {"rx": 0, "rz": 0},
             model.MD_FAV_POS_DEACTIVE: {'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975},
@@ -290,7 +290,7 @@ class GuiTestCase(unittest.TestCase):
         # Add one view
         fview = gmodel.MicroscopeView("fakeview")
         tab.views.value.append(fview)
-        tab.view_posture = model.VigilantAttribute(FM_IMAGING)
+        tab.view_posture = model.VigilantAttribute(Posture.FM_IMAGING)
         tab.focussedView.value = fview
 
         return tab

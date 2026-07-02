@@ -22,9 +22,7 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
-                             LOADING, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
-                             MeteorPostureManager)
+from odemis.acq.move import Posture, MeteorPostureManager
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 
@@ -75,15 +73,15 @@ class TestMeteorJeol1Move(unittest.TestCase):
         # Check the instantiation of correct posture manager
         self.assertIsInstance(self.posture_manager, MeteorPostureManager)
         # move the stage to the loading position
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move the stage to the sem imaging area, and grid1 will be chosen by default.
-        f = self.posture_manager.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
         position_label = self.posture_manager.get_current_posture_label()
         grid_label = self.posture_manager.get_current_grid_label()
-        self.assertEqual(position_label, SEM_IMAGING)
-        self.assertEqual(grid_label, GRID_1)
+        self.assertEqual(position_label, Posture.SEM_IMAGING)
+        self.assertEqual(grid_label, Posture.GRID_1)
         # check the values of tilt and rotation
         sem_angles = self.stage_bare.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
@@ -94,13 +92,13 @@ class TestMeteorJeol1Move(unittest.TestCase):
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
         # move the stage to the loading position
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move the stage to the fm imaging area, and grid1 will be chosen by default
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         position_label = self.posture_manager.get_current_posture_label()
-        self.assertEqual(position_label, FM_IMAGING)
+        self.assertEqual(position_label, Posture.FM_IMAGING)
         # check the values of tilt and rotation
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
@@ -122,15 +120,15 @@ class TestMeteorJeol1Move(unittest.TestCase):
 
     def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
         # move the stage to the loading position
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move the stage to the fm imaging area, and grid1 will be chosen by default
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         position_label = self.posture_manager.get_current_posture_label()
         grid_label = self.posture_manager.get_current_grid_label()
-        self.assertEqual(position_label, FM_IMAGING)
-        self.assertEqual(grid_label, GRID_1)
+        self.assertEqual(position_label, Posture.FM_IMAGING)
+        self.assertEqual(grid_label, Posture.GRID_1)
         # check the values of tilt and rotation
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
@@ -140,68 +138,68 @@ class TestMeteorJeol1Move(unittest.TestCase):
 
     def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
         # move to loading position
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move the stage to the sem imaging area
-        f = self.posture_manager.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
         # now the selected grid is already the grid1
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_1, current_grid)
+        self.assertEqual(Posture.GRID_1, current_grid)
         # move the stage to grid2
-        f = self.posture_manager.cryo_switch_sample_position(GRID_2)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.GRID_2)
         f.result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_2, current_grid)
+        self.assertEqual(Posture.GRID_2, current_grid)
         # make sure we are still in sem  imaging area
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
         sem_angles = self.stage_bare.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], sem_angles[axis], places=4)
 
     def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
         # move to loading position
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move the stage to the sem imaging area
-        f = self.posture_manager.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
         # move the stage to grid2
-        f = self.posture_manager.cryo_switch_sample_position(GRID_2)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.GRID_2)
         f.result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_2, current_grid)
+        self.assertEqual(Posture.GRID_2, current_grid)
         # move the stage back to grid1
-        f = self.posture_manager.cryo_switch_sample_position(GRID_1)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.GRID_1)
         f.result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_1, current_grid)
+        self.assertEqual(Posture.GRID_1, current_grid)
         # make sure we are still in the sem imaging area
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
         sem_angles = self.stage_bare.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], sem_angles[axis], places=4)
 
     def test_moving_from_sem_to_fm(self):
         # move to loading position
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move the stage to the sem imaging area
-        f = self.posture_manager.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
         # move to the fm imaging area
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
         # check the values of tilt and rotation
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
@@ -210,68 +208,68 @@ class TestMeteorJeol1Move(unittest.TestCase):
         self._check_focus_position(model.MD_FAV_POS_ACTIVE)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_area(self):
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move to the fm imaging area
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
         # now the grid is grid1 by default
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_1, current_grid)
+        self.assertEqual(Posture.GRID_1, current_grid)
         # move to the grid2
-        f = self.posture_manager.cryo_switch_sample_position(GRID_2)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.GRID_2)
         f.result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_2, current_grid)
+        self.assertEqual(Posture.GRID_2, current_grid)
         # make sure we are still in fm imaging area
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
         # check the values of tilt and rotation
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_from_grid2_to_grid1_in_fm_imaging_area(self):
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move to the fm imaging area
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
         # move to the grid2
-        f = self.posture_manager.cryo_switch_sample_position(GRID_2)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.GRID_2)
         f.result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_2, current_grid)
+        self.assertEqual(Posture.GRID_2, current_grid)
         # move back to the grid1
-        f = self.posture_manager.cryo_switch_sample_position(GRID_1)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.GRID_1)
         f.result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_1, current_grid)
+        self.assertEqual(Posture.GRID_1, current_grid)
         # make sure we are still in fm imaging area
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
         # check the values of tilt and rotation
         fm_angles = self.stage_bare.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_to_sem_from_fm(self):
-        f = self.posture_manager.cryo_switch_sample_position(LOADING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.LOADING)
         f.result()
         # move to the fm imaging area
-        f = self.posture_manager.cryo_switch_sample_position(FM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.FM_IMAGING, current_imaging_mode)
         # move to sem
-        f = self.posture_manager.cryo_switch_sample_position(SEM_IMAGING)
+        f = self.posture_manager.cryo_switch_sample_position(Posture.SEM_IMAGING)
         f.result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertEqual(Posture.SEM_IMAGING, current_imaging_mode)
         sem_angles = self.stage_bare.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage_bare.position.value[axis], sem_angles[axis], places=4)
@@ -282,15 +280,15 @@ class TestMeteorJeol1Move(unittest.TestCase):
         arbitrary_position = {"x": 0.0, "y": 0.01, "z": 4.85e-3}
         self.stage_bare.moveAbs(arbitrary_position).result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(UNKNOWN, current_imaging_mode)
+        self.assertEqual(Posture.UNKNOWN, current_imaging_mode)
         current_grid = self.posture_manager.get_current_grid_label()
         self.assertEqual(current_grid, None)
 
     def test_transform_from_sem_to_fm(self):
         # assert that raises value error when no rz
         stage_md = self.stage_bare.getMetadata()
-        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][Posture.GRID_1]
+        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][Posture.GRID_2]
         with self.assertRaises(ValueError):
             self.posture_manager._transform_from_sem_to_fm(grid1_pos)
         with self.assertRaises(ValueError):

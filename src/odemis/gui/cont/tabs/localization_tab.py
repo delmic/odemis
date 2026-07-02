@@ -38,7 +38,7 @@ import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
 from odemis.acq.align import AutoFocus
-from odemis.acq.move import MILLING, ALIGNMENT, FM_IMAGING, SEM_IMAGING, THREE_BEAMS, FIB_VIEW_FM, POSITION_NAMES
+from odemis.acq.move import Posture
 from odemis.acq.stream import LiveStream, StaticStream
 from odemis.gui import conf
 from odemis.gui.conf.data import get_local_vas
@@ -198,15 +198,15 @@ class LocalizationTab(Tab):
         # Only enable the tab when the stage is at the right position
         if self.main_data.role == "enzel":
             self._stage = self.tab_data_model.main.stage
-            self._allowed_targets = [THREE_BEAMS, ALIGNMENT, SEM_IMAGING]
+            self._allowed_targets = [Posture.THREE_BEAMS, Posture.ALIGNMENT, Posture.SEM_IMAGING]
         elif self.main_data.role == "meteor":
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
-            self._allowed_targets = [FM_IMAGING, FIB_VIEW_FM]
+            self._allowed_targets = [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]
             self._stage = self.tab_data_model.main.stage_bare
         elif self.main_data.role == "mimas":
             # Only useful near the active positions: milling (FIB) or FLM
-            self._allowed_targets = [FM_IMAGING, MILLING]
+            self._allowed_targets = [Posture.FM_IMAGING, Posture.MILLING]
             self._stage = self.tab_data_model.main.stage
 
         self._aligner = self.tab_data_model.main.aligner
@@ -498,10 +498,10 @@ class LocalizationTab(Tab):
         self._acquisition_controller._update_overview_acquisition_button()
         # Update the current posture read-only indicator if needed
         if self.main_data.posture_manager.at_fib_view_fm_posture(pos):
-            self.panel.lbl_current_posture.SetLabel(POSITION_NAMES[FIB_VIEW_FM])
+            self.panel.lbl_current_posture.SetLabel(Posture.FIB_VIEW_FM.value)
             self.panel.bmp_current_posture.SetBitmap(self.bmp_fib_view_fm)
         elif self.main_data.posture_manager.at_fm_imaging_posture(pos):
-            self.panel.lbl_current_posture.SetLabel(POSITION_NAMES[FM_IMAGING])
+            self.panel.lbl_current_posture.SetLabel(Posture.FM_IMAGING.value)
             self.panel.bmp_current_posture.SetBitmap(self.bmp_fm_imaging)
 
     def terminate(self):

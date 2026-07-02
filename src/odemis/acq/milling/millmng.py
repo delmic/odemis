@@ -50,12 +50,7 @@ from odemis.acq.feature import (
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.acq.milling.patterns import RectanglePatternParameters
 from odemis.acq.milling.fibsemos import run_milling_tasks_fibsemos
-from odemis.acq.move import (
-    MILLING,
-    POSITION_NAMES,
-    SEM_IMAGING,
-    MicroscopePostureManager,
-)
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stream import FIBStream, SEMStream
 from odemis.dataio import find_fittest_converter
 from odemis.util import executeAsyncTask
@@ -346,8 +341,8 @@ class AutomatedMillingManager(object):
             logging.info(f"Starting {task_num}/{len(self.task_list)}: {self.current_workflow} for {len(self.features)} features...")
 
             current_posture = self.pm.get_current_posture_label()
-            if current_posture not in [SEM_IMAGING, MILLING]:
-                error_text = (f"Current posture is {POSITION_NAMES[current_posture]}. "
+            if current_posture not in [Posture.SEM_IMAGING, Posture.MILLING]:
+                error_text = (f"Current posture is {current_posture.value}. "
                                "Please switch to SEM_IMAGING or MILLING before starting automated milling.")
                 logging.error(error_text)
                 raise ValueError(error_text)
@@ -418,7 +413,7 @@ class AutomatedMillingManager(object):
         self._future.set_progress()
 
         # milling position
-        stage_position = feature.get_posture_position(MILLING)
+        stage_position = feature.get_posture_position(Posture.MILLING)
 
         # move to position
         self._future.running_subf = self.stage.moveAbs(stage_position)

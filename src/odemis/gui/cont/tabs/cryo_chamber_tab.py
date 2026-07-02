@@ -36,22 +36,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis import model
 from odemis.acq.feature import feature_decoder
-from odemis.acq.move import (
-    ALIGNMENT,
-    COATING,
-    FIB_IMAGING,
-    FM_IMAGING,
-    FIB_VIEW_FM,
-    GRID_1,
-    GRID_2,
-    LOADING,
-    LOADING_PATH,
-    MILLING,
-    POSITION_NAMES,
-    SEM_IMAGING,
-    THREE_BEAMS,
-    UNKNOWN,
-)
+from odemis.acq.move import Posture
 from odemis.acq.stream import StaticStream
 from odemis.gui import conf
 from odemis.gui.comp.buttons import (
@@ -132,7 +117,7 @@ class CryoChamberTab(Tab):
                             id=main_frame.menu_item_edit_meteor_calibration.GetId())
             main_frame.menu_item_edit_meteor_calibration.Enable(True)
 
-        self._current_posture = UNKNOWN  # position of the sample (regularly updated)
+        self._current_posture = Posture.UNKNOWN  # position of the sample (regularly updated)
         self._target_posture = None  # when moving, move POSITION to be reached, otherwise None
 
         if self._role == 'enzel':
@@ -156,9 +141,9 @@ class CryoChamberTab(Tab):
                 raise ValueError('The stage is missing an rx axis.')
             panel.ctrl_rx.Bind(wx.EVT_CHAR, panel.ctrl_rx.on_char)
 
-            self.position_btns = {LOADING: self.panel.btn_switch_loading, THREE_BEAMS: self.panel.btn_switch_imaging,
-                                  ALIGNMENT: self.panel.btn_switch_align, COATING: self.panel.btn_switch_coating,
-                                  SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
+            self.position_btns = {Posture.LOADING: self.panel.btn_switch_loading, Posture.THREE_BEAMS: self.panel.btn_switch_imaging,
+                                  Posture.ALIGNMENT: self.panel.btn_switch_align, Posture.COATING: self.panel.btn_switch_coating,
+                                  Posture.SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
             self._grid_btns = {}
             self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
                                 self.panel.stage_align_btn_m_aligner_x: ("x", -1),
@@ -203,11 +188,11 @@ class CryoChamberTab(Tab):
 
             # All the meteor buttons
             self.position_btns = {
-                SEM_IMAGING: self.panel.btn_switch_sem_imaging,
-                FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                MILLING: self.panel.btn_switch_milling,
-                FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
-                FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
+                Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
+                Posture.MILLING: self.panel.btn_switch_milling,
+                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
+                Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
            }
             # Remove the ones which are not supported on this system
             self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
@@ -217,8 +202,8 @@ class CryoChamberTab(Tab):
             # For now, hard-coded to 2 grids. Could be extended to be more flexible, once some METEOR
             # support a different number of grids (see MIMAS or FASTEM).
             self._grid_btns = {
-                  GRID_1: self.panel.btn_switch_grid1,
-                  GRID_2: self.panel.btn_switch_grid2,
+                  Posture.GRID_1: self.panel.btn_switch_grid1,
+                  Posture.GRID_2: self.panel.btn_switch_grid2,
             }
             # show load project button
             self.btn_load_project.Show()
@@ -227,11 +212,11 @@ class CryoChamberTab(Tab):
             self._stage = self.tab_data_model.main.stage
 
             self.position_btns = {
-                LOADING: self.panel.btn_switch_loading_chamber_tab,
-                COATING: self.panel.btn_switch_coating_chamber_tab,
-                FM_IMAGING: self.panel.btn_switch_optical_chamber_tab,
-                MILLING: self.panel.btn_switch_milling_chamber_tab,
-                FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
+                Posture.LOADING: self.panel.btn_switch_loading_chamber_tab,
+                Posture.COATING: self.panel.btn_switch_coating_chamber_tab,
+                Posture.FM_IMAGING: self.panel.btn_switch_optical_chamber_tab,
+                Posture.MILLING: self.panel.btn_switch_milling_chamber_tab,
+                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
             }
 
             self._grid_btns = {}
@@ -604,7 +589,7 @@ class CryoChamberTab(Tab):
         if self._move_cancelled:
             txt_msg = self._get_cancel_warning_msg()
             self._show_warning_msg(txt_msg)
-        elif posture == UNKNOWN and self._move_future.done(): # unknown position and not moving
+        elif posture == Posture.UNKNOWN and self._move_future.done(): # unknown position and not moving
             txt_warning = "To enable buttons, please move away from unknown position."
             self._show_warning_msg(txt_warning)
         else:
@@ -618,8 +603,8 @@ class CryoChamberTab(Tab):
         """
         # Show warning message if target position is indicated
         if self._target_posture is not None:
-            current_label = POSITION_NAMES[self._current_posture]
-            target_label = POSITION_NAMES[self._target_posture]
+            current_label = self._current_posture.name
+            target_label = self._target_posture.name
             return "Stage stopped between {} and {} positions".format(
                 current_label, target_label
             )
@@ -661,7 +646,7 @@ class CryoChamberTab(Tab):
         self._enable_position_controls(self._current_posture)
         if self._role == 'enzel':
             # Enable stage advanced controls on sem imaging
-            self._enable_advanced_controls(self._current_posture == SEM_IMAGING)
+            self._enable_advanced_controls(self._current_posture == Posture.SEM_IMAGING)
         elif self._role == "meteor":
             self._control_warning_msg(self._current_posture)
         elif self._role == 'mimas':  # Old mimas, not to be confused with the new mimas (to be replaced)
@@ -674,12 +659,12 @@ class CryoChamberTab(Tab):
         """
         if self._role == 'enzel':
             # Define which button to disable in respect to the current move
-            disable_buttons = {LOADING: (), THREE_BEAMS: (), ALIGNMENT: (), COATING: (),
-                               SEM_IMAGING: (), LOADING_PATH: (ALIGNMENT, COATING, SEM_IMAGING)}
+            disable_buttons = {Posture.LOADING: (), Posture.THREE_BEAMS: (), Posture.ALIGNMENT: (), Posture.COATING: (),
+                               Posture.SEM_IMAGING: (), Posture.LOADING_PATH: (Posture.ALIGNMENT, Posture.COATING, Posture.SEM_IMAGING)}
             for movement, button in self.position_btns.items():
-                if current_posture == UNKNOWN:
+                if current_posture == Posture.UNKNOWN:
                     # If at unknown position, only allow going to LOADING position
-                    button.Enable(movement == LOADING)
+                    button.Enable(movement == Posture.LOADING)
                 elif movement in disable_buttons[current_posture]:
                     button.Disable()
                 else:
@@ -704,10 +689,10 @@ class CryoChamberTab(Tab):
                 button.Enable(switch_allowed)
 
                 # Hardcoding the tooltip for the disabled FM Milling state here, for lack of a better mechanism.
-                if button_posture == FIB_VIEW_FM and not switch_allowed:
+                if button_posture == Posture.FIB_VIEW_FM and not switch_allowed:
                     button.SetToolTip(
-                        f"The {POSITION_NAMES[FIB_VIEW_FM]} posture can only be reached "
-                        f"from the {POSITION_NAMES[MILLING]} posture"
+                        f"The {Posture.FIB_VIEW_FM.value} posture can only be reached "
+                        f"from the {Posture.MILLING.value} posture"
                     )
                 else:
                     button.SetToolTip("")
@@ -720,7 +705,7 @@ class CryoChamberTab(Tab):
             # If so, the sample moving will be very odd, as the move is clipped to
             # the range. So as soon as we reach FM_IMAGING, we check that the
             # current position is within range, if not, most likely that range is wrong.
-            if current_posture == FM_IMAGING:
+            if current_posture == Posture.FM_IMAGING:
                 imaging_stage = self.tab_data_model.main.stage
                 stage_pos = imaging_stage.position.value
                 imaging_rng = imaging_stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
@@ -740,9 +725,9 @@ class CryoChamberTab(Tab):
         elif self._role == 'mimas':  # Old mimas, not to be confused with the new mimas (to be replaced)
             # enabling/disabling mimas buttons
             for movement, button in self.position_btns.items():
-                if current_posture == UNKNOWN:
+                if current_posture == Posture.UNKNOWN:
                     # If at unknown position, only allow going to LOADING position
-                    button.Enable(movement == LOADING)
+                    button.Enable(movement == Posture.LOADING)
                 else:
                     button.Enable(True)
 
@@ -789,7 +774,7 @@ class CryoChamberTab(Tab):
        """
         current_angle = math.degrees(pos)
         # When the user is typing (and HasFocus() == True) dont updated the value to prevent overwriting the user input
-        if not self.panel.ctrl_rx.HasFocus() \
+        if not self.panel.ctrl_rx.HasFocus()\
                 and not almost_equal(self.panel.ctrl_rx.GetValue(), current_angle, atol=1e-3):
             self.panel.ctrl_rx.SetValue(current_angle)
 
@@ -910,15 +895,15 @@ class CryoChamberTab(Tab):
 
         if self._role == 'enzel':
             if (
-                current_posture is LOADING
+                current_posture is Posture.LOADING
                 and not self._display_insertion_stick_warning_msg()
             ):
                 return None
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [FM_IMAGING, SEM_IMAGING, MILLING, FIB_IMAGING, FIB_VIEW_FM]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, MILLING, FIB_IMAGING, FIB_VIEW_FM]
+                self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+                and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
@@ -928,7 +913,7 @@ class CryoChamberTab(Tab):
 
     @call_in_wx_main
     def _on_posture(self, posture: int) -> None:
-        logging.info(f"Stage posture changed to {POSITION_NAMES[posture]}")
+        logging.info(f"Stage posture changed to {posture.value}")
         self._update_movement_controls()
 
     def _display_insertion_stick_warning_msg(self) -> bool:
@@ -1075,9 +1060,9 @@ class CryoChamberTab(Tab):
         Called to perform action prior to terminating the tab
         :return: (bool) True to proceed with termination, False for canceling
         """
-        if self._current_posture is LOADING:
+        if self._current_posture is Posture.LOADING:
             return True
-        if self._move_future.running() and self._target_posture is LOADING:
+        if self._move_future.running() and self._target_posture is Posture.LOADING:
             return self._confirm_terminate_dialog(
                 "The sample is still moving to the loading position, are you sure you want to close Odemis?"
             )
