@@ -274,7 +274,7 @@ class SparcAcquisitionTab(Tab):
                     "y": sum(ssaxes["y"].range) / 2}
             # In case of a 'independent' scan stage, move the scan stage
             # to the center (so that scan has maximum range)
-            if main_data.stage.name not in sstage.affects.value:
+            if main_data.stage and main_data.stage.name not in sstage.affects.value:
                 sstage.moveAbs(posc)
 
             self.scan_stage_ent = sem_stream_cont.add_setting_entry(

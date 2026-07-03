@@ -15,6 +15,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+from typing import Dict, Tuple, Optional
+
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.comp.combo import ComboBox
 import logging
@@ -93,7 +95,10 @@ class ActuatorController(object):
     """ This controller manages the buttons to manually move the actuators.
     """
 
-    def __init__(self, tab_data, tab_panel, tab_prefix):
+    def __init__(
+            self, tab_data, tab_panel, tab_prefix, slider_ss_map: Optional[Dict[str, str]] = None,
+            btn_actuator_map: Optional[Dict[str, Tuple[str, str, int]]] = None,
+        ):
         """ Binds the step and axis buttons to their appropriate
         Vigilant Attributes in the model.ActuatorGUIData. It only connects the
         buttons which exists with the actuators which exists.
@@ -101,6 +106,13 @@ class ActuatorController(object):
         tab_data (ActuatorGUIData): the data model of the tab
         tab_panel: (wx.Frame): the main frame of the GUI
         tab_prefix (string): common prefix of the names of the buttons
+        slider_ss_map: Optional mapping of slider name to step size name.
+            Overrides the default slider and step size VA binding if provided.
+            e.g. {"slider_stage": "mirror_z"} to bind the stage slider to the mirror_z step size.
+        btn_actuator_map: Optional mapping of button name to actuator (name, axis, factor).
+            Overrides the default button and actuator's axis binding if provided.
+            e.g. {"btn_p_mirror_xy_x": ("mirror", "x", 1)} to bind the mirror_xy x+ button to the
+            mirror x+ axis.
         """
         self._tab_data_model = tab_data
         self._tab_panel = tab_panel
@@ -108,40 +120,61 @@ class ActuatorController(object):
 
         # Bind size steps (= sliders)
         self._va_connectors = []
-        for an, ss in tab_data.stepsizes.items():
-            slider_name = tab_prefix + "slider_" + an
+        # Build default slider -> stepsize name map, then apply overrides
+        slider_map = {tab_prefix + "slider_" + ssn: ssn for ssn in tab_data.stepsizes}
+        if slider_ss_map:
+            slider_map.update(slider_ss_map)
+
+        for slider_name, ssn in slider_map.items():
+            if ssn not in tab_data.stepsizes:
+                continue
             try:
                 slider = getattr(tab_panel, slider_name)
             except AttributeError:
+                logging.debug("%s not found in panel %s", slider_name, tab_panel.GetName())
                 continue
-
+            ss = tab_data.stepsizes[ssn]
             slider.SetRange(*ss.range)
-
             vac = VigilantAttributeConnector(ss, slider, events=wx.EVT_SLIDER)
             self._va_connectors.append(vac)
+
         if not self._va_connectors:
             logging.warning("No slider found for tab %s", tab_prefix)
 
         # Bind buttons
         self._btns = []
+        btn_map = {}
+        # Build default button -> (actuator, axis, factor) map, then apply overrides
         for actuator, axis in tab_data.axes:
             for suffix, factor in [("m", -1), ("p", 1)]:
                 # something like "lens_align_btn_p_mirror_rz"
                 btn_name = "%sbtn_%s_%s_%s" % (tab_prefix, suffix, actuator, axis)
-                try:
-                    btn = getattr(tab_panel, btn_name)
-                except AttributeError:
-                    logging.debug("No button in GUI found for axis %s", axis)
-                    continue
+                btn_map[btn_name] = (actuator, axis, factor)
+        if btn_actuator_map:
+            btn_map.update(btn_actuator_map)
 
-                def btn_action(evt, tab_data=tab_data, actuator=actuator, axis=axis, factor=factor):
-                    # Button events don't contain key state, so check ourselves
-                    if wx.GetKeyState(wx.WXK_SHIFT):
-                        factor /= 10
-                    tab_data.step(actuator, axis, factor)
+        for btn_name, (actuator, axis, factor) in btn_map.items():
+            if getattr(tab_data.main, actuator, None) is None:
+                continue
+            try:
+                btn = getattr(tab_panel, btn_name)
+            except AttributeError:
+                logging.debug(
+                    "%s not found for %s axis in panel %s",
+                    btn_name,
+                    (actuator, axis),
+                    tab_panel.GetName()
+                )
+                continue
 
-                btn.Bind(wx.EVT_BUTTON, btn_action)
-                self._btns.append(btn)
+            def btn_action(evt, tab_data=tab_data, actuator=actuator, axis=axis, factor=factor):
+                # Button events don't contain key state, so check ourselves
+                if wx.GetKeyState(wx.WXK_SHIFT):
+                    factor /= 10
+                tab_data.step(actuator, axis, factor)
+
+            btn.Bind(wx.EVT_BUTTON, btn_action)
+            self._btns.append(btn)
 
         # On SECOM, show the right aligner panel (X/Y or A/B)
         if ("aligner", "x") in tab_data.axes:
