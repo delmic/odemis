@@ -54,7 +54,7 @@ from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.settings import EBeamBlankerSettingsController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
+from odemis.gui.cont.tabs._constants import MIRROR_AXES_LS, MIRROR_ONPOS_RADIUS, get_mirror_pos_parked
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import AxisConnector, ProgressiveFutureConnector
@@ -851,8 +851,35 @@ class Sparc2AlignTab(Tab):
                 self._mirror_auto_align_future = model.InstantaneousFuture()
                 logging.debug("Mirror auto-alignment enabled.")
 
+        slider_ss_map = {}
+        btn_actuator_map = {}
+        # For a mirror with x, y, z axes (SPARCv2), reuse the stage slider for z axis
+        # and mirror_xy X, Y buttons and stage Z button to control the x, y, z axes of the mirror instead.
+        if main_data.mirror and set(main_data.mirror.axes.keys()) == {"x", "y", "z"}:
+            self.panel.lbl_step_size_xy.Hide()
+            self.panel.slider_mirror_xy.Hide()
+            self.panel.lbl_step_size_x.Show(True)
+            self.panel.lbl_step_size_y.Show(True)
+            self.panel.lbl_step_size_z.Show(True)
+            self.panel.slider_mirror_x.Show(True)
+            self.panel.slider_mirror_y.Show(True)
+            self.panel.slider_stage.Show(True)
+            self.panel.lbl_pz.Show(True)
+            self.panel.btn_p_stage_z.Show(True)
+            self.panel.btn_m_stage_z.Show(True)
+            self.panel.lbl_mz.Show(True)
+            slider_ss_map = {"slider_stage": "mirror_z"}
+            btn_actuator_map = {
+                "btn_p_mirror_xy_x": ("mirror", "x", 1),
+                "btn_m_mirror_xy_x": ("mirror", "x", -1),
+                "btn_p_mirror_xy_y": ("mirror", "y", 1),
+                "btn_m_mirror_xy_y": ("mirror", "y", -1),
+                "btn_p_stage_z": ("mirror", "z", 1),
+                "btn_m_stage_z": ("mirror", "z", -1),
+            }
+
         # Bind moving buttons & keys
-        self._actuator_controller = ActuatorController(tab_data, panel, "")
+        self._actuator_controller = ActuatorController(tab_data, panel, "", slider_ss_map, btn_actuator_map)
         self._actuator_controller.bind_keyboard(panel)
 
         # TODO: warn user if the mirror stage is too far from the official engaged
@@ -2379,8 +2406,9 @@ class Sparc2AlignTab(Tab):
         # possible to hack the GUI and enable the tab even if the mirror is
         # not engaged. In such case, if by mistake the mirror moves, we should
         # not set the "random" position as the engaged position.
-        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
-                                 pos["s"] - MIRROR_POS_PARKED["s"])
+        mirror = self.tab_data_model.main.mirror
+        pos_parked = get_mirror_pos_parked(mirror)
+        dist_parked = math.dist([pos[a] for a in pos], [pos_parked[a] for a in pos])
         if dist_parked <= MIRROR_ONPOS_RADIUS:
             logging.warning("Mirror seems parked, not updating FAV_POS_ACTIVE")
             return
@@ -2588,7 +2616,7 @@ class Sparc2AlignTab(Tab):
         # For SPARCs with a "parkable" mirror.
         if main_data.role in ("sparc", "sparc2"):
             mirror = main_data.mirror
-            if mirror and set(mirror.axes.keys()) == {"l", "s"}:
+            if mirror and (main_data.role == "sparc2" or set(mirror.axes.keys()) == MIRROR_AXES_LS):
                 return 5
             elif main_data.light_aligner:
                 # Special case for ELIM module: no mirror, but light-aligner
