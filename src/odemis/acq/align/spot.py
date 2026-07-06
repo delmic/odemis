@@ -85,9 +85,7 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=N
             returns (float):    Final distance to the center (m)
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    est_start = time.time() + 0.1
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateAlignmentTime(ccd.exposureTime.value))
+    f = model.ProgressiveFuture(total_time=estimateAlignmentTime(ccd.exposureTime.value))
     f._task_state = RUNNING
 
     # Task to run
@@ -190,8 +188,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, logpath):
                     future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=MTD_EXHAUSTIVE)
                     lens_pos, fm_level, _ = future._autofocusf.result()
                     # Update progress of the future
-                    future.set_progress(end=time.time() +
-                                        estimateAlignmentTime(hqet, dist, 1))
+                    future.set_progress(total_time=future.elapsed_time + estimateAlignmentTime(hqet, dist, 1))
                 except IOError as ex:
                     logging.error("Autofocus on spot image failed: %s", ex)
                     raise IOError('Spot alignment failure. AutoFocus failed.')
@@ -219,8 +216,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, logpath):
         ccd.exposureTime.value = ccd.exposureTime.clip(hqet)
 
         # Update progress of the future
-        future.set_progress(end=time.time() +
-                            estimateAlignmentTime(hqet, dist, 1))
+        future.set_progress(total_time=future.elapsed_time + estimateAlignmentTime(hqet, dist, 1))
         logging.debug("After rough alignment, spot center is at %s m", vector)
 
         # Limit FoV to save time
@@ -230,8 +226,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, logpath):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() +
-                            estimateAlignmentTime(hqet, dist, 0))
+        future.set_progress(total_time=future.elapsed_time + estimateAlignmentTime(hqet, dist, 0))
 
         # Center spot
         if future._task_state == CANCELLED:
@@ -470,9 +465,7 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None, log
                 (2 floats): vector to the spot from the center (m, m)
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    est_start = time.time() + 0.1
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateCenterTime(ccd.exposureTime.value))
+    f = model.ProgressiveFuture(total_time=estimateCenterTime(ccd.exposureTime.value))
     f._spot_center_state = RUNNING
     f.task_canceller = _CancelCenterSpot
     f._center_lock = threading.Lock()
@@ -551,8 +544,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg, logpath):
                 escan.translation.value = (-tab_pxs[0], -tab_pxs[1])
             steps += 1
             # Update progress of the future
-            future.set_progress(end=time.time() +
-                                estimateCenterTime(ccd.exposureTime.value, dist))
+            future.set_progress(total_time=future.elapsed_time + estimateCenterTime(ccd.exposureTime.value, dist))
 
         return dist, tab
     finally:

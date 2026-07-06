@@ -68,10 +68,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
             dict : Transformation metadata
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    est_start = time.time() + 0.1
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateOverlayTime(dwell_time,
-                                                                    repetitions))
+    f = model.ProgressiveFuture(total_time=estimateOverlayTime(dwell_time, repetitions))
     f._find_overlay_state = RUNNING
 
     # Task to run
@@ -150,9 +147,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                     raise CancelledError()
 
                 # Update progress of the future (it may be the second trial)
-                future.set_progress(end=time.time() +
-                                    estimateOverlayTime(future._gscanner.dwell_time,
-                                                        repetitions))
+                future.set_progress(
+                    total_time=future.elapsed_time + estimateOverlayTime(future._gscanner.dwell_time, repetitions)
+                )
 
                 # Wait for ScanGrid to finish
                 optical_image, electron_coordinates, electron_scale = future._gscanner.DoAcquisition()
@@ -162,7 +159,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                     raise CancelledError()
 
                 # Update remaining time to 6secs (hardcoded estimation)
-                future.set_progress(end=time.time() + 6)
+                future.set_progress(total_time=future.elapsed_time + 6)
 
                 # Check if ScanGrid gave one image or list of images
                 # If it is a list, follow the "one image per spot" procedure
@@ -260,7 +257,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                     raise CancelledError()
 
                 # We are almost done... about 1 s left
-                future.set_progress(end=time.time() + 1)
+                future.set_progress(total_time=future.elapsed_time + 1)
 
                 logging.debug("Calculating transformation...")
                 try:

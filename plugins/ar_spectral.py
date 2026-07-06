@@ -177,11 +177,9 @@ class SpectralARScanStream(stream.Stream):
 
         logging.debug("Optical path configured")
 
-        est_start = time.time() + 0.1
         # Create a "Future", which is an object that can be used to follow the
         # task completion while it's going on, and get the result.
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + self.estimateAcquisitionTime())
+        f = model.ProgressiveFuture(total_time=self.estimateAcquisitionTime())
         f.task_canceller = self._cancelAcquisition
         f._acq_state = RUNNING
         f._acq_lock = threading.Lock()

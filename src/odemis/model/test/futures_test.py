@@ -270,45 +270,40 @@ class TestProgressiveFuture(unittest.TestCase):
 
     def test_progress(self):
         """Test progress update for future."""
-        self.start = None  # for the caller
-        self.end = None  # for the caller
-        now = time.time()
+        self.elapsed = None  # for the caller
+        self.total = None  # for the caller
         # start is default time now if not specified
-        future = ProgressiveFuture(end=now + 1)
+        future = ProgressiveFuture(total_time=1)
         future.task_canceller = self.cancel_task
 
         # caller request future to indicate change in time estimation
         future.add_update_callback(self.on_progress_update)
         # update the progress
-        future.set_progress(end=now + 2)
-        # check end time was updated
-        self.assertEqual(self.end, now + 2)
-        # future not running yet, so start should be after "now"
-        self.assertGreaterEqual(self.start, now)
+        future.set_progress(total_time=2)
+        # check total time was updated
+        self.assertAlmostEqual(self.total, 2, delta=0.1)
+        # future not running yet, so elapsed should be ~0
+        self.assertAlmostEqual(self.elapsed, 0, delta=0.1)
 
         # "start" the task (set the future running)
         future.set_running_or_notify_cancel()
-        # the progress should be updated and thus .start should be updated now with the current time
-        expected_start = time.time()
-        self.assertTrue(expected_start - 0.1 <= self.start <= expected_start)
+        # the progress should be updated and thus .elapsed should be ~0 (just started)
+        self.assertAlmostEqual(self.elapsed, 0, delta=0.1)
 
         time.sleep(0.1)  # wait a bit
 
-        now = time.time()
         # while running, update the estimated ending time
-        future.set_progress(end=now + 1)
-        # the progress should be updated and thus .end should be in 1 sec from now
-        expected_end = now + 1
-        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end)
+        future.set_progress(total_time=future.elapsed_time + 1)
+        # the progress should be updated and thus remaining time should be ~1s
+        self.assertAlmostEqual(self.total - self.elapsed, 1, delta=0.1)
 
     def test_cancel_while_running(self):
         """Test cancelling of future while running."""
         self.cancelled = 0
-        self.start = None  # for the caller
-        self.end = None  # for the caller
-        now = time.time()
+        self.elapsed = None  # for the caller
+        self.total = None  # for the caller
         # start is default time now if not specified
-        future = ProgressiveFuture(end=now + 2)
+        future = ProgressiveFuture(total_time=2)
         future.task_canceller = self.cancel_task
 
         # "start" the task (set the future running)
@@ -327,47 +322,42 @@ class TestProgressiveFuture(unittest.TestCase):
         """Tests retrieving the progress from the future."""
         f = ProgressiveFuture()
 
-        now = time.time()
-        start, end = now + 1, now + 2
-
-        f.set_progress(start, end)  # update progress
-        start_f, end_f = f.get_progress()  # retrieve progress
-        # check progress returned is same as progress set beforehand
-        self.assertEqual(start, start_f)
-        self.assertEqual(end, end_f)
+        f.set_progress(total_time=1)  # update progress with duration=1
+        elapsed_f, total_f = f.get_progress()  # retrieve progress
+        # future is pending, elapsed≈0, total≈1
+        self.assertAlmostEqual(elapsed_f, 0, delta=0.1)
+        self.assertAlmostEqual(total_f, 1, delta=0.1)
 
         # "start" the task (set the future running)
         f.set_running_or_notify_cancel()  # updates start and end
-        start_f, end_f = f.get_progress()  # retrieve the progress
-        now = time.time()
-        # check that start is a tiny bit before now
-        self.assertLessEqual(start_f, time.time())
-        # check that expected duration is still 1s as task should take 1s
-        self.assertAlmostEqual(start_f + 1, end_f)
-        # check that the estimated end time of the futures has been updated
-        expected_end = now + 1
-        self.assertTrue(expected_end - 0.1 <= end_f <= expected_end + 0.1)  # end should be 1s in the future
+        elapsed_f, total_f = f.get_progress()  # retrieve the progress
+        # check that elapsed is ~0 (just started)
+        self.assertAlmostEqual(elapsed_f, 0, delta=0.1)
+        # check that expected duration is still ~1s
+        self.assertAlmostEqual(total_f - elapsed_f, 1, delta=0.1)
+        # remaining time should be ~1s
+        self.assertAlmostEqual(total_f - elapsed_f, 1, delta=0.1)
 
         time.sleep(0.1)  # wait a bit
 
         # "finish" the task
         f.set_result(None)
         self.assertTrue(f.done())
-        start_f, end_f = f.get_progress()
-        # check that start is now in the past as future started in the past
-        self.assertLessEqual(start_f, time.time())
-        # check that end is also now in the past as future already finished
-        self.assertLessEqual(end_f, time.time())
+        elapsed_f, total_f = f.get_progress()
+        # check that elapsed > 0 as future started in the past
+        self.assertGreater(elapsed_f, 0)
+        # check that after done, elapsed ≈ total
+        self.assertAlmostEqual(elapsed_f, total_f, delta=0.2)
 
     def cancel_task(self, future):
         """Task canceller"""
         self.cancelled += 1
         return True
 
-    def on_progress_update(self, future, start, end):
-        """Called whenever some progress on the future is reported. Start and end time are updated."""
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, total_time):
+        """Called whenever some progress on the future is reported. Elapsed and total times are updated."""
+        self.elapsed = elapsed_time
+        self.total = total_time
 
 
 class TestProgressiveBatchFuture(unittest.TestCase):
@@ -375,8 +365,8 @@ class TestProgressiveBatchFuture(unittest.TestCase):
 
     def test_progress(self):
         """Test progress update of future."""
-        self.start = None  # for the caller
-        self.end = None  # for the caller
+        self.elapsed = None  # for the caller
+        self.total = None  # for the caller
         fs = {}
         f1 = ProgressiveFuture()
         f1.task_canceller = self.cancel_task
@@ -384,41 +374,33 @@ class TestProgressiveBatchFuture(unittest.TestCase):
         f2.task_canceller = self.cancel_task
         fs[f1] = 10  # estimated duration in seconds
         fs[f2] = 15  # estimated duration in seconds
-        time_creation_batch_future = time.time()
         batch_future = ProgressiveBatchFuture(fs)
         batch_future.add_update_callback(self.on_progress_update)
 
         # check estimated time for batch future is sum of estimated time for sub-futures
-        self.assertEqual(self.end - self.start, fs[f1] + fs[f2])
+        self.assertAlmostEqual(self.total, fs[f1] + fs[f2], delta=0.1)
 
         # "start" the sub-tasks; the batch task is already started at creation
         f1.set_running_or_notify_cancel()
 
-        now = time.time()
-        f1.set_progress(end=now + 2)  # update the progress on one sub-future
-        # check that the estimated end time of the batch futures has been updated
-        expected_end = now + fs[f2] + 2
-        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
-        # check that the start of the batch future is after creation of batch future
-        self.assertGreaterEqual(self.start, time_creation_batch_future)
+        f1.set_progress(total_time=f1.elapsed_time + 2)  # update the progress on one sub-future
+        # check that the remaining time of the batch futures has been updated
+        self.assertAlmostEqual(self.total - self.elapsed, fs[f2] + 2, delta=0.2)
+        # check that the elapsed of the batch future is >= 0
+        self.assertGreaterEqual(self.elapsed, 0)
 
-        now = time.time()
         f1.set_result(None)  # set sub-future done
 
-        # check estimated time of batch future is equal to f2
-        expected_end = now + fs[f2]
-        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+        # check estimated remaining time of batch future is equal to f2
+        self.assertAlmostEqual(self.total - self.elapsed, fs[f2], delta=0.2)
 
         f2.set_running_or_notify_cancel()
-        # check time of batch future is still equal to f2 as future just started
-        expected_end = now + fs[f2]
-        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+        # check remaining time of batch future is still equal to f2 as future just started
+        self.assertAlmostEqual(self.total - self.elapsed, fs[f2], delta=0.2)
 
-        now = time.time()
-        f2.set_progress(end=now + 10)  # update the progress on one sub-future
-        # check that the estimated end time of the batch futures has been updated
-        expected_end = now + 10
-        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+        f2.set_progress(total_time=f2.elapsed_time + 10)  # update the progress on one sub-future
+        # check that the remaining time of the batch futures has been updated
+        self.assertAlmostEqual(self.total - self.elapsed, 10, delta=0.2)
 
         f2.set_result(None)  # set sub-future done
 
@@ -535,10 +517,10 @@ class TestProgressiveBatchFuture(unittest.TestCase):
         self.cancelled += 1
         return True
 
-    def on_progress_update(self, future, start, end):
-        """Whenever there is a progress update, update start and end time."""
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, total_time):
+        """Whenever there is a progress update, update elapsed and total times."""
+        self.elapsed = elapsed_time
+        self.total = total_time
 
     def test_large_batch_future(self):
         """Test ProgressiveBatchFuture with 500, 1000, and 2000 sub-futures."""
@@ -556,19 +538,18 @@ class TestProgressiveBatchFuture(unittest.TestCase):
 
                 # Check the estimated time for the batch future
                 total_estimated_duration = sum(fs.values())
-                self.assertEqual(self.end - self.start, total_estimated_duration)
+                self.assertAlmostEqual(self.total, total_estimated_duration, delta=0.1)
 
                 # Start a subset of futures
                 for i, f in enumerate(fs):
                     if i < num_futures // 2:
                         f.set_running_or_notify_cancel()
-                        f.set_progress(end=time.time() + (fs[f] / 2))  # Halfway through the task
+                        f.set_progress(total_time=f.elapsed_time + (fs[f] / 2))  # Halfway through the task
                         f.set_result(None)  # Mark future as done
 
                 # Verify the progress of the batch future
                 remaining_duration = sum(t for f, t in fs.items() if not f.done())
-                expected_end = time.time() + remaining_duration
-                self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+                self.assertAlmostEqual(self.total - self.elapsed, remaining_duration, delta=0.2)
 
                 # Complete all futures
                 for f in fs:
@@ -599,7 +580,7 @@ class TestProgressiveBatchFuture(unittest.TestCase):
                 for i, f in enumerate(fs):
                     if i < num_futures // 2:
                         f.set_running_or_notify_cancel()
-                        f.set_progress(end=time.time() + (fs[f] / 2))  # Halfway through the task
+                        f.set_progress(total_time=f.elapsed_time + (fs[f] / 2))  # Halfway through the task
 
                 # Cancel the batch future after some progress
                 self.assertTrue(batch_future.cancel())
@@ -638,7 +619,7 @@ class TestProgressiveBatchFuture(unittest.TestCase):
                 for i, f in enumerate(fs):
                     if i < num_futures // 2:
                         f.set_running_or_notify_cancel()
-                        f.set_progress(end=time.time() + (fs[f] / 2))  # Halfway through the task
+                        f.set_progress(total_time=f.elapsed_time + (fs[f] / 2))  # Halfway through the task
 
                 # Cancel the first future after some progress
                 first_future = list(fs.keys())[0]

@@ -204,7 +204,8 @@ class TestFastEMCalibration(unittest.TestCase):
         # FIXME no subfuture available yet, which are cancelable
         #  when subfutures are implemented, add a check in this test case that the subfuture was also cancelled
 
-        self.end = None  # updated in callback on_progress_update
+        self.elapsed = None  # updated in callback on_progress_update
+        self.total = None  # updated in callback on_progress_update
         self.updates = 0  # updated in callback on_progress_update
         self.done = False  # updated in callback on_done
 
@@ -222,16 +223,17 @@ class TestFastEMCalibration(unittest.TestCase):
         with self.assertRaises(CancelledError):
             f.result(timeout=5)  # add timeout = 5s in case cancellation error was not raised
         self.assertGreaterEqual(self.updates, 2)  # at least one update at cancellation
-        self.assertLessEqual(self.end, time.time())
+        # When cancelled, elapsed_time and total_time both equal the actual duration
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
 
     def on_done(self, future):
         self.done = True
 
-    def on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, total_time):
+        self.elapsed = elapsed_time
+        self.total = total_time
         self.updates += 1
 
 

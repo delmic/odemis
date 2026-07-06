@@ -250,8 +250,8 @@ class SECOMTestCase(unittest.TestCase):
                 self.streams[0],
                 stream.StreamTree(streams=self.streams[1:3])
                 ])
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.total = None
         self.updates = 0
 
         f = acqmng.acquire(st.getProjections())
@@ -271,8 +271,8 @@ class SECOMTestCase(unittest.TestCase):
                 self.streams[2],
                 stream.StreamTree(streams=self.streams[0:2])
                 ])
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.total = None
         self.updates = 0
         self.done = False
 
@@ -286,16 +286,16 @@ class SECOMTestCase(unittest.TestCase):
 
         self.assertRaises(CancelledError, f.result, 1)
         self.assertGreaterEqual(self.updates, 1) # at least one update at cancellation
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
 
     def on_done(self, future):
         self.done = True
 
-    def on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, total_time):
+        self.elapsed = elapsed_time
+        self.total = total_time
         self.updates += 1
 
 class SPARCTestCase(unittest.TestCase):
@@ -383,8 +383,8 @@ class SPARCTestCase(unittest.TestCase):
         est_time = acqmng.estimateTime(st.getProjections())
 
         # prepare callbacks
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.total = None
         self.updates = 0
         self.done = 0
 
@@ -405,7 +405,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(not f.cancelled())
 
         time.sleep(0.1)
@@ -442,8 +442,8 @@ class SPARCTestCase(unittest.TestCase):
         est_time = acqmng.estimateTime(st.getProjections())
 
         # prepare callbacks
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.total = None
         self.updates = 0
         self.done = 0
 
@@ -464,7 +464,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(not f.cancelled())
 
         # assert optical path configuration
@@ -509,8 +509,8 @@ class SPARCTestCase(unittest.TestCase):
         est_time = acqmng.estimateTime(st.getProjections())
 
         # prepare callbacks
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.total = None
         self.updates = 0
         self.done = 0
 
@@ -531,7 +531,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1)  # at least one update at end
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(not f.cancelled())
 
         time.sleep(0.1)
@@ -545,9 +545,9 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("On done called")
         self.done += 1
 
-    def on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, total_time):
+        self.elapsed = elapsed_time
+        self.total = total_time
         self.updates += 1
 
 
@@ -704,7 +704,7 @@ class MeteorTestCase(unittest.TestCase):
 
         self.fm_focuser.moveAbs({"z": self.fm_focus_pos}).result()
 
-    def _on_progress_update(self, f, s, e):
+    def _on_progress_update(self, f, elapsed_time, total_time):
         self._nb_updates += 1
 
     def test_only_FM_streams_with_zstack(self):

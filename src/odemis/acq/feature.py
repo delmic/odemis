@@ -689,7 +689,7 @@ class CryoFeatureAcquisitionTask(object):
         """Run the acquisition task."""
         exp = None
         self._future._task_state = RUNNING
-        self._future.set_progress(end=time.time() + self.estimate_total_time() + 2) # +2 for pessimistic margin
+        self._future.set_progress(total_time=self._future.elapsed_time + self.estimate_total_time() + 2) # +2 for pessimistic margin
         try:
             with self._future._task_lock:
                 if self._future._task_state == CANCELLED:
@@ -802,7 +802,7 @@ def acquire_at_features(
     future.task_canceller = task.cancel
 
     # set progress of the future
-    future.set_end_time(time.time() + task.estimate_total_time())
+    future.set_progress(total_time=future.elapsed_time + task.estimate_total_time())
 
     # assign the acquisition task to the future
     executeAsyncTask(future, task.run)

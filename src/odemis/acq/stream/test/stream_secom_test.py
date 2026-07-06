@@ -321,9 +321,9 @@ class SECOMConfocalTestCase(unittest.TestCase):
     def _on_done(self, future):
         self.done = True
 
-    def _on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
+    def _on_progress_update(self, future, elapsed_time, total_time):
+        self.elapsed = elapsed_time
+        self.total = total_time
         self.updates += 1
 
     def test_live_conf(self):
@@ -397,7 +397,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 1)  # at least 1 update
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
@@ -460,7 +460,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
             testing.assert_tuple_almost_equal(d.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
         self.assertGreaterEqual(self.updates, 1)  # at least 1 update
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
@@ -495,7 +495,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
             f.result(timeout)
 
         self.assertGreaterEqual(self.updates, 1)  # at least at the end
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
         self.assertTrue(f.cancelled())
 
 

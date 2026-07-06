@@ -207,7 +207,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
     """
 
     est_dur = estimate_acquisition_time(roa, pre_calibrations, acq_dwell_time)
-    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
+    f = model.ProgressiveFuture(total_time=est_dur)
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
@@ -301,7 +301,7 @@ class AcquisitionTask(object):
         # flag which when set to True can be used to force returns the run() function and skip the acquisition
         self._skip_roa_acq = False
         if isinstance(future, model.ProgressiveFuture):
-            self._total_roa_time = future.end_time - future.start_time
+            self._total_roa_time = future.total_time
 
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
@@ -858,7 +858,7 @@ def acquireNonRectangularTiledArea(toa, stream, stage, acq_dwell_time, scanner_c
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
     est_dur = toa.estimate_acquisition_time(acq_dwell_time)
-    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
+    f = model.ProgressiveFuture(total_time=est_dur)
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
@@ -925,7 +925,7 @@ def acquireTiledArea(stream, stage, region, live_stream=None, overlap=0.01, cent
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
     est_dur = estimateTiledAcquisitionTime(sem_stream, stage, region, overlap)
-    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
+    f = model.ProgressiveFuture(total_time=est_dur)
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
@@ -1113,8 +1113,9 @@ class OverviewAcquisition(object):
 
         logging.debug("Overlap is %s%%", overlap * 100)
 
-        def _pass_future_progress(sub_f, start, end):
-            self._future.set_progress(end=end)
+        def _pass_future_progress(sub_f, elapsed_time, estimated_total_time):
+            remaining = estimated_total_time - elapsed_time
+            self._future.set_progress(total_time=self._future.elapsed_time + remaining)
 
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,

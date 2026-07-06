@@ -279,8 +279,10 @@ class ProgressiveFutureConnector(object):
         self._full_text = full
 
         # Will contain the info of the future as soon as we get it.
-        self._start, self._end = future.get_progress()
-        self._end = None
+        elapsed, total = future.get_progress()
+        self._elapsed = elapsed  # elapsed time at last progress update (s)
+        self._total = total  # estimated total duration at last progress update (s)
+        self._progress_time = time.time()  # wall-clock time when the last progress update was received
         self._prev_left = None
         self._last_update = 0  # when was the last GUI update
 
@@ -295,16 +297,16 @@ class ProgressiveFutureConnector(object):
         future.add_update_callback(self._on_progress)
         future.add_done_callback(self._on_done)
 
-    def _on_progress(self, _, start, end):
-        """ Process any progression
-
-        start (float): time the work started
-        end (float): estimated time at which the work is ending
-
+    def _on_progress(self, _, elapsed_time: float, total_time: float):
         """
+        Process any progression update.
 
-        self._start = start
-        self._end = end
+        :param elapsed_time: time elapsed since the task started, in seconds.
+        :param total_time: estimated total duration of the task, in seconds.
+        """
+        self._elapsed = elapsed_time
+        self._total = total_time
+        self._progress_time = time.time()
 
     @call_in_wx_main
     def _on_done(self, future):
@@ -329,12 +331,14 @@ class ProgressiveFutureConnector(object):
     def _update_progress(self):
         """ Update the progression controls """
         now = time.time()
-        past = max(0, now - self._start)
-        left = max(0, self._end - now)
+        # Extrapolate elapsed time since the last progress update
+        past = self._elapsed + (now - self._progress_time)
+        past = max(0, past)
+        total = max(past, self._total)
+        left = max(0, total - past)
         prev_left = self._prev_left
-        total = past + left
         if total <= 0:
-            logging.warning("Unexpected progress %s to %s", self._start, self._end)
+            logging.warning("Unexpected progress elapsed=%s total=%s", self._elapsed, self._total)
             ratio = 1
         else:
             ratio = past / total
