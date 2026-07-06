@@ -125,6 +125,7 @@
         mag: 84.0, # ratio, (actually of the complete light path)
         na: 0.85, # ratio, numerical aperture
         ri: 1.0, # ratio, refractive index
+        wd: 10.6e-3,  # m, working distance
     },
     metadata: {
         # Refractive index mismatch correction factor
@@ -294,7 +295,7 @@
         # Loading position to retract lens
         FAV_POS_DEACTIVE: {'z': -11.5e-3},
         # Initial active position (close from the sample, but not too close, for safety)
-        FAV_POS_ACTIVE: {'z': 1.69e-3}
+        FAV_POS_ACTIVE: {'z': 1.69e-3},
     },
     affects: ["Camera"],
 }

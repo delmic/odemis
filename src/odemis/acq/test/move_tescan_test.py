@@ -23,8 +23,18 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import (FM_IMAGING, SEM_IMAGING, UNKNOWN, MicroscopePostureManager,
-                             MeteorTescan1PostureManager, LOADING, MILLING)
+from odemis.acq.move import (
+    FM_IMAGING,
+    FIB_VIEW_FM,
+    GRID_1,
+    LOADING,
+    MILLING,
+    MeteorTescan1PostureManager,
+    MicroscopePostureManager,
+    POSITION_NAMES,
+    SEM_IMAGING,
+    UNKNOWN,
+)
 from odemis.acq.test import move_tfs1_test, move_tfs3_test
 from odemis.util import testing
 
@@ -306,6 +316,27 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         # # Switch back to milling posture
         # self.pm.cryo_switch_sample_position(MILLING).result()
         # testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+
+    def test_fib_view_fm_movements(self):
+        """Test that milling <> fib-view fm switches work as expected"""
+        self.stage_bare.moveAbs(self.stage_grid_centers[POSITION_NAMES[GRID_1]]).result()
+        self.pm.cryo_switch_sample_position(MILLING).result()
+        initial_pos = self.stage_bare.position.value
+        self.assertEqual(self.pm.current_posture.value, MILLING)
+
+        self.pm.cryo_switch_sample_position(FIB_VIEW_FM).result()
+        resulting_posture = self.pm.get_current_posture_label()
+        self.assertEqual(resulting_posture, FIB_VIEW_FM)
+
+        # Verify that directly going from fib-view fm to fm imaging is not allowed
+        with self.assertRaises(ValueError):
+            self.pm.cryo_switch_sample_position(FM_IMAGING).result()
+
+        self.pm.cryo_switch_sample_position(MILLING).result()
+        resulting_posture = self.pm.get_current_posture_label()
+        self.assertEqual(resulting_posture, MILLING)
+        final_pos = self.stage_bare.position.value
+        testing.assert_pos_almost_equal(initial_pos, final_pos)
 
 
 if __name__ == "__main__":
