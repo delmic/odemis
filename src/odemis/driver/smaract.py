@@ -33,7 +33,7 @@ import time
 import re
 
 from ctypes import *
-from typing import Optional, Dict
+from typing import Optional, Dict, Set
 from odemis import model
 from odemis import util
 from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute, roattribute
@@ -48,6 +48,9 @@ try:
 except ImportError as err:
     logging.info("Smaract Python SDK modules for Picoscale driver not found with error: {}".format(err))
     smaract_python_sdk = False
+
+REFPROC_STD = "standard"
+REFPROC_MULTI_PHASE = "multi-phase"
 
 
 def add_coord(pos1, pos2):
@@ -2912,7 +2915,7 @@ class SA_CTLError(IOError):
 
 class MCS2(model.Actuator):
 
-    def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
+    def __init__(self, name, role, locator, ref_on_init=False, refproc=REFPROC_STD, axes=None, speed=1e-3, accel=1e-3,
                  hold_time=float('inf'), pos_deactive_after_ref=False, param_file=None, **kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
@@ -2931,6 +2934,15 @@ class MCS2(model.Actuator):
                 network:sn:<serialnumber>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
+        refproc (str): referencing (aka homing) procedure name. For now only "multi-phase" or "standard" is accepted.
+            Default is "standard". "standard" procedure calls the device referencing procedure.
+            "multi-phase" executes a metadata-driven referencing procedure intended for mechanically constrained systems
+            (e.g. L-slot geometries). The order of referencing is defined by the `AXES_ORDER_REF` metadata. Axes listed
+            in `FAV_POS_ALIGN` are referenced first and moved to their corresponding alignment/good positions. They are
+            then moved to their engaged position specified by `FAV_POS_ACTIVE` before the remaining axes are referenced.
+            If `pos_deactive_after_ref` is True, all referenced axes are finally moved to the parking positions defined
+            by `FAV_POS_DEACTIVE`. Failed references are retried automatically until all axes are referenced or the
+            retry limit is reached.
         hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
             Default is float('inf') or infinite. Can be also set to 0 to disable hold.
             Is set to the same value for all channels.
@@ -3052,6 +3064,15 @@ class MCS2(model.Actuator):
         axes_ref = {a: self._is_channel_referenced(i) for a, i in self._axis_map.items()}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+
+        refproc = refproc.lower()
+        if refproc == REFPROC_MULTI_PHASE:
+            self.reference = self._reference_multi_phase
+            logging.debug("Using multi-phase referencing procedure")
+        elif refproc == REFPROC_STD:
+            logging.debug("Using standard referencing procedure")
+        else:
+            raise ValueError(f"Reference procedure {refproc} unknown")
 
         # If ref_on_init, referenced immediately.
         if all(referenced for _, referenced in axes_ref.items()):
@@ -3633,6 +3654,24 @@ class MCS2(model.Actuator):
         f = self._executor.submitf(f, self._doReference, f, axes)
         return f
 
+    @isasync
+    def _reference_multi_phase(self, _=None):
+        """
+        Asynchronous entry point to execute the multi-phase referencing sequence.
+
+        This method automatically collects all mapped axes, verifies their states,
+        and submits the `_do_reference_multi_phase` operation to the background executor.
+        No arguments are required, as axis handling is derived entirely from the
+        device metadata properties (`AXES_ORDER_REF`, etc.).
+
+        :return: A CancellableFuture object tracking the state of the background operation.
+        """
+        axes = set(self.axes.keys())
+
+        f = self._createMoveFuture()
+        f = self._executor.submitf(f, self._do_reference_multi_phase, f, axes)
+        return f
+
     def _doReference(self, future, axes):
         """
         Actually runs the referencing code
@@ -3697,6 +3736,182 @@ class MCS2(model.Actuator):
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
 
+    def _reference_with_retry(self, future: model.CancellableFuture, axes_to_ref: list,
+                              post_ref_positions: Optional[dict] = None, reference_lbl: str = ""):
+        """
+        Executes a sequential, retry-based referencing routine for a subset of axes.
+
+        This mechanism is designed to resolve kinematic deadlocks in confined
+        mechanical setups (such as an L-shaped slot).
+
+        By retrying in a loop, axes that fail to reference initially are skipped until
+        other axes succeed. Moving the successful axes out of the way (via
+        `post_ref_positions`) clears the physical path for the previously blocked
+        axes to succeed on subsequent attempts.
+
+        :param future: The future object used to monitor cancellation requests.
+        :param axes_to_ref: A list of axis string identifiers to reference, in preferred order.
+        :param post_ref_positions: Optional mapping of `axis -> position`. If provided, an
+                                   axis will immediately move to this absolute position
+                                   upon successful referencing to clear physical space.
+        :param reference_lbl: A string label (e.g., "Phase 1") used for log message prefixing.
+
+        :raises HwError: If the retry loop exhausts and one or more axes remain unreferenced.
+        :raises CancelledError: If a stop/cancel flag is set on the future during execution.
+        """
+        unreferenced = set(axes_to_ref)
+        max_retries = max(len(axes_to_ref) * 2, 1)
+
+        for attempt in range(max_retries):
+            if not unreferenced:
+                break
+            for a in axes_to_ref:
+                if a not in unreferenced:
+                    continue
+                if future._must_stop.is_set():
+                    raise CancelledError()
+
+                channel = self._axis_map[a]
+                self.referenced._value[a] = False
+                logging.info("Referencing %s axis %s (Attempt %d)", reference_lbl, a, attempt + 1)
+                self.Reference(channel)
+
+                try:
+                    self._waitEndMove(future, {channel}, time.time() + 100)
+                except CancelledError:
+                    raise
+                except Exception as e:
+                    logging.debug("Axis %s failed to reference: %s", a, e)
+
+                is_referenced = self._is_channel_referenced(channel)
+                self.referenced._value[a] = is_referenced
+
+                if is_referenced:
+                    self._updatePosition()
+                    if post_ref_positions and a in post_ref_positions:
+                        target = {a: post_ref_positions[a]}
+                        logging.info("Moving axis %s to position %s", a, target)
+                        self._checkMoveAbs(target)
+                        if future._must_stop.is_set():
+                            raise CancelledError()
+                        self._doMoveAbs(future, self._applyInversion(target))
+                        self._waitEndMove(future, {channel}, time.time() + 100)
+                    unreferenced.remove(a)
+                    logging.info("Axis %s successfully referenced.", a)
+                else:
+                    logging.warning("Axis %s failed to reference. Will retry.", a)
+
+        if unreferenced:
+            logging.error("%s axes %s not referenced after retries", reference_lbl, unreferenced)
+            raise model.HwError(f"Hardware referencing failed for axes: {unreferenced}")
+
+    def _do_reference_multi_phase(self, future: model.CancellableFuture, axes: Set[str]):
+        """
+        A multi-phase referencing sequence for complex geometries (e.g., L-slot mechanics)
+        to prevent hardware collisions.
+
+        The sequence is strictly controlled by device metadata and executes as follows:
+
+        - Phase 1 (Corner Alignment): Identifies axes designated in `FAV_POS_ALIGN`.
+          References them safely using a retry loop, parking them in the "corner" of
+          the L-slot to maximize physical clearance.
+
+        - Phase 2 (Engaged Referencing): Sequentially moves the already-referenced
+          Phase 1 axes to their active working positions (`FAV_POS_ACTIVE`),
+          then references any remaining axes.
+
+        - Phase 3 (Deactivation): If configured, sequentially retracts all axes
+          to their safe parking positions (`FAV_POS_DEACTIVE`).
+
+        Note: All multi-axis movements in this function are explicitly executed
+        sequentially (one-by-one). Concurrent movements are avoided to prevent
+        diagonal motion that could cause mechanical collisions in confined spaces.
+
+        :param future: The future object used to monitor cancellation requests.
+        :param axes: A set of axis string identifiers to be referenced. `AXES_ORDER_REF`
+                     metadata should contain the same axes and define the order of procedure.
+
+        :raises ValueError: If required metadata (`AXES_ORDER_REF`, `FAV_POS_ACTIVE`) is missing.
+        :raises HwError: If the hardware fails to reference after all retries are exhausted.
+        :raises CancelledError: If the operation is interrupted by the user.
+        """
+        with future._moving_lock:
+            try:
+                # Gather configuration and logical groups
+                ordered_axes = self._metadata.get(model.MD_AXES_ORDER_REF, None)
+                if ordered_axes is None:
+                    raise ValueError("Missing AXES_ORDER_REF metadata for referencing.")
+                if set(ordered_axes) != axes:
+                    raise ValueError("AXES_ORDER_REF metadata does not match the provided "
+                                     "axes. Order: %s, Axes: %s" % (ordered_axes, axes))
+
+                align_pos = self._metadata.get(model.MD_FAV_POS_ALIGN, {})
+                active_pos = self._metadata.get(model.MD_FAV_POS_ACTIVE, None)
+
+                if active_pos is None:
+                    raise ValueError("Missing FAV_POS_ACTIVE metadata for referencing.")
+
+                # Split axes into Phase 1 (L-slot axes needing alignment/good position) and
+                # Phase 2 (post-alignment axes)
+                phase1_axes = [a for a in ordered_axes if a in align_pos]
+                phase2_axes = [a for a in ordered_axes if a not in align_pos]
+
+                # PHASE 1: Reference L-slot axes and move to alignment/good positions
+                self._reference_with_retry(future, phase1_axes, post_ref_positions=align_pos, reference_lbl="Phase 1")
+
+                # PHASE 2: Move to Active/Engaged position and reference remaining
+                if phase2_axes:
+                    # Move already-referenced axes to their active (engaged) position to clear the way
+                    pre_phase2_target = {}
+                    for a in self.axes:
+                        # Find axes not in phase 2, perfectly referenced, and possessing an active position
+                        if a not in phase2_axes and self.referenced._value[a] and a in active_pos:
+                            pre_phase2_target[a] = active_pos[a]
+
+                    if pre_phase2_target:
+                        logging.info("Moving referenced axes to engaged position %s sequentially before Phase 2", pre_phase2_target)
+                        # Move sequentially (one by one) to prevent diagonal movement from crashing in the L-slot
+                        for a in ordered_axes:
+                            if a in pre_phase2_target:
+                                single_target = {a: pre_phase2_target[a]}
+                                self._checkMoveAbs(single_target)
+                                if future._must_stop.is_set():
+                                    raise CancelledError()
+                                self._doMoveAbs(future, self._applyInversion(single_target))
+                                self._waitEndMove(future, {self._axis_map[a]}, time.time() + 100)
+
+                    self._reference_with_retry(future, phase2_axes, reference_lbl="Phase 2")
+
+                # PHASE 3: Move to Safe/Deactive position (if requested)
+                all_axes_referenced = all(self.referenced._value[a] for a in self.axes)
+
+                if self._pos_deactive_after_ref and all_axes_referenced:
+                    try:
+                        deactive_pos = self._metadata[model.MD_FAV_POS_DEACTIVE]
+                    except KeyError:
+                        logging.warning("Cannot move to deactive position. Missing FAV_POS_DEACTIVE")
+                    else:
+                        logging.info("Moving axes sequentially to deactivated position %s after referencing", deactive_pos)
+                        # Ensure we step through the sequence one at a time.
+                        for a in ordered_axes:
+                            if a in deactive_pos:
+                                single_target = {a: deactive_pos[a]}
+                                self._checkMoveAbs(single_target)
+                                if future._must_stop.is_set():
+                                    raise CancelledError()
+                                self._doMoveAbs(future, self._applyInversion(single_target))
+                                self._waitEndMove(future, {self._axis_map[a]}, time.time() + 100)
+            except CancelledError:
+                logging.warning("Referencing cancelled, device will not move until another referencing")
+                future._was_stopped = True
+                raise
+            except Exception as ex:
+                self.state._set_value(ex, force_write=True)
+                logging.exception("Referencing failure")
+                raise
+            finally:
+                self._updatePosition()
+                self.referenced.notify(self.referenced.value)
 
 class FakeMCS2_DLL(object):
     """
