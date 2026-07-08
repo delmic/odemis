@@ -111,12 +111,12 @@
         # Grid centers in SEM range, at rx = FAV_SEM_POS_ACTIVE,
         # These values are based on the expectation from the CAD model. Recalibrate for each system:
         SAMPLE_CENTERS: {
-            "GRID 1": {
+            "grid 1": {
                 'x': -2.611e-3,
                 'y': -13.540e-3,
                 'z': 35.651e-3
             },
-            "GRID 2": {
+            "grid 2": {
                 'x': 1.389e-3,
                 'y': -13.540e-3,
                 'z': 35.651e-3

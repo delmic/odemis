@@ -22,7 +22,7 @@ import unittest
 
 import odemis
 from odemis import model
-from odemis.acq.move import GRID_1, GRID_2, UNKNOWN, POSITION_NAMES
+from odemis.acq.move import Posture
 from odemis.acq.test import move_tfs1_test
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -62,8 +62,8 @@ class TestMeteorZeiss1Move(move_tfs1_test.TestMeteorTFS1Move):
         Test the keys in stage position for _transform_from_sem_to_fm.
         """
         stage_md = self.stage.getMetadata()
-        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][Posture.GRID_1]
+        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][Posture.GRID_2]
         # Above position are updated in linear axes and do not have rotation axes,
         # so should raise KeyError when rotation axes are accessed
         with self.assertRaises(KeyError):
@@ -79,18 +79,18 @@ class TestMeteorZeiss1Move(move_tfs1_test.TestMeteorTFS1Move):
         fm_grid_1_pos = self.posture_manager._transform_from_sem_to_fm(grid1_pos)
         self.stage.moveAbs(fm_grid_1_pos).result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_1, current_grid)
+        self.assertEqual(Posture.GRID_1, current_grid)
         fm_grid_2_pos = self.posture_manager._transform_from_sem_to_fm(grid2_pos)
         self.stage.moveAbs(fm_grid_2_pos).result()
         current_grid = self.posture_manager.get_current_grid_label()
-        self.assertEqual(GRID_2, current_grid)
+        self.assertEqual(Posture.GRID_2, current_grid)
 
     def test_unknown_label_at_initialization(self):
         # Find a position that is not in any defined posture i.e. it is outside the imaging range
         arbitrary_position = {"x": 0.0, "y": 0.0, "z": 0.0e-3}
         self.stage.moveAbs(arbitrary_position).result()
         current_imaging_mode = self.posture_manager.get_current_posture_label()
-        self.assertEqual(UNKNOWN, current_imaging_mode)
+        self.assertEqual(Posture.UNKNOWN, current_imaging_mode)
         current_grid = self.posture_manager.get_current_grid_label()
         self.assertEqual(current_grid, None)
 

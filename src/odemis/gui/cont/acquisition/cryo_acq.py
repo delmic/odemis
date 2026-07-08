@@ -45,7 +45,7 @@ from odemis.acq.feature import (
     acquire_at_features,
     add_feature_info_to_filename,
 )
-from odemis.acq.move import FM_IMAGING
+from odemis.acq.move import Posture
 from odemis.acq.stream import (
     BrightfieldStream,
     FluoStream,
@@ -259,7 +259,7 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acquire.Enable(not is_acquiring)
         self._panel.txt_cryosecom_est_time.Show(not is_acquiring)
         self._panel.btn_cryosecom_change_file.Enable(not is_acquiring)
-        self._panel.btn_acquire_overview.Enable(not is_acquiring)
+        self._update_overview_acquisition_button()
         self._panel.streams_chk_list.Enable(not is_acquiring)
 
         if self.acqui_mode is guimod.AcquiMode.FLM:
@@ -766,6 +766,23 @@ class CryoAcquiController(object):
         self._on_zstack()
         self._update_acquisition_time()
 
+    @call_in_wx_main
+    def _update_overview_acquisition_button(self) -> None:
+        """
+        Update the overview acquisition button enabled state to reflect the current UI state, based on if an acquisition
+        is already taking place or the current stage posture.
+        """
+        pm = self._tab_data.main.posture_manager
+        enabled = not self._tab_data.main.is_acquiring.value and not pm.at_fib_view_fm_posture(pm.stage.position.value)
+        self._panel.btn_acquire_overview.Enable(enabled)
+        # Only show a tooltip when at FM Milling. The other option, while acquiring, is quite obvious.
+        if pm.at_fib_view_fm_posture(pm.stage.position.value):
+            self._panel.btn_acquire_overview.SetToolTip(
+                f"Overview acquisition is not available when at {Posture.FIB_VIEW_FM.value} posture"
+            )
+        else:
+            self._panel.btn_acquire_overview.SetToolTip("")
+
     def _on_zstack(self):
         """
         Takes care of preparing for the zstack by generating the zlevels,
@@ -873,14 +890,14 @@ class CryoAcquiController(object):
                     if correlation_dict.fm_pois:
                         # Update feature position according to POI in FM
                         pm = self._tab_data.main.posture_manager
-                        feature_stage_bare = feature.get_posture_position(FM_IMAGING)
+                        feature_stage_bare = feature.get_posture_position(Posture.FM_IMAGING)
                         poi = correlation_dict.fm_pois[0]
                         poi_coords = poi.coordinates.value
-                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=FM_IMAGING)
+                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=Posture.FM_IMAGING)
                         new_feature_stage_bare = pm.from_sample_stage_to_stage_position({"x":poi_coords[0],
                                                                                     "y":poi_coords[1],
-                                                                                    "z":sample_pos["z"]}, posture=FM_IMAGING)
-                        feature.posture_positions[FM_IMAGING].update(new_feature_stage_bare)
+                                                                                    "z":sample_pos["z"]}, posture=Posture.FM_IMAGING)
+                        feature.posture_positions[Posture.FM_IMAGING].update(new_feature_stage_bare)
                         feature.fm_focus_position.value = {"z": poi_coords[2]}
                     # Draw milling position in FIBSEM tab around the projected POI
                     target = correlation_dict.fib_projected_pois[0]

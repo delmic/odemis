@@ -31,7 +31,7 @@ from typing import Dict, Tuple
 
 from odemis import model, util
 from odemis.acq import move, stream
-from odemis.acq.move import FM_IMAGING, IMAGING, MILLING, POSITION_NAMES, MicroscopePostureManager
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 
 
@@ -364,8 +364,8 @@ SECOM_MODES = {
 
 # MIMAS modes have a different format: just detector + move target position
 MIMAS_MODES = {
-            'optical': ("ccd", FM_IMAGING),
-            'fib': ("se-detector", MILLING),
+            'optical': ("ccd", Posture.FM_IMAGING),
+            'fib': ("se-detector", Posture.MILLING),
             }
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
@@ -615,7 +615,7 @@ class OpticalPathManager:
             else:
                 target = detector
 
-        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
+        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.value)
 
         # Special SECOM mode: just look at the fan and be done
         if self.microscope.role in ("secom", "delphi"):
@@ -652,10 +652,10 @@ class OpticalPathManager:
                 continue
 
             # Check whether that actuator affects the target
-            targets = {target.name} | set(target.affects.value)
+            targets = {target.value} | set(target.affects.value)
             if not any(self.affects(comp.name, n) for n in targets):
                 logging.debug("Actuator %s doesn't affect %s, so not moving it",
-                              comp.name, target.name)
+                              comp.name, target.value)
                 continue
 
             mv = {}
@@ -787,7 +787,7 @@ class OpticalPathManager:
                     logging.warning("%s not an actuator, but tried to move to %s", comp_role, mv)
 
         # Now take care of the selectors based on the target detector
-        fmoves.extend(self.selectorsToPath(target.name))
+        fmoves.extend(self.selectorsToPath(target.value))
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
@@ -1150,15 +1150,15 @@ class _MimasOpticalPathManager(OpticalPathManager):
             else:
                 target = detector
 
-        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
+        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.value)
 
         mode_position = self._modes[mode][1]
 
         # Only accept moving if the stage is already within the "IMAGING" area (which means FM_IMAGING & MILLING)
         # as this means the stage will not move, but only the optical lens.
         current_pos = self._posture_manager.get_current_posture_label()
-        if current_pos not in (IMAGING, FM_IMAGING, MILLING):
-            logging.warning("Optical path cannot be changed while in position %s", POSITION_NAMES[current_pos])
+        if current_pos not in (Posture.IMAGING, Posture.FM_IMAGING, Posture.MILLING):
+            logging.warning("Optical path cannot be changed while in position %s", current_pos.name)
             return
 
         f = self._posture_manager.cryo_switch_sample_position(mode_position)

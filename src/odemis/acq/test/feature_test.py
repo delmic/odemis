@@ -30,9 +30,9 @@ from odemis.acq.feature import (
     CryoFeature,
     load_milling_tasks,
     FEATURE_READY_TO_MILL,
-    MILLING,
     REFERENCE_IMAGE_FILENAME,
 )
+from odemis.acq.move import Posture
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -80,7 +80,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
 
         self.assertEqual(feature.path, self.path)
         self.assertEqual(feature.reference_image.shape, reference_image.shape)
-        self.assertEqual(feature.get_posture_position(MILLING), stage_position)
+        self.assertEqual(feature.get_posture_position(Posture.MILLING), stage_position)
         self.assertEqual(feature.status.value, FEATURE_READY_TO_MILL)
         self.assertEqual(set(feature.milling_tasks.keys()), set(milling_tasks.keys()))
 

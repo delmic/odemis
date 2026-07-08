@@ -34,7 +34,7 @@ import odemis
 from odemis import model
 from odemis.acq import acqmng, stream
 from odemis.acq.acqmng import SettingsObserver
-from odemis.acq.move import MicroscopePostureManager, FM_IMAGING
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stitching import (
     REGISTER_IDENTITY,
     WEAVER_COLLAGE_REVERSE,
@@ -85,7 +85,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         # Initialize the stage to be at a legal SEM Imaging position
         cls.stage_bare = model.getComponent(role="stage-bare")
-        sem_pos_grid1 = cls.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]["GRID 1"]
+        sem_pos_grid1 = cls.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]["grid 1"]
         cls.stage_bare.moveAbsSync(sem_pos_grid1)
 
         # Make sure the lens is referenced
@@ -177,7 +177,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         Test moving the stage to a tile based on its index
         """
-        self.posture_manager.cryo_switch_sample_position(FM_IMAGING).result()
+        self.posture_manager.cryo_switch_sample_position(Posture.FM_IMAGING).result()
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
@@ -672,7 +672,7 @@ class TiledAcqUtilTestCase(unittest.TestCase):
 
     def test_get_tiled_bboxes(self):
         # test whole grid
-        selected_grids = ["GRID 1", "GRID 2"]
+        selected_grids = ["grid 1", "grid 2"]
         sample_centers_raw = self.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]
         sample_centers = [(v["x"], v["y"]) for v in sample_centers_raw.values()]
 

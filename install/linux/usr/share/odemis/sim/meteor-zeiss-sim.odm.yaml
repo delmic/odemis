@@ -70,7 +70,7 @@
         SEM_IMAGING_RANGE: {"x": [40.e-3, 60.e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
         FM_IMAGING_RANGE: {"x": [90.e-3, 102.5e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
         # Grid centers in SEM range
-        SAMPLE_CENTERS: {"GRID 1": {'x': 50.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}, "GRID 2": {'x': 46.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}},
+        SAMPLE_CENTERS: {"grid 1": {'x': 50.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}, "grid 2": {'x': 46.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}},
         # Calibrated values used for the SEM/FM switching behaviour
         CALIB: {"x": 50.e-3  , "y":  50.e-3  , "m":  3.3309e-3  , "z":  10.e-3  , "z_ct":  42.e-3  , "dx":  47.e-3  , "dy":  -0.1952e-3, "version":"zeiss_1"},
         # Active tilting (rx) & rotation (rm) angles positions when switching between SEM & FM, in radians.

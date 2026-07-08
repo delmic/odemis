@@ -44,9 +44,9 @@
     metadata: {
         SAMPLE_CENTERS: {
             #DISH
-            "GRID 1": {"x": 0.e-3, "y": 0.e-3, "z": 8.5e-3},
+            "grid 1": {"x": 0.e-3, "y": 0.e-3, "z": 8.5e-3},
             #GRID
-            "GRID 2": {"x": 6.25e-3, "y": 0.e-3, "z": 8.5e-3}
+            "grid 2": {"x": 6.25e-3, "y": 0.e-3, "z": 8.5e-3}
         },
         CALIB: {
             "x_0": 0.e-3,
