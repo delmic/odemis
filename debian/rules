@@ -11,8 +11,7 @@ export PYBUILD_DISABLE=test
 
 override_dh_auto_install:
 	@if [ ! -f install/linux/usr/share/odemis/datacollector.key ]; then \
-		echo "ERROR: Missing install/linux/usr/share/odemis/datacollector.key"; \
-		exit 1; \
+		echo "WARNING: Missing install/linux/usr/share/odemis/datacollector.key"; \
 	fi
 	python3 setup.py install --root debian/odemis --install-layout=deb
 

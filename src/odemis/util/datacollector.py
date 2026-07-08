@@ -278,15 +278,27 @@ class DataCollectorConfig:
     def get_upload_backend(self) -> "S3UploadBackend":
         """
         Return the configured upload backend instance.
+
+        When the environment variable TEST_DATACOLLECTION is set to "1",
+        uploads are redirected to the test bucket (S3_TEST_BUCKET) so that
+        developer and CI runs do not pollute the production dataset.
+
         :return: Configured S3UploadBackend instance.
         """
         credentials = _search_credentials()
+        if os.environ.get("TEST_DATACOLLECTION") == "1":
+            bucket = S3_TEST_BUCKET
+            logging.info(
+                "DataCollector: TEST_DATACOLLECTION=1 — using test bucket '%s'", bucket
+            )
+        else:
+            bucket = S3_BUCKET
         return S3UploadBackend(
             access_key=credentials["access_key"],
             secret_key=credentials["secret_key"],
             endpoint_url=S3_ENDPOINT_URL,
             region=S3_REGION,
-            bucket=S3_BUCKET,
+            bucket=bucket,
         )
 
 

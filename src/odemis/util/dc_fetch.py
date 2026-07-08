@@ -23,13 +23,17 @@ Retrieval helpers for downloading DataCollector ZIP samples from S3.
 """
 
 import logging
+import configparser
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import boto3
 
-from odemis.util.datacollector import DataCollectorConfig, S3UploadBackend
+from odemis.util.datacollector import S3_BUCKET, S3_ENDPOINT_URL, S3_REGION
+
+
+_DC_FETCH_CONFIG_PATH = Path.home() / ".config" / "odemis" / "dc_fetch.ini"
 
 
 def parse_since_utc(value: str) -> datetime:
@@ -155,34 +159,107 @@ def parse_host_filters(value: Optional[str]) -> List[str]:
     hosts = [part.strip().strip("/") for part in value.split(",")]
     return [host for host in hosts if host]
 
+
+def _write_dc_fetch_config(
+    config: configparser.ConfigParser,
+    config_path: Path,
+) -> None:
+    """
+    Write dc_fetch INI config to disk, creating parent directories if needed.
+
+    :param config: Parsed configuration object.
+    :param config_path: Destination INI file path.
+    :return: None.
+    """
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as fp:
+        config.write(fp)
+
+
+def _load_or_init_dc_fetch_config(config_path: Path) -> configparser.ConfigParser:
+    """
+    Load the data retrieval keys from the config path. If the file does not
+    exist, the template for the file will be created.
+
+    :param config_path: path from where the data retrieval keys exists
+    :return: Parsed configuration object.
+    :raises RuntimeError: If the config was just created or credentials are missing.
+    """
+    resolved_path = config_path or _DC_FETCH_CONFIG_PATH
+    cp = configparser.ConfigParser(interpolation=None)
+    default_endpoint = "" if S3_ENDPOINT_URL is None else str(S3_ENDPOINT_URL)
+    defaults = {
+        "access_key": "",
+        "secret_key": "",
+        "bucket": S3_BUCKET,
+        "endpoint_url": default_endpoint,
+        "region": S3_REGION,
+    }
+
+    if resolved_path.exists():
+        cp.read(str(resolved_path), encoding="utf-8")
+    else:
+        cp["s3"] = defaults
+        _write_dc_fetch_config(cp, resolved_path)
+        raise RuntimeError(
+            "dc_fetch config created at {}. Please edit [s3] access_key and "
+            "secret_key, then run the command again.".format(resolved_path)
+        )
+
+    if not cp.has_section("s3"):
+        cp["s3"] = defaults
+        _write_dc_fetch_config(cp, resolved_path)
+        raise RuntimeError(
+            "Missing [s3] section in {}. A template was written. Please set "
+            "[s3] access_key and secret_key.".format(resolved_path)
+        )
+
+    access_key = cp.get("s3", "access_key", fallback="").strip()
+    secret_key = cp.get("s3", "secret_key", fallback="").strip()
+    if not access_key or not secret_key:
+        raise RuntimeError(
+            "Missing S3 credentials in {}. Please set [s3] access_key and "
+            "secret_key.".format(resolved_path)
+        )
+
+    return cp
+
 def build_s3_client_from_config(
-    config: DataCollectorConfig,
+    config_path: Path,
     bucket_override: Optional[str] = None,
     endpoint_override: Optional[str] = None,
     region_override: Optional[str] = None,
 ) -> Tuple[Any, str]:
     """
-    Build an S3 client using datacollector credentials with optional endpoint/bucket overrides.
-    :param config: DataCollectorConfig instance.
+    Build an S3 client from dc_fetch.ini with optional endpoint/bucket overrides.
+    :param config_path: path to retrieve keys for data retrieval.
     :param bucket_override: Optional S3 bucket name override.
     :param endpoint_override: Optional S3 endpoint URL override.
     :param region_override: Optional AWS region name override.
     :return: Tuple of (Boto3 S3 client, bucket name).
     """
-    backend = config.get_upload_backend()
-    if not isinstance(backend, S3UploadBackend):
-        raise RuntimeError("Only S3 backend is supported for retrieval.")
-    endpoint_url = endpoint_override or backend._endpoint_url  # pylint: disable=protected-access
-    bucket = bucket_override or backend._bucket  # pylint: disable=protected-access
+    cp = _load_or_init_dc_fetch_config(config_path=config_path)
+    default_endpoint = "" if S3_ENDPOINT_URL is None else str(S3_ENDPOINT_URL)
+
+    endpoint_url_text = endpoint_override
+    if endpoint_url_text is None:
+        endpoint_url_text = cp.get("s3", "endpoint_url", fallback=default_endpoint).strip()
+    endpoint_url = endpoint_url_text or None
+
+    bucket = bucket_override
+    if bucket is None:
+        bucket = cp.get("s3", "bucket", fallback=S3_BUCKET).strip() or S3_BUCKET
+
+    region_name = region_override
+    if region_name is None:
+        region_name = cp.get("s3", "region", fallback=S3_REGION).strip() or S3_REGION
+
     client_kwargs: Dict[str, Any] = {
         "endpoint_url": endpoint_url,
-        "aws_access_key_id": backend._access_key,  # pylint: disable=protected-access
-        "aws_secret_access_key": backend._secret_key,  # pylint: disable=protected-access
+        "aws_access_key_id": cp.get("s3", "access_key").strip(),
+        "aws_secret_access_key": cp.get("s3", "secret_key").strip(),
+        "region_name": region_name,
     }
-    if region_override:
-        client_kwargs["region_name"] = region_override
-    else:
-        client_kwargs["region_name"] = backend._region  # pylint: disable=protected-access
     client = boto3.client("s3", **client_kwargs)
     return client, bucket
 
@@ -206,9 +283,8 @@ def fetch_samples(
     :param region_override: Optional AWS region name override.
     :return: Dictionary with counts of listed, matched, downloaded, skipped, and failed samples.
     """
-    cfg = DataCollectorConfig()
     s3_client, bucket = build_s3_client_from_config(
-        cfg,
+        config_path=_DC_FETCH_CONFIG_PATH,
         bucket_override=bucket_override,
         endpoint_override=endpoint_override,
         region_override=region_override,
@@ -227,7 +303,8 @@ def fetch_samples(
     for prefix in prefixes:
         for item in iter_s3_objects(s3_client, bucket=bucket, prefix=prefix):
             listed += 1
-            key = item.get("Key")
+            raw_key = item.get("Key")
+            key = raw_key if isinstance(raw_key, str) else None
             if not key or not should_download_key(key, event_filter, since_utc):
                 continue
             matched += 1
@@ -240,7 +317,7 @@ def fetch_samples(
                 continue
             # Write to a .part file first so a failed download never leaves a
             # truncated ZIP that would be mistaken for a complete file on retry.
-            tmp_dest = destination.with_suffix(".part")
+            tmp_dest = Path(str(destination.with_suffix(".part")))
             try:
                 s3_client.download_file(bucket, key, str(tmp_dest))
                 tmp_dest.rename(destination)

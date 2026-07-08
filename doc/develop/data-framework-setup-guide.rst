@@ -88,33 +88,6 @@ key pair, then run the following commands line by line:
    { "access_key": "<PRODUCTION_ACCESS_KEY_ID>", "secret_key": "<PRODUCTION_SECRET_ACCESS_KEY>" }
    EOF
 
-   # Restrict access: readable only by root and the odemis process user
-   sudo chmod 600 /usr/share/odemis/datacollector.key
-   sudo chown root:root /usr/share/odemis/datacollector.key
-
-
-Test / Developer Setup
-~~~~~~~~~~~~~~~~~~~~~~
-
-Use the test IAM credentials scoped to ``delmic-odemis-collect-test``. Ask a
-software engineer for the test key pair. The setup steps are identical:
-
-.. code-block:: bash
-
-   # Create the file — replace placeholder values with the real keys
-   sudo tee /usr/share/odemis/datacollector.key > /dev/null << 'EOF'
-   { "access_key": "<TEST_ACCESS_KEY_ID>", "secret_key": "<TEST_SECRET_ACCESS_KEY>" }
-   EOF
-
-   # Restrict access: readable only by root and the odemis process user
-   sudo chmod 600 /usr/share/odemis/datacollector.key
-   sudo chown root:root /usr/share/odemis/datacollector.key
-
-.. important::
-   Even with test credentials installed, the framework still targets the
-   **production** bucket by default. You must also set the environment variable
-   described in :ref:`test-bucket-mode` to redirect uploads to the test bucket.
-
 
 Setting up the Local Queue Directory (dc_queue)
 -------------------------------------------------
@@ -234,12 +207,6 @@ that calls ``record()``):
 The framework logs the following ``INFO`` message when test mode is active::
 
    DataCollector: TEST_DATACOLLECTION=1 — using test bucket 'delmic-odemis-collect-test'
-
-To run data collection within a single shell session in test mode:
-
-.. code-block:: bash
-
-   TEST_DATACOLLECTION=1 python3 <your_script_or_odemis_launcher>
 
 .. important::
    The test bucket credentials (``access_key`` / ``secret_key`` in the key

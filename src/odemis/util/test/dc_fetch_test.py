@@ -170,27 +170,44 @@ class DCFetchTest(unittest.TestCase):
             self.assertEqual(kwargs["endpoint_override"], "https://s3.eu-west-1.amazonaws.com")
             self.assertEqual(kwargs["region_override"], "eu-west-1")
 
-    def test_build_s3_client_uses_backend_region_as_default(self) -> None:
-        """build_s3_client_from_config should use backend._region when no override is given."""
-        from odemis.util.datacollector import S3UploadBackend, S3_REGION
+    def test_build_s3_client_creates_template_config_when_missing(self) -> None:
+        """First run should create dc_fetch.ini template and prompt user to fill credentials."""
+        with tempfile.TemporaryDirectory(prefix="dc_fetch_cfg_") as tmp_dir:
+            config_path = Path(tmp_dir) / "dc_fetch.ini"
+            with self.assertRaises(RuntimeError) as ctx:
+                dc_fetch.build_s3_client_from_config(config_path=config_path)
 
-        backend = S3UploadBackend(
-            access_key="key",
-            secret_key="secret",
-            region=S3_REGION,
-            bucket="test-bucket",
-        )
-        mock_config = Mock()
-        mock_config.get_upload_backend.return_value = backend
+            self.assertTrue(config_path.exists())
+            self.assertIn(str(config_path), str(ctx.exception))
+            content = config_path.read_text(encoding="utf-8")
+            self.assertIn("[s3]", content)
+            self.assertIn("access_key =", content)
+            self.assertIn("secret_key =", content)
 
-        with patch("boto3.client") as mock_boto3_client:
-            mock_boto3_client.return_value = Mock()
-            dc_fetch.build_s3_client_from_config(mock_config)
+    def test_build_s3_client_uses_dc_fetch_ini_values(self) -> None:
+        """Client builder should read credentials and defaults from dc_fetch.ini."""
+        with tempfile.TemporaryDirectory(prefix="dc_fetch_cfg_") as tmp_dir:
+            config_path = Path(tmp_dir) / "dc_fetch.ini"
+            config_path.write_text(
+                "[s3]\n"
+                "access_key = test-access\n"
+                "secret_key = test-secret\n"
+                "bucket = test-bucket\n"
+                "endpoint_url =\n"
+                "region = eu-west-1\n",
+                encoding="utf-8",
+            )
 
-        call_kwargs = mock_boto3_client.call_args.kwargs
-        self.assertEqual(call_kwargs.get("region_name"), S3_REGION)
-        # endpoint_url must be None so boto3 resolves the regional endpoint automatically
-        self.assertIsNone(call_kwargs.get("endpoint_url"))
+            with patch("boto3.client") as mock_boto3_client:
+                mock_boto3_client.return_value = Mock()
+                _client, bucket = dc_fetch.build_s3_client_from_config(config_path=config_path)
+
+            self.assertEqual(bucket, "test-bucket")
+            call_kwargs = mock_boto3_client.call_args.kwargs
+            self.assertEqual(call_kwargs.get("aws_access_key_id"), "test-access")
+            self.assertEqual(call_kwargs.get("aws_secret_access_key"), "test-secret")
+            self.assertEqual(call_kwargs.get("region_name"), "eu-west-1")
+            self.assertIsNone(call_kwargs.get("endpoint_url"))
 
 
 if __name__ == "__main__":

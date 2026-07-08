@@ -88,12 +88,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--bucket",
         dest="bucket",
-        help="Optional S3 bucket override (default from datacollector backend config).",
+        help="Optional S3 bucket override",
     )
     parser.add_argument(
         "--endpoint-url",
         dest="endpoint_url",
-        help="Optional S3 endpoint URL override (default from datacollector backend config).",
+        help="Optional S3 endpoint URL override",
     )
     parser.add_argument(
         "--region",
