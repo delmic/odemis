@@ -1982,8 +1982,13 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
 
         detvas = get_local_vas(main_data.streak_ccd, main_data.hw_settings_config)
+        # TODO: ideally, pcExposureTime and pcIntegrationCounts should be passed as hwdetvas, so that
+        # they get immediately updated when the user changes them in HPDTA. However, currently, the
+        # StreamController shows the hwdetvas before the other VAs, which prevents them from being
+        # displayed next to the photon-counting checkbox. Once StreamController is adjusted to show
+        # every VAs according to the STREAM_SETTINGS_CONFIG, this can be changed.
 
-        if main_data.streak_ccd.exposureTime.range[1] < 86400:  # 24h
+        if main_data.streak_ccd.exposureTime.range[1] < 3600:  # 1h
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
             detvas.remove("exposureTime")
 
