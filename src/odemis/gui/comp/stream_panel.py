@@ -545,6 +545,7 @@ class StreamPanel(wx.Panel):
         self._prev_drange = None
 
         self.gb_sizer = wx.GridBagSizer()
+        self.gb_sizer.SetEmptyCellSize((0, 0))
 
         # Counter that keeps track of the number of rows containing controls inside this panel
         self.num_rows = 0
