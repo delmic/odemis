@@ -214,6 +214,10 @@ class StreamController(object):
                 logging.warning("Stream has zIndex but no corresponding stream entry found.")
             self.stream.max_projection.subscribe(self._on_max_projection)
 
+        # For Temporal Spectrum streams, which has a photon counting mode, show/hide the exposure time controls
+        if hasattr(stream, "detPhotonCounting"):
+            self.stream.detPhotonCounting.subscribe(self._on_photon_counting, init=True)
+
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
@@ -544,6 +548,38 @@ class StreamController(object):
         """Disable/enable the z-index control based on the max_projection setting"""
         if self._zindex_se is not None:
             self._zindex_se.value_ctrl.Enable(not val)
+
+    @call_in_wx_main
+    def _on_photon_counting(self, active: bool):
+        """
+        For Temporal Spectrum streams which has a photon counting mode, show/hide the exposure time controls.
+        Photon-counting disabled:
+        - integrationTime/exposureTime
+        - integrationCounts
+        Photon-counting enabled:
+        - (pc)IntegrationCounts
+        - (pc)ExposureTime
+        Called when the .photonCounting VA is changed
+        :param active: True if Photon counting mode is enabled
+        """
+        pc_vas = (self.stream.det_vas.get("pcIntegrationCounts"), self.stream.det_vas.get("pcExposureTime"))
+        no_pc_vas = []
+        for va_name in ("integrationCounts", "integrationTime", "exposureTime"):
+            if hasattr(self.stream, va_name):
+                va = getattr(self.stream, va_name)
+                no_pc_vas.append(va)
+
+        for entry in self.entries:
+            if hasattr(entry, "vigilattr"):
+                if entry.vigilattr in pc_vas:
+                    entry.lbl_ctrl.Show(active)
+                    entry.value_ctrl.Show(active)
+
+                if entry.vigilattr in no_pc_vas:
+                    entry.lbl_ctrl.Show(not active)
+                    entry.value_ctrl.Show(not active)
+
+        self.stream_bar.Layout()
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

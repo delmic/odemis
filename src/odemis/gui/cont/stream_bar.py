@@ -1982,6 +1982,8 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
 
         detvas = get_local_vas(main_data.streak_ccd, main_data.hw_settings_config)
+        # TODO: use pcExposureTime and pcIntegrationCounts as hwdetvas, so that they directly update
+        # when the user changes them in HPDTA?
 
         if main_data.streak_ccd.exposureTime.range[1] < 86400:  # 24h
             # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
