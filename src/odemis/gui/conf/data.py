@@ -454,12 +454,6 @@ HW_SETTINGS_CONFIG = {
         )),
     "streak-ccd":
         OrderedDict((
-            ("exposureTime", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "scale": "log",
-                "type": "float",
-                "tooltip": "Readout camera exposure time.",
-            }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
                 "tooltip": "Readout camera: number of pixels combined.",
@@ -475,8 +469,8 @@ HW_SETTINGS_CONFIG = {
             ("streakMode", {
                 "control_type": odemis.gui.CONTROL_CHECK,
                 "label": "Streak mode",
-                "tooltip": "If checked streak camera is in operate mode and streaking.\n"
-                           "If not checked steak camera is in focus mode.",
+                "tooltip": "If checked, the streak camera is in operate mode and streaking.\n"
+                           "If not checked, the streak camera is in focus mode.",
             }),
             ("timeRange", {
                 "control_type": odemis.gui.CONTROL_COMBO,
@@ -489,7 +483,7 @@ HW_SETTINGS_CONFIG = {
                 "label": "MCP gain",
                 "tooltip": "Microchannel plate gain of the streak unit.\n"
                            "Be careful when setting the gain while operating the camera in focus-mode.\n"
-                           "Only increase the gain while the stream is playing.",
+                           "It's only possible to increase the gain while the stream is playing.",
                 "key_step": 1,
             }),
             ("shutter", {
@@ -502,6 +496,28 @@ HW_SETTINGS_CONFIG = {
             }),
             ("phaseLock", {
                 "tooltip": "Activate phase-locking of the streak-unit to the blanker signal",
+            }),
+            ("photonCounting", {
+            }),
+            ("pcIntegrationCounts", {
+                "label": "Integration counts",
+                "control_type": odemis.gui.CONTROL_INT,
+            }),
+            ("pcExposureTime", {
+                "label": "Exposure time",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+            }),
+            ("pcThreshold", {
+                # Used for calibration, only for metadata and advanced users => hide
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # After the photon-counting settings, because it's hidden if photon-counting is enabled
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "type": "float",
+                "tooltip": "Readout camera exposure time.",
             }),
         )),
     "streak-delay": {
@@ -1074,11 +1090,11 @@ STREAM_SETTINGS_CONFIG = {
                 "scale": "log",
                 "type": "float",
                 "accuracy": 2,
-                "tooltip": "Readout camera exposure time.",
+                "tooltip": "Total readout camera exposure time (including integration counts).",
             }),
             ("integrationCounts", {
-                "tooltip": "Number of images that are integrated, if requested exposure"
-                           "time exceeds the camera exposure time limit.",
+                "tooltip": "Number of images that are integrated. Automatically computed when the "
+                           "integration time exceeds the camera maximum exposure time.",
             }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
