@@ -141,18 +141,17 @@ class AnchorDriftCorrector(LeechAcquirer):
     estimate current drift.
     """
 
-    def __init__(self, scanner, detector, save_images=False):
+    def __init__(self, scanner, detector):
         """
         :param scanner: (Emitter) A component with a .dwellTime, .translation, .scale.
         :param detector: (Detector) To acquire the signal.
-        :param save_images: (bool) Whether to save drift corrector images.
         """
         super(AnchorDriftCorrector, self).__init__()
         self._scanner = scanner
         self._detector = detector
         self._dc_estimator = None
         self._period_acq = None  # number of acq left until next drift correction is performed
-        self.save_images = save_images
+        self.log_path = None
 
         # roi: the anchor region, it must be set to something different from
         #  UNDEFINED_ROI to run.
@@ -283,7 +282,7 @@ class AnchorDriftCorrector(LeechAcquirer):
                                                      self._detector,
                                                      self.roi.value,
                                                      self.dwellTime.value,
-                                                     save_images=self.save_images)
+                                                     log_path=self.log_path)
 
         # First acquisition of anchor area
         self._dc_estimator.acquire()

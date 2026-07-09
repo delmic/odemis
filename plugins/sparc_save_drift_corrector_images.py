@@ -23,8 +23,8 @@ import logging
 
 import wx
 
-from odemis.gui.plugin import Plugin
 from odemis.gui.model import TabName
+from odemis.gui.plugin import Plugin
 
 
 class SaveDriftCorrectorImgPlugin(Plugin):
@@ -45,18 +45,21 @@ class SaveDriftCorrectorImgPlugin(Plugin):
             )
             return
 
-        self._drift_corrector = sparc_acq_tab.tab_data_model.driftCorrector
+        self._sparc_acq_tab = sparc_acq_tab
         self.addMenu("Help/Development/Save drift corrector images",
                      self._save_drift_corrector_images,
                      item_kind=wx.ITEM_CHECK,
                      pass_menu_item=True)
 
+    def _on_sparc_acq_ctrl_filename(self, filename):
+        self._sparc_acq_tab.tab_data_model.driftCorrector.log_path = filename
+
     def _save_drift_corrector_images(self, menu_item):
         """Menu callback for: Help/Development/Save drift corrector images"""
         checked = menu_item.IsChecked()
         if checked:
-            self._drift_corrector.save_images = True
+            self._sparc_acq_tab._acquisition_controller.filename.subscribe(self._on_sparc_acq_ctrl_filename, init=True)
             logging.debug("Save drift corrector images checked, will acquire drift corrector images")
         else:
-            self._drift_corrector.save_images = False
+            self._sparc_acq_tab._acquisition_controller.filename.unsubscribe(self._on_sparc_acq_ctrl_filename)
             logging.debug("Save drift corrector images unchecked, will not acquire drift corrector images")
