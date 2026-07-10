@@ -294,28 +294,37 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         self.pm.cryo_switch_sample_position(LOADING).result()
         # Transform to milling posture
         self.pm.cryo_switch_sample_position(MILLING).result()
+        time.sleep(0.5)
         # Store shorthand for sample stage
         sample_stage = self.pm.sample_stage
         # Take note of sample stage pos
         initial_sample_stage_pos = sample_stage.position.value
         # Switch to SEM posture
         self.pm.cryo_switch_sample_position(SEM_IMAGING).result()
-        # Compare sample stage pos to previous pos
-        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        time.sleep(0.5)
+        # For the absolute tolerance, we pick a value that is relatively large (2 times the stage-bare stepsize),
+        # but small enough to catch any logical mistakes.
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=2e-6)
         # Switch back to milling posture
         self.pm.cryo_switch_sample_position(MILLING).result()
-        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
-        # TODO: uncomment the following section once all the sample stage problems are resolved
-        # # Now change milling angle to check stability; sample stage pos should remain the same.
-        # milling_angle = math.radians(30)
-        # self.pm.milling_angle.value = milling_angle
-        # # Switch to SEM posture
-        # self.pm.cryo_switch_sample_position(SEM_IMAGING).result()
-        # # Compare sample stage pos to previous pos
-        # testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
-        # # Switch back to milling posture
-        # self.pm.cryo_switch_sample_position(MILLING).result()
-        # testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=1e-6)
+        time.sleep(0.5)
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=2e-6)
+        # Now change milling angle to check stability; sample stage pos should remain the same.
+        milling_angle = math.radians(28)
+        self.pm.milling_angle.value = milling_angle
+        time.sleep(0.5)
+        # Make sure to move the stage to the newly set milling angle
+        self.pm.cryo_switch_sample_position(MILLING).result()
+        time.sleep(0.5)
+        # Switch to SEM posture
+        self.pm.cryo_switch_sample_position(SEM_IMAGING).result()
+        time.sleep(0.5)
+        # Increase tolerances a bit more to overcome an accumulating error due to a very fast (and inaccurate) stage.
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=4e-6)
+        # Switch back to milling posture
+        self.pm.cryo_switch_sample_position(MILLING).result()
+        time.sleep(0.5)
+        testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=4e-6)
 
     def test_fib_view_fm_movements(self):
         """Test that milling <> fib-view fm switches work as expected"""
