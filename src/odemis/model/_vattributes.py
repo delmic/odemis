@@ -1016,25 +1016,6 @@ class Enumerated(object):
     def choices(self):
         del self._choices
 
-
-class VAEnumerated(VigilantAttribute, Enumerated):
-    """
-    VigilantAttribute which contains any kind of values from a given set.
-    """
-
-    def __init__(self, value, choices, **kwargs):
-        """
-        choices (set or dict (value -> str)): all the possible value that can be
-         assigned, or if it's a dict all the values that can be assigned and a
-         user-readable description of the values.
-        """
-        Enumerated.__init__(self, choices)
-        VigilantAttribute.__init__(self, value, **kwargs)
-
-    def _check(self, value):
-        Enumerated._check(self, value)
-        VigilantAttribute._check(self, value)
-
     def clip(self, val):
         """ Clip the given value to fit within the choices.
           If the value is not within the choices, the closest choice will be used.
@@ -1067,6 +1048,25 @@ class VAEnumerated(VigilantAttribute, Enumerated):
         else:
             # if not possible to set the requested value, return the current value
             return self.value
+
+
+class VAEnumerated(VigilantAttribute, Enumerated):
+    """
+    VigilantAttribute which contains any kind of values from a given set.
+    """
+
+    def __init__(self, value, choices, **kwargs):
+        """
+        choices (set or dict (value -> str)): all the possible value that can be
+         assigned, or if it's a dict all the values that can be assigned and a
+         user-readable description of the values.
+        """
+        Enumerated.__init__(self, choices)
+        VigilantAttribute.__init__(self, value, **kwargs)
+
+    def _check(self, value):
+        Enumerated._check(self, value)
+        VigilantAttribute._check(self, value)
 
 
 class FloatContinuous(FloatVA, Continuous):
