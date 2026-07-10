@@ -112,6 +112,18 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
                     ctrl.WriteText(c)
             test.gui_loop(0.02)
 
+    def _set_focus(self, ctrl):
+        """Set focus; if focus can't be obtained (e.g. headless CI), synthesize a focus event to trigger selection."""
+        ctrl.SetFocus()
+        test.gui_loop(0.1)
+
+        if not ctrl.HasFocus():
+            # Headless fallback: directly invoke the focus handler
+            evt = wx.FocusEvent(wx.wxEVT_SET_FOCUS, ctrl.Id)
+            evt.SetEventObject(ctrl)
+            ctrl.GetEventHandler().ProcessEvent(evt)
+            test.gui_loop(0.1)
+
     def test_int_txt_ctrl(self):
 
         ctrl = IntegerTextCtrl(self.panel, value=123456789)
@@ -126,8 +138,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.assertEqual(123456789, ctrl.GetValue())
 
         # Focusing the field will select all the text in it
-        ctrl.SetFocus()
-        test.gui_loop(0.1)
+        self._set_focus(ctrl)
 
         # Type '1' — value not yet committed
         self._simulate_typing(ctrl, '1')
@@ -152,8 +163,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         test.gui_loop(0.1)
 
         # Focusing the field will select all the number in it, but not the unit (Mm)
-        ctrl.SetFocus()
-        test.gui_loop(0.1)
+        self._set_focus(ctrl)
 
         # Set the value to 1 Mm (period should not register)
         self._simulate_typing(ctrl, "0.001\r")
@@ -182,8 +192,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         test.gui_loop(0.1)
 
         # Focusing the field will select all the text in it
-        ctrl.SetFocus()
-        test.gui_loop(0.1)
+        self._set_focus(ctrl)
 
         # Set the value to 1 px (minus and period should not register)
         self._simulate_typing(ctrl, "-0.001\r")
@@ -212,8 +221,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.assertEqual(mctrl.get_value_str(), "123.456789 Mm")
 
         # Focusing the field will select all the text in it
-        mctrl.SetFocus()
-        test.gui_loop(0.1)
+        self._set_focus(mctrl)
 
         # Set the value to 0.001 Mm
         self._simulate_typing(mctrl, "0.001\r")
@@ -246,8 +254,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         wctrl = UnitFloatCtrl(self.panel, value=3.44, unit='W')
         self.add_control(wctrl, label=wctrl.__class__.__name__, flags=wx.EXPAND | wx.ALL)
 
-        wctrl.SetFocus()
-        test.gui_loop(0.1)
+        self._set_focus(wctrl)
         wctrl.SetSelection(0, 20)
 
         self._simulate_typing(wctrl, "44e-9W\r")
