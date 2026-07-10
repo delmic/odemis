@@ -62,9 +62,12 @@ class TestCryoProject(unittest.TestCase):
         """Tests that the legacy project without features works properly."""
         project_dir = self.test_dir / "legacy-no-features"
         project_dir.mkdir()
-        (project_dir / "123-overview.ome.tiff").touch()
+        overview_file = project_dir / "123-overview.ome.tiff"
+        overview_file.touch()
         project_data = load_project(project_dir)
         self.assertEqual(len(project_data["overviews"]), 1)
+        # Check that the legacy overview image is now part of the project data
+        self.assertEqual(project_data["overviews"][0][IMG_FILENAME], str(overview_file))
         # Check that the list of features is there, but empty
         self.assertEqual(len(project_data["features"]), 0)
 
@@ -96,6 +99,8 @@ class TestCryoProject(unittest.TestCase):
         project_data = load_project(project_dir)
         self.assertIn("features", project_data)
         self.assertGreater(len(project_data["features"]), 0)
+        # Check that the in-memory project data has an absolute path relative to the new project dir
+        self.assertTrue(Path(project_data["features"][0]["images"][0][IMG_FILENAME]).is_relative_to(project_dir))
         self.assertIn("overviews", project_data)
         self.assertIn(IMG_FILENAME, project_data["overviews"][0])
 
