@@ -43,7 +43,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 ODEMISCLI_CMD = [sys.executable, "-m", "odemis.cli.main"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "sim/secom2-sim.odm.yaml"
 
 class TestWithoutBackend(unittest.TestCase):
     # all the test cases which don't need a backend running
@@ -116,16 +116,11 @@ class TestWithBackend(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SECOM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SECOM_CONFIG)
 
+    @classmethod
+    def tearDownClass(cls):
+        testing.stop_backend()
 
     def setUp(self):
         # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
@@ -135,18 +130,10 @@ class TestWithBackend(unittest.TestCase):
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
         )
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
         # reset the logging (because otherwise it accumulates)
         if logging.root:
             del logging.root.handlers[:]
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
 
     def tearDown(self):
         # Delete files created by tests
@@ -168,7 +155,7 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
         output = out.getvalue()
-        self.assertTrue(b"Light Engine" in output)
+        self.assertTrue(b"Light Source" in output)
         self.assertTrue(b"Camera" in output)
 
     def test_list_no_dash(self):
@@ -184,7 +171,7 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
         output = out.getvalue()
-        self.assertTrue(b"Light Engine" in output)
+        self.assertTrue(b"Light Source" in output)
         self.assertTrue(b"Camera" in output)
 
     def test_check(self):
@@ -201,7 +188,7 @@ class TestWithBackend(unittest.TestCase):
             out = BytesIO()
             sys.stdout = out
 
-            cmdline = ["cli", "--list-prop", "Light Engine"]
+            cmdline = ["cli", "--list-prop", "light"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -215,7 +202,7 @@ class TestWithBackend(unittest.TestCase):
     def test_encoding(self):
         """Check no problem happens due to unicode encoding to ascii"""
         f = open("test.txt", "w")
-        cmd = ODEMISCLI_CMD + ["--list-prop", "Light Engine"]
+        cmd = ODEMISCLI_CMD + ["--list-prop", "light"]
         ret = subprocess.check_call(cmd, stdout=f)
         self.assertEqual(ret, 0, "trying to run %s" % cmd)
         f.close()
@@ -231,7 +218,7 @@ class TestWithBackend(unittest.TestCase):
             out = BytesIO()
             sys.stdout = out
 
-            cmdline = ["cli", "--list-prop", "Light Engine"]
+            cmdline = ["cli", "--list-prop", "light"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -249,7 +236,7 @@ class TestWithBackend(unittest.TestCase):
             out = BytesIO()
             sys.stdout = out
 
-            cmdline = ["cli", "--set-attr", "Light Engine", "power", str([0.0 for _ in power])]
+            cmdline = ["cli", "--set-attr", "light", "power", str([0.0 for _ in power])]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -261,7 +248,7 @@ class TestWithBackend(unittest.TestCase):
             out = BytesIO()
             sys.stdout = out
 
-            cmdline = ["cli", "--list-prop", "Light Engine"]
+            cmdline = ["cli", "--list-prop", "light"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -279,7 +266,12 @@ class TestWithBackend(unittest.TestCase):
             out = BytesIO()
             sys.stdout = out
 
-            cmdline = ["cli", "--set-attr", "Sample Stage", "speed", "x: 0.5, y: 0.2"]
+            # We use the "dependencies" attribute, which is a bit odd VA, as it pretty much accepts
+            # anything.
+            cmdline = ["cli", "--set-attr", "Sample Stage", "dependencies", "{x: 0.5, y: 0.2}"]
+            ret = main.main(cmdline)
+            # Reset it to empty dict
+            cmdline = ["cli", "--set-attr", "Sample Stage", "dependencies", "{}"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -325,8 +317,6 @@ class TestWithBackend(unittest.TestCase):
         self.assertNotEqual(ret, 0, "trying to run '%s' should fail" % cmdline)
 
     def test_reference(self):
-        # On this simulated hardware, no component supports referencing, so
-        # just check that referencing correctly reports this
         try:
             # change the stdout
             out = BytesIO()
@@ -336,7 +326,31 @@ class TestWithBackend(unittest.TestCase):
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
-        self.assertNotEqual(ret, 0, "Referencing should have failed with '%s'" % cmdline)
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+    def test_reference_multi_axes(self):
+        # Check that --reference accepts multiple axes in a single invocation.
+        try:
+            out = BytesIO()
+            sys.stdout = out
+
+            cmdline = ["cli", "--reference", "Sample Stage", "x", "y"]
+            ret = main.main(cmdline)
+        except SystemExit as exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+    def test_reference_no_axis(self):
+        # --reference with only a component name and no axis should fail
+        try:
+            out = BytesIO()
+            sys.stdout = out
+
+            cmdline = ["cli", "--reference", "Sample Stage"]
+            ret = main.main(cmdline)
+        except SystemExit as exc:
+            ret = exc.code
+        self.assertNotEqual(ret, 0, "Referencing with no axis should have failed with '%s'" % cmdline)
 
     def test_stop(self):
         try:
