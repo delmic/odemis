@@ -32,6 +32,7 @@ from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
+from odemis.util.datacollector import DataCollector
 import sys
 import threading
 import traceback
@@ -74,6 +75,7 @@ class OdemisGUIApp(wx.App):
         self._snapshot_controller = None
         self._temperature_controller = None
         self._menu_controller = None
+        self._data_collector = DataCollector()
         self.plugins = []  # List of instances of plugin.Plugins
 
         # User input devices
@@ -348,7 +350,7 @@ class OdemisGUIApp(wx.App):
             self.main_data.level.subscribe(self.on_level_va, init=True)
             log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
-            self._menu_controller = MenuController(self.main_data, self.main_frame)
+            self._menu_controller = MenuController(self.main_data, self.main_frame, self._data_collector)
             # Menu events
             self.main_frame.Bind(wx.EVT_MENU, self.on_close_window, id=self.main_frame.menu_item_quit.GetId())
 
@@ -379,6 +381,7 @@ class OdemisGUIApp(wx.App):
             # Due to a bug in wxPython, sometimes the .Maximize() at the beginning of the function
             # has no effect. So we call it after the Show() to be sure it works.
             wx.CallAfter(self.main_frame.Maximize)
+
         except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not

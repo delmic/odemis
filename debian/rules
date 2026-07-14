@@ -10,6 +10,9 @@ export PYBUILD_DISABLE=test
 	dh $@ --with python3 --with sphinxdoc --buildsystem=pybuild
 
 override_dh_auto_install:
+	@if [ ! -f install/linux/usr/share/odemis/datacollector.key ]; then \
+		echo "WARNING: Missing install/linux/usr/share/odemis/datacollector.key"; \
+	fi
 	python3 setup.py install --root debian/odemis --install-layout=deb
 
 override_dh_installdocs:

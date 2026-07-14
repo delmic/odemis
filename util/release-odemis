@@ -32,6 +32,12 @@ if [ ! -d ~/development/pkg-native/odemis ]; then
      git clone https://github.com/delmic/odemis.git
 fi
 
+# Ensure datacollector key is present in the build tree before any release action.
+if [ ! -f ~/development/pkg-native/odemis/install/linux/usr/share/odemis/datacollector.key ]; then
+    echo "Missing required file: ~/development/pkg-native/odemis/install/linux/usr/share/odemis/datacollector.key"
+    exit 1
+fi
+
 cd ~/development/odemis
 
 if ! git remote get-url upstream > /dev/null ; then

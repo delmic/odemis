@@ -70,6 +70,7 @@ magic.odm.yaml
 # This directory contains the database from fluorophores.org
 # To fill it, run ./util/getfluodb.py
 /install/linux/usr/share/odemis/fluodb/
+/install/linux/usr/share/odemis/datacollector.key
 
 # External drivers
 /src/odemis/driver/hitachi.py

@@ -27,7 +27,9 @@ from odemis.gui.comp import popup
 import odemis.gui.conf
 from odemis.gui.model import TabName, CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
+from odemis.gui.model.main_gui_data import MainGUIData
 from odemis.gui.util import call_in_wx_main
+from odemis.util.datacollector import DataCollector
 from odemis.util import driver
 import os
 import subprocess
@@ -42,14 +44,17 @@ class MenuController(object):
     tab controller.
     """
 
-    def __init__(self, main_data, main_frame):
-        """ Binds the menu actions.
+    def __init__(self, main_data: MainGUIData, main_frame: wx.Frame, data_collector: DataCollector):
+        """
+        Binds the menu actions.
 
-        main_data (MainGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the main frame of the GUI
+        :param main_data: The representation of the microscope GUI.
+        :param main_frame: The main frame of the GUI.
+        :param data_collector: The data collector, used for the data sharing consent menu item.
         """
         self._main_data = main_data
         self._main_frame = main_frame
+        self._data_collector = data_collector
 
         # /File
         # /File/Open...
@@ -153,6 +158,9 @@ class MenuController(object):
 
         # /Help/About
         main_frame.Bind(wx.EVT_MENU, self._on_about, id=main_frame.menu_item_about.GetId())
+        self._consent_menu_item = self._append_data_sharing_menu_item(main_frame)
+        if self._consent_menu_item is not None:
+            main_frame.Bind(wx.EVT_MENU, self._on_toggle_data_sharing, id=self._consent_menu_item.GetId())
 
         # add a toggle for correlation tab in viewer mode
         if main_data.is_viewer:
@@ -162,6 +170,56 @@ class MenuController(object):
             menu = main_frame.menu_item_show_correlation.GetMenu()
             menu.Remove(main_frame.menu_item_show_correlation)
             main_frame.menu_item_show_correlation.Destroy()
+
+    def _append_data_sharing_menu_item(self, main_frame: wx.Frame) -> wx.MenuItem:
+        """
+        Append and initialize Help menu checkbox for data sharing consent.
+        :param main_frame: The main application frame.
+        :return: The created menu item, or None if the Help menu is not available.
+        """
+        help_menu = main_frame.menu_item_about.GetMenu()
+        if help_menu is None:
+            return None
+        help_menu.AppendSeparator()
+        item = help_menu.AppendCheckItem(wx.ID_ANY, "Share data with Delmic")
+        item.Check(self._data_collector.get_consent() is True)
+        return item
+
+    @call_in_wx_main
+    def _on_toggle_data_sharing(self, evt):
+        """Show consent dialog when the data-sharing menu item is clicked."""
+        try:
+            message = ("Allow Odemis to send selected acquisition data to Delmic, "
+            "including example images and interaction logs (e.g., alignment steps, point-of-interest placements). "
+            "A random sample (eg, 10%) of workflow data may be included. This data is used solely to improve "
+            "Odemis algorithms and user experience. Data is stored securely on EU servers, accessible "
+            "only to designated Delmic analysts, and never shared with third parties.\n\n"
+            "By opting in, you confirm you have the authority to make this decision for your institution"
+            " and that sharing this data is permitted under your institution's data policies.\n\n"
+            "\"Enable for one day\" enables sharing for 24 hours with 100% collection, "
+            "then automatically disables it.")
+
+            dlg = wx.MessageDialog(
+                self._main_frame,
+                message=message,
+                caption="Share data with Delmic",
+                style=wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION
+            )
+            dlg.SetYesNoCancelLabels(yes="Opt in", no="Opt out", cancel="Enable for one day")
+            response = dlg.ShowModal()
+            dlg.Destroy()
+
+            if response == wx.ID_YES:
+                self._data_collector.set_consent(True)
+            elif response == wx.ID_NO:
+                self._data_collector.set_consent(False)
+            elif response == wx.ID_CANCEL:
+                self._data_collector.set_temporary_consent(days=1)
+            # Sync the Help menu checkbox to reflect the persisted choice.
+            if self._consent_menu_item is not None:
+                self._consent_menu_item.Check(self._data_collector.get_consent() is True)
+        except Exception:
+            logging.exception("Failed to run data-collection consent prompt.")
 
     def _on_update(self, evt):
         import odemis.gui.util.updater as updater
