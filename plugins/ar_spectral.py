@@ -179,7 +179,7 @@ class SpectralARScanStream(stream.Stream):
 
         # Create a "Future", which is an object that can be used to follow the
         # task completion while it's going on, and get the result.
-        f = model.ProgressiveFuture(total_time=self.estimateAcquisitionTime())
+        f = model.ProgressiveFuture(remaining_time=self.estimateAcquisitionTime())
         f.task_canceller = self._cancelAcquisition
         f._acq_state = RUNNING
         f._acq_lock = threading.Lock()

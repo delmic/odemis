@@ -145,7 +145,7 @@ def DelphiCalibration(main_data):
     returns (ProgressiveFuture): Progress DoDelphiCalibration
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    f = model.ProgressiveFuture(total_time=estimateDelphiCalibration())
+    f = model.ProgressiveFuture(remaining_time=estimateDelphiCalibration())
     f._task_state = RUNNING
 
     # Task to run
@@ -258,7 +258,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(total_time=future.elapsed_time + 19 * 60)
+        future.set_progress(remaining_time=19 * 60)
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -280,7 +280,7 @@ def _DoDelphiCalibration(future, main_data):
         main_data.ebeam_focus.moveAbsSync({"z": SEM_KNOWN_FOCUS})
 
         # Update progress of the future
-        future.set_progress(total_time=future.elapsed_time + 17.5 * 60)
+        future.set_progress(remaining_time=17.5 * 60)
 
         # Detect the holes/markers of the sample holder
         try:
@@ -301,7 +301,7 @@ def _DoDelphiCalibration(future, main_data):
             raise IOError("Failed to find sample holder holes (%s)." % (ex,))
 
         # Update progress of the future
-        future.set_progress(total_time=future.elapsed_time + 13.5 * 60)
+        future.set_progress(remaining_time=13.5 * 60)
         logger.info("Calculating shift parameters...")
 
         # Resetting shift parameters, to not take them into account during calib
@@ -359,7 +359,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(total_time=future.elapsed_time + 8.5 * 60)
+        future.set_progress(remaining_time=8.5 * 60)
         logger.info("Moving SEM stage to expected offset %s...", position)
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
@@ -410,7 +410,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(total_time=future.elapsed_time + 5 * 60)
+        future.set_progress(remaining_time=5 * 60)
         logger.info("Measuring rotation and scaling...")
         try:
             future.running_subf = RotationAndScaling(main_data.ccd, main_data.bsd,
@@ -464,7 +464,7 @@ def _DoDelphiCalibration(future, main_data):
             logger.warning("Failed to find a spot, twin stage calibration might have failed")
 
         # Update progress of the future
-        future.set_progress(total_time=future.elapsed_time + 2.5 * 60)
+        future.set_progress(remaining_time=2.5 * 60)
 
         # Proper hfw for spot grid to be within the ccd fov
         main_data.ebeam.horizontalFoV.value = 80e-06
@@ -609,7 +609,7 @@ def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus, logpath=No
     returns (ProgressiveFuture): Progress DoAlignAndOffset
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    f = model.ProgressiveFuture(total_time=estimateOffsetTime(ccd.exposureTime.value))
+    f = model.ProgressiveFuture(remaining_time=estimateOffsetTime(ccd.exposureTime.value))
     f._task_state = RUNNING
 
     # Task to run
@@ -711,7 +711,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
                 raise IOError("Failed to align stages and calculate offset.")
 
         # Almost done
-        future.set_progress(total_time=future.elapsed_time + 0.1)
+        future.set_progress(remaining_time=0.1)
         sem_pos = sem_stage.position.value
 
         # Since the optical stage is at its origin, the final SEM stage position
@@ -779,7 +779,7 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
     returns (ProgressiveFuture): Progress DoRotationAndScaling
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    f = model.ProgressiveFuture(total_time=estimateRotationAndScalingTime(ccd.exposureTime.value))
+    f = model.ProgressiveFuture(remaining_time=estimateRotationAndScalingTime(ccd.exposureTime.value))
     f._task_state = RUNNING
 
     # Task to run
@@ -978,7 +978,7 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, manual=False,
     """
     # Create ProgressiveFuture and update its state to RUNNING
     et = 6e-06 * numpy.prod(escan.resolution.range[1])
-    f = model.ProgressiveFuture(total_time=estimateHoleDetectionTime(et))
+    f = model.ProgressiveFuture(remaining_time=estimateHoleDetectionTime(et))
     f._task_state = RUNNING
 
     # Task to run
@@ -1282,7 +1282,7 @@ def LensAlignment(navcam, sem_stage, logpath=None):
     returns (ProgressiveFuture): Progress DoLensAlignment
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    f = model.ProgressiveFuture(total_time=estimateLensAlignmentTime())
+    f = model.ProgressiveFuture(remaining_time=estimateLensAlignmentTime())
     f._task_state = RUNNING
 
     # Task to run
@@ -1348,7 +1348,7 @@ def HFWShiftFactor(detector, escan, logpath=None):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
-    f = model.ProgressiveFuture(total_time=estimateHFWShiftFactorTime(et))
+    f = model.ProgressiveFuture(remaining_time=estimateHFWShiftFactorTime(et))
     f._task_state = RUNNING
 
     # Task to run
@@ -1504,7 +1504,7 @@ def ResolutionShiftFactor(detector, escan, logpath=None):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
-    f = model.ProgressiveFuture(total_time=estimateResolutionShiftFactorTime(et))
+    f = model.ProgressiveFuture(remaining_time=estimateResolutionShiftFactorTime(et))
     f._task_state = RUNNING
 
     # Task to run
@@ -1670,7 +1670,7 @@ def ScaleShiftFactor(detector, escan, logpath=None):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     et = 7.5e-07 * numpy.prod(SPOT_RES)
-    f = model.ProgressiveFuture(total_time=4 * et + 1)
+    f = model.ProgressiveFuture(remaining_time=4 * et + 1)
     f._task_state = RUNNING
 
     # Task to run

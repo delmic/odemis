@@ -135,7 +135,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         before_start_t = time.time()
         f = fastem.acquireTiledArea(self.stream, self.stage, scintillator5_area)
         time.sleep(1)
-        elapsed_t, total_t = f.get_progress()
+        elapsed_t, remaining_t = f.get_progress()
         self.assertGreater(elapsed_t, 0)
         # don't use for DEBUG example
         self.assertGreater(total_t - elapsed_t, 10)  # Should report still more than 10s

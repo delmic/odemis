@@ -110,9 +110,9 @@ class TestDriftStream(unittest.TestCase):
     def on_done(self, future):
         self.done += 1
 
-    def on_progress_update(self, future, elapsed_time, total_time):
+    def on_progress_update(self, future, elapsed_time, remaining_time):
         self.elapsed = elapsed_time
-        self.total = total_time
+        self.remaining = remaining_time
         self.updates += 1
 
 if __name__ == "__main__":

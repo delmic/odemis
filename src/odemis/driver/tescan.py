@@ -1319,7 +1319,7 @@ class Detector(model.Detector):
     @isasync
     def applyAutoContrastBrightness(self):
         # Create ProgressiveFuture and update its state to RUNNING
-        f = model.ProgressiveFuture(total_time=5)  # rough time estimation
+        f = model.ProgressiveFuture(remaining_time=5)  # rough time estimation
 
         return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
 

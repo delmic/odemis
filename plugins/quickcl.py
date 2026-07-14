@@ -515,7 +515,7 @@ class QuickCLPlugin(Plugin):
         future._cur_f = InstantaneousFuture()
         future.task_canceller = self._acq_canceller
         future.set_running_or_notify_cancel()  # Indicate the work is starting now
-        future.set_progress(total_time=dur)
+        future.set_progress(remaining_time=dur)
         dlg.showProgress(future)
 
         future._cur_f = acqmng.acquire(ss, self.main_app.main_data.settings_obs)

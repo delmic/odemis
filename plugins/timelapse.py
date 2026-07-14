@@ -411,7 +411,7 @@ class TimelapsePlugin(Plugin):
         if last_ss:
             logging.debug("Acquiring last acquisition, with all the streams")
             ss = [st] + last_ss
-            f.set_progress(total_time=acqmng.estimateTime(ss))
+            f.set_progress(remaining_time=acqmng.estimateTime(ss))
             das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
             self._save_data(fn_pat % (nb,), das)
 
@@ -449,7 +449,7 @@ class TimelapsePlugin(Plugin):
             # Update progress bar
             left = nb - i
             dur = dur_one * left + extra_dur
-            f.set_progress(total_time=f.elapsed_time + dur)
+            f.set_progress(remaining_time=dur)
 
         st._old_shouldUpdateImage = st._shouldUpdateImage
         st._shouldUpdateImage = store_raw_data
@@ -492,7 +492,7 @@ class TimelapsePlugin(Plugin):
                 dur += acqmng.estimateTime(ss) - sacqt
 
             startt = time.time()
-            f.set_progress(total_time=f.elapsed_time + dur)
+            f.set_progress(remaining_time=dur)
             das, e = acqmng.acquire(ss, self.main_app.main_data.settings_obs).result()
             if f.cancelled():
                 dlg.resumeSettings()

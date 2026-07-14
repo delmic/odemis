@@ -226,7 +226,7 @@ class PeakFitter(object):
         returns (model.ProgressiveFuture):  Progress of DoFit
         """
         # Create ProgressiveFuture and update its state to RUNNING
-        f = model.ProgressiveFuture(total_time=self.estimateFitTime(spectrum))
+        f = model.ProgressiveFuture(remaining_time=self.estimateFitTime(spectrum))
         f._fit_state = RUNNING
         f._fit_lock = threading.Lock()
         f.task_canceller = self._CancelFit

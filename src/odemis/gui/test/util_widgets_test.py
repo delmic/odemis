@@ -104,7 +104,7 @@ class ConnectorTestCase(test.GuiTestCase):
         test.gui_loop(0.2)
 
         # Create the ProgressiveFuture
-        pf = model.ProgressiveFuture(total_time=60)  # one min
+        pf = model.ProgressiveFuture(remaining_time=60)  # one min
         # future.task_canceller = self.cancel_task
 
         # Create the connector
@@ -122,7 +122,7 @@ class ConnectorTestCase(test.GuiTestCase):
         self.assertGreater(r2, r1)
 
         # Make it look a lot longer => should update backwards
-        pf.set_progress(total_time=120)
+        pf.set_progress(remaining_time=120)
         test.gui_loop(0.3)  # need to wait at least 0.25 s
         r3 = gauge.Value / gauge.Range
         self.assertLess(r3, r2)
@@ -133,7 +133,7 @@ class ConnectorTestCase(test.GuiTestCase):
         self.assertGreater(r4, r3)
 
         # Make it look a little longer => should not update
-        pf.set_progress(total_time=121)
+        pf.set_progress(remaining_time=121)
         test.gui_loop(0.3)  # need to wait at least 0.25 s
         r5 = gauge.Value / gauge.Range
         self.assertEqual(r5, r4)

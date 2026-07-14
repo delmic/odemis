@@ -251,7 +251,7 @@ class SRAcqPlugin(Plugin):
         self._startt = time.time()
         self._last_display = self._startt
 
-        f = model.ProgressiveFuture(total_time=self.expectedDuration.value)
+        f = model.ProgressiveFuture(remaining_time=self.expectedDuration.value)
         f.task_canceller = lambda l: True  # To allow cancelling while it's running
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         self._future = f
@@ -274,7 +274,7 @@ class SRAcqPlugin(Plugin):
                 # Update the progress bar
                 left = nb - self._n
                 dur = self.exposureTime.value * left + 0.1
-                f.set_progress(total_time=f.elapsed_time + dur)
+                f.set_progress(remaining_time=dur)
 
                 # Update the image
                 try:
@@ -287,7 +287,7 @@ class SRAcqPlugin(Plugin):
 
             logging.info("Waiting for all data to be saved")
             dur = self._q.qsize() * 0.1  # very pessimistic
-            f.set_progress(total_time=f.elapsed_time + dur)
+            f.set_progress(remaining_time=dur)
             self._q.join()
 
             if f.cancelled():

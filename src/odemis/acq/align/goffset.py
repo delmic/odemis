@@ -348,7 +348,7 @@ def sparc_auto_grating_offset(spgr: model.Actuator,
 
     est_time = max_it * 0.5  # rough estimated time
 
-    f = model.ProgressiveFuture(total_time=est_time)
+    f = model.ProgressiveFuture(remaining_time=est_time)
 
     f._task_lock = threading.Lock()
     f._task_state = RUNNING
@@ -501,7 +501,7 @@ def _do_sparc_auto_grating_offset(future: model.ProgressiveFuture,
                 logging.warning("Hardware offset limit reached: %s. Keeping max allowed move.", ValueError)
                 break
 
-            future.set_progress(total_time=future.elapsed_time + (max_it - i - 1) * 0.5)
+            future.set_progress(remaining_time=(max_it - i - 1) * 0.5)
 
         logging.warning("SparcAutoGratingOffset did not converge within max iterations")
         return False
@@ -586,7 +586,7 @@ def auto_align_grating_detector_offsets(spectrograph: model.Actuator,
     n_gratings = len(spectrograph.axes["grating"].choices)
     n_detectors = len(detectors)
     a_time = _total_alignment_time(n_gratings, n_detectors) + 10 # estimated time to turn on light and close slit
-    f = model.ProgressiveFuture(total_time=a_time)
+    f = model.ProgressiveFuture(remaining_time=a_time)
     f.task_canceller = _cancel_auto_align_grating_detector_offsets
 
     f._task_lock = threading.Lock()
@@ -698,7 +698,7 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             duration_until_now = time.time() - start_time
             steps_left = total_steps - current_step
             time_left = (duration_until_now / current_step) * steps_left
-            future.set_progress(total_time=future.elapsed_time + time_left)
+            future.set_progress(remaining_time=time_left)
 
             logging.info("Finished alignment | Detector: %s | Grating: %s", d.name, g0)
 
@@ -721,11 +721,12 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
             duration_until_now = time.time() - start_time
             steps_left = total_steps - current_step
             time_left = (duration_until_now / current_step) * steps_left
-            future.set_progress(total_time=future.elapsed_time + time_left)
+            future.set_progress(remaining_time=time_left)
 
             logging.info("Finished alignment | Detector: %s | Grating: %s", first_detector.name, g)
 
-        future.set_progress(total_time=future.elapsed_time)
+        # Alignment is done, therefore set remaining time to 0
+        future.set_progress(remaining_time=0.0)
         return results
 
     except CancelledError:

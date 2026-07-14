@@ -282,15 +282,11 @@ class TestProgressiveMove(unittest.TestCase):
         prog_move = ProgressiveMove(self.spec_switch, new_pos)
 
         # request the progress and calculate the elapsed time
-        prog_1_start, prog_1_end = prog_move.get_progress()
-        now = time.time()
-        elapsed_time_1 = now - prog_1_start
+        elapsed_time_1, remaining_1 = prog_move.get_progress()
 
         time.sleep(2)
         # after waiting a few seconds request the progress and calculate the elapsed time again
-        prog_2_start, prog_2_end = prog_move.get_progress()
-        now = time.time()
-        elapsed_time_2 = now - prog_2_start
+        elapsed_time_2, remaining_2 = prog_move.get_progress()
 
         # check if the elapsed time of the second check is greater than the first check
         self.assertGreater(elapsed_time_2, elapsed_time_1)
@@ -304,9 +300,9 @@ class TestProgressiveMove(unittest.TestCase):
         # check if the end position is the same as the FAV_POS_ACTIVE position
         testing.assert_pos_almost_equal(self.spec_switch.position.value, new_pos)
 
-        prog_3_start, prog_3_end = prog_move.get_progress()
-        # check if the elapsed end time is lesser than the actual time
-        self.assertLess(prog_3_end, time.time())
+        elapsed_3, remaining_3 = prog_move.get_progress()
+        # check if remaining time is 0 when done
+        self.assertAlmostEqual(remaining_3, 0.0, delta=0.1)
 
     def test_progressive_move_cancel(self):
         # first move the axis we want to use to the 0.0 position

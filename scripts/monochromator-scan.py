@@ -97,7 +97,7 @@ class MonochromatorScanStream(stream.Stream):
         f = self.prepare()
         f.result()
 
-        f = model.ProgressiveFuture(total_time=self.estimateAcquisitionTime())
+        f = model.ProgressiveFuture(remaining_time=self.estimateAcquisitionTime())
         f.task_canceller = self._cancelAcquisition
         f._acq_state = RUNNING
         f._acq_lock = threading.Lock()
@@ -147,7 +147,7 @@ class MonochromatorScanStream(stream.Stream):
         try:
             for i in range(res):
                 left = (res - i) * (dt + 0.05)
-                future.set_progress(total_time=future.elapsed_time + left)
+                future.set_progress(remaining_time=left)
 
                 cwl = wls + i * wli  # requested value
                 self._sgr.moveAbs({"wavelength": cwl}).result()

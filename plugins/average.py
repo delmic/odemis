@@ -192,7 +192,7 @@ class AveragePlugin(Plugin):
         else:
             opmf = None
 
-        f = model.ProgressiveFuture(total_time=exp_duration)
+        f = model.ProgressiveFuture(remaining_time=exp_duration)
         f.task_canceller = lambda l: True  # To allow cancelling while it's running
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(f)
@@ -205,7 +205,7 @@ class AveragePlugin(Plugin):
                 # Update the progress bar
                 left = nb - i
                 dur = frt * left + 0.1
-                f.set_progress(total_time=f.elapsed_time + dur)
+                f.set_progress(remaining_time=dur)
 
                 # Start acquisition
                 dets[0].softwareTrigger.notify()

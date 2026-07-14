@@ -97,7 +97,7 @@ class SimplePlugin(Plugin):
         d = []
         for i in range(10):
             left = (10 - i) * exp
-            f.set_progress(total_time=f.elapsed_time + left)
+            f.set_progress(remaining_time=left)
             # d.append(ccd.data.get())
             time.sleep(exp)
             if f.cancelled():

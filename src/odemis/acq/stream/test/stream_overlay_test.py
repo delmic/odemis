@@ -122,7 +122,7 @@ class TestOverlayStream(unittest.TestCase):
 
         # prepare callbacks
         self.elapsed = None
-        self.total = None
+        self.remaining = None
         self.updates = 0
         self.done = 0
 
@@ -149,7 +149,7 @@ class TestOverlayStream(unittest.TestCase):
         # self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
-        self.assertAlmostEqual(self.elapsed, self.total, delta=0.1)
+        self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(not f.cancelled())
 
         # make sure the callback had time to be called
@@ -160,9 +160,9 @@ class TestOverlayStream(unittest.TestCase):
         logging.debug("Acquisition done received")
         self.done += 1
 
-    def on_progress_update(self, future, elapsed_time, total_time):
+    def on_progress_update(self, future, elapsed_time, remaining_time):
         self.elapsed = elapsed_time
-        self.total = total_time
+        self.remaining = remaining_time
         self.updates += 1
 
 if __name__ == "__main__":

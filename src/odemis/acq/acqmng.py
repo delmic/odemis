@@ -103,7 +103,7 @@ def acquireZStack(streams, zlevels, settings_obs=None):
 
     # set the progress of the future
     total_duration = acqui_task.estimate_total_duration()
-    future.set_progress(total_time=future.elapsed_time + total_duration)
+    future.set_progress(remaining_time=total_duration)
 
     # assign the acquisition task to the future
     executeAsyncTask(future, acqui_task.run)
@@ -197,7 +197,7 @@ class ZStackAcquisitionTask(object):
                     acquired_data.append(data[0])
                 # update the remaining time
                 remaining_t -= stream.estimateAcquisitionTime()
-                self._main_future.set_progress(total_time=self._main_future.elapsed_time + remaining_t)
+                self._main_future.set_progress(remaining_time=remaining_t)
 
             else:
                 # for each stream, iterate through zlevels
@@ -213,7 +213,7 @@ class ZStackAcquisitionTask(object):
                     # subtract one zstep time
                     if i != len(self._zlevels[stream]) - 1:
                         remaining_t -= self._zstep_duration[stream]
-                        self._main_future.set_progress(total_time=self._main_future.elapsed_time + remaining_t)
+                        self._main_future.set_progress(remaining_time=remaining_t)
 
                     try:
                         # acquire this single stream, and get the data
@@ -244,7 +244,7 @@ class ZStackAcquisitionTask(object):
                         zstack.append(data[0])
                     # update the remaining time
                     remaining_t -= stream.estimateAcquisitionTime()
-                    self._main_future.set_progress(total_time=self._main_future.elapsed_time + remaining_t)
+                    self._main_future.set_progress(remaining_time=remaining_t)
 
                 zcube = assembleZCube(zstack, self._zlevels[stream])
                 acquired_data.append(zcube)
@@ -514,7 +514,7 @@ class AcquisitionTask(object):
         expected_time = sum(self._streamTimes.values())
         # no need to set the start time of the future: it's automatically done
         # when setting its state to running.
-        self._future.set_progress(total_time=self._future.elapsed_time + expected_time)
+        self._future.set_progress(remaining_time=expected_time)
 
         logging.info("Starting acquisition of %s streams, with expected duration of %f s",
                      len(self._streams), expected_time)
@@ -580,7 +580,7 @@ class AcquisitionTask(object):
 
                 # update the time left
                 expected_time -= self._streamTimes[s]
-                self._future.set_progress(total_time=self._future.elapsed_time + expected_time)
+                self._future.set_progress(remaining_time=expected_time)
 
             # Tell the leeches it's over. Note: we don't do it in case of
             # (partial) error.
@@ -657,7 +657,7 @@ class AcquisitionTask(object):
                 if model.MD_DESCRIPTION not in d.metadata:
                     d.metadata[model.MD_DESCRIPTION] = s.name.value
 
-    def _on_progress_update(self, f, elapsed_time, estimated_total_time):
+    def _on_progress_update(self, f, elapsed_time, remaining_time):
         """
         Called when the current future has made a progress (and so it should
         provide a better time estimation).
@@ -674,9 +674,8 @@ class AcquisitionTask(object):
                             f, self._current_future)
             return
 
-        remaining = estimated_total_time - elapsed_time
-        total_remaining = remaining + sum(self._streamTimes[s] for s in self._streams_left)
-        self._future.set_progress(total_time=self._future.elapsed_time + total_remaining)
+        total_remaining = remaining_time + sum(self._streamTimes[s] for s in self._streams_left)
+        self._future.set_progress(remaining_time=total_remaining)
 
     def cancel(self, future):
         """

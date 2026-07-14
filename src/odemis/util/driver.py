@@ -311,7 +311,7 @@ class ProgressiveMove(model.ProgressiveFuture):
             move_time = guessActuatorMoveDuration(comp, ax, abs(current_pos[ax] - pos[ax]))
             axes_total_move_time = move_time if move_time > axes_total_move_time else axes_total_move_time
 
-        super().__init__(total_time=axes_total_move_time)
+        super().__init__(remaining_time=axes_total_move_time)
 
         self._running_subf = comp.moveAbs(pos)
         self.task_canceller = self._cancel

@@ -676,8 +676,8 @@ class CryoFeatureAcquisitionTask(object):
         logging.debug(f"Estimated total movement time {expected_movement_time}s")
         return expected_movement_time
 
-    def estimate_total_time(self) -> float:
-        """Estimate the total time for the acquisition task."""
+    def estimate_remaining_time(self) -> float:
+        """Estimate the remaining time for the acquisition task."""
         n_active_features = sum(f.status.value != FEATURE_DEACTIVE for f in self.features)
         expected_movement_time = self.estimate_movement_time()
         expected_acq_time = self.estimate_acquisition_time()
@@ -689,7 +689,7 @@ class CryoFeatureAcquisitionTask(object):
         """Run the acquisition task."""
         exp = None
         self._future._task_state = RUNNING
-        self._future.set_progress(total_time=self._future.elapsed_time + self.estimate_total_time() + 2) # +2 for pessimistic margin
+        self._future.set_progress(remaining_time=self.estimate_remaining_time() + 2)  # +2 for pessimistic margin
         try:
             with self._future._task_lock:
                 if self._future._task_state == CANCELLED:
@@ -802,7 +802,7 @@ def acquire_at_features(
     future.task_canceller = task.cancel
 
     # set progress of the future
-    future.set_progress(total_time=future.elapsed_time + task.estimate_total_time())
+    future.set_progress(remaining_time=task.estimate_remaining_time())
 
     # assign the acquisition task to the future
     executeAsyncTask(future, task.run)

@@ -71,7 +71,7 @@ def do_autofocus_in_roi(
 
             # Update the time progress
             est_time = estimate_autofocus_in_roi_time(len(focus_points) - i, ccd, focus, focus_range,average_focus_time)
-            f.set_progress(total_time=f.elapsed_time + est_time)
+            f.set_progress(remaining_time=est_time)
             with f._autofocus_roi_lock:
                 if f._autofocus_roi_state == CANCELLED:
                     raise CancelledError()
@@ -179,7 +179,7 @@ def autofocus_in_roi(
     """
     # Create ProgressiveFuture and update its state to RUNNING
     n_focus_points = len(focus_points)
-    f = model.ProgressiveFuture(total_time=estimate_autofocus_in_roi_time(n_focus_points, ccd, focus, focus_range))
+    f = model.ProgressiveFuture(remaining_time=estimate_autofocus_in_roi_time(n_focus_points, ccd, focus, focus_range))
     f._autofocus_roi_state = RUNNING
     f._autofocus_roi_lock = threading.Lock()
     f.task_canceller = _cancel_autofocus_bbox

@@ -957,7 +957,7 @@ class MyComponent(model.Component):
         return a ProgressiveFuture, which will have the estimated time shorten
         """
         # First estimate the time to 10s, and then it will be shorten
-        f = model.ProgressiveFuture(total_time=10)
+        f = model.ProgressiveFuture(remaining_time=10)
 
         # run in a separate thread
         executeAsyncTask(f, self._long_pessimistic_task, args=(f, duration))
@@ -971,7 +971,7 @@ class MyComponent(model.Component):
             time.sleep(1)
             psmt_end = max(psmt_end - 1, time.time())
             remaining = max(0.0, psmt_end - time.time())
-            future.set_progress(total_time=future.elapsed_time + remaining)
+            future.set_progress(remaining_time=remaining)
 
         return time.time() - start
 

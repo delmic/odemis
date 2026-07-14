@@ -756,7 +756,7 @@ class Detector(model.Detector):
     @isasync
     def applyAutoContrastBrightness(self):
         # Create ProgressiveFuture and update its state to RUNNING
-        f = model.ProgressiveFuture(total_time=2)  # rough time estimation
+        f = model.ProgressiveFuture(remaining_time=2)  # rough time estimation
         f._move_lock = threading.Lock()
 
         return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
@@ -1910,7 +1910,7 @@ class ChamberPressure(model.Actuator):
         self._checkMoveAbs(pos)
 
         # Create ProgressiveFuture and update its state to RUNNING
-        f = model.ProgressiveFuture(total_time=self._estimateMoveTime())
+        f = model.ProgressiveFuture(remaining_time=self._estimateMoveTime())
         f._move_state = RUNNING
 
         # Task to run
@@ -2065,7 +2065,7 @@ class ChamberPressure(model.Actuator):
                 waiting_time = 10
             else:
                 waiting_time = 0
-            future.set_progress(total_time=future.elapsed_time + self.wakeUpTime + remainingTime + waiting_time)
+            future.set_progress(remaining_time=self.wakeUpTime + remainingTime + waiting_time)
         except suds.WebFault:
             logging.warning("Time updater failed while moving to pressure %g.",
                             pressure, exc_info=True)

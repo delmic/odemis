@@ -685,7 +685,7 @@ def Sparc2AutoFocus(
     else:
         autofocus_loading_times = (5, 5)
 
-    f = model.ProgressiveFuture(total_time=sum(autofocus_loading_times))
+    f = model.ProgressiveFuture(remaining_time=sum(autofocus_loading_times))
     f._autofocus_state = RUNNING
     # Time for each action left
     f._actions_time = list(autofocus_loading_times)
@@ -735,7 +735,7 @@ def Sparc2ManualFocus(
         bl = model.getComponent(role="brightlight")
 
     manual_focus_loading_time = 10  # Rough estimation of the slit movement
-    f = model.ProgressiveFuture(total_time=manual_focus_loading_time)
+    f = model.ProgressiveFuture(remaining_time=manual_focus_loading_time)
     # The only goal for using a canceller is to make the progress bar stop
     # as soon as it's cancelled.
     f.task_canceller = _cancelSparc2ManualFocus
@@ -902,13 +902,13 @@ def _DoSparc2AutoFocus(
         return dict((grating, detector) -> focus pos)
     """
 
-    def updateProgress(subf, elapsed_time, total_time):
+    def updateProgress(subf, elapsed_time, remaining_time):
         """
         Updates the time progress when the current subfuture updates its progress
         """
         # if the future is complete, the standard progress update will work better
         if not subf.done():
-            future.set_progress(total_time=total_time + sum(future._actions_time))
+            future.set_progress(remaining_time=remaining_time + sum(future._actions_time))
 
     try:
         if future._autofocus_state == CANCELLED:
@@ -932,7 +932,7 @@ def _DoSparc2AutoFocus(
             logging.info("Autofocus procedure cancelled after turning on the light")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(total_time=future.total_time + sum(future._actions_time))
+        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
 
         # Configure the optical path to the specific focus mode, for the detector
         # (so that the path manager knows which component matters). In case of
@@ -945,7 +945,7 @@ def _DoSparc2AutoFocus(
             logging.info("Autofocus procedure cancelled after closing the slit")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(total_time=future.total_time + sum(future._actions_time))
+        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
 
         # In case autofocus is manual return
         if not start_autofocus:
@@ -985,7 +985,7 @@ def _DoSparc2AutoFocus(
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled after the completion of the autofocus")
             raise CancelledError()
-        future.set_progress(total_time=future.total_time + sum(future._actions_time))
+        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
 
         logging.debug("Acquiring the last image")
         if streams:
@@ -998,7 +998,7 @@ def _DoSparc2AutoFocus(
             logging.info("Autofocus procedure cancelled after acquiring the last image")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(total_time=future.total_time + sum(future._actions_time))
+        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
 
         logging.debug("Turning off the light")
         bl.power.value = bl.power.range[0]
@@ -1006,7 +1006,7 @@ def _DoSparc2AutoFocus(
             logging.warning("Autofocus procedure is cancelled after turning off the light")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(total_time=future.total_time + sum(future._actions_time))
+        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
 
         return ret
 
@@ -1077,7 +1077,7 @@ def AutoFocus(
             Focus level
     """
     # Create ProgressiveFuture and update its state to RUNNING
-    f = model.ProgressiveFuture(total_time=estimateAutoFocusTime(detector, emt, focus, dfbkg, good_focus,
+    f = model.ProgressiveFuture(remaining_time=estimateAutoFocusTime(detector, emt, focus, dfbkg, good_focus,
                                                                  rng_focus))
     f._autofocus_state = RUNNING
     f._autofocus_lock = threading.Lock()
@@ -1132,7 +1132,7 @@ def AutoFocusSpectrometer(
     # Create ProgressiveFuture and update its state to RUNNING
     # calculate the time for the AutoFocusSpectrometer procedure to be completed
     a_time = _totalAutoFocusTime(spectrograph, focuser, detectors, selector, streams)
-    f = model.ProgressiveFuture(total_time=a_time)
+    f = model.ProgressiveFuture(remaining_time=a_time)
     f.task_canceller = _CancelAutoFocusSpectrometer
     # Extra info for the canceller
     f._autofocus_state = RUNNING
@@ -1180,7 +1180,7 @@ def _updateAFSProgress(
     detector_moves: number of detector moves left to do (>= 0)
     """
     tleft = af_dur + grating_moves * MOVE_TIME_GRATING + detector_moves * MOVE_TIME_DETECTOR
-    future.set_progress(total_time=future.elapsed_time + tleft)
+    future.set_progress(remaining_time=tleft)
 
 
 def CLSpotsAutoFocus(
