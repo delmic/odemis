@@ -932,7 +932,7 @@ def _DoSparc2AutoFocus(
             logging.info("Autofocus procedure cancelled after turning on the light")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
+        future.set_progress(remaining_time=sum(future._actions_time))
 
         # Configure the optical path to the specific focus mode, for the detector
         # (so that the path manager knows which component matters). In case of
@@ -945,7 +945,7 @@ def _DoSparc2AutoFocus(
             logging.info("Autofocus procedure cancelled after closing the slit")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
+        future.set_progress(remaining_time=sum(future._actions_time))
 
         # In case autofocus is manual return
         if not start_autofocus:
@@ -985,7 +985,7 @@ def _DoSparc2AutoFocus(
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled after the completion of the autofocus")
             raise CancelledError()
-        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
+        future.set_progress(remaining_time=sum(future._actions_time))
 
         logging.debug("Acquiring the last image")
         if streams:
@@ -998,7 +998,7 @@ def _DoSparc2AutoFocus(
             logging.info("Autofocus procedure cancelled after acquiring the last image")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
+        future.set_progress(remaining_time=sum(future._actions_time))
 
         logging.debug("Turning off the light")
         bl.power.value = bl.power.range[0]
@@ -1006,7 +1006,7 @@ def _DoSparc2AutoFocus(
             logging.warning("Autofocus procedure is cancelled after turning off the light")
             raise CancelledError()
         future._actions_time.pop(0)
-        future.set_progress(remaining_time=future.remaining_time + sum(future._actions_time))
+        future.set_progress(remaining_time=sum(future._actions_time))
 
         return ret
 

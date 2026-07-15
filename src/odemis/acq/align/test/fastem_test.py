@@ -223,7 +223,7 @@ class TestFastEMCalibration(unittest.TestCase):
         with self.assertRaises(CancelledError):
             f.result(timeout=5)  # add timeout = 5s in case cancellation error was not raised
         self.assertGreaterEqual(self.updates, 2)  # at least one update at cancellation
-        # When cancelled, elapsed_time and total_time both equal the actual duration
+        # When canceled remaining time should be 0
         self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())

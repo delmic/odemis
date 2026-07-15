@@ -138,7 +138,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         elapsed_t, remaining_t = f.get_progress()
         self.assertGreater(elapsed_t, 0)
         # don't use for DEBUG example
-        self.assertGreater(total_t - elapsed_t, 10)  # Should report still more than 10s
+        self.assertGreater(remaining_t, 10)  # Should report still more than 10s
 
         overview_da = f.result()
         self.assertGreater(overview_da.shape[0], 2000)

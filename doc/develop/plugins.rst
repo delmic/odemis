@@ -320,8 +320,8 @@ When that entry is selected, it shows an acquisition window and then acquire
 
             d = []
             for i in range(10):
-                left = (10 - i) * exp
-                f.set_progress(end=time.time() + left)
+                remaining_time = (10 - i) * exp
+                f.set_progress(remaining_time=remaining_time)
                 d.append(ccd.data.get())
                 if f.cancelled():
                     # Unfreezes the setting and stream controls in window

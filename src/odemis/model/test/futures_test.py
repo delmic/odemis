@@ -274,35 +274,74 @@ class TestProgressiveFuture(unittest.TestCase):
         self.remaining = None  # for the caller
         # start is default time now if not specified
         future = ProgressiveFuture(remaining_time=1)
-        future.task_canceller = self.cancel_task
 
         # caller request future to indicate change in time estimation
         future.add_update_callback(self.on_progress_update)
         # update the progress
         future.set_progress(remaining_time=2)
-        # check total time was updated
-        self.assertAlmostEqual(self.remaining, 2, delta=0.1)
-        # future not running yet, so elapsed should be ~0
-        self.assertAlmostEqual(self.elapsed, 0, delta=0.1)
+        # check remaining time was updated
+        self.assertAlmostEqual(self.remaining, 2, delta=0.05)
+        # future not running yet, so elapsed should be 0
+        self.assertEqual(self.elapsed, 0)
 
         # "start" the task (set the future running)
         future.set_running_or_notify_cancel()
         # the progress should be updated and thus .elapsed should be ~0 (just started)
-        self.assertAlmostEqual(self.elapsed, 0, delta=0.1)
+        self.assertAlmostEqual(self.elapsed, 0, delta=0.05)
+        # remaining should still reflect the last estimate
+        self.assertAlmostEqual(self.remaining, 2, delta=0.05)
 
         time.sleep(0.1)  # wait a bit
 
         # while running, update the estimated ending time
         future.set_progress(remaining_time=1)
         # the progress should be updated and thus remaining time should be ~1s
-        self.assertAlmostEqual(self.remaining, 1, delta=0.1)
+        self.assertAlmostEqual(self.remaining, 1, delta=0.05)
+        # elapsed should reflect the ~0.1s since running started, not just
+        # the (near-zero) time since this set_progress call
+        self.assertAlmostEqual(self.elapsed, 0.1, delta=0.05)
+
+    def test_properties(self):
+        """Test elapsed_time and remaining_time properties."""
+        future = ProgressiveFuture(remaining_time=5)
+
+        # before start: elapsed is 0, remaining is the initial estimate
+        self.assertEqual(future.elapsed_time, 0)
+        self.assertAlmostEqual(future.remaining_time, 5, delta=0.05)
+
+        future.set_running_or_notify_cancel()
+        time.sleep(0.1)
+
+        # while running: elapsed grows, remaining decreases
+        self.assertAlmostEqual(future.elapsed_time, 0.1, delta=0.05)
+        self.assertAlmostEqual(future.remaining_time, 4.9, delta=0.05)
+
+        # after done: elapsed reflects actual run time, remaining is 0
+        future.set_result(None)
+        self.assertAlmostEqual(future.elapsed_time, 0.1, delta=0.05)
+        self.assertEqual(future.remaining_time, 0)
+
+    def test_time_extrapolation(self):
+        """Test that elapsed/remaining extrapolate over time without explicit set_progress calls."""
+        future = ProgressiveFuture(remaining_time=10)
+        future.set_running_or_notify_cancel()
+
+        time.sleep(0.1)
+        e1, r1 = future.get_progress()
+        self.assertAlmostEqual(e1, 0.1, delta=0.05)
+        self.assertAlmostEqual(r1, 9.9, delta=0.05)
+
+        time.sleep(0.1)
+        e2, r2 = future.get_progress()
+        self.assertAlmostEqual(e2, 0.2, delta=0.05)
+        self.assertAlmostEqual(r2, 9.8, delta=0.05)
+
+        # elapsed increases and remaining decreases by the same amount
+        self.assertAlmostEqual(e2 - e1, r1 - r2, delta=0.01)
 
     def test_cancel_while_running(self):
         """Test cancelling of future while running."""
         self.cancelled = 0
-        self.elapsed = None  # for the caller
-        self.remaining = None  # for the caller
-        # start is default time now if not specified
         future = ProgressiveFuture(remaining_time=2)
         future.task_canceller = self.cancel_task
 
@@ -317,37 +356,44 @@ class TestProgressiveFuture(unittest.TestCase):
             future.result(timeout=5)
 
         self.assertEqual(self.cancelled, 1)
+        # after cancellation: remaining is 0, elapsed reflects actual run time
+        elapsed, remaining = future.get_progress()
+        self.assertAlmostEqual(elapsed, 0.1, delta=0.05)
+        self.assertEqual(remaining, 0)
 
     def test_get_progress(self):
         """Tests retrieving the progress from the future."""
         f = ProgressiveFuture()
 
         f.set_progress(remaining_time=1)  # update progress with duration=1
-        elapsed_f, total_f = f.get_progress()  # retrieve progress
-        # future is pending, elapsed≈0, total≈1
-        self.assertAlmostEqual(elapsed_f, 0, delta=0.1)
-        self.assertAlmostEqual(total_f, 1, delta=0.1)
+        elapsed_f, remaining_f = f.get_progress()  # retrieve progress
+        # future is pending: elapsed is always 0, remaining reflects the estimate
+        self.assertEqual(elapsed_f, 0)
+        self.assertAlmostEqual(remaining_f, 1, delta=0.05)
 
         # "start" the task (set the future running)
-        f.set_running_or_notify_cancel()  # updates start and end
-        elapsed_f, total_f = f.get_progress()  # retrieve the progress
+        f.set_running_or_notify_cancel()
+        elapsed_f, remaining_f = f.get_progress()  # retrieve the progress
         # check that elapsed is ~0 (just started)
-        self.assertAlmostEqual(elapsed_f, 0, delta=0.1)
-        # check that expected duration is still ~1s
-        self.assertAlmostEqual(total_f - elapsed_f, 1, delta=0.1)
-        # remaining time should be ~1s
-        self.assertAlmostEqual(total_f - elapsed_f, 1, delta=0.1)
+        self.assertAlmostEqual(elapsed_f, 0, delta=0.05)
+        # check that the remaining estimate carried over from before start
+        self.assertAlmostEqual(remaining_f, 1, delta=0.05)
 
         time.sleep(0.1)  # wait a bit
+
+        # before finishing, verify time has been extrapolated
+        elapsed_f, remaining_f = f.get_progress()
+        self.assertAlmostEqual(elapsed_f, 0.1, delta=0.05)
+        self.assertAlmostEqual(remaining_f, 0.9, delta=0.05)
 
         # "finish" the task
         f.set_result(None)
         self.assertTrue(f.done())
-        elapsed_f, total_f = f.get_progress()
-        # check that elapsed > 0 as future started in the past
-        self.assertGreater(elapsed_f, 0)
-        # check that after done, elapsed ≈ total
-        self.assertAlmostEqual(elapsed_f, total_f, delta=0.2)
+        elapsed_f, remaining_f = f.get_progress()
+        # elapsed reflects the actual run duration (~0.1s)
+        self.assertAlmostEqual(elapsed_f, 0.1, delta=0.05)
+        # after done, remaining time is always 0
+        self.assertEqual(remaining_f, 0)
 
     def cancel_task(self, future):
         """Task canceller"""
@@ -355,7 +401,7 @@ class TestProgressiveFuture(unittest.TestCase):
         return True
 
     def on_progress_update(self, future, elapsed_time, remaining_time):
-        """Called whenever some progress on the future is reported. Elapsed and total times are updated."""
+        """Called whenever some progress on the future is reported. Elapsed and remaining times are updated."""
         self.elapsed = elapsed_time
         self.remaining = remaining_time
 
@@ -386,8 +432,8 @@ class TestProgressiveBatchFuture(unittest.TestCase):
         f1.set_progress(remaining_time=2)  # update the progress on one sub-future
         # check that the remaining time of the batch futures has been updated
         self.assertAlmostEqual(self.remaining, fs[f2] + 2, delta=0.2)
-        # check that the elapsed of the batch future is >= 0
-        self.assertGreaterEqual(self.elapsed, 0)
+        # batch future was just started, so elapsed should be ~0
+        self.assertAlmostEqual(self.elapsed, 0, delta=0.05)
 
         f1.set_result(None)  # set sub-future done
 
@@ -518,7 +564,7 @@ class TestProgressiveBatchFuture(unittest.TestCase):
         return True
 
     def on_progress_update(self, future, elapsed_time, remaining_time):
-        """Whenever there is a progress update, update elapsed and total times."""
+        """Whenever there is a progress update, update elapsed and remaining times."""
         self.elapsed = elapsed_time
         self.remaining = remaining_time
 

@@ -466,7 +466,13 @@ class ProgressiveFuture(CancellableFuture):
                 self._last_update_time = now
             if remaining_time is not None:
                 self._remaining_time = remaining_time
-                self._last_update_time = now
+                if self._state == RUNNING:
+                    # Accumulate elapsed time since the last anchor before resetting the anchor,
+                    # so that a set_progress(remaining_time=...) call does not discard previously
+                    # accumulated elapsed time.
+                    if self._last_update_time is not None and elapsed_time is None:
+                        self._elapsed_time += now - self._last_update_time
+                    self._last_update_time = now
 
             if remaining_time is not None and remaining_time < 0:
                 logging.warning("Future remaining time is negative: %f s", remaining_time)
@@ -549,7 +555,10 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         :param elapsed_time: (float) Elapsed time of the sub-future in seconds.
         :param remaining_time: (float) Estimated remaining time of the sub-future in seconds.
         """
-        if f.running():  # only care about the future which is currently running
+        # Process updates from futures that are not yet done. This includes PENDING and RUNNING futures.
+        # remaining_time updates are meaningful even while a sub-future is PENDING, so the batch future
+        # can receive updated estimates.
+        if not f.done():
             self.futures[f] = max(0.0, remaining_time)
             self.set_progress(remaining_time=self._estimate_remaining())
 

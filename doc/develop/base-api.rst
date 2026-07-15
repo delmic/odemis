@@ -380,26 +380,26 @@ function specifically.
         The callback is always called at least once, when the task is finished.
 
         :param fn: The callback.
-            *start* is the (estimated) time of the beginning of the task.
-            *end* is the estimated time at the end of the task.
-            If the task is finished (or cancelled) the end time is the time the task was completed or cancelled.
+            *elapsed* is the time that has elapsed since the task started.
+            *remaining* is the time remaining until the task is expected to complete.
+            If the task is finished (or cancelled) the remaining time is 0.
 
-        :type fn: callable: (Future, float start, float end) → None
+        :type fn: callable: (Future, float elapsed, float remaining) → None
 
     .. py:method:: get_progress()
     
 	Read the last known progress information.
 
-        :return (float start, float end): time at which the task started (or will be starting),
-                time at which the task ended (or will be ending)
+        :return (float elapsed, float remaining): time that has elapsed since the task started,
+                time remaining until the task is expected to complete
 
-    .. py:method:: set_progress(start, end)
+    .. py:method:: set_progress(elapsed, remaining)
     
-	Update the start and end times of the task.
+	Update the elapsed and remaining times of the task.
 	To be used by executors only, to provide the update information.
 
-        :param float start: time at which the task started (or will be starting)
-        :param float end: time at which the task ended (or will be ending)
+        :param float elapsed: time that has elapsed since the task started
+        :param float remaining: time remaining until the task is expected to complete
 
 
 VigilantAttribute

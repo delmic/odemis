@@ -70,7 +70,9 @@ def do_autofocus_in_roi(
                 average_focus_time = (time.time() - start_time) / i
 
             # Update the time progress
-            est_time = estimate_autofocus_in_roi_time(len(focus_points) - i, ccd, focus, focus_range,average_focus_time)
+            est_time = estimate_autofocus_in_roi_time(
+                len(focus_points) - i, ccd, focus, focus_range, average_focus_time
+            )
             f.set_progress(remaining_time=est_time)
             with f._autofocus_roi_lock:
                 if f._autofocus_roi_state == CANCELLED:
