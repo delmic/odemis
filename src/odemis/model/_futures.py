@@ -28,6 +28,7 @@ from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import threading
 import time
+from typing import Tuple
 
 
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
@@ -420,11 +421,11 @@ class ProgressiveFuture(CancellableFuture):
         """
         with self._condition:
             if self._last_update_time is not None:
-                self._elapsed_time += time.time() - self._last_update_time
+                self._elapsed_time += time.monotonic() - self._last_update_time
             self._remaining_time = 0.0
         self._invoke_upd_callbacks()
 
-    def get_progress(self) -> tuple[float, float]:
+    def get_progress(self) -> Tuple[float, float]:
         """
         Return the current known elapsed and remaining time.
 
@@ -438,7 +439,7 @@ class ProgressiveFuture(CancellableFuture):
                 return 0.0, max(0.0, self._remaining_time)
             elif self._state == RUNNING:
                 if self._last_update_time is not None:
-                    since = time.time() - self._last_update_time
+                    since = time.monotonic() - self._last_update_time
                     elapsed = max(0.0, self._elapsed_time + since)
                     remaining = max(0.0, self._remaining_time - since)
                 else:
@@ -460,11 +461,14 @@ class ProgressiveFuture(CancellableFuture):
             time.
         """
         with self._condition:
-            now = time.time()
+            now = time.monotonic()
             if elapsed_time is not None:
                 self._elapsed_time = elapsed_time
                 self._last_update_time = now
             if remaining_time is not None:
+                if remaining_time < 0:
+                    logging.warning("Future remaining time is negative: %f s", remaining_time)
+
                 self._remaining_time = remaining_time
                 if self._state == RUNNING:
                     # Accumulate elapsed time since the last anchor before resetting the anchor,
@@ -473,9 +477,6 @@ class ProgressiveFuture(CancellableFuture):
                     if self._last_update_time is not None and elapsed_time is None:
                         self._elapsed_time += now - self._last_update_time
                     self._last_update_time = now
-
-            if remaining_time is not None and remaining_time < 0:
-                logging.warning("Future remaining time is negative: %f s", remaining_time)
 
         self._invoke_upd_callbacks()
 

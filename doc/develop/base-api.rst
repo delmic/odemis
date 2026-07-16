@@ -380,9 +380,10 @@ function specifically.
         The callback is always called at least once, when the task is finished.
 
         :param fn: The callback.
-            *elapsed* is the time that has elapsed since the task started.
+            *elapsed* is the time that has elapsed since the task started. Once the task is
+                finished, the elapsed time is the total execution time.
             *remaining* is the time remaining until the task is expected to complete.
-            If the task is finished (or cancelled) the remaining time is 0.
+                If the task is finished (or cancelled) the remaining time is 0.
 
         :type fn: callable: (Future, float elapsed, float remaining) → None
 
