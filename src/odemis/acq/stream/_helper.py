@@ -691,8 +691,16 @@ class CCDSettingsStream(RepetitionStream):
         res = self._getDetectorVA("resolution").value
         readout = numpy.prod(res) / ro_rate
 
-        exp = self._getDetectorVA("exposureTime").value
-        duration = (exp + readout + 0.03) * 1.20
+        if hasattr(self, "detPhotonCounting") and self.detPhotonCounting.value:
+            exp = self.detPcExposureTime.value
+            counts = self.detPcIntegrationCounts.value
+        elif hasattr(self, "integrationTime"):
+            exp = self._hwExpTime
+            counts = self.integrationCounts.value
+        else:
+            exp = self._getDetectorVA("exposureTime").value
+            counts = 1
+        duration = ((exp + readout) * counts + 0.03) * 1.20
         # Add the setup time
         duration += self.SETUP_OVERHEAD
 

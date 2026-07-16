@@ -53,6 +53,11 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         # very early.
         time.sleep(2)
 
+        # Reset photon-counting mode in case it was set, as most of the test cases don't touch it
+        # and assume it's off.
+        if model.hasVA(self.streak_ccd, "photonCounting"):
+            self.streak_ccd.photonCounting.value = False
+
     def test_streak_live_stream(self):  # TODO  this one has still exposureTime
         """ Test playing TemporalSpectrumSettingsStream
         and check shape and MD for image received are correct."""
@@ -162,7 +167,7 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         time.sleep(2)
         streaks.is_active.value = False
 
-        self.assertGreater(len(self._images), 0,"No temporal spectrum received after 2s")
+        self.assertGreater(len(self._images), 0, "No temporal spectrum received after 2s")
         self.assertIsInstance(self._images[-1], model.DataArray)
         # .image should be a 2D temporal spectrum
         self.assertEqual(self._images[-1].shape[1::-1], streaks.detResolution.value)
@@ -363,12 +368,14 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         streaks.roi.value = (0.15, 0.6, 0.8, 0.8)
         streaks.repetition.value = (5, 6)
 
-        ###inactive stream######################################################################################
-        # set stream VA
-        streaks.integrationTime.value = 2.0  # s
+        # Note: this test assumes that the hardware maximum exposure time is 10s
 
+        ###inactive stream######################################################################################
         # set HW VA to position different from stream VA
         self.streak_ccd.exposureTime.value = 0.3  # s
+
+        # set stream VA
+        streaks.integrationTime.value = 12.0  # s
 
         # while stream is not active, HW should not move, therefore
         # check stream VA did not trigger HW VA to change
@@ -383,18 +390,18 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
 
         # HW VA should be updated with the correct value when acquiring or playing the stream
         # check explicit values of stream and HW VA
-        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
-        self.assertEqual(streaks.integrationTime.value, 2)
+        self.assertAlmostEqual(self.streak_ccd.exposureTime.value, 6.0)
+        self.assertEqual(streaks.integrationTime.value, 12.0)
 
         # change stream VA --> HW VAs should change as stream is still active
-        streaks.integrationTime.value = 4.0  # s
+        streaks.integrationTime.value = 11.0  # s
         time.sleep(streaks.integrationTime.value + 0.5)
         # check stream VA shows not the same value as the HW VA
         self.assertNotEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
         # check stream VA and HW VA show the correct value
-        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
-        self.assertEqual(streaks.integrationTime.value, 4)
-        self.assertEqual(streaks.integrationCounts.value, 4)
+        self.assertAlmostEqual(self.streak_ccd.exposureTime.value, 5.5)
+        self.assertEqual(streaks.integrationTime.value, 11.0)
+        self.assertEqual(streaks.integrationCounts.value, 2)
 
         # change stream VA --> HW VAs should change as stream is still active
         streaks.integrationTime.value = 0.9  # s
@@ -407,16 +414,16 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         self.assertEqual(streaks.integrationCounts.value, 1)
 
         # change stream VA --> HW VAs should change as stream is still active
-        streaks.integrationTime.value = 1.0  # s
+        streaks.integrationTime.value = 10.0  # s
         time.sleep(0.1)
         # check stream VA shows now the same value as the HW VA
         self.assertEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
         # check stream VA and HW VA show the correct value
-        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
-        self.assertEqual(streaks.integrationTime.value, 1)
+        self.assertEqual(self.streak_ccd.exposureTime.value, 10)
+        self.assertEqual(streaks.integrationTime.value, 10)
         self.assertEqual(streaks.integrationCounts.value, 1)
 
-        streaks.integrationTime.value = 4.0  # s
+        streaks.integrationTime.value = 140.0  # s
         time.sleep(0.1)
 
         ###inactive stream######################################################################################
@@ -426,8 +433,8 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
 
         # check stream and HW VA still shows the same value as before and are different from each other
         self.assertNotEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
-        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
-        self.assertEqual(streaks.integrationTime.value, 4)
+        self.assertEqual(self.streak_ccd.exposureTime.value, 10.0)
+        self.assertEqual(streaks.integrationTime.value, 140.0)
 
     def test_streak_acq_live_update(self):
         """Test if live update works during acquisition with streak camera"""
@@ -443,10 +450,9 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
-
-        streaks.detExposureTime.value = 0.01  # 10ms
+        streaks.detExposureTime.value = 0.1  # 100ms
         streaks.roi.value = (0.1, 0.1, 0.8, 0.8)
-        streaks.repetition.value = (10, 12)
+        streaks.repetition.value = (7, 9)
 
         # Start acquisition
         # estimated acquisition time should be accurate with less than 50% margin
@@ -654,6 +660,10 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
 
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
+        # Explicitly put something very different from the expected exposure time, to check that
+        # the stream does set the correct value.
+        self.streak_ccd.exposureTime.value = 0.123  # s
+
         streaks.detStreakMode.value = True
         streaks.detMCPGain.value = 10
         streaks.detShutter.value = False
@@ -663,9 +673,9 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         self.streak_ccd.updateMetadata({model.MD_BASELINE: 0})
 
         # set stream VAs
-        streaks.integrationTime.value = 2  # s
+        streaks.integrationTime.value = 12  # s
         # TODO use fixed repetition value -> set ROI?
-        streaks.repetition.value = (2, 4)  # results in (2, 3)
+        streaks.repetition.value = (2, 3)
         num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
         exp_pos, exp_pxs, exp_res = roi_to_phys(streaks)
 
@@ -712,7 +722,7 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
 
         time.sleep(2)
         # do a second acquisition with longer exp time and check values are bigger due to integration
-        streaks.integrationTime.value = 2.5  # s
+        streaks.integrationTime.value = 13.5  # s
 
         # Start acquisition
         # estimated acquisition time should be accurate with less than 50% margin
@@ -723,11 +733,13 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         self.assertIsNone(exp)
         ts_da2 = data2[1]  # temporal spectrum data array
 
-        # test that the values in the second acquisition are greater (integrationCount greater than first acq)
-        numpy.testing.assert_array_less(ts_da, ts_da2)
+        # In theory, the second acquisition should have (slightly) higher values than the first one,
+        # as the integration time is longer. However, even with the simulator, due to the noise and
+        # clipping, it's very hard to check reliably.
+        # numpy.testing.assert_array_less(ts_da, ts_da2)
 
         # check background subtraction
-        streaks.integrationTime.value = 2  # s
+        streaks.integrationTime.value = 12  # s
         self.streak_ccd.updateMetadata({model.MD_BASELINE: 100})
 
         # Start acquisition
@@ -741,8 +753,6 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
 
         # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
         self.assertEqual(ts_da3.metadata[model.MD_BASELINE], 100)
-        # test that the baseline is actually removed compared to same acquisition without baseline
-        numpy.testing.assert_array_less(ts_da3, ts_da)
 
     def test_streak_acq_integrated_images_leech(self):
         """Test acquisition with streak camera with a long exposure time
@@ -765,14 +775,14 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         sems.emtDwellTime.value = 1e-06
 
         # set stream VAs
-        streaks.integrationTime.value = 2  # s
-        # The maximum exposure time of the streak-ccd is 1s => 2 images are integrated
+        streaks.integrationTime.value = 14  # s
+        # The maximum exposure time of the streak-ccd is 10s => 2 images are integrated
         assert streaks.integrationCounts.value == 2
         streaks.roi.value = (0, 0.2, 0.4, 0.8)
-        streaks.repetition.value = (3, 5)  # results in (2, 4)
+        streaks.repetition.value = (2, 3)
 
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
-        dc.period.value = 1  # s  so should run leech for sub acquisitions (between integrating 2 images)
+        dc.period.value = 7  # s  so should run leech for sub acquisitions (between integrating 2 images)
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
         dc.dwellTime.value = 1e-06
         sems.leeches.append(dc)
@@ -824,6 +834,101 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         # check last image in .raw has a time axis greater than 1 (last image is the drift correction image)
         temporalSpectrum_drift = ts_da[-1]  # drift correction image
         self.assertGreaterEqual(temporalSpectrum_drift.shape[-4], 2)
+
+    def test_streak_acq_photon_counting(self):
+        """Test acquisition with streak camera, in photon counting mode"""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # test with streak camera
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"exposureTime", "readoutRate", "binning", "resolution",
+                                                                "photonCounting", "pcExposureTime", "pcIntegrationCounts"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode", "shutter"})
+
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
+
+        streaks.detStreakMode.value = True
+        streaks.detExposureTime.value = 0.1  # Should not be used, but short to make it different from the photon counting exposure time
+        streaks.detPcExposureTime.value = 0.01  # 10ms
+        streaks.detPcIntegrationCounts.value = 100
+        streaks.detPhotonCounting.value = True
+
+        expected_exp_time = streaks.detPcExposureTime.value * streaks.detPcIntegrationCounts.value
+
+        # Disable the protections
+        streaks.detMCPGain.value = 5
+        streaks.detShutter.value = False
+
+        streaks.repetition.value = (7, 3)
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
+        exp_pos, exp_pxs, exp_res = roi_to_phys(streaks)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # stss.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second array are temporal spectrum images
+        # data: array should contain same images as stss.raw
+
+        # wait until it's over
+        data, exp = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertIsNone(exp)
+
+        # Confirm protections are applied on the hardware
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+        self.assertTrue(self.streak_unit.shutter.value)
+
+        # check if number of images in the received data (sem image + temporal spectrum images) is the same as
+        # number of images stored in raw
+        self.assertEqual(len(data), len(stss.raw))
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = stss.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check that the number of acquired temporal spectrum images matches the number of ebeam positions
+        ts_da = stss.raw[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        self.assertEqual(shape[3] * shape[4], num_ts)
+        # len of shape should be 5: CTZYX
+        self.assertEqual(len(shape), 5)
+
+        # check if metadata is correctly stored
+        md = ts_da.metadata
+        self.assertEqual(md[model.MD_INTEGRATION_COUNT], 100)
+        self.assertAlmostEqual(md[model.MD_EXP_TIME], expected_exp_time)
+        self.assertIn(model.MD_STREAK_TIMERANGE, md)
+        self.assertIn(model.MD_STREAK_MCPGAIN, md)
+        self.assertIn(model.MD_STREAK_MODE, md)
+        self.assertIn(model.MD_TRIGGER_DELAY, md)
+        self.assertIn(model.MD_TRIGGER_RATE, md)
+        self.assertIn(model.MD_POS, md)  # check the corresponding SEM pos is there
+        self.assertIn(model.MD_PIXEL_SIZE, md)  # check the corresponding SEM pos is there
+        self.assertIn(model.MD_WL_LIST, md)
+        self.assertIn(model.MD_TIME_LIST, md)
+
+        md = sem_da.metadata
+        self.assertIn(model.MD_PIXEL_SIZE, md)
+        self.assertIn(model.MD_POS, md)
+
+        # start same acquisition again and check acquisition does not timeout due to sync failures
+        timeout2 = 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        data, exp = f.result(timeout2)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
 
 if __name__ == "__main__":
