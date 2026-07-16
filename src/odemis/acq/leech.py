@@ -29,7 +29,6 @@ import numpy
 from odemis import model
 from odemis.acq import drift
 from odemis.model import UNDEFINED_ROI
-from odemis.acq.stream._base import NON_SETTINGS_VA
 
 
 # Helper function for code using the leeches
@@ -158,9 +157,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         # period is the (approximate) time between two acquisition of the
         #  anchor (and drift compensation). The exact period is determined so
         #  that it fits with the region of acquisition.
-        # name: is not needed as such, but have it to comply with Stream.get_settings_entries
-        # Stream.set_settings_entries functions. The leech settings along with the stream settings
-        # form a recipe for the acquisition, and it's easier to have all the settings in the same format.
+        # name: User-friendly name (and required to be serialized similarly to a Stream)
         # Note: the scale used for the acquisition of the anchor region is
         #  selected by the AnchoredEstimator, to be as small as possible while
         #  still not scanning too many pixels.
@@ -363,8 +360,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         The format of the dict is the same as the one returned by Stream.get_settings_entries.
         """
         entries = {}
-        all_vas = model.getVAs(self)
-        settings_vas = set(all_vas.keys()).difference(NON_SETTINGS_VA)
+        settings_vas = model.getVAs(self)
         for va_name in settings_vas:
             entries.update({va_name: getattr(self, va_name).value})
         entries["class"] = self.__class__.__name__
