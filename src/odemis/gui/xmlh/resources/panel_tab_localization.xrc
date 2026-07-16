@@ -239,6 +239,37 @@
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
+                    <border>10</border>
+                    <flag>wxALL</flag>
+                    <object class="wxPanel" name="pnl_current_posture">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <border>10</border>
+                          <flag>wxRIGHT|wxALIGN_CENTER_VERTICAL</flag>
+                          <object class="wxStaticText">
+                            <label>Current posture</label>
+                            <fg>#DDDDDD</fg>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticBitmap" name="bmp_current_posture">
+                            <bitmap>../../img/icon/ico_meteorimaging_green.png</bitmap>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <flag>wxALIGN_CENTER_VERTICAL</flag>
+                          <object class="wxStaticText" name="lbl_current_posture">
+                            <label>posture</label>
+                            <fg>#777777</fg>
+                          </object>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem" name="fp_feature_panel">
                         <object class="wxPanel" name="pnl_features">

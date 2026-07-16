@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import functools
 import gc
 import logging
+import math
 import os
 import threading
 import time
@@ -2369,9 +2370,15 @@ class CryoAcquiredStreamsController(CryoStreamsController):
             logging.debug("Feature has no streams to display")
             return
 
+        pm = self._tab_data_model.main.posture_manager
         # Add streams to the tab model
         for s in feature.streams.value:
             if s not in self._tab_data_model.streams.value:
+                pos = s.getRawMetadata()[0].get(model.MD_STAGE_POSITION_RAW)
+                # Add milling angle suffix to stream's name if it was acquired at the milling angle.
+                if pos and "rx" in pos and pm.at_fib_view_fm_posture(pos):
+                    stream_milling_angle = pm.calculate_milling_angle(pos["rx"], pm.fm_column_tilt)
+                    s.name.value = f"{s.name.value} at {math.degrees(stream_milling_angle):0.0f}°"
                 self._tab_data_model.streams.value.append(s)
 
         # show the feature streams on the acquired view
