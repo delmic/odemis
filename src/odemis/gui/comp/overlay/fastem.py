@@ -27,7 +27,7 @@ import wx
 
 import odemis.gui as gui
 from odemis import model, util
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import (
     SEL_MODE_DRAG,
     SEL_MODE_NONE,

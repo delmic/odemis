@@ -97,7 +97,7 @@ class ADCTestCase(unittest.TestCase):
         self.assertEqual(dc.roi.value, (0, 0, 1, 1))
 
         # UNDEFINED_ROI doesn't allow to start
-        dc.roi.value = stream.UNDEFINED_ROI
+        dc.roi.value = model.UNDEFINED_ROI
         self.assertEqual(dc.estimateAcquisitionTime(0.1, (4, 3)), 0)
         with self.assertRaises(ValueError):
             dc.series_start()

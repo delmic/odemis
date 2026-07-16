@@ -205,7 +205,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
 
-            self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
+            self.roa = model.TupleContinuous(model.UNDEFINED_ROI,
                                              range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                              cls=(int, float))
 

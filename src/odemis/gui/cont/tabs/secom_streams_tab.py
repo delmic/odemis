@@ -566,7 +566,7 @@ class SecomStreamsTab(Tab):
             # Put the spot position at a "good" place if not yet defined
             if self.tab_data_model.spotPosition.value == (None, None):
                 roa = self.tab_data_model.roa.value
-                if roa == acqstream.UNDEFINED_ROI:
+                if roa == model.UNDEFINED_ROI:
                     # If no ROA => just at the center of the FoV
                     pos = (0.5, 0.5)
                 else:  # Otherwise => in the center of the ROI

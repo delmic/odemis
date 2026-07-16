@@ -36,14 +36,12 @@ from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3,
                           MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX,
                           MD_POL_EY, MD_POL_EZ, MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N,
-                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS)
+                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N, TINT_FIT_TO_RGB, TINT_RGB_AS_IS,
+                          UNDEFINED_ROI)
 from odemis.util import img
 # TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
-# to identify a ROI which must still be defined by the user
 from odemis.util.transform import AffineTransform, alt_transformation_matrix_from_implicit
-
-UNDEFINED_ROI = (0, 0, 0, 0)
 
 # use hardcode list of polarization positions necessary for polarimetry analysis
 POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,

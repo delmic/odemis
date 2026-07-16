@@ -1808,7 +1808,7 @@ class SparcStreamsController(StreamBarController):
         # With EBIC, often the user wants to get the whole area, same as the survey.
         # But it's not very easy to select all of it, so do it automatically.
         # (after the controller creation, to automatically set the ROA too)
-        if ebic_stream.roi.value == acqstream.UNDEFINED_ROI:
+        if ebic_stream.roi.value == model.UNDEFINED_ROI:
             ebic_stream.roi.value = (0, 0, 1, 1)
         return self._addRepStream(ebic_stream, sem_ebic_stream, play=False)
 
@@ -1859,7 +1859,7 @@ class SparcStreamsController(StreamBarController):
         # With CLi, often the user wants to get the whole area, same as the survey.
         # But it's not very easy to select all of it, so do it automatically.
         # (after the controller creation, to automatically set the ROA too)
-        if cli_stream.roi.value == acqstream.UNDEFINED_ROI:
+        if cli_stream.roi.value == model.UNDEFINED_ROI:
             cli_stream.roi.value = (0, 0, 1, 1)
         return ret
 

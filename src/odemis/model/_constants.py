@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
-Created on 26 Mar 2012
+"""
+Created on 16 Jul 2026
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2026 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -18,25 +18,14 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-# Load the package namespace here so that it's possible to just do "import model"
 
-# to hide the lower layer
-from Pyro4.core import oneway, isasync
+General constants used across the odemis model.
+"""
 
-from ._futures import *
-from ._vattributes import *
-from ._components import *
-from ._dataflow import *
-from ._core import *
-from ._metadata import *
-from ._dataio import *
-from ._constants import *
+__all__ = ["UNDEFINED_ROI"]
 
-
-#__all__ = []
-#import model._properties
-#__all__ += [name for name in dir(model._properties) if not name.startswith('_')]
-
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
+# Sentinel value for a Region Of Interest (ROI) that has not yet been defined
+# by the user. The ROI is expressed as (xmin, ymin, xmax, ymax) in relative
+# coordinates (0 to 1). This sentinel uses (0, 0, 0, 0), which is an empty
+# region and therefore not a valid ROI.
+UNDEFINED_ROI = (0, 0, 0, 0)

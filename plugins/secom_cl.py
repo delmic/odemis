@@ -364,7 +364,7 @@ class SECOMCLSettingsStream(acqstream.CCDSettingsStream):
         rep = self.repetition.clip(repetition)
 
         # If ROI is undefined => link repetition and pxs as if ROI is full
-        if roi == acqstream.UNDEFINED_ROI:
+        if roi == model.UNDEFINED_ROI:
             pxs = (phy_size[0] / rep[0], phy_size[1] / rep[1])
             roi, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
             self.pixelSize._value = pxs
@@ -423,7 +423,7 @@ class SECOMCLSettingsStream(acqstream.CCDSettingsStream):
         pxs = self.pixelSize.value
 
         old_roi = self.roi.value
-        if old_roi != acqstream.UNDEFINED_ROI and roi != acqstream.UNDEFINED_ROI:
+        if old_roi != model.UNDEFINED_ROI and roi != model.UNDEFINED_ROI:
             old_size = (old_roi[2] - old_roi[0], old_roi[3] - old_roi[1])
             new_size = (roi[2] - roi[0], roi[3] - roi[1])
 
@@ -456,7 +456,7 @@ class SECOMCLSettingsStream(acqstream.CCDSettingsStream):
                   (2 floats) The new pixel size.
         """
         # If ROI is undefined => link rep and pxs as if the ROI was full
-        if roi == acqstream.UNDEFINED_ROI:
+        if roi == model.UNDEFINED_ROI:
             _, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
             return roi, rep, pxs
 
@@ -848,7 +848,7 @@ class CLAcqPlugin(Plugin):
         Used to enable/disable the drift correction period control.
         :param roi: (4 x 0<=float<=1) The anchor region selected (tlbr).
         """
-        enabled = (roi != acqstream.UNDEFINED_ROI)
+        enabled = (roi != model.UNDEFINED_ROI)
 
         # The driftCorrector should be a leech if drift correction is enabled
         dc = self._driftCorrector

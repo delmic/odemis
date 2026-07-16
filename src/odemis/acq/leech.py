@@ -28,7 +28,7 @@ import numpy
 
 from odemis import model
 from odemis.acq import drift
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 from odemis.acq.stream._base import NON_SETTINGS_VA
 
 

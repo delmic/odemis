@@ -36,7 +36,8 @@ import math
 from odemis import model, dataio
 from odemis.acq import stream, acqmng
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
-    SpectrumStream, UNDEFINED_ROI, StaticStream, LiveStream, Stream
+    SpectrumStream, StaticStream, LiveStream, Stream
+from odemis.model import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf

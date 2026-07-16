@@ -48,7 +48,6 @@ from odemis.acq.stitching import (
 )
 from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
 from odemis.acq.stream import (
-    UNDEFINED_ROI,
     ARStream,
     EMStream,
     MonochromatorSettingsStream,
@@ -56,6 +55,7 @@ from odemis.acq.stream import (
     SpectrumStream,
     StaticStream,
 )
+from odemis.model import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 from odemis.gui.comp import popup
 from odemis.gui.comp.stream_panel import OPT_BTN_REMOVE, OPT_BTN_SHOW

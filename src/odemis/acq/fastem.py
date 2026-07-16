@@ -121,7 +121,7 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name: str, scintillator_number: int, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
+    def __init__(self, name: str, scintillator_number: int, coordinates=model.UNDEFINED_ROI, colour="#FFA300"):
         """
         :param name: (str) Name of the region of calibration (ROC).
         :param scintillator_number: (int) The scintillator number of the region of calibration (ROC).

@@ -34,6 +34,7 @@ from wx.adv import WizardPageSimple
 
 import odemis.acq.stream as acqstream
 from odemis.acq import leech
+from odemis.model import UNDEFINED_ROI
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.conf.file import CONF_PATH
 from odemis.gui.cont.stream_bar import SparcStreamsController
@@ -193,10 +194,10 @@ class Sparc2StreamsPage(WizardPageSimple):
             main_data.ebeam
         )
         tab_data.roa = tab_data.semStream.roi
-        tab_data.roa.value = acqstream.UNDEFINED_ROI
+        tab_data.roa.value = UNDEFINED_ROI
         tab_data.driftCorrector = leech.AnchorDriftCorrector(tab_data.semStream.emitter,
                                                              tab_data.semStream.detector)
-        tab_data.driftCorrector.roi.value = acqstream.UNDEFINED_ROI
+        tab_data.driftCorrector.roi.value = UNDEFINED_ROI
 
         # Custom scrolled window to be able to fit the stream settings entries panels
         self._scrolled_win = wx.ScrolledWindow(self, style=wx.VSCROLL)

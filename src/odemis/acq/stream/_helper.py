@@ -30,9 +30,9 @@ import numpy
 
 from odemis import model
 from odemis.acq import align
-from odemis.model import VigilantAttributeBase, MD_POL_NONE
+from odemis.model import VigilantAttributeBase, MD_POL_NONE, UNDEFINED_ROI
 from odemis.util import img, almost_equal, angleres
-from ._base import Stream, UNDEFINED_ROI, POL_POSITIONS
+from ._base import Stream, POL_POSITIONS
 from ._live import LiveStream
 
 

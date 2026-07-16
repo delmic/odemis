@@ -36,7 +36,7 @@ from odemis import dataio, model
 from odemis.gui.model import TabName
 import odemis.util
 from odemis.acq import stream, drift, acqmng
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf

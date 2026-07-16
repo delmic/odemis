@@ -104,13 +104,13 @@ class SparcAcquisitionTab(Tab):
         tab_data.semStream = semcl_stream
         tab_data.roa = semcl_stream.roi
         # Force the ROA to be defined by the user on first use
-        tab_data.roa.value = acqstream.UNDEFINED_ROI
+        tab_data.roa.value = model.UNDEFINED_ROI
 
         tab_data.driftCorrector = leech.AnchorDriftCorrector(semcl_stream.emitter,
                                                              semcl_stream.detector)
 
         # drift correction is disabled until a ROI is selected
-        tab_data.driftCorrector.roi.value = acqstream.UNDEFINED_ROI
+        tab_data.driftCorrector.roi.value = model.UNDEFINED_ROI
 
         # To make sure the spot mode is stopped when the tab loses focus
         tab_data.streams.value.append(spot_stream)
@@ -361,7 +361,7 @@ class SparcAcquisitionTab(Tab):
             # Put the spot position at a "good" place if not yet defined
             if self.tab_data_model.spotPosition.value == (None, None):
                 roa = self.tab_data_model.roa.value
-                if roa == acqstream.UNDEFINED_ROI:
+                if roa == model.UNDEFINED_ROI:
                     # If no ROA => just at the center of the FoV
                     pos = (0.5, 0.5)
                 else:  # Otherwise => in the center of the ROI
@@ -449,7 +449,7 @@ class SparcAcquisitionTab(Tab):
         Called when the Anchor region changes.
         Used to enable/disable the drift correction period control
         """
-        enabled = (roi != acqstream.UNDEFINED_ROI)
+        enabled = (roi != model.UNDEFINED_ROI)
         self.dc_period_ent.lbl_ctrl.Enable(enabled)
         self.dc_period_ent.value_ctrl.Enable(enabled)
 
