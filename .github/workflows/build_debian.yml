@@ -36,6 +36,11 @@ jobs:
         apt-get install -y devscripts equivs
         mk-build-deps -i -r -t "apt-get -y --no-install-recommends" debian/control
 
+    - name: Make a fake datacollector key
+      run: |
+        mkdir -p install/linux/usr/share/odemis
+        printf '{ "access_key": "FAKE_BUILD_KEY", "secret_key": "FAKE_BUILD_SECRET" }\n' > install/linux/usr/share/odemis/datacollector.key
+
     - name: Build Debian package
       run: |
         dpkg-buildpackage -us -uc -b
