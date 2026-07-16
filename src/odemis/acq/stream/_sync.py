@@ -292,6 +292,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         for l in self.leeches:
             shape = (len(pol_pos), rep[1], rep[0])
             # estimate acq time for leeches is based on two fastest axis
+
             if self._integrationTime:
                 integration_count = self._integrationCounts.value
                 if integration_count > 1:
@@ -996,11 +997,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
             res = self._sccd._getDetectorVA("resolution").value
             readout = numpy.prod(res) / ro_rate
 
-            if self._integrationTime:
+            if hasattr(self._sccd, "detPhotonCounting") and self._sccd.detPhotonCounting.value:
+                exp = self._sccd.detPcExposureTime.value
+                counts = self._sccd.detPcIntegrationCounts.value
+            elif self._integrationTime:
                 exp = self._integrationTime.value  # get the total exp time
-                readout *= self._integrationCounts.value
+                counts = self._integrationCounts.value
             else:
                 exp = self._sccd._getDetectorVA("exposureTime").value
+                counts = 1
 
             if self._supports_hw_sync():
                 # The overhead per frame depends a lot on the camera. For now, we use arbitrarily the
@@ -1009,7 +1014,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             else:
                 # Each pixel x the exposure time (of the detector) + readout time +
                 # 30ms overhead + 20% overhead
-                dur_image = (exp + readout + 0.03) * 1.20
+                dur_image = ((exp + readout) * counts + 0.03) * 1.20
             duration = numpy.prod(self.repetition.value) * dur_image
             # Add the setup time
             duration += self.SETUP_OVERHEAD
@@ -2233,24 +2238,29 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         :param future: Current future running for the whole acquisition.
         """
         try:
-            # Compute the max safe intensity value, based on the exposure time
-            if self._integrationTime:
-                # calculate exposure time to be set on detector
-                exp = self._integrationTime.value / self._integrationCounts.value  # get the exp time from stream
-                exp = self._ccd.exposureTime.clip(exp)  # set the exp time on the HW VA
+            if hasattr(self._sccd, "detPhotonCounting") and self._sccd.detPhotonCounting.value:
+                # Disable protection, as each frame should receive very little signal
+                self._intensity_limit_cpf = math.inf
+                logging.debug("Streak CCD protection disable due to photon-counting mode")
             else:
-                # stream has exposure time
-                exp = self._sccd._getDetectorVA("exposureTime").value  # s
+                # Compute the max safe intensity value, based on the exposure time
+                if self._integrationTime:
+                    # calculate exposure time to be set on detector
+                    exp = self._integrationTime.value / self._integrationCounts.value  # get the exp time from stream
+                    exp = self._ccd.exposureTime.clip(exp)  # set the exp time on the HW VA
+                else:
+                    # stream has exposure time
+                    exp = self._sccd._getDetectorVA("exposureTime").value  # s
 
-            # Clip to the maximum value of the detector, otherwise we might never detect high intensity
-            # for long exposure times. Should be defined on the streak-ccd.metadata[MD_CALIB]["intensity_limit"]
-            # as count/s.
-            max_det_value = self._ccd.shape[2] - 1
-            ccd_md = self._ccd.getMetadata()
+                # Clip to the maximum value of the detector, otherwise we might never detect high intensity
+                # for long exposure times. Should be defined on the streak-ccd.metadata[MD_CALIB]["intensity_limit"]
+                # as count/s.
+                max_det_value = self._ccd.shape[2] - 1
+                ccd_md = self._ccd.getMetadata()
 
-            intensity_limit_cps = ccd_md.get(model.MD_CALIB, {}).get("intensity_limit", 40000)
-            self._intensity_limit_cpf = min(intensity_limit_cps * exp, max_det_value)  # counts/frame
-            logging.debug("Streak CCD intensity threshold set to %s counts/frame", self._intensity_limit_cpf)
+                intensity_limit_cps = ccd_md.get(model.MD_CALIB, {}).get("intensity_limit", 40000)
+                self._intensity_limit_cpf = min(intensity_limit_cps * exp, max_det_value)  # counts/frame
+                logging.debug("Streak CCD intensity threshold set to %s counts/frame", self._intensity_limit_cpf)
 
             das, error = super()._runAcquisition(future)
         finally:
@@ -2985,48 +2995,67 @@ class SEMCCDAcquirerRectangle(SEMCCDAcquirer):
         # Note: if the stream has "local VA" (ie, copy of the component VA), then it is assumed that
         # the component VA has already been set to the correct value. (ie, linkHwVAs() has been called)
 
-        if model.hasVA(self._mdstream._ccd, "exposureTime"):
-            expTime = self._mdstream._ccd.exposureTime
-        elif model.hasVA(self._mdstream._ccd, "dwellTime"):
-            expTime = self._mdstream._ccd.dwellTime
+        # Special for detectors with photon counting: a dedicated exposure time and integration count are used.
+        # However, there is only one frame that is sent per acquisition, independent of the integration count.
+        ccd = self._mdstream._ccd
+        photon_counting = model.hasVA(ccd, "photonCounting") and ccd.detPhotonCounting.value
+        if photon_counting:
+            exp_time_va = ccd.pcExposureTime
+            pc_count = ccd.pcIntegrationCounts.value
+        elif model.hasVA(ccd, "exposureTime"):
+            exp_time_va = ccd.exposureTime
+        elif model.hasVA(ccd, "dwellTime"):
+            exp_time_va = ccd.dwellTime
         else:
-            raise ValueError(f"No exposureTime or dwellTime control on {self._mdstream._ccd.name}")
+            raise ValueError(f"No exposureTime or dwellTime control on {ccd.name}")
 
         # Set the detector synchronisation. It's important to do it before reading frameDuration,
         # because for some detectors it depends on it. Also, for the spectrometer, the CCD settings
         # are only applied after setting the synchronization.
         self._mdstream._ccd_df.synchronizedOn(self._mdstream._trigger)
 
-        if self._mdstream._integrationTime:
+        if photon_counting:
+            exp_time = exp_time_va.value * pc_count
+            integration_time = exp_time
+
+            if max_snapshot_duration is None:
+                max_snapshot_duration = exp_time
+        elif self._mdstream._integrationTime:
             integration_time = self._mdstream._integrationTime.value
-            exp_time = expTime.value
+            exp_time = exp_time_va.value
             if max_snapshot_duration is None:
                 max_snapshot_duration = exp_time
             else:
                 max_snapshot_duration = min(max_snapshot_duration, exp_time)
         else:
             # CCD stream has exposure time
-            exp_time = expTime.value
+            exp_time = exp_time_va.value
             integration_time = exp_time
 
             if max_snapshot_duration is None:
                 max_snapshot_duration = exp_time
 
         if integration_time > max_snapshot_duration:
+            if photon_counting:
+                # TODO: reduce the pcIntegrationCounts and use integration counts to sum afterwards...
+                raise NotImplementedError("Photon counting with sub-frames (for drift correction) not implemented "
+                                          f"({integration_time} > {max_snapshot_duration} s)")
+
             # calculate exposure time to be set on detector
             integration_count = math.ceil(integration_time / max_snapshot_duration)
             exp_time = integration_time / integration_count
             # set the exp time on the HW VA (which might adjust it)
-            expTime.value = expTime.clip(exp_time)
+            exp_time_va.value = exp_time_va.clip(exp_time)
             # calculate the integrationCount using the actual value from the HW, in case it was
             # modified by a lot (unlikely)
-            exp_time = expTime.value
+            exp_time = exp_time_va.value
             integration_count = math.ceil(integration_time / exp_time)
             logging.debug("Using integration of %d snapshots of %s s per pixel",
                           integration_count, exp_time)
         else:
-            exp_time = integration_time
-            expTime.value = exp_time
+            if not photon_counting:
+                exp_time = integration_time
+                exp_time_va.value = exp_time
             integration_count = 1
 
         fuzzing = (hasattr(self._mdstream, "fuzzing") and self._mdstream.fuzzing.value)
@@ -3086,10 +3115,10 @@ class SEMCCDAcquirerRectangle(SEMCCDAcquirer):
             self._mdstream._emitter.external.value = True
 
         # Estimate the duration of a CCD frame (aka snapshot)
-        if hasVA(self._mdstream._ccd, "frameDuration"):
+        if hasVA(ccd, "frameDuration"):
             # TODO: make the frameDuration getter blocking until all the settings have been updated?
             time.sleep(0.1)  # wait a bit to ensure the value is updated (can take ~30ms)
-            frame_duration = self._mdstream._ccd.frameDuration.value
+            frame_duration = ccd.frameDuration.value
             logging.debug("Using CCD frame duration of %s s", frame_duration)
         else:
             if model.hasVA(self._mdstream._sccd, "readoutRate"):
@@ -3097,6 +3126,8 @@ class SEMCCDAcquirerRectangle(SEMCCDAcquirer):
                 readout = numpy.prod(ccd_res) / self._mdstream._sccd.readoutRate.value
             else:
                 readout = 0
+            if photon_counting:
+                readout *= pc_count
             frame_duration = exp_time + readout  # s
             logging.debug("Estimated CCD frame duration of %s s, (%s + %s s)",
                           frame_duration, exp_time, readout)
@@ -3681,16 +3712,16 @@ class SEMCCDAcquirerHwSync(SEMCCDAcquirer):
 
         # max_snapshot_duration is expected to be None, as we do not support integration/leeches.
         assert max_snapshot_duration is None
-        if self._mdstream._integrationTime and self._mdstream._integrationCounts.value > 1:
-            # We would need to request the e-beam scanner to duplicate each pixel N times.
-            # (in order to send N triggers to the CCD)
-            raise NotImplementedError("Integration time not supported with hardware sync")
-
         if self._mdstream._integrationTime:
-            # The RepetitionStream updates all the CCD settings in .prepare() and _linkHwVAs(), but
-            # if integration is used, the exposure time might be incorrect.
-            # As, for now, integrationCounts is always == 1, it's easy.
-            self._mdstream._ccd.exposureTime.value = self._mdstream._integrationTime.value
+            if self._mdstream._integrationCounts.value == 1:
+                # The RepetitionStream updates all the CCD settings in .prepare() and _linkHwVAs(), but
+                # if integration is used, the exposure time might be incorrect.
+                # As, for now, integrationCounts is always == 1, it's easy.
+                self._mdstream._ccd.exposureTime.value = self._mdstream._integrationTime.value
+            else:
+                # We would need to request the e-beam scanner to duplicate each pixel N times.
+                # (in order to send N triggers to the CCD)
+                raise NotImplementedError("Integration time not supported with hardware sync")
 
         integration_count = 1
 
