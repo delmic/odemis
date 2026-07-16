@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import collections
 import logging
+import math
 from typing import List
 
 import numpy
@@ -37,7 +38,7 @@ import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis import model
 from odemis.acq.align import AutoFocus
-from odemis.acq.move import MILLING, ALIGNMENT, FM_IMAGING, SEM_IMAGING, THREE_BEAMS
+from odemis.acq.move import MILLING, ALIGNMENT, FM_IMAGING, SEM_IMAGING, THREE_BEAMS, FIB_VIEW_FM, POSITION_NAMES
 from odemis.acq.stream import LiveStream, StaticStream
 from odemis.gui import conf
 from odemis.gui.conf.data import get_local_vas
@@ -47,6 +48,7 @@ from odemis.gui.cont.acquisition.cryo_z_localization import CryoZLocalizationCon
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.img import getBitmap
 from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, TOOL_FIDUCIAL
 from odemis.gui.util import call_in_wx_main
 from odemis.util.dataio import data_to_static_streams
@@ -161,6 +163,10 @@ class LocalizationTab(Tab):
         # Link which overview streams is shown with the ones shown in the Chamber
         self.tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_overview_visible)
 
+        # Current posture indicator initialization
+        self.bmp_fm_imaging = getBitmap("icon/ico_meteorimaging_green.png")
+        self.bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm_green.png")
+
         # Will create SEM stream with all settings local
         emtvas = set()
         hwemtvas = set()
@@ -197,11 +203,17 @@ class LocalizationTab(Tab):
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
             self._allowed_targets = [FM_IMAGING]
+            if FIB_VIEW_FM in self.main_data.posture_manager.postures:
+                self._allowed_targets.append(FIB_VIEW_FM)
             self._stage = self.tab_data_model.main.stage_bare
         elif self.main_data.role == "mimas":
             # Only useful near the active positions: milling (FIB) or FLM
             self._allowed_targets = [FM_IMAGING, MILLING]
             self._stage = self.tab_data_model.main.stage
+
+        if len(self._allowed_targets) <= 1:
+            self.panel.pnl_current_posture.Hide()
+            self.panel.Layout()
 
         self._aligner = self.tab_data_model.main.aligner
 
@@ -440,9 +452,12 @@ class LocalizationTab(Tab):
         # get the top right view port
         view = self.tab_data_model.views.value[1]
         self.tab_data_model.focussedView.value = view
+        pm = self.main_data.posture_manager
         for s in data_to_static_streams(data):
+            # Add milling angle suffix to stream's name if it was acquired at the milling angle.
+            if pm.current_posture.value == FIB_VIEW_FM:
+                s.name.value = f"{s.name.value} at {math.degrees(pm.milling_angle.value):0.0f}°"
             if self.tab_data_model.main.currentFeature.value:
-                s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
                 self.tab_data_model.main.currentFeature.value.streams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
             self._acquired_stream_controller.showFeatureStream(s)
@@ -475,7 +490,10 @@ class LocalizationTab(Tab):
 
     def _on_stage_pos(self, pos):
         """
-        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        Called when the stage is moved, and perform the following actions:
+        - enable the tab if posture is fm imaging or fib-view fm, disable otherwise
+        - set current posture label and bitmap based on current posture
+
         :param pos: (dict str->float or None) updated position of the stage
         """
         guiutil.enable_tab_on_stage_position(
@@ -484,6 +502,16 @@ class LocalizationTab(Tab):
             self._allowed_targets,
             tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
         )
+        self._acquisition_controller._update_overview_acquisition_button()
+        # Update the current posture read-only indicator if needed
+        if self.main_data.posture_manager.at_fib_view_fm_posture(pos):
+            self.panel.lbl_current_posture.SetLabel(POSITION_NAMES[FIB_VIEW_FM])
+            self.panel.bmp_current_posture.SetBitmap(self.bmp_fib_view_fm)
+        elif self.main_data.posture_manager.at_fm_imaging_posture(pos):
+            self.panel.lbl_current_posture.SetLabel(POSITION_NAMES[FM_IMAGING])
+            self.panel.bmp_current_posture.SetBitmap(self.bmp_fm_imaging)
+        else:
+            logging.info(f"Unknown stage position {pos} for localization")
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
