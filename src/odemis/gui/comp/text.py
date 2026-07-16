@@ -776,6 +776,14 @@ class _NumberTextCtrl(wx.TextCtrl):
             str_val = units.readable_str(self._number_value, sig=self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
 
+    def DoGetBestSize(self):
+        """ Return the best size of the control """
+        # To workaround issue with wxWidgets 3.2.4 on Ubuntu 24.04, that causes BestSize to report
+        # a pretty big height. Fixed in wxWidgets 3.2.9/wxPython 4.2.5
+        best_size = wx.TextCtrl.DoGetBestSize(self)
+        best_size[1] = min(best_size[1], 16)
+        return best_size
+
     def Disable(self):
         self.Enable(False)
 

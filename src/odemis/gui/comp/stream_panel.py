@@ -1095,7 +1095,7 @@ class StreamPanel(wx.Panel):
             if selectable:
                 value_ctrl = wx.TextCtrl(self._panel, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
-                value_ctrl.MinSize = (-1, value_ctrl.BestSize[1])
+                value_ctrl.MinSize = (-1, min(value_ctrl.BestSize[1], 16))  # Workaround BestSize bug on wxPython 4.2.1
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
@@ -1172,7 +1172,7 @@ class StreamPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = wx.TextCtrl(self._panel, value=str(value or ""),
                                  style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
-        value_ctrl.MinSize = (-1, value_ctrl.BestSize[1])
+        value_ctrl.MinSize = (-1, min(value_ctrl.BestSize[1], 16))  # Workaround BestSize bug on wxPython 4.2.1
         if readonly:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
         else:
