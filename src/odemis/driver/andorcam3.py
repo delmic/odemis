@@ -607,15 +607,16 @@ class AndorCam3(model.DigitalCamera):
                 raise exp
             if not os.path.isdir(self._bitflow_install_dirs):
                 logging.error("The directory '%s' is not present. Check "
-                              "that the libandor3 package is installed, "
+                              "that the libandor3-cl package is installed, "
                               "and the configuration is correct.",
                               self._bitflow_install_dirs)
                 raise exp
             # check if bitflow module is loaded
-            fmodules = open("/proc/modules").readlines()
-            if not any(re.match("bitflow", l) for l in fmodules):
+            with open("/proc/modules") as fmodules:
+                modules_info = fmodules.readlines()
+            if not any(re.match("bitflow", minfo) for minfo in modules_info):
                 logging.error("The bitflow module is not loaded. Check "
-                              "that libandor3 is correctly installed and "
+                              "that libandor3-cl is correctly installed and "
                               "you are using a supported kernel.")
                 raise exp
             raise exp
