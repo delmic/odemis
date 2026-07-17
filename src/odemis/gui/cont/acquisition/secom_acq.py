@@ -32,7 +32,8 @@ import logging
 import wx
 
 import odemis.gui.model as guimod
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream
+from odemis.model import UNDEFINED_ROI
+from odemis.acq.stream import ScannedTCSettingsStream
 from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.model import TabName, TOOL_NONE, TOOL_SPOT

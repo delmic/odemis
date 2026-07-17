@@ -49,7 +49,7 @@ import numpy
 from odemis import dataio, model, acq
 from odemis.gui.model import TabName
 from odemis.acq import stream, drift, acqmng
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 import os.path

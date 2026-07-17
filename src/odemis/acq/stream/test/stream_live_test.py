@@ -91,7 +91,7 @@ class StreamTestCase(unittest.TestCase):
     def _check_square_pixel(self, st):
         rep = st.repetition.value
         roi = st.roi.value
-        if roi == stream.UNDEFINED_ROI:
+        if roi == model.UNDEFINED_ROI:
             return
         width = roi[2] - roi[0], roi[3] - roi[1]
 
@@ -107,12 +107,12 @@ class StreamTestCase(unittest.TestCase):
         ss = stream.SpectrumSettingsStream("test spec", None, None, ebeam)
 
         # if roi is UNDEFINED, everything is left unchanged
-        ss.roi.value = stream.UNDEFINED_ROI
+        ss.roi.value = model.UNDEFINED_ROI
         ss.pixelSize.value = 1e-8
         self.assertEqual(ss.pixelSize.value, 1e-8)
         ss.repetition.value = (100, 100)
         self.assertEqual(ss.repetition.value, (100, 100))
-        self.assertEqual(ss.roi.value, stream.UNDEFINED_ROI)
+        self.assertEqual(ss.roi.value, model.UNDEFINED_ROI)
 
         # in any cases, a pixel is always square
         self._check_square_pixel(ss)

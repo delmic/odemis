@@ -31,7 +31,7 @@ import numpy
 import wx
 
 from odemis import util, model, gui
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import RectangleEditingMixin, WorldOverlay, Vec, Label, \
     SEL_MODE_EDIT, SEL_MODE_CREATE, SEL_MODE_NONE, cairo_polygon
 from odemis.util import units

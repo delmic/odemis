@@ -38,7 +38,8 @@ import wx
 
 from odemis import model, dataio, util
 from odemis.acq import acqmng, stream
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
+from odemis.model import UNDEFINED_ROI
+from odemis.acq.stream import ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
     TemporalSpectrumSettingsStream, AngularSpectrumSettingsStream
 from odemis.gui import conf
 from odemis.gui.model import TabName

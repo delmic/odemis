@@ -1246,7 +1246,7 @@ class FastEMMultiBeamAcquiController(object):
                     if check_calib_2:
                         roc_2 = roa.roc_2.value
                         if (
-                            roc_2.coordinates.value == stream.UNDEFINED_ROI
+                            roc_2.coordinates.value == model.UNDEFINED_ROI
                             or not roc_2.parameters
                         ):
                             return False
@@ -1254,7 +1254,7 @@ class FastEMMultiBeamAcquiController(object):
                     if check_calib_3:
                         roc_3 = roa.roc_3.value
                         if (
-                            roc_3.coordinates.value == stream.UNDEFINED_ROI
+                            roc_3.coordinates.value == model.UNDEFINED_ROI
                             or not roc_3.parameters
                         ):
                             return False
@@ -1269,7 +1269,7 @@ class FastEMMultiBeamAcquiController(object):
             for roa_window in roas:
                 roa = roa_window[0]
                 roc = roa.roc_2.value
-                if roc.coordinates.value == stream.UNDEFINED_ROI or not roc.parameters:
+                if roc.coordinates.value == model.UNDEFINED_ROI or not roc.parameters:
                     undefined.add(roc.scintillator_number.value)
         return sorted(undefined)
 
@@ -1282,7 +1282,7 @@ class FastEMMultiBeamAcquiController(object):
             for roa_window in roas:
                 roa = roa_window[0]
                 roc = roa.roc_3.value
-                if roc.coordinates.value == stream.UNDEFINED_ROI or not roc.parameters:
+                if roc.coordinates.value == model.UNDEFINED_ROI or not roc.parameters:
                     undefined.add(roc.scintillator_number.value)
         return sorted(undefined)
 

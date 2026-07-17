@@ -46,7 +46,7 @@ import math
 import numpy
 from odemis import dataio, model
 from odemis.acq import stream, drift, acqmng
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 from odemis.dataio import hdf5
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf

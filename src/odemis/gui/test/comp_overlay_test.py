@@ -39,7 +39,7 @@ import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
 from odemis import model, util
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.model import UNDEFINED_ROI
 from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
 from odemis.gui.comp.overlay.centered_line import (CROSSHAIR, HORIZONTAL_LINE,
