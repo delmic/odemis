@@ -126,9 +126,9 @@ class TestAlignment(unittest.TestCase):
     def on_done(self, future):
         self.done += 1
 
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
+    def on_progress_update(self, future, elapsed_time, remaining_time):
+        self.elapsed = elapsed_time
+        self.remaining = remaining_time
         self.updates += 1
 
     def test_aligned_stream(self):

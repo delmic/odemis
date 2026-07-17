@@ -268,10 +268,7 @@ def measure_z_multi_targets(stigmator: model.HwComponent, focus: model.HwCompone
     :return: ProgressiveFuture returning the list of localized targets (POIs and fiducials)
     """
     # Create ProgressiveFuture and run it in a separate thread.
-    est_start = time.time() + 0.1
-
-    f = ProgressiveFuture(start=est_start,
-                          end=est_start + estimate_measure_z_multi_targets(pois, stream, fiducials=fiducials))
+    f = ProgressiveFuture(remaining_time=estimate_measure_z_multi_targets(pois, stream, fiducials=fiducials))
 
     # For now, it's impossible to cancel (it's very short anyway)
     f._task_state = RUNNING

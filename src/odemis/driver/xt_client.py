@@ -2032,9 +2032,7 @@ class Detector(model.Detector):
 
         """
         # Create ProgressiveFuture and update its state
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # Rough time estimation
+        f = ProgressiveFuture(remaining_time=20)  # Rough time estimation
         f._auto_contrast_brightness_lock = threading.Lock()
         f._must_stop = threading.Event()  # Cancel of the current future requested
         f.task_canceller = self._cancelAutoContrastBrightness
@@ -2662,9 +2660,7 @@ class Focus(model.Actuator):
         :return: Future object
         """
         # Create ProgressiveFuture and update its state
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 11)  # rough time estimation
+        f = ProgressiveFuture(remaining_time=11)  # rough time estimation
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
@@ -2899,9 +2895,7 @@ class MultiBeamScanner(Scanner):
         """
         Wrapper for autostigmation function, non-blocking.
         """
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 90)  # Rough time estimation
+        f = ProgressiveFuture(remaining_time=90)  # Rough time estimation
         adapter_version = re.search(r"xtadapter:\s*([\d.]+)", self.parent._swVersion)
         adapter_version = adapter_version.group(1)
         # The new autostig is only supported in xtadapter v1.11.5 and higher
@@ -3140,8 +3134,6 @@ class XTTKFocus(Focus):
             The detector is unused for XTTK focusing, because it is not possible to select a channel for flash focusing.
         :return: Future object
         """
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # Rough time estimation
+        f = ProgressiveFuture(remaining_time=20)  # Rough time estimation
         f = self._executor.submitf(f, self.parent.start_autofocusing_flash)
         return f

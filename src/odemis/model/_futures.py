@@ -28,6 +28,7 @@ from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import threading
 import time
+from typing import Tuple
 
 
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
@@ -370,100 +371,118 @@ class CancellableFuture(futures.Future):
 
 class ProgressiveFuture(CancellableFuture):
     """
-    Allows to track the current progress of the task by getting the (expected)
-    start and end time.
+    Allows to track the current progress of the task by getting the estimated
+    elapsed and remaining time.
     """
 
-    def __init__(self, start=None, end=None):
+    def __init__(self, remaining_time: float = 0.1):
         """
-        start (float): start time
-        end (float): end time
+        :param remaining_time: initial estimated remaining duration in seconds.
+            Since no time has elapsed yet at creation, this equals the total
+            expected duration.
         """
         CancellableFuture.__init__(self)
         self._upd_callbacks = []
 
-        # just a bit ahead of time to say it's not starting now
-        self._start_time = start or (time.time() + 0.1)
-        self._end_time = end or (self._start_time + 0.1)
+        self._elapsed_time = 0.0  # [s] Initially no time has elapsed, therefore always initialize with 0.0
+        self._remaining_time = float(remaining_time)  # [s] remaining time at the last anchor point
+        # Wall-clock time when _elapsed_time/_remaining_time were last anchored;
+        # None until the task starts running.
+        self._last_update_time = None
         self.add_done_callback(self.__on_done)
 
     @property
-    def start_time(self):
-        return self._start_time
+    def elapsed_time(self) -> float:
+        """
+        Return the elapsed time since the task started, in seconds.
+
+        Returns 0 when the task is still pending, the actual elapsed time when
+        running, and the total actual duration when finished or cancelled.
+        """
+        elapsed, _ = self.get_progress()
+        return elapsed
 
     @property
-    def end_time(self):
-        return self._end_time
+    def remaining_time(self) -> float:
+        """
+        Return the estimated remaining time of the task in seconds.
+
+        Returns 0 when the task is finished or cancelled.
+        """
+        _, remaining = self.get_progress()
+        return remaining
 
     def __on_done(self, future):
         """
-        Called when the future is over to report the update one last time
-        => the last update callbacks will be called _before_ the done callbacks
+        Called when the future is over to report the update one last time.
+
+        Snapshots the current elapsed time and sets remaining to 0.
+        The last update callbacks will be called before the done callbacks.
         """
         with self._condition:
-            self._end_time = time.time()
+            if self._last_update_time is not None:
+                self._elapsed_time += time.monotonic() - self._last_update_time
+            self._remaining_time = 0.0
         self._invoke_upd_callbacks()
 
-    def get_progress(self):
+    def get_progress(self) -> Tuple[float, float]:
         """
-        Return the current known start and end time
-        return (float, float): start and end time (in s from epoch)
+        Return the current known elapsed and remaining time.
+
+        :returns: elapsed_time in seconds since the start of the task, and
+            remaining_time as the estimated time left in seconds.
+            When the task is pending, elapsed_time is 0. When done or
+            cancelled, remaining_time is 0.
         """
         with self._condition:
-            start, end = self._start_time, self._end_time
             if self._state == PENDING:
-                # ensure we say the start time is not (too much) in the past
-                now = time.time()
-                if start < now:
-                    dur = end - start
-                    start = now
-                    end = now + dur
+                return 0.0, max(0.0, self._remaining_time)
             elif self._state == RUNNING:
-                # ensure we say the end time is not (too much) in the past
-                end = max(end, time.time())
+                if self._last_update_time is not None:
+                    since = time.monotonic() - self._last_update_time
+                    elapsed = max(0.0, self._elapsed_time + since)
+                    remaining = max(0.0, self._remaining_time - since)
+                else:
+                    elapsed = max(0.0, self._elapsed_time)
+                    remaining = max(0.0, self._remaining_time)
+                return elapsed, remaining
+            else:  # FINISHED or CANCELLED
+                return max(0.0, self._elapsed_time), 0.0
 
-        return start, end
-
-    def set_progress(self, start=None, end=None):
+    def set_progress(self, elapsed_time: float | None = None, remaining_time: float | None = None):
         """
-        Update the start and end times of the task. To be used by executors only.
+        Update the progress of the task. To be used by executors only.
 
-        start (float or None): time at which the task started (or will be starting)
-        end (float or None): time at which the task ended (or will be ending)
+        :param elapsed_time: time already elapsed since task start, in seconds.
+            When provided, _last_update_time is anchored to the current wall-clock
+            time so future calls to get_progress extrapolate from this point.
+        :param remaining_time: new estimated remaining time in seconds from now.
+            When provided, _last_update_time is anchored to the current wall-clock
+            time.
         """
         with self._condition:
-            if start is not None:
-                self._start_time = start
-            if end is not None:
-                self._end_time = end
+            now = time.monotonic()
+            if elapsed_time is not None:
+                self._elapsed_time = elapsed_time
+                self._last_update_time = now
+            if remaining_time is not None:
+                if remaining_time < 0:
+                    logging.warning("Future remaining time is negative: %f s", remaining_time)
 
-            if self._start_time > self._end_time:
-                logging.warning("Future start time %f > end time %f",
-                                self._start_time, self._end_time)
+                self._remaining_time = remaining_time
+                if self._state == RUNNING:
+                    # Accumulate elapsed time since the last anchor before resetting the anchor,
+                    # so that a set_progress(remaining_time=...) call does not discard previously
+                    # accumulated elapsed time.
+                    if self._last_update_time is not None and elapsed_time is None:
+                        self._elapsed_time += now - self._last_update_time
+                    self._last_update_time = now
 
         self._invoke_upd_callbacks()
-
-    def set_start_time(self, val):
-        """
-        Update the start time of the task. To be used by executors only.
-        Deprecated, use set_progress()
-
-        val (float): time at which the task started (or will be starting)
-        """
-        self.set_progress(start=val)
-
-    def set_end_time(self, val):
-        """
-        Update the end time of the task. To be used by executors only.
-        Deprecated, use set_progress()
-
-        val (float): time at which the task ended (or will be ending)
-        """
-        self.set_progress(end=val)
 
     def _report_update(self, fn):
-        start, end = self.get_progress()
-        fn(self, start, end)
+        elapsed, remaining = self.get_progress()
+        fn(self, elapsed, remaining)
 
     def _invoke_upd_callbacks(self):
         for callback in self._upd_callbacks:
@@ -474,15 +493,17 @@ class ProgressiveFuture(CancellableFuture):
 
     def add_update_callback(self, fn):
         """
-        Adds a callback that will receive progress updates whenever a new one is
-          available. The callback receives 2 floats: start and end.
-          "start" is time of the beginning of the task, and "end" is the
-          estimated time at the end of the task. If the task is finished (or
-          cancelled) the end time is the time the task was completed or cancelled
-          The callback is always called at least once, when the task is
-          finished.
-        fn (callable: (Future, float, float) -> None): the callback, that will
-          be called with this future as argument and the start and end information.
+        Add a callback that will receive progress updates whenever a new one is
+        available.
+
+        The callback receives elapsed_time and remaining_time, both in seconds.
+        elapsed_time is how long the task has been running, and remaining_time is
+        the estimated time left. When the task is finished or cancelled,
+        remaining_time is 0. The callback is always called at least once, when
+        the task finishes.
+
+        :param fn: callable with signature (Future, float, float) -> None, called
+            with this future, elapsed_time, and remaining_time.
         """
         with self._condition:
             if self._state not in (CANCELLED, FINISHED):
@@ -493,16 +514,12 @@ class ProgressiveFuture(CancellableFuture):
 
     def set_running_or_notify_cancel(self):
         """
-        Returns:
-            False if the Future was cancelled, True otherwise.
+        :returns: False if the Future was cancelled, True otherwise.
         """
         running = futures.Future.set_running_or_notify_cancel(self)
         if running:
-            # Set start to current time and end to estimated endtime (difference between current end and start)
-            start, end = self.get_progress()
-            startt = time.time()
-            endt = startt + (end - start)  # Force the computation order to reduce floating point error
-            self.set_progress(start=startt, end=endt)
+            # Anchor elapsed to 0 at the moment the task actually starts
+            self.set_progress(elapsed_time=0.0)
 
         return running
 
@@ -518,8 +535,7 @@ class ProgressiveBatchFuture(ProgressiveFuture):
                         respective time estimates for the duration of the future.
         """
         self.futures = futures
-        start = time.time()  # start time of the batch future
-        super().__init__(start=start, end=start + sum(self.futures.values()))
+        super().__init__(remaining_time=sum(self.futures.values()))
         self.task_canceller = self._cancel_all  # takes care of cancelling the task (=all sub-futures)
         # Use this flag to make sure the ProgressiveBatchFuture's cancel is only called once in case any of its sub-future
         # raises an exception or CancelledError in its done callback.
@@ -531,23 +547,21 @@ class ProgressiveBatchFuture(ProgressiveFuture):
 
         self.set_running_or_notify_cancel()
 
-    def _on_future_update(self, f, start, end):
+    def _on_future_update(self, f, elapsed_time: float, remaining_time: float):
         """
-        Whenever progress on the single sub-future is reported, the progress (or end) for the batch future
+        Whenever progress on the single sub-future is reported, the progress for the batch future
         is updated accordingly.
 
         :param f: (ProgressiveFuture) A single sub-future.
-        :param start: (float) Start time of a single future in the batch future in seconds since epoch.
-        :param end: (float) End of a single future in the batch future in seconds since epoch.
+        :param elapsed_time: (float) Elapsed time of the sub-future in seconds.
+        :param remaining_time: (float) Estimated remaining time of the sub-future in seconds.
         """
-        if f.running():  # only care about the future which is currently running
-            # For a running future it is of interest how much time is still needed for execution until finished.
-            # If the future is running, it is no longer of interest when the future has started (which is now in the
-            # past), but how much time is still needed between now and the estimated end.
-            now = time.time()
-            # Update the time estimation for the running future with the time still needed to finish this future
-            self.futures[f] = end - max(start, now)
-            self.set_progress(end=self._estimate_end())  # set the progress for batch future (all futures not done yet)
+        # Process updates from futures that are not yet done. This includes PENDING and RUNNING futures.
+        # remaining_time updates are meaningful even while a sub-future is PENDING, so the batch future
+        # can receive updated estimates.
+        if not f.done():
+            self.futures[f] = max(0.0, remaining_time)
+            self.set_progress(remaining_time=self._estimate_remaining())
 
     def _on_future_done(self, f):
         """
@@ -558,7 +572,7 @@ class ProgressiveBatchFuture(ProgressiveFuture):
 
         :param f: (ProgressiveFuture) A single sub-future.
         """
-        self.set_progress(end=self._estimate_end())  # set the progress for batch future (all futures not done yet)
+        self.set_progress(remaining_time=self._estimate_remaining())
 
         # If an exception occurs or CancelledError is raised for a sub-future, cancel the ProgressiveBatchFuture and
         # all its sub-futures. The cancelling of ProgressiveBatchFuture only needs to be called once because the
@@ -583,18 +597,15 @@ class ProgressiveBatchFuture(ProgressiveFuture):
             # we don't require the futures to be carried out sequentially
             self.set_result(None)
 
-    def _estimate_end(self):
+    def _estimate_remaining(self) -> float:
         """
-        Calculating the end of the batch future by estimating the time left to
-        run the remaining futures. Calculates the new end time based on the current
-        time plus the estimated time for all futures that still need to be executed.
+        Calculate the remaining time for the batch future.
 
-        :returns: (float) Newly estimated end time for the batch future.
+        :returns: (float) Total remaining time in seconds for all futures that
+            have not yet completed.
         """
         # with f.done() only futures are taken into account that are not executed (finished) yet
-        time_left = sum(t for f, t in self.futures.items() if not f.done())
-
-        return time.time() + time_left
+        return sum(t for f, t in self.futures.items() if not f.done())
 
     def _cancel_all(self, f):
         """

@@ -184,15 +184,15 @@ class AveragePlugin(Plugin):
         md = [None] * len(dets)  # to store the metadata
         self._prepare_acq(dets)
 
-        end = time.time() + self.expectedDuration.value
+        exp_duration = self.expectedDuration.value
         if main_data.cld:
             # If the cl-detector is present => configure the optical path
             opmf = main_data.opm.setPath("cli")
-            end += 10
+            exp_duration += 10
         else:
             opmf = None
 
-        f = model.ProgressiveFuture(end=end)
+        f = model.ProgressiveFuture(remaining_time=exp_duration)
         f.task_canceller = lambda l: True  # To allow cancelling while it's running
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(f)
@@ -205,7 +205,7 @@ class AveragePlugin(Plugin):
                 # Update the progress bar
                 left = nb - i
                 dur = frt * left + 0.1
-                f.set_progress(end=time.time() + dur)
+                f.set_progress(remaining_time=dur)
 
                 # Start acquisition
                 dets[0].softwareTrigger.notify()

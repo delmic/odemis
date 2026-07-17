@@ -279,8 +279,9 @@ class ProgressiveFutureConnector(object):
         self._full_text = full
 
         # Will contain the info of the future as soon as we get it.
-        self._start, self._end = future.get_progress()
-        self._end = None
+        elapsed, remaining = future.get_progress()
+        self._elapsed = elapsed  # elapsed time at last progress update (s)
+        self._remaining = remaining  # remaining time at last progress update (s)
         self._prev_left = None
         self._last_update = 0  # when was the last GUI update
 
@@ -295,16 +296,15 @@ class ProgressiveFutureConnector(object):
         future.add_update_callback(self._on_progress)
         future.add_done_callback(self._on_done)
 
-    def _on_progress(self, _, start, end):
-        """ Process any progression
-
-        start (float): time the work started
-        end (float): estimated time at which the work is ending
-
+    def _on_progress(self, _, elapsed_time: float, remaining_time: float):
         """
+        Process any progression update.
 
-        self._start = start
-        self._end = end
+        :param elapsed_time: time elapsed since the task started, in seconds.
+        :param remaining_time: estimated remaining time of the task, in seconds.
+        """
+        self._elapsed = elapsed_time
+        self._remaining = remaining_time
 
     @call_in_wx_main
     def _on_done(self, future):
@@ -329,19 +329,20 @@ class ProgressiveFutureConnector(object):
     def _update_progress(self):
         """ Update the progression controls """
         now = time.time()
-        past = max(0, now - self._start)
-        left = max(0, self._end - now)
+        elapsed, remaining = self._future.get_progress()
+
         prev_left = self._prev_left
-        total = past + left
+        total = elapsed + remaining
         if total <= 0:
-            logging.warning("Unexpected progress %s to %s", self._start, self._end)
+            logging.warning("Unexpected progress elapsed=%s remaining=%s", self._elapsed, self._remaining)
             ratio = 1
         else:
-            ratio = past / total
+            ratio = elapsed / total
 
         # Avoid back and forth estimation (but at least every 10 s)
         can_update = True
         if prev_left is not None and self._last_update + 10 > now:
+            prev_ratio = ratio
             # Don't update gauge if ratio reduces (a bit)
             try:
                 prev_ratio = self._bar.Value / self._bar.Range
@@ -350,13 +351,13 @@ class ProgressiveFutureConnector(object):
             except ZeroDivisionError:
                 pass
             # Or if the time left in absolute value slightly increases (< 5s)
-            if 0 < left - prev_left < 5:
+            if 0 < remaining - prev_left < 5:
                 can_update = False
 
         if not can_update:
             logging.debug("Not updating progress as new estimation is %g s left "
                           "vs old %g s, and current ratio %g vs old %g.",
-                          left, prev_left, ratio * 100, prev_ratio * 100)
+                          remaining, prev_left, ratio * 100, prev_ratio * 100)
             return
         else:
             self._last_update = now
@@ -370,8 +371,8 @@ class ProgressiveFutureConnector(object):
             return
 
         # Time left text
-        self._prev_left = left
-        left = math.ceil(left)  # pessimistic
+        self._prev_left = remaining
+        left = math.ceil(remaining)  # pessimistic
 
         if left > 2:
             lbl_txt = "%s" % units.readable_time(left, full=self._full_text)

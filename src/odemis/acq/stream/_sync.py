@@ -383,9 +383,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         else:
             self._dc_estimator = None
 
-        est_start = time.time() + 0.1
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + self.estimateAcquisitionTime())
+        f = model.ProgressiveFuture(remaining_time=self.estimateAcquisitionTime())
         self._current_future = f
         self._acq_state = RUNNING
         self._prog_sum = 0
@@ -415,7 +413,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         # add some overhead for the end of the acquisition
         tot_left = left + bonus + 0.1
         logging.debug("Estimating another %g s left for the total acquisition.", tot_left)
-        future.set_progress(end=time.time() + tot_left)
+        future.set_progress(remaining_time=tot_left)
 
     def _cancelAcquisition(self, future):
         with self._acq_lock:
@@ -2615,9 +2613,7 @@ class ScannedRemoteTCStream(LiveStream):
             if self._acq_thread.is_alive():
                 logging.error("Previous acquisition not ending, will acquire anyway")
 
-        est_start = time.time() + 0.1
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + self.estimateAcquisitionTime())
+        f = model.ProgressiveFuture(remaining_time=self.estimateAcquisitionTime())
         self._current_future = f
         self._acq_state = RUNNING  # TODO: move to per acquisition
         self._prog_sum = 0
@@ -2805,7 +2801,7 @@ class ScannedRemoteTCStream(LiveStream):
         # add some overhead for the end of the acquisition
         tot_left = left + time_assemble + bonus + 0.1
         tot_left *= 1.1  # extra padding
-        future.set_progress(end=time.time() + tot_left)
+        future.set_progress(remaining_time=tot_left)
 
     def _onNewData(self, dataflow, data):
         # Add frame data to the queue for processing later.

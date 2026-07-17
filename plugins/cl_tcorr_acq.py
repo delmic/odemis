@@ -118,11 +118,9 @@ class CorrelatorScanStream(stream.Stream):
         # this fails => need to use a different (and supported) mode.
         self.prepare().result()
 
-        est_start = time.time() + 0.1
         # Create a "Future", which is an object that can be used to follow the
         # task completion while it's going on, and get the result.
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + self.estimateAcquisitionTime())
+        f = model.ProgressiveFuture(remaining_time=self.estimateAcquisitionTime())
         f.task_canceller = self._cancelAcquisition
         f._acq_state = RUNNING
         f._acq_lock = threading.Lock()

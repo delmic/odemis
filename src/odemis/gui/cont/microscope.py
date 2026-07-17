@@ -1257,9 +1257,7 @@ class DelphiStateController(SecomStateController):
         returns (ProgressiveFuture): Progress DoDelphiLoading
         """
         # Create ProgressiveFuture and update its state to RUNNING
-        est_start = time.time() + 0.1
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + sum(self.DELPHI_LOADING_TIMES))
+        f = model.ProgressiveFuture(remaining_time=sum(self.DELPHI_LOADING_TIMES))
         # will contain a future to cancel or CANCELLED or FINISHED
         f._delphi_load_state = None
 
@@ -1428,21 +1426,20 @@ class DelphiStateController(SecomStateController):
 
         return True
 
-    def _update_load_time(self, future, start, end):
+    def _update_load_time(self, future, elapsed_time: float, remaining_time: float):
         """
         Called whenever a (sub)future of the load action updates the time info
         """
         # Kludge to detect that the progressive future has just been created
         # and doesn't contain yet the correct information.
         # TODO: Once Pyro is fixed, it should be possible to remove it.
-        if end - start <= 0.1:
+        if remaining_time <= 0.1:
             return
 
         # Add the estimated time that the rest of the procedure will take
-        est_end = end + sum(self._chamber_pump_future._actions_time)
-        self._chamber_pump_future.set_progress(end=est_end)
-        rem_time = est_end - time.time()
-        logging.debug("Loading future remaining time: %f", rem_time)
+        new_remaining = remaining_time + sum(self._chamber_pump_future._actions_time)
+        self._chamber_pump_future.set_progress(remaining_time=new_remaining)
+        logging.debug("Loading future remaining time: %f", new_remaining)
 
 
 class FastEMStateController(object):

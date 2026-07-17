@@ -758,7 +758,7 @@ class TiledAcquisitionTask(object):
         :return DataArray: Acquired da for the current tile stream
         """
         # Update the progress bar
-        self._future.set_progress(end=self.estimateTime(self._number_of_tiles - i) + time.time())
+        self._future.set_progress(remaining_time=self.estimateTime(self._number_of_tiles - i))
         # Acquire data array for passed stream
         self._future.running_subf = acqmng.acquire([stream], self._settings_obs)
         das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
@@ -778,7 +778,7 @@ class TiledAcquisitionTask(object):
         :return: list(DataArray) acquired das for the current tile streams
         """
         # Update the progress bar
-        self._future.set_progress(end=self.estimateTime(self._number_of_tiles - i) + time.time())
+        self._future.set_progress(remaining_time=self.estimateTime(self._number_of_tiles - i))
         # Acquire data array for passed stream
         self._future.running_subf = acqmng.acquire(streams, self._settings_obs)
         das, e = self._future.running_subf.result()  # blocks until all the acquisitions are finished
@@ -1088,7 +1088,7 @@ class TiledAcquisitionTask(object):
                 else:
                     logging.info("Acquisition completed, now stitching...")
                     # Stitch the acquired tiles
-                    self._future.set_progress(end=self.estimateTime(0) + time.time())
+                    self._future.set_progress(remaining_time=self.estimateTime(0))
                     st_data = self._stitchTiles(da_list)
 
             if self._future._task_state == CANCELLED:
@@ -1161,7 +1161,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     if not mem_sufficient:
         raise IOError("Not enough RAM to safely acquire the overview: %g GB needed" % (mem_est / 1024 ** 3,))
 
-    future.set_progress(end=task.estimateTime() + time.time())
+    future.set_progress(remaining_time=task.estimateTime())
     # connect the future to the task and run in a thread
     executeAsyncTask(future, task.run)
 
@@ -1176,7 +1176,7 @@ def estimateOverviewTime(*args, **kwargs):
     """
     # Create an overview acquisition task with future = None
     task = AcquireOverviewTask(*args, **kwargs)
-    return task.estimate_time()
+    return task.estimate_remaining_time()
 
 
 def acquireOverview(streams, stage, areas, focus, detector, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
@@ -1214,7 +1214,7 @@ def acquireOverview(streams, stage, areas, focus, detector, overlap=0.2, setting
                                registrar, weaver, focusing_method, use_autofocus, focus_points_dist)
     future.task_canceller = task.cancel  # let the future cancel the task
 
-    future.set_progress(end=task.estimate_time() + time.time())
+    future.set_progress(remaining_time=task.estimate_remaining_time())
     # connect the future to the task and run in a thread
     executeAsyncTask(future, task.run)
 
@@ -1284,7 +1284,7 @@ class AcquireOverviewTask(object):
             logging.debug("acquisition overview cancelled.")
         return True
 
-    def estimate_time(self) -> float:
+    def estimate_remaining_time(self) -> float:
         """
         Estimates the time for the rest of the acquisition.
         :return: (float) the estimated time for the rest of the acquisition
@@ -1318,9 +1318,9 @@ class AcquireOverviewTask(object):
 
         return acquisition_time
 
-    def _pass_future_progress(self, future, start: float, end: float) -> None:
+    def _pass_future_progress(self, future, elapsed_time: float, remaining_time: float) -> None:
         # update the main future with running sub future time estimate and time estimation of remaining tasks
-        self._future.set_progress(end=end + sum(self.time_per_task))
+        self._future.set_progress(remaining_time=remaining_time + sum(self.time_per_task))
 
     def run(self):
         """
@@ -1332,7 +1332,7 @@ class AcquireOverviewTask(object):
         self._future._task_state = RUNNING
         da_rois = []
         try:
-            self._future.set_end_time(time.time() + self.estimate_time())
+            self._future.set_progress(remaining_time=self.estimate_remaining_time())
             # create a for loop for roi to create sub futures
             for idx, roi in enumerate(self.areas):
 

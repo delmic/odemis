@@ -181,9 +181,7 @@ class Chamber(model.Actuator):
         self._checkMoveAbs(pos)
 
         new_pres = pos["vacuum"]
-        est_start = time.time() + 0.1
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + self._getDuration(new_pres))
+        f = model.ProgressiveFuture(remaining_time=self._getDuration(new_pres))
 
         return self._executor.submitf(f, self._changePressure, f, new_pres)
 

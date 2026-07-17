@@ -554,8 +554,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
        Test progress update of acquireTiledArea function
         """
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.remaining = None
         self.updates = 0
         area = (0, 0, 0.00001, 0.00001)  # left, top, right, bottom
         overlap = 0.2
@@ -572,8 +572,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         Test cancelling of acquireTiledArea function
         """
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.remaining = None
         self.updates = 0
         self.done = False
         # Get area from stage metadata
@@ -589,16 +589,16 @@ class CRYOSECOMTestCase(unittest.TestCase):
 
         self.assertRaises(CancelledError, f.result, 1)
         self.assertGreaterEqual(self.updates, 1)  # at least one update at cancellation
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
 
     def on_done(self, future):
         self.done = True
 
-    def on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, remaining_time):
+        self.elapsed = elapsed_time
+        self.remaining = remaining_time
         self.updates += 1
 
 class TiledAcqUtilTestCase(unittest.TestCase):

@@ -401,7 +401,7 @@ class FibsemOSMillingTaskManager:
             path = os.getcwd()
 
         milling_stages = convert_milling_tasks_to_milling_stages(tasks)
-        end_time = time.time() + estimate_total_milling_time(milling_stages) + 30
+        estimated_dur = estimate_total_milling_time(milling_stages) + 30
 
         with self._lock:
             if self._active:
@@ -416,7 +416,7 @@ class FibsemOSMillingTaskManager:
             self._future.running_subf = model.InstantaneousFuture()
             self._future.task_canceller = self.cancel
             # +30 s as estimate time only includes milling time, not current switching time, etc
-            self._future.set_end_time(end_time)
+            self._future.set_progress(remaining_time=estimated_dur)
 
             try:
                 executeAsyncTask(self._future, self._run)

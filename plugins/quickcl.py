@@ -512,11 +512,10 @@ class QuickCLPlugin(Plugin):
         # Acquire (even if it was live, to be sure it's the data is up-to-date)
         ss = self._get_acq_streams()
         dur = acqmng.estimateTime(ss)
-        startt = time.time()
         future._cur_f = InstantaneousFuture()
         future.task_canceller = self._acq_canceller
         future.set_running_or_notify_cancel()  # Indicate the work is starting now
-        future.set_progress(end=startt + dur)
+        future.set_progress(remaining_time=dur)
         dlg.showProgress(future)
 
         future._cur_f = acqmng.acquire(ss, self.main_app.main_data.settings_obs)

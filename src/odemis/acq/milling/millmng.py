@@ -184,7 +184,7 @@ class TFSMillingTaskManager:
 
             # estimate the milling time
             estimated_time = self.fibsem.estimate_milling_time()
-            self._future.set_end_time(time.time() + estimated_time)
+            self._future.set_progress(remaining_time=estimated_time)
 
             # start patterning (async)
             self.fibsem.start_milling()
@@ -260,7 +260,7 @@ def run_milling_tasks(tasks: List[MillingTaskSettings], fib_stream: FIBStream, f
     future.task_canceller = milling_task_manager.cancel
 
     # set the progress of the future (TODO: fix dummy time estimate)
-    future.set_end_time(time.time() + 10 * len(tasks))
+    future.set_progress(remaining_time=10 * len(tasks))
 
     # assign the acquisition task to the future
     executeAsyncTask(future, milling_task_manager.run)
@@ -537,7 +537,7 @@ def run_automated_milling(features: List[CryoFeature],
 
     # set the progress of the future
     total_duration = len(task_list) * len(features) * 30
-    future.set_end_time(time.time() + total_duration) # TODO: get proper time estimate from fibsemOS
+    future.set_progress(remaining_time=total_duration) # TODO: get proper time estimate from fibsemOS
 
     # assign the acquisition task to the future
     executeAsyncTask(future, amm.run)

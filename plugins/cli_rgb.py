@@ -352,8 +352,7 @@ class RGBCLIntensity(Plugin):
 
         # Prepare the Future to represent the acquisition progress, and cancel
         dur = self.expectedDuration.value
-        end = time.time() + dur
-        ft = model.ProgressiveFuture(end=end)
+        ft = model.ProgressiveFuture(remaining_time=dur)
 
         # Allow to cancel by cancelling also the sub-task
         def canceller(future):
@@ -384,7 +383,7 @@ class RGBCLIntensity(Plugin):
                 raise CancelledError()
 
             dur -= dt_survey
-            ft.set_progress(end=time.time() + dur)
+            ft.set_progress(remaining_time=dur)
 
             # Extra drift correction between each filter
             dc_roi = self._acqui_tab.driftCorrector.roi.value
@@ -397,7 +396,7 @@ class RGBCLIntensity(Plugin):
                                                     dc_roi, dc_dt)
                 drift_est.acquire()
                 dur -= dt_drift
-                ft.set_progress(end=time.time() + dur)
+                ft.set_progress(remaining_time=dur)
             else:
                 drift_est = None
 
@@ -405,7 +404,7 @@ class RGBCLIntensity(Plugin):
             for fb, co in zip(self._filters, self._colours):
                 cl_set_s.axisFilter.value = fb.value
                 logging.debug("Using band %s", fb.value)
-                ft.set_progress(end=time.time() + dur)
+                ft.set_progress(remaining_time=dur)
 
                 # acquire CL stream
                 ft._subf = acqmng.acquire([self._cl_int_s], self.main_app.main_data.settings_obs)
@@ -415,7 +414,7 @@ class RGBCLIntensity(Plugin):
                 if ft.cancelled():
                     raise CancelledError()
                 dur -= dt_clint
-                ft.set_progress(end=time.time() + dur)
+                ft.set_progress(remaining_time=dur)
 
                 if drift_est:
                     drift_est.acquire()
@@ -424,7 +423,7 @@ class RGBCLIntensity(Plugin):
                     tot_dc_vect = (tot_dc_vect[0] + dc_vect[0] * pxs[0],
                                    tot_dc_vect[1] - dc_vect[1] * pxs[1])  # Y is inverted in physical coordinates
                     dur -= dt_drift
-                    ft.set_progress(end=time.time() + dur)
+                    ft.set_progress(remaining_time=dur)
 
                 # Convert the CL intensity stream into a "fluo" stream so that it's nicely displayed (in colour) in the viewer
                 for da in d:

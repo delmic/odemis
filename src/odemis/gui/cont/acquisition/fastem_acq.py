@@ -455,6 +455,7 @@ class FastEMOverviewAcquiController(object):
             )
             self.acq_future.add_done_callback(partial(self.on_acquisition_done, num=num))
             self.acq_future.add_done_callback(self.reset_acquisition_gui)
+
             self._fs_connector = ProgressiveFutureConnector(
                 self.acq_future, self.gauge_acq, self.lbl_acqestimate
             )
@@ -848,9 +849,8 @@ class FastEMSingleBeamAcquiController(object):
                 )
                 self._on_toa_acquisition_done_sub_callback[toa] = toa_sub_callback
                 f.add_done_callback(toa_sub_callback)
-                t = f.end_time - f.start_time
+                t = f.remaining_time
                 total_t += t
-                f.set_progress(start=time.time(), end=time.time() + total_t)
                 self._toa_future_connector.append(
                     ProgressiveFutureConnector(f, window.gauge)
                 )
@@ -1445,9 +1445,8 @@ class FastEMMultiBeamAcquiController(object):
                 self._on_roa_acquisition_done_sub_callback[roa] = roa_sub_callback
                 f.add_done_callback(roa_sub_callback)
 
-                t = f.end_time - f.start_time
+                t = f.remaining_time
                 total_t += t
-                f.set_progress(start=time.time(), end=time.time() + total_t)
                 self._roa_future_connector.append(
                     ProgressiveFutureConnector(f, window.gauge)
                 )
@@ -2028,7 +2027,7 @@ class FastEMCalibrationController:
                 )
                 self._on_calibration_done_sub_callback[calib_name] = calib_sub_callback
                 f.add_done_callback(calib_sub_callback)
-                t = f.end_time - f.start_time
+                t = f.remaining_time
                 total_t += t
                 fs[f] = t
 

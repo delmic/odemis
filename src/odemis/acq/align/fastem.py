@@ -122,7 +122,7 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
         raise ModuleNotFoundError("fastem_calibration module missing. Cannot run calibrations.")
 
     est_dur = estimate_calibration_time(calibrations)
-    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
+    f = model.ProgressiveFuture(remaining_time=est_dur)
 
     # Create a task that runs the calibration and alignments.
     task = CalibrationTask(f, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
@@ -242,9 +242,7 @@ class CalibrationTask(object):
 
         # Get the estimated time for all requested calibrations.
         total_calibration_time = self.estimate_calibration_time()
-
-        # No need to set the start time of the future: it's automatically done when setting its state to running.
-        self._future.set_progress(end=time.time() + total_calibration_time)  # provide end time to future
+        self._future.set_progress(remaining_time=total_calibration_time)  # provide end time to future
         logging.info("Starting calibrations, with expected duration of %f s", total_calibration_time)
 
         try:
@@ -282,7 +280,7 @@ class CalibrationTask(object):
                     raise CancelledError()
 
                 # Update the time left for the calibrations remaining
-                self._future.set_progress(end=time.time() + self.estimate_calibration_time())
+                self._future.set_progress(remaining_time=self.estimate_calibration_time())
                 logging.debug("Finished calibration %s successfully", calib)
 
         except CancelledError:

@@ -163,17 +163,17 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
     def setUp(self):
         self.done = False
         self.updates = 0
-        self.start = None
-        self.end = None
+        self.elapsed = None
+        self.remaining = None
         self._images = []
 
     # Called when the acquisition future is completed or updates the progress
     def on_done(self, future):
         self.done = True
 
-    def on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
+    def on_progress_update(self, future, elapsed_time, remaining_time):
+        self.elapsed = elapsed_time
+        self.remaining = remaining_time
         self.updates += 1
 
     # Called when a stream.image is changed
@@ -210,7 +210,7 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 4)  # at least a couple of updates
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
@@ -233,7 +233,7 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 5)  # at least a few updates
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
@@ -264,7 +264,7 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
         f.cancel()
 
         self.assertGreaterEqual(self.updates, 1)  # at least at the end
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(f.cancelled())
 
         # short acquisition
@@ -281,7 +281,7 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
         f.cancel()
 
         self.assertGreaterEqual(self.updates, 1)  # at least at the end
-        self.assertLessEqual(self.end, time.time())
+        self.assertAlmostEqual(self.remaining, 0, delta=0.1)
         self.assertTrue(f.cancelled())
 
     def test_acq_ar(self):
@@ -1428,7 +1428,7 @@ class BaseSPARCTestCase(unittest.TestCase, ABC):
             self.assertGreater(pos[1] + sstage_to_abs_shift[1], roi_rng[0][1])
             self.assertLess(pos[1] + sstage_to_abs_shift[1], roi_rng[1][1])
 
-    def on_progress_update_stage(self, _, start, end):
+    def on_progress_update_stage(self, _, elapsed_time, remaining_time):
         sstage_pos = self.scan_stage.position.value
         self.stage_positions.add((sstage_pos["x"], sstage_pos["y"]))
         self.ebeam_positions.add(self.ebeam.translation.value)

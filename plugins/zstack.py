@@ -430,8 +430,7 @@ class ZStackPlugin(Plugin):
                     dur = sacqt * left + step_time * (left - 1)
                     logging.debug("Acquisition %d of %d", total_nb - left, total_nb)
 
-                    startt = time.time()
-                    f.set_progress(end=startt + dur)
+                    f.set_progress(remaining_time=dur)
 
                     # Prepare the axis for this step
                     self.preStepAcquisition(i)
