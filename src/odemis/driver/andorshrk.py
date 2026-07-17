@@ -1952,8 +1952,12 @@ class Shamrock(model.Actuator):
         Setter for the grating VA.
         It will try to put the same wavelength as before the change of grating.
         Synchronous until the grating is finished (up to 30s)
-        g (1<=int<=3): the new grating
+        g (1<=int<=4): the new grating
         """
+        if self.GetGrating() == g:
+            logging.debug("Grating %d already selected, not moving", g)
+            return
+
         # Make sure that getPixelToWavelength() can be called in-between the
         # moves as the intermediary position might not accepted by the HW.
         with self._px2wl_lock:
