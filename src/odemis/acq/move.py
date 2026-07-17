@@ -120,7 +120,7 @@ class MicroscopePostureManager:
             else:
                 raise ValueError(f"Stage version {stage_version} is not supported")
         else:
-            ValueError(f"Microscope {role} is not supported")
+            raise ValueError(f"Microscope {role} is not supported")
 
     @abstractmethod
     def __init__(self, microscope):
