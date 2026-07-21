@@ -30,6 +30,8 @@ import inspect
 import logging
 import math
 import numbers
+from typing import Set
+
 from odemis import model, util
 import odemis
 from odemis.util import units, inspect_getmembers
@@ -715,35 +717,46 @@ def move_abs(comp_name, moves, check_distance=True, to_radians=False):
                       (comp_name, act_mv, exc))
 
 
-def reference(comp_name, axis_name):
+def reference(comp_name: str, axis_names: Set[str]) -> None:
     """
-    reference the axis of the given component
+    Reference one or more axes of the given component.
+
+    :param comp_name: name of the actuator component
+    :param axis_names: set of axis names to reference
+    :raises ValueError: if the component is not an actuator or an axis cannot be referenced
+    :raises IOError: if referencing fails
     """
     component = get_component(comp_name)
 
+    if not axis_names:
+        raise ValueError("At least one axis must be specified for referencing component %s" % comp_name)
+
     try:
-        if axis_name not in component.axes:
-            raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
+        for axis_name in axis_names:
+            if axis_name not in component.axes:
+                raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
     except (TypeError, AttributeError):
         raise ValueError("Component %s is not an actuator" % comp_name)
 
     try:
-        if axis_name not in component.referenced.value:
-            raise AttributeError()  # immediately caught
+        for axis_name in axis_names:
+            if axis_name not in component.referenced.value:
+                raise AttributeError()  # immediately caught
     except (TypeError, AttributeError):
         raise ValueError("Axis %s of actuator %s cannot be referenced" % (axis_name, comp_name))
 
+
     try:
-        m = component.reference({axis_name})
+        m = component.reference(axis_names)
         try:
             m.result(360)
         except KeyboardInterrupt:
-            logging.warning("Cancelling referencing of axis %s", axis_name)
+            logging.warning("Cancelling referencing of axes %s", axis_names)
             m.cancel()
             raise
     except Exception as exc:
-        raise IOError("Failed to reference axis %s of component %s: %s" %
-                      (axis_name, comp_name, exc))
+        raise IOError("Failed to reference axes %s of component %s: %s" %
+                      (axis_names, comp_name, exc))
 
 def stop_move():
     """
@@ -971,9 +984,9 @@ def main(args):
                         help="flag needed to allow any move bigger than 10 mm.")
     dm_grp.add_argument("--degrees", dest="degrees", action="store_true", default=False,
                         help="indicate the position is in degrees, it will be converted to radians.")
-    dm_grpe.add_argument("--reference", dest="reference", nargs=2, action="append",
+    dm_grpe.add_argument("--reference", dest="reference", nargs="+", action="append",
                          metavar=("<component>", "<axis>"),
-                         help="runs the referencing procedure for the given axis.")
+                         help="runs the referencing procedure for the given axis (or axes, separated by spaces).")
     dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
                          help="immediately stop all the actuators in all directions.")
     dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+",
@@ -1083,10 +1096,9 @@ def main(args):
                 c = l[0]
                 kvs = dict(zip(l[1::2], l[2::2]))
                 update_metadata(c, kvs)
-        # TODO: catch keyboard interrupt and stop the moves
         elif options.reference is not None:
-            for c, a in options.reference:
-                reference(c, a)
+            for l in options.reference:
+                reference(l[0], set(l[1:]))
         elif options.position is not None:
             moves = merge_moves(options.position)
             for c, m in moves.items():
