@@ -45,7 +45,7 @@ from odemis.util import inspect_getmembers
 # callbacks.
 # Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.THREADPOOL_MINTHREADS = 16  # TODO: still need 48, because it can block when increasing the pool?
-Pyro4.config.THREADPOOL_MAXTHREADS = 128
+Pyro4.config.THREADPOOL_MAXTHREADS = 256
 # TODO make sure Pyro can now grow the pool: it used to allocate a huge static
 # number of threads. It seems also that when growing the pool it sometimes blocks
 
