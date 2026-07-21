@@ -30,7 +30,7 @@ Depends: ${shlibs:Depends},
          odemis-doc,
          cgroup-tools,
 # just to take screenshots during bug report
-         graphicsmagick,
+         gnome-screenshot,
 # currently authbind is only needed for the auto probing of nfpm driver
          authbind,
          python3,
