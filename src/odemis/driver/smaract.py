@@ -1483,7 +1483,7 @@ class MC_5DOF_DLL(CDLL):
 
     def __init__(self):
         if os.name == "nt":
-            raise NotImplemented("Windows not yet supported")
+            raise NotImplementedError("Windows not yet supported")
             # WinDLL.__init__(self, "libSA_MC.dll")  # TODO check it works
         else:
             # Global so that its sub-libraries can access it
