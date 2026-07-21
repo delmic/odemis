@@ -265,7 +265,7 @@ class SmarPodDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmarpod.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmarpod.so.1", RTLD_GLOBAL)
 
     def __getitem__(self, name):
         try:
@@ -1487,7 +1487,7 @@ class MC_5DOF_DLL(CDLL):
             # WinDLL.__init__(self, "libSA_MC.dll")  # TODO check it works
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractmc.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractmc.so.0", RTLD_GLOBAL)
 
     def __getitem__(self, name):
         try:
@@ -2874,7 +2874,7 @@ class SA_CTLDLL(CDLL):
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libsmaractctl.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libsmaractctl.so.1", RTLD_GLOBAL)
 
         self.SA_CTL_GetFullVersionString.restype = c_char_p
         self.SA_CTL_GetFullVersionString.errcheck = lambda r, f, a: r  # Always happy
