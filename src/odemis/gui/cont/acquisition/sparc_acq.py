@@ -487,7 +487,11 @@ class SparcAcquiController(object):
         """
         streams = list(self._tab_data_model.acquisitionStreams)
         st = stream.StreamTree(streams=streams)
-        thumb = acqmng.computeThumbnail(st, acq_future)
+        try:
+            thumb = acqmng.computeThumbnail(st, acq_future)
+        except Exception:
+            logging.exception("Failed to compute thumbnail for acquisition")
+            thumb = None
         data, exp = acq_future.result()
 
         filename = self.filename.value
