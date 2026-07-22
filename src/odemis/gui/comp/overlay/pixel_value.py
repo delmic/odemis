@@ -68,7 +68,7 @@ class PixelValueOverlay(ViewOverlay):
     def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
         if not self.active.value:
-            return super(ViewOverlay, self).on_leave(evt)
+            return super().on_leave(evt)
         else:
             self._v_pos = None
             self._p_pos = None
@@ -77,7 +77,7 @@ class PixelValueOverlay(ViewOverlay):
     def on_motion(self, evt):
         """ Update the display of the raw pixel value based on the current mouse position """
         if not self.active.value:
-            return super(ViewOverlay, self).on_motion(evt)
+            return super().on_motion(evt)
 
         # Whatever happens, we don't keep the event, but pass it to any other interested listener.
         evt.Skip()

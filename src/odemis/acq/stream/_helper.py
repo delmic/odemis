@@ -1363,7 +1363,7 @@ class AngularSpectrumAlignmentStream(AngularSpectrumSettingsStream):
         if self.wl_inverted:
             data = data[:,::-1, ...]  # invert C
 
-        super(AngularSpectrumSettingsStream, self)._onNewData(dataflow, data)
+        super()._onNewData(dataflow, data)
 
 class FastScanningDetector(RepetitionStream):
 
