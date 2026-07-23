@@ -33,7 +33,7 @@ import numpy
 
 from odemis import model, util
 from odemis.model import oneway
-from odemis.util import to_str_escape
+from odemis.util import to_str_escape, driver
 
 #  0= Boolean: Can have the values true or false. Valid entries are „true“ (true), „false“
 #              (false), „on“ (true), „off“ (false), „yes“ (true), „no“ (false), „0“ (false), or
@@ -1628,7 +1628,6 @@ class DelayGenerator(model.HwComponent):
 # Just keep enough log messages to be able to detect the previous command error or warning
 LOG_QUEUE_MAX_SIZE = 16  # max number of log messages to keep in the queue
 
-
 class StreakCamera(model.HwComponent):
     """
     Represents Hamamatsu readout camera for the streak unit.
@@ -1679,11 +1678,19 @@ class StreakCamera(model.HwComponent):
             raise
 
         # collect responses (error_code = 0-3,6-10) from commandport
-        self.queue_command_responses = queue.Queue(maxsize=0)  # List[str]
-        # log messages (error_code = 4,5) from commandport
-        self.queue_log = []  # List[str], to hold the latest log messages (error codes 4 & 5)
+        self.queue_command_responses = queue.Queue()  # List[str]
+        # Latest log (error code 4) and warning (error code 5) messages
+        self.queue_log = collections.deque(maxlen=LOG_QUEUE_MAX_SIZE) # List[str]
+        self.queue_warning = queue.Queue()  # str
         # Communication with the acquisition thread:
-        self.queue_img = queue.Queue(maxsize=0)  # Tuple[CMD_*, ...] where extra elements are command arguments
+        self.queue_img = queue.Queue()  # Tuple[CMD_*, ...] where extra elements are command arguments
+
+        # For notifications
+        gui_users = driver.get_active_gui_users()
+        self._gui_user = next(iter(gui_users), None)  # just take the first user, if any
+        if self._gui_user:
+            self._notification_thread = threading.Thread(target=self._notification_loop, daemon=True)
+            self._notification_thread.start()
 
         self.should_listen = True  # used in readCommandResponse thread
 
@@ -1748,6 +1755,39 @@ class StreakCamera(model.HwComponent):
         except Exception:
             self.terminate()
             raise
+
+    def _notification_loop(self) -> None:
+        """
+        Grabs the warning messages from the queue and sends them as notifications to the GUI.
+        Expected to run in a separate thread.
+        """
+        try:
+            while True:
+                msg = self.queue_warning.get()
+                if msg is None:  # Special "message" to terminate the thread
+                    break
+                self._show_warning(msg)
+        except Exception:
+            logging.exception("Error in notification thread")
+        finally:
+            logging.info("Notification thread terminated.")
+
+    def _show_warning(self, msg: str) -> None:
+        """
+        Sends a warning message as a notification to the GUI user.
+        :param msg: The warning message to be sent.
+        """
+        if self._gui_user:
+            try:
+                # RemoteEx sends new lines as \r\n, which is shown oddly in the notifications.
+                # => replace with just \n, and use the first line as the title.
+                lines = msg.split("\r\n")
+                title = lines[0]
+                message = "\n".join(lines[1:])
+                driver.notify_to_user(self._gui_user, title=title,  message=message,
+                                      app=self.name, icon="warning")
+            except Exception as ex:
+                logging.warning("Error sending notification: %s", ex)
 
     def _openConnection(self):
         """
@@ -1814,6 +1854,11 @@ class StreakCamera(model.HwComponent):
             self.AppEnd()
         except Exception:
             logging.info("Failed to stop the HPDTA App (Hamamatsu streak camera)", exc_info=True)
+
+        if self._notification_thread:
+            self.queue_warning.put(None)  # Special "message" to terminate the thread
+            self._notification_thread.join(5)
+            self._notification_thread = None
 
         self.should_listen = False  # terminates receiver thread
         if self.t_receiver.is_alive():
@@ -1933,20 +1978,21 @@ class StreakCamera(model.HwComponent):
 
                 # Sometimes the answer comes in multiple parts, separated by \r\n, but cut on \r.
                 # so need to wait a tiny bit longer (<3ms) to check if the response is continuing.
-                for i in range(100):
-                    time.sleep(3e-3)
-                    readable, _, _ = select.select([self._commandport], [], [], 0)  # wait max 0s.
-                    if not readable:  # No more data available => good to process it
-                        break
-                    try:
-                        received = self._commandport.recv(4096)
-                        logging.debug("Received extra: '%s'", to_str_escape(received))
-                        responses += received.decode("latin1")
-                    except Exception as ex:  # No extra data, that's unexpected, but fine!
-                        logging.debug("No more data available while so was supposed to be there: %s", ex)
-                        break
-                else:
-                    logging.warning("Responses keep coming in, will process the data received so far.")
+                if len(responses) > 100 or responses[-1:] != "\r":  # if the response look like it could be cut, wait for more
+                    for i in range(100):
+                        time.sleep(3e-3)
+                        readable, _, _ = select.select([self._commandport], [], [], 0)  # wait max 0s.
+                        if not readable:  # No more data available => good to process it
+                            break
+                        try:
+                            received = self._commandport.recv(4096)
+                            logging.debug("Received extra: '%s'", to_str_escape(received))
+                            responses += received.decode("latin1")
+                        except Exception as ex:  # No extra data, that's unexpected, but fine!
+                            logging.debug("No more data available while so was supposed to be there: %s", ex)
+                            break
+                    else:
+                        logging.warning("Responses keep coming in, will process the data received so far.")
 
                 # Separate commands on \r... but not \r\n (which is used to separate lines inside a response)
                 # Note: in reality, it's even more muddy, because some error messages may contain raw
@@ -1966,16 +2012,19 @@ class StreakCamera(model.HwComponent):
                         logging.warning("Skipping unexpected response (%s): %s", ex, to_str_escape(msg))
                         continue
 
-                    logging.debug("Interpreted response: %s", msg_splitted)
+                    # logging.debug("Interpreted response: %s", msg_splitted)
 
                     if error_code in (4, 5):
                         # A new image is available on the dataport => Send to the special queue
                         if error_code == 4 and rfunc in ("Livemonitor", "Acqmonitor"):
                             self.queue_img.put((CMD_IMG, *rargs))
-                        else:
+                        elif error_code == 4:
                             self.queue_log.append(msg_splitted)
-                            if len(self.queue_log) > LOG_QUEUE_MAX_SIZE:
-                                self.queue_log.pop(0)
+                        else:  # error_code == 5
+                            # Discard old wernings if too many
+                            while self.queue_warning.qsize() >= LOG_QUEUE_MAX_SIZE:
+                                self.queue_warning.get()
+                            self.queue_warning.put(msg_splitted[1])
                     else:  # send response including error_code to queue
                         self.queue_command_responses.put(msg_splitted)
 
@@ -3102,11 +3151,11 @@ class HPDTASim:
         """Return the current vertical pixel count (VWidth) given the binning."""
         return self.SENSOR_VWIDTH // self._cam_binning[1]
 
-    def _parse_time_range_s(self) -> Optional[float]:
+    def _parse_time_range_s(self) -> float:
         """
         Parse the current streak-unit time range string to seconds.
 
-        :return: time range in seconds, or None for synchroscan integer IDs
+        :return: time range in seconds
         """
         tr = self._su_time_range.strip()
         parts = tr.split(" ")
@@ -3115,8 +3164,12 @@ class HPDTASim:
             try:
                 return float(parts[0]) * units_map[parts[1]]
             except (KeyError, ValueError):
-                return None
-        return None  # synchroscan integer ID
+                return 1e-6
+        elif len(parts) == 1:  # synchroscan integer ID -> arbitrary ps-scale values
+            return (2 ** int(parts[0])) * 50e-12
+        else:
+            logging.warning("Unrecognized time range format %r", tr)
+            return 1e-6
 
     # ── image and scaling-table generation ────────────────────────────────
 
@@ -3183,13 +3236,12 @@ class HPDTASim:
         h = self._get_vwidth()
         time_range_s = self._parse_time_range_s()
 
-        if time_range_s is None or time_range_s == 0:
-            # Synchroscan: time range is an integer ID; use arbitrary ps-scale values
-            values = numpy.linspace(0.0, 100.0, h, dtype=numpy.float32)
+        # Compute the same unit prefix that get_time_scale_factor() would return
+        if self.streak_unit == "synchroscan":  # always ps
+            unit_factor = 1e-12
         else:
-            # Compute the same unit prefix that get_time_scale_factor() would return
             unit_factor = 10.0 ** (int(math.log10(time_range_s) // 3) * 3)
-            values = numpy.linspace(0.0, time_range_s / unit_factor, h, dtype=numpy.float32)
+        values = numpy.linspace(0.0, time_range_s / unit_factor, h, dtype=numpy.float32)
 
         return values.tobytes()
 
@@ -3459,7 +3511,6 @@ class _HPDTACommandHandler(socketserver.BaseRequestHandler):
         """
         parts = [str(error_code), func_name] + [str(v) for v in values]
         msg = ",".join(parts) + "\r"
-        # logging.debug("HPDTASim → %s", to_str_escape(msg))
         with self._send_lock:
             self.request.sendall(msg.encode("latin1"))
 
@@ -3469,7 +3520,6 @@ class _HPDTACommandHandler(socketserver.BaseRequestHandler):
 
         :param msg: raw command without the trailing \\r, e.g. "AcqStart(Live)"
         """
-        # logging.debug("HPDTASim ← %s", to_str_escape(msg))
         m = re.match(r"(\w+)\((.*)\)$", msg.strip())
         if not m:
             logging.warning("HPDTASim: cannot parse command: %s", to_str_escape(msg))
@@ -3995,6 +4045,9 @@ class _HPDTACommandHandler(socketserver.BaseRequestHandler):
                 sim._su_gate_mode = value
             elif pl == "shutter":
                 sim._su_shutter = value
+                if value == "Open":
+                    # Send a warning, just for testing
+                    self._send_response("Shutter opened\r\nBe careful!", "6", error_code=5)
             elif pl == "trigmode":
                 sim._su_trig_mode = value
             elif pl == "triglevel":
