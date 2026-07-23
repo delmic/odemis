@@ -23,6 +23,7 @@ import logging
 import os
 import time
 import unittest
+from concurrent.futures import Future
 from concurrent.futures._base import CancelledError
 from unittest import mock
 
@@ -33,11 +34,12 @@ import odemis.acq.path as path
 import odemis.acq.stream as stream
 from odemis import model
 from odemis.acq import acqmng
-from odemis.acq.acqmng import SettingsObserver, acquireZStack
+from odemis.acq.acqmng import SettingsObserver, ZStackAcquisitionTask, acquireZStack
 from odemis.acq.leech import ProbeCurrentAcquirer
 from odemis.acq.move import MicroscopePostureManager, FM_IMAGING, SEM_IMAGING, LOADING
 from odemis.driver import xt_client
 from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
+from odemis.model import InstantaneousFuture
 from odemis.util import testing
 from odemis.util.comp import generate_zlevels
 
@@ -855,6 +857,109 @@ class MeteorTestCase(unittest.TestCase):
             self.assertEqual(len(d.metadata[model.MD_PIXEL_SIZE]), 3)
         self.assertEqual(data[0].metadata[model.MD_EXTRA_SETTINGS]
                          ["Camera"]["exposureTime"], [0.023, "s"])
+
+
+def _make_sim_data_array(shape=(64, 64), dtype=numpy.uint16):
+    """
+    Return a minimal 2-D DataArray suitable as a z-level image.
+
+    :param shape: 2-tuple (height, width)
+    :param dtype: NumPy dtype for the pixel data
+    :return: model.DataArray with pixel-size and position metadata
+    """
+    md = {
+        model.MD_DIMS: "YX",
+        model.MD_PIXEL_SIZE: (1e-7, 1e-7),
+        model.MD_POS: (0.0, 0.0),
+    }
+    return model.DataArray(numpy.zeros(shape, dtype=dtype), md)
+
+
+def _make_sim_stream(name="mock_stream"):
+    """
+    Build a MagicMock that satisfies the interface used by ZStackAcquisitionTask.
+
+    :param name: human-readable name for the stream mock
+    :return: unittest.mock.MagicMock mimicking a Stream
+    """
+    s = mock.MagicMock()
+    s.name.value = name
+    s.estimateAcquisitionTime.return_value = 0.0
+    s.focuser.moveAbs.return_value = InstantaneousFuture(None)
+    return s
+
+
+def _make_sim_task(stream_mock, zlevels):
+    """
+    Construct a ZStackAcquisitionTask with a mock ProgressiveFuture.
+
+    Both guessActuatorMoveDuration (called in __init__) and
+    estimate_total_duration (called inside run()) are patched to avoid
+    the need for real actuator hardware.
+
+    :param stream_mock: mock Stream object
+    :param zlevels: dict mapping stream_mock to list of z positions
+    :return: (task, mock_future) tuple ready to call task.run() on
+    """
+    future = mock.MagicMock()
+    with mock.patch("odemis.acq.acqmng.guessActuatorMoveDuration", return_value=0.0):
+        task = ZStackAcquisitionTask(future, [stream_mock], zlevels, settings_obs=None)
+    task.estimate_total_duration = mock.MagicMock(return_value=1.0)
+    return task, future
+
+
+class TestZStackPartialFailureSim(unittest.TestCase):
+    """
+    Simulation tests (no hardware) for the fix that saves partial z-stack data
+    when a camera error occurs during an acquisition.
+
+    Root cause of the original bug: a camera communication error could return
+    an image with the wrong shape.  On NumPy < 1.24, numpy.array() on
+    silently produces an object-dtype array, instead of returning the expected 3D array
+     (WriteDirectory() → AssertionError: 0).
+
+    Shape validation in ZStackAcquisitionTask.run(), plus partial z-stack assembly
+    is implemented instead of discarding data on failure.
+    """
+
+    def test_full_success_returns_zcube(self):
+        """
+        When all z-levels succeed, run() returns a single ZYX DataArray and no exception.
+        """
+        n = 3
+        zlevels_list = [i * 1e-6 for i in range(n)]
+        s = _make_sim_stream("fluo")
+        task, _ = _make_sim_task(s, {s: zlevels_list})
+
+        good_img = _make_sim_data_array((64, 64))
+        acq_futures = [InstantaneousFuture(([good_img], None)) for _ in range(n)]
+
+        with mock.patch("odemis.acq.acqmng.acquire", side_effect=acq_futures):
+            data, exp = task.run()
+
+        self.assertIsNone(exp)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0].shape, (n, 64, 64))
+        self.assertNotEqual(data[0].dtype, object)
+
+    def test_first_zlevel_fails_returns_empty_data(self):
+        """
+        When the very first z-level fails, no z-cube can be assembled.
+        run() must return an empty data list and the exception.
+        """
+        zlevels_list = [0.0e-6, 1.0e-6]
+        s = _make_sim_stream("fluo")
+        task, _ = _make_sim_task(s, {s: zlevels_list})
+
+        hw_error = IOError("Camera connection lost")
+
+        with mock.patch("odemis.acq.acqmng.acquire",
+                        return_value=InstantaneousFuture(([], hw_error))):
+            data, exp = task.run()
+
+        self.assertEqual(len(data), 0)
+        self.assertIs(exp, hw_error)
+
 
 if __name__ == "__main__":
     unittest.main()
