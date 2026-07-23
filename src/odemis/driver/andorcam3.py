@@ -281,7 +281,7 @@ class AndorCam3(model.DigitalCamera):
         else:
             max_res = tuple(max_res)
         if not all(1 <= mr <= r for mr, r in zip(max_res, sensor_res_user)):
-            raise ValueError("max_res has to be between 1, 1 and %s, but got %s" % sensor_res_user, max_res)
+            raise ValueError(f"max_res has to be between (1, 1) and {sensor_res_user}, but got {max_res}")
         max_res_hw = self._transposeSizeFromUser(max_res)
 
         self._metadata[model.MD_SENSOR_SIZE] = sensor_res_user
@@ -740,7 +740,7 @@ class AndorCam3(model.DigitalCamera):
             self.temp_timer.start()
             logging.info("Successfully reconnected to camera")
         except CancelledError:
-            self.state._set_value(HwError("Camera disconnected, acquire an image to attempt reconnection)"),
+            self.state._set_value(HwError("Camera disconnected, acquire an image to attempt reconnection"),
                                   force_write=True)
             raise
         except Exception:
@@ -923,13 +923,14 @@ class AndorCam3(model.DigitalCamera):
         self.atcore.AT_GetEnumStringByIndex(self.handle, prop, index, string, len(string))
         return string.value
 
-    def GetEnumStringImplemented(self, prop):
+    def GetEnumStringImplemented(self, prop: str) -> List[Optional[str]]:
         """
-        Return in a list the strings corresponding of each possible value of an enum
-        Non implemented values are replaced by None, but (temporarily) unavailable ones
+        List all the possible values of an Enum property.
+        Non-implemented values are replaced by None, but (temporarily) unavailable ones
          are still returned. Use isEnumIndexAvailable() to check for the
          availability of a value.
-        return (list of str or None)
+        :param prop: name of the property to query
+        :return: list of values allowed, in the same order as the Enum. A None indicates the value is non-implemented.
         """
         assert(isinstance(prop, str))
         num_values = c_int()
@@ -965,7 +966,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             if self.isImplemented("TemperatureControl"):
                 tmps_str = self.GetEnumStringImplemented("TemperatureControl")
-                tmps = [float(t) for t in tmps_str if tmps_str is not None]
+                tmps = [float(t) for t in tmps_str if t is not None]
                 if max(tmps) >= TEMP_NO_COOLING:
                     logging.warning("Largest temperature (%f°C) is hotter than cooling disable (%f°C)",
                                     max(tmps), TEMP_NO_COOLING)
@@ -1259,7 +1260,7 @@ class AndorCam3(model.DigitalCamera):
 #                 if rrng_height[b] != self.GetIntRanges("AOIHeight"):
 #                     logging.debug("Heigh allowed == %s instead of %s",
 #                                   self.GetIntRanges("AOIHeight"), rrng_height[b])
-        if self._binmtd == FIXED_BINNING:
+        elif self._binmtd == FIXED_BINNING:
             # Try each of the binnings, so we know for sure what the driver likes
             binnings = self.GetEnumStringImplemented("AOIBinning")
             for bs in binnings:
@@ -1299,9 +1300,9 @@ class AndorCam3(model.DigitalCamera):
         max_size = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))
 
-        # Note: "AOIWidth" is defined as "not writtable" if the acquisition is
+        # Note: "AOIWidth" is defined as "not writable" if the acquisition is
         # active, so no check can be done here. But normally, the VA only
-        # allows to reach here if it was writtable at init.
+        # allows to reach here if it was writable at init.
 
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
