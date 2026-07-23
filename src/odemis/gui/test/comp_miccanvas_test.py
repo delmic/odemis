@@ -187,7 +187,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # BufferedCanvas is abstract and should not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
 
-    # @unittest.skip("simple")
     def test_threaded_plot(self):
         test.goto_manual()
 
@@ -236,7 +235,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         self.assertTrue(is_done.is_set())
 
-    # @unittest.skip("simple")
     def test_bitmap_canvas(self):
         self.frame.SetSize((1000, 1000))
         cnvs = canvas.BitmapCanvas(self.panel)
@@ -268,7 +266,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         #     test.gui_loop(0.1)
 
-    # @unittest.skip("simple")
     def test_plot_viewport(self):
         vwp = viewport.PointSpectrumViewport(self.panel)
         self.add_control(vwp, wx.EXPAND, proportion=1)
@@ -293,7 +290,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # print px
         # print vwp.canvas._pos_x_to_val_x(px, True)
 
-    # @unittest.skip("simple")
     def test_plot_canvas(self):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
@@ -401,7 +397,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         test.gui_loop(0.2)
 
-    # @unittest.skip("simple")
     def test_buffer_to_world(self):
 
         for m in MARGINS:

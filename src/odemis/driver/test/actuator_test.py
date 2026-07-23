@@ -384,7 +384,6 @@ class TestCoupledStage(unittest.TestCase):
             self.skipTest("Running backend found")
         self.stage.moveAbs({"x": 0, "y": 0})
 
-    # @unittest.skip("skip")
     def test_move_rel(self):
         stage = self.stage
         sem_stage = self.sem_stage
@@ -485,7 +484,6 @@ class TestCoupledStage(unittest.TestCase):
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
 
-    # @unittest.skip("skip")
     def test_move_abs(self):
         stage = self.stage
         sem_stage = self.sem_stage
@@ -747,7 +745,6 @@ class TestConvertStage(unittest.TestCase):
         # Check the value of dependency taking rotation into account
         testing.assert_pos_almost_equal(dependency.position.value, {"a": new_x_pos, "b": new_y_pos})
 
-    # @skip("skip")
     def test_move_rel(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y"])
 
@@ -829,7 +826,6 @@ class TestConvertStage(unittest.TestCase):
         testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06})
         testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
-    # @skip("skip")
     def test_move_abs(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y"])
         dependency.speed.value = {"x": 1e-6, "y": 2e-6}
@@ -920,7 +916,6 @@ class TestConvertStage(unittest.TestCase):
 
 
 class TestConvert3DStage(unittest.TestCase):
-    # @skip("skip")
     def test_move_rel(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y", "z"])
 
@@ -1000,7 +995,6 @@ class TestConvert3DStage(unittest.TestCase):
         testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
         testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
-    # @skip("skip")
     def test_move_abs(self):
         dependency = simulated.Stage("stage", "test", axes=["x", "y", "z"])
         dependency.speed.value = {"x": 1e-6, "y": 2e-6, "z": 5e-6}

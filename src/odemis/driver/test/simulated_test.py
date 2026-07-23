@@ -189,7 +189,6 @@ class ActuatorTest(object):
             self.assertAlmostEqual(self.dev.position.value[a], 0)
 
 
-# @skip("simple")
 class StageTest(unittest.TestCase, ActuatorTest):
     actuator_type = simulated.Stage
     # name, role, children (must be None)

@@ -71,7 +71,6 @@ class TestDriftStream(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
-    # @unittest.skip("skip")
     def test_drift_stream(self):
         escan = self.ebeam
         detector = self.sed

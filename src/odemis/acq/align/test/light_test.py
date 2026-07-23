@@ -115,7 +115,6 @@ class TestTurnOnLight(unittest.TestCase):
         self.assertTrue(f.done())
         f.result()
 
- #    @skip("skip")
     def test_slit_timeout(self):
         """
         Test Timeout

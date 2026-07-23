@@ -65,7 +65,7 @@ if TEST_NOHW:
     KWARGS_CAM = KWARGS_CAM_SIM
     KWARGS_SHRK = KWARGS_SHRK_SIM
 
-#@skip("simple")
+
 class TestShamrockStatic(unittest.TestCase):
     def test_fake_independent(self):
         """
@@ -125,7 +125,6 @@ class SpectrographTestBaseClass:
         """
         self.assertIn("wavelength", self.spectrograph.axes)
 
-#    @skip("simple")
     def test_moverel(self):
         self._move_to_non_mirror_grating()
         orig_wl = self.spectrograph.position.value["wavelength"]
@@ -134,7 +133,6 @@ class SpectrographTestBaseClass:
         f.result()  # wait for the move to finish
         self.assertGreater(self.spectrograph.position.value["wavelength"], orig_wl)
 
-#    @skip("simple")
     def test_moveabs(self):
         self._move_to_non_mirror_grating()
         orig_wl = self.spectrograph.position.value["wavelength"]
@@ -151,7 +149,6 @@ class SpectrographTestBaseClass:
         f.result()  # wait for the move to finish
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
-#    @skip("simple")
     def test_fail_move(self):
         """
         Check that you cannot move more than allowed
@@ -192,7 +189,6 @@ class SpectrographTestBaseClass:
             f = sp.moveAbs(pos)  # will fail here normally
             f.result()
 
-#    @skip("simple")
     def test_grating(self):
         self._move_to_non_mirror_grating()
         cw = self.spectrograph.position.value["wavelength"]
@@ -224,7 +220,6 @@ class SpectrographTestBaseClass:
         self.assertEqual(self.spectrograph.position.value["grating"], cg)
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
-#    @skip("simple")
     def test_sync(self):
         sp = self.spectrograph
         self._move_to_non_mirror_grating()
@@ -256,7 +251,6 @@ class SpectrographTestBaseClass:
         # timeout = 0.001s should be too short for such a long move
         self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
 
-#    @skip("simple")
     def test_stop(self):
         sp = self.spectrograph
         self._move_to_non_mirror_grating()
@@ -272,7 +266,6 @@ class SpectrographTestBaseClass:
         sp.stop()
         self.assertTrue(f.done() or f.cancelled())  # the current task cannot be cancelled on this hardware
 
-#    @skip("simple")
     def test_queue(self):
         """
         Ask for several long moves in a row, and checks that nothing breaks
@@ -308,7 +301,6 @@ class SpectrographTestBaseClass:
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
 
-#    @skip("simple")
     def test_cancel(self):
         sp = self.spectrograph
         self._move_to_non_mirror_grating()
@@ -677,7 +669,6 @@ class TestShamrockAndCCD(SpectrographTestBaseClass, unittest.TestCase):
         self.spectrometer.resolution.value = self._orig_res
         super(TestShamrockAndCCD, self).tearDown()
 
-#    @skip("simple")
     def test_simple(self):
         """
         Just ensures that the device has all the VA it should
@@ -689,7 +680,6 @@ class TestShamrockAndCCD(SpectrographTestBaseClass, unittest.TestCase):
         self.assertGreater(self.spectrometer.exposureTime.value, 0)
         self.assertIn("wavelength", self.spectrograph.axes)
 
-#    @skip("simple")
     def test_acquisition(self):
         exp = 0.1 #s
         self.spectrometer.exposureTime.value = exp

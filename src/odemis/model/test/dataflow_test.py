@@ -184,7 +184,6 @@ class FakeDataFlowException(Exception):
 
 class TestDataFlow(unittest.TestCase):
 
-    # @unittest.skip("simple")
     def test_dataarray_pickle(self):
         darray = model.DataArray([[1, 2], [3, 4]], metadata={"a": 1})
         jar = pickle.dumps(darray)
@@ -193,7 +192,6 @@ class TestDataFlow(unittest.TestCase):
         self.assertEqual(darray.metadata, up_darray.metadata, "metadata is different after pickling")
         self.assertEqual(up_darray.metadata["a"], 1)
 
-    # @unittest.skip("simple")
     def test_df_subscribe_get(self):
         self.df = SimpleDataFlow()
         self.size = (2, 2)
@@ -221,7 +219,6 @@ class TestDataFlow(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
-    # @unittest.skip("simple")
     def test_df_double_subscribe(self):
         self.df = SimpleDataFlow()
         self.size = (2, 2)

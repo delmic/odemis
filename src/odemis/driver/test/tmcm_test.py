@@ -86,7 +86,6 @@ if TEST_NOHW:
     KWARGS_RENC = KWARGS_RENC_SIM
 
 
-# @skip("faster")
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
@@ -247,7 +246,6 @@ class TestSendInstructionRetry(unittest.TestCase):
         self.assertEqual(call_count[0], 1)  # no retry attempt
 
 
-# @skip("faster")
 class TestActuator(unittest.TestCase):
 
     def setUp(self):
@@ -261,7 +259,6 @@ class TestActuator(unittest.TestCase):
         f.result()
         self.dev.terminate()
 
-#    @skip("faster")
     def test_simple(self):
         move = {'x': 0.01e-6}
         self.dev.moveRel(move)

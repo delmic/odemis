@@ -130,7 +130,6 @@ def assert_pos_as_in_mode(t: unittest.TestCase, comp, mode):
                                    (comp.name, axis, comp.position.value[axis], pos))
 
 
-# @skip("faster")
 class SimPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) simple SPARC (like in Chalmers)
@@ -157,7 +156,6 @@ class SimPathTestCase(unittest.TestCase):
 #         for t in threading.enumerate():
 #             print "Thread %d: %s" % (t.ident, t.name)
 
-#    @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -165,7 +163,6 @@ class SimPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-#     @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect ar, spectral and mirror-align
@@ -198,7 +195,6 @@ class SimPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("monochromator").result()
 
-#     @skip("simple")
     def test_guess_mode(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -222,7 +218,6 @@ class SimPathTestCase(unittest.TestCase):
         self.assertEqual(guess, "spectral")
 
 
-# @skip("faster")
 class MonashPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) full SPARC (like in Monash)
@@ -249,7 +244,6 @@ class MonashPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
-#    @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -257,7 +251,6 @@ class MonashPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-#    @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect all modes to be available
@@ -298,7 +291,6 @@ class MonashPathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value,
                          path.SPARC_MODES["monochromator"][1]["spec-det-selector"])
 
-#     @skip("simple")
     def test_guess_mode(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -334,7 +326,6 @@ class MonashPathTestCase(unittest.TestCase):
         self.assertEqual(guess, "cli")
 
 
-# @skip("faster")
 class SpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC with just a spectrometer (like in AMOLF)
@@ -355,7 +346,6 @@ class SpecPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
-#     @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -363,7 +353,6 @@ class SpecPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-#     @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist, but not available.
@@ -388,7 +377,6 @@ class SpecPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("monochromator").result()
 
-#     @skip("simple")
     def test_guess_mode(self):
         # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -405,7 +393,6 @@ class SpecPathTestCase(unittest.TestCase):
             guess = self.optmngr.guessMode(sems)
 
 
-# @skip("faster")
 class Sparc2PathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in Oslo)
@@ -462,7 +449,6 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.assertLess(dur, 20, "Changing to CLI then AR mode took %s s > 20 s" % (dur,))
 
-    # @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect all modes to be available
@@ -547,7 +533,6 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.optmngr.setPath("chamber-view").result()
         self.assertEqual(self.focus.position.value, chamber_focus)
 
-    # @skip("simple")
     def test_guess_mode(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -571,7 +556,6 @@ class Sparc2PathTestCase(unittest.TestCase):
         guess = self.optmngr.guessMode(sps)
         self.assertEqual(guess, "spectral")
 
-#   @skip("simple")
     def test_set_path_stream(self):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
@@ -649,7 +633,6 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.focus.position.value, orig_focus)
 
 
-# @skip("faster")
 class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
     """
     Tests the optical path settings on a SPARC2 with polarizer and EK imaging
@@ -680,7 +663,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
-    # @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist.
@@ -742,7 +724,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         # No requirement on polarizer (it should be unchanged)
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
-#   @skip("simple")
     def test_set_path_stream(self):
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer)
 
@@ -802,7 +783,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
 
 
-#    @skip("faster")
 class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in EMPA)
@@ -831,7 +811,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
-    # @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -839,7 +818,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-    # @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect all modes to be available
@@ -910,7 +888,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         spec_sel_pos = self.spec_sel.position.value["x"]
         self.assertAlmostEqual(spec_sel_pos, act_pos["x"])
 
-    # @skip("simple")
     def test_guess_mode(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -934,7 +911,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         guess = self.optmngr.guessMode(sps)
         self.assertEqual(guess, "spectral")
 
-    # @skip("simple")
     def test_set_path_stream(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -1015,7 +991,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
-    # @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -1023,7 +998,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-    # @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect all modes to be available
@@ -1094,7 +1068,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         dd_sel_pos = self.spec_dd_sel.position.value["rx"]
         self.assertIn(self.espec2.name, dd_sel_choices[dd_sel_pos])
 
-    # @skip("simple")
     def test_guess_mode(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -1118,7 +1091,6 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         guess = self.optmngr.guessMode(sps)
         self.assertEqual(guess, "spectral")
 
-    # @skip("simple")
     def test_set_path_stream(self):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)

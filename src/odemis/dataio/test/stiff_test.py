@@ -332,7 +332,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel((1, 1)), 0)
 
-    # @skip("simple")
     def testExportNoWL(self):
         """
         Check it's possible to export/import a spectrum with missing wavelength
@@ -403,7 +402,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
                 self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
 
-    # @skip("simple")
     def testExportRead(self):
         """
         Checks that we can read back an image
@@ -451,7 +449,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(subim.shape, sizes[i][-1::-1])
                 self.assertEqual(subim[white[-1:-3:-1]], ldata[i][white[-1:-3:-1]])
 
-    # @skip("simple")
     def testReadMDSpec(self):
         """
         Checks that we can read back the metadata of a spectrum image
@@ -519,7 +516,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
                 self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
 
-    # @skip("simple")
     def testReadMDAR(self):
         """
         Checks that we can read back the metadata of an Angular Resolved image
@@ -618,7 +614,6 @@ class TestTiffIO(unittest.TestCase):
                 if model.MD_LENS_MAG in md:
                     self.assertAlmostEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
 
-    # @skip("simple")
     def testReadMDFluo(self):
         """
         Checks that we can read back the metadata of a fluoresence image

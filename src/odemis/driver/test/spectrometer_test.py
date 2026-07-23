@@ -232,7 +232,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.assertEqual(data.shape[0], 1)
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
-#    @skip("simple")
     def test_vbinning(self):
         """
         Test vertical binning (use less than the whole detector)
@@ -293,7 +292,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         md = data.metadata
         self.assertEqual(md[model.MD_BINNING], tuple(binning))
 
-#    @skip("simple")
     def test_hbinning(self):
         """
         Test horizontal binning (large horizontal pixels)

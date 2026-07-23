@@ -61,7 +61,6 @@ if TEST_NOHW:
     KWARGS = KWARGS_SIM
 
 
-# @skip("simple")
 class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     """
     Ensure we always test the fake version at least a bit
@@ -89,14 +88,12 @@ class TestFake(VirtualTestCam, unittest.TestCase):
         )
 
 
-# @skip("simple")
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
 
 
 # Inheritance order is important for setUp, tearDown
-# @skip("simple")
 class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam2 class.
@@ -280,7 +277,6 @@ class TestAndorCam2HwTrigger(unittest.TestCase):
         self.camera.data.synchronizedOn(None)
 
 
-# @skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface.

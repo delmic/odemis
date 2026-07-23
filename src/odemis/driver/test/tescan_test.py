@@ -99,7 +99,6 @@ CONFIG_SEM_AMBER = {"name": "Amber", "role": "sem",
                     }
 
 
-# @skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -548,7 +547,6 @@ class BaseSEMTest(object):
                 None,      # req_pos["rx"] should be None (unrequested)
             )
 
-    # @skip("not working with the newer simulator Tescan Essence v1.2.2")
     def test_stop(self):
         """
         Check it's possible to stop the stage while it's moving.
@@ -620,7 +618,6 @@ class TestSEMNoDet(BaseSEMTest, unittest.TestCase):
         self.assertEqual(light.power.value, orig_pwr)
 
 
-# @skip("skip")
 class TestSEM(BaseSEMTest, unittest.TestCase):
     """
     Tests which can share one SEM device

@@ -39,7 +39,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 TEST_IMAGE_PATH = Path(__file__).parent
 
-# @unittest.skip("skip")
+
 class TestDivideInNeighborhoods(unittest.TestCase):
     """
     Test DivideInNeighborhoods
@@ -47,7 +47,6 @@ class TestDivideInNeighborhoods(unittest.TestCase):
     def setUp(self):
         random.seed(0)
 
-    # @unittest.skip("skip")
     def test_divide_and_find_center_grid(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
@@ -63,7 +62,6 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(len(subimages), 100)
 
-    # @unittest.skip("skip")
     def test_divide_and_find_center_grid_noise(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input
@@ -84,7 +82,6 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(len(subimages), 100)
 
-    # @unittest.skip("skip")
     def test_divide_and_find_center_grid_missing_point(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
@@ -105,7 +102,6 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(len(subimages), 99)
 
-    # @unittest.skip("skip")
     def test_divide_and_find_center_grid_cosmic_ray(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
@@ -127,7 +123,6 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(len(subimages), 99)
 
-    # @unittest.skip("skip")
     def test_divide_and_find_center_grid_noise_missing_point_cosmic_ray(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input that
@@ -149,7 +144,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(len(subimages), 99)
 
-# @unittest.skip("skip")
+
 class TestMatchCoordinates(unittest.TestCase):
     """
     Test MatchCoordinates

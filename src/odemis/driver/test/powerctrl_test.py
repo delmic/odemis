@@ -42,7 +42,6 @@ CLASS_PCU = CLASS
 KWARGS_PCU = KWARGS
 
 
-# @unittest.skip("faster")
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
@@ -89,7 +88,6 @@ CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[-5, 5], [3, -3
 CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0"}
 
 
-# @unittest.skip("faster")
 class TestPowerControl(unittest.TestCase):
     """
     Tests which need a component ready
@@ -137,7 +135,6 @@ class TestPowerControl(unittest.TestCase):
         ans_i = int(ans)
         self.assertAlmostEqual(ans_i, 1)
 
-    # @unittest.skip("faster")
     def test_power_supply_va(self):
         self.sed.powerSupply.value = True
         self.assertEqual(self.pcu.supplied.value,
@@ -153,7 +150,6 @@ class TestPowerControl(unittest.TestCase):
                          {"sem": self.sem.powerSupply.value, "sed": self.sed.powerSupply.value})
 
 
-# @unittest.skip("faster")
 class TestMemory(unittest.TestCase):
     """
     Tests which need a component ready

@@ -38,7 +38,6 @@ else:
     PORT = "/dev/ttyUSB*"
 
 
-# @skip("skip")
 class TestBeamShiftController(unittest.TestCase):
     """
     Tests the beam controller driver.

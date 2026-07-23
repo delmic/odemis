@@ -50,7 +50,6 @@ KWARGS = {"name": "test", "role": "filter", "port": PORT,
           }
 
 
-#@skip("simple")
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready

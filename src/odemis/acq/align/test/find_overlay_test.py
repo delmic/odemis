@@ -107,7 +107,6 @@ class TestOverlay(unittest.TestCase):
                 self.ebeam = child
                 self.ebeam.magnification.value = ebeam_mag
 
-    # @unittest.skip("skip")
     def test_find_overlay(self):
         """
         Test FindOverlay
@@ -120,7 +119,6 @@ class TestOverlay(unittest.TestCase):
         self.assertIn(model.MD_PIXEL_SIZE_COR, opt_md)
         self.assertIn(model.MD_SHEAR_COR, sem_md)
 
-    # @unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
@@ -131,7 +129,6 @@ class TestOverlay(unittest.TestCase):
         with self.assertRaises(ValueError):
             f.result()
 
-    # @unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation

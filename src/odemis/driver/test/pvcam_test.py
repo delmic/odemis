@@ -37,7 +37,7 @@ CLASS = pvcam.PVCam
 # device can also be "rspiusb", but 0 is more generic
 CONFIG_PVCAM = dict(name="camera", role="ccd", device=0, transpose=[2, -1])
 
-#@skip("simple")
+
 class StaticTestPVCam(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = CONFIG_PVCAM
@@ -52,7 +52,6 @@ class StaticTestPVCam(VirtualStaticTestCam, unittest.TestCase):
 
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
 class TestPVCam(VirtualTestCam, unittest.TestCase):
     """
     Test directly the PVCam class.
@@ -67,7 +66,6 @@ class TestPVCam(VirtualTestCam, unittest.TestCase):
         super().setUpClass()
 
 
-#@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM

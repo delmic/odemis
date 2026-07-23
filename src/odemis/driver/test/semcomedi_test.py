@@ -75,7 +75,7 @@ KWARGS_SEM_CNT = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "counter0": CONFIG_CNT, "scanner": CONFIG_SCANNER}
               }
 
-#@unittest.skip("simple")
+
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -175,7 +175,6 @@ class EventReceiver:
         self.count += 1
 
 
-#@unittest.skip("simple")
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device
@@ -236,7 +235,6 @@ class TestSEM(unittest.TestCase):
 
         self.scanner.magnification.value = mag_orig
 
-#     @unittest.skip("simple")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6 # s
         expected_duration = self.compute_expected_duration()
@@ -320,7 +318,6 @@ class TestSEM(unittest.TestCase):
         testing.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
 
 
-#     @unittest.skip("simple")
     def test_osr(self):
         """
         Checks that find_best_oversampling_rate always finds something appropriate
@@ -350,7 +347,6 @@ class TestSEM(unittest.TestCase):
             else:
                 self.assertGreater(dpr, 1)
 
-#     @unittest.skip("too long")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -405,7 +401,6 @@ class TestSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
 
-#     @unittest.skip("too long")
     def test_acquire_long_short(self):
         """
         test being able to cancel image acquisition if dwell time is too long
@@ -434,7 +429,6 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration_s, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration_s))
         self.assertLess(duration, expected_duration_l, "Execution took %f s, as much as the long exposure time %d." % (duration, expected_duration_l))
 
-#     @unittest.skip("simple")
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
 
@@ -453,7 +447,6 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(evt_counter.count, 1)
         self.scanner.startScan.unsubscribe(evt_counter)
 
-#     @unittest.skip("simple")
     def test_acquire_with_va(self):
         """
         Change some settings before and while acquiring
@@ -479,7 +472,6 @@ class TestSEM(unittest.TestCase):
         self.sed.data.unsubscribe(self.receive_image) # just in case it failed
         self.assertEqual(self.left, 0)
 
-#     @unittest.skip("simple")
     def test_df_fast_sub_unsub(self):
         """
         Test the dataflow on a very fast cycle subscribing/unsubscribing
@@ -503,7 +495,6 @@ class TestSEM(unittest.TestCase):
 
         self.assertLessEqual(self.left, 10000 - 1)
 
-#     @unittest.skip("simple")
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
@@ -573,7 +564,6 @@ class TestSEM(unittest.TestCase):
             self.acq_done.set()
 
 
-# @unittest.skip("simple")
 class TestSEM2(unittest.TestCase):
     """
     Tests which can share one SEM device with 2 detectors
@@ -610,7 +600,6 @@ class TestSEM2(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 
-#    @unittest.skip("simple")
     def test_acquire_two_flows(self):
         """
         Simple acquisition with two dataflows acquiring (more or less)
@@ -739,7 +728,6 @@ class TestSEM2(unittest.TestCase):
             dataflow.unsubscribe(self.receive_image2)
 
 
-# @unittest.skip("simple")
 class TestSEMCounter(unittest.TestCase):
     """
     Tests of a SEM device with 1 analog and 1 counting detector
@@ -776,7 +764,6 @@ class TestSEMCounter(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 
-#     @unittest.skip("simple")
     def test_acquire_cnt(self):
         self.scanner.dwellTime.value = 100e-3
         expected_duration = self.compute_expected_duration()
@@ -789,7 +776,6 @@ class TestSEMCounter(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
-#     @unittest.skip("simple")
     def test_acquire_long_dt(self):
         # Dwell time above 0.83s cannot be handled by one command only, so dpr
         # is required
@@ -806,7 +792,6 @@ class TestSEMCounter(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
-#    @unittest.skip("simple")
     def test_acquire_two_flows(self):
         """
         Simple acquisition with two dataflows acquiring (more or less)

@@ -92,7 +92,6 @@ class TestAlignment(unittest.TestCase):
         self.data[0].shape = Y, X
         self.fake_img = self.data[0]
 
-#     @skip("skip")
     def test_spot_alignment(self):
         """
         Test AlignSpot
@@ -105,7 +104,6 @@ class TestAlignment(unittest.TestCase):
         dist, vector = f.result()
         self.assertAlmostEqual(dist, 2.41e-05)
 
-#     @skip("faster")
     def test_spot_alignment_cancelled(self):
         """
         Test AlignSpot cancellation
