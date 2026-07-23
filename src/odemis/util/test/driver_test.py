@@ -41,7 +41,7 @@ from odemis.util.driver import (
     getSerialDriver,
     guessActuatorMoveDuration,
     readMemoryUsage,
-    speedUpPyroConnect, EventOnce,
+    speedUpPyroConnect, EventOnce, get_active_gui_users,
 )
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -94,6 +94,27 @@ class TestDriver(unittest.TestCase):
         else:
             with self.assertRaises(LookupError):
                 v = get_linux_version()
+
+    def test_get_active_gui_users(self):
+        users = get_active_gui_users()
+        self.assertIsInstance(users, set)
+        self.assertTrue(all(isinstance(u, str) for u in users))
+        if not users:
+            # Could happen in a CI environment, so we don't want to fail the test
+            logging.warning("No active GUI users found.")
+
+    def test_notify_to_user(self):
+        users = get_active_gui_users()
+        if not users:
+            logging.warning("No active GUI users found. Skipping notification test.")
+            return
+        first_user = next(iter(users))
+        # just check it doesn't raise an exception
+        odemis.util.driver.notify_to_user(first_user,
+                                          "Test notification",
+                                          "This is a test notification from the odemis.util.driver module.",
+                                          app="Odemis testing",
+                                          icon="info")
 
     def onEvent(self):
         """
