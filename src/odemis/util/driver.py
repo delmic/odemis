@@ -23,12 +23,13 @@ import logging
 import math
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
-from typing import Dict, List
+from typing import Dict, List, Set, Optional
 
 from Pyro4.errors import CommunicationError
 
@@ -115,6 +116,67 @@ def readMemoryUsage():
         return mem
     except ImportError:
         return _VmB('VmRSS')
+
+
+def get_active_gui_users() -> Set[str]:
+    """
+    Returns a set of usernames with active Wayland/X11 sessions.
+    :return: set of usernames. In case of error, returns an empty set.
+    """
+    gui_users = set()
+    try:
+        # Get list of sessions
+        sessions = subprocess.check_output(
+            ["loginctl", "list-sessions", "--no-legend"], text=True
+        ).strip().splitlines()
+
+        for session in sessions:
+            parts = session.split()
+            if len(parts) >= 3:
+                session_id, user = parts[0], parts[2]
+                # Check session type (wayland or x11)
+                stype = subprocess.check_output(
+                    ["loginctl", "show-session", session_id, "-p", "Type", "--value"],
+                    text=True
+                ).strip()
+
+                if stype in ("wayland", "x11"):
+                    gui_users.add(user)
+    except Exception as ex:
+        logging.exception("Error querying loginctl: %s", ex)
+
+    return gui_users
+
+
+def notify_to_user(target_user: str, title: str, message: str, app: Optional[str] = None, icon: Optional[str] = None):
+    """
+    Send a desktop notification to the specified user.
+    The current process should be running with sufficient privileges to execute systemd-run as the target user.
+    Note: this relies on systemd, using systemd-run and notify-send.
+    :param target_user: The username of the target user.
+    :param title: The title of the notification.
+    :param message: The message body of the notification.
+    :param app: application name for the notification. If None, the default will be used (notify-send)
+    :param icon: icon for the notification. If None, the default will be used (notify-send)
+    :raises: CalledProcessError if the command fails (though, in some cases, the command can fail silently)
+    """
+    # HACK: Gnome Shell notifications handler automatically replaces newlines with spaces. To force
+    # the new lines, we replace them by \r.
+    message = message.replace("\n", "\r")
+    cmd = [
+        "systemd-run",
+        f"--machine={target_user}@.host",
+        "--user",
+        "notify-send",
+        title,
+        message
+    ]
+    if app:
+        cmd.append(f"--app-name={app}")
+    if icon:
+        cmd.append(f"--icon={icon}")
+
+    subprocess.run(cmd, check=True)
 
 
 ATOL_LINEAR_POS = 100e-6  # m
