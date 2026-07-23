@@ -41,7 +41,7 @@ from odemis.util.driver import (
     getSerialDriver,
     guessActuatorMoveDuration,
     readMemoryUsage,
-    speedUpPyroConnect, EventOnce,
+    speedUpPyroConnect, EventOnce, get_active_gui_users,
 )
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -94,6 +94,18 @@ class TestDriver(unittest.TestCase):
         else:
             with self.assertRaises(LookupError):
                 v = get_linux_version()
+
+    def test_get_active_gui_users(self):
+        users = get_active_gui_users()
+        self.assertIsInstance(users, set)
+        self.assertGreaterEqual(len(users), 1)
+
+    def test_notify_to_user(self):
+        users = get_active_gui_users()
+        first_user = next(iter(users))
+        # just check it doesn't raise an exception
+        odemis.util.driver.notify_to_user(first_user, "Test notification", "This is a test notification from the odemis.util.driver module.",
+                                          app="Odemis testing", icon="info")
 
     def onEvent(self):
         """
