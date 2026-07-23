@@ -53,7 +53,6 @@ class TestWithoutBackend(unittest.TestCase):
         if logging.root:
             del logging.root.handlers[:]
 
-#    @skip("Simple")
     def test_help(self):
         """
         It checks handling help option
@@ -71,7 +70,6 @@ class TestWithoutBackend(unittest.TestCase):
         output = out.getvalue()
         self.assertTrue(b"Microscope management" in output)
 
-#    @skip("Simple")
     def test_error_command_line(self):
         """
         It checks handling when wrong number of argument is given
@@ -83,7 +81,6 @@ class TestWithoutBackend(unittest.TestCase):
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
 
-#    @skip("Simple")
     def test_scan(self):
         try:
             # change the stdout
@@ -110,7 +107,6 @@ class TestWithoutBackend(unittest.TestCase):
             ret = exc.code
         self.assertNotEqual(ret, 0, "Wrongly succeeded trying to run scan with unknown class: '%s'" % cmdline)
 
-#@skip("Simple")
 class TestWithBackend(unittest.TestCase):
     backend_was_running = False
 

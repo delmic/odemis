@@ -38,7 +38,7 @@ KWARGS = dict(name="test", role="switch", sn=SN, axis="r", inverted=["r"])
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
 
-# @skip("simple")
+
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready

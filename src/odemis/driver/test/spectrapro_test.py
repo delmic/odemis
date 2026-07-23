@@ -57,7 +57,7 @@ KWARGS = {"name": "test", "role": "spectrograph", "port": PORT,
             ],
           }
 
-# @unittest.skip("faster")
+
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready

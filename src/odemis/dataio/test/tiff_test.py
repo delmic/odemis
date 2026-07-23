@@ -57,7 +57,6 @@ class TestTiffIO(unittest.TestCase):
             pass
 
     # Be careful: numpy's notation means that the pixel coordinates are Y,X,C
-#    @skip("simple")
     def testExportOnePage(self):
         # create a simple greyscale image
         size = (256, 512)
@@ -103,7 +102,6 @@ class TestTiffIO(unittest.TestCase):
         del im
         os.remove(fn)
 
-#    @skip("simple")
     def testExportMultiPage(self):
         # create a simple greyscale image
         size = (512, 256)
@@ -131,7 +129,6 @@ class TestTiffIO(unittest.TestCase):
             self.assertEqual(im.size, size)
             self.assertEqual(im.getpixel(white), 124)
 
-#    @skip("simple")
     def testExportThumbnail(self):
         # create a simple greyscale image
         size = (512, 256)
@@ -407,7 +404,6 @@ class TestTiffIO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
             self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
 
-#    @skip("simple")
     def testMetadata(self):
         """
         checks that the metadata is saved with every picture
@@ -536,7 +532,6 @@ class TestTiffIO(unittest.TestCase):
         im = rdata[0]
         self.assertEqual(im.metadata[model.MD_ACQ_RECIPES], metadata[model.MD_ACQ_RECIPES])
 
-#    @skip("simple")
     def testExportRead(self):
         """
         Checks that we can read back an image and a thumbnail
@@ -591,7 +586,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
 
-#    @skip("simple")
     def testReadAndSaveMDSpec(self):
         """
         Checks that we can save and read back the metadata of a spectrum image.
@@ -685,7 +679,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
-    #    @skip("simple")
     def testReadAndSaveMDTempSpec(self):
         """
         Checks that we can save and read back the metadata of a temporal spectrum image.
@@ -796,7 +789,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
-    #    @skip("simple")
     def testReadAndSaveMDSpecialDim(self):
         """
         Checks that we can save and read back the metadata of an image with dim CTZ=0.
@@ -1156,7 +1148,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
-#    @skip("simple")
     def testReadMDFluo(self):
         """
         Checks that we can read back the metadata of a fluoresence image
@@ -1455,7 +1446,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
-#    @skip("simple")
     def testReadMDOutWlBands(self):
         """
         Checks that we hand MD_OUT_WL if it contains multiple bands.

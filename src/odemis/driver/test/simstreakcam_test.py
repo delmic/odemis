@@ -49,7 +49,6 @@ KWARGS_SPECTROGRAPH = dict(name="sr193", role="spectrograph", device="fake",
 
 
 # Inheritance order is important for setUp, tearDown
-# @skip("simple")
 class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
     """
     Test directly the streak camera class with simulated streak camera HW.
@@ -82,7 +81,6 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
         cls.streakcam.terminate()
 
 
-# @skip("simple")
 class TestSimStreakCamGenericCamSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface with a simulated streak camera, using the fake SEM.

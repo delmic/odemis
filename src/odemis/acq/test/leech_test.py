@@ -173,7 +173,6 @@ class ADCTestCase(unittest.TestCase):
                 self.fail("Too many iterations")
 
 
-# @skip("simple")
 class PCAcquirerTestCase(unittest.TestCase):
 
     def test_get_next_pixels(self):

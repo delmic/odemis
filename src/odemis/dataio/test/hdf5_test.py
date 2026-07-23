@@ -99,7 +99,6 @@ class TestHDF5IO(unittest.TestCase):
 
         os.remove(fn)
 
-#    @skip("Doesn't work")
     def testExportMultiPage(self):
         # create two greyscale images corresponding to two fluorescence images
         size = (512, 256)
@@ -133,7 +132,6 @@ class TestHDF5IO(unittest.TestCase):
 
         os.remove(FILENAME)
 
-#    @skip("Doesn't work")
     def testExportThumbnail(self):
         # create 2 simple greyscale images
         size = (512, 256)

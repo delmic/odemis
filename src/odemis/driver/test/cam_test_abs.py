@@ -127,7 +127,6 @@ class VirtualTestCam(metaclass=ABCMeta):
 #        gc.collect()
         pass
 
-#    @unittest.skip("simple")
     def test_temp(self):
         if not model.hasVA(self.camera, "targetTemperature"):
             self.skipTest("Camera doesn't support setting temperature")
@@ -142,7 +141,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.camera.targetTemperature.value = self.camera.targetTemperature.range[0]
         self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[0])
 
-#    @unittest.skip("simple")
     def test_fan(self):
         if not model.hasVA(self.camera, "fanSpeed"):
             self.skipTest("Camera doesn't support setting fan speed")
@@ -157,7 +155,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.camera.fanSpeed.value = orig_fs
         self.assertEqual(self.camera.fanSpeed.value, orig_fs)
 
-#    @unittest.skip("simple")
     def test_acquire(self):
         self.assertEqual(len(self.camera.shape), 3)
         self.camera.exposureTime.value = self.camera.exposureTime.clip(0.1)
@@ -273,7 +270,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         # Note: the position of the image when the resolution is odd can be slightly
         # shift without any translation, but let's not go there...
 
-#    @unittest.skip("simple")
     def test_two_acquire(self):
         exposure = 0.1
 
@@ -303,7 +299,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
-#    @unittest.skip("simple")
     def test_acquire_flow(self):
         exposure = 0.1
         self.camera.exposureTime.value = exposure
@@ -388,7 +383,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.assertGreaterEqual(dur, exp_dur)  # Fail if acquisition went too fast
         self.assertEqual(self.left, 0)  # Fail if acquisition went too slow
 
-#    @unittest.skip("simple")
     def test_data_flow_with_va(self):
         exposure = 1.0 # long enough to be sure we can change VAs before the end
         self.camera.exposureTime.value = exposure
@@ -410,7 +404,6 @@ class VirtualTestCam(metaclass=ABCMeta):
 
         self.assertEqual(self.left, 0)
 
-#    @unittest.skip("not implemented")
     def test_df_subscribe_get(self):
         exposure = 1.0 # long enough to be sure we can do a get before the end
         self.camera.exposureTime.value = exposure
@@ -450,7 +443,6 @@ class VirtualTestCam(metaclass=ABCMeta):
 
         self.assertEqual(self.left, 0)
 
-#    @unittest.skip("simple")
     def test_df_double_subscribe(self):
         exposure = 1.0 # long enough to be sure we can do a get before the end
         number, number2 = 3, 5
@@ -477,7 +469,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.assertEqual(self.left, 0)
         self.assertEqual(self.left2, 0)
 
-#    @unittest.skip("simple")
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
@@ -522,7 +513,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
 
-#    @unittest.skip("simple")
     def test_binning(self):
         if not model.hasVA(self.camera, "binning") or self.camera.binning.readonly:
             self.skipTest("Camera doesn't support setting binning")
@@ -558,7 +548,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         self.assertEqual(im.metadata[model.MD_BINNING], new_binning)
 
-#    @unittest.skip("simple")
     def test_aoi(self):
         """
         Check sub-area acquisition works
@@ -586,7 +575,6 @@ class VirtualTestCam(metaclass=ABCMeta):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
-#    @unittest.skip("simple")
     def test_error(self):
         """
         Errors should raise an exception but still allow to access the camera afterwards

@@ -76,7 +76,6 @@ class FakeDetector(model.Detector):
         self._shape = (2 ** 16,)
 
 
-# @skip("simple")
 class StreamTestCase(unittest.TestCase):
 
     def setUp(self):

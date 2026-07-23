@@ -44,7 +44,7 @@ KWARGS_SIM["address"] = "fake"
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
 
-# @skip("faster")
+
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
@@ -77,7 +77,6 @@ class TestStatic(unittest.TestCase):
         dev.terminate()
 
 
-# @skip("faster")
 class TestActuator(unittest.TestCase):
 
     def setUp(self):
@@ -91,7 +90,6 @@ class TestActuator(unittest.TestCase):
         f.result()
         self.dev.terminate()
 
-#    @skip("faster")
     def test_simple(self):
         move = {'x': 0.1e-6}
         f = self.dev.moveRel(move)

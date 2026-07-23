@@ -87,7 +87,6 @@ class TestSimCam(unittest.TestCase):
         self.camera.exposureTime.value = exp
         time.sleep(old_exp) # wait for the last frame (worst case)
 
-#     @unittest.skip("simple")
     def test_roi(self):
         """
         check that .translation and .binning work
@@ -118,7 +117,6 @@ class TestSimCam(unittest.TestCase):
         self.camera.resolution.value = self.camera.resolution.range[1]
         self.camera.translation.value = (0, 0)
 
-#     @unittest.skip("simple")
     def test_acquire(self):
         self.assertGreaterEqual(len(self.camera.shape), 3)
         exposure = 0.1
@@ -132,7 +130,6 @@ class TestSimCam(unittest.TestCase):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
-#     @unittest.skip("simple")
     def test_metadata(self):
         im = self.camera.data.get()
         md = im.metadata
@@ -149,7 +146,6 @@ class TestSimCam(unittest.TestCase):
         self.assertAlmostEqual(pxs, md[model.MD_PIXEL_SIZE])
 
 
-#     @unittest.skip("simple")
     def test_two_acquire(self):
         exposure = 0.1
         self._ensureExp(exposure)
@@ -170,7 +166,6 @@ class TestSimCam(unittest.TestCase):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
-#     @unittest.skip("simple")
     def test_acquire_flow(self):
         exposure = 0.1
         self._ensureExp(exposure)
@@ -186,7 +181,6 @@ class TestSimCam(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
-#     @unittest.skip("simple")
     def test_data_flow_with_va(self):
         exposure = 1.0 # long enough to be sure we can change VAs before the end
         self._ensureExp(exposure)
@@ -208,7 +202,6 @@ class TestSimCam(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
-#     @unittest.skip("not implemented")
     def test_df_subscribe_get(self):
         exposure = 1.0 # long enough to be sure we can do a get before the end
         self._ensureExp(exposure)
@@ -247,7 +240,6 @@ class TestSimCam(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
-#     @unittest.skip("simple")
     def test_df_double_subscribe(self):
         exposure = 1.0 # long enough to be sure we can do a get before the end
         number, number2 = 3, 5
@@ -298,7 +290,6 @@ class TestSimCam(unittest.TestCase):
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
 
-#     @unittest.skip("simple")
     def test_focus(self):
         """
         Check it's possible to change the focus

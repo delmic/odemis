@@ -70,7 +70,6 @@ if TEST_NOHW:
     CONFIG_SEM6 = CONFIG_SEM_SIM6
 
 
-# @skip("skip")
 class TestSEM3Axes(unittest.TestCase):
     """
     Tests which can share one SEM device controlling 3 axes
@@ -164,7 +163,6 @@ class TestSEM3Axes(unittest.TestCase):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_rot, ebeam.rotation.value)
 
-    # @skip("skip")
     def test_move_axes(self):
         """
         Check if it's possible to move the stage with the use linear x and y changes.

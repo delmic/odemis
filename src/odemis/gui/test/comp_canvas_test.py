@@ -74,7 +74,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         test.gui_loop()
         self.remove_all()
 
-    # @unittest.skip("simple")
     def test_crosshair(self):
         show_crosshair = self.view.show_crosshair
         show_crosshair.value = True
@@ -85,7 +84,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         show_crosshair.value = False
         self.assertEqual(len(self.canvas.view_overlays), lvo - 1)
 
-    # @unittest.skip("simple")
     def test_basic_display(self):
         """
         Draws a view with two streams, one with a red pixel with a low density
@@ -173,7 +171,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
                       result_im.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
-    # @unittest.skip("simple")
     def test_basic_move(self):
         mpp = 0.00001
         self.view.mpp.value = mpp
@@ -236,7 +233,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
                       result_im.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
-    # @unittest.skip("simple")
     def test_zoom_move(self):
         mpp = 0.00001
         self.view.mpp.value = mpp

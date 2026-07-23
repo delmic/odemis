@@ -53,7 +53,6 @@ class TestRegister(unittest.TestCase):
             "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
         )
 
-    # @unittest.skip("skip")
     def test_real_images_shift(self):
         """
         Test register wrapper function
@@ -94,7 +93,6 @@ class TestRegister(unittest.TestCase):
                 self.assertAlmostEqual(calculatedPosition[0], pos[i][0], places=1)
                 self.assertAlmostEqual(calculatedPosition[1], pos[i][1], places=1)
 
-    # @unittest.skip("skip")
     def test_dep_tiles(self):
         """
         Test register wrapper function, when dependent tiles are present

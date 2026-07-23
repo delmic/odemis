@@ -56,7 +56,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0215801135
                            "pressure": CONFIG_PRESSURE}
               }
 
-# @skip("skip")
+
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -112,7 +112,6 @@ class TestSEMStatic(unittest.TestCase):
         daemon.shutdown()
 
 
-# @skip("skip")
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device
@@ -174,7 +173,6 @@ class TestSEM(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 
-#     @skip("skip")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
@@ -227,7 +225,6 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
 
-#     @skip("faster")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -393,7 +390,6 @@ class TestSEM(unittest.TestCase):
         """
         pass
 
-#     @skip("skip")
     def test_focus(self):
         """
         Check it's possible to change the focus
@@ -414,7 +410,6 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertAlmostEqual(self.focus.position.value["z"], pos["z"], 5)
 
-#     @skip("skip")
     def test_move(self):
         """
         Check it's possible to move the stage
@@ -431,7 +426,6 @@ class TestSEM(unittest.TestCase):
         f.result()
         testing.assert_pos_almost_equal(self.stage.position.value, pos)
 
-#     @skip("skip")
     def test_navcam(self):
         """
         Check it's possible to acquire a navcam image
@@ -445,7 +439,6 @@ class TestSEM(unittest.TestCase):
         duration = time.time() - start
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
 
-#     @skip("skip")
     def test_navcam_focus(self):
         """
         Check it's possible to change the overview focus
@@ -464,7 +457,6 @@ class TestSEM(unittest.TestCase):
 
         testing.assert_pos_almost_equal(self.navcam_focus.position.value, pos)
 
-#     @skip("skip")
     def test_pressure(self):
         """
         Check it's possible to change the pressure state
@@ -482,7 +474,6 @@ class TestSEM(unittest.TestCase):
         new_pos = self.pressure.position.value["vacuum"]
         self.assertEqual(1e04, new_pos)
 
-#     @skip("skip")
     def test_grid_scanning(self):
         # Dwell time is hard-coded when doing grid scanning
         self.scanner.dwellTime.value = 100e-6  # s
@@ -498,7 +489,6 @@ class TestSEM(unittest.TestCase):
         self.scanner.resolution.value = last_res
         self.size = self.scanner.resolution.value
 
-#     @skip("skip")
     def test_sample_holder(self):
         """
         Check it's possible to read the current sample holder ID
@@ -509,7 +499,6 @@ class TestSEM(unittest.TestCase):
         # Try to register holder with wrong code
         self.assertRaises(ValueError, self.pressure.registerSampleHolder, "wrongCode")
 
-#     @skip("skip")
     def test_auto_contrast(self):
         """
         Check it's possible to apply AutoContrast

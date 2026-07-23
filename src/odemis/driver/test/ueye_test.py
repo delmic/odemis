@@ -47,7 +47,6 @@ class StaticTestUEye(VirtualStaticTestCam, unittest.TestCase):
 
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
 class TestUEye(VirtualTestCam, unittest.TestCase):
     """
     Test directly the UEye class.
@@ -74,7 +73,6 @@ class TestUEye(VirtualTestCam, unittest.TestCase):
         VirtualTestCam.setUp(self)
 
 
-# @skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM

@@ -48,7 +48,6 @@ pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 USE_THREADS = True
 
 
-# @unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
@@ -112,7 +111,6 @@ class ContainerTest(unittest.TestCase):
         rdaemon.ping()
 
 
-# @unittest.skip("simple")
 class SerializerTest(unittest.TestCase):
 
     def test_recursive(self):
@@ -155,7 +153,6 @@ class SerializerTest(unittest.TestCase):
         daemon.shutdown()
 
 
-# @unittest.skip("simple")
 class ProxyOfProxyTest(unittest.TestCase):
     # Test sharing a shared component from the client
 
@@ -337,7 +334,6 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
 
 
-# @unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
     """
     Test the Component, DataFlow, and VAs when shared remotely.

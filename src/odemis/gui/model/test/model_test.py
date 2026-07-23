@@ -33,7 +33,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 
 
-# @skip("simple")
 class MainGUIDataTestCase(unittest.TestCase):
 
     def test_secom_missing_stage(self):

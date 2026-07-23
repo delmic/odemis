@@ -57,7 +57,6 @@ class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
 
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
 class TestAndorCam3(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam3 class.
@@ -76,7 +75,6 @@ class TestAndorCam3(VirtualTestCam, unittest.TestCase):
             self.camera.data.get()
 
 
-#@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM

@@ -48,7 +48,6 @@ IMGS = [IMG_PATH + "/driver/songbird-sim-sem.h5",
         IMG_PATH + "/acq/align/test/images/Slice69_stretched.tif"]
 
 
-# @unittest.skip("skip")
 class TestIdentityRegistrar(unittest.TestCase):
 
     def setUp(self):

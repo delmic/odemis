@@ -76,7 +76,6 @@ KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CO
 KWARGS_E725 = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_BUS_E725}
 
 
-# @skip("faster")
 class TestController(unittest.TestCase):
     """
     directly test the low level class
@@ -142,7 +141,7 @@ class TestController(unittest.TestCase):
         self.assertEqual(0, ctrl.GetErrorNum())
         ctrl.terminate()
 
-#@skip("faster")
+
 class TestFake(TestController):
     """
     very basic test of the simulator, to ensure we always test it.
@@ -152,7 +151,7 @@ class TestFake(TestController):
         self.accesser = pigcs.SerialBusAccesser(self.ser)
         self.config_ctrl = CONFIG_CTRL_BASIC
 
-#@skip("faster")
+
 class TestFakeCL(TestController):
     """
     very basic test of the simulator and CL controller, to ensure we always test it.
@@ -163,7 +162,6 @@ class TestFakeCL(TestController):
         self.config_ctrl = CONFIG_CTRL_CL
 
 
-#@skip("faster")
 class TestActuator(unittest.TestCase):
 
     def setUp(self):
@@ -173,7 +171,6 @@ class TestActuator(unittest.TestCase):
     def tearDown(self):
         time.sleep(0.1) # to make sure all is sent
 
-#    @skip("faster")
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -189,7 +186,6 @@ class TestActuator(unittest.TestCase):
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
             stage.terminate()
 
-#    @skip("faster")
     def test_simple(self):
         stage = CLASS(**self.kwargs)
         move = {'x': 0.01e-6}
@@ -209,7 +205,6 @@ class TestActuator(unittest.TestCase):
         ep = pickle.loads(p)
         self.assertIsInstance(ep, PIGCSError)
 
-#    @skip("faster")
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
@@ -240,7 +235,6 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
-#    @skip("faster")
     def test_speed(self):
         """
         Note: with C-867 open-looped (SMOController), speed is very imprecise,
@@ -297,7 +291,6 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
-#    @skip("faster")
     def test_linear_pos(self):
         """
         Check that the position reported during a move is always increasing
@@ -342,7 +335,6 @@ class TestActuator(unittest.TestCase):
         # back (at the end, in case of overshoot)
         self.assertGreater(diff_pos * self.direction, -20e-6) # negative means opposite dir
 
-#    @skip("faster")
     def test_stop(self):
         stage = CLASS(**self.kwargs)
         stage.stop()
@@ -353,7 +345,6 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(f.cancelled())
         stage.terminate()
 
-#    @skip("faster")
     def test_queue(self):
         """
         Note: with C-867 open-looped (SMOController), speed is very imprecise,
@@ -438,7 +429,6 @@ class TestActuator(unittest.TestCase):
         self.assertEqual(self.called, 11)
         stage.terminate()
 
-#    @skip("faster")
     def test_cancel(self):
         stage = CLASS(**self.kwargs)
         speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
@@ -470,7 +460,6 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
-#    @skip("faster")
     def test_not_cancel(self):
         stage = CLASS(**self.kwargs)
         speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
@@ -520,7 +509,6 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
-#    @skip("faster")
     def test_move_circle(self):
         # check if we can run it
         buses = CLASS.scan(PORT)
@@ -551,7 +539,6 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
-#    @skip("faster")
     def test_future_callback(self):
         stage = CLASS(**self.kwargs)
         speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
@@ -605,13 +592,11 @@ class TestActuator(unittest.TestCase):
         self.called += 1
 
 
-# @skip("faster")
 class TestActuatorCL(TestActuator):
     def setUp(self):
         self.kwargs = KWARGS_CL
         self.kwargs_two = KWARGS_TWO_CL
 
-    #    @skip("faster")
     def test_reference(self):
         """
         Test referencing for 2 axes.
@@ -653,7 +638,6 @@ class TestActuatorCL(TestActuator):
         self.assertFalse(stage.referenced.value['x'])  # check it is no longer referenced
 
 
-# @skip("faster")
 class TestActuatorIP(TestActuator):
     def setUp(self):
         if TEST_NOHW:

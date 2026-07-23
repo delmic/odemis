@@ -93,7 +93,6 @@ class TestCalibration(unittest.TestCase):
         f = self.chamber.moveAbs({"vacuum": vacuum_pressure})
         f.result()
 
-    # @unittest.skip("skip")
     def test_find_hole_center(self):
         """
         Test FindCircleCenter for holes
@@ -127,7 +126,6 @@ class TestCalibration(unittest.TestCase):
         expected_coordinates = (-0.00014212, 9.405e-05)  # about: 888, 934 = -0.00014212, 9.405e-05
         numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
 
-    # @unittest.skip("skip")
     def test_find_lens_center(self):
         """
         Test FindRingCenter for lenses
@@ -139,7 +137,6 @@ class TestCalibration(unittest.TestCase):
         expected_coordinates = (-1.6584835e-05, 1.3084411e-04)  # 454.75, 446.1) px
         numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
 
-    # @unittest.skip("skip")
     def test_no_hole(self):
         """
         Test FindCircleCenter raises exception
@@ -161,7 +158,6 @@ class TestCalibration(unittest.TestCase):
         holes_found = f.result()
         self.assertEqual(len(holes_found), 2)
 
-    # @unittest.skip("skip")
     def test_update_offset_rot(self):
         """
         Test UpdateOffsetAndRotation
