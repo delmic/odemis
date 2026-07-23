@@ -28,7 +28,7 @@ from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import threading
 import time
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
@@ -449,7 +449,7 @@ class ProgressiveFuture(CancellableFuture):
             else:  # FINISHED or CANCELLED
                 return max(0.0, self._elapsed_time), 0.0
 
-    def set_progress(self, elapsed_time: float | None = None, remaining_time: float | None = None):
+    def set_progress(self, elapsed_time: Optional[float] = None, remaining_time: Optional[float] = None):
         """
         Update the progress of the task. To be used by executors only.
 
