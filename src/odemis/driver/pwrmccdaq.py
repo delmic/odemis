@@ -63,7 +63,8 @@ class MCCDevice(HwComponent):
     This class can be inherited for more functionality to support more complex components.
     """
     def __init__(self, name: str, role: str, mcc_device: Optional[str],
-                 di_channels: Dict[int, Tuple[str, bool]] = {}, **kwargs):
+                di_channels: Optional[Dict[int, Tuple[str, bool]]] = None, children: Optional[Dict[str, dict]] = None,
+                daemon=None, **kwargs):
         """
         :param mcc_device (str or None): serial number or None (null in yaml file) for auto-detect.
             the device is considered a USB-powered MCC DAQ 1208LS device. Note that the serial number
@@ -76,8 +77,12 @@ class MCCDevice(HwComponent):
             value is a list with VA name (str) and a "TTL high" flag, stating the value to set when
             reading high on the DI channel. So passing True means that the VA will report True when
             the port is high, and False when the port is low. Passing False means the opposite.
+        :param children: Known children are "actuator" for an MCCDeviceDIOActuator child component which can be used
+            to control binary axes through the digital outputs of the MCC device.
         """
-        super().__init__(name, role, **kwargs)
+        super().__init__(name, role, daemon=daemon, **kwargs)
+        di_channels = di_channels or {}
+        children = children or {}
         self._name = name
         self._di_channels = dict(sorted(di_channels.items()))  # sort the list of channels
         self.device = None  # either MCCDeviceSimulator class or usb_1208LS class
@@ -93,8 +98,13 @@ class MCCDevice(HwComponent):
             except HwError:
                 raise HwError("Failed to open MCC DAQ device with s/n '%s'" % mcc_device)
 
+        self.init_dio_values = {}  # dict of channel number -> initial bit value read from the device at startup
+        for channel in range(16):
+            port, bit = self.channel_to_port(channel)
+            self.init_dio_values[channel] = self.device.DBitIn(port, bit)
+
         # Default to every channel is output (both ports set to 0)
-        dconfig = {
+        self.dconfig = {
             usb_1208LS.DIO_PORTA: 0,
             usb_1208LS.DIO_PORTB: 0,
         }
@@ -113,7 +123,7 @@ class MCCDevice(HwComponent):
                 except ValueError:
                     raise ValueError(f"Invalid channel value for status {self._di_channels[channel]}")
 
-                dconfig[port] |= 1 << bit  # set channel to input
+                self.dconfig[port] |= 1 << bit  # set channel to input
 
                 # create a VA with False as default
                 va = model.BooleanVA(False, readonly=True)
@@ -123,9 +133,19 @@ class MCCDevice(HwComponent):
                 setattr(self, va_name, va)  # set the class VA variable name
                 logging.info(f"{va_name} status registered for component {self._name} on channel {channel}")
 
-            for port, val in dconfig.items():
-                self.device.DConfig(port, val)
+        for port, val in self.dconfig.items():
+            self.device.DConfig(port, val)
 
+        # set default configuration
+        self.device.AOut(0, 0x0)
+        self.device.AOut(1, 0x0)
+
+        # check if an actuator child is requested and create it
+        if "actuator" in children:
+            self._actuator = MCCDeviceDIOActuator(parent=self, daemon=daemon, **children["actuator"])
+            self.children.value.add(self._actuator)
+
+        if self._di_channels:
             # create the thread to poll all the status bits
             self._status_thread = MCCDeviceDIStatus(self.device, self._channel_vas, self._connection_lock)
             self._status_thread.start()
@@ -214,7 +234,8 @@ class MCCDeviceLight(Emitter, MCCDevice):
     Inherits from Emitter for ComponentProxy support and from MCCDevice for power and interlock control.
     """
     def __init__(self, name: str, role: str, mcc_device: Optional[str], ao_channels: List[int], do_channels: List[int],
-                 spectra, pwr_curve, di_channels: Dict[int, Tuple[str, bool]] = {}, **kwargs):
+                 spectra, pwr_curve, di_channels: Optional[Dict[int, Tuple[str, bool]]] = None, children: Optional[Dict[str, dict]] = None,
+                 daemon=None, **kwargs):
         """
         :param mcc_device (str or None): refer to parent. When using the simulator ("fake"), the
           first 8 DIO channels are connected to the next 8 DIO channels. For instance, the value of
@@ -233,6 +254,8 @@ class MCCDeviceLight(Emitter, MCCDevice):
             At least one pair should be provided. If no voltage is linked to 0W, then a 0V -> 0W mapping is used.
             The total curve should be monotonic.
         :param di_channels (dict -> int, list(str, bool)): refer to parent.
+        :param children: Known children are "actuator" for an MCCDeviceDIOActuator child component which can be used
+            to control binary axes through the digital outputs of the MCC device.
         """
         Emitter.__init__(self, name, role, **kwargs)
 
@@ -289,7 +312,7 @@ class MCCDeviceLight(Emitter, MCCDevice):
 
         # if the parameters of this call are set incorrect in the config file
         # the thread will be started prematurely and not be suspended properly
-        MCCDevice.__init__(self, name, role, mcc_device, di_channels)
+        MCCDevice.__init__(self, name, role, mcc_device, di_channels, children=children, daemon=daemon)
 
         # Maximum power for channel to be used as a range for power
         max_power = tuple([crv[-1][1] for crv in self._pwr_curve])
@@ -362,6 +385,295 @@ class MCCDeviceLight(Emitter, MCCDevice):
                 if old_bit_value != new_bit_value:
                     logging.debug(f"Setting do_channel {do_ch} from {old_bit_value} to {new_bit_value}")
                     self.device.DBitOut(port, bit, new_bit_value)
+
+
+class MCCDeviceDIOActuator(model.Actuator):
+    """
+    Actuator child of MCCDevice with binary axes controlled via MCC DAQ digital outputs,
+    with optional position feedback via separate digital inputs.
+    Instantiated automatically by MCCDevice (or MCCDeviceLight) when an "actuator" child is requested.
+    """
+
+    def __init__(self, name: str, role: str, parent: MCCDevice, axes: Dict[str, dict], **kwargs):
+        """
+        :param parent: the MCCDevice instance that owns this actuator.
+        :param axes (dict str -> dict): axis name -> axis configuration dict with:
+              "do" (int): DO channel number for setting the position.
+              "low" (float): position reported when the DO is low (0).
+              "high" (float): position reported when the DO is high (1).
+              "unit" (str, optional): unit of the axis, default "".
+              "duration" (float): transition time in seconds to wait after a move.
+              "di" (int, optional): DI channel number for reading back the position.
+              "di_inverted" (bool, optional): if True, DI high = low position (default False).
+            Example:
+              {"nd-filter": {"do": 0, "low": 0.0, "high": 1.57, "unit": "rad",
+                             "duration": 0.5, "di": 8, "di_inverted": False}}
+
+        NOTE The do and di channels must not share the same port A or B, since the MCC device
+             port must be configured explicitly for reading or writing.
+             Port A, channel 0-7 -> pin 21-28
+             Port B, channel 8-15 -> pin 32-39
+        """
+        if not axes:
+            raise ValueError("axes must define at least one axis")
+
+        self._axes_cfg = {}   # axis_name -> (do_ch, low, high, duration)
+        self._di_feedback = {}  # axis_name -> (di_ch, di_inverted)
+
+        axes_def = {}
+        do_ports = set()
+        di_ports = set()
+        do_ports_parent = set()
+        if hasattr(parent, "_do_channels"):
+            do_ports_parent = {parent.channel_to_port(ch)[0] for ch in parent._do_channels}
+        di_ports_parent = {parent.channel_to_port(ch)[0] for ch in parent._di_channels}
+        for axis_name, axis_cfg in axes.items():
+            missing_keys = {"do", "low", "high", "duration"} - set(axis_cfg.keys())
+            if missing_keys:
+                raise ValueError(f"Axis '{axis_name}' is missing required key(s): {', '.join(missing_keys)}")
+
+            do_ch = axis_cfg["do"]
+            low = axis_cfg["low"]
+            high = axis_cfg["high"]
+            unit = axis_cfg.get("unit", "")
+            duration = axis_cfg["duration"]
+
+            if low == high:
+                raise ValueError(f"Axis '{axis_name}' 'low' and 'high' positions must be different")
+            if not 0 <= duration < 1000:
+                raise ValueError(f"Axis '{axis_name}' duration {duration} should be between 0 and 1000 s")
+            try:
+                do_port, _ = parent.channel_to_port(do_ch)
+                do_ports.add(do_port)
+            except ValueError:
+                raise ValueError(f"Axis '{axis_name}' has invalid 'do' channel {do_ch}")
+
+            self._axes_cfg[axis_name] = (do_ch, low, high, duration)
+            axes_def[axis_name] = model.Axis(unit=unit, choices={low, high})
+
+            if "di" in axis_cfg:
+                di_ch = axis_cfg["di"]
+                if di_ch in parent._di_channels:
+                    raise ValueError(f"Axis '{axis_name}' 'di' channel {di_ch} is already used for a parent DI status")
+                di_inverted = axis_cfg.get("di_inverted", False)
+                try:
+                    di_port, _ = parent.channel_to_port(di_ch)
+                    di_ports.add(di_port)
+                except ValueError:
+                    raise ValueError(f"Axis '{axis_name}' has invalid 'di' channel {di_ch}")
+                parent.dconfig[di_port] = 0xff  # set all channel to input
+                self._di_feedback[axis_name] = (di_ch, di_inverted)
+
+        do_ports |= do_ports_parent
+        di_ports |= di_ports_parent
+        shared_ports = do_ports & di_ports
+        if shared_ports:
+            raise ValueError(f"DO and DI channels cannot share the same port(s): {shared_ports}. "
+                             f"Port A/B can be used for either DO or DI, but not both.")
+
+        for port, val in parent.dconfig.items():
+            parent.device.DConfig(port, val)
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+
+        self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+        self.position = model.VigilantAttribute({}, readonly=True)
+
+        self._metadata = {model.MD_HW_NAME: f"{self.parent.device.getManufacturer()} "
+                                            f"{self.parent.device.getProduct()} "
+                                            f"{self.parent.device.getSerialNumber()}"}
+        self._swVersion = odemis.__version__
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+
+        # Calling DConfig sets channel value to LOW, set the DO pins to their initial values
+        # and update the position accordingly
+        self._init_position()
+
+    def _init_position(self) -> None:
+        """Set DO pins to their initial hardware values and update position accordingly."""
+        pos = {}
+        for axis_name, (do_ch, low, high, _) in self._axes_cfg.items():
+            port, bit = self.parent.channel_to_port(do_ch)
+            val = self.parent.init_dio_values[do_ch]
+            pos[axis_name] = high if val else low
+            with self.parent._connection_lock:
+                self.parent.device.DBitOut(port, bit, val)
+        self.position._set_value(pos, force_write=True)
+
+    def _update_position(self) -> None:
+        """Read the actual position from the DI feedback channels and update the position VA."""
+        pos = {}
+        for axis_name, (do_ch, low, high, _) in self._axes_cfg.items():
+            if axis_name in self._di_feedback:
+                di_ch, di_inverted = self._di_feedback[axis_name]
+                port, bit = self.parent.channel_to_port(di_ch)
+                with self.parent._connection_lock:
+                    val = self.parent.device.DBitIn(port, bit)
+                # di_inverted=False: DI high -> high position; di_inverted=True: DI high -> low position
+                pos[axis_name] = low if (bool(val) == di_inverted) else high
+            else:
+                port, bit = self.parent.channel_to_port(do_ch)
+                with self.parent._connection_lock:
+                    val = self.parent.device.DBitIn(port, bit)
+                pos[axis_name] = high if val else low
+
+        self.position._set_value(pos, force_write=True)
+        logging.debug("Updated position: %s", pos)
+
+
+    def _create_move_future(self) -> model.CancellableFuture:
+        """
+        Create a CancellableFuture for a move.
+        :returns: a CancellableFuture for the move.
+        """
+        f = model.CancellableFuture()
+        f._moving_lock = threading.Lock()
+        f._must_stop = threading.Event()
+        f._was_stopped = False
+        f.task_canceller = self._cancel_current_move
+        return f
+
+    @model.isasync
+    def moveAbs(self, pos: Dict[str, float]) -> model.CancellableFuture:
+        if not pos:
+            return model.InstantaneousFuture()
+        self._check_move_abs(pos)
+
+        f = self._create_move_future()
+        self._executor.submitf(f, self._do_move_abs, f, pos)
+        return f
+
+    moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
+
+    @model.isasync
+    def moveRel(self, shift: Dict[str, float]) -> model.CancellableFuture:
+        raise NotImplementedError("Relative move is not supported on binary axes")
+
+    moveRel.__doc__ = model.Actuator.moveRel.__doc__
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+
+    def _check_move_abs(self, pos: Dict[str, float]) -> None:
+        """
+        Check that the requested absolute move is valid.
+
+        :param pos: dict of axis name -> target position
+        :raises ValueError: if any axis is unknown or any position is not a valid choice for that axis.
+        """
+        for axis, val in pos.items():
+            if axis not in self.axes:
+                raise ValueError(f"Unknown axis '{axis}'")
+            if val not in self.axes[axis].choices:
+                raise ValueError(
+                    f"Unsupported position {val!r} for axis '{axis}', "
+                    f"choices are {self.axes[axis].choices}")
+
+    def _do_move_abs(self, future: model.CancellableFuture, pos: Dict[str, float]) -> None:
+        """
+        Blocking and cancellable absolute move.
+        Sets the DO pin and waits for the transition duration.
+
+        :param future: the CancellableFuture for this move.
+        :param pos: dict of axis name -> target position
+        """
+        durations = []
+        with future._moving_lock:
+            for axis_name, v in pos.items():
+                do_ch, _, high, duration = self._axes_cfg[axis_name]
+                port, bit = self.parent.channel_to_port(do_ch)
+                new_val = int(v == high)
+                logging.debug("Setting DO channel %d to %d for axis '%s' -> %s",
+                              do_ch, new_val, axis_name, v)
+                with self.parent._connection_lock:
+                    self.parent.device.DBitOut(port, bit, new_val)
+                durations.append(duration)
+
+            self._wait_end_move(future, max(durations), pos)
+
+        logging.debug("Move successfully completed")
+
+    def _wait_end_move(self, future: model.CancellableFuture, duration: float, pos: Dict[str, float]) -> None:
+        """
+        Wait until the max transition duration has elapsed or cancellation is requested.
+        If DI feedback is configured for an axis, waits until the DI confirms the
+        position is reached, up to a fixed timeout after the transition duration.
+
+        :param future: the CancellableFuture for this move.
+        :param duration: the maximum transition duration to wait for.
+        :param pos: dict of axis name -> target position
+        :raises: TimeoutError if a DI-equipped axis does not confirm position in time.
+        """
+        future._must_stop.wait(duration)
+        self._check_cancelled(future)
+
+        di_axes = {axis: v for axis, v in pos.items() if axis in self._di_feedback}
+
+        if not di_axes:
+            # No DI feedback: just update position based on DO readback
+            self._update_position()
+            return
+
+        timeout = time.time() + 2 * duration
+        sleept = max(0.01, min(duration / 2, 0.1))
+
+        while di_axes:
+            self._update_position()
+            current_pos = self.position.value
+            di_axes = {
+                axis: v
+                for axis, v in di_axes.items()
+                if current_pos[axis] != v
+            }
+
+            if not di_axes:
+                break
+
+            self._check_cancelled(future)
+
+            if time.time() >= timeout:
+                raise TimeoutError(
+                    f"Timeout waiting for DI feedback for axes {di_axes}, "
+                    f"current position: {current_pos}"
+                )
+
+            logging.debug(
+                "Waiting for DI feedback, current position: %s, target position: %s",
+                current_pos,
+                di_axes
+            )
+            time.sleep(sleept)
+
+    def _cancel_current_move(self, future: model.CancellableFuture) -> bool:
+        """
+        Cancel the current move.
+
+        :param future: the CancellableFuture for this move.
+        """
+        future._must_stop.set()
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling current move")
+            return future._was_stopped
+
+    def _check_cancelled(self, future: model.CancellableFuture) -> None:
+        """
+        Check if the move was cancelled.
+
+        :param future: the CancellableFuture for this move.
+        :raises: CancelledError if the move was cancelled.
+        """
+        if future._must_stop.is_set():
+            future._was_stopped = True
+            raise model.CancelledError()
+
+    def terminate(self) -> None:
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+        super().terminate()
 
 
 class MCCDeviceSimulator:
