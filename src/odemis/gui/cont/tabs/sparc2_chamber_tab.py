@@ -24,21 +24,29 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
-from concurrent.futures import CancelledError
 import logging
 import math
+from concurrent.futures import CancelledError
+
 import wx
 
-from odemis import model
 import odemis.acq.stream as acqstream
-from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.model import TabName
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
+from odemis import model
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED, MIRROR_ENGAGED, \
-    MIRROR_PARKED, MIRROR_BAD, MIRROR_NOT_REFD
+from odemis.gui.cont.stream_bar import StreamBarController
+from odemis.gui.cont.tabs._constants import (
+    MIRROR_BAD,
+    MIRROR_ENGAGED,
+    MIRROR_NOT_REFD,
+    MIRROR_ONPOS_RADIUS,
+    MIRROR_PARKED,
+    MIRROR_AXES_LS,
+    get_mirror_pos_parked,
+)
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.model import TabName
 from odemis.gui.util import call_in_wx_main
 
 
@@ -130,15 +138,15 @@ class ChamberTab(Tab):
     def _get_mirror_state(cls, mirror):
         """
         Return the state of the mirror stage (in term of position)
-        Note: need self._pos_engaged
         return (MIRROR_*)
         """
         if not all(mirror.referenced.value.values()):
             return MIRROR_NOT_REFD
 
         pos = mirror.position.value
-        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
-                                 pos["s"] - MIRROR_POS_PARKED["s"])
+        pos_parked = get_mirror_pos_parked(mirror)
+
+        dist_parked = math.dist([pos[a] for a in pos], [pos_parked[a] for a in pos])
         if dist_parked <= MIRROR_ONPOS_RADIUS:
             return MIRROR_PARKED
 
@@ -146,8 +154,7 @@ class ChamberTab(Tab):
             pos_engaged = mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
         except KeyError:
             return MIRROR_BAD
-        dist_engaged = math.hypot(pos["l"] - pos_engaged["l"],
-                                  pos["s"] - pos_engaged["s"])
+        dist_engaged = math.dist([pos[a] for a in pos], [pos_engaged[a] for a in pos])
         if dist_engaged <= MIRROR_ONPOS_RADIUS:
             return MIRROR_ENGAGED
         else:
@@ -164,22 +171,19 @@ class ChamberTab(Tab):
         # => just say it's "somewhere in the middle".
         mirror = self.tab_data_model.main.mirror
         if not all(mirror.referenced.value.values()):
-            # In case it pulses, wxGauge still holds the old value, so it might
-            # think it doesn't need to refresh unless the value changes.
-            self.panel.gauge_move.Value = 0
-            self.panel.gauge_move.Value = 50  # Range is 100 => 50%
+            if not self._pulse_timer.IsRunning():
+                self.panel.gauge_move.Value = 0
+                self.panel.gauge_move.Value = 50  # Range is 100 => 50%
             return
 
         # We map the position between Parked -> Engaged. The basic is simple,
         # we could just map the current position on the segment. But we also
         # want to show a position "somewhere in the middle" when the mirror is
         # at a random bad position.
-        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
-                                 pos["s"] - MIRROR_POS_PARKED["s"])
-        dist_engaged = math.hypot(pos["l"] - self._pos_engaged["l"],
-                                  pos["s"] - self._pos_engaged["s"])
-        tot_dist = math.hypot(MIRROR_POS_PARKED["l"] - self._pos_engaged["l"],
-                              MIRROR_POS_PARKED["s"] - self._pos_engaged["s"])
+        pos_parked = get_mirror_pos_parked(mirror)
+        dist_parked = math.dist([pos[a] for a in pos], [pos_parked[a] for a in pos])
+        dist_engaged = math.dist([pos[a] for a in pos], [self._pos_engaged[a] for a in pos])
+        tot_dist = math.dist([pos_parked[a] for a in pos], [self._pos_engaged[a] for a in pos])
         ratio_to_engaged = dist_engaged / tot_dist
         ratio_to_parked = dist_parked / tot_dist
         if ratio_to_parked < ratio_to_engaged:
@@ -220,13 +224,26 @@ class ChamberTab(Tab):
         #  * when engaging => move l first, then s
         # Some systems are special, default is overridden with MD_AXES_ORDER_REF
         mirror = self.tab_data_model.main.mirror
-        axes_order = mirror.getMetadata().get(model.MD_AXES_ORDER_REF, ("s", "l"))
-        if set(axes_order) != {"s", "l"}:
-            logging.warning("Axes order of mirror is %s, while should have s and l axes",
-                            axes_order)
+        pos_parked = get_mirror_pos_parked(mirror)
+        mirror_axes = set(mirror.axes.keys())
+        mirror_md = mirror.getMetadata()
+        if mirror_axes == MIRROR_AXES_LS:
+            axes_order = mirror_md.get(model.MD_AXES_ORDER_REF, ("s", "l"))
+        else:
+            try:
+                axes_order = mirror_md[model.MD_AXES_ORDER_REF]
+            except KeyError:
+                raise ValueError("Mirror actuator has no metadata AXES_ORDER_REF")
+        if set(axes_order) != mirror_axes:
+            logging.warning("Axes order of mirror is %s, while should have %s axes",
+                            axes_order, mirror_axes)
         mstate = self._get_mirror_state(mirror)
 
         moves = []
+        # If reference_at_once is True, then the mirror axes can be referenced at once and the
+        # driver will take care of the referencing procedure. If False, reference the mirror
+        # axes one-by-one.
+        reference_at_once = mirror_md.get(model.MD_CALIB, {}).get("reference_at_once", False)
         if mstate == MIRROR_PARKED:
             # => Engage
             for a in reversed(axes_order):
@@ -234,19 +251,23 @@ class ChamberTab(Tab):
             btn_text = "ENGAGING MIRROR"
         elif mstate == MIRROR_NOT_REFD:
             # => Reference
-            for a in axes_order:
-                moves.append((mirror.reference, {a}))
-            btn_text = "PARKING MIRROR"
+            if reference_at_once:
+                btn_text = "REFERENCING MIRROR"
+                moves.append((mirror.reference, set(axes_order)))
+            else:
+                btn_text = "PARKING MIRROR"
+                for a in axes_order:
+                    moves.append((mirror.reference, {a}))
             # position doesn't update during referencing, so just pulse
             self._pulse_timer.Start(250)  # 4 Hz
         else:
             # => Park
-            # Use standard move to show the progress of the mirror position, but
-            # finish by (normally fast) referencing to be sure it really moved
-            # to the parking position.
             for a in axes_order:
-                moves.append((mirror.moveAbs, {a: MIRROR_POS_PARKED[a]}))
-                moves.append((mirror.reference, {a}))
+                moves.append((mirror.moveAbs, {a: pos_parked[a]}))
+                if not reference_at_once:
+                    # finish by (normally fast) referencing to be sure it really moved
+                    # to the parking position.
+                    moves.append((mirror.reference, {a}))
             btn_text = "PARKING MIRROR"
 
         logging.debug("Will do the following moves: %s", moves)
@@ -321,11 +342,16 @@ class ChamberTab(Tab):
         text based on this.
         Note: must be called within the main GUI thread
         """
-        mstate = self._get_mirror_state(self.tab_data_model.main.mirror)
+        mirror = self.tab_data_model.main.mirror
+        mstate = self._get_mirror_state(mirror)
+        mirror_axes = set(mirror.axes.keys())
 
         if mstate == MIRROR_NOT_REFD:
-            txt_warning = ("Parking the mirror is required at least once in order "
-                           "to reference the actuators.")
+            if mirror_axes == MIRROR_AXES_LS:
+                txt_warning = ("Parking the mirror is required at least once in order "
+                               "to reference the actuators.")
+            else:
+                txt_warning = "Referencing the mirror is required at least once."
         elif mstate == MIRROR_BAD:
             txt_warning = "The mirror is neither fully parked nor entirely engaged."
         else:
@@ -339,7 +365,13 @@ class ChamberTab(Tab):
         if mstate == MIRROR_PARKED:
             btn_text = "ENGAGE MIRROR"
         else:
-            btn_text = "PARK MIRROR"
+            if mirror_axes == MIRROR_AXES_LS:
+                btn_text = "PARK MIRROR"
+            else:
+                if mstate == MIRROR_NOT_REFD:
+                    btn_text = "REFERENCE MIRROR"
+                else:
+                    btn_text = "PARK MIRROR"
 
         self.panel.btn_switch_mirror.SetLabel(btn_text)
 
@@ -384,7 +416,7 @@ class ChamberTab(Tab):
         # redux stage
         if main_data.role in ("sparc", "sparc2"):
             mirror = main_data.mirror
-            if mirror and set(mirror.axes.keys()) == {"l", "s"}:
+            if mirror and (main_data.role == "sparc2" or set(mirror.axes.keys()) == MIRROR_AXES_LS):
                 mstate = cls._get_mirror_state(mirror)
                 # If mirror stage not engaged, make this tab the default
                 if mstate != MIRROR_ENGAGED:

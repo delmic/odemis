@@ -1327,7 +1327,12 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
         self.btn_auto_align = xrc.XRCCTRL(self, "btn_auto_align")
         self.gauge_auto_align = xrc.XRCCTRL(self, "gauge_auto_align")
-        self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
+        self.lbl_step_size_xy = xrc.XRCCTRL(self, "lbl_step_size_xy")
+        self.slider_mirror_xy = xrc.XRCCTRL(self, "slider_mirror_xy")
+        self.lbl_step_size_x = xrc.XRCCTRL(self, "lbl_step_size_x")
+        self.slider_mirror_x = xrc.XRCCTRL(self, "slider_mirror_x")
+        self.lbl_step_size_y = xrc.XRCCTRL(self, "lbl_step_size_y")
+        self.slider_mirror_y = xrc.XRCCTRL(self, "slider_mirror_y")
         self.lbl_step_size_z = xrc.XRCCTRL(self, "lbl_step_size_z")
         self.slider_stage = xrc.XRCCTRL(self, "slider_stage")
         self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
@@ -16562,14 +16567,80 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lbl_step_size_xy">
                           <label>Step size (X, Y)</label>
                         </object>
                         <flag>wxRIGHT</flag>
                         <border>5</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="UnitFloatSlider" name="slider_mirror">
+                        <object class="UnitFloatSlider" name="slider_mirror_xy">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_step_size_x">
+                          <label>Step size (X)</label>
+                          <hidden>1</hidden>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_mirror_x">
+                          <hidden>1</hidden>
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_step_size_y">
+                          <label>Step size (Y)</label>
+                          <hidden>1</hidden>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_mirror_y">
+                          <hidden>1</hidden>
                           <size>-1,20</size>
                           <value>0.000001</value>
                           <min>0.0000001</min>
