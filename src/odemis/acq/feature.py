@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import copy
-import glob
 import logging
 import os
 import threading
@@ -51,12 +50,13 @@ from odemis.acq.move import (
     MicroscopePostureManager,
 )
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
-from odemis.acq.stream import Stream, StaticFluoStream
+from odemis.acq.stream import Stream, StaticFluoStream, StaticSEMStream, StaticFIBStream
 from odemis.dataio import find_fittest_converter
 from odemis.gui.cont.cryo_project import IMG_FILENAME, IMG_IN_FILE_IDS, add_image
 from odemis.model import MD_IN_FILE_INDEX
 from odemis.util import dataio, executeAsyncTask
 from odemis.util.comp import generate_zlevels
+from odemis.util.datacollector import DataCollector
 from odemis.util.dataio import data_to_static_streams, open_acquisition, splitext
 from odemis.util.driver import estimate_stage_movement_time
 from odemis.util.filename import create_filename
@@ -174,13 +174,18 @@ class CryoFeature(object):
     def __init__(self, name: str,
                  stage_position: Dict[str, float],
                  fm_focus_position: Dict[str, float],
-                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None, correlation_data=None):
+                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None,
+                 correlation_data=None,
+                 collect: bool = False):
         """
         :param name: (string) the feature name
         :param stage_position: (dict) the stage position of the feature (stage-bare)
         :param fm_focus_position: (dict) the focus position of the feature
         :param correlation_data: (Dict[str,FIBFMCorrelationData]) Dictionary mapping the feature status to
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
+        :param collect: (bool) Whether this feature is eligible for data collection.
+            Defaults to False.  The GUI sets this based on the per-project sampling
+            decision made when a project is opened or created.
         """
         self.name = model.StringVA(name)
         # FIXME: The 'position' parameter should eventually contain the SampleStage coordinates and not stage bare from the stage_position!
@@ -210,6 +215,10 @@ class CryoFeature(object):
         if correlation_data is None:
             correlation_data = {}
         self.correlation_data = correlation_data
+
+        # Whether this feature is eligible for data collection.
+        # Set by the GUI from the per-project sampling decision; persisted in features.json.
+        self.collect: bool = collect
 
         # attributes for automated milling
         self.path: str = None  # TODO:support path creation here, rather than on milling data save
@@ -298,9 +307,11 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     fm_focus_position = feature_raw['fm_focus_position']
     posture_positions = feature_raw.get('posture_positions', {})
     milling_task_json = feature_raw.get('milling_tasks', {})
+    collect = feature_raw.get('collect', False)
     feature = CryoFeature(name=feature_raw['name'],
                           stage_position=stage_position,
-                          fm_focus_position=fm_focus_position
+                          fm_focus_position=fm_focus_position,
+                          collect=collect
                           )
     feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
     feature.status.value = feature_raw['status']
@@ -401,6 +412,161 @@ def _create_fibsem_filename(filename: str, acq_type: str) -> str:
     ptn = f"{basename}-{acq_type}-{{cnt}}"
 
     return create_filename(path, ptn, ext, count="001")
+
+
+def _is_zstack_stream(stream: "Stream") -> bool:
+    """Return True if the stream contains z-stack (3-D ZYX) data."""
+    return hasattr(stream, "zIndex")
+
+
+def _stream_overlaps_position(stream: "Stream", x: float, y: float) -> bool:
+    """Return True if the stage position (x, y) falls within the stream's field of view.
+
+    :param stream: A static stream with a getBoundingBox() method.
+    :param x: Stage x position in metres.
+    :param y: Stage y position in metres.
+    :returns: True when the position is inside the bounding box, False otherwise.
+    """
+    try:
+        bbox = stream.getBoundingBox()  # (left, top, right, bottom) in metres
+    except Exception:
+        return False
+    left, top, right, bottom = bbox
+    return left <= x <= right and top <= y <= bottom
+
+
+def collect_feature_data(
+    feature: "CryoFeature",
+    overview_streams: Optional[List["Stream"]] = None,
+    project_dir: Optional[str] = None,
+) -> None:
+    """Collect anonymized data for a feature and submit it to the data collector.
+
+    Skips immediately if feature.collect is False or if data collection consent
+    has not been granted.  Never raises — all errors are logged and suppressed.
+
+    The payload contains:
+    - First acquired z-stack per FM channel (or first FM image if no z-stack).
+    - FM and SEM overview images that spatially overlap the feature's position.
+    - Feature status, stage position, and FM focus position.
+
+    Privacy rules enforced:
+    - Feature name is never included.
+    - Image payload keys are generic (channel_0, overview_fm_0, etc.).
+    - Original filenames are not included in the payload.
+
+    After collection feature.collect is set to False to prevent re-collection.
+
+    :param feature: The feature to collect data for.
+    :param overview_streams: Optional list of overview static streams.
+        Used to find FM / SEM overviews that overlap the feature position.
+    :param project_dir: Optional project directory path.  When provided and
+        feature.streams is empty, streams are loaded from disk first.
+    """
+    if not feature.collect:
+        return
+
+    try:
+        _dc = DataCollector()
+        if not _dc.get_consent():
+            return
+    except Exception:
+        logging.exception("collect_feature_data: failed to access DataCollector; skipping.")
+        return
+
+    try:
+
+        # Load feature streams from disk when not yet in memory.
+        if not feature.streams.value and project_dir:
+            try:
+                load_feature_streams_from_disk(feature, project_dir)
+            except Exception:
+                logging.exception(
+                    "collect_feature_data: failed to load streams; skipping.")
+                return
+
+        feature_streams = list(feature.streams.value)
+
+        # Collect first z-stack per FM channel; fall back to first FM image per channel.
+        fm_zstacks: List = []
+        fm_images: List = []
+        for s in feature_streams:
+            if isinstance(s, StaticFluoStream):
+                if _is_zstack_stream(s):
+                    fm_zstacks.append(s)
+                else:
+                    fm_images.append(s)
+
+        # Per channel: prefer z-stack, then plain FM image.
+        # Channels are delineated by MD_OUT_WL; use index as fallback.
+        selected_fm: List = []
+        seen_channels: set = set()
+        for s in fm_zstacks + fm_images:
+            try:
+                channel_key = s.raw[0].metadata.get(model.MD_OUT_WL)
+            except (IndexError, AttributeError):
+                channel_key = None
+            if channel_key not in seen_channels:
+                seen_channels.add(channel_key)
+                selected_fm.append(s)
+
+        # Collect spatially overlapping overview streams.
+        stage_pos = feature.stage_position.value
+        feat_x = stage_pos.get("x", 0.0)
+        feat_y = stage_pos.get("y", 0.0)
+
+        overview_fm: List = []
+        overview_sem: List = []
+        for s in (overview_streams or []):
+            if not _stream_overlaps_position(s, feat_x, feat_y):
+                continue
+            if isinstance(s, StaticFluoStream):
+                overview_fm.append(s)
+            elif isinstance(s, (StaticSEMStream, StaticFIBStream)):
+                overview_sem.append(s)
+
+        # Build privacy-preserving payload — generic keys, no names or filenames.
+        payload: dict = {
+            "status": feature.status.value,
+            "stage_position": dict(stage_pos),
+            "fm_focus_position": dict(feature.fm_focus_position.value),
+        }
+
+        def _get_raw(stream: "Stream") -> Optional["model.DataArray"]:
+            try:
+                return stream.raw[0] if stream.raw else None
+            except Exception:
+                return None
+
+        for idx, s in enumerate(selected_fm):
+            da = _get_raw(s)
+            if da is not None:
+                payload[f"channel_{idx}"] = da
+
+        for idx, s in enumerate(overview_fm):
+            da = _get_raw(s)
+            if da is not None:
+                payload[f"overview_fm_{idx}"] = da
+
+        for idx, s in enumerate(overview_sem):
+            da = _get_raw(s)
+            if da is not None:
+                payload[f"overview_sem_{idx}"] = da
+
+        image_keys = [k for k in payload if k.startswith(("channel_", "overview_fm_", "overview_sem_"))]
+        if not image_keys:
+            logging.debug(
+                "collect_feature_data: no images found for feature; skipping upload."
+            )
+            return
+
+        _dc.record("feature_collected", "1.0", payload)
+
+        feature.collect = False
+        logging.debug("collect_feature_data: submitted feature data for collection.")
+
+    except Exception:
+        logging.exception("collect_feature_data: unexpected error; feature data not collected.")
 
 # To handle the timeout error when the stage is not able to move to the desired position
 # It logs the message and raises the MoveError exception
