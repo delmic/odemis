@@ -282,6 +282,7 @@ class ProgressiveFutureConnector(object):
         elapsed, remaining = future.get_progress()
         self._elapsed = elapsed  # elapsed time at last progress update (s)
         self._remaining = remaining  # remaining time at last progress update (s)
+        self._progress_update_time = time.monotonic()  # wall-clock time of the last progress anchor
         self._prev_left = None
         self._last_update = 0  # when was the last GUI update
 
@@ -305,6 +306,7 @@ class ProgressiveFutureConnector(object):
         """
         self._elapsed = elapsed_time
         self._remaining = remaining_time
+        self._progress_update_time = time.monotonic()
 
     @call_in_wx_main
     def _on_done(self, future):
@@ -328,8 +330,15 @@ class ProgressiveFutureConnector(object):
 
     def _update_progress(self):
         """ Update the progression controls """
-        now = time.time()
+        now = time.monotonic()
         elapsed, remaining = self._future.get_progress()
+
+        # For pending futures, get_progress() always returns elapsed=0. Use
+        # wall-clock time since the last progress anchor so the bar advances.
+        if elapsed == 0 and not self._future.running() and not self._future.done():
+            wall_elapsed = max(0.0, now - self._progress_update_time)
+            elapsed = wall_elapsed
+            remaining = max(0.0, remaining - wall_elapsed)
 
         prev_left = self._prev_left
         total = elapsed + remaining
