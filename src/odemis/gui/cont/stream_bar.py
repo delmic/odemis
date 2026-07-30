@@ -2142,6 +2142,15 @@ class SparcStreamsController(StreamBarController):
                     if e.stream is stream:
                         e.set_visible(True)
 
+        interlock_triggered = False
+        if model.hasVA(self._main_data_model.light, "interlockTriggered"):
+            interlock_triggered = self._main_data_model.light.interlockTriggered.value
+
+        if updated and not interlock_triggered:
+            self._main_data_model.set_light_protector_position("off")
+        else:
+            self._main_data_model.set_light_protector_position("on")
+
         super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
 
         # Make sure the current view is compatible with the stream playing

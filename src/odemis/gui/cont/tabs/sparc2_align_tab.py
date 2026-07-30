@@ -2539,6 +2539,7 @@ class Sparc2AlignTab(Tab):
             self._onAlignMode(mode)
             if main.mirror:
                 main.mirror.position.subscribe(self._onMirrorPos)
+            main.set_light_protector_position("on")
 
             # Reset the focus progress bar (as any focus action has been cancelled)
             wx.CallAfter(self.panel.gauge_autofocus.SetValue, 0)

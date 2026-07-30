@@ -71,6 +71,7 @@ class SparcAcquiController(object):
         self._streambar_controller = streambar_controller
         self._interlockTriggered = False  # local/private bool to track interlock status
         self._ebeam_blanker = None
+        self._pre_interlock_protector = None  # to restore the light protector position when interlock is reset
 
         # _interlock_blocks_acquisition is used to adjust the behaviour when the interlock is opened.
         # * True => acquisition is forbidden when interlock is triggered
@@ -279,6 +280,11 @@ class SparcAcquiController(object):
                 message = "Laser and e-beam were suspended automatically due to interlock trigger."
             else:
                 message = "Laser was suspended automatically due to interlock trigger."
+
+            if self._main_data_model.light_protector:
+                self._pre_interlock_protector = self._main_data_model.light_protector.position.value
+                self._main_data_model.set_light_protector_position("on")
+                message += " Light protector set to 'on'."
         else:
             message = "Laser interlock trigger is reset to normal."
             # Put back the e-beam blanker to its original state, but only if it is (still) forced
@@ -289,6 +295,9 @@ class SparcAcquiController(object):
                     message += " E-beam blanker disabled."
                 elif self._pre_interlock_blanker is None:  # Automatic mode (= blanker active when not acquiring)
                     message += " E-beam blanker set back to automatic mode."
+            if self._main_data_model.light_protector and self._pre_interlock_protector is not None:
+                self._main_data_model.light_protector.moveAbs(self._pre_interlock_protector).result()
+                message += " Light protector position restored."
 
         popup.show_message(wx.GetApp().main_frame,
                            title="Laser safety",
@@ -443,6 +452,8 @@ class SparcAcquiController(object):
                                       % self.conf.last_format)
 
         self._pause_streams()
+        if not self._interlockTriggered:
+            self._main_data_model.set_light_protector_position("off")
 
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
@@ -520,6 +531,7 @@ class SparcAcquiController(object):
         self._main_data_model.is_acquiring.value = False
         self.acq_future = None  # To avoid holding the ref in memory
         self._acq_future_connector = None
+        self._main_data_model.set_light_protector_position("on")
 
         try:
             data, exp = future.result()
