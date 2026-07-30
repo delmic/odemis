@@ -31,7 +31,7 @@ from odemis import model
 from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
-from odemis.acq.move import MicroscopePostureManager, MeteorTFS3PostureManager
+from odemis.acq.move import MicroscopePostureManager
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
@@ -168,6 +168,7 @@ class MainGUIData(object):
         "det-rotator": "det_rotator",
         "se-detector-ion": "ion_sed",
         "stage-global": "stage_global",
+        "light-protector": "light_protector",
     }
 
     def __init__(self, microscope):
@@ -254,6 +255,7 @@ class MainGUIData(object):
         self.det_rotator = None  # detector rotator of the fastem microscope
         self.ion_sed = None  # detector for the ions of a composited detector component
         self.stage_global = None  # stage with coordinates converted into a global coordinate system
+        self.light_protector = None
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
@@ -461,6 +463,52 @@ class MainGUIData(object):
 
         # TODO: add more detectors here
         # Example time-correlator shutter
+
+    def set_light_protector_position(self, position_name: str) -> bool:
+        """
+        Set the light protector axes to a given position name.
+
+        :param position_name: Position name to set.
+        :raises: Exception if an error occured during the move operation.
+
+        NOTE: The light protector must contain axes with choices that are dictionaries mapping float values
+              to string names. If the position name is not found in the choices, a warning is logged and the
+              axis is skipped.
+        """
+        if self.light_protector is None:
+            return
+
+        current_pos = self.light_protector.position.value
+        target = {}
+
+        try:
+            axes = self.light_protector.axes
+            for axis_name, axis in axes.items():
+                if not isinstance(axis.choices, dict):
+                    logging.warning("Light protector axis '%s' does not have choices of type dict", axis_name)
+                    continue
+
+                # str -> float mapping for the axis choices
+                choices_inv = {n: v for v, n in axis.choices.items()}
+                value = choices_inv.get(position_name)
+                if value is None:
+                    logging.warning("Light protector axis '%s' has no choice for position '%s'.", axis_name, position_name)
+                    continue
+
+                if current_pos[axis_name] != value:
+                    target[axis_name] = value
+
+            if target:
+                logging.debug("Moving light protector to position: %s", target)
+                self.light_protector.moveAbs(target).result()
+
+        except Exception:
+            logging.exception(
+                "Failed to set light protector position to '%s', "
+                "it is not safe to perform light alignment.",
+                position_name,
+            )
+            raise
 
     def stopMotion(self):
         """
