@@ -33,6 +33,7 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
+from typing import Optional
 
 import wx
 
@@ -45,6 +46,7 @@ from odemis.gui import conf
 from odemis.gui.model import TabName
 from odemis.gui.comp import popup
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
+from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
@@ -71,7 +73,6 @@ class SparcAcquiController(object):
         self._streambar_controller = streambar_controller
         self._interlockTriggered = False  # local/private bool to track interlock status
         self._ebeam_blanker = None
-        self._pre_interlock_protector = None  # to restore the light protector position when interlock is reset
 
         # _interlock_blocks_acquisition is used to adjust the behaviour when the interlock is opened.
         # * True => acquisition is forbidden when interlock is triggered
@@ -175,6 +176,9 @@ class SparcAcquiController(object):
         # Listen to preparation state
         self._main_data_model.is_preparing.subscribe(self.on_preparation)
 
+        # Listen to tab change to update the light protector position
+        self._main_data_model.tab.subscribe(self._on_tab_change, init=True)
+
     def __del__(self):
         self._executor.shutdown(wait=False)
 
@@ -257,6 +261,78 @@ class SparcAcquiController(object):
             self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
             logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
 
+    def _on_tab_change(self, tab: Optional[Tab]) -> None:
+        """
+        Callback when the user changes the tab.
+
+        :param tab: the tab selected by the user, or None if no tab is selected
+        """
+        if tab is None:
+            return
+        if tab.name == TabName.SPARC_ACQUI.value and not self._interlockTriggered:
+            self.set_light_protector_position("off")
+        else:
+            self.set_light_protector_position("on")
+
+    def _on_light_protector_move(self, future: model.CancellableFuture) -> None:
+        """
+        Callback when the light protector move is done.
+
+        :param future: The future representing the move operation.
+        """
+        try:
+            future.result()
+        except Exception:
+            logging.exception("Failed to move the light protector, it is not safe to perform light alignment.")
+
+    def set_light_protector_position(self, position_name: str) -> None:
+        """
+        Set the light protector axes to a given position name.
+
+        :param position_name: Position name to set.
+
+        NOTE: The light protector must contain axes with choices that are dictionaries mapping float values
+              to string names. If the position name is not found in the choices, a warning is logged and the
+              axis is skipped.
+        """
+        light_protector = self._main_data_model.light_protector
+        if light_protector is None:
+            return
+
+        current_pos = light_protector.position.value
+        target = {}
+
+        try:
+            axes = light_protector.axes
+            for axis_name, axis in axes.items():
+                if not isinstance(axis.choices, dict):
+                    logging.warning("Light protector axis '%s' does not have choices of type dict", axis_name)
+                    continue
+
+                # str -> float mapping for the axis choices
+                choices_inv = {n: v for v, n in axis.choices.items()}
+                value = choices_inv.get(position_name)
+                if value is None:
+                    logging.warning("Light protector axis '%s' has no choice for position '%s'.", axis_name, position_name)
+                    continue
+
+                if current_pos[axis_name] != value:
+                    target[axis_name] = value
+                else:
+                    logging.debug("Light protector axis '%s' is already at position '%s'.", axis_name, position_name)
+
+            if target:
+                logging.debug("Moving light protector to position: %s", target)
+                f = light_protector.moveAbs(target)
+                f.add_done_callback(self._on_light_protector_move)
+
+        except Exception:
+            logging.exception(
+                "Failed to set light protector position to '%s', "
+                "it is not safe to perform light alignment.",
+                position_name,
+            )
+
     def on_interlock_change(self, value: bool) -> None:
         """
         If the connected interlock status changes, the label on the acquisition panel has to
@@ -282,9 +358,8 @@ class SparcAcquiController(object):
                 message = "Laser was suspended automatically due to interlock trigger."
 
             if self._main_data_model.light_protector:
-                self._pre_interlock_protector = self._main_data_model.light_protector.position.value
-                self._main_data_model.set_light_protector_position("on")
-                message += " Light protector set to 'on'."
+                self.set_light_protector_position("on")
+                message += " Laser protection activated."
         else:
             message = "Laser interlock trigger is reset to normal."
             # Put back the e-beam blanker to its original state, but only if it is (still) forced
@@ -295,9 +370,11 @@ class SparcAcquiController(object):
                     message += " E-beam blanker disabled."
                 elif self._pre_interlock_blanker is None:  # Automatic mode (= blanker active when not acquiring)
                     message += " E-beam blanker set back to automatic mode."
-            if self._main_data_model.light_protector and self._pre_interlock_protector is not None:
-                self._main_data_model.light_protector.moveAbs(self._pre_interlock_protector).result()
-                message += " Light protector position restored."
+            if self._main_data_model.light_protector:
+                current_tab = self._main_data_model.tab.value
+                if current_tab is not None and current_tab.name == TabName.SPARC_ACQUI.value:
+                    self.set_light_protector_position("off")
+                    message += " Laser protection reset."
 
         popup.show_message(wx.GetApp().main_frame,
                            title="Laser safety",
@@ -452,8 +529,6 @@ class SparcAcquiController(object):
                                       % self.conf.last_format)
 
         self._pause_streams()
-        if not self._interlockTriggered:
-            self._main_data_model.set_light_protector_position("off")
 
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
@@ -531,7 +606,6 @@ class SparcAcquiController(object):
         self._main_data_model.is_acquiring.value = False
         self.acq_future = None  # To avoid holding the ref in memory
         self._acq_future_connector = None
-        self._main_data_model.set_light_protector_position("on")
 
         try:
             data, exp = future.result()
