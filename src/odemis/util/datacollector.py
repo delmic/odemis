@@ -32,7 +32,6 @@ import json
 import logging
 import os
 import queue
-import random
 import re
 import shutil
 import socket
@@ -657,6 +656,9 @@ class DataCollector:
         self._worker: Optional[_BackgroundWorker] = None
         self._init_ok: bool = False
         self._init_lock = threading.Lock()
+        # Collect percentage of the acquired data based on the selected probability
+        # in order to keep the growth of the collected data in control.
+        self.probability = _DEFAULT_COLLECTION_PROBABILITY
 
     def _lazy_init(self) -> None:
         """Initialise configuration and worker on first use."""
@@ -788,16 +790,9 @@ class DataCollector:
                 days_left = None
 
             if days_left is not None and days_left <= 1:
-                probability = _FULL_COLLECTION_PROBABILITY
+                self.probability = _FULL_COLLECTION_PROBABILITY
             else:
-                probability = _DEFAULT_COLLECTION_PROBABILITY
-
-            if random.random() >= probability:
-                logging.debug(
-                    "DataCollector: event '%s' not sampled (%.0f%% collection probability).",
-                    event_name, probability * 100,
-                )
-                return
+                self.probability = _DEFAULT_COLLECTION_PROBABILITY
 
             item = _WorkItem(
                 event_name=event_name,
