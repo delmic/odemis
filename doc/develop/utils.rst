@@ -35,7 +35,6 @@ Side utilities for Odemis
 
 Hardware configuration utilities
 ================================
-* ``ftdiprog``: (FASTEM) FTDI USB/serial adapter: flash a special "USB description" to be used to detect the right device. (Not currently used in Odemis)
 * ``lksconfig``: (ENZEL) lakeshore temperature controller: change the PID values of the temperature control.
 * ``nfterminal``: (SPARC) NewPort NewFocus actuator: Terminal (aka REPL) utility to send command to the device. Used for configuration of some hardware (light tunnel) at installation.
 * ``piconfig``: (SECOM) Physics Instrument actuator: read/write configuration in flash (stored as ``.pi.tsv``).
