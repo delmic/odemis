@@ -1,3 +1,18 @@
+odemis (3.8.4-1) focal; urgency=medium
+
+  * New version: 3.8.4
+  * Main bug fixes and improvements:
+   - SPARC: drift correction failed for CL intensity streams on with new NI-DAQ board
+   - METEOR: importing a SEM tileset acquired with scan rotation showed each tile rotated
+   - GUI: on Ubuntu 24.04, vertical spacing between some settings was too high
+   - Autoscript driver: support for controlling the external scan mode (SPARC)
+   - TMCM driver: support for the TMCM-6214 board
+   - Introduce MODEL_OPTIONS variable to odemis.conf 
+   - Update channel selector: also update the microscope manual
+   - Bug reporter: list of components was sometimes incomplete  
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 05 Aug 2026 18:15:54 +0800
+
 odemis (3.8.3-1) focal; urgency=medium
 
   * New version: 3.8.3
