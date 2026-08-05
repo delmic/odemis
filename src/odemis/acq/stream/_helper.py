@@ -864,7 +864,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         # when starting to play the stream again.
         try:
             self.detStreakMode.subscribe(self._on_streak_mode)
-            self.detMCPGain.subscribe(self._on_mcp_gain)
+            # self.detMCPGain.subscribe(self._on_mcp_gain)  #DEBUG: test without MCP Gain protection
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
         try:
@@ -898,11 +898,12 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         if self.is_active.value != self._active:  # changing from previous value?
             if self._active:
                 # make the full MCPGain range available when stream is active
-                self.detMCPGain.range = self.streak_unit.MCPGain.range
+                #self.detMCPGain.range = self.streak_unit.MCPGain.range
+                pass
             else:
                 self._suspend()
                 # only allow values <= current MCPGain value for HW safety reasons when stream inactive
-                self.detMCPGain.range = (0, self.detMCPGain.value)
+                #self.detMCPGain.range = (0, self.detMCPGain.value)
                 # TODO: also prevent the shutter from being closed -> open when not playing?
                 # It's actually harder to do that the gain, because it's a boolean... so for now we don't do that.
 
