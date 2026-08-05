@@ -30,6 +30,7 @@ from unittest.mock import MagicMock
 
 import odemis.acq.test as acq_test
 from odemis.acq.feature import feature_decoder
+from odemis.acq.move import Posture
 from odemis.gui.cont.cryo_project import (
     load_project,
     read_project_file,
@@ -90,6 +91,9 @@ class TestCryoProject(unittest.TestCase):
         reloaded_project_data = read_project_file(project_dir / PROJECT_NAME)
         self.assertEqual(reloaded_project_data["features"], project_data["features"])
         self.assertEqual(reloaded_project_data["overviews"], project_data["overviews"])
+        posture_values = {p.value for p in Posture}
+        for posture_key in reloaded_project_data["features"][0]["posture_positions"].keys():
+            self.assertIn(posture_key, posture_values)
 
     def test_v1_0_project(self):
         """Tests that a v1.0 project works properly."""
@@ -103,6 +107,9 @@ class TestCryoProject(unittest.TestCase):
         self.assertTrue(Path(project_data["features"][0]["images"][0][IMG_FILENAME]).is_relative_to(project_dir))
         self.assertIn("overviews", project_data)
         self.assertIn(IMG_FILENAME, project_data["overviews"][0])
+        posture_values = {p.value for p in Posture}
+        for posture_key in project_data["features"][0]["posture_positions"].keys():
+            self.assertIn(posture_key, posture_values)
 
     def test_image_operations(self):
         """Tests that the image operations work properly."""

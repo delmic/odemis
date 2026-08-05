@@ -34,7 +34,7 @@ import odemis
 from odemis import model
 from odemis.acq import acqmng, stream
 from odemis.acq.acqmng import SettingsObserver
-from odemis.acq.move import MicroscopePostureManager, FM_IMAGING
+from odemis.acq.move import MicroscopePostureManager, Posture
 from odemis.acq.stitching import (
     REGISTER_IDENTITY,
     WEAVER_COLLAGE_REVERSE,
@@ -177,7 +177,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """
         Test moving the stage to a tile based on its index
         """
-        self.posture_manager.cryo_switch_sample_position(FM_IMAGING).result()
+        self.posture_manager.switch_posture(Posture.FM_IMAGING).result()
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,

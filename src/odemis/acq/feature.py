@@ -43,13 +43,7 @@ from odemis.acq.acqmng import (
 from odemis.acq.align.autofocus import AutoFocus, estimateAutoFocusTime
 from odemis.acq.milling.tasks import MillingTaskSettings, load_milling_tasks
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
-from odemis.acq.move import (
-    FM_IMAGING,
-    MILLING,
-    UNKNOWN,
-    POSITION_NAMES,
-    MicroscopePostureManager,
-)
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.acq.stitching._tiledacq import SAFE_REL_RANGE_DEFAULT
 from odemis.acq.stream import Stream, StaticFluoStream
 from odemis.dataio import find_fittest_converter
@@ -221,7 +215,7 @@ class CryoFeature(object):
         self.superz_focused: Optional[bool] = None  # True if super z focus has high accuracy, False otherwise,
         # If None, it means that the super z focus was not used.
 
-    def set_posture_position(self, posture: str, position: Dict[str, float]) -> None:
+    def set_posture_position(self, posture: "Posture", position: Dict[str, float]) -> None:
         """
         Set the stage position for the given posture.
         :param posture: the posture to set the position for
@@ -229,15 +223,15 @@ class CryoFeature(object):
         """
         # TODO: once the stage has access to it, it should check that the position is within the
         # allowed range for the given posture (see SEM_IMAGING_RANGE, FM_IMAGING_RANGE)
-        self.posture_positions[posture] = position
+        self.posture_positions[posture.value] = position
 
-    def get_posture_position(self, posture: str) -> Dict[str, float]:
+    def get_posture_position(self, posture: "Posture") -> Optional[Dict[str, float]]:
         """
         Get the stage position for the given posture.
         :param posture: the posture to get the position for
         :return: the position for the given posture
         """
-        return self.posture_positions.get(posture, None)
+        return self.posture_positions.get(posture.value, None)
 
     def save_milling_task_data(self,
                                stage_position: Dict[str, float],
@@ -272,13 +266,13 @@ class CryoFeature(object):
         exporter.export(filename, reference_image)
 
         # save the milling position (it can be updated by the user)
-        self.set_posture_position(posture=MILLING, position=stage_position)
+        self.set_posture_position(posture=Posture.MILLING, position=stage_position)
 
         # set the feature status to ready to mill
         self.status.value = FEATURE_READY_TO_MILL
 
         logging.info(f"Milling tasks: {self.milling_tasks}, path: {self.path}, Reference image: {filename}")
-        logging.info(f"Stage position for milling: {self.get_posture_position(MILLING)}")
+        logging.info(f"Stage position for milling: {self.get_posture_position(Posture.MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
 def feature_decoder(feature_raw: Dict) -> CryoFeature:
@@ -304,7 +298,7 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
                           )
     feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
     feature.status.value = feature_raw['status']
-    feature.posture_positions = {int(k): v for k, v in posture_positions.items()} # convert keys to int
+    feature.posture_positions = posture_positions
     feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
     feature.path = feature_raw.get('path', None)
     feature.superz_stream_name = feature_raw.get('superz_stream_name', None)
@@ -327,7 +321,7 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
 
 def get_feature_position_at_posture(pm: MicroscopePostureManager,
                                     feature: CryoFeature,
-                                    posture: int,
+                                    posture: "Posture",
                                     recalculate: bool = False) -> Dict[str, float]:
     """Get the feature position at the given posture, if it doesn't exist, create it.
     :param pm: the posture manager
@@ -335,7 +329,7 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
     :param posture: the posture to get the position for
     :param recalculate: if True, force recalculate the position, otherwise use the existing one
     :return: the position for the given posture"""
-    if posture == UNKNOWN:
+    if posture == Posture.UNKNOWN:
         raise ValueError("Cannot compute position for UNKNOWN posture")
 
     position = feature.get_posture_position(posture)
@@ -343,7 +337,7 @@ def get_feature_position_at_posture(pm: MicroscopePostureManager,
     # if the position doesn't exist at that posture, create it
     if position is None or recalculate:
         try:
-            logging.info(f"Feature position for {feature.name.value} at {POSITION_NAMES[posture]} posture doesn't exist. Creating it.")
+            logging.info(f"Feature position for {feature.name.value} at {posture} posture doesn't exist. Creating it.")
             position = pm.to_posture(feature.stage_position.value, posture)
             feature.set_posture_position(posture=posture, position=position)
         except Exception as e:
@@ -573,7 +567,7 @@ class CryoFeatureAcquisitionTask(object):
         :param site: The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=FM_IMAGING) # stage-bare
+        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=Posture.FM_IMAGING) # stage-bare
         fm_focus_position = site.fm_focus_position.value
         logging.debug(f"For feature {site.name.value} moving the stage to {stage_position}")
         self._future.running_subf = self.stage.moveAbs(stage_position)
@@ -654,7 +648,7 @@ class CryoFeatureAcquisitionTask(object):
                 continue
             positions.append(get_feature_position_at_posture(pm=self.pm,
                                                              feature=f,
-                                                             posture=FM_IMAGING))
+                                                             posture=Posture.FM_IMAGING))
 
         stage_movement_time = 0
         for start, end in zip(positions[0:-1], positions[1:]):
@@ -696,16 +690,16 @@ class CryoFeatureAcquisitionTask(object):
                     raise CancelledError()
 
                 # move to FM IMAGING posture
-                current_posture = self.pm.get_current_posture_label()
-                logging.debug(f"Current Posture: {POSITION_NAMES[current_posture]}")
+                current_posture = self.pm.get_current_posture()
+                logging.debug(f"Current Posture: {current_posture}")
 
-                if current_posture != FM_IMAGING:
-                    raise ValueError(f"Currently only supported when at {POSITION_NAMES[FM_IMAGING]} posture")
+                if current_posture != Posture.FM_IMAGING:
+                    raise ValueError(f"Currently only supported when at {Posture.FM_IMAGING} posture")
                     # TODO: enable this when the cryo switch is fixed
                     logging.debug(
-                        f"Moving to {POSITION_NAMES[FM_IMAGING]} from {POSITION_NAMES[current_posture]}"
+                        f"Moving to {Posture.FM_IMAGING} from {current_posture}"
                     )
-                    self._future.running_subf = self.pm.cryo_switch_sample_position(FM_IMAGING)
+                    self._future.running_subf = self.pm.switch_posture(Posture.FM_IMAGING)
                     self._future.running_subf.result()
 
             for feature in self.features:
