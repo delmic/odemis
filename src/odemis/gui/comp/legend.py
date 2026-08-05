@@ -360,9 +360,9 @@ class AxisLegend(wx.Panel):
 
         # Explicitly set the min size
         if self._orientation == wx.HORIZONTAL:
-            self.SetMinSize((-1, 32))
+            self.SetMinSize((2, 32))
         else:
-            self.SetMinSize((42, -1))
+            self.SetMinSize((42, 2))
 
         # The following properties are volatile, meaning that they can change often
         self._value_range = None  # 2-tuple with the minimum and maximum value
@@ -559,7 +559,7 @@ class AxisLegend(wx.Panel):
 
         if self._orientation == wx.VERTICAL and max_width != self._max_tick_width:
             self._max_tick_width = max_width
-            self.SetMinSize((int(self._max_tick_width + 14), -1))
+            self.SetMinSize((int(self._max_tick_width + 14), 2))
             self.Parent.GetSizer().Layout()
 
 
