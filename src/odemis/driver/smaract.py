@@ -3715,8 +3715,6 @@ class MCS2(model.Actuator):
                         self._checkMoveAbs(deactive_pos)
                         self._doMoveAbs(future, self._applyInversion(deactive_pos))
 
-                    self._waitEndMove(future, moving_channels, time.time() + 100)
-
             except CancelledError:
                 # FIXME: if the referencing is stopped, the device refuses to
                 # move until referencing is run (and successful).
@@ -3795,7 +3793,6 @@ class MCS2(model.Actuator):
                         if future._must_stop.is_set():
                             raise CancelledError()
                         self._doMoveAbs(future, self._applyInversion(target))
-                        self._waitEndMove(future, {channel}, time.time() + 100)
                     unreferenced.remove(a)
                     logging.info("Axis %s successfully referenced.", a)
                 else:
@@ -3878,7 +3875,6 @@ class MCS2(model.Actuator):
                                 if future._must_stop.is_set():
                                     raise CancelledError()
                                 self._doMoveAbs(future, self._applyInversion(single_target))
-                                self._waitEndMove(future, {self._axis_map[a]}, time.time() + 100)
 
                     self._reference_with_retry(future, phase2_axes, reference_lbl="Phase 2")
 
@@ -3900,7 +3896,6 @@ class MCS2(model.Actuator):
                                 if future._must_stop.is_set():
                                     raise CancelledError()
                                 self._doMoveAbs(future, self._applyInversion(single_target))
-                                self._waitEndMove(future, {self._axis_map[a]}, time.time() + 100)
             except CancelledError:
                 logging.warning("Referencing cancelled, device will not move until another referencing")
                 future._was_stopped = True
