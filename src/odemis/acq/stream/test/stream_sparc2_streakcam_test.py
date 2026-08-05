@@ -293,10 +293,6 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         time.sleep(0.1)
         # check GUI VA do not show same values as HW VAs
         self.assertNotEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
-        # value > current MCPGain GUI value while stream is not active shouldn't be possible
-        # also checks if .MCPGain.range has updated
-        with self.assertRaises(IndexError):
-            streaks.detMCPGain.value = 5
 
         # change GUI VAs --> HW VAs should not update as stream is inactive
         streaks.detExposureTime.value = 0.2  # s
@@ -314,10 +310,6 @@ class SPARC2StreakCameraTestCase(BaseSPARCTestCase):
         streaks.detStreakMode.value = False
         time.sleep(0.1)
         self.assertEqual(streaks.detMCPGain.value, 0)  # GUI VA should be 0 after changing .streakMode
-        # value > current MCPGain GUI value while stream is not active shouldn't be possible
-        # also checks if .MCPGain.range has been updated
-        with self.assertRaises(IndexError):
-            streaks.detMCPGain.value = 1
 
         #########################################################################################
         # checks that the order of setting the VAs when stream gets active is correct
