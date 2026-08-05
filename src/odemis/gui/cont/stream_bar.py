@@ -2254,6 +2254,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         # origin of the stream instead, but just trying both simplifies things.
         if self._current_feature:
             remove_image(self._current_feature.images.value, md[MD_FILENAME], [md[MD_IN_FILE_INDEX]])
+            self._current_feature.streams.value.remove(stream)
         remove_image(self._tab_data_model.main.overviews.value, md[MD_FILENAME], [md[MD_IN_FILE_INDEX]])
         save_project(self._tab_data_model.main)
 
