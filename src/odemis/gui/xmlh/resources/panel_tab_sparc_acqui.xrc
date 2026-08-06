@@ -303,6 +303,7 @@
                     <object class="CaptionBar" name="cbar_acq_recipes">
                       <label>ACQUISITION RECIPES</label>
                       <foldable>1</foldable>
+                      <collapsed>1</collapsed>
                       <fg>#1A1A1A</fg>
                     </object>
                     <option>0</option>
@@ -311,6 +312,7 @@
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_acq_recipes">
                       <bg>#333333</bg>
+                      <hidden>1</hidden>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
