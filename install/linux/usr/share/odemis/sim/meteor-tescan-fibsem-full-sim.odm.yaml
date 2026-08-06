@@ -1,7 +1,7 @@
 # This microscope file uses simplified simulated stage and not the realistic one.
 # The acquisition happens through a simulated SEM & FIB.
 
-"METEOR-FIBSEM-Sim": {
+"METEOR TESCAN FIBSEM Full-Sim": {
     class: Microscope,
     role: meteor,
 }

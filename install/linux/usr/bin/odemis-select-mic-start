@@ -132,18 +132,11 @@ process_file() {
     # Add a new header to the logfile
     printf "$(date) Parsing file: $fn\n" >> "$parse_logfile"
 
-    # Extract the microscope name and role using a small Python script
-mic_name=$(python3 <<EOF 2>>"$parse_logfile"
-import sys
-import yaml
-from odemis.odemisd import modelgen
-
-f = open('$fn')
-d = yaml.load(f, modelgen.SafeLoader)
-mic_name = next(n for n, d in d.items() if d.get('class') == 'Microscope')
-print(mic_name)
-EOF
-    )
+    # Extract the microscope name by finding the top-level key whose block
+    # contains "class: Microscope", without spawning a Python interpreter.
+    mic_name=$(grep -B1 "class: Microscope" "$fn" 2>>"$parse_logfile" \
+        | grep -v "class: Microscope" \
+        | sed "s/^[[:space:]]*['\"]\\?\\([^'\":]*\\)['\"]\\?:.*/\\1/")
 
     mic_list+=("$fn")  # The dialog has a hidden column, which is the filepath
 
