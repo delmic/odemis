@@ -40,7 +40,7 @@ from odemis.gui.cont.stream_bar import EnzelAlignmentStreamsBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
-from odemis.acq.move import ALIGNMENT, THREE_BEAMS
+from odemis.acq.move import Posture
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.cont.tabs.tab import Tab
@@ -542,7 +542,7 @@ class EnzelAlignTab(Tab):
 
         :param pos: (dict str->float or None) updated position of the stage
         """
-        targets = (ALIGNMENT, THREE_BEAMS)
+        targets = (Posture.ALIGNMENT, Posture.THREE_BEAMS)
         guiutil.enable_tab_on_stage_position(self, self.posture_manager, targets,
                                              tooltip="Alignment can only be performed in the three beams mode")
 

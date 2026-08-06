@@ -25,6 +25,28 @@ import os
 from packaging.version import Version
 from pathlib import Path
 from typing import Any, Dict, List, Iterable, Optional
+from odemis.acq.move import Posture
+
+# This lookup is to go from legacy int based postures to enum based postures.
+# The lookup can later be extended when changing the enum values. For instance, when we change Posture.FM_IMAGING's
+# value from FM IMAGING to FM ORTHO, we can add an entry: "FM IMAGING": Posture.FM_IMAGING, which would then map to the
+# new value. This however would require to update the migration logic a bit to discern strings from ints.
+LEGACY_POSTURE_REGISTRY = {
+    -1: Posture.UNKNOWN,
+     0: Posture.LOADING,
+     1: Posture.IMAGING,
+     2: Posture.ALIGNMENT,
+     3: Posture.COATING,
+     4: Posture.LOADING_PATH,
+     5: Posture.MILLING,
+     6: Posture.SEM_IMAGING,
+     7: Posture.FM_IMAGING,
+     8: Posture.GRID_1,
+     9: Posture.GRID_2,
+    10: Posture.THREE_BEAMS,
+    11: Posture.FIB_IMAGING,
+    12: Posture.FIB_VIEW_FM,
+}
 
 PROJECT_NAME = "project.json"
 PROJECT_VERSION = "1.0"
@@ -115,6 +137,15 @@ def load_project(project_dir: os.PathLike) -> dict:
     # Feature streams are intentionally not loaded here; they are lazy-loaded
     # on demand by CryoAcquiredStreamsController when a feature is selected.
 
+    # Migrate integer posture keys to string values (legacy format)
+    for feature in features:
+        for posture_key in list(feature["posture_positions"].keys()):
+            try:
+                posture_key_int = int(posture_key)
+            except ValueError:
+                continue  # already a string key, no migration needed
+            new_key = LEGACY_POSTURE_REGISTRY.get(posture_key_int, Posture.UNKNOWN).value
+            feature["posture_positions"][new_key] = feature["posture_positions"].pop(posture_key)
     return {"overviews": overviews, "features": features}
 
 

@@ -37,7 +37,7 @@ import wx
 from odemis import model, util
 from odemis.acq.align.tdct import _convert_das_to_numpy_stack, run_tdct_correlation
 from odemis.acq.feature import FIBFMCorrelationData, Target, TargetType
-from odemis.acq.move import POSITION_NAMES, FM_IMAGING, FIB_VIEW_FM
+from odemis.acq.move import Posture
 from odemis.acq.stream import StaticFluoStream, StaticSEMStream, StaticFIBStream, FluoStream
 from odemis.gui.cont.features import save_project
 from odemis.gui.img import getBitmap
@@ -199,11 +199,11 @@ class CorrelationPointsController:
         self.at_fib_view_fm = model.BooleanVA(at_fib_view_fm)
 
         if self.at_fib_view_fm.value:
-            self._panel.lbl_fm_posture.SetLabel(POSITION_NAMES[FIB_VIEW_FM])
+            self._panel.lbl_fm_posture.SetLabel(Posture.FIB_VIEW_FM.value)
             bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm.png")
             self._panel.bmp_fm_posture.SetBitmap(bmp_fib_view_fm)
         else:
-            self._panel.lbl_fm_posture.SetLabel(POSITION_NAMES[FM_IMAGING])
+            self._panel.lbl_fm_posture.SetLabel(Posture.FM_IMAGING.value)
             bmp_fm_imaging = getBitmap("icon/ico_meteorimaging.png")
             self._panel.bmp_fm_posture.SetBitmap(bmp_fm_imaging)
 

@@ -34,7 +34,7 @@ import wx
 
 import odemis.gui.model as gmodel
 from odemis import model
-from odemis.acq.move import FM_IMAGING, MeteorTFS3PostureManager
+from odemis.acq.move import Posture, MeteorTFS3PostureManager
 from odemis.driver.tmcm import TMCLController
 from odemis.gui.model import MainGUIData
 from odemis.gui.xmlh import odemis_get_test_resources
@@ -290,7 +290,7 @@ class GuiTestCase(unittest.TestCase):
         # Add one view
         fview = gmodel.MicroscopeView("fakeview")
         tab.views.value.append(fview)
-        tab.view_posture = model.VigilantAttribute(FM_IMAGING)
+        tab.view_posture = model.VigilantAttribute(Posture.FM_IMAGING)
         tab.focussedView.value = fview
 
         return tab

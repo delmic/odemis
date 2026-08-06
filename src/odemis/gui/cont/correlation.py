@@ -40,7 +40,7 @@ from odemis import model
 from odemis.acq.stream import RGBStream, StaticFluoStream, StaticSEMStream, StaticStream
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.model import TabName
-from odemis.acq.move import FM_IMAGING
+from odemis.acq.move import Posture
 
 # TODO: move to more approprate location
 def update_image_in_views(s: StaticStream, views: List[guimod.StreamView]) -> None:
@@ -559,7 +559,7 @@ class CorrelationController(object):
                 continue
 
             # convert sem stage-bare position to fm sample-stage position
-            fm_pos = self.pm.to_posture(pos, FM_IMAGING)
+            fm_pos = self.pm.to_posture(pos, Posture.FM_IMAGING)
             ssp = self.pm.to_sample_stage_from_stage_position(fm_pos)
             md_pos = (ssp["x"], ssp["y"])
             # update metadata

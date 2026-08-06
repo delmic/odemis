@@ -31,7 +31,7 @@ from typing import Dict, Tuple
 
 from odemis import model, util
 from odemis.acq import move, stream
-from odemis.acq.move import FM_IMAGING, IMAGING, MILLING, POSITION_NAMES, MicroscopePostureManager
+from odemis.acq.move import Posture, MicroscopePostureManager
 from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 
 
@@ -364,8 +364,8 @@ SECOM_MODES = {
 
 # MIMAS modes have a different format: just detector + move target position
 MIMAS_MODES = {
-            'optical': ("ccd", FM_IMAGING),
-            'fib': ("se-detector", MILLING),
+            'optical': ("ccd", Posture.FM_IMAGING),
+            'fib': ("se-detector", Posture.MILLING),
             }
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
@@ -1154,13 +1154,13 @@ class _MimasOpticalPathManager(OpticalPathManager):
 
         mode_position = self._modes[mode][1]
 
-        # Only accept moving if the stage is already within the "IMAGING" area (which means FM_IMAGING & MILLING)
+        # Only accept moving if the stage is already within the "Posture.IMAGING" area (which means Posture.FM_IMAGING & Posture.MILLING)
         # as this means the stage will not move, but only the optical lens.
-        current_pos = self._posture_manager.get_current_posture_label()
-        if current_pos not in (IMAGING, FM_IMAGING, MILLING):
-            logging.warning("Optical path cannot be changed while in position %s", POSITION_NAMES[current_pos])
+        current_pos = self._posture_manager.get_current_posture()
+        if current_pos not in (Posture.IMAGING, Posture.FM_IMAGING, Posture.MILLING):
+            logging.warning("Optical path cannot be changed while in position %s", current_pos.value)
             return
 
-        f = self._posture_manager.cryo_switch_sample_position(mode_position)
+        f = self._posture_manager.switch_posture(mode_position)
         f.result()
         logging.debug("Move to position %s completed", mode_position)
