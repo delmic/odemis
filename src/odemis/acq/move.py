@@ -1906,9 +1906,9 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                     target_pos_sem = self.get_target_position(Posture.SEM_IMAGING)
                     if not isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'z', 'm'}, target_position)))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'rm'}, target_position)))
-                    sub_moves.append((stage, filter_dict({'rx'}, target_position)))
+                    sub_moves.append((stage, filter_dict({'z', 'm'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'rm'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'rx'}, target_pos_sem)))
 
             if target_posture in (Posture.GRID_1, Posture.GRID_2):
                 # The current mode doesn't change.
