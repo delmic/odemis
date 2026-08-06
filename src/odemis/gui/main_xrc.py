@@ -18800,6 +18800,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                     <object class="CaptionBar" name="cbar_acq_recipes">
                       <label>ACQUISITION RECIPES</label>
                       <foldable>1</foldable>
+                      <collapsed>1</collapsed>
                       <fg>#1A1A1A</fg>
                     </object>
                     <option>0</option>
@@ -18808,6 +18809,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_acq_recipes">
                       <bg>#333333</bg>
+                      <hidden>1</hidden>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
