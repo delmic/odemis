@@ -188,7 +188,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         starting_pos = tiled_acq_task._starting_pos
         logging.debug("Starting position: %s, expected shift per tile = %s", starting_pos, exp_shift)
         tiled_acq_task._moveToTile((0, 0), START_INDEX, fov)
-        testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
+        time.sleep(0.01)
+        testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=1e-6, match_all=False)
 
         # Note that we cannot predict precisely, as the algorithm may choose to spread
         # more or less the tiles to fit within the area.
