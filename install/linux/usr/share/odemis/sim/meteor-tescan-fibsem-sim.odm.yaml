@@ -2,7 +2,7 @@
 # The acquisition can be performed either with a real microscope or with a Tescan simulator
 # using the host info in the init section of the Tescan FIBSEM.
 
-"METEOR-FIBSEM-Sim": {
+"METEOR TESCAN FIBSEM Sim": {
     class: Microscope,
     role: meteor,
 }

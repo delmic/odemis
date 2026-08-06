@@ -7,7 +7,7 @@
 Name=Odemis Microscope Simulator
 Comment=Open odemis with a microscope selector
 Keywords=Odemis;simulator;microscope;select
-Exec=bash -c "odemis-select-mic-start /usr/share/odemis/sim/*.odm.yaml --select-version"
+Exec=bash -c "odemis-select-mic-start ~/development/odemis/install/linux/usr/share/odemis/sim/*.odm.yaml --select-version"
 Type=Application
 StartupNotify=true
 Icon=odemis
