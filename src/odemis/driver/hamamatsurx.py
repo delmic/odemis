@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 import collections
 import functools
 import select
+import socketserver
 import threading
 import logging
 import math
@@ -67,6 +68,21 @@ DELAY_NAMES = {
     "Delay H": "delayH",
 }
 
+# Commands that can be passed to queue_img as Tuple[CMD_*, ...].
+# For CMD_IMG, the extra elements are the image event arguments (previously passed as a list).
+# For all other commands, no extra arguments are passed.
+CMD_QUIT = "Q"
+CMD_STOP = "F"
+CMD_SW_TRIGGER = "T"
+CMD_IMG = "I"
+CMD_START = "S"
+
+
+class TerminationRequested(Exception):
+    """
+    Acquisition thread termination requested.
+    """
+    pass
 
 class RemoteExError(IOError):
     def __init__(self, errno, *args, **kwargs):
@@ -98,15 +114,17 @@ class ReadoutCamera(model.DigitalCamera):
     Represents Hamamatsu readout camera.
     """
 
-    def __init__(self, name, role, parent,
+    def __init__(self, name: str, role: str, parent: model.HwComponent,
                  spectrograph: Optional[model.HwComponent] = None,
+                 can_photon_counting: bool = False,
                  **kwargs):
         """ Initializes the Hamamatsu OrcaFlash readout camera.
-        :param name: (str) as in Odemis
-        :param role: (str) as in Odemis
+        :param name: as in Odemis
+        :param role: as in Odemis
         :param parent: class StreakCamera
         :param spectrograph: should provide .position and getPixelToWavelength() to
         obtain the wavelength list.
+        :param can_photon_counting: whether the camera supports photon counting
         :param transp: (int, int) transpose the resolution from the camera to the user (see Detector)
         """
         self.parent = parent
@@ -192,10 +210,37 @@ class ReadoutCamera(model.DigitalCamera):
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
 
         range_exp = self._getCamExpTimeRange()
-        self._exp_time = self.GetCamExpTime()
-        self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
+        exp_time = self.GetCamExpTime()
+        self.exposureTime = model.FloatContinuous(exp_time, range_exp, unit="s", setter=self._setCamExpTime)
         self._metadata[model.MD_EXP_TIME] = self.exposureTime.value
         # Note: timeRange of streakunit > exposureTime readoutcam is possible and okay.
+
+        if can_photon_counting:
+            # When set, the photon-counting procedure is used to do acquisition.
+            # Changing while acquiring is not supported.
+            self.photonCounting = model.BooleanVA(False, setter=self._set_photon_counting)
+            # Number of exposures during photon-counting. It has no effect when photon-counting acquisition
+            # is disabled.
+            count_range = self._get_exposure_count_range()
+            integ_count = self._get_exposure_count()
+            self.pcIntegrationCounts = model.IntContinuous(integ_count, count_range, unit="",
+                                                           setter=self._set_exposure_count)
+            # Dedicated exposure time for photon-counting mode
+            range_exp = self._get_pc_exp_time_range()
+            exp_time = self._get_pc_exp_time()
+            self.pcExposureTime = model.FloatContinuous(exp_time, range_exp, unit="s", setter=self._set_pc_exp_time)
+
+            threshold_range = self._get_threshold_range()
+            threshold = self._get_pc_threshold()
+            self.pcThreshold = model.IntContinuous(threshold, threshold_range, unit="counts", setter=self._set_pc_threshold)
+
+            # Refresh regularly the values. Only done for photon-counting values, because these
+            # values are typically modified directly in HPDTA by the user during calibration.
+            self._va_poll = util.RepeatingTimer(5, self._update_settings,
+                                                "Readout cam settings polling")
+            self._va_poll.start()
+        else:
+            self._va_poll = None
 
         self.readoutRate = model.VigilantAttribute(425000000, unit="Hz", readonly=True)  # MHz
         self._metadata[model.MD_READOUT_TIME] = 1 / self.readoutRate.value  # s
@@ -209,10 +254,11 @@ class ReadoutCamera(model.DigitalCamera):
         self._sync_event = None
         self.softwareTrigger = model.Event()
         # queue events starting an acquisition (advantageous when event.notify is called very fast)
-        self.queue_events = collections.deque()
+        self._queue_events = collections.deque()
         self._acq_sync_lock = threading.Lock()
 
         self.t_image = None  # thread for reading images from the RingBuffer
+        self._update_monitor_mode(False)
 
         self.data = StreakCameraDataFlow(self._start, self._stop, self._sync)
 
@@ -224,8 +270,19 @@ class ReadoutCamera(model.DigitalCamera):
 
         # terminate image thread
         if self.t_image and self.t_image.is_alive():
-            self.parent.queue_img.put(None)  # Special message to request end of the thread
+            self.parent.queue_img.put((CMD_QUIT,))  # Special message to request end of the thread
             self.t_image.join(5)
+
+        # Just in case the acquisition thread failed, directly stop the acquisition
+        try:
+            self.parent.AcqStop()
+        except Exception:
+            pass
+
+        if self._va_poll:
+            self._va_poll.cancel()
+            self._va_poll.join(1)
+            self._va_poll = None
 
         super().terminate()
 
@@ -241,6 +298,31 @@ class ReadoutCamera(model.DigitalCamera):
             del self._metadata[model.MD_WL_LIST]  # remove WL list from MD if empty
         else:
             self._metadata[model.MD_WL_LIST] = wll
+
+    def _update_settings(self) -> None:
+        """
+        Read the photon-counting settings from HPDTA and reflect them on the VAs
+        """
+        logging.debug("Updating readout cam photon-counting settings")
+        try:
+            exp_time = self._get_pc_exp_time()
+            if exp_time != self.pcExposureTime.value:
+                self.pcExposureTime._value = exp_time
+                self.pcExposureTime.notify(exp_time)
+
+            count = self._get_exposure_count()
+            if count != self.pcIntegrationCounts.value:
+                self.pcIntegrationCounts._value = count
+                self.pcIntegrationCounts.notify(count)
+
+            threshold = self._get_pc_threshold()
+            if threshold != self.pcThreshold.value:
+                self.pcThreshold._value = threshold
+                self.pcThreshold.notify(threshold)
+
+        except Exception:
+            logging.exception("Unexpected failure when polling photon-counting settings")
+
 
     def _getReadoutCamBinningChoices(self):
         """
@@ -283,9 +365,10 @@ class ReadoutCamera(model.DigitalCamera):
         # If camera is acquiring, it is essential to stop cam first and then change binning.
         # Currently, this only affects the Alignment tab, where camera is continuously acquiring.
         if self.data.active:  # Note: not thread save -> change # TODO use update_settings()
+            self.parent.queue_img.put((CMD_STOP,))
             self.parent.AcqStop()
             self.parent.CamParamSet("Setup", "Binning", binning)
-            self.parent.StartAcquisition("Live")
+            self._start()
         else:
             self.parent.CamParamSet("Setup", "Binning", binning)
 
@@ -326,15 +409,32 @@ class ReadoutCamera(model.DigitalCamera):
 
         return res
 
+    def _set_photon_counting(self, value: bool) -> bool:
+        """
+        Sets the photon-counting mode for the camera.
+        :param value: (bool) True to enable photon-counting, False to disable
+        :return: current photon-counting mode
+        """
+        if value == self.photonCounting.value:
+            return value
+
+        if self.data.active:
+            # We could support it, but it's a lot of extra complexity to the code, and in reality, never used.
+            logging.warning("Photon-counting mode changed to %s while acquiring: not supported", value)
+
+        return value
+
     def _getCamExpTimeRange(self):
         """
         Get min and max values for the camera exposure time.
         :return: tuple containing min and max exposure time
         """
-        exp = self.parent.CamParamInfoEx("Live", "Exposure")  # returns list
-        # Values in returned list "exp" are in order. 1st - 4th values see CamParamInfoEx.
-        min_value = exp[4]
-        max_value = exp[-1]
+        # Although it returns list of possible exposure times, any value between the smallest and
+        # largest value is accepted.
+        exp = self.parent.CamParamInfoEx("Live", "Exposure")
+        # Values in returned list "exp" are in order.
+        min_value = exp[4]  # First exposure time, eg "1200 us"
+        max_value = exp[-1]  # Last/longest exposure time, eg "1 s"
 
         min_value_raw, min_unit = min_value.split(' ')[0:2]
         max_value_raw, max_unit = max_value.split(' ')[0:2]
@@ -344,7 +444,7 @@ class ReadoutCamera(model.DigitalCamera):
 
         return min_exp, max_exp
 
-    def GetCamExpTime(self):
+    def GetCamExpTime(self) -> float:
         """
         Get the camera exposure time.
         Converts the provided value received from RemoteEx into sec.
@@ -354,13 +454,13 @@ class ReadoutCamera(model.DigitalCamera):
         try:
             exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
         except Exception:
-            raise IOError("Exposure time of %s is not supported for read-out camera." % exp_time_raw)
+            raise IOError("Exposure time of %s failed to be converted to a float" % exp_time_raw)
 
         return exp_time
 
-    def _setCamExpTime(self, value):
+    def _setCamExpTime(self, value: float) -> float:
         """
-        Set the camera exposure time.
+        Set the camera exposure time in live mode.
         Converts the time range in sec into a for RemoteEx readable format.
         :param value: (float) exposure time to be set
         :return: (float) current exposure time
@@ -372,11 +472,145 @@ class ReadoutCamera(model.DigitalCamera):
 
         # Note: RemoteEx uses different exposure times depending on acquisition mode
         # If we support e.g. photon counting, we need to specify a different location in RemoteEx.
-        # For now location is always "Live"
+        # See pcExposureTime.
         self.parent.CamParamSet("Live", "Exposure", exp_time_raw)
-        self._metadata[model.MD_EXP_TIME] = value  # update MD
 
-        return value
+        # Although it is associated to a list, almost any value is accepted, with just a small rounding.
+        exp_time = self.GetCamExpTime()
+        return exp_time
+
+    def _get_pc_exp_time_range(self) -> Tuple[float, float]:
+        """
+        Get min and max values for the camera exposure time.
+        :return: tuple containing min and max exposure time
+        """
+        exp = self.parent.CamParamInfoEx("PC", "Exposure")  # returns list of possible exposure times
+        # Values in returned list "exp" are in order.
+        min_value = exp[4]  # First exposure time, eg "1200 us"
+        max_value = exp[-1]  # Last/longest exposure time, eg "1 s"
+
+        min_value_raw, min_unit = min_value.split(' ')[0:2]
+        max_value_raw, max_unit = max_value.split(' ')[0:2]
+
+        min_exp = self.parent.convertUnit2Time(min_value_raw, min_unit)
+        max_exp = self.parent.convertUnit2Time(max_value_raw, max_unit)
+
+        return min_exp, max_exp
+
+    def _get_pc_exp_time(self) -> float:
+        """
+        Get the camera exposure time in photon-counting mode
+        Converts the provided value received from RemoteEx into sec.
+        :return: (float) exposure time in sec
+        """
+        exp_time_raw = self.parent.CamParamGet("PC", "Exposure")[0].split(' ')
+        try:
+            exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
+        except Exception:
+            raise IOError("Exposure time of %s failed to be converted to a float" % exp_time_raw)
+
+        return exp_time
+
+    def _set_pc_exp_time(self, value: float) -> float:
+        """
+        Set the camera exposure time in photon-counting mode.
+        Converts the time range in sec into a for RemoteEx readable format.
+        :param value: (float) exposure time to be set
+        :return: (float) current exposure time
+        """
+        try:
+            exp_time_raw = self.parent.convertTime2Unit(value)
+        except Exception:
+            raise IOError("Exposure time of %s sec is not supported for read-out camera." % value)
+
+        try:
+            self.parent.CamParamSet("PC", "Exposure", exp_time_raw)
+        except Exception:
+            logging.warning("Failed to set exposure time for photon-counting mode.")
+
+        exp_time = self._get_pc_exp_time()
+        return exp_time
+
+    def _get_exposure_count(self) -> int:
+        """
+        Reads the current exposure count from the camera, in photon-counting mode.
+        """
+        count = self.parent.CamParamGet("PC", "NrExposures")
+        return int(count[0])
+
+    def _get_exposure_count_range(self) -> Tuple[int, int]:
+        """
+        Get min and max values for the camera exposure count, in photon-counting mode.
+        :return: tuple containing min and max exposure count
+        """
+        count_info = self.parent.CamParamInfoEx("PC", "NrExposures")
+        min_value = int(count_info[3])
+        max_value = int(count_info[4])
+
+        return min_value, max_value
+
+    def _set_exposure_count(self, count: int) -> int:
+        """
+        Sets the exposure count for the camera, in photon-counting mode.
+        :param count: requested exposure count
+        :return: actual exposure count
+        """
+        self.parent.CamParamSet("PC", "NrExposures", str(count))
+        return count  # Any value in range is accepted, so no need to read it back
+
+    def _get_threshold_range(self) -> Tuple[int, int]:
+        """
+        Get min and max values for the camera threshold, in photon-counting mode.
+        :return: tuple containing min and max threshold
+        """
+        thresh_info = self.parent.CamParamInfoEx("PC", "Threshold")
+        min_value = int(thresh_info[3])
+        max_value = int(thresh_info[4])
+
+        return min_value, max_value
+
+    def _get_pc_threshold(self) -> int:
+        """
+        Get the camera threshold in photon-counting mode.
+        :return: (int) threshold in counts
+        """
+        threshold = self.parent.CamParamGet("PC", "Threshold")
+        return int(threshold[0])
+
+    def _set_pc_threshold(self, threshold: int) -> int:
+        """
+        Set the camera threshold in photon-counting mode.
+        :param threshold: (int) threshold in counts
+        :return: (int) actual threshold set
+        """
+        self.parent.CamParamSet("PC", "Threshold", str(threshold))
+        return threshold  # Any value in range is accepted, so no need to read it back
+
+    def _update_monitor_mode(self, active: bool, photon_counting: bool = False) -> None:
+        """
+        Update the image monitoring mode of HPDTA, to receive the correct image, depending on the
+        acquisition mode.
+        :param active: (bool) True if acquisition is active, False otherwise
+        :param photon_counting: (bool) True if photon-counting mode is enabled, False otherwise
+        """
+        if active:
+            if photon_counting:
+                # Receive the final image, once the acquisition stops.
+                # In photon-counting, the intermediary images are not useful. We acquire one image
+                # at a time.
+                self.parent.AcqLiveMonitor("Off")
+                self.parent.AcqAcqMonitor("EndAcq")
+                # Typically, each acquisition is opened in a separate window, and if too many windows
+                # are opened (19), the acquisition can fail.
+                self.parent.ImgParamSet("AcquireToSameWindow", "1")
+            else:
+                # For standard mode, use the "live" mode to get a fluid image.
+                # The last image is the same as the latest from the ring buffer, so we don't need it.
+                self.parent.AcqLiveMonitor("RingBuffer", nbBuffers=3)
+                self.parent.AcqAcqMonitor("Off")
+        else:
+            self.parent.AcqLiveMonitor("Off")
+            self.parent.AcqAcqMonitor("Off")
 
     def _start(self):
         """
@@ -384,20 +618,12 @@ class ReadoutCamera(model.DigitalCamera):
         """
         # restart thread in case it was terminated
         if not self.t_image or not self.t_image.is_alive():
-            # start thread, which keeps reading the dataport when an image/scaling table has arrived
-            # after commandport thread to be able to set the RingBuffer
-            # AcqLiveMonitor writes images to Ringbuffer, which we can read from
-            # only works if we use "Live" or "SingleLive" mode
-
-            self.parent.AcqLiveMonitor("RingBuffer", nbBuffers=3)
-            self.t_image = threading.Thread(target=self._getDataFromBuffer)
+            # start acquisition thread, which waits for monitor messages that indicate an image
+            # is available.
+            self.t_image = threading.Thread(target=self._acquire)
             self.t_image.start()
 
-        # Note: no function to get current acqMode.
-        # Note: Acquisition mode, needs to be before exposureTime!
-        # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
-        if self._sync_event is None:  # do not care about synchronization, start acquire
-            self.parent.StartAcquisition("Live")
+        self.parent.queue_img.put((CMD_START,))
 
         # Force trigger rate reading
         try:
@@ -416,8 +642,7 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Stop the acquisition.
         """
-        self.parent.AcqStop()
-        self.parent.queue_img.put("F")  # Flush, to stop reading all images still in the ring buffer
+        self.parent.queue_img.put((CMD_STOP,))
         # Note: set MCPGain to zero after acquiring for HW safety reasons
         self.parent._streakunit.MCPGain.value = 0
 
@@ -451,8 +676,8 @@ class ReadoutCamera(model.DigitalCamera):
         Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify()).
         """
         logging.debug("Event triggered to start a new synchronized acquisition.")
-        self.queue_events.append(time.time())
-        self.parent.queue_img.put("start")
+        self._queue_events.append(time.time())
+        self.parent.queue_img.put((CMD_SW_TRIGGER,))
 
     # override
     def updateMetadata(self, md):
@@ -507,7 +732,74 @@ class ReadoutCamera(model.DigitalCamera):
 
         return table
 
-    def _getDataFromBuffer(self):
+    def _get_acq_msg(self, **kwargs) -> Tuple[str, ...]:
+        """
+        Read one message from the acquisition queue
+        :return: message
+        :raises queue.Empty: if no message on the queue
+        :raise TerminationRequested: if CMD_QUIT is received
+        """
+        while True:
+            cmd, *args = self.parent.queue_img.get(**kwargs)
+            if cmd in (CMD_START, CMD_SW_TRIGGER, CMD_STOP, CMD_SW_TRIGGER, CMD_IMG, CMD_QUIT):
+                logging.debug("Acq received message %s", cmd)
+                break
+            else:
+                logging.warning("Acq received unexpected message %s, skipping", cmd)
+                # wait for a new message
+
+        if cmd == CMD_QUIT:
+            raise TerminationRequested()
+
+        return (cmd, *args)
+
+    def _acquire(self):
+        """
+        Acquisition thread. Runs all the time, until receive a GEN_QUIT message.
+        Managed via the .queue_img queue, by passing CMD_* messages.
+        """
+        try:
+            while True: # Waiting/Acquiring loop
+                # Wait until we have a start (or terminate) message
+                photon_counting = self._acq_wait_start()
+
+                # acquisition loop (until stop requested)
+                self._acquire_images(photon_counting)
+
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception:
+            logging.exception("Failure in acquisition thread")
+
+        logging.debug("Acquisition thread ended")
+
+    def _acq_wait_start(self) -> bool:
+        """
+        Blocks until the acquisition should start.
+        It flushes the previous CMD_IMG (monitor) messages too.
+        Note: it expects that the acquisition is stopped.
+        raise TerminationRequested: if a terminate message was received
+        """
+        while True:
+            cmd, *args = self._get_acq_msg(block=True)
+            if cmd == CMD_START:
+                logging.debug("Acquisition started")
+                break
+            # Either a (duplicated) Stop or a trigger => we don't care
+            logging.debug("Skipped message %s as acquisition is stopped", cmd)
+
+        # Not synchronized => start immediately
+        photon_counting = hasattr(self, "photonCounting") and self.photonCounting.value
+        self._update_monitor_mode(active=True, photon_counting=photon_counting)
+        if not self._sync_event:
+            if photon_counting:
+                self.parent.StartAcquisition("PC")
+            else:
+                self.parent.StartAcquisition("Live")
+
+        return photon_counting
+
+    def _acquire_images(self, photon_counting: bool):
         """
         This method runs in a separate thread and waits for messages in queue indicating
         that some data was received. The image is then received from the device via the dataport IP socket or
@@ -515,119 +807,226 @@ class ReadoutCamera(model.DigitalCamera):
         It corrects the vertical time information. The table contains the actual timestamps for each px.
         The camera should already be prepared with a RingBuffer.
         """
-        logging.debug("Starting data thread.")
-        time.sleep(1)  # TODO: why? => Document.
+        logging.debug("Starting data reception.")
 
+        # TODO: handle changing synchronization while acquiring. It could be done by sending
+        # a CMD message to report that the synchronization has changed. Currently changing the
+        # synchronization during, or even just after stopping a photon-counting acqusition can
+        # end-up with a long time (~10s) for the thread to catch up with the state.
+        # TODO: handle settings change during the acquisition. See the binning change hack. This
+        # could be done by (yet again) another CMD message to report that the settings have changed.
         is_receiving_image = False  # used during synchronised acquisition
+
+        # When the acquisition is triggered per frame, store the start time of the frame for the metadata.
+        # In case, it's "live", then the frame start will be computed from the time the image is received,
+        # which is a little bit less accurate.
+        if photon_counting:
+            acq_start_t = time.time()
+        else:
+            acq_start_t = None
 
         try:
             while True:
+                # In synchronized mode, with previous image received => need to wait for next trigger
                 if self._sync_event and not is_receiving_image:
-                    timeout = 2
+                    # Wait until HPDTA is ready again: there is no "pending" command (ie, either running or about to run)
+                    timeout = 2  # s
                     start = time.time()
                     while int(self.parent.AsyncCommandStatus()[0]):
-                        time.sleep(0)
-                        logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
-                        if time.time() > start + timeout:  # most likely camera is in live-mode, so stop camera
+                        time.sleep(1e-3)
+                        if time.time() > start + timeout:
+                            logging.info("Asynchronous RemoteEx command still in process after %g s. "
+                                         "Stopping acquisition to reset state.", timeout)
+                            # most likely camera is in live-mode, so stop camera, and wait a bit more
                             self.parent.AcqStop()
                             start = time.time()
+
+                    # Start next acquisition, if a trigger event was received.
+                    # This handles all the cases (event delayed or not), because the message wait
+                    # function gets a trigger event, it jumps back to the beginning of this while loop.
                     try:
-                        event_time = self.queue_events.popleft()
-                        logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
-                        self.parent.AcqStart("SingleLive")  # should never be a different
+                        event_time = self._queue_events.popleft()
+                        acq_start_t = time.time()
+                        logging.info("Starting acquisition delayed by %g s.", acq_start_t - event_time)
+                        if photon_counting:
+                            self.parent.AcqStart("PC")
+                        else:
+                            self.parent.AcqStart("SingleLive")
                         is_receiving_image = True
                     except IndexError:
-                        # No event (yet) => fine
+                        # No event (yet) => fine, will wait via queue_img for CMD_SW_TRIGGER.
                         pass
 
-                if self._sync_event:
-                    timeout = max(self.exposureTime.value * 2, 1)  # wait at least 1s
+                if self._sync_event and is_receiving_image:
+                    if photon_counting:
+                        acq_time = self.pcExposureTime.value * self.pcIntegrationCounts.value
+                    else:
+                        acq_time = self.exposureTime.value
+
+                    timeout = max(acq_time * 2, 1)  # wait at least 1s
                 else:
                     timeout = None
 
+                # Check for the communication queue:
+                # * (CMD_IMG, *args) -> monitor message from HPDTA = a new image is available
+                # * (CMD_*,) -> from the Odemis backend, to report a change in acqusition, or trigger event
                 try:
-                    rargs = self.parent.queue_img.get(block=True, timeout=timeout)  # block until receive something
+                    cmd, *args = self._get_acq_msg(block=True, timeout=timeout)
                 except queue.Empty:
                     logging.warning("Failed to receive image from streak ccd. Timed out after %f s. Will try again.",
                                     timeout)
                     is_receiving_image = False
+                    acq_start_t = None
                     continue
 
-                logging.debug("Received img message %s", rargs)
-
-                if rargs is None:  # if message is None end the thread
-                    return
-
-                if self._sync_event:  # synchronized mode
-                    if rargs == "start":
-                        logging.info("Received event trigger")
-                        continue
+                if cmd == CMD_SW_TRIGGER:
+                    if not self._sync_event:
+                        logging.warning("Received a trigger event, but no sync event is set. Ignoring.")
                     else:
-                        logging.info("Get the synchronized image.")
-                else:  # non-sync mode
-                    while not self.parent.queue_img.empty():
+                        logging.info("Received event trigger")
+                    continue
+                elif cmd == CMD_STOP:
+                    return
+                elif cmd == CMD_IMG:  # info from the HPDTA image monitor
+                    rargs = args
+                else:
+                    logging.warning("Received unknown command %s from queue_img, skipping.", cmd)
+                    continue
+
+                # If live mode, and multiple images are in the queue, flush all but the last one
+                if not self._sync_event:
+                    while True:
                         # keep reading to check if there might be a newer image for display
                         # in case we are too slow with reading
-                        rargs = self.parent.queue_img.get(block=False)
+                        try:
+                            cmd, *args = self._get_acq_msg(block=False)
+                        except queue.Empty:
+                            break  # no more images in queue
 
-                        if rargs is None:  # if message is None end the thread
+                        if cmd == CMD_START:
+                            logging.debug("Received start command, but acquisition already started. Ignoring.")
+                            continue  # ignore, acquisition was already started
+                        elif cmd == CMD_SW_TRIGGER:
+                            logging.warning("Received a trigger event, but no sync event is set. Ignoring.")
+                            continue
+                        elif cmd == CMD_STOP:
                             return
-                    logging.info("No more images in queue, so get the image.")
+                        elif cmd == CMD_IMG:  # info from the HPDTA image monitor
+                            logging.debug("Discarding previous image")
+                            rargs = args
+                        else:
+                            logging.warning("Received unknown command %s from queue_img, skipping.",
+                                            cmd)
+                            continue
+                    logging.info("No more images in queue, will read the latest one.")
 
-                if rargs == "F":  # Flush => the previous images are from the previous acquisition
-                    logging.debug("Acquisition was stopped so flush previous images.")
-                    continue
-
-                reception_time_image = time.time()
-
-                # get the image from the buffer
-                img_num = rargs[1]
-                img_info = self.parent.ImgRingBufferGet("Data", img_num)
-
-                if not img_info:  # TODO check if this ever happens in log and if not remove!
-                    logging.warning("Image info received from buffer is empty!")
-                    continue
-
-                img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive (uint16)
-                img_num_actual = img_info[4]
-
-                img = b""
                 try:
-                    while len(img) < img_size:  # wait until all bytes are received
-                        img += self.parent._dataport.recv(img_size)
-                except socket.timeout as msg:
-                    logging.error("Did not receive an image: %s", msg)
-                    continue
+                    image = self._get_image(rargs, acq_start_t, photon_counting)  # get the image and metadata from the buffer
+                    self.data.notify(image)  # send to the listeners of the DataFlow
+                except (OSError, TimeoutError) as ex:
+                    logging.warning("Failed to receive image: %s", ex)
+                finally:
+                    is_receiving_image = False
 
-                image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
-                image.shape = (int(img_info[1]), int(img_info[0]))
-                logging.debug("Requested image number %s, received number %s of shape %s.",
-                              img_num, img_num_actual, image.shape)
+                # Photon-counting mode always only acquire a single image, so if no synchronization
+                # is used, we need to start a new acquisition
+                if photon_counting and not self._sync_event:
+                    acq_start_t = time.time()
+                    self.parent.StartAcquisition("PC")
 
-                # Get the scaling table to correct the time axis
-                if self.parent._streakunit.streakMode.value:
-                    # There should be no sync problem, as we only receive images and scaling table via the dataport
-                    try:
-                        # TODO only request scaling table if corresponding MD not available for this time range
-                        self._metadata[model.MD_TIME_LIST] = self._get_time_scale()
-                    except Exception:
-                        logging.exception("Failed to get scaling table")
-                else:
-                    # remove MD_TIME_LIST if not applicable
-                    self._metadata.pop(model.MD_TIME_LIST, None)
-
-                md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
-                self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
-                md[model.MD_ACQ_DATE] = reception_time_image - md[model.MD_EXP_TIME] + md[model.MD_READOUT_TIME]
-                dataarray = model.DataArray(self._transposeDAToUser(image), md)
-                self.data.notify(dataarray)  # pass the new image plus MD to the callback fct
-
-                is_receiving_image = False
-
-        except Exception:
-            logging.exception("Readout camera data thread failed.")
         finally:
-            logging.info("Readout camera data thread ended.")
+            self.parent.AcqStop()
+            self._update_monitor_mode(active=False)
+
+    def _get_image(self, event_args: List[str], acq_start_t: Optional[float], photon_counting: bool) -> model.DataArray:
+        """
+        Receive an image corresponding to the monitor event from HPDTA
+        :param event_args: monitor event information, as received from HPDTA
+        :param acq_start_t: time when the acquisition started, or None if not known
+        :param photon_counting: True if photon-counting mode is enabled, False otherwise
+        :return: the DataArray
+        :raise OSError: if the image could not be received
+        :raise TimeoutError: if the image could not be received in time
+        """
+        reception_time_image = time.time()
+
+        # Getting the image is slightly different depending on the type of monitor
+        # We use the "event" to differenciate: "ringbuffer" if LiveMonitor, and
+        # "Endacq" or "Endpart" if AcqMonitor
+        event = event_args[0].lower()
+        if event == "ringbuffer":  # From AcqLiveMonitor
+            img_num = event_args[1]
+            img_info = self.parent.ImgRingBufferGet("Data", img_num)
+            # returns: iDX,iDY,BBP,Type,seqnumber,timestamp
+            img_num_actual = img_info[4]
+            if img_num != img_num_actual:
+                logging.warning(
+                    "Requested image number %s, but received number %s. Will use it anyway.",
+                    img_num, img_num_actual)
+        elif event in ("endacq", "endpart"):  # From AcqAcqMonitor
+            img_info = self.parent.ImgDataGet("current", "data")
+            # returns: iDX,iDY,BBP,Type . Example: 672,508,2,0
+        else:
+            raise OSError(f"Received unknown event {event} from queue_img, skipping.")
+
+        if not img_info:  # TODO check if this ever happens in log and if not, remove!
+            raise OSError("Image info received from buffer is empty!")
+
+        img_bpp = int(img_info[2])
+        if img_bpp != 2:
+            logging.warning("Received image with unexpected depth of %s bytes, will try to read it anyway",
+                img_bpp)
+            # TODO: also handle img_bpp == 1 and 4.
+
+        img_size = int(img_info[0]) * int(img_info[1]) * img_bpp  # num of bytes we need to receive (uint16)
+
+        img = b""
+        try:
+            while len(img) < img_size:  # wait until all bytes are received
+                img += self.parent._dataport.recv(img_size)
+        except socket.timeout as msg:
+            raise TimeoutError(f"Did not receive an image: {msg}")
+
+        image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
+        image.shape = (int(img_info[1]), int(img_info[0]))  # Y, X
+        logging.debug("Received image of shape %s.", image.shape)
+
+        # Get the scaling table to correct the time axis
+        if self.parent._streakunit.streakMode.value:
+            # There should be no sync problem, as we only receive images and scaling table via the dataport
+            try:
+                # TODO only request scaling table if corresponding MD not available for this time range
+                self._metadata[model.MD_TIME_LIST] = self._get_time_scale()
+            except Exception:
+                logging.exception("Failed to get scaling table")
+        else:
+            # remove MD_TIME_LIST if not applicable
+            self._metadata.pop(model.MD_TIME_LIST, None)
+
+        md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
+        if photon_counting:
+            # Save the extra metadata for photon-counting mode.
+            # Don't trust .pcIntegrationCounts & .pcExposureTime too much, as the user might have changed in HPDTA
+            try:
+                exposure_count = self._get_exposure_count()
+                exp_time_raw = self.parent.CamParamGet("PC", "Exposure")[0].split(' ')
+                exp_time_pc = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
+                md[model.MD_EXP_TIME] = exp_time_pc * exposure_count  # Total exposure time
+                md[model.MD_INTEGRATION_COUNT] = exposure_count
+            except Exception:
+                logging.exception("Failed to get photon-counting metadata.")
+        else:  # Standard acquisition => use the "Live" settings
+            exp_time_raw = self.parent.CamParamGet("Live", "Exposure")[0].split(' ')
+            exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
+            md[model.MD_EXP_TIME] = exp_time
+
+        self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
+        if acq_start_t is not None:
+            md[model.MD_ACQ_DATE] = acq_start_t
+        else:
+            md[model.MD_ACQ_DATE] = reception_time_image - md[model.MD_EXP_TIME] + md[model.MD_READOUT_TIME]
+
+        return model.DataArray(self._transposeDAToUser(image), md)
 
 
 class StreakUnit(model.HwComponent):
@@ -658,7 +1057,7 @@ class StreakUnit(model.HwComponent):
 
         # Set default "good" parameters, which are not controlled/changed afterward.
         # There are several types of streak unit (eg, single sweep, synchroscan).
-        # Synchroscan:  DevParamsList 'Time Range', 'Mode', 'Gate Mode', 'MCP Gain', 'Delay'
+        # Synchroscan:  DevParamsList 'Time Range', 'Mode', 'Gate Mode', 'MCP Gain', 'Shutter', 'FocusTimeOver', 'Delay'
         # Single Sweep: DevParamsList 'Time Range', 'Mode', 'Gate Mode', 'MCP Gain', 'Shutter', 'Trig. Mode', 'Trigger status', 'Trig. level', 'Trig. slope', 'FocusTimeOver'
         # In order to support all of them we need to check the available parameters.
         parent.DevParamSet(self.location, "MCP Gain", 0)
@@ -1248,11 +1647,21 @@ class StreakCamera(model.HwComponent):
         super().__init__(name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
         port_d = port + 1  # the port number to receive the image data
-        self.host = host
         self.port = port
         self.port_d = port_d
 
         self._lock_command = threading.Lock()
+
+        # When host is "fake-singlesweep" or "fake-synchroscan", start a local simulator
+        # and connect to it instead of a real HPDTA machine.
+        if host.startswith("fake-"):
+            streak_unit_type = host[len("fake-"):]
+            logging.info("Starting HPDTASim (streak_unit=%s) on port %d", streak_unit_type, port)
+            self._simulator = HPDTASim(streak_unit=streak_unit_type, port=port)
+            self.host = "localhost"
+        else:
+            self._simulator = None
+            self.host = host
 
         # connect to readout camera
         try:
@@ -1260,13 +1669,16 @@ class StreakCamera(model.HwComponent):
             self._commandport, self._dataport = self._openConnection()
         except Exception:
             logging.exception("Failed to initialise Hamamatsu readout camera.")
+            if self._simulator:
+                self._simulator.terminate()
             raise
 
         # collect responses (error_code = 0-3,6-10) from commandport
         self.queue_command_responses = queue.Queue(maxsize=0)  # List[str]
         # log messages (error_code = 4,5) from commandport
-        self.queue_img = queue.Queue(maxsize=0)  # str, messages indicating a new image is ready
         self.queue_log = []  # List[str], to hold the latest log messages (error codes 4 & 5)
+        # Communication with the acquisition thread:
+        self.queue_img = queue.Queue(maxsize=0)  # Tuple[CMD_*, ...] where extra elements are command arguments
 
         self.should_listen = True  # used in readCommandResponse thread
 
@@ -1276,7 +1688,9 @@ class StreakCamera(model.HwComponent):
         # Note: start HPDTA after initializing queue and command and receiver threads
         # but before image thread and initializing children.
         # Note: if already running, it will return ["parameters ignored"] and continue
-        self.AppStart(settings_ini)  # Note: comment out for testing in order to not start a new App
+        # TODO: add an option to allow showing the dialogs? the drawback is that all dialogs are
+        # shown and all operations are blocked, including closing the app.
+        self.AppStart(visible=True, ini_file=settings_ini, no_dialog=True)  # Note: comment out for testing in order to not start a new App
 
         try:
             # Detect when a device is not turned on, or the wrong sweep unit is selected.
@@ -1294,6 +1708,12 @@ class StreakCamera(model.HwComponent):
                 raise model.HwError("HPDTA software didn't find the license. Check the USB dongle is plugged in.")
             vinfo = self.AppInfo("Version")
             self._swVersion = vinfo[0]
+
+            # don't send warning when closing the app with unsaved images. In remote mode, we never
+            # need to save on the images on the streak camera computer.
+            self.ImgParamSet("WarnWhenUnsaved", "0")
+
+            # TODO: grap the queue logs in a separate thread?
 
             children = children or {}
             dependencies = dependencies or {}
@@ -1395,6 +1815,10 @@ class StreakCamera(model.HwComponent):
             self.t_receiver.join(5)
         self._closeConnection()
 
+        if self._simulator is not None:
+            self._simulator.terminate()
+            self._simulator = None
+
         super().terminate()
 
     def sendCommand(self, func, *args, **kwargs) -> List[str]:
@@ -1478,7 +1902,7 @@ class StreakCamera(model.HwComponent):
         This method runs in a separate thread and continuously listens for messages returned from
         the device via the commandport IP socket.
         The messages are made available either on .queue_command_responses (for the standard responses)
-        or .queue_img (for messages related to the images).
+        or .queue_img (for messages related to the images, as Tuple[CMD_*, ...]).
         """
         try:
             responses = ""  # received data not yet processed
@@ -1541,8 +1965,8 @@ class StreakCamera(model.HwComponent):
 
                     if error_code in (4, 5):
                         # A new image is available on the dataport => Send to the special queue
-                        if error_code == 4 and rfunc == "Livemonitor":
-                            self.queue_img.put(rargs)
+                        if error_code == 4 and rfunc.lower() in ("livemonitor", "acqmonitor"):
+                            self.queue_img.put((CMD_IMG, *rargs))
                         else:
                             self.queue_log.append(msg_splitted)
                             if len(self.queue_log) > LOG_QUEUE_MAX_SIZE:
@@ -1572,9 +1996,9 @@ class StreakCamera(model.HwComponent):
             start = time.time()
             timeout = 5
             while int(self.AsyncCommandStatus()[0]):
-                time.sleep(0)
+                time.sleep(1e-3)
                 if time.time() > start + timeout:
-                    logging.error("Could not start acquisition.")
+                    logging.error("Could not start acquisition, HPDTA still processing command.")
                     return
             self.AcqStart(AcqMode)
 
@@ -1602,24 +2026,33 @@ class StreakCamera(model.HwComponent):
 
     # === Application commands ========================================================
 
-    def AppStart(self, ini_file: str = None):
+    def AppStart(self, visible: bool = True, ini_file: str = None, no_dialog: bool = True):
         """
         Start RemoteEx. If the application is already running, it will not do anything.
         Blocks until the application is started.
         :param ini_file: (str) path to the INI file for HPDTA, default is HDPTA8.INI
+        :param no_dialog: if False, the HPDTA application will communicate with the user by normal message
+        boxes. Otherwise, all messages that are normally shown are only sent to the RemoteEx client
+        with error code 5.
         """
         # The function accepts up to 4 arguments: fVisible, sINIFile, fNoDialogs, iEncoding
+        # fVisible: 0 = invisible, 1 = visible (default)
+        # sINIFile: ini file (Default is HDPTA8.INI). Warning INI != HWP (although the
+        # HWP file also follows the INI syntax, so it will not complain!). However, the INI file
+        # points towards the hardware profile (HWprofile) file.
+        # fNoDialogs: False = show dialogs, True = no dialogs (default)
         logging.debug("Starting RemoteEx App.")
         if ini_file is None:
-            # need ~15 s when starting App -> use larger timeout
-            self.sendCommand("AppStart", timeout=30)
+            ini_file = ""
         else:
-            # First argument: fVisible: 0 = invisible, 1 = visible (default)
-            # Second argument: ini file (Default is HDPTA8.INI). Warning INI != HWP (although the
-            # HWP file also follows the INI syntax, so it will not complain!). However, the INI file
-            # points towards the hardware profile (HWprofile) file.
             logging.debug("Starting with ini file: %s", ini_file)
-            self.sendCommand("AppStart", "1", ini_file, timeout=30)
+
+        self.sendCommand("AppStart",
+                         "1" if visible else "0",
+                         ini_file,
+                         "1" if no_dialog else "0",
+                         timeout=30)
+
 
     def AppEnd(self):
         """Close RemoteEx."""
@@ -1888,7 +2321,7 @@ class StreakCamera(model.HwComponent):
         # Note: args can be only one argument
         if nbBuffers is not None and monitorType == "RingBuffer":
             args = (str(nbBuffers),)
-        return self.sendCommand("acqLiveMonitor", monitorType, *args)
+        return self.sendCommand("AcqLiveMonitor", monitorType, *args)
 
     def AcqLiveMonitorTSInfo(self):
         """Correlates the current time with the timestamp. It outputs the current time and the time stamp.
@@ -1903,7 +2336,7 @@ class StreakCamera(model.HwComponent):
                         Unix or Linux: Seconds and μseconds since 01.01.1970"""
         self.sendCommand("AcqLiveMonitorTSFormat", format)
 
-    def AcqAcqMonitor(self, type):
+    def AcqAcqMonitor(self, type: str) -> List[str]:
         """Starts a mode which returns information on every new image or part image acquired in
         Acquire/Analog Integration or Photon counting mode (Acquisition monitoring).
         :param type: (str)
@@ -2393,7 +2826,7 @@ class StreakCamera(model.HwComponent):
     def ImgParamSet(self, parameter, value):
         """Sets the values of the image options.
         :param parameter: (str) see ImgParamGet
-        :param value: (str) TODO"""
+        :param value: (str) depends on the parameter. See documentation """
         self.sendCommand("ImgParamSet", parameter, value)
 
     def ImgRingBufferGet(self, type, seqNumber, filename=None):
@@ -2428,7 +2861,7 @@ class StreakCamera(model.HwComponent):
             args += (filename,)
         return self.sendCommand("ImgRingBufferGet", type, seqNumber, *args)
 
-    def ImgDataGet(self, destination, type, *args):
+    def ImgDataGet(self, destination: str, type: str, *args) -> List[str]:
         """
 
         :param destination: (str)
@@ -2529,3 +2962,1325 @@ class StreakCameraDataFlow(model.DataFlow):
         """
         super().synchronizedOn(event)
         self._sync(event)
+
+
+class HPDTASim:
+    """
+    Simulates the HPDTA (Hamamatsu HPD-TA) software via the RemoteEx TCP/IP protocol.
+
+    Listens on two TCP ports: a command port that speaks the RemoteEx command/response
+    protocol, and a data port that carries raw binary image and scaling-table data.
+
+    Architecture mirrors hitachi.SUIPSim: a single state-holder class owns two
+    socketserver.ThreadingTCPServer instances (one per port). A request-handler
+    class processes the persistent per-connection command session. A second handler
+    class manages the data-port connection and stores a reference to the socket so
+    that command responses can push binary data through it.
+    """
+
+    SENSOR_HWIDTH = 1024
+    SENSOR_VWIDTH = 256
+
+    SINGLESWEEP_TIME_RANGES = [
+        "1 ns", "2 ns", "5 ns", "10 ns", "20 ns", "50 ns",
+        "100 ns", "200 ns", "500 ns",
+        "1 us", "2 us", "5 us", "10 us", "20 us", "50 us",
+        "100 us", "200 us", "500 us",
+        "1 ms", "2 ms", "5 ms", "10 ms",
+    ]
+
+    SYNCHROSCAN_TIME_RANGES = ["1", "2", "3", "4", "5"]
+
+    def __init__(self, streak_unit: str = "singlesweep", port: int = 1001):
+        """
+        :param streak_unit: type of streak unit to simulate, "singlesweep" or "synchroscan"
+        :param port: TCP port for the command channel; data channel uses port + 1
+        """
+        if streak_unit not in ("singlesweep", "synchroscan"):
+            raise ValueError("streak_unit must be 'singlesweep' or 'synchroscan', got %r" % streak_unit)
+        self.streak_unit = streak_unit
+        self.port = port
+        self.port_d = port + 1
+
+        self._must_stop = threading.Event()  # Indicates the whole simulator should stop
+
+        # Camera state
+        self._cam_binning = (2, 2)
+        self._cam_exp_time = "100 ms"      # used for Live and SingleLive modes
+        self._cam_pc_exp_time = "50 ms"    # used for photon-counting (PC) mode
+        self._cam_pc_nr_exposures = 500  # frames
+        self._cam_pc_threshold = 123  # counts
+
+        # Streak unit state
+        self._su_mode = "Focus"
+        self._su_mcp_gain = 0
+        self._su_gate_mode = "Normal"
+        self._su_shutter = "Closed"
+        if streak_unit == "singlesweep":
+            self._su_time_range = "1 ns"
+            self._su_trig_mode = "Cont"
+            self._su_trig_level = 1.0
+            self._su_trig_slope = "Rising"
+            self._su_focus_time_over = "false"
+        else:  # synchroscan
+            self._su_time_range = "1"
+            self._su_delay = 0.0
+
+        # Delay box state
+        if streak_unit == "singlesweep":
+            self._db_setting = "M1"
+            self._db_trig_mode = "Ext. rising"
+            self._db_delay_a = 0.0
+            self._db_delay_b = 2e-8
+            self._db_delay_c = 0.0
+            self._db_delay_d = 0.0
+            self._db_delay_e = 0.0
+            self._db_delay_f = 0.0
+            self._db_delay_g = 0.0
+            self._db_delay_h = 0.0
+            self._db_burst_mode = "Off"
+            self._db_repetition_rate = 1e6
+        else:  # synchroscan (C12270)
+            self._db_delay_time = 0
+            self._db_lock_mode = "Unlocked"
+            self._db_device_status = "OK"
+
+        # Acquisition state
+        self._acq_mode = None  # None, "Live", "SingleLive", or "PC"
+        self._live_monitor_type = "Off"
+        self._acq_monitor_type = "Off"
+        self._ring_buffer_size = 3
+        self._ring_buffer = {}  # int (seq_num) -> bytes
+        self._ring_buffer_seq = 0
+        self._ring_buffer_lock = threading.Lock()
+
+        # Active connections (set by handlers)
+        self._data_conn = None
+        self._data_conn_lock = threading.Lock()
+
+        # Acquisition background thread
+        self._acq_thread = None
+        self._acq_lock = threading.Lock()
+        self._acq_must_stop = threading.Event()  # Indicates the acquisition thread should stop
+
+        # Time until which AsyncCommandStatus should report a pending task (0 = no pending task)
+        self._task_end_t = 0
+
+        self._cmd_server = None
+        self._data_server = None
+        try:
+            self._cmd_server = _HPDTAServer(self, ("localhost", port), _HPDTACommandHandler)
+            self._data_server = _HPDTAServer(self, ("localhost", self.port_d), _HPDTADataHandler)
+
+            t_cmd = threading.Thread(target=self._cmd_server.serve_forever,
+                                     name="HPDTASim command server", daemon=True)
+            t_cmd.start()
+            t_data = threading.Thread(target=self._data_server.serve_forever,
+                                      name="HPDTASim data server", daemon=True)
+            t_data.start()
+
+            logging.info("HPDTASim started on ports %d/%d (streak_unit=%s)", port, self.port_d, streak_unit)
+        except Exception:
+            if self._cmd_server:
+                self._cmd_server.server_close()
+            if self._data_server:
+                self._data_server.server_close()
+            raise
+
+    def terminate(self):
+        """Stop the simulator and close all servers."""
+        self._must_stop.set()
+        self._stop_acquisition()
+        self._cmd_server.shutdown()
+        self._cmd_server.server_close()
+        self._data_server.shutdown()
+        self._data_server.server_close()
+        logging.info("HPDTASim terminated")
+
+    # ── helpers ────────────────────────────────────────────────────────────
+
+    def _get_hwidth(self) -> int:
+        """Return the current horizontal pixel count (HWidth) given the binning."""
+        return self.SENSOR_HWIDTH // self._cam_binning[0]
+
+    def _get_vwidth(self) -> int:
+        """Return the current vertical pixel count (VWidth) given the binning."""
+        return self.SENSOR_VWIDTH // self._cam_binning[1]
+
+    def _parse_time_s(self, time_str: str) -> float:
+        """
+        Parse a camera exposure time string to seconds.
+
+        :param time_str: exposure time string such as "100 ms"
+        :return: exposure time in seconds; falls back to 0.1 s on parse error
+        """
+        units_map = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9}
+        try:
+            val, unit = time_str.strip().split(" ")
+            return float(val) * units_map[unit]
+        except (KeyError, ValueError):
+            return 1e-6
+
+    def _get_time_range_s(self) -> float:
+        """
+        Read the current streak-unit time range.
+        :return: time range in seconds
+        """
+        tr = self._su_time_range.strip()
+        if " " in tr:  # has unit -> parse as a time unit
+            return self._parse_time_s(tr)
+        else:  # synchroscan integer ID -> arbitrary ps-scale values
+            try:
+                return (2 ** int(tr)) * 50e-12
+            except ValueError:
+                logging.warning("Unrecognized time format %r", tr)
+                return 1e-6
+
+    # ── image and scaling-table generation ────────────────────────────────
+
+    def _generate_image(self) -> bytes:
+        """
+        Generate a synthetic streak-camera image.
+
+        Three cases based on streak mode and shutter state:
+
+        * Operate mode, shutter open: Gaussian peak swept along the full time axis
+          (intensity fades with row index, simulating a temporal sweep).
+        * Focus mode (not Operate), shutter open: Gaussian peak confined to the
+          centre horizontal line only (simulates the focused beam visible in Focus
+          mode without time-sweeping).
+        * Shutter closed: flat background with noise.
+
+        :return: raw bytes of a uint16 image in row-major (C) order, shape (VWidth, HWidth)
+        """
+        h = self._get_vwidth()
+        w = self._get_hwidth()
+
+        shutter_closed = self._su_shutter == "Closed"
+        photon_counting = self._acq_mode == "PC"
+
+        if photon_counting:
+            exp_s = self._parse_time_s(self._cam_pc_exp_time)
+            exp_time = exp_s * self._cam_pc_nr_exposures
+        else:
+            exp_time = self._parse_time_s(self._cam_exp_time)
+
+        x_idx = numpy.arange(w, dtype=numpy.float32).reshape(1, -1)
+        center_col = w / 2.0
+        sigma_x = w / 8.0
+        gauss_x = numpy.exp(-0.5 * ((x_idx - center_col) / sigma_x) ** 2)
+        # Adjust the intensity based on the exposure time
+        max_v = 10000.0 * exp_time
+
+        if shutter_closed:
+            image = numpy.full((h, w), 100.0, dtype=numpy.float32)
+        elif self._su_mode == "Operate":
+            # Full sweep: peak fades as time progresses (row 0 = brightest)
+            y_idx = numpy.arange(h, dtype=numpy.float32).reshape(-1, 1)
+            fade = numpy.exp(-y_idx / max(h, 1) * 3.0)
+            image = (gauss_x * fade * max_v).astype(numpy.float32)
+        else:
+            # Focus mode, shutter open: horizontal peak around 1/3rd of the screen
+            center_row = h / 3.0
+            sigma_y = max(h / 100.0, 1.0)
+            y_idx = numpy.arange(h, dtype=numpy.float32).reshape(-1, 1)
+            gauss_y = numpy.exp(-0.5 * ((y_idx - center_row) / sigma_y) ** 2)
+            image = (gauss_x * gauss_y * max_v).astype(numpy.float32)
+
+        # Apply MCP gain: gain=0 → ×0.1, gain=63 → ×6.4
+        gain_factor = (self._su_mcp_gain + 1) / 10.0
+        image *= gain_factor
+
+        # Add baseline + dark noise
+        max_noise = 5 if photon_counting else 50
+        image += 100 + numpy.random.randint(0, max_noise, (h, w)).astype(numpy.float32)
+
+        return numpy.clip(image, 0, 65535).astype(numpy.uint16).tobytes()
+
+    def _generate_scaling_table_time(self) -> numpy.ndarray:
+        """
+        Generate a float32 scaling table for the time axis.
+
+        Values are expressed in the natural unit prefix for the current time range
+        (e.g. ns for a 1 ns range, us for 1 µs). This matches the convention of
+        the real HPDTA: the ReadoutCamera driver multiplies by get_time_scale_factor()
+        to convert the values to seconds.
+
+        :return: float32 array with one entry per vertical pixel
+        """
+        h = self._get_vwidth()
+        time_range_s = self._get_time_range_s()
+
+        # Compute the same unit prefix that get_time_scale_factor() would return
+        if self.streak_unit == "synchroscan":  # always ps
+            unit_factor = 1e-12
+        else:
+            unit_factor = 10.0 ** (int(math.log10(time_range_s) // 3) * 3)
+        values = numpy.linspace(0.0, time_range_s / unit_factor, h, dtype=numpy.float32)
+
+        return values
+
+    # ── acquisition control ───────────────────────────────────────────────
+
+    def _start_acquisition(self, mode: str, command_conn, send_lock: threading.Lock):
+        """
+        Start the background acquisition thread.
+
+        :param mode: "Live", "SingleLive", or "PC"
+        :param command_conn: command-port socket used to push monitor notifications
+        :param send_lock: lock protecting writes to command_conn
+        """
+        if mode not in ("Live", "SingleLive", "PC"):
+            raise ValueError(f"Invalid acquisition mode {mode!r}")
+
+        logging.debug("Starting acquisition mode %r", mode)
+        with self._acq_lock:
+            self._stop_acquisition_locked()
+            logging.debug("acquisition ready to start")
+            self._acq_must_stop.clear()
+            self._acq_mode = mode
+            self._acq_thread = threading.Thread(
+                target=self._acq_worker,
+                args=(command_conn, send_lock),
+                name="HPDTASim %s acquisition" % mode,
+                daemon=True,
+            )
+            self._acq_thread.start()
+
+    def _stop_acquisition(self):
+        """Stop any running acquisition (thread-safe)."""
+        with self._acq_lock:
+            self._stop_acquisition_locked()
+
+    def _stop_acquisition_locked(self):
+        """Stop acquisition; caller must hold _acq_lock."""
+        self._acq_mode = None
+        self._acq_must_stop.set()
+        t = self._acq_thread
+        self._acq_thread = None
+        if t is not None and t.is_alive():
+            t.join(timeout=3)
+
+    def _acq_worker(self, command_conn, send_lock: threading.Lock):
+        """
+        Background thread for simulating acquisition.
+
+        In Live mode, generates one image per exposure period in a continuous
+        loop. In SingleLive & PC mode, generates exactly one image and then stops.
+        Each image is stored in the ring buffer and triggers a monitor
+        notification on the command socket.
+        """
+        try:
+            while self._acq_mode is not None and not self._acq_must_stop.is_set():
+                single = self._acq_mode in ("SingleLive", "PC")
+                photon_counting = self._acq_mode == "PC"
+
+                # Simulate one frame acquisition
+                if photon_counting:
+                    exp_s = self._parse_time_s(self._cam_pc_exp_time)
+                    total_time = exp_s * self._cam_pc_nr_exposures
+                    logging.debug("Starting photon-counting acquisition of %s s", total_time)
+                else:
+                    total_time = self._parse_time_s(self._cam_exp_time)
+
+                self._acq_must_stop.wait(max(total_time, 0.05))
+                if self._acq_mode is None or self._acq_must_stop.is_set():
+                    break
+
+                img_data = self._generate_image()
+                with self._ring_buffer_lock:
+                    # In reality, the ring-buffer is only used of live monitor, but as we only use
+                    # EndAcq in PC mode, it's safe to also use the ring-buffer to hold the latest image.
+                    self._ring_buffer_seq += 1
+                    seq = self._ring_buffer_seq
+                    self._ring_buffer[seq] = img_data
+                    # Evict images beyond the ring-buffer window
+                    for k in sorted(k for k in self._ring_buffer
+                                     if k <= seq - self._ring_buffer_size):
+                        del self._ring_buffer[k]
+
+                if self._live_monitor_type == "RingBuffer":
+                    self._push_notification(command_conn, send_lock,
+                                            "4,Livemonitor,RingBuffer,%d\r" % seq)
+                if self._acq_monitor_type == "EndAcq":
+                    self._push_notification(command_conn, send_lock, "4,Acqmonitor,EndAcq\r")
+
+                if single:
+                    self._acq_mode = None
+                    break
+        except Exception:
+            logging.exception("HPDTASim: exception in acquisition thread")
+        finally:
+            logging.debug("Acquisition thread exiting")
+
+    @staticmethod
+    def _push_notification(command_conn, send_lock: threading.Lock, msg: str):
+        """
+        Send an async notification on the command socket.
+
+        :param command_conn: the command-port socket
+        :param send_lock: lock protecting writes to command_conn
+        :param msg: the notification string to send (must end with \\r)
+        """
+        with send_lock:
+            try:
+                command_conn.sendall(msg.encode("latin1"))
+            except Exception:
+                logging.debug("HPDTASim: failed to send notification %r", msg, exc_info=True)
+
+    # ── ring-buffer access ────────────────────────────────────────────────
+
+    def get_ring_buffer_image(self, seq_num: int) -> Tuple[int, bytes]:
+        """
+        Retrieve an image from the ring buffer by sequence number.
+
+        If the requested number is not in the buffer the oldest available image
+        is returned, mirroring the real HPDTA behaviour.
+
+        :param seq_num: the requested sequence number
+        :return: (actual_seq_num, raw_image_bytes)
+        """
+        with self._ring_buffer_lock:
+            if not self._ring_buffer:
+                data = self._generate_image()
+                return seq_num, data
+            if seq_num not in self._ring_buffer:
+                actual = min(self._ring_buffer)
+            else:
+                actual = seq_num
+            return actual, self._ring_buffer[actual]
+
+    def get_current_image(self) -> bytes:
+        """
+        Return the most recently acquired image (for AcqMonitor mode).
+
+        :return: raw image bytes (uint16, row-major)
+        """
+        with self._ring_buffer_lock:
+            if not self._ring_buffer:
+                return self._generate_image()
+            return self._ring_buffer[max(self._ring_buffer)]
+
+    def send_data(self, data: bytes):
+        """
+        Push raw bytes to the client via the data port.
+
+        :param data: bytes to transmit
+        """
+        with self._data_conn_lock:
+            conn = self._data_conn
+        if conn is not None:
+            try:
+                conn.sendall(data)
+            except Exception:
+                logging.debug("HPDTASim: failed to send data", exc_info=True)
+        else:
+            logging.warning("HPDTASim: no data connection available to send %d bytes", len(data))
+
+
+class _HPDTAServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    """
+    TCPServer subclass that carries a back-reference to the HPDTASim instance.
+    """
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def __init__(self, simulator: HPDTASim, *args, **kwargs):
+        self.simulator = simulator
+        super().__init__(*args, **kwargs)
+
+
+class _HPDTADataHandler(socketserver.BaseRequestHandler):
+    """
+    Handles the data-port connection for HPDTASim.
+
+    Sends the RemoteEx data-port greeting, stores the socket in the simulator
+    so that command handlers can push binary data, and holds the connection open
+    until the simulator is shut down.
+    """
+
+    def setup(self):
+        self.sim = self.server.simulator
+
+    def handle(self):
+        try:
+            self.request.sendall(b"RemoteEx Data Ready\r")
+            with self.sim._data_conn_lock:
+                self.sim._data_conn = self.request
+            while not self.sim._must_stop.is_set():
+                time.sleep(0.1)
+        except Exception:
+            logging.debug("HPDTASim data handler error", exc_info=True)
+        finally:
+            with self.sim._data_conn_lock:
+                if self.sim._data_conn is self.request:
+                    self.sim._data_conn = None
+
+
+class _HPDTACommandHandler(socketserver.BaseRequestHandler):
+    """
+    Handles the command-port connection for HPDTASim.
+
+    Implements the RemoteEx command protocol:
+      - Client sends  FunctionName(arg1,arg2,...)\\r
+      - Server replies error_code,FunctionName[,value1,...]\\r
+      - Server proactively pushes 4,MonitorName[,args...]\\r notifications
+
+    The handler runs as a persistent per-connection loop (like SUSimTCPRequestHandler
+    in hitachi.py) and exits when the client closes the connection or AppEnd() is received.
+    """
+
+    def setup(self):
+        self.sim = self.server.simulator
+        self.request.settimeout(1.0)
+        self._send_lock = threading.Lock()
+
+    def handle(self):
+        try:
+            self.request.sendall(b"RemoteEx Ready\r")
+            buf = ""
+            while not self.sim._must_stop.is_set():
+                try:
+                    data = self.request.recv(4096)
+                except socket.timeout:
+                    continue
+                if not data:
+                    logging.debug("HPDTASim: command connection closed by client")
+                    break
+                buf += data.decode("latin1")
+                # Commands are delimited by \r NOT followed by \n
+                parts = re.split(r"\r(?!\n)", buf)
+                buf = parts[-1]
+                for cmd in parts[:-1]:
+                    cmd = cmd.strip()
+                    if cmd:
+                        self._process_command(cmd)
+        except Exception:
+            logging.exception("HPDTASim command handler error")
+        finally:
+            logging.debug("HPDTASim command handler ended")
+
+    # ── protocol helpers ──────────────────────────────────────────────────
+
+    def _send_response(self, func_name: str, *values, error_code: int = 0):
+        """
+        Format and send a RemoteEx response.
+
+        :param func_name: name of the function being responded to
+        :param values: positional return values (converted to str)
+        :param error_code: RemoteEx error code (0 = success)
+        """
+        parts = [str(error_code), func_name] + [str(v) for v in values]
+        msg = ",".join(parts) + "\r"
+        with self._send_lock:
+            self.request.sendall(msg.encode("latin1"))
+
+    def _process_command(self, msg: str):
+        """
+        Parse a command string and dispatch it.
+
+        :param msg: raw command without the trailing \\r, e.g. "AcqStart(Live)"
+        """
+        m = re.match(r"(\w+)\((.*)\)$", msg.strip())
+        if not m:
+            logging.warning("HPDTASim: cannot parse command: %s", to_str_escape(msg))
+            return
+        func = m.group(1)
+        args_str = m.group(2).strip()
+        args = [a.strip() for a in args_str.split(",")] if args_str else []
+        try:
+            self._dispatch(func, args)
+        except Exception:
+            logging.exception("HPDTASim: error handling %s(%s)", func, args)
+            self._send_response(func, error_code=8)
+
+    # ── command dispatcher ────────────────────────────────────────────────
+
+    def _dispatch(self, func: str, args: list):
+        """
+        Dispatch a parsed command to its handler method.
+
+        :param func: function name as received (original case)
+        :param args: list of argument strings
+        """
+        fl = func.lower()
+        sim = self.sim
+
+        # General / application
+        # Note: Appinfo(type) and AppInfo(param) both lowercase to "appinfo";
+        # they are distinguished by argument value ("type" vs "Version"/"Date"/...).
+        if fl == "appinfo":
+            param = args[0] if args else ""
+            if param.lower() == "type":
+                # Appinfo(type) – returns the application name
+                self._send_response(func, "HPDTA")
+            elif param.lower() == "version":
+                self._send_response(func, "9.0 (HPDTASim)")
+            elif param.lower() == "date":
+                self._send_response(func, "01.01.2024")
+            elif param.lower() == "directory":
+                self._send_response(func, "C:\\HPDTASim\\")
+            else:
+                self._send_response(func, "HPDTASim")
+
+        elif fl == "appstart":
+            self._send_response(func)
+
+        elif fl == "append":  # AppEnd
+            self._send_response(func)
+            sim.terminate()
+
+        elif fl == "applicenceget":
+            # AppLicenceGet – return "found" for application key + acquire licence
+            self._send_response(func, "1", "1", "0", "0", "0", "0")
+
+        elif fl == "asynccommandstatus":
+            if time.time() < sim._task_end_t:
+                self._send_response(func, "1", "0", "1")
+            else:
+                self._send_response(func, "0", "0", "0")
+
+        elif fl == "stop" or fl == "shutdown":
+            self._send_response(func)
+
+        # Acquisition
+        elif fl == "acqstart":
+            mode = args[0] if args else "Live"
+            sim._task_end_t = time.time() + 0.1
+            sim._start_acquisition(mode, self.request, self._send_lock)
+            self._send_response(func)
+
+        elif fl == "acqstop":
+            sim._stop_acquisition()
+            self._send_response(func)
+
+        elif fl == "acqstatus":
+            status = "busy" if sim._acq_mode else "idle"
+            self._send_response(func, status, sim._acq_mode or "")
+
+        elif fl == "acqlivemonitor":
+            monitor_type = args[0] if args else "Off"
+            sim._live_monitor_type = monitor_type
+            if monitor_type == "RingBuffer" and len(args) > 1:
+                try:
+                    sim._ring_buffer_size = int(args[1])
+                except ValueError:
+                    pass
+            self._send_response(func)
+
+        elif fl == "acqacqmonitor":
+            sim._acq_monitor_type = args[0] if args else "Off"
+            self._send_response(func)
+
+        elif fl == "acqparamget":
+            param = args[0] if args else ""
+            defaults = {
+                "displayinterval": "100",
+                "32bitinai": "false",
+                "pcmode": "Normal",
+                "32bitinpc": "false",
+                "moirrereduction": "0",
+            }
+            self._send_response(func, defaults.get(param.lower(), "0"))
+
+        elif fl == "acqparamset":
+            self._send_response(func)
+
+        elif fl == "acqparaminfo":
+            self._send_response(func, args[0] if args else "", "0", "0")
+
+        elif fl == "acqparaminfoex":
+            self._send_response(func, args[0] if args else "", "0", "0")
+
+        elif fl == "acqparamslist":
+            params = ["DisplayInterval", "32BitInAI", "PCMode", "32BitInPC", "MoireeReduction"]
+            self._send_response(func, str(len(params)), *params)
+
+        # Camera
+        elif fl == "camparamget":
+            self._handle_camparamget(func, args)
+
+        elif fl == "camparamset":
+            self._handle_camparamset(func, args)
+
+        elif fl == "camparaminfo":
+            self._handle_camparaminfo(func, args)
+
+        elif fl == "camparaminfoex":
+            self._handle_camparaminfoex(func, args)
+
+        elif fl == "camparamslist":
+            self._handle_camparamslist(func, args)
+
+        elif fl == "camgetlivebg" or fl == "camsetupsendserial":
+            self._send_response(func)
+
+        # External devices (streak unit + delay box)
+        elif fl == "devparamget":
+            self._handle_devparamget(func, args)
+
+        elif fl == "devparamset":
+            self._handle_devparamset(func, args)
+
+        elif fl == "devparaminfo":
+            self._handle_devparaminfo(func, args)
+
+        elif fl == "devparaminfoex":
+            self._handle_devparaminfoex(func, args)
+
+        elif fl == "devparamslist":
+            self._handle_devparamslist(func, args)
+
+        # Image
+        elif fl == "imgringbufferget":
+            self._handle_imgringbufferget(func, args)
+
+        elif fl == "imgdataget":
+            self._handle_imgdataget(func, args)
+
+        elif fl == "imgparamget":
+            self._send_response(func, "0")
+
+        elif fl == "imgparamset":
+            self._send_response(func)
+
+        # Main / General params (minimal stubs)
+        elif fl == "mainparamget":
+            self._handle_mainparamget(func, args)
+
+        elif fl in ("mainparaminfo", "mainparaminfoex"):
+            self._send_response(func, args[0] if args else "", "0", "5")
+
+        elif fl == "mainparamslist":
+            params = ["ImageSize", "Message", "MCPGain", "Mode", "TimeRange"]
+            self._send_response(func, str(len(params)), *params)
+
+        elif fl in ("mainsyncget",):
+            self._send_response(func, "0", "0", "0", "Sync")
+
+        elif fl in ("mainsyncset", "genparamset"):
+            self._send_response(func)
+
+        elif fl == "genparamget":
+            self._send_response(func, "0")
+
+        elif fl in ("genparaminfo", "genparaminfoex"):
+            self._send_response(func, args[0] if args else "", "false", "0")
+
+        elif fl == "genparamslist":
+            params = ["RestoreWindowPos", "UserFunctions", "ShowStreakControl"]
+            self._send_response(func, str(len(params)), *params)
+
+        else:
+            logging.warning("HPDTASim: unknown command %s(%s)", func, args)
+            self._send_response(func, error_code=2)
+
+    # ── camera parameter handlers ─────────────────────────────────────────
+
+    def _handle_camparamget(self, func: str, args: list):
+        """
+        Handle CamParamGet(location, parameter).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        _loc, param = args[0], args[1]
+        pl = param.lower()
+        sim = self.sim
+
+        if pl == "camerainfo":
+            info = (
+                "OrcaFlash 4.0 V3\r\nProduct number: C13440-20C\r\n"
+                "Serial number: 301730\r\nFirmware: 4.20.B\r\n"
+                "Version: 4.20.B03-A19-B02-4.02"
+            )
+            self._send_response(func, info)
+        elif pl == "binning":
+            b = sim._cam_binning
+            self._send_response(func, "%d x %d" % (b[0], b[1]))
+        elif pl == "hwidth":
+            self._send_response(func, str(sim._get_hwidth()))
+        elif pl == "vwidth":
+            self._send_response(func, str(sim._get_vwidth()))
+        elif pl == "hoffs":
+            self._send_response(func, "0")
+        elif pl == "voffs":
+            self._send_response(func, "0")
+        elif pl == "exposure":
+            exp = sim._cam_pc_exp_time if _loc.lower() == "pc" else sim._cam_exp_time
+            self._send_response(func, exp)
+        elif pl == "nrexposures" and _loc.lower() == "pc":
+            self._send_response(func, str(sim._cam_pc_nr_exposures))
+        elif pl == "threshold" and _loc.lower() == "pc":
+            self._send_response(func, str(sim._cam_pc_threshold))
+        elif pl == "timingmode":
+            self._send_response(func, "Internal timing")
+        elif pl == "scanmode":
+            self._send_response(func, "Subarray")
+        elif pl == "showgainoffset":
+            self._send_response(func, "true")
+        elif pl == "triggermode":
+            self._send_response(func, "Edge trigger")
+        elif pl == "triggersource":
+            self._send_response(func, "BNC")
+        elif pl == "triggerpolarity":
+            self._send_response(func, "neg.")
+        else:
+            logging.debug("HPDTASim: CamParamGet unknown param %s", param)
+            self._send_response(func, "0")
+
+    def _handle_camparamset(self, func: str, args: list):
+        """
+        Handle CamParamSet(location, parameter, value).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 3:
+            self._send_response(func, error_code=6)
+            return
+        loc, param, value = args[0], args[1], args[2]
+        pl = param.lower()
+        sim = self.sim
+
+        if pl == "binning":
+            parts = value.split("x")
+            if len(parts) == 2:
+                try:
+                    sim._cam_binning = (int(parts[0].strip()), int(parts[1].strip()))
+                except ValueError:
+                    pass
+        elif pl == "exposure":
+            if loc.lower() == "pc":
+                sim._cam_pc_exp_time = value
+            else:
+                sim._cam_exp_time = value
+        elif pl == "nrexposures" and loc.lower() == "pc":
+            try:
+                sim._cam_pc_nr_exposures = int(value)
+            except ValueError:
+                pass
+        elif pl == "threshold" and loc.lower() == "pc":
+            try:
+                sim._cam_pc_threshold = int(value)
+            except ValueError:
+                pass
+        self._send_response(func)
+
+    def _handle_camparaminfo(self, func: str, args: list):
+        """
+        Handle CamParamInfo(location, parameter).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        loc, param = args[0], args[1]
+        pl = param.lower()
+        sim = self.sim
+
+        if pl == "binning":
+            b = sim._cam_binning
+            self._send_response(func, "Binning", "%d x %d" % (b[0], b[1]), "2")
+        elif pl == "exposure":
+            exp = sim._cam_pc_exp_time if loc.lower() == "pc" else sim._cam_exp_time
+            self._send_response(func, "Exposure", exp, "4", "100 us", "10 s")
+        elif pl == "nrexposures" and loc.lower() == "pc":
+            self._send_response(func, "# of exposures:",
+                                str(sim._cam_pc_nr_exposures), "1", "1", "100000")
+        elif pl == "threshold" and loc.lower() == "pc":
+            self._send_response(func, "Threshold",
+                                str(sim._cam_pc_threshold), "1", "0", "65535")
+        else:
+            self._send_response(func, param, "0", "3")
+
+    def _handle_camparaminfoex(self, func: str, args: list):
+        """
+        Handle CamParamInfoEx(location, parameter).
+
+        Response format for list parameters:  label, value, type=2, count, choice1, ...
+        Response format for numeric parameters: label, value, type=1, min, max
+        Response format for exposure-time lists: label, value, type=4, count, choice1, ...
+          where index [4] (first choice) is the minimum and index [-1] is the maximum.
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        loc, param = args[0], args[1]
+        pl = param.lower()
+        sim = self.sim
+
+        if pl == "binning":
+            b = sim._cam_binning
+            choices = ["1 x 1", "2 x 2", "4 x 4"]
+            self._send_response(func, "Binning", "%d x %d" % (b[0], b[1]),
+                                "2", str(len(choices)), *choices)
+        elif pl == "exposure":
+            # type=EXPTIME (4), list of exposure times in increasing order
+            exp_choices = [
+                "20 us", "25 us", "30 us", "40 us", "50 us", "60 us", "70 us", "80 us",
+                "100 us", "200 us", "500 us",
+                "1 ms", "2 ms", "5 ms", "10 ms", "20 ms", "50 ms",
+                "100 ms", "200 ms", "500 ms",
+                "1 s", "2 s", "5 s", "10 s",
+            ]
+            exp = sim._cam_pc_exp_time if loc.lower() == "pc" else sim._cam_exp_time
+            self._send_response(func, "Exposure:", exp,
+                                "4", str(len(exp_choices)), *exp_choices)
+        elif pl == "nrexposures" and loc.lower() == "pc":
+            # type=NUMERIC (1); client reads [3] and [4] for min/max
+            self._send_response(func, "# of exposures:",
+                                str(sim._cam_pc_nr_exposures), "1", "1", "100000")
+        elif pl == "threshold" and loc.lower() == "pc":
+            self._send_response(func, "Threshold",
+                                str(sim._cam_pc_threshold), "1", "0", "65535")
+        else:
+            self._send_response(func, param, "0", "3")
+
+    def _handle_camparamslist(self, func: str, args: list):
+        """
+        Handle CamParamsList(location).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        loc = args[0].lower() if args else "setup"
+        if loc == "setup":
+            params = [
+                "TimingMode", "TriggerMode", "TriggerSource", "TriggerPolarity",
+                "ScanMode", "Binning", "HOffs", "HWidth", "VOffs", "VWidth",
+                "ShowGainOffset", "CameraInfo",
+            ]
+        elif loc == "live":
+            params = ["Exposure", "Gain", "Offset"]
+        elif loc == "acquire":
+            params = ["Exposure", "NrTrigger"]
+        elif loc == "pc":
+            params = ["Exposure", "NrExposures", "Threshold"]
+        else:
+            params = ["Exposure"]
+        self._send_response(func, str(len(params)), *params)
+
+    # ── device parameter handlers ─────────────────────────────────────────
+
+    def _handle_devparamget(self, func: str, args: list):
+        """
+        Handle DevParamGet(location, parameter).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        loc, param = args[0], args[1]
+        # Normalize: remove spaces and dots for easy comparison
+        pl = param.lower().replace(" ", "").replace(".", "")
+        ll = loc.lower()
+
+        if ll in ("streakcamera", "streak", "td"):
+            self._get_streak_param(func, param, pl)
+        elif ll in ("del", "delay", "delaybox", "del1"):
+            self._get_delay_param(func, param, pl)
+        else:
+            logging.warning("HPDTASim: DevParamGet unknown location %s", loc)
+            self._send_response(func, error_code=2)
+
+    def _get_streak_param(self, func: str, param: str, pl: str):
+        """
+        Return a streak-unit parameter value.
+
+        :param func: original function name
+        :param param: original parameter name (for logging)
+        :param pl: normalised parameter name (lowercase, no spaces/dots)
+        """
+        sim = self.sim
+        if pl == "devicename":
+            self._send_response(func, "C10627" if sim.streak_unit == "singlesweep" else "C16910")
+        elif pl == "pluginname":
+            self._send_response(func, "HPDTASim")
+        elif pl == "mode":
+            self._send_response(func, sim._su_mode)
+        elif pl == "mcpgain":
+            self._send_response(func, str(sim._su_mcp_gain))
+        elif pl == "timerange":
+            self._send_response(func, sim._su_time_range)
+        elif pl == "gatemode":
+            self._send_response(func, sim._su_gate_mode)
+        elif pl == "shutter":
+            self._send_response(func, sim._su_shutter)
+        elif pl == "trigmode" and sim.streak_unit == "singlesweep":
+            self._send_response(func, sim._su_trig_mode)
+        elif pl == "triglevel" and sim.streak_unit == "singlesweep":
+            self._send_response(func, str(sim._su_trig_level))
+        elif pl == "trigslope" and sim.streak_unit == "singlesweep":
+            self._send_response(func, sim._su_trig_slope)
+        elif pl == "focustimeover" and sim.streak_unit == "singlesweep":
+            self._send_response(func, sim._su_focus_time_over)
+        elif pl == "triggerstatus" and sim.streak_unit == "singlesweep":
+            self._send_response(func, "Ready")
+        elif pl == "delay" and sim.streak_unit == "synchroscan":
+            self._send_response(func, str(sim._su_delay))
+        else:
+            logging.debug("HPDTASim: DevParamGet unknown streak param %s", param)
+            self._send_response(func, "0")
+
+    def _get_delay_param(self, func: str, param: str, pl: str):
+        """
+        Return a delay-box parameter value.
+
+        :param func: original function name
+        :param param: original parameter name (for logging)
+        :param pl: normalised parameter name
+        """
+        sim = self.sim
+        if pl == "devicename":
+            self._send_response(func, "DG645" if sim.streak_unit == "singlesweep" else "C12270")
+        elif pl == "pluginname":
+            self._send_response(func, "HPDTASim")
+        elif sim.streak_unit == "singlesweep":
+            delay_attr = {
+                "delaya": "_db_delay_a", "delayb": "_db_delay_b",
+                "delayc": "_db_delay_c", "delayd": "_db_delay_d",
+                "delaye": "_db_delay_e", "delayf": "_db_delay_f",
+                "delayg": "_db_delay_g", "delayh": "_db_delay_h",
+            }
+            if pl == "setting":
+                self._send_response(func, sim._db_setting)
+            elif pl == "trigmode":
+                self._send_response(func, sim._db_trig_mode)
+            elif pl in delay_attr:
+                self._send_response(func, str(getattr(sim, delay_attr[pl])))
+            elif pl == "burstmode":
+                self._send_response(func, sim._db_burst_mode)
+            elif pl == "repetitionrate":
+                self._send_response(func, str(sim._db_repetition_rate))
+            else:
+                logging.debug("HPDTASim: DevParamGet unknown delay param %s", param)
+                self._send_response(func, "0")
+        else:  # synchroscan
+            if pl == "delaytime":
+                self._send_response(func, str(sim._db_delay_time))
+            elif pl == "lockmode":
+                self._send_response(func, sim._db_lock_mode)
+            elif pl == "devicestatus":
+                self._send_response(func, sim._db_device_status)
+            else:
+                logging.debug("HPDTASim: DevParamGet unknown delay param %s", param)
+                self._send_response(func, "0")
+
+    def _handle_devparamset(self, func: str, args: list):
+        """
+        Handle DevParamSet(location, parameter, value).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 3:
+            self._send_response(func, error_code=6)
+            return
+        loc, param, value = args[0], args[1], args[2]
+        pl = param.lower().replace(" ", "").replace(".", "")
+        ll = loc.lower()
+        sim = self.sim
+
+        if ll in ("streakcamera", "streak", "td"):
+            if pl == "mode":
+                sim._su_mode = value
+            elif pl == "mcpgain":
+                try:
+                    sim._su_mcp_gain = int(float(value))
+                except ValueError:
+                    pass
+            elif pl == "timerange":
+                sim._su_time_range = value
+            elif pl == "gatemode":
+                sim._su_gate_mode = value
+            elif pl == "shutter":
+                sim._su_shutter = value
+            elif pl == "trigmode":
+                sim._su_trig_mode = value
+            elif pl == "triglevel":
+                try:
+                    sim._su_trig_level = float(value)
+                except ValueError:
+                    pass
+            elif pl == "trigslope":
+                sim._su_trig_slope = value
+            elif pl == "delay":
+                try:
+                    sim._su_delay = float(value)
+                except ValueError:
+                    pass
+
+        elif ll in ("del", "delay", "delaybox", "del1"):
+            if sim.streak_unit == "singlesweep":
+                float_params = {
+                    "delaya": "_db_delay_a", "delayb": "_db_delay_b",
+                    "delayc": "_db_delay_c", "delayd": "_db_delay_d",
+                    "delaye": "_db_delay_e", "delayf": "_db_delay_f",
+                    "delayg": "_db_delay_g", "delayh": "_db_delay_h",
+                    "repetitionrate": "_db_repetition_rate",
+                }
+                str_params = {
+                    "setting": "_db_setting",
+                    "trigmode": "_db_trig_mode",
+                    "burstmode": "_db_burst_mode",
+                }
+            else:  # synchroscan
+                float_params = {
+                    "delaytime": "_db_delay_time",
+                }
+                str_params = {
+                    "lockmode": "_db_lock_mode",
+                    "devicestatus": "_db_device_status",
+                }
+            if pl in float_params:
+                try:
+                    setattr(sim, float_params[pl], float(value))
+                except ValueError:
+                    pass
+            elif pl in str_params:
+                setattr(sim, str_params[pl], value)
+
+        self._send_response(func)
+
+    def _handle_devparaminfo(self, func: str, args: list):
+        """
+        Handle DevParamInfo(location, parameter).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        _loc, param = args[0], args[1]
+        pl = param.lower().replace(" ", "").replace(".", "")
+        sim = self.sim
+
+        if pl == "mcpgain":
+            self._send_response(func, "MCP Gain", str(sim._su_mcp_gain), "1", "0", "63")
+        elif pl == "timerange":
+            self._send_response(func, "Time Range", sim._su_time_range, "2")
+        elif pl in ("delaya", "delayb", "delayc", "delayd", "delaye",
+                    "delayf", "delayg", "delayh") and sim.streak_unit == "singlesweep":
+            attr = "_db_" + pl
+            val = getattr(sim, attr, 0.0)
+            self._send_response(func, param, str(val), "1", "0.0", "1.0")
+        elif pl == "delaytime":
+            self._send_response(func, "Delay Time", str(sim._db_delay_time), "1", "0", "65535")
+        elif pl == "repetitionrate":
+            self._send_response(func, "Repetition Rate", str(sim._db_repetition_rate), "5")
+        else:
+            self._send_response(func, param, "0", "3")
+
+    def _handle_devparaminfoex(self, func: str, args: list):
+        """
+        Handle DevParamInfoEx(location, parameter).
+
+        Response format: ctrl_avail, stat_avail, label, current_value, type, [extra...]
+          - NUMERIC (type=1): ctrl, stat, label, val, 1, min, max
+            client uses [5:] for MCP Gain range and [-1] for delay max
+          - LIST (type=2): ctrl, stat, label, val, 2, count, choice1, ...
+            client uses [6:] for Time Range choices
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        _loc, param = args[0], args[1]
+        pl = param.lower().replace(" ", "").replace(".", "")
+        sim = self.sim
+
+        if pl == "mcpgain":
+            # client reads [5:] → (min, max)
+            self._send_response(func, "1", "1", "MCP Gain",
+                                str(sim._su_mcp_gain), "1", "0", "63")
+        elif pl == "timerange":
+            # client reads [6:] → list of choices
+            choices = (HPDTASim.SINGLESWEEP_TIME_RANGES
+                       if sim.streak_unit == "singlesweep"
+                       else HPDTASim.SYNCHROSCAN_TIME_RANGES)
+            self._send_response(func, "1", "1", "Time Range", sim._su_time_range, "2",
+                                str(len(choices)), *choices)
+        elif pl in ("delaya", "delayb", "delayc", "delayd", "delaye",
+                    "delayf", "delayg", "delayh") and sim.streak_unit == "singlesweep":
+            # client reads [-1] as max
+            attr = "_db_" + pl
+            val = getattr(sim, attr, 0.0)
+            self._send_response(func, "1", "1", param, str(val), "1", "0.0", "1.0")
+        elif pl == "delaytime":
+            self._send_response(func, "1", "1", "Delay Time",
+                                str(sim._db_delay_time), "1", "0", "65535")
+        elif pl == "repetitionrate":
+            self._send_response(func, "0", "1", "Repetition Rate",
+                                str(sim._db_repetition_rate), "5")
+        elif pl == "gatemode":
+            choices = ["Normal", "Gate"]
+            self._send_response(func, "1", "1", "Gate Mode", sim._su_gate_mode, "2",
+                                str(len(choices)), *choices)
+        elif pl == "mode":
+            choices = ["Focus", "Operate"]
+            self._send_response(func, "1", "1", "Mode", sim._su_mode, "2",
+                                str(len(choices)), *choices)
+        elif pl == "shutter":
+            choices = ["Closed", "Open"]
+            self._send_response(func, "1", "1", "Shutter", sim._su_shutter, "2",
+                                str(len(choices)), *choices)
+        elif pl == "trigmode":
+            choices = ["Cont", "Single", "Ext"]
+            self._send_response(func, "1", "1", "Trig. Mode", sim._su_trig_mode, "2",
+                                str(len(choices)), *choices)
+        elif pl == "setting":
+            choices = ["M1", "M2", "M3"]
+            self._send_response(func, "1", "1", "Setting", sim._db_setting, "2",
+                                str(len(choices)), *choices)
+        elif pl == "lockmode":
+            choices = ["Locked", "Unlocked"]
+            self._send_response(func, "1", "1", "Lock Mode", sim._db_lock_mode, "2",
+                                str(len(choices)), *choices)
+        else:
+            self._send_response(func, "1", "1", param, "0", "3")
+
+    def _handle_devparamslist(self, func: str, args: list):
+        """
+        Handle DevParamsList(device).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        device = args[0].lower() if args else ""
+        sim = self.sim
+
+        if device in ("streakcamera", "streak", "td"):
+            if sim.streak_unit == "singlesweep":
+                params = [
+                    "Time Range", "Mode", "Gate Mode", "MCP Gain",
+                    "Shutter", "Trig. Mode", "Trigger status",
+                    "Trig. level", "Trig. slope", "FocusTimeOver",
+                ]
+            else:
+                params = ["Time Range", "Mode", "Gate Mode", "MCP Gain", "Delay","Shutter"]
+        elif device in ("del", "delay", "delaybox", "del1"):
+            if sim.streak_unit == "singlesweep":
+                params = [
+                    "Setting", "Trig. Mode",
+                    "Delay A", "Delay B", "Delay C", "Delay D",
+                    "Delay E", "Delay F", "Delay G", "Delay H",
+                    "Burst Mode", "Repetition Rate",
+                ]
+            else:
+                params = ["Delay Time", "Lock Mode", "Device Status"]
+        else:
+            logging.warning("HPDTASim: DevParamsList unknown device %s", device)
+            params = []
+        self._send_response(func, str(len(params)), *params)
+
+    # ── image handlers ────────────────────────────────────────────────────
+
+    def _handle_imgringbufferget(self, func: str, args: list):
+        """
+        Handle ImgRingBufferGet(type, seqNumber[, filename]).
+
+        Responds with image geometry info on the command port and pushes the raw
+        pixel data on the data port.
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+        if args[0].lower() != "data":
+            self._send_response(func, error_code=2)
+            return
+        try:
+            seq_num = int(args[1])
+        except ValueError:
+            self._send_response(func, error_code=1)
+            return
+
+        actual_seq, img_data = self.sim.get_ring_buffer_image(seq_num)
+        h = self.sim._get_vwidth()
+        w = self.sim._get_hwidth()
+        timestamp = int(time.time() * 1000)
+        # response: iDX, iDY, BBP, Type, seqnumber, timestamp
+        self._send_response(func, str(w), str(h), "2", "0", str(actual_seq), str(timestamp))
+        self.sim.send_data(img_data)
+
+    def _handle_imgdataget(self, func: str, args: list):
+        """
+        Handle ImgDataGet(destination, type[, direction]).
+
+        For type=Data: pushes raw uint16 image on data port.
+        For type=ScalingTable: pushes float32 scaling-table bytes on data port.
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        if len(args) < 2:
+            self._send_response(func, error_code=6)
+            return
+
+        data_type = args[1].lower()
+        if data_type == "data":
+            h = self.sim._get_vwidth()
+            w = self.sim._get_hwidth()
+            img_data = self.sim.get_current_image()
+            self._send_response(func, str(w), str(h), "2", "0")
+            self.sim.send_data(img_data)
+        elif data_type == "scalingtable":
+            direction = args[2].lower() if len(args) > 2 else "vertical"
+            if direction in ("v", "ver", "vertical", "y"):
+                table_data = self.sim._generate_scaling_table_time()
+            else:  # horizontal
+                # Typically, horizontal scaling table is not used, so just return pixel numbers
+                w = self.sim._get_hwidth()
+                table_data = numpy.arange(w, dtype=numpy.float32)
+
+            self._send_response(func, str(len(table_data)), "0")
+            self.sim.send_data(table_data.tobytes())
+        else:
+            self._send_response(func, error_code=2)
+
+    # ── main-param stubs ──────────────────────────────────────────────────
+
+    def _handle_mainparamget(self, func: str, args: list):
+        """
+        Handle MainParamGet(parameter).
+
+        :param func: original function name
+        :param args: parsed argument list
+        """
+        param = args[0] if args else ""
+        pl = param.lower().replace(" ", "")
+        sim = self.sim
+
+        if pl == "mcpgain":
+            self._send_response(func, str(sim._su_mcp_gain))
+        elif pl == "mode":
+            self._send_response(func, sim._su_mode)
+        elif pl == "timerange":
+            self._send_response(func, sim._su_time_range)
+        elif pl == "imagesize":
+            self._send_response(func, "%dx%d" % (sim._get_hwidth(), sim._get_vwidth()))
+        elif pl == "message":
+            self._send_response(func, "")
+        elif pl == "temperature":
+            self._send_response(func, "25.0")
+        elif pl == "shutter":
+            val = sim._su_shutter if sim.streak_unit == "singlesweep" else "Open"
+            self._send_response(func, val)
+        else:
+            self._send_response(func, "0")
