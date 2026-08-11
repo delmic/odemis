@@ -531,6 +531,29 @@ def _checkCancelled(future: "model.ProgressiveFuture") -> None:
             raise CancelledError()
 
 
+def _ensure_horizontal_bin_1(detector: model.Detector) -> Dict[model.VigilantAttribute, Any]:
+    """
+    Ensure that the detector is set to horizontal binning of 1, while keeping the same intensity
+    level per pixel (by increasing the exposure time proportionally).
+
+    :param detector: CCD to adjust. If binning is not supported, nothing is done.
+    :return: dict of attributes to restore to the previous value
+    """
+    restore_attrs = {}
+    if not model.hasVA(detector, "binning") or detector.binning.value[0] == 1:
+        return restore_attrs
+
+    restore_attrs[detector.binning] = detector.binning.value
+    bin_x = detector.binning.value[0]
+    detector.binning.value = (1, detector.binning.value[1])
+
+    # increase exposure time to maintain same intensity per pixel
+    exp_t = detector.exposureTime.value
+    restore_attrs[detector.exposureTime] = exp_t
+    detector.exposureTime.value = detector.exposureTime.clip(exp_t * bin_x)
+
+    return restore_attrs
+
 def _total_alignment_time(n_gratings: int,
                           n_detectors: int) -> float:
     """
@@ -623,10 +646,10 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
     :return: dict mapping (grating, detector) to alignment success boolean
     :raises CancelledError: if the operation is cancelled
     """
-
     results: Dict[tuple, bool] = {}
     original_pos = {k: v for k, v in spectrograph.position.value.items()
                     if k in ("wavelength", "grating")}
+    restore_attrs : Dict[model.VigilantAttribute, Any] = {}  # VAs -> value to restore
 
     gratings = sorted(list(spectrograph.axes["grating"].choices.keys()))
     logging.info(f"Available gratings: {list(spectrograph.axes['grating'].choices.keys())}")
@@ -671,6 +694,10 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
 
         logging.info("Setting optical path to alignment mode: %s",align_mode)
         future._subfuture = opm.setPath(align_mode, detector=first_detector)
+        # in the meantime, adjust the horizontal binning to the minimum, to get the best results
+        for d in detectors:
+            restore_attrs.update(_ensure_horizontal_bin_1(d))
+
         future._subfuture.result()
 
         _checkCancelled(future)
@@ -702,10 +729,10 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
 
             logging.info("Finished alignment | Detector: %s | Grating: %s", d.name, g0)
 
+        # align remaining gratings using the first detector
         if selector:
             selector.moveAbsSync({selector_axes: detector_to_selector[first_detector]})
 
-        # align remaining gratings using the first detector
         for g in gratings[1:]:
             _checkCancelled(future)
             logging.info("Switching to grating: %s", g)
@@ -734,11 +761,17 @@ def _do_auto_align_grating_detector_offsets(future: model.ProgressiveFuture,
         raise
 
     finally:
-        logging.info("Turning off brightlight")
+        logging.info("Restoring previous state")
         try:
             bl.power.value = bl.power.range[0]
         except Exception:
             logging.exception("Failed to turn off the light during alignment cleanup")
+
+        for va, value in restore_attrs.items():
+            try:
+                va.value = value
+            except Exception:
+                logging.exception("Failed to restore previous detector setting to %s", value)
 
         try:
             spectrograph.moveAbsSync(original_pos)
