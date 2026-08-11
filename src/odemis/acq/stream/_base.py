@@ -166,11 +166,6 @@ class Stream(object):
         else:
             self.raw = raw
 
-        # initialize the projected tiles cache
-        self._projectedTilesCache = {}
-        # initialize the raw tiles cache
-        self._rawTilesCache = {}
-
         # TODO: should better be based on a BufferedDataFlow: subscribing starts
         # acquisition and sends (raw) data to whoever is interested. .get()
         # returns the previous or next image acquired.
