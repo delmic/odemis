@@ -269,6 +269,7 @@ class SparcAcquiController(object):
             return
 
         logging.warning(f"Interlock status changed from {not value} -> {value}")
+        self._interlockTriggered = value
 
         if value:
             # The laser is connected electronically to the interlock, so nothing to do in software.
@@ -290,14 +291,22 @@ class SparcAcquiController(object):
                 elif self._pre_interlock_blanker is None:  # Automatic mode (= blanker active when not acquiring)
                     message += " E-beam blanker set back to automatic mode."
 
-        popup.show_message(wx.GetApp().main_frame,
-                           title="Laser safety",
-                           message=message,
-                           timeout=10.0,
-                           level=logging.WARNING)
-
-        self._interlockTriggered = value
+        # This function is not running in the main GUI thread.
+        # So all GUI functions called bellow must be protected.
+        self.show_popup_message_later(title="Laser safety", message=message,
+                                      timeout=10.0, level=logging.WARNING)
         self.update_acquisition_time()
+
+    @call_in_wx_main
+    def show_popup_message_later(self, title: str, **kwargs) -> None:
+        """
+        Show a popup message, protected to run in the main GUI thread.
+        :param title: The title of the message
+        :param kwargs: Additional keyword arguments to pass to the popup.show_message function
+        """
+        popup.show_message(wx.GetApp().main_frame,
+                           title=title,
+                           **kwargs)
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
