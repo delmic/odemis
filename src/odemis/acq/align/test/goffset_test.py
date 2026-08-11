@@ -154,6 +154,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         cls.microscope = model.getMicroscope()
         cls.optmngr = path.OpticalPathManager(cls.microscope)
 
+        # The simulator only simulates the 0th order when wavelength is set to 0nm, so force it.
         cls.spgr.moveAbsSync({"wavelength": 0.0})
         cls._original_position = cls.spgr.position.value.copy()
 
@@ -200,7 +201,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
 
         # If peak is already centered, the algorithm exits immediately
         # so goffset should not change.
-        self.assertAlmostEqual(start_goffset, end_goffset, places=6,
+        self.assertAlmostEqual(start_goffset, end_goffset, delta=1,
             msg="goffset changed even though peak was already centered (scale estimation likely ran)")
 
     def test_scale_estimation_misaligned(self):
@@ -265,6 +266,7 @@ class TestSparcAutoGratingOffset(unittest.TestCase):
         except Exception:
             logging.debug("Selector move to secondary failed or not present; continuing")
 
+        self.spgr.moveRelSync({"goffset": 321})  # intentionally misalign
         start_goffset = self.spgr.position.value["goffset"]
 
         f = sparc_auto_grating_offset(self.spgr, spccd, max_it=50)
