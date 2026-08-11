@@ -28,7 +28,7 @@ import wx
 
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 
 
 class TabController(object):
@@ -40,7 +40,6 @@ class TabController(object):
         :param: main_frame: odemis.gui.main_xrc.xrcfr_main
         :param: main_data: (MainGUIData) the main GUI data.
         :param: default_tab: (Tab) the default_tab to be shown.
-        :param: use_main_data_tab: (bool) flag to use the MainGUIData tab VAEnumerated.
         """
         self.main_frame = main_frame
         self.main_data = main_data
@@ -148,6 +147,8 @@ class TabBarController(TabController):
         tab_list, default_tab = self._create_needed_tabs(tab_defs, main_frame, main_data)
         super().__init__(tab_list, main_data.tab, main_frame, main_data, default_tab=default_tab)
 
+        main_frame.Bind(wx.EVT_SIZE, self._on_resize)
+
     def _create_needed_tabs(self, tab_defs, main_frame, main_data):
         """ Create the tabs needed by the current microscope. The tab's parent is the main_frame.
 
@@ -192,3 +193,31 @@ class TabBarController(TabController):
             main_frame.pnl_tabbuttons.Hide()
 
         return tabs, default_tab
+
+    def _on_resize(self, event: wx.Event) -> None:
+        """ This method is called when the main frame is resized """
+        # Force resize of every tab, not just the one shown, to ensure they are all ready to be shown.
+        # Otherwise this happens only at the moment a tab is shown. This is especially an issue at
+        # startup, as they default to a very tiny size (eg, 150x0), which prevents most of the drawing
+        # from happening properly. It also gives a smoother experience when switching tabs.
+        current_tab = self._tab.value
+        current_size = current_tab.panel.Size
+
+        # At init, the first few resize events have unrealistic tiny values.
+        if current_size.width > 10 and current_size.height > 10:
+            self._refit_all_tabs(current_size)
+
+        event.Skip()
+
+    @wxlimit_invocation(0.5)
+    def _refit_all_tabs(self, size: wx.Size) -> None:
+        """ Resize all tabs to the size of the current tab. This is called when the main frame is resized. """
+        logging.debug("Updating all tabs to size %s", size)
+        current_tab = self._tab.value
+        for tab in self._tab.choices:
+            if tab == current_tab:
+                continue
+            if tab.panel.Size == size:
+                continue
+            tab.panel.Size = size
+            tab.panel.Layout()
