@@ -141,6 +141,16 @@ class MenuController(object):
             menu_dev = main_frame.menu_item_edit_meteor_calibration.GetMenu()
             menu_dev.Delete(main_frame.menu_item_edit_meteor_calibration)
 
+        # /Help/Share Data with Delmic
+        if main_data.role in ["meteor", "mimas"]:
+            self.consent_item = main_frame.menu_item_data_sharing
+            self.consent_item.Check(self._data_collector.get_consent() is True)
+            main_frame.Bind(wx.EVT_MENU, self._on_toggle_data_sharing, id=self.consent_item.GetId())
+        else:
+            menu = main_frame.menu_item_data_sharing.GetMenu()
+            menu.Remove(main_frame.menu_item_data_sharing)
+            main_frame.menu_item_data_sharing.Destroy()
+
         # TODO: make it work on Windows too
         # /Help/Report a problem...
         if sys.platform.startswith('win32'):
@@ -158,9 +168,6 @@ class MenuController(object):
 
         # /Help/About
         main_frame.Bind(wx.EVT_MENU, self._on_about, id=main_frame.menu_item_about.GetId())
-        self._consent_menu_item = self._append_data_sharing_menu_item(main_frame)
-        if self._consent_menu_item is not None:
-            main_frame.Bind(wx.EVT_MENU, self._on_toggle_data_sharing, id=self._consent_menu_item.GetId())
 
         # add a toggle for correlation tab in viewer mode
         if main_data.is_viewer:
@@ -170,20 +177,6 @@ class MenuController(object):
             menu = main_frame.menu_item_show_correlation.GetMenu()
             menu.Remove(main_frame.menu_item_show_correlation)
             main_frame.menu_item_show_correlation.Destroy()
-
-    def _append_data_sharing_menu_item(self, main_frame: wx.Frame) -> wx.MenuItem:
-        """
-        Append and initialize Help menu checkbox for data sharing consent.
-        :param main_frame: The main application frame.
-        :return: The created menu item, or None if the Help menu is not available.
-        """
-        help_menu = main_frame.menu_item_about.GetMenu()
-        if help_menu is None:
-            return None
-        help_menu.AppendSeparator()
-        item = help_menu.AppendCheckItem(wx.ID_ANY, "Share data with Delmic")
-        item.Check(self._data_collector.get_consent() is True)
-        return item
 
     @call_in_wx_main
     def _on_toggle_data_sharing(self, evt):
@@ -216,8 +209,7 @@ class MenuController(object):
             elif response == wx.ID_CANCEL:
                 self._data_collector.set_temporary_consent(days=1)
             # Sync the Help menu checkbox to reflect the persisted choice.
-            if self._consent_menu_item is not None:
-                self._consent_menu_item.Check(self._data_collector.get_consent() is True)
+            self.consent_item.Check(self._data_collector.get_consent() is True)
         except Exception:
             logging.exception("Failed to run data-collection consent prompt.")
 

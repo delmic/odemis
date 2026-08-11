@@ -197,6 +197,13 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_data_sharing">
+          <label>Share Data with Delmic</label>
+          <checkable>1</checkable>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_update">
           <label>Check for update</label>
