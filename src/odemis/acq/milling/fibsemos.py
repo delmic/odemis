@@ -25,9 +25,12 @@ import math
 import os
 import threading
 import time
+import json
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 from typing import List, Optional, Union
+
+from packaging.version import InvalidVersion, Version
 
 from odemis import model
 from odemis.acq.milling.patterns import (
@@ -47,6 +50,7 @@ from odemis.util import executeAsyncTask
 
 # Check if fibsemOS is available
 try:
+    import fibsem
     from fibsem.microscopes.odemis_microscope import (
         OdemisThermoMicroscope,
         OdemisTescanMicroscope,
@@ -155,6 +159,60 @@ def _crop_to_reduced_area(ref_img: 'FibsemImage', rect: 'FibsemRectangle') -> 'F
     # crop along the last two axes, DataArray slicing behaves like numpy
     ref_img.data = ref_img.data[..., y0:y1, x0:x1]
     return ref_img
+
+
+def _populate_tescan_metadata_defaults(extra_settings: dict) -> dict:
+    """Normalize recorded Tescan metadata for fibsemOS image conversion.
+
+    :param extra_settings: The metadata dictionary from SettingsObserver
+    :return: The same dictionary with optional conversion fields populated.
+    :raises ValueError: Required metadata is missing or invalid.
+    """
+    if not isinstance(extra_settings, dict):
+        raise ValueError("Reference image metadata has invalid extra settings.")
+
+    for beam_key in ("Electron-Beam", "Ion-Beam"):
+        beam_md = extra_settings.get(beam_key)
+        if not isinstance(beam_md, dict):
+            raise ValueError(f"Reference image metadata is missing {beam_key}.")
+        for field in ("dwellTime", "horizontalFoV", "accelVoltage", "resolution", "rotation"):
+            entry = beam_md.get(field)
+            if not entry or entry[0] is None:
+                raise ValueError(f"Reference image metadata is missing {beam_key}.{field}.")
+            if field in ("dwellTime", "horizontalFoV") and entry[0] <= 0:
+                raise ValueError(f"Reference image metadata has invalid {beam_key}.{field}: {entry[0]!r}.")
+
+        beam_md.setdefault("shift", [[0.0, 0.0]])
+        beam_md.setdefault("stigmator", [[0.0, 0.0]])
+        if "beamCurrent" not in beam_md:
+            # Tescan SEM probeCurrent is calculated; FIB probeCurrent is measured.
+            if beam_key == "Electron-Beam" and "probeCurrent" in beam_md:
+                beam_md["beamCurrent"] = beam_md["probeCurrent"].copy()
+            else:
+                beam_md["beamCurrent"] = [None]
+
+    for focus_key in ("Electron-Focus", "Ion-Focus"):
+        focus_md = extra_settings.setdefault(focus_key, {})
+        if not focus_md.get("position"):
+            focus_md["position"] = [{"z": None}]
+        else:
+            focus_md["position"][0].setdefault("z", None)
+
+    for detector_key in ("Electron-Detector", "Ion-Detector"):
+        detector_md = extra_settings.setdefault(detector_key, {})
+        for field in ("type", "mode", "brightness", "contrast"):
+            detector_md.setdefault(field, [None])
+
+    stage_md = extra_settings.get("Stage")
+    position = stage_md.get("position") if isinstance(stage_md, dict) else None
+    if not position or not isinstance(position[0], dict):
+        raise ValueError("Reference image metadata is missing Stage.position.")
+    for axis in ("x", "y", "z", "rx", "rz"):
+        if position[0].get(axis) is None:
+            raise ValueError(f"Reference image metadata is missing Stage.position.{axis}.")
+
+    return extra_settings
+
 
 
 def create_fibsemos_tfs_microscope() -> 'OdemisThermoMicroscope':
@@ -429,6 +487,15 @@ class FibsemOSMillingTaskManager:
 
     def __init__(self):
         """Initialize the manager and establish the fibsemOS microscope connection."""
+        # These versions also accept a reference-image argument.
+        try:
+            version = Version(fibsem.__version__)
+        except InvalidVersion:
+            logging.debug("Unrecognized fibsemOS version %r.", fibsem.__version__)
+        else:
+            if version < Version("0.5.0.dev0"):
+                logging.warning("fibsemOS %s: passing reference images via stage metadata.", fibsem.__version__)
+
         # create microscope connection
         self.microscope = create_fibsemos_microscope()
         self._lock = threading.Lock()
@@ -478,13 +545,24 @@ class FibsemOSMillingTaskManager:
                         raise CancelledError()
 
                 logging.info(f"Running milling stage: {stage.name}")
-                ref_img = from_odemis_image(_get_reference_image(self.feature))
+                odemis_ref_image = _get_reference_image(self.feature)
+                try:
+                    extra_settings = odemis_ref_image.metadata[model.MD_EXTRA_SETTINGS]
+                except KeyError:
+                    raise ValueError("Reference image metadata is missing extra settings.") from None
+                if isinstance(extra_settings, str):
+                    extra_settings = json.loads(extra_settings)
+                extra_settings = _populate_tescan_metadata_defaults(extra_settings)
+                odemis_ref_image.metadata[model.MD_EXTRA_SETTINGS] = extra_settings
+                ref_img = from_odemis_image(odemis_ref_image)
                 ref_img.metadata.image_settings.path = self.path
                 ref_img.metadata.image_settings.reduced_area = stage.alignment.rect
 
                 ref_img = _crop_to_reduced_area(ref_img, stage.alignment.rect)
+                # Both supported APIs read this field when no reference image argument is passed.
+                stage.reference_image = ref_img
 
-                mill_stages(self.microscope, [stage], ref_img)
+                mill_stages(self.microscope, [stage])
 
         finally:
             with self._lock:

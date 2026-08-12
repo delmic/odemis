@@ -19,9 +19,13 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import json
 import logging
 import math
 import unittest
+from concurrent import futures
+from copy import deepcopy
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy
@@ -456,6 +460,221 @@ class TestCompositeSpotSizeCorrection(unittest.TestCase):
         self.ruler.spot_size_correction.value = 16e-9
         with self.assertRaises(ValueError):
             convert_milling_tasks_to_milling_stages([self.task])
+
+
+def create_tescan_metadata() -> dict:
+    """Return recorded Tescan settings without unsupported optional fields."""
+    beam = {
+        "dwellTime": [1e-6, "s"],
+        "horizontalFoV": [100e-6, "m"],
+        "accelVoltage": [30e3, "V"],
+        "resolution": [[8, 6], ""],
+        "rotation": [0.0, "rad"],
+    }
+    metadata = {
+        "Electron-Beam": deepcopy(beam),
+        "Ion-Beam": deepcopy(beam),
+        "Electron-Focus": {"position": [{"z": 5e-3}, "m"]},
+        "Electron-Detector": {"type": ["SE", ""]},
+        "Ion-Detector": {"type": ["SE", ""]},
+        "Stage": {"position": [{"x": 0.0, "y": 0.0, "z": 30e-3, "rx": 0.0, "rz": 0.0}, "m"]},
+    }
+    metadata["Electron-Beam"]["probeCurrent"] = [100e-12, "A"]
+    return metadata
+
+
+class TestTescanMetadataDefaults(unittest.TestCase):
+    """Check metadata normalization without acquiring microscope settings."""
+
+    def test_current_values(self):
+        metadata = create_tescan_metadata()
+        # A measured FIB current must not be copied into the setpoint field.
+        metadata["Ion-Beam"]["probeCurrent"] = [90e-12, "A"]
+        normalized = fibsemos._populate_tescan_metadata_defaults(metadata)
+        self.assertEqual(normalized["Electron-Beam"]["beamCurrent"], [100e-12, "A"])
+        self.assertIsNot(normalized["Electron-Beam"]["beamCurrent"], metadata["Electron-Beam"]["probeCurrent"])
+        self.assertIsNone(normalized["Ion-Beam"]["beamCurrent"][0])
+
+    def test_preserve_recorded_values(self):
+        metadata = create_tescan_metadata()
+        for beam_key in ("Electron-Beam", "Ion-Beam"):
+            metadata[beam_key]["beamCurrent"] = [150e-12, "A"]
+            metadata[beam_key]["shift"] = [[1e-6, 2e-6], "m"]
+            metadata[beam_key]["stigmator"] = [[0.1, 0.2], ""]
+        metadata["Ion-Focus"] = {"position": [{"z": 10e-3}, "m"]}
+        metadata["Ion-Detector"]["brightness"] = [0.7, ""]
+        metadata["Ion-Detector"]["contrast"] = [0.0, ""]
+        original = deepcopy(metadata)
+        normalized = fibsemos._populate_tescan_metadata_defaults(metadata)
+        self.assertIs(normalized, metadata)
+        for component, settings in original.items():
+            for field, entry in settings.items():
+                with self.subTest(component=component, field=field):
+                    self.assertEqual(normalized[component][field], entry)
+
+    def test_optional_defaults(self):
+        normalized = fibsemos._populate_tescan_metadata_defaults(create_tescan_metadata())
+        self.assertIsNone(normalized["Ion-Focus"]["position"][0]["z"])
+        self.assertIsNone(normalized["Ion-Detector"]["mode"][0])
+        self.assertIsNone(normalized["Ion-Detector"]["brightness"][0])
+        self.assertEqual(normalized["Ion-Beam"]["shift"][0], [0.0, 0.0])
+
+    def test_missing_beam_settings(self):
+        for beam_key in ("Electron-Beam", "Ion-Beam"):
+            for field in ("dwellTime", "horizontalFoV", "accelVoltage", "resolution", "rotation"):
+                for entry in (None, [], [None]):
+                    with self.subTest(beam=beam_key, field=field, entry=entry):
+                        metadata = create_tescan_metadata()
+                        metadata[beam_key][field] = entry
+                        with self.assertRaisesRegex(ValueError, rf"{beam_key}\.{field}"):
+                            fibsemos._populate_tescan_metadata_defaults(metadata)
+
+    def test_invalid_acquisition_settings(self):
+        for field in ("dwellTime", "horizontalFoV"):
+            for value in (0.0, -1.0):
+                with self.subTest(field=field, value=value):
+                    metadata = create_tescan_metadata()
+                    metadata["Ion-Beam"][field][0] = value
+                    with self.assertRaisesRegex(ValueError, rf"invalid Ion-Beam\.{field}"):
+                        fibsemos._populate_tescan_metadata_defaults(metadata)
+
+    def test_missing_stage_position(self):
+        for entry in (None, [], [{}]):
+            with self.subTest(entry=entry):
+                metadata = create_tescan_metadata()
+                metadata["Stage"]["position"] = entry
+                with self.assertRaisesRegex(ValueError, r"Stage\.position"):
+                    fibsemos._populate_tescan_metadata_defaults(metadata)
+        for axis in ("x", "y", "z", "rx", "rz"):
+            with self.subTest(axis=axis):
+                metadata = create_tescan_metadata()
+                del metadata["Stage"]["position"][0][axis]
+                with self.assertRaisesRegex(ValueError, rf"Stage\.position\.{axis}"):
+                    fibsemos._populate_tescan_metadata_defaults(metadata)
+
+    @unittest.skipUnless(fibsemos.FIBSEMOS_INSTALLED, "fibsemOS is not available")
+    def test_image_conversion(self):
+        """Convert normalized metadata through the installed fibsemOS adapter."""
+        metadata = fibsemos._populate_tescan_metadata_defaults(create_tescan_metadata())
+        image = model.DataArray(numpy.zeros((6, 8)), metadata={
+            model.MD_EXTRA_SETTINGS: metadata,
+            model.MD_PIXEL_SIZE: (12.5e-6, 12.5e-6),
+            model.MD_DESCRIPTION: "FIB",
+        })
+        converted = fibsemos.from_odemis_image(image)
+        self.assertIsNone(converted.metadata.microscope_state.ion_beam.beam_current)
+        self.assertEqual(converted.metadata.microscope_state.electron_beam.beam_current, 100e-12)
+        self.assertEqual(converted.metadata.image_settings.dwell_time, 1e-6)
+        self.assertEqual(converted.metadata.image_settings.hfw, 100e-6)
+
+
+class TestMillingAPICompatibility(unittest.TestCase):
+    """Check reference image handling with both fibsemOS APIs without hardware."""
+
+    def setUp(self):
+        self.microscope = mock.Mock()
+        self.rect = SimpleNamespace(left=0.25, top=0.25, width=0.5, height=0.5)
+        self.stage = SimpleNamespace(name="Test stage", alignment=SimpleNamespace(rect=self.rect))
+        self.feature = CryoFeature(name="f1", stage_position={}, fm_focus_position={})
+        self.feature.reference_image = model.DataArray(numpy.arange(48).reshape(6, 8), metadata={
+            model.MD_EXTRA_SETTINGS: create_tescan_metadata(),
+        })
+        self.ref_image = SimpleNamespace(data=self.feature.reference_image.copy(),
+                                        metadata=SimpleNamespace(image_settings=SimpleNamespace()))
+
+    def _legacy_mill_stages(self, microscope: object, stages: list, reference_image: object = None,
+                            parent_ui: object = None) -> None:
+        """Model the reference-image argument's fallback to stage metadata."""
+        self.assertIsNone(reference_image)
+        self.assertIsNone(parent_ui)
+        self.assertIs(stages[0].reference_image, self.ref_image)
+
+    def _new_mill_stages(self, microscope: object, stages: list, parent_ui: object = None) -> None:
+        """Model the API that reads reference images from stage metadata."""
+        self.assertIsNone(parent_ui)
+        self.assertIs(stages[0].reference_image, self.ref_image)
+
+    def _run_with_api(self, milling_api: mock.Mock, version: str = "0.5.0.dev0") -> None:
+        """Run the manager synchronously with a mocked fibsemOS API."""
+        self.ref_image.data = self.feature.reference_image.copy()
+        with mock.patch.object(fibsemos, "mill_stages", milling_api, create=True), \
+             mock.patch.object(fibsemos, "fibsem", SimpleNamespace(__version__=version), create=True), \
+             mock.patch.object(fibsemos, "create_fibsemos_microscope", return_value=self.microscope), \
+             mock.patch.object(fibsemos, "from_odemis_image", return_value=self.ref_image, create=True):
+            self.manager = fibsemos.FibsemOSMillingTaskManager()
+            self.manager._future = futures.Future()
+            self.manager._active = True
+            self.manager.milling_stages = [self.stage]
+            self.manager.feature = self.feature
+            self.manager.path = "/tmp/milling"
+            self.manager._run()
+
+    def _check_reference_image(self) -> None:
+        """Check that the API receives the cropped image and alignment metadata."""
+        self.assertIs(self.stage.reference_image, self.ref_image)
+        numpy.testing.assert_array_equal(self.ref_image.data, self.feature.reference_image[1:4, 2:6])
+        self.assertEqual(self.ref_image.metadata.image_settings.path, "/tmp/milling")
+        self.assertIs(self.ref_image.metadata.image_settings.reduced_area, self.rect)
+        self.assertEqual(self.feature.reference_image.shape, (6, 8))
+        self.assertFalse(self.manager._active)
+
+    def test_legacy_api(self):
+        milling_api = mock.create_autospec(self._legacy_mill_stages, side_effect=self._legacy_mill_stages)
+        with self.assertLogs(level=logging.WARNING) as logs:
+            self._run_with_api(milling_api, version="0.4.1a1")
+
+        self.assertIn("fibsemOS 0.4.1a1: passing reference images via stage metadata.", logs.output[0])
+        milling_api.assert_called_once_with(self.microscope, [self.stage])
+        self._check_reference_image()
+
+    def test_new_api(self):
+        for version in ("0.5.0.dev0", "0.5.0a0", "0.5.0", "0.5.2.dev0", "0.10.0"):
+            with self.subTest(version=version):
+                milling_api = mock.create_autospec(self._new_mill_stages, side_effect=self._new_mill_stages)
+                with mock.patch.object(fibsemos.logging, "warning") as warning:
+                    self._run_with_api(milling_api, version=version)
+
+                warning.assert_not_called()
+                milling_api.assert_called_once_with(self.microscope, [self.stage])
+                self._check_reference_image()
+
+    def test_unknown_version(self):
+        """Unknown version metadata must not prevent milling through stage metadata."""
+        milling_api = mock.create_autospec(self._new_mill_stages, side_effect=self._new_mill_stages)
+        with mock.patch.object(fibsemos.logging, "warning") as warning:
+            self._run_with_api(milling_api, version="unknown")
+        warning.assert_not_called()
+        milling_api.assert_called_once_with(self.microscope, [self.stage])
+        self._check_reference_image()
+
+    def test_serialized_metadata(self):
+        """Normalize settings loaded from an image with JSON metadata."""
+        self.feature.reference_image.metadata[model.MD_EXTRA_SETTINGS] = json.dumps(create_tescan_metadata())
+        milling_api = mock.create_autospec(self._new_mill_stages, side_effect=self._new_mill_stages)
+        self._run_with_api(milling_api)
+        normalized = self.feature.reference_image.metadata[model.MD_EXTRA_SETTINGS]
+        self.assertEqual(normalized["Electron-Beam"]["beamCurrent"], [100e-12, "A"])
+        self.assertIsNone(normalized["Ion-Beam"]["beamCurrent"][0])
+        self._check_reference_image()
+
+    def test_missing_metadata_prevents_milling(self):
+        del self.feature.reference_image.metadata[model.MD_EXTRA_SETTINGS]
+        milling_api = mock.create_autospec(self._new_mill_stages)
+        with self.assertRaisesRegex(ValueError, "missing extra settings"):
+            self._run_with_api(milling_api)
+        milling_api.assert_not_called()
+        self.assertFalse(self.manager._active)
+
+    def test_milling_error_is_not_retried(self):
+        """A TypeError inside milling must propagate without a second milling attempt."""
+        for api in (self._legacy_mill_stages, self._new_mill_stages):
+            with self.subTest(api=api.__name__):
+                milling_api = mock.create_autospec(api)
+                milling_api.side_effect = TypeError("Milling failed")
+                with self.assertRaisesRegex(TypeError, "Milling failed"):
+                    self._run_with_api(milling_api)
+                self.assertEqual(milling_api.call_count, 1)
+                self.assertFalse(self.manager._active)
 
 
 class TestResolveFeatureReferenceImage(unittest.TestCase):
