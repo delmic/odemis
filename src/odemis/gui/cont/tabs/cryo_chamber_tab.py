@@ -131,17 +131,18 @@ class CryoChamberTab(Tab):
             if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
                 raise ValueError(f"Focuser {fmd_key} metadata ({fmd_value}) does not have the required axes {required_axis}.")
 
-        # All the meteor buttons
-        self.position_btns = {
-            Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
-            Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
-            Posture.MILLING: self.panel.btn_switch_milling,
-            Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
-            Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-       }
-        # Remove the ones which are not supported on this system
-        self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
-                              if posture in main_data.posture_manager.postures}
+            # All the meteor buttons
+            self.position_btns = {
+                Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
+                Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
+                Posture.MILLING: self.panel.btn_switch_milling,
+                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
+                Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                Posture.TRENCHING: self.panel.btn_switch_trenching,
+            }
+            # Remove the ones which are not supported on this system
+            self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
+                                  if posture in main_data.posture_manager.postures}
 
         # Grid buttons (for switching between grids)
         # For now, hard-coded to 2 grids. Could be extended to be more flexible, once some METEOR
@@ -764,8 +765,23 @@ class CryoChamberTab(Tab):
         end_pos = self.posture_manager.get_target_position(self._target_posture)
 
         if (
-            self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
-            and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+            self._target_posture in [
+                Posture.FIB_IMAGING,
+                Posture.FIB_VIEW_FM,
+                Posture.FM_IMAGING,
+                Posture.MILLING,
+                Posture.SEM_IMAGING,
+                Posture.TRENCHING,
+            ]
+            and current_posture in [
+                Posture.FIB_IMAGING,
+                Posture.FIB_VIEW_FM,
+                Posture.FM_IMAGING,
+                Posture.LOADING,
+                Posture.MILLING,
+                Posture.SEM_IMAGING,
+                Posture.TRENCHING,
+            ]
             and not self._display_meteor_pos_warning_msg(end_pos)
         ):
             return None
