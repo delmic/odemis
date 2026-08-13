@@ -40,6 +40,7 @@ import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.acq.feature import CryoFeature, load_feature_streams_from_disk
+from odemis.acq.move import Posture
 from odemis.acq.stream import StaticSEMStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.gui.conf.data import get_local_vas
@@ -2378,7 +2379,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
                 pos = s.getRawMetadata()[0].get(model.MD_STAGE_POSITION_RAW)
                 # Add milling angle suffix to stream's name if it was acquired at the milling angle.
                 if pos and "rx" in pos and pm.at_fib_view_fm_posture(pos):
-                    stream_milling_angle = pm.calculate_milling_angle(pos["rx"], pm.fm_column_tilt)
+                    stream_milling_angle = pm.calculate_milling_angle(pos["rx"], Posture.FIB_VIEW_FM)
                     s.name.value = f"{s.name.value} at {math.degrees(stream_milling_angle):0.0f}°"
                 self._tab_data_model.streams.value.append(s)
 

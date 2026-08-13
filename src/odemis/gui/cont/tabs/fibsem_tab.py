@@ -55,6 +55,8 @@ from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 
 
+FIBSEM_POSTURES = [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.TRENCHING]
+
 class FibsemTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -179,7 +181,7 @@ class FibsemTab(Tab):
 
         # fib viewport double click event for vertical movements
         self.pm = self.tab_data_model.main.posture_manager
-        panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
+        panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click)
 
         # TODO: replace with current_posture?
         self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
@@ -187,14 +189,24 @@ class FibsemTab(Tab):
 
         self._posture_switch_future = model.InstantaneousFuture()
 
-        rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["mill_angle"]
-        self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
+        milling_angle_degrees = math.degrees(self.pm.milling_angle.value)
+        self.panel.ctrl_milling_angle.SetValue(milling_angle_degrees)
         # Tilt field is in degrees, so convert from radians to integer degrees to prevent a lot of decimals from showing
         self.panel.ctrl_milling_angle.SetValueRange(*numpy.round(numpy.rad2deg(MILLING_RANGE)).astype(int))
         self.panel.ctrl_milling_angle.Bind(wx.EVT_COMMAND_ENTER, self._update_milling_angle)
-        self._update_milling_angle(None)
+        self.pm.milling_angle.subscribe(self._update_angle_controls)
         self.panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._move_to_milling_posture)
         self.panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._move_to_sem_posture)
+
+        if Posture.TRENCHING in self.pm.postures:
+            self.panel.ctrl_trenching_angle.Enable(False)  # To reflect the read-only state
+            self.pm.trenching_angle.subscribe(self._update_angle_controls)
+            self.panel.btn_switch_trenching.Bind(wx.EVT_BUTTON, self._move_to_trenching_posture)
+        else:
+            self.panel.btn_switch_trenching.Show(False)
+            self.panel.ctrl_trenching_angle.Show(False)
+
+        self._update_angle_controls()
         self.tab_data_model.streams.subscribe(self._remove_deleted_acquired_streams)
 
     @call_in_wx_main
@@ -366,9 +378,10 @@ class FibsemTab(Tab):
         guiutil.enable_tab_on_stage_position(
             tab=self,
             posture_manager=self.pm,
-            target=[Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING],
-            tooltip="FIBSEM tab is only available at SEM position"
+            target=FIBSEM_POSTURES,
+            tooltip=f"FIBSEM tab is only available at {', '.join(FIBSEM_POSTURES)} postures"
         )
+        self._update_angle_controls()
 
         # update stage pos label
         rx = math.degrees(pos["rx"])
@@ -396,9 +409,11 @@ class FibsemTab(Tab):
 
         # update the stage position buttons
         if self._posture_switch_future.done():
-            self.panel.btn_switch_sem_imaging.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
-            self.panel.btn_switch_milling.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
-            self.panel.ctrl_milling_angle.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
+            self.panel.btn_switch_sem_imaging.Enable(posture in FIBSEM_POSTURES)
+            self.panel.btn_switch_milling.Enable(posture in FIBSEM_POSTURES)
+            self.panel.btn_switch_trenching.Enable(posture in FIBSEM_POSTURES)
+            self.panel.lbl_trenching_angle.Show(posture == Posture.TRENCHING)
+            self.panel.ctrl_trenching_angle.Show(posture == Posture.TRENCHING)
 
             if posture == Posture.SEM_IMAGING:
                 self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
@@ -408,20 +423,19 @@ class FibsemTab(Tab):
                 self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_COMPLETE)
             else:
                 self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_OFF)
+            if posture == Posture.TRENCHING:
+                self.panel.btn_switch_trenching.SetValue(BTN_TOGGLE_COMPLETE)
+            else:
+                self.panel.btn_switch_trenching.SetValue(BTN_TOGGLE_OFF)
 
             self.panel.Layout()
 
     def _update_milling_angle(self, evt: wx.Event):
-        # Check if already at milling posture
-        already_at_milling = self.pm.get_current_posture() == Posture.MILLING
-
         # update the metadata of the stage
         milling_angle = math.radians(self.panel.ctrl_milling_angle.GetValue())
         self.pm.milling_angle.value = milling_angle  # this will call the setter in the move posture manager and handle md update
         md = self.pm.get_posture_orientation(Posture.MILLING)
         stage_tilt = md["rx"]
-        self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(milling_angle):.2f}° "
-                                                 f"corresponds to a stage tilt of {math.degrees(stage_tilt):.2f}°")
 
         # if the tab isn't shown, we don't want to perform a move or change features
         if evt is None:
@@ -435,20 +449,47 @@ class FibsemTab(Tab):
                 milling_position["rx"] = stage_tilt
                 feature.set_posture_position(Posture.MILLING, milling_position)
 
-        if already_at_milling:
+
+        current_posture = self.pm.get_current_posture()
+        if current_posture == Posture.MILLING:
             # Normally this happens automatically when clicking the ProgressRadioButton, but since we are now not
             # clicking it, but still want to show progress, we set the progress state of the button manually.
             self.panel.btn_switch_milling.SetValue(BTN_TOGGLE_PROGRESS)
-            self._move_to_milling_posture(None)
+            self._move_to_milling_posture()
+        elif current_posture == Posture.TRENCHING:
+            self.panel.btn_switch_trenching.SetValue(BTN_TOGGLE_PROGRESS)
+            self._move_to_trenching_posture()
 
-    def _move_to_milling_posture(self, evt: wx.Event):
+    def _update_angle_controls(self, *args):
+        """Update the visibility of the milling and trenching angle controls"""
+        current_posture = self.pm.get_current_posture()
+        angle = self.pm.milling_angle.value
+        if current_posture in [Posture.MILLING, Posture.SEM_IMAGING]:
+            rx = self.pm.calculate_stage_tilt(angle, Posture.MILLING)
+            self.panel.ctrl_milling_angle.SetToolTip(f"A milling angle of {math.degrees(angle):.2f}° "
+                                                     f"corresponds to a stage tilt of {math.degrees(rx):.2f}°")
+        elif Posture.TRENCHING in self.pm.postures and current_posture == Posture.TRENCHING:
+            self.panel.ctrl_milling_angle.SetToolTip("")
+            rx = self.pm.calculate_stage_tilt(angle, Posture.TRENCHING)
+            self.panel.ctrl_trenching_angle.SetValue(math.degrees(self.pm.trenching_angle.value))
+            self.panel.ctrl_trenching_angle.SetToolTip(f"The FIB angle with respect to the sample surface "
+                                                       f"corresponds to a stage tilt of {math.degrees(rx):.2f}°")
+
+    def _move_to_milling_posture(self, *args):
+        """Update the stage to move to the milling posture"""
         self._posture_switch_future = self.pm.switch_posture(Posture.MILLING)
 
         # Do NOT call f.result(). Instead, add a callback:
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
-    def _move_to_sem_posture(self, evt: wx.Event):
+    def _move_to_sem_posture(self, *args):
+        """Update the stage to move to the sem posture"""
         self._posture_switch_future = self.pm.switch_posture(Posture.SEM_IMAGING)
+        self._posture_switch_future.add_done_callback(self._on_move_complete)
+
+    def _move_to_trenching_posture(self, *args):
+        """Update the stage to move to the trenching posture"""
+        self._posture_switch_future = self.pm.switch_posture(Posture.TRENCHING)
         self._posture_switch_future.add_done_callback(self._on_move_complete)
 
     @call_in_wx_main
