@@ -900,10 +900,11 @@ class CryoAcquiController(object):
                                                                                     "z":sample_pos["z"]}, posture=Posture.FM_IMAGING)
                         feature.posture_positions[Posture.FM_IMAGING.value].update(new_feature_stage_bare)
                         feature.fm_focus_position.value = {"z": poi_coords[2]}
-                    # Draw milling position in FIBSEM tab around the projected POI
+                    # Update the shared feature/pattern anchor around the projected POI.
+                    # The saved milling stage position remains the reference-image center.
                     target = correlation_dict.fib_projected_pois[0]
                     rel_pos = pos_to_relative(target.coordinates.value[:2], feature.reference_image)
-                    fibsem_tab.milling_task_controller.move_milling_tasks(rel_pos)
+                    fibsem_tab.milling_task_controller.set_milling_feature_position(rel_pos)
 
     @call_in_wx_main
     def _on_filename(self, name):
