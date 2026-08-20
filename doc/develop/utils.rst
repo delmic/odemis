@@ -61,7 +61,6 @@ Development tools
 * ``generate_icons.sh``: generate windows icons from the PNG icons.
 * ``getfluodb.py``: downloads the fluorophore database (SECOM/METEOR/ENZEL) – currently the website is broken so fails to download.
 * ``groom-img.py``: recompresses all PNG files to makes them as small as possible (for XRC files).
-* ``launch_xrced.py``: Starts XRCed with the extra Odemis XRC code. XRCed doesn’t work since around 2020.
 * ``release-odemis``: Releases the current git HEAD as a new version (on github and Ubuntu).
 * ``runtests.sh``: run all the test cases, and generate a report.
 * ``pytest_log_filter.py``: used by runtest.sh to parse the log, and highlight the errors.

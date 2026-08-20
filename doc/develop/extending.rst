@@ -631,14 +631,9 @@ different files. Also, as the GUI relies on the wxPython and cairo libraries to
 display widgets, it is also recommended to have a basic knowledge of these
 libraries.
 
-To edit the interface, you could use XRCed (but it only works with wxPython3).
-Launch it by typing this (from ``~/development/odemis``)::
-
-    PYTHONPATH=./src/ ./util/launch_xrced.py [path_to_xrc_file]
-
-Alternatively, you can just regenerate the ``.py`` file from a ``.xrc``.To 
-generate ``main_xrc.py`` from all ``.xrc`` files under ``src/odemis/gui/xmlh/
-resources`` use the following command::
+When you modify GUI layout files (``.xrc``), regenerate the corresponding
+Python resource module. To rebuild ``main_xrc.py`` from all ``.xrc`` files
+under ``src/odemis/gui/xmlh/resources``, run::
 
     ./src/odemis/gui/xmlh/generate_xrc.py
 
