@@ -27,9 +27,9 @@ controller stack need to be configured. This involves
 2) setting the spc parameter for conversion between encoder counts and motor steps
 
 Example usage:
-python3 pmconfig.py --address 0 --target-address 1 --spc-config
+pmconfig --address 0 --target-address 1 --spc-config
 or
-python3 pmconfig.py --address 1 --spc-config
+pmconfig --address 1 --spc-config --port /dev/fake
 """
 import argparse
 import logging
