@@ -26,6 +26,7 @@ import os
 
 import wx
 
+from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
@@ -206,6 +207,45 @@ class CryoFeatureController(object):
 
         stream = self._tab.fib_stream # the fib stream
 
+        # Preserve the physical feature position before the milling posture is
+        # updated to the current stage position (the center of the reference
+        # image). If a reference image already exists, its relative feature
+        # offset is the authoritative position.
+        pending_feature_offset = feature.pending_milling_feature_offset
+        feature_offset = (pending_feature_offset
+                          if pending_feature_offset is not None
+                          else feature.milling_feature_offset.value)
+        snap_patterns_to_feature = (pending_feature_offset is not None
+                                    or feature.milling_feature_offset.value is None)
+        feature_sample_pos = None
+        if feature_offset is not None and feature.reference_image is not None:
+            image_pos = feature.reference_image.metadata.get(model.MD_POS)
+            if image_pos is not None:
+                feature_sample_pos = (image_pos[0] + feature_offset[0],
+                                      image_pos[1] + feature_offset[1])
+
+        if feature_sample_pos is None:
+            milling_pos = feature.get_posture_position(Posture.MILLING)
+            if milling_pos is not None:
+                sample_pos = self.pm.to_sample_stage_from_stage_position(
+                    milling_pos, posture=Posture.MILLING)
+                feature_sample_pos = (sample_pos["x"], sample_pos["y"])
+
+        if pending_feature_offset is not None and feature_sample_pos is not None:
+            # Commit the physical marker position only when Save Position is
+            # pressed. The explicit milling posture is overwritten below with
+            # the reference-image center, not this marker position.
+            current_sample_pos = self.pm.to_sample_stage_from_stage_position(
+                self.pm.stage.position.value, posture=Posture.MILLING)
+            marker_stage_pos = self.pm.from_sample_stage_to_stage_position(
+                {"x": feature_sample_pos[0],
+                 "y": feature_sample_pos[1],
+                 "z": current_sample_pos["z"]},
+                posture=Posture.MILLING)
+            updated_stage_pos = dict(feature.stage_position.value)
+            updated_stage_pos.update(marker_stage_pos)
+            feature.stage_position.value = updated_stage_pos
+
         # acquire a new fib image for reference
         from odemis.acq import acqmng
         self._acq_future = acqmng.acquire(
@@ -222,6 +262,17 @@ class CryoFeatureController(object):
                                 # milling_tasks=milling_tasks,
                                 path=os.path.join(self._tab.conf.pj_last_path, feature.name.value),
                                 reference_image=stream.raw[0])
+
+        # Store the feature within the newly acquired image and position the
+        # milling patterns around the same point. The milling posture position
+        # saved above intentionally remains the image-center stage coordinate.
+        if feature_sample_pos is not None:
+            image_pos = feature.reference_image.metadata.get(model.MD_POS)
+            if image_pos is not None:
+                relative_pos = (feature_sample_pos[0] - image_pos[0],
+                                feature_sample_pos[1] - image_pos[1])
+                self._tab.milling_task_controller.set_milling_feature_position(
+                    relative_pos, move_patterns=snap_patterns_to_feature)
 
         save_project(self._tab_data_model.main)
 

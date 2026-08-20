@@ -177,6 +177,8 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
         }
         if feature.path:
             feature_item['path'] = feature.path
+        if feature.milling_feature_offset.value is not None:
+            feature_item['milling_feature_offset'] = feature.milling_feature_offset.value
         feature_list.append(feature_item)
 
     overview_list = serialize_images(overviews, project_dir)

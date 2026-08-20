@@ -30,11 +30,13 @@ import cairo
 import odemis.gui as gui
 import odemis.gui.img as guiimg
 import wx
+from odemis import model
 from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, FEATURE_READY_TO_MILL,
                                 FEATURE_POLISHED, FEATURE_ROUGH_MILLED, TargetType, get_feature_position_at_posture)
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
+from odemis.gui.comp.popup import show_message
 from odemis.gui.model import TabName, TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
 from odemis.acq.move import Posture, MicroscopePostureManager
 
@@ -79,6 +81,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         # get the tab based on the view posture
         self.tab_name = TabName.METEOR_FIBSEM.value if self.view_posture == Posture.SEM_IMAGING else TabName.CRYOSECOM_LOCALIZATION.value
+        self._selected_feature = None
+        self._current_feature = None
+        self._hover_feature = None
+        # defer the tool reset until mouse-up to avoid changing modes while the canvas is dragging
+        self._cancel_move_on_left_up = False
+        self._label = self.add_label("")
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
         if self._selected_tool_va:
@@ -117,10 +125,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if not hasattr(self.tab_data.main, "currentFeature"):
             raise ValueError("CryoFeatureOverlay requires currentFeature VA.")
         self.tab_data.main.currentFeature.subscribe(self._on_current_feature_va, init=True)
-
-        self._selected_feature = None
-        self._hover_feature = None
-        self._label = self.add_label("")
+        self.tab_data.main.tab.subscribe(self._on_tab_change)
 
     def _on_tool(self, selected_tool):
         """ Update the feature mode (show or edit) when the overlay is active and tools change"""
@@ -130,12 +135,40 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             else:
                 self._mode = MODE_SHOW_FEATURES
 
-    def _on_current_feature_va(self, _):
+    def _on_current_feature_va(self, feature):
+        if self._current_feature is not None and feature is not self._current_feature:
+            self._discard_pending_milling_feature_offset(self._current_feature)
+        self._current_feature = feature
         # Redraw when the current feature is changed, as it's displayed differently
         wx.CallAfter(self.cnvs.request_drawing_update)
 
+    def _on_tab_change(self, tab):
+        if (self._current_feature is not None
+                and (tab is None or tab.name != self.tab_name)):
+            self._discard_pending_milling_feature_offset(self._current_feature)
+            wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _discard_pending_milling_feature_offset(self, feature: CryoFeature) -> None:
+        """Discard an unsaved marker position and notify the user."""
+        if feature.pending_milling_feature_offset is None:
+            return
+
+        feature.pending_milling_feature_offset = None
+        show_message(
+            wx.GetApp().main_frame,
+            "Feature position not saved",
+            f"The unsaved position for {feature.name.value} was discarded.\n"
+            "Use \"Save Position\" before switching features or tabs.",
+            timeout=5.0,
+            level=logging.WARNING,
+        )
+
     def _on_status_change(self, _):
         # Redraw whenever any feature status changes, as it's reflected in the icon
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _on_milling_feature_offset_change(self, _):
+        # Redraw whenever the feature/pattern anchor within the FIB image changes.
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_features_changes(self, features):
@@ -150,6 +183,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         # a big deal.
         for f in features:
             f.status.subscribe(self._on_status_change)
+            f.milling_feature_offset.subscribe(self._on_milling_feature_offset_change)
 
     def on_dbl_click(self, evt):
         """
@@ -192,10 +226,28 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             feature = self._detect_point_inside_feature(v_pos)
             if self._mode == MODE_EDIT_FEATURES:
-                if feature:
+                current_feature = self.tab_data.main.currentFeature.value
+                if feature is current_feature and current_feature is not None:
                     # move/drag the selected feature
                     self._selected_feature = feature
                     DragMixin._on_left_down(self, evt)
+                elif feature is not None:
+                    # Only the currently selected feature can be moved.
+                    if current_feature is None:
+                        warning = (f"No feature is selected, but you are trying to move "
+                                   f"{feature.name.value}. Select {feature.name.value} first.")
+                    else:
+                        warning = (f"{current_feature.name.value} is selected, but you are trying "
+                                   f"to move {feature.name.value}. Select {feature.name.value} first.")
+                    self._cancel_move_on_left_up = True
+                    show_message(
+                        wx.GetApp().main_frame,
+                        "Feature not selected",
+                        warning,
+                        timeout=5.0,
+                        level=logging.WARNING,
+                    )
+                    evt.Skip()
                 else:
                     # create new feature based on the physical position then disable the feature tool
                     pos = self._view_to_stage_pos(v_pos)
@@ -215,6 +267,11 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         otherwise let the canvas handle the event when the overlay is active.
         """
         if self.active:
+            if self._cancel_move_on_left_up:
+                self._cancel_move_on_left_up = False
+                self._selected_tool_va.value = TOOL_NONE
+                evt.Skip()
+                return
             if self.left_dragging:
                 if self._selected_feature:
                     self._update_selected_feature_position(evt.Position)
@@ -232,14 +289,36 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         # re-calculate the position for all postures
         # use current_posture instead of view_posture to support milling posture
         stage_position = self._view_to_stage_pos(v_pos)
-        self._selected_feature.stage_position.value = stage_position
-        self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
-        self._update_other_postures()
+        if self._has_saved_milling_reference(self._selected_feature):
+            # Preview only. Save Position commits the marker and snaps patterns.
+            self._update_milling_feature_offset(self._selected_feature, stage_position)
+        else:
+            self._selected_feature.stage_position.value = stage_position
+            self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
+            self._update_other_postures()
 
         # Reset the selected tool to signal end of feature moving operation
         self._selected_feature = None
         self._selected_tool_va.value = TOOL_NONE
         self.cnvs.update_drawing()
+
+    def _update_milling_feature_offset(self, feature: CryoFeature, stage_position: Dict[str, float]) -> None:
+        """Preview a feature-marker move relative to the saved FIB image."""
+        if self.pm.current_posture.value != Posture.MILLING or feature.reference_image is None:
+            return
+
+        image_pos = feature.reference_image.metadata.get(model.MD_POS)
+        if image_pos is None:
+            logging.warning("Cannot update milling feature offset: reference image has no position metadata.")
+            return
+
+        sample_pos = self.pm.to_sample_stage_from_stage_position(
+            stage_position, posture=Posture.MILLING)
+        feature.pending_milling_feature_offset = (sample_pos["x"] - image_pos[0],
+                                                  sample_pos["y"] - image_pos[1])
+
+    def _has_saved_milling_reference(self, feature: CryoFeature) -> bool:
+        return self.pm.current_posture.value == Posture.MILLING and feature.reference_image is not None
 
     def _update_other_postures(self):
         """Ask the user to recalculate the feature position for all other postures"""
@@ -286,8 +365,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
         offset = self.cnvs.get_half_buffer_size()  # to convert physical feature positions to pixels
         for feature in self.tab_data.main.features.value:
-            position = self._get_feature_position_at_view_posture(feature)
-            view_pos = self.pm.to_sample_stage_from_stage_position(position)
+            view_pos = self._get_feature_sample_position(feature)
             fvsp = self.cnvs.phys_to_view((view_pos["x"], view_pos["y"]), offset)
             if in_radius(fvsp[0], fvsp[1], FEATURE_DIAMETER, v_pos[0], v_pos[1]):
                 return feature
@@ -298,13 +376,23 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             if self.dragging:
                 self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
-                self._selected_feature.set_posture_position(self.pm.current_posture.value, self._view_to_stage_pos(v_pos))
+                stage_position = self._view_to_stage_pos(v_pos)
+                if self._has_saved_milling_reference(self._selected_feature):
+                    self._update_milling_feature_offset(self._selected_feature, stage_position)
+                else:
+                    self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
                 self.cnvs.update_drawing()
                 return
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
                 self._hover_feature = feature
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
+                if self._mode == MODE_EDIT_FEATURES:
+                    if feature is self.tab_data.main.currentFeature.value:
+                        self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+                    else:
+                        self.cnvs.set_dynamic_cursor(wx.CURSOR_NO_ENTRY)
+                else:
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
             else:
                 if self._mode == MODE_EDIT_FEATURES:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
@@ -334,8 +422,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             # (This would automatically take care of the case where the current posture is UNKNOWN,
             # as it would just return the position in the "ideal" sample coordinates)
 
-            position = self._get_feature_position_at_view_posture(feature)
-            view_pos = self.pm.to_sample_stage_from_stage_position(position)
+            view_pos = self._get_feature_sample_position(feature)
             half_size_offset = self.cnvs.get_half_buffer_size()
 
             # convert physical position to buffer 'world' coordinates
@@ -414,6 +501,29 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             feature=feature,
             posture=posture,
         )
+
+    def _get_feature_sample_position(self, feature: CryoFeature) -> Dict[str, float]:
+        """Return the feature position in sample coordinates for drawing.
+
+        At the milling posture, the stored posture position is the center of the
+        saved FIB image. The marker itself is drawn at its independent offset
+        within that image. While dragging, use the live posture position so the
+        marker follows the pointer until the new offset is committed.
+        """
+        posture = self.pm.current_posture.value
+        feature_offset = (feature.pending_milling_feature_offset
+                          if feature.pending_milling_feature_offset is not None
+                          else feature.milling_feature_offset.value)
+        if (posture == Posture.MILLING
+                and feature_offset is not None
+                and feature.reference_image is not None):
+            image_pos = feature.reference_image.metadata.get(model.MD_POS)
+            if image_pos is not None:
+                return {"x": image_pos[0] + feature_offset[0],
+                        "y": image_pos[1] + feature_offset[1]}
+
+        position = self._get_feature_position_at_view_posture(feature)
+        return self.pm.to_sample_stage_from_stage_position(position)
 
     def _on_view_posture_change(self, posture):
         self.view_posture = posture
