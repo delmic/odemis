@@ -26,6 +26,8 @@ from packaging.version import Version
 from pathlib import Path
 from typing import Any, Dict, List, Iterable, Optional
 from odemis.acq.move import Posture
+from odemis.util.filepath import is_relative_to
+
 
 # This lookup is to go from legacy int based postures to enum based postures.
 # The lookup can later be extended when changing the enum values. For instance, when we change Posture.FM_IMAGING's
@@ -224,7 +226,7 @@ def serialize_images(images: List[Dict[str, Any]], project_dir: os.PathLike) -> 
     for image in images:
         image_path = Path(image[IMG_FILENAME])
         # Everything acquired in Odemis is being stored in the project dir, skip if somehow otherwise.
-        if not image_path.is_relative_to(project_dir):
+        if not is_relative_to(image_path, project_dir):
             logging.warning("Skip saving image outside of project directory to project file.")
             continue
         image_filename_rel = image_path.relative_to(project_dir)

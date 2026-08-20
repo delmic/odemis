@@ -42,6 +42,7 @@ from odemis.gui.cont.cryo_project import (
     add_image,
     remove_image,
 )
+from odemis.util.filepath import is_relative_to
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -104,7 +105,9 @@ class TestCryoProject(unittest.TestCase):
         self.assertIn("features", project_data)
         self.assertGreater(len(project_data["features"]), 0)
         # Check that the in-memory project data has an absolute path relative to the new project dir
-        self.assertTrue(Path(project_data["features"][0]["images"][0][IMG_FILENAME]).is_relative_to(project_dir))
+        self.assertTrue(
+            is_relative_to(Path(project_data["features"][0]["images"][0][IMG_FILENAME]), project_dir)
+        )
         self.assertIn("overviews", project_data)
         self.assertIn(IMG_FILENAME, project_data["overviews"][0])
         posture_values = {p.value for p in Posture}
