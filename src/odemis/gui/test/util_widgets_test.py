@@ -103,9 +103,11 @@ class ConnectorTestCase(test.GuiTestCase):
 
         test.gui_loop(0.2)
 
-        # Create the ProgressiveFuture
+        # Create the ProgressiveFuture and transition it to RUNNING state.
+        # Progress only advances once the future is running (not pending).
         pf = model.ProgressiveFuture(remaining_time=60)  # one min
         # future.task_canceller = self.cancel_task
+        pf.set_running_or_notify_cancel()
 
         # Create the connector
         pfc = widgets.ProgressiveFutureConnector(pf, bar=gauge, label=stxt)
