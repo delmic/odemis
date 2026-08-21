@@ -94,7 +94,7 @@ class PMD401Bus(Actuator):
         """
         :param axes (dict: str -> dict): axis name --> axis parameters
             Each axis is specified by a set of parameters.
-            After successful configuration with the pmconfig.py script, the only required parameter for a default motor
+            After successful configuration with the pmconfig script, the only required parameter for a default motor
             is the address which was set during the configuration process.
             The spc parameter (conversion between motor steps and encoder counts) is typically saved in the flash
             memory of the controller during the configuration process. The flash value is overridden by the
