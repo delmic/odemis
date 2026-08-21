@@ -207,6 +207,7 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_lens_ext.view.show_pixelvalue.value = False
         self.panel.vp_align_light.view.show_crosshair.value = False
         self.panel.vp_align_light_ar.view.show_crosshair.value = False
+        self._grating_calib_prev_crosshair = False  # Previous value, used after grating calibration
 
         # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
         self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
@@ -785,18 +786,18 @@ class Sparc2AlignTab(Tab):
         #                 calibration of the trigger delays for temporal resolved acq
         # * light-in-align: engage or retract the folding mirror to switch to
         #                     internal or external spectrograph
-        self._alignbtn_to_mode = collections.OrderedDict((
-            (panel.btn_align_lens, "lens-align"),
-            (panel.btn_align_mirror, "mirror-align"),
-            (panel.btn_align_lens2, "lens2-align"),
-            (panel.btn_align_centering, "center-align"),
-            (panel.btn_align_ek, "ek-align"),
-            (panel.btn_align_fiber, "fiber-align"),
-            (panel.btn_align_streakcam, "streak-align"),
-            (panel.btn_align_light_in, "light-in-align"),
-            (panel.btn_align_light_in_ar, "light-in-align-ar"),
-            (panel.btn_align_tunnel_lens, "tunnel-lens-align"),
-        ))
+        self._alignbtn_to_mode = {
+            panel.btn_align_lens: "lens-align",
+            panel.btn_align_mirror: "mirror-align",
+            panel.btn_align_lens2: "lens2-align",
+            panel.btn_align_centering: "center-align",
+            panel.btn_align_ek: "ek-align",
+            panel.btn_align_fiber: "fiber-align",
+            panel.btn_align_streakcam: "streak-align",
+            panel.btn_align_light_in: "light-in-align",
+            panel.btn_align_light_in_ar: "light-in-align-ar",
+            panel.btn_align_tunnel_lens: "tunnel-lens-align",
+        }
 
         # The GUI mode to the optical path mode (see acq.path.py)
         self._mode_to_opm = {
@@ -874,6 +875,16 @@ class Sparc2AlignTab(Tab):
 
         # To hold the progressive future connector during calibration
         self._pfc_grating_calibration = None
+
+        # To disable the buttons during automated calibration/alignment procedures
+        tab_data.main.is_acquiring.subscribe(self._on_acquisition)
+
+    @call_in_wx_main
+    def _on_acquisition(self, acquiring):
+        for btn in self._alignbtn_to_mode.keys():
+            btn.Enable(not acquiring)
+
+        # the ActuatorController takes care of the buttons for moving the actuators
 
     def _on_btn_auto_align(self, evt):
         """
@@ -1191,6 +1202,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Enable(False)  # Will be enabled once the lens is at the correct place
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(True)
+            self.panel.pnl_grating.Show(True)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.gauge_autofocus.Enable(True)
             self.panel.btn_autofocus.Enable(True)
@@ -1216,6 +1228,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
@@ -1235,6 +1248,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_switch.Show(True)
             self.panel.pnl_lens_switch.Enable(False)  # Will be enabled once the lens is at the correct place
             self.panel.pnl_focus.Show(True)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.gauge_autofocus.Enable(True)
             self.panel.btn_autofocus.Enable(True)
@@ -1257,6 +1271,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
@@ -1289,6 +1304,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
@@ -1307,6 +1323,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.pnl_fibaligner.Show(True)
             # Disable the buttons until the fiber box is ready
@@ -1347,6 +1364,7 @@ class Sparc2AlignTab(Tab):
             else:
                 self.panel.pnl_focus.Show(True)
                 self.panel.pnl_focus_ext.Show(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.btn_autofocus.Enable(False)
             self.panel.btn_autofocus_ext.Enable(False)
             self.panel.gauge_autofocus.Enable(False)
@@ -1395,6 +1413,7 @@ class Sparc2AlignTab(Tab):
                 self.panel.pnl_focus.Show(True)
                 self.panel.btn_autofocus.Enable(False)
                 self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
@@ -1434,6 +1453,7 @@ class Sparc2AlignTab(Tab):
                 self.panel.pnl_focus.Show(True)
                 self.panel.btn_autofocus.Enable(False)
                 self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_grating.Show(False)
             self.panel.pnl_focus_ext.Show(False)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
@@ -1457,6 +1477,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
+            self.panel.pnl_grating.Show(False)  # TODO: should allow grating calibration once it is compatible
             self.panel.pnl_focus_ext.Show(True)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
@@ -1549,8 +1570,9 @@ class Sparc2AlignTab(Tab):
             logging.debug("Optical path was updated.")
 
 
-    # Auto-Calibration
+    # Grating auto-calibration
     def _on_btn_grating_calibration(self, evt):
+        # Procedure is running -> the button is used to cancel it
         if not self._grating_calibration_future.done():
             self._grating_calibration_future.cancel()
             return
@@ -1559,32 +1581,27 @@ class Sparc2AlignTab(Tab):
         self.panel.gauge_auto_grating_center.SetValue(0)
         self.panel.btn_auto_grating_center.SetLabel("Cancel")
 
-        wx.CallAfter(self._start_grating_calibration)
+        self._start_grating_calibration()
 
     def _start_grating_calibration(self):
         main = self.tab_data_model.main
         align_mode = self.tab_data_model.align_mode.value
-        opm = main.opm
+        viewport = None  # Viewport that is used in the current mode
 
         # Set the optical path according to the align mode
-        if align_mode == "streak-align":
-            if (main.streak_ccd
-                    and main.spectrograph_ded
-                    and main.streak_ccd.name in main.spectrograph_ded.affects.value):
-                opath = "streak-focus-ext"
-            else:
-                opath = "streak-focus"
-        elif align_mode == "tunnel-lens-align":
-            opath = "spec-focus-ext"
-        elif align_mode in ("lens-align", "lens2-align", "light-in-align"):
+        if align_mode in ("lens-align", "lens2-align", "light-in-align"):
             opath = "spec-focus"
+            viewport = self.panel.vp_align_lens
+        # TODO: support external spectrograph calibration
+        # elif align_mode == "tunnel-lens-align":
+        #     opath = "spec-focus-ext"
         else:
             logging.warning("Auto calibration requested not compatible with requested alignment mode %s. Do nothing.",
                             align_mode)
             return
 
         # Pick the right hardware based on whether opath is external or internal
-        if opath in ("spec-focus-ext", "streak-focus-ext"):
+        if opath == "spec-focus-ext":
             bl = main.brightlight_ext
             spectrograph = main.spectrograph_ded
             selector = getattr(main, "spec_ded_det_selector", None)
@@ -1613,15 +1630,31 @@ class Sparc2AlignTab(Tab):
 
         # Start alignment procedure
         self._grating_calibration_future = auto_align_grating_detector_offsets(
-            spectrograph, detectors, opm, opath, bl, selector=selector)
+            spectrograph, detectors, main.opm, opath, bl, selector=selector)
 
         # Bind progress & done callbacks
         self._grating_calibration_future.add_done_callback(self._on_grating_calibration_done)
         self.panel.btn_auto_grating_center.SetLabel("Cancel")
 
+        # Show the cross-hair, at the middle, to confirm the alignment is correct.
+        if viewport:
+            viewport.canvas.fit_view_to_content()
+            self._grating_calib_prev_crosshair = viewport.view.show_crosshair.value
+            viewport.view.show_crosshair.value = True
+
+        # Disable the rest of the GUI
+        main.is_acquiring.value = True
+        if align_mode == "tunnel-lens-align":
+            self.panel.btn_manual_focus_ext.Enable(False)
+        else:
+            self.panel.btn_manual_focus.Enable(False)
+        self._enableFocusComponents(manual=False, ccd_stream=False)
+        self.panel.btn_bkg_acquire.Enable(False)
+
         self._pfc_grating_calibration = ProgressiveFutureConnector(self._grating_calibration_future,
                                                                    self.panel.gauge_auto_grating_center)
 
+    @call_in_wx_main
     def _on_grating_calibration_done(self, f):
         try:
             result = f.result()
@@ -1631,12 +1664,17 @@ class Sparc2AlignTab(Tab):
         except Exception:
             logging.exception("Grating calibration failed")
 
-        finally:
-            self._grating_calibration_future = model.InstantaneousFuture()
-            self._pfc_grating_calibration = None
+        self.tab_data_model.main.is_acquiring.value = False
+        self._grating_calibration_future = model.InstantaneousFuture()
+        self._pfc_grating_calibration = None
 
-            wx.CallAfter(self.panel.btn_auto_grating_center.SetLabel, "Auto center")
-            wx.CallAfter(self.panel.gauge_auto_grating_center.SetValue, 0)
+        # Go back to "normal" mode, which is the simplest to enable the right widgets and play the rigth stream.
+        self._onAlignMode(self.tab_data_model.align_mode.value)
+
+        self.panel.vp_align_lens.view.show_crosshair.value = self._grating_calib_prev_crosshair
+
+        wx.CallAfter(self.panel.btn_auto_grating_center.SetLabel, "Auto calib")
+        wx.CallAfter(self.panel.gauge_auto_grating_center.SetValue, 0)
 
     @call_in_wx_main
     def _on_lens_align_done(self, f):
@@ -2006,6 +2044,7 @@ class Sparc2AlignTab(Tab):
                     self._enableFocusComponents(manual=True, ccd_stream=False)
                 self._stream_controller.pauseStreams()
                 self.panel.btn_bkg_acquire.Enable(False)
+                self.panel.btn_auto_grating_center.Enable(False)
 
             self._mf_future = Sparc2ManualFocus(main.opm, opath, toggled=True)
             self._mf_future.add_done_callback(self._onManualFocusReady)
@@ -2045,6 +2084,7 @@ class Sparc2AlignTab(Tab):
         if future.cancelled():
             return
 
+        self.panel.btn_auto_grating_center.Enable(True)
         self._onAlignMode(self.tab_data_model.align_mode.value)
 
     @call_in_wx_main
@@ -2080,6 +2120,7 @@ class Sparc2AlignTab(Tab):
             self._enableFocusComponents(manual=False, ccd_stream=False)
             self._stream_controller.pauseStreams()
             self.panel.btn_bkg_acquire.Enable(False)
+            self.panel.btn_auto_grating_center.Enable(False)
 
             # No manual autofocus for now
             self._autofocus_f = Sparc2AutoFocus(focus_mode, main.opm, ss, start_autofocus=True)
@@ -2102,6 +2143,7 @@ class Sparc2AlignTab(Tab):
                 logging.error("Unexpected autofocus mode '%s'", self._autofocus_align_mode)
                 return
             btn.SetLabel("Auto focus")
+            self.panel.btn_auto_grating_center.Enable(True)
 
     @call_in_wx_main
     def _on_autofocus_done(self, future):
