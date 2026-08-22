@@ -37,6 +37,7 @@ from odemis.acq.stream import FIBStream
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
+from odemis.gui.comp.popup import show_message
 from odemis.gui.model import TabName, TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
 from odemis.acq.move import Posture, MicroscopePostureManager
 
@@ -135,7 +136,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
 
     def _on_current_feature_va(self, feature):
         if self._current_feature is not None and feature is not self._current_feature:
-            self._current_feature.pending_milling_feature_offset = None
+            self._discard_pending_milling_feature_offset(self._current_feature)
         self._current_feature = feature
         # Redraw when the current feature is changed, as it's displayed differently
         wx.CallAfter(self.cnvs.request_drawing_update)
@@ -143,8 +144,23 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     def _on_tab_change(self, tab):
         if (self._current_feature is not None
                 and (tab is None or tab.name != self.tab_name)):
-            self._current_feature.pending_milling_feature_offset = None
+            self._discard_pending_milling_feature_offset(self._current_feature)
             wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _discard_pending_milling_feature_offset(self, feature: CryoFeature) -> None:
+        """Discard an unsaved marker position and notify the user."""
+        if feature.pending_milling_feature_offset is None:
+            return
+
+        feature.pending_milling_feature_offset = None
+        show_message(
+            wx.GetApp().main_frame,
+            "Feature position not saved",
+            f"The unsaved position for {feature.name.value} was discarded.\n"
+            "Use \"Save Position\" before switching features or tabs.",
+            timeout=5.0,
+            level=logging.WARNING,
+        )
 
     def _on_status_change(self, _):
         # Redraw whenever any feature status changes, as it's reflected in the icon
@@ -212,10 +228,27 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             feature = self._detect_point_inside_feature(v_pos)
             if self._mode == MODE_EDIT_FEATURES:
-                if feature:
+                current_feature = self.tab_data.main.currentFeature.value
+                if feature is current_feature and current_feature is not None:
                     # move/drag the selected feature
                     self._selected_feature = feature
                     DragMixin._on_left_down(self, evt)
+                elif feature is not None:
+                    # Only the feature selected in the Features control can be moved.
+                    if current_feature is None:
+                        warning = (f"No feature is selected, but you are trying to move "
+                                   f"{feature.name.value}. Select {feature.name.value} first.")
+                    else:
+                        warning = (f"{current_feature.name.value} is selected, but you are trying "
+                                   f"to move {feature.name.value}. Select {feature.name.value} first.")
+                    show_message(
+                        wx.GetApp().main_frame,
+                        "Feature not selected",
+                        warning,
+                        timeout=5.0,
+                        level=logging.WARNING,
+                    )
+                    evt.Skip()
                 else:
                     # create new feature based on the physical position then disable the feature tool
                     pos = self._view_to_stage_pos(v_pos)
@@ -359,7 +392,13 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
                 self._hover_feature = feature
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
+                if self._mode == MODE_EDIT_FEATURES:
+                    if feature is self.tab_data.main.currentFeature.value:
+                        self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+                    else:
+                        self.cnvs.set_dynamic_cursor(wx.CURSOR_NO_ENTRY)
+                else:
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
             else:
                 if self._mode == MODE_EDIT_FEATURES:
                     self.cnvs.set_default_cursor(wx.CURSOR_PENCIL)
