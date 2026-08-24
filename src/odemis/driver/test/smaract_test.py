@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-import math
 import tempfile
 
 from odemis.driver import smaract
@@ -814,6 +813,134 @@ class TestPicoscale(unittest.TestCase):
         self.assertTrue(f.cancelled())
         for a, i in self.dev.referenced.value.items():
             self.assertFalse(i)
+
+
+CONFIG_MULTI_PHASE = {
+    "name": "MultiPhase Stage",
+    "role": "stage",
+    "ref_on_init": False,
+    "locator": "fake",
+    "refproc": smaract.REFPROC_MULTI_PHASE,
+    "speed": 0.002,
+    "accel": 0.002,
+    "hold_time": 1.0,
+    "pos_deactive_after_ref": False,
+    "param_file": None,
+    "axes": {
+        "x": {"range": [-3e-3, 3e-3], "unit": "m", "channel": 0},
+        "z": {"range": [-3e-3, 3e-3], "unit": "m", "channel": 2},
+        "y": {"range": [-3e-3, 3e-3], "unit": "m", "channel": 1},
+    },
+}
+
+MULTI_PHASE_METADATA = {
+    model.MD_AXES_ORDER_REF: ["x", "z", "y"],
+    model.MD_FAV_POS_ALIGN: {"x": -2e-3, "z": -2e-3},
+    model.MD_FAV_POS_ACTIVE: {"x": 1e-3, "y": 0.0, "z": -1e-3},
+    model.MD_FAV_POS_DEACTIVE: {"x": -2e-3, "y": 0.0, "z": 2e-3},
+}
+
+class TestMCS2MultiPhase(unittest.TestCase):
+    """
+    Tests for the MCS2 multi-phase referencing procedure (_doReferenceMultiPhase).
+    Uses the simulator only.
+    """
+
+    def setUp(self):
+        self.dev = smaract.MCS2(**CONFIG_MULTI_PHASE)
+        # Pass a copy to avoid mutating the global constant if tests modify it
+        self.dev.updateMetadata(MULTI_PHASE_METADATA.copy())
+
+    def tearDown(self):
+        """Cleans up the device after each test."""
+        self.dev.terminate()
+
+    def test_reference_all_axes(self):
+        """All axes are referenced and end up in the active/zero positions."""
+        f = self.dev.reference()
+        f.result(timeout=60)
+
+        # 1. Assert all axes are marked as referenced
+        for a, referenced in self.dev.referenced.value.items():
+            self.assertTrue(referenced, f"Axis {a} not referenced")
+
+        # 2. Assert final position. Because pos_deactive_after_ref=False,
+        #    X and Z should be at FAV_POS_ACTIVE. Y should be at 0.0 (auto-zeroed).
+        expected_pos = {
+            "x": MULTI_PHASE_METADATA[model.MD_FAV_POS_ACTIVE]["x"],
+            "z": MULTI_PHASE_METADATA[model.MD_FAV_POS_ACTIVE]["z"],
+            "y": 0.0
+        }
+
+        testing.assert_pos_almost_equal(
+            self.dev.position.value, expected_pos,
+            atol=1e-6, match_all=False
+        )
+
+    def test_reference_missing_axes_order_metadata(self):
+        """Missing AXES_ORDER_REF metadata must raise ValueError."""
+        self.dev._metadata.pop(model.MD_AXES_ORDER_REF)
+
+        f = self.dev.reference()
+        with self.assertRaises(ValueError) as context:
+            f.result(timeout=10)
+
+        self.assertIn("Missing AXES_ORDER_REF", str(context.exception))
+
+    def test_reference_axis_not_in_order(self):
+        """If AXES_ORDER_REF does not exactly match the requested axes, it must raise ValueError."""
+        # Modify the metadata to cause a mismatch ('y' is missing)
+        self.dev._metadata[model.MD_AXES_ORDER_REF] = ["x", "z"]
+
+        f = self.dev.reference()
+
+        with self.assertRaises(ValueError) as context:
+            f.result(timeout=10)
+
+        self.assertIn(
+            "AXES_ORDER_REF metadata does not match the provided axes.",
+            str(context.exception)
+        )
+
+    def test_reference_missing_active_pos_metadata(self):
+        """Missing FAV_POS_ACTIVE metadata (needed for phase 2) must raise ValueError."""
+        self.dev._metadata.pop(model.MD_FAV_POS_ACTIVE)
+
+        f = self.dev.reference()
+        with self.assertRaises(ValueError) as context:
+            f.result(timeout=10)
+
+        self.assertIn("Missing FAV_POS_ACTIVE", str(context.exception))
+
+    def test_reference_with_deactive_position(self):
+        """With pos_deactive_after_ref=True, stage moves sequentially to FAV_POS_DEACTIVE."""
+        self.dev._pos_deactive_after_ref = True
+
+        f = self.dev.reference()
+        f.result(timeout=60)
+
+        # 1. Assert all axes are referenced
+        for a, referenced in self.dev.referenced.value.items():
+            self.assertTrue(referenced, f"Axis {a} not referenced")
+
+        # 2. Assert final position is the deactive parking position
+        deactive_pos = MULTI_PHASE_METADATA[model.MD_FAV_POS_DEACTIVE]
+        testing.assert_pos_almost_equal(
+            self.dev.position.value, deactive_pos,
+            atol=1e-6, match_all=False
+        )
+
+    def test_reference_missing_deactive_pos_metadata(self):
+        """If pos_deactive_after_ref=True but FAV_POS_DEACTIVE is missing, it should log a warning but NOT crash."""
+        self.dev._pos_deactive_after_ref = True
+        self.dev._metadata.pop(model.MD_FAV_POS_DEACTIVE)
+
+        # It should succeed without throwing an exception
+        f = self.dev.reference()
+        f.result(timeout=60)
+
+        for a, referenced in self.dev.referenced.value.items():
+            self.assertTrue(referenced)
 
 
 if __name__ == '__main__':
