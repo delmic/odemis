@@ -764,13 +764,14 @@ class ActuatorGUIData(MicroscopyGUIData):
         if main.mirror_xy:
             # Typically for the SPARCv2
             ss_def.update({
-                "mirror": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
+                "mirror_xy": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
             })
         elif main.mirror:
             # SPARC mirror Y usually needs to be 10x bigger than X
             ss_def.update({
                 "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", {"x"}),
                 "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", {"y"}),
+                "mirror_z": (10e-6, [100e-9, 1e-3], "mirror", {"z"}),
             })
 
         # str -> VA: name (as the name of the attribute) -> step size (m)
