@@ -1006,8 +1006,12 @@ class MonochromatorSettingsStream(RepetitionStream):
         # value should be included
         self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
 
-        # TODO: once the semcomedi works with any value, remove this
-        if hasattr(self, "emtDwellTime"):
+        # HACK WARNING: the semcomedi (old driver for the NI-DAQ) only works reliably with "long"
+        # dwell time (eg, 0.1 ms) for the counting PMT. It's not possible to enforce it on the driver
+        # as the e-beam component can be used with other detectors. In addition, there is no direct
+        # way to detect which driver is used, but we know that the other drivers (eg, semnidaq) do
+        # provide a scanPath VA, so check the presence of the VA to distinguish.
+        if hasattr(self, "emtDwellTime") and not model.hasVA(emitter, "scanPath"):
             dt = self.emtDwellTime
             # Recommended > 1ms, but 0.1 ms should work
             dt.value = max(10e-3, dt.value)
