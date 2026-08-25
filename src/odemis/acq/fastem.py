@@ -1120,7 +1120,29 @@ class OverviewAcquisition(object):
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
                                                       focusing_method=FocusingMethod.NONE, weaver=WEAVER_COLLAGE,
                                                       log_path=file_pattern, centered_acq=centered_acq)
+        self._sub_future.can_pause = True
         self._sub_future.add_update_callback(_pass_future_progress)
+
+        # Propagate pause/resume from the outer future to the sub-future.
+        # The sub-future's tile loop calls wait_if_paused(), so pausing it stops the
+        # stage from moving to the next tile. The outer future then signals its own
+        # _is_paused_event (via wait_if_paused()), which unblocks any caller of pause().
+        def _propagate_pause():
+            while not self._sub_future.done():
+                time.sleep(0.05)
+                if self._future.is_pause_requested and not self._sub_future.done():
+                    self._sub_future.pause()  # blocks until tile loop calls wait_if_paused()
+                    try:
+                        self._future.wait_if_paused()  # signals outer paused + blocks until resumed
+                    except CancelledError:
+                        # Outer future was cancelled while paused; resume the sub-future
+                        # so its own cancellation can propagate and complete cleanly.
+                        self._sub_future.resume()
+                        return
+                    if not self._sub_future.done():
+                        self._sub_future.resume()
+
+        threading.Thread(target=_propagate_pause, daemon=True).start()
 
         das = []
         try:

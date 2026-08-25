@@ -180,9 +180,11 @@ class FastEMOverviewAcquiController(object):
 
         # For acquisition
         self.btn_acquire = self._tab_panel.btn_acq
+        self.btn_pause = self._tab_panel.btn_pause_acq
         self.btn_cancel = self._tab_panel.btn_cancel_acq
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
+        self._is_paused = False
         self.gauge_acq = self._tab_panel.gauge_acq
         self.lbl_acqestimate = self._tab_panel.lbl_acq_estimate
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
@@ -192,6 +194,7 @@ class FastEMOverviewAcquiController(object):
 
         # Link acquire/cancel buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_pause.Bind(wx.EVT_BUTTON, self.on_pause)
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         # Hide gauge, disable acquisition button
@@ -381,6 +384,7 @@ class FastEMOverviewAcquiController(object):
           If None, no icon is shown.
         """
         self.btn_cancel.Hide()
+        self.btn_pause.Hide()
         self.btn_acquire.Show()
         self.btn_acquire.Enable()
         self.gauge_acq.Hide()
@@ -391,6 +395,8 @@ class FastEMOverviewAcquiController(object):
         self._tab_panel.Layout()
         self.acq_future = None
         self._fs_connector = None
+        self._is_paused = False
+        self.btn_pause.SetLabel("Pause")
         self._main_data_model.is_acquiring.value = False
 
         if text is not None:
@@ -426,6 +432,9 @@ class FastEMOverviewAcquiController(object):
         self._main_data_model.is_acquiring.value = True
         self.btn_acquire.Enable(False)
         self.btn_acquire.Hide()
+        self.btn_pause.Enable()
+        self.btn_pause.SetLabel("Pause")
+        self.btn_pause.Show()
         self.btn_cancel.Enable()
         self.btn_cancel.Show()
         self.gauge_acq.Show()
@@ -453,6 +462,7 @@ class FastEMOverviewAcquiController(object):
                 self._tab_data_model.semStream, self._main_data_model.stage, region,
                 overlap=self._overlap, centered_acq=True,
             )
+            self.acq_future.can_pause = True
             self.acq_future.add_done_callback(partial(self.on_acquisition_done, num=num))
             self.acq_future.add_done_callback(self.reset_acquisition_gui)
 
@@ -476,8 +486,74 @@ class FastEMOverviewAcquiController(object):
             return
 
         self.acq_future.cancel()
+        self.btn_pause.Enable(False)
         fastem._executor.cancel()
         # all the rest will be handled by on_acquisition_done()
+
+    def on_pause(self, evt):
+        """
+        Called during acquisition when pressing the pause/continue button.
+        """
+        if not self.acq_future:
+            logging.warning("Tried to pause overview acquisition while it was not started")
+            return
+
+        if self._is_paused:
+            logging.debug("Resuming acquisition")
+            self.acq_future.resume()
+            self._is_paused = False
+            # if self._fs_connector:
+            #     self._fs_connector.resume()
+            self.btn_pause.SetLabel("Pause")
+            self._set_status_message("Acquisition resumed.")
+        else:
+            if not self.acq_future.can_pause:
+                logging.warning("Overview acquisition cannot be paused")
+                return
+            logging.debug("Pausing acquisition")
+            # if self._fs_connector:
+            #     self._fs_connector.pause()
+            self.btn_pause.Enable(False)
+            self.btn_pause.SetLabel("Pausing...")
+            self.btn_cancel.Enable(False)
+            self._set_status_message("Pausing after current tile...")
+            t = threading.Thread(target=self._do_pause, daemon=True)
+            t.start()
+
+    def _do_pause(self):
+        """Call pause() in a background thread so the GUI stays responsive.
+
+        Blocks until the acquisition has truly paused at a tile boundary, then
+        schedules a GUI update via wx.CallAfter.
+        """
+        if self.acq_future and self.acq_future.pause():
+            self._is_paused = True
+            wx.CallAfter(self._on_actually_paused)
+        else:
+            wx.CallAfter(self._on_pause_failed)
+
+    @call_in_wx_main
+    def _on_pause_failed(self):
+        """Reset GUI if pausing failed (e.g., the acquisition finished in the meantime)."""
+        # if self._fs_connector:
+        #     self._fs_connector.resume()
+        self.btn_pause.Enable()
+        self.btn_pause.SetLabel("Pause")
+        self.btn_cancel.Enable()
+        if not self.acq_future or self.acq_future.done():
+            return  # reset_acquisition_gui will handle the full reset
+        self._set_status_message("Acquisition running.")
+
+    @call_in_wx_main
+    def _on_actually_paused(self):
+        """Re-enable the relevant buttons once the acquisition is truly paused."""
+        if not self._is_paused:
+            return  # Resumed or cancelled in the meantime; nothing to do.
+        self.btn_pause.SetLabel("Resume")
+        self.btn_pause.Enable()
+        self.btn_cancel.Enable()
+        self._set_status_message("Acquisition paused.")
+        logging.debug("Overview acquisition paused at tile boundary.")
 
     def on_acquisition_done(self, future, num):
         """
@@ -1069,6 +1145,7 @@ class FastEMMultiBeamAcquiController(object):
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self.acq_future = None  # ProgressiveBatchFuture
+        self.acq_future_for_pausing = None  # ProgressiveFuture
         self._fs_connector = None  # ProgressiveFutureConnector
         self.save_full_cells = model.BooleanVA(
             False
