@@ -280,6 +280,8 @@ Actuators:
  * stage: Moves the sample. It can have up to 3 linear axes (x, y, z) and 3 rotational axes (rx, ry, rz).
  * scan-stage: Optional fast and accurate moving stage used to move the sample during an acquisition instead of
    moving the e-beam. It has two axes: x and y.
+ * light-protector: It provides protection from an input light (e.g. laser). It usually has one axis with
+   two choices: "on" and "off".
 
 Detectors:
  * se-detector: Secondary electron detector of the SEM (detector).
