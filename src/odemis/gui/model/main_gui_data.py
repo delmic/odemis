@@ -31,7 +31,7 @@ from odemis import model
 from odemis.acq import acqmng, path
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import FastEMCalibration, FastEMROC
-from odemis.acq.move import MicroscopePostureManager, MeteorTFS3PostureManager
+from odemis.acq.move import MicroscopePostureManager
 from odemis.gui import (
     FG_COLOUR_BLIND_BLUE,
     FG_COLOUR_BLIND_ORANGE,
@@ -168,6 +168,7 @@ class MainGUIData(object):
         "det-rotator": "det_rotator",
         "se-detector-ion": "ion_sed",
         "stage-global": "stage_global",
+        "light-protector": "light_protector",
     }
 
     def __init__(self, microscope):
@@ -254,6 +255,7 @@ class MainGUIData(object):
         self.det_rotator = None  # detector rotator of the fastem microscope
         self.ion_sed = None  # detector for the ions of a composited detector component
         self.stage_global = None  # stage with coordinates converted into a global coordinate system
+        self.light_protector = None
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
