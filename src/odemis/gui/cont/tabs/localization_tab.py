@@ -166,6 +166,7 @@ class LocalizationTab(Tab):
         # Current posture indicator initialization
         self.bmp_fm_imaging = getBitmap("icon/ico_meteorimaging_green.png")
         self.bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm_green.png")
+        self.bmp_slm_imaging = getBitmap("icon/ico_slm_imaging_green.png")
 
         # Will create SEM stream with all settings local
         emtvas = set()
@@ -203,6 +204,8 @@ class LocalizationTab(Tab):
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
             self._allowed_targets = [Posture.FM_IMAGING]
+            if Posture.SLM_IMAGING in self.main_data.posture_manager.postures:
+                self._allowed_targets.append(Posture.SLM_IMAGING)
             if Posture.FIB_VIEW_FM in self.main_data.posture_manager.postures:
                 self._allowed_targets.append(Posture.FIB_VIEW_FM)
             self._stage = self.tab_data_model.main.stage_bare
@@ -457,6 +460,8 @@ class LocalizationTab(Tab):
             # Add milling angle suffix to stream's name if it was acquired at the milling angle.
             if pm.current_posture.value == Posture.FIB_VIEW_FM:
                 s.name.value = f"{s.name.value} at {math.degrees(pm.milling_angle.value):0.0f}°"
+            if pm.current_posture.value == Posture.SLM_IMAGING:
+                s.name.value = f"{s.name.value} (SLM)"
             if self.tab_data_model.main.currentFeature.value:
                 self.tab_data_model.main.currentFeature.value.streams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
@@ -484,7 +489,7 @@ class LocalizationTab(Tab):
     # role -> tooltip message
     DISABLED_TAB_TOOLTIP = {
         "enzel": "Localization can only be performed in the three beams or SEM imaging modes",
-        "meteor": "Localization can only be performed in FM mode",
+        "meteor": "Localization can only be performed in FM or SLM mode",
         "mimas": "Localization and milling can only be performed in optical or FIB mode",
     }
 
@@ -504,7 +509,10 @@ class LocalizationTab(Tab):
         )
         self._acquisition_controller._update_overview_acquisition_button()
         # Update the current posture read-only indicator if needed
-        if self.main_data.posture_manager.at_fib_view_fm_posture(pos):
+        if self.main_data.posture_manager.at_slm_imaging_posture(pos):
+            self.panel.lbl_current_posture.SetLabel(Posture.SLM_IMAGING.value)
+            self.panel.bmp_current_posture.SetBitmap(self.bmp_slm_imaging)
+        elif self.main_data.posture_manager.at_fib_view_fm_posture(pos):
             self.panel.lbl_current_posture.SetLabel(Posture.FIB_VIEW_FM.value)
             self.panel.bmp_current_posture.SetBitmap(self.bmp_fib_view_fm)
         elif self.main_data.posture_manager.at_fm_imaging_posture(pos):

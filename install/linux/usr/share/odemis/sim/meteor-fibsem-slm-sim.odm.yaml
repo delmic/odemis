@@ -105,6 +105,7 @@
         FAV_SEM_POS_ACTIVE: {"rx": 0.6108652381980153, "rz": 0},  # pre-tilt 35°
         FAV_FIB_POS_ACTIVE: {"rx": 0.29670597283903605 , "rz": 3.141592653589793},
         FAV_MILL_POS_ACTIVE: {"mill_angle": 0.2443461, "rz": 0},  # milling angle (14°) is the angle between ion beam column and sample plane
+        FAV_SLM_POS_ACTIVE: {"rx": 0.2, "rz": 0},
     },
 }
 
@@ -125,6 +126,7 @@
         mag: 84.0, # ratio, (actually of the complete light path)
         na: 0.85, # ratio, numerical aperture
         ri: 1.0, # ratio, refractive index
+        wd: 10.6e-3,  # m, working distance
     },
     metadata: {
         # Refractive index mismatch correction factor

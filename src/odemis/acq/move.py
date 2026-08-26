@@ -62,6 +62,7 @@ class Posture(str, Enum):
     THREE_BEAMS = "THREE BEAMS"
     FIB_IMAGING = "FIB IMAGING"
     FIB_VIEW_FM = "FIB-VIEW FM"
+    SLM_IMAGING = "SLM IMAGING"
 
     def __str__(self) -> str:
         """Return the string value of the posture."""
@@ -342,6 +343,21 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # pre-tilt is required for milling posture, but not all systems have it
         stage_md = self.stage.getMetadata()
+        self._slm_focus = None
+        self._slm_lens = None
+        self._slm_axes_referenced = False
+        self._slm_available = False
+
+        if model.MD_FAV_SLM_POS_ACTIVE in stage_md:
+            try:
+                self._slm_focus = model.getComponent(role="focus-coincident")
+                self._slm_lens = model.getComponent(role="lens-arm-coincident")
+                self._slm_available = True
+            except LookupError:
+                logging.warning(
+                    "SLM posture metadata is configured but focus-coincident/lens-arm-coincident components are missing"
+                )
+
         md_calib = stage_md.get(model.MD_CALIB, {})
         self.pre_tilt = md_calib.get(model.MD_SAMPLE_PRE_TILT, None)
         self.fib_column_tilt = TFS_FIB_COLUMN_TILT
@@ -404,12 +420,14 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.MILLING: self._transform_from_fm_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_fm_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_fm_to_fib_view_fm,
+                Posture.SLM_IMAGING: self._transform_from_fm_to_slm,
             },
             Posture.SEM_IMAGING: {
                 Posture.FM_IMAGING: self._transform_from_sem_to_fm,
                 Posture.MILLING: self._transform_from_sem_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_sem_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_sem_to_fib_view_fm,
+                Posture.SLM_IMAGING: self._transform_from_sem_to_slm,
             },
             Posture.MILLING: {
                 Posture.SEM_IMAGING: self._transform_from_milling_to_sem,
@@ -418,18 +436,28 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.MILLING: self._transform_from_sem_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_milling_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_milling_to_fib_view_fm,
+                Posture.SLM_IMAGING: self._transform_from_milling_to_slm,
             },
             Posture.FIB_IMAGING: {
                 Posture.SEM_IMAGING: self._transform_from_fib_to_sem,
                 Posture.FM_IMAGING: self._transform_from_fib_to_fm,
                 Posture.MILLING: self._transform_from_fib_to_milling,
-                Posture.FIB_VIEW_FM: self._transform_from_fib_to_fib_view_fm
+                Posture.FIB_VIEW_FM: self._transform_from_fib_to_fib_view_fm,
+                Posture.SLM_IMAGING: self._transform_from_fib_to_slm,
             },
             Posture.FIB_VIEW_FM: {
                 Posture.MILLING: self._transform_from_fib_view_fm_to_milling,
                 Posture.SEM_IMAGING: self._transform_from_fib_view_fm_to_sem,
                 Posture.FM_IMAGING: self._transform_from_fib_view_fm_to_fm,
                 Posture.FIB_IMAGING: self._transform_from_fib_view_fm_to_fib,
+                Posture.SLM_IMAGING: self._transform_from_fib_view_fm_to_slm,
+            },
+            Posture.SLM_IMAGING: {
+                Posture.SEM_IMAGING: self._transform_from_slm_to_sem,
+                Posture.FM_IMAGING: self._transform_from_slm_to_fm,
+                Posture.MILLING: self._transform_from_slm_to_milling,
+                Posture.FIB_IMAGING: self._transform_from_slm_to_fib,
+                Posture.FIB_VIEW_FM: self._transform_from_slm_to_fib_view_fm,
             },
             Posture.UNKNOWN: {
                 Posture.UNKNOWN: lambda x: x
@@ -465,10 +493,14 @@ class MeteorPostureManager(MicroscopePostureManager):
             if self.at_fib_view_fm_posture(position):
                 return Posture.FIB_VIEW_FM
         if isInRange(position, stage_sem_imaging_rng, self.linear_axes):
+            # the stage bare tilt are rotation is same between milling and slm
+            # posture. In slm posture, slm objective is active.
+            if self.at_slm_imaging_posture(position):
+                return Posture.SLM_IMAGING
+            elif self.at_milling_posture(position):
+                return Posture.MILLING
             if self.at_fib_imaging_posture(position):
                 return Posture.FIB_IMAGING
-            if self.at_milling_posture(position):
-                return Posture.MILLING
             return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN
@@ -559,6 +591,29 @@ class MeteorPostureManager(MicroscopePostureManager):
             atol_rotation=math.radians(3)
         )
 
+    def at_slm_imaging_posture(self, pos: Dict[str, float]) -> bool:
+        """
+        Check if at SLM posture.
+
+        :param pos: the stage position
+        :return: True if the stage is at the slm imaging posture
+        """
+        if not self._slm_available:
+            return False
+
+        stage_md = self.stage.getMetadata()
+        if model.MD_FAV_SLM_POS_ACTIVE not in stage_md:
+            return False
+
+        stage_slm = stage_md[model.MD_FAV_SLM_POS_ACTIVE]
+        if not isNearPosition(pos, stage_slm, self.rotational_axes, atol_rotation=math.radians(3)):
+            return False
+
+        slm_focus_active = self._slm_focus.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+        if not slm_focus_active:
+            return False
+        return isNearPosition(self._slm_focus.position.value, slm_focus_active, self._slm_focus.axes)
+
     def at_fib_view_fm_posture(self, pos: Dict[str, float]) -> bool:
         """
         Check if at fib-view fm posture
@@ -600,6 +655,8 @@ class MeteorPostureManager(MicroscopePostureManager):
             md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
             rx = self.calculate_stage_tilt(column_tilt=self.fm_column_tilt)
             return {"rx": rx, "rz": md["rz"]}
+        elif posture == Posture.SLM_IMAGING:
+            return stage_md[model.MD_FAV_SLM_POS_ACTIVE]
         else:
             raise ValueError(f"posture {posture} not supported for orientation retrieval")
 
@@ -721,6 +778,7 @@ class MeteorPostureManager(MicroscopePostureManager):
             Posture.FIB_IMAGING: tf_fib_im,
             Posture.MILLING: tf_sem,
             Posture.FIB_VIEW_FM: tf_sem,
+            Posture.SLM_IMAGING: tf_sem,
             Posture.UNKNOWN: tf_id
         }
         # From stage-bare to sample-stage
@@ -730,8 +788,62 @@ class MeteorPostureManager(MicroscopePostureManager):
             Posture.FIB_IMAGING: tf_fib_im_inv,
             Posture.MILLING: tf_sem_inv,
             Posture.FIB_VIEW_FM: tf_sem_inv,
+            Posture.SLM_IMAGING: tf_sem_inv,
             Posture.UNKNOWN: tf_id
         }
+
+    def _ensure_slm_referenced(self) -> None:
+        """Reference SLM axes once before SLM posture movements."""
+        if not self._slm_available or self._slm_axes_referenced:
+            return
+
+        logging.info("Referencing SLM axes before moving to SLM posture...")
+        for axis in ("l", "s"):
+            future = self._slm_lens.reference({axis})
+            future.result()
+        future = self._slm_focus.reference({"z"})
+        future.result()
+        self._slm_axes_referenced = True
+
+    def _append_slm_lens_focus_moves(self,
+                                     sub_moves: List[Tuple[model.Component, Dict[str, float]]],
+                                     engage: bool) -> List[Tuple[model.Component, Dict[str, float]]]:
+        """
+        Append SLM lens/focus sub-moves and return the updated list.
+
+        :param sub_moves: Existing list of (component, move_dict) tuples.
+        :param engage: True to engage (active), False to retract (deactive).
+        :return: Updated sub_moves list.
+        """
+        if not self._slm_available or self._slm_lens is None or self._slm_focus is None:
+            return sub_moves
+
+        lens_md = self._slm_lens.getMetadata()
+        focus_md = self._slm_focus.getMetadata()
+
+        if engage:
+            lens_target = lens_md.get(model.MD_FAV_POS_ACTIVE, {})
+            focus_target = focus_md.get(model.MD_FAV_POS_ACTIVE, {})
+            moves = [
+                (self._slm_lens, {"s": lens_target.get("s")}),
+                (self._slm_lens, {"l": lens_target.get("l")}),
+                (self._slm_focus, {"z": focus_target.get("z")}),
+            ]
+        else:
+            lens_target = lens_md.get(model.MD_FAV_POS_DEACTIVE, {})
+            focus_target = focus_md.get(model.MD_FAV_POS_DEACTIVE, {})
+            moves = [
+                (self._slm_focus, {"z": focus_target.get("z")}),
+                (self._slm_lens, {"l": lens_target.get("l")}),
+                (self._slm_lens, {"s": lens_target.get("s")}),
+            ]
+
+        if any(move[next(iter(move))] is None for _, move in moves):
+            state = "active" if engage else "deactive"
+            raise ValueError(f"SLM {state} metadata is incomplete for lens/focus axes")
+
+        sub_moves.extend(moves)
+        return sub_moves
 
     def _initialise_offset(self):
         stage_md = self.stage.getMetadata()
@@ -1098,6 +1210,54 @@ class MeteorPostureManager(MicroscopePostureManager):
         milling_pos = self._transform_from_fib_view_fm_to_milling(pos)
         return self._transform_from_milling_to_fib(milling_pos)
 
+    def _transform_from_sem_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SEM posture to SLM posture."""
+        transformed_pos = pos.copy()
+        transformed_pos.update(self.get_posture_orientation(Posture.SLM_IMAGING))
+        return transformed_pos
+
+    def _transform_from_slm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to SEM posture."""
+        transformed_pos = pos.copy()
+        transformed_pos.update(self.get_posture_orientation(Posture.SEM_IMAGING))
+        return transformed_pos
+
+    def _transform_from_fm_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from FM posture to SLM posture."""
+        return self._transform_from_sem_to_slm(self._transform_from_fm_to_sem(pos))
+
+    def _transform_from_slm_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to FM posture."""
+        return self._transform_from_sem_to_fm(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_milling_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from milling posture to SLM posture."""
+        transformed_pos = pos.copy()
+        transformed_pos.update(self.get_posture_orientation(Posture.SLM_IMAGING))
+        return transformed_pos
+
+    def _transform_from_slm_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to milling posture."""
+        transformed_pos = pos.copy()
+        transformed_pos.update(self.get_posture_orientation(Posture.MILLING))
+        return transformed_pos
+
+    def _transform_from_fib_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from FIB posture to SLM posture."""
+        return self._transform_from_sem_to_slm(self._transform_from_fib_to_sem(pos))
+
+    def _transform_from_slm_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to FIB posture."""
+        return self._transform_from_sem_to_fib(self._transform_from_slm_to_sem(pos))
+
+    def _transform_from_fib_view_fm_to_slm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from FIB-view FM posture to SLM posture."""
+        return self._transform_from_sem_to_slm(self._transform_from_fib_view_fm_to_sem(pos))
+
+    def _transform_from_slm_to_fib_view_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """Transform from SLM posture to FIB-view FM posture."""
+        return self._transform_from_sem_to_fib_view_fm(self._transform_from_slm_to_sem(pos))
+
     def is_posture_switch_allowed(self, source_posture: Posture, target_posture: Posture) -> bool:
         """
         Check if it is allowed to move from source to target posture. This is a combination of availability of
@@ -1188,7 +1348,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
             end_pos = self.to_posture(pos=sem_grid1_pos, posture=target_posture)
         elif current_posture == Posture.FM_IMAGING:
-            if target_posture in [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING]:
+            if target_posture in [Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.SLM_IMAGING]:
                 # Revert to the same Z height as before going to FM (if known)
                 deactive_fm_position = stage_md.get(model.MD_FM_POS_SAMPLE_DEACTIVE)
                 if deactive_fm_position and "z" in deactive_fm_position:
@@ -1196,7 +1356,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     sample_stage_pos["z"] = deactive_fm_position["z"]
                     stage_position = self.from_sample_stage_to_stage_position(sample_stage_pos, posture=Posture.FM_IMAGING)
                 end_pos = self.to_posture(pos=stage_position, posture=target_posture)
-        elif current_posture in (Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM):
+
+        elif current_posture in (Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING):
             if target_posture in self.postures:
                 end_pos = self.to_posture(pos=stage_position, posture=target_posture)
 
@@ -1339,6 +1500,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                     target_pos_sem = self.get_target_position(Posture.SEM_IMAGING)
                     if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                         sub_moves.append((self.focus, focus_deactive))
+                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
                     sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
                     sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos_sem)))
 
@@ -1348,10 +1510,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_position)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_position)))
-            elif target_posture in (Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM):
+            elif target_posture in (Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
+                sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
 
                 if (type(self) == MeteorTFS1PostureManager):
                     if current_posture == Posture.SEM_IMAGING and target_posture == Posture.FM_IMAGING:
@@ -1424,6 +1587,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 if target_posture in [Posture.FM_IMAGING, Posture.FIB_VIEW_FM]:
                     # Engage the focuser
                     sub_moves.append((self.focus, focus_active))
+                elif target_posture == Posture.SLM_IMAGING:
+                    # Engage the SLM lens and focus as last move
+                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=True)
             else:
                 raise ValueError(f"Unsupported move to target {target_posture}")
 
@@ -1470,6 +1636,8 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
 
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         # These positions are "optional", and only used with Odemis advanced
+        if self._slm_available:
+            self.postures.append(Posture.SLM_IMAGING)
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             self.postures.append(Posture.MILLING)
         if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
@@ -2018,6 +2186,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Automatic conversion to sample-stage axes
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
+        if self._slm_available:
+            self.postures.append(Posture.SLM_IMAGING)
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             self.postures.append(Posture.MILLING)
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
@@ -2090,8 +2260,16 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             tf_mill = tf_id
             tf_fib_view_fm = tf_id
 
+        if self._slm_available:
+            rx_slm = stage_md[model.MD_FAV_SLM_POS_ACTIVE]["rx"]
+            tf_tilt = self._get_tilt_transformation(-pre_tilt, rx_slm)
+            tf_slm = tf_reverse @ tf_tilt @ tf_sr
+        else:
+            tf_slm = tf_id
+
         tf_mill_inv = numpy.linalg.inv(tf_mill)
         tf_fib_view_fm_inv = numpy.linalg.inv(tf_fib_view_fm)
+        tf_slm_inv = numpy.linalg.inv(tf_slm)
 
         logging.debug(f"tf_matrix: {tf_fm}, tf_sem: {tf_sem}, tf_mill: {tf_mill}")
 
@@ -2101,6 +2279,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             Posture.SEM_IMAGING: tf_sem,
             Posture.MILLING: tf_mill,
             Posture.FIB_VIEW_FM: tf_fib_view_fm,
+            Posture.SLM_IMAGING: tf_slm,
             Posture.UNKNOWN: tf_id,
         }
         # From stage-bare to sample-stage
@@ -2109,6 +2288,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             Posture.SEM_IMAGING: tf_sem_inv,
             Posture.MILLING: tf_mill_inv,
             Posture.FIB_VIEW_FM: tf_fib_view_fm_inv,
+            Posture.SLM_IMAGING: tf_slm_inv,
             Posture.UNKNOWN: tf_id,
         }
 
@@ -2501,7 +2681,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                     target_pos_sem = self.get_target_position(Posture.SEM_IMAGING)
                     if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                         sub_moves.append((self.focus, focus_deactive))
-
+                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
                     sub_moves.append((self.stage, {'z': safety_z}))
                     sub_moves.append((self.stage, filter_dict({'x', 'y', 'rx', 'rz'}, target_pos_sem)))
                     # Don't move in Z of Posture.SEM_IMAGING, as it'll move down first to safety_z later
@@ -2517,10 +2697,11 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'x'}, target_position)))
                 sub_moves.append((self.stage, filter_dict({'y', 'z'}, target_position)))
 
-            elif target_posture in (Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_VIEW_FM):
+            elif target_posture in (Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
+                sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=False)
 
                 if current_posture == Posture.MILLING:
                     # Store current milling angle, to go back to that same position next time
@@ -2553,6 +2734,10 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         self.shutter.value = False  # False = retracted (open), blocking call
                     # Engage the focuser as last move
                     sub_moves.append((self.focus, focus_active))
+
+                if target_posture == Posture.SLM_IMAGING:
+                    # Engage the SLM lens and focus as last move
+                    sub_moves = self._append_slm_lens_focus_moves(sub_moves, engage=True)
             else:
                 raise ValueError(f"Unsupported move to target {target_posture}")
 

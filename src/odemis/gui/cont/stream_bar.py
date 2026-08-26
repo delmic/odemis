@@ -29,7 +29,7 @@ import os
 import threading
 import time
 from collections import OrderedDict
-from typing import Optional
+from typing import Optional, Tuple
 
 import wx
 
@@ -39,6 +39,7 @@ import odemis.gui
 import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
+from odemis.acq.move import Posture
 from odemis.acq.feature import CryoFeature, load_feature_streams_from_disk
 from odemis.acq.stream import StaticSEMStream, StaticStream
 from odemis.acq.stream_settings import StreamSettingsConfig
@@ -2163,6 +2164,133 @@ class CryoStreamsController(SecomStreamsController):
     Controls the display of stream panels without affecting the actual streams
     """
 
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the cryo stream controller and refresh stream panel visibility
+        when posture changes.
+        """
+        super().__init__(*args, **kwargs)
+        posture_va = self._main_data_model.posture_manager.current_posture
+        posture_va.subscribe(self._on_posture_change, init=True)
+
+    def _is_slm_posture(self) -> bool:
+        """
+        Check whether the current posture is SLM imaging posture.
+        """
+        posture = self._main_data_model.posture_manager.get_current_posture()
+        return posture == Posture.SLM_IMAGING
+
+    def _is_slm_stream(self, stream) -> bool:
+        """
+        Determine whether a stream is tied to SLM optics.
+
+        A stream is considered SLM when its focuser role or name contains the
+        coincident marker.
+        """
+        focuser = getattr(stream, "focuser", None)
+        if focuser is self._main_data_model.focus_coincident:
+            return True
+        return False
+
+    def _get_fluo_components(self) -> Tuple[object, object, object, object]:
+        """
+        Pick optical components for a fluorescence stream based on posture.
+
+        Returns detector, light source, filter and focuser.
+        """
+        if self._is_slm_posture():
+            ccd = getattr(self._main_data_model, "ccd_coincident", None)
+            light = getattr(self._main_data_model, "light_coincident", None)
+            light_filter = getattr(self._main_data_model, "filter_coincident", None)
+            focuser = getattr(self._main_data_model, "focus_coincident", None)
+            if all((ccd, light, light_filter, focuser)):
+                return ccd, light, light_filter, focuser
+
+        return (
+            self._main_data_model.ccd,
+            self._main_data_model.light,
+            self._main_data_model.light_filter,
+            self._main_data_model.focus,
+        )
+
+    def _create_fluo_stream(self, name: str) -> acqstream.FluoStream:
+        """
+        Create a fluorescence stream bound to posture-specific optics.
+        """
+        ccd, light, light_filter, focuser = self._get_fluo_components()
+        return acqstream.FluoStream(
+            name,
+            ccd,
+            ccd.data,
+            light,
+            light_filter,
+            focuser=focuser,
+            opm=self._main_data_model.opm,
+            detvas={"exposureTime"},
+        )
+
+    def addFluo(self, **kwargs):
+        """
+        Create a new fluorescence stream and its panel in the stream bar.
+        """
+        names = [s.name.value for s in self._tab_data_model.streams.value]
+        for i in range(1, 1000):
+            name = "Filtered colour %d" % i
+            if name not in names:
+                break
+        else:
+            logging.error("Failed to find a new unique name for stream")
+            name = "Filtered colour"
+
+        stream = self._create_fluo_stream(name)
+        self._ensure_power_non_null(stream)
+        return self._add_stream(stream, **kwargs)
+
+    def _addFluoWithSettings(self, label, display_label, **kwargs):
+        """
+        Create a fluorescence stream from saved settings.
+
+        :param label: the stream settings key in the settings file
+        :param display_label: the display name of the stream to create
+        """
+        stream = self._create_fluo_stream(display_label)
+        self.stream_settings.apply_settings(stream, label)
+        self._ensure_power_non_null(stream)
+        return self._add_stream(stream, **kwargs)
+
+    @call_in_wx_main
+    def _on_posture_change(self, _posture) -> None:
+        """
+        Refresh stream panel visibility whenever posture changes.
+        """
+        view = self._tab_data_model.focussedView.value
+        self._onView(view)
+
+    def _add_fluo_streams_actions(self) -> None:
+        """
+        Create fluorescence add actions for cryo and enable them only in SLM posture.
+        """
+        if (
+                self._main_data_model.light and
+                self._main_data_model.light_filter and
+                self._main_data_model.ccd
+        ):
+            def fluor_capable() -> bool:
+                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                       guimodel.CHAMBER_UNKNOWN}
+                view = self._tab_data_model.focussedView.value
+                compatible = view.is_compatible(acqstream.FluoStream)
+                return enabled and compatible
+
+            if self.stream_settings.config_data:
+                acq_names = sorted(self.stream_settings.entries)
+                for label in acq_names:
+                    display_label = self._get_unique_action_name(label, "Filtered colour")
+                    call_label = functools.partial(self._addFluoWithSettings, label, display_label)
+                    self.add_action(display_label, call_label, fluor_capable)
+            else:
+                self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+
     def _onView(self, view):
         """ Handle the changing of the focused view """
         if not view or self.ignore_view:
@@ -2188,11 +2316,26 @@ class CryoStreamsController(SecomStreamsController):
                 # Thus, combining the class type and 'overviewStreams' presence ensures
                 # the accurate identification of the 'Overview' view.
                 if isinstance(view, guimodel.FeatureOverviewView):
-                    e.Show(e.stream in ov_streams)
+                    show = e.stream in ov_streams
+                    e.Show(show)
                 else:
-                    e.Show(e.stream not in ov_streams)
+                    show = e.stream in ov_streams
+                    e.Show(show)
+
+                # Show either the acquired FM or the acquired SLM streams, depending on the current posture.
+                if show:
+                    stream_is_slm = self._is_slm_stream(e.stream)
+                    posture_is_slm = self._is_slm_posture()
+                    show = (stream_is_slm == posture_is_slm)
+
+                e.Show(show)
             else:
-                e.Show(isinstance(e.stream, allowed_classes))
+                is_slm_stream = self._is_slm_stream(e.stream)
+                is_slm_posture = self._is_slm_posture()
+                # It is True when (SLM strem + SLM posture) and (FM stream and FM posture)
+                # such that the compatible stream to the posture is shown
+                show = isinstance(e.stream, allowed_classes) and (is_slm_stream == is_slm_posture)
+                e.Show(show)
 
         self._stream_bar.fit_streams()
 
