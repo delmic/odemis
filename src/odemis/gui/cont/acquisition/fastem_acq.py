@@ -502,8 +502,8 @@ class FastEMOverviewAcquiController(object):
             logging.debug("Resuming acquisition")
             self.acq_future.resume()
             self._is_paused = False
-            # if self._fs_connector:
-            #     self._fs_connector.resume()
+            if self._fs_connector:
+                self._fs_connector.resume()
             self.btn_pause.SetLabel("Pause")
             self._set_status_message("Acquisition resumed.")
         else:
@@ -511,8 +511,6 @@ class FastEMOverviewAcquiController(object):
                 logging.warning("Overview acquisition cannot be paused")
                 return
             logging.debug("Pausing acquisition")
-            # if self._fs_connector:
-            #     self._fs_connector.pause()
             self.btn_pause.Enable(False)
             self.btn_pause.SetLabel("Pausing...")
             self.btn_cancel.Enable(False)
@@ -535,8 +533,8 @@ class FastEMOverviewAcquiController(object):
     @call_in_wx_main
     def _on_pause_failed(self):
         """Reset GUI if pausing failed (e.g., the acquisition finished in the meantime)."""
-        # if self._fs_connector:
-        #     self._fs_connector.resume()
+        if self._fs_connector:
+            self._fs_connector.resume()
         self.btn_pause.Enable()
         self.btn_pause.SetLabel("Pause")
         self.btn_cancel.Enable()
@@ -546,13 +544,19 @@ class FastEMOverviewAcquiController(object):
 
     @call_in_wx_main
     def _on_actually_paused(self):
-        """Re-enable the relevant buttons once the acquisition is truly paused."""
+        """Re-enable the relevant buttons once the acquisition is truly paused.
+        Also freezes the progress bar and label by pausing the connector timer.
+        """
         if not self._is_paused:
             return  # Resumed or cancelled in the meantime; nothing to do.
+        if self._fs_connector:
+            self._fs_connector.pause()
         self.btn_pause.SetLabel("Resume")
         self.btn_pause.Enable()
         self.btn_cancel.Enable()
-        self._set_status_message("Acquisition paused.")
+        _, remaining = self.acq_future.get_progress()
+        remaining_txt = units.readable_time(math.ceil(remaining))
+        self._set_status_message(f"Acquisition paused, {remaining_txt} left.")
         logging.debug("Overview acquisition paused at tile boundary.")
 
     def on_acquisition_done(self, future, num):
@@ -1138,6 +1142,7 @@ class FastEMMultiBeamAcquiController(object):
 
         # For acquisition
         self.btn_acquire = self._tab_panel.btn_acquire
+        self.btn_pause = self._tab_panel.btn_pause
         self.btn_cancel = self._tab_panel.btn_cancel
         self.gauge_acq = self._tab_panel.gauge_acq
         self.lbl_acqestimate = self._tab_panel.lbl_acq_estimate
@@ -1147,6 +1152,7 @@ class FastEMMultiBeamAcquiController(object):
         self.acq_future = None  # ProgressiveBatchFuture
         self.acq_future_for_pausing = None  # ProgressiveFuture
         self._fs_connector = None  # ProgressiveFutureConnector
+        self._is_paused = False
         self.save_full_cells = model.BooleanVA(
             False
         )  # Set to True if full cells should be saved
@@ -1154,6 +1160,7 @@ class FastEMMultiBeamAcquiController(object):
 
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
+        self.btn_pause.Bind(wx.EVT_BUTTON, self.on_pause)
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         # Hide gauge, disable acquisition button
@@ -1380,12 +1387,16 @@ class FastEMMultiBeamAcquiController(object):
           If None, no icon is shown.
         """
         self.btn_cancel.Hide()
+        self.btn_pause.Hide()
+        self.btn_pause.SetLabel("Pause")
         self.btn_acquire.Show()
         self.btn_acquire.Enable()
         self.gauge_acq.Hide()
         self.enable_project_tree_ctrl_checkboxes()
         self._tab_panel.Layout()
         self.acq_future = None
+        self.acq_future_for_pausing = None
+        self._is_paused = False
         self._fs_connector = None
         self._roa_future_connector.clear()
         self._set_next_project_dwell_time_sub_callback.clear()
@@ -1407,6 +1418,9 @@ class FastEMMultiBeamAcquiController(object):
         self._main_data_model.is_acquiring.value = True
         self.btn_acquire.Enable(False)
         self.btn_acquire.Hide()
+        self.btn_pause.Enable()
+        self.btn_pause.SetLabel("Pause")
+        self.btn_pause.Show()
         self.btn_cancel.Enable()
         self.btn_cancel.Show()
         self.gauge_acq.Show()
@@ -1661,6 +1675,84 @@ class FastEMMultiBeamAcquiController(object):
             window.Layout()
             window.Refresh()
 
+    def on_pause(self, evt):
+        """
+        Called during acquisition when pressing the pause/continue button.
+        """
+        if not self.acq_future:
+            logging.warning("Tried to pause ROA acquisition while it was not started")
+            return
+
+        if self._is_paused:
+            logging.debug("Resuming ROA acquisition")
+            if self.acq_future_for_pausing:
+                self.acq_future_for_pausing.resume()
+            self._is_paused = False
+            self.acq_future_for_pausing = None
+            self.btn_pause.SetLabel("Pause")
+            if self._fs_connector:
+                self._fs_connector.resume()
+        else:
+            # Find the currently running ROA sub-future that supports pause
+            running_future = next(
+                (f for f in self.acq_future.futures if f.running() and getattr(f, "can_pause", False)),
+                None,
+            )
+            if running_future is None:
+                logging.warning("ROA acquisition cannot be paused right now (no running pausable future found)")
+                return
+            logging.debug("Pausing ROA acquisition")
+            self.acq_future_for_pausing = running_future
+            self.btn_pause.Enable(False)
+            self.btn_pause.SetLabel("Pausing...")
+            self.btn_cancel.Enable(False)
+            t = threading.Thread(target=self._do_pause, daemon=True)
+            t.start()
+
+    def _do_pause(self):
+        """
+        Call pause() in a background thread so the GUI stays responsive.
+
+        Blocks until the ROA acquisition has truly paused at a field boundary,
+        then schedules a GUI update via wx.CallAfter.
+        """
+        if self.acq_future_for_pausing and self.acq_future_for_pausing.pause():
+            self._is_paused = True
+            wx.CallAfter(self._on_actually_paused)
+        else:
+            wx.CallAfter(self._on_pause_failed)
+
+    @call_in_wx_main
+    def _on_pause_failed(self):
+        """
+        Reset GUI if pausing failed (e.g., the ROA finished in the meantime).
+        """
+        self.acq_future_for_pausing = None
+        self.btn_pause.Enable()
+        self.btn_pause.SetLabel("Pause")
+        self.btn_cancel.Enable()
+        if not self.acq_future or self.acq_future.done():
+            return  # _reset_acquisition_gui will handle the full reset
+        self.lbl_acqestimate.SetLabel("Acquisition running.")
+
+    @call_in_wx_main
+    def _on_actually_paused(self):
+        """
+        Re-enable the relevant buttons once the ROA acquisition is truly paused.
+        Also freezes the progress bar and label by pausing the connector timer.
+        """
+        if not self._is_paused:
+            return  # Resumed or cancelled in the meantime; nothing to do.
+        if self._fs_connector:
+            self._fs_connector.pause()
+        self.btn_pause.SetLabel("Resume")
+        self.btn_pause.Enable()
+        self.btn_cancel.Enable()
+        _, remaining = self.acq_future.get_progress()
+        remaining_txt = units.readable_time(math.ceil(remaining))
+        self.lbl_acqestimate.SetLabel(f"Acquisition paused, {remaining_txt} left.")
+        logging.debug("ROA acquisition paused at field boundary.")
+
     def on_cancel(self, evt):
         """
         Called during acquisition when pressing the cancel button
@@ -1671,6 +1763,10 @@ class FastEMMultiBeamAcquiController(object):
             self._reset_acquisition_gui()
             return
 
+        self.btn_pause.Enable(False)
+        # If currently paused, resume before cancelling so the task is not stuck in wait_if_paused()
+        if self._is_paused and self.acq_future_for_pausing:
+            self.acq_future_for_pausing.resume()
         self.acq_future.cancel()
         fastem._executor.cancel()
         # all the rest will be handled by on_acquisition_done()

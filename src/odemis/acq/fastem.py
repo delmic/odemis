@@ -208,6 +208,7 @@ def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage,
 
     est_dur = estimate_acquisition_time(roa, pre_calibrations, acq_dwell_time)
     f = model.ProgressiveFuture(remaining_time=est_dur)
+    f.can_pause = True
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
@@ -525,6 +526,17 @@ class AcquisitionTask(object):
             # Note: The acquisition of the current single field image (tile) is still finished though.
             if self._cancelled:
                 raise CancelledError()
+
+            # Pause between fields if requested. Blanks the beam while paused so the sample is not damaged.
+            if self._future.is_pause_requested:
+                logging.debug("Pausing ROA acquisition at field boundary.")
+                if not self._blank_beam:
+                    self._scanner.blanker.value = True  # blank the beam while paused
+                self._future.wait_if_paused()
+                if self._cancelled:
+                    raise CancelledError()
+                if not self._blank_beam:
+                    self._scanner.blanker.value = False  # unblank the beam after resuming
 
         logging.debug("Successfully acquired all fields of ROA.")
 
