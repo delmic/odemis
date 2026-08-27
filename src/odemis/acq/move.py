@@ -353,6 +353,8 @@ class MeteorPostureManager(MicroscopePostureManager):
                 self._slm_focus = model.getComponent(role="focus-coincident")
                 self._slm_lens = model.getComponent(role="lens-arm-coincident")
                 self._slm_available = True
+                # if self._slm_lens.referenced.value:
+                #     self._slm_axes_referenced = True
             except LookupError:
                 logging.warning(
                     "SLM posture metadata is configured but focus-coincident/lens-arm-coincident components are missing"

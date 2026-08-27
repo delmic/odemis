@@ -1019,11 +1019,10 @@ class CryoChamberTab(Tab):
         Tab.Show(self, show=show)
 
         if self._role in ["meteor", "mimas"] and show:
-            pm = self.tab_data_model.main.posture_manager
-            already_referenced = getattr(pm, "_slm_axes_referenced", False)
+            already_referenced = getattr(self.posture_manager, "_slm_axes_referenced", False)
             if (not already_referenced
-                    and Posture.SLM_IMAGING in getattr(pm, "postures", ())
-                    and hasattr(pm, "_ensure_slm_referenced")):
+                    and Posture.SLM_IMAGING in getattr(self.posture_manager, "postures", ())
+                    and hasattr(self.posture_manager, "_ensure_slm_referenced")):
                 # stage_md = self.tab_data_model.main.stage_bare.getMetadata()
                 # auto_ref = bool(stage_md.get("slm_auto_reference", False))
                 # if auto_ref:
@@ -1042,7 +1041,7 @@ class CryoChamberTab(Tab):
                 )
                 ans = box.ShowModal()
                 if ans == wx.ID_YES:
-                    pm._ensure_slm_referenced()
+                    self.posture_manager._ensure_slm_referenced()
                 else:
                     wx.GetApp().ExitMainLoop()
                     return

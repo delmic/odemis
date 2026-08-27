@@ -187,7 +187,7 @@ class FibsemTab(Tab):
         self.panel = panel
 
         self._posture_switch_future = model.InstantaneousFuture()
-        self._slm_alignment_controller = SLMAlignmentController(self.main_frame)
+        self._slm_alignment_controller = SLMAlignmentController(self.main_frame, main_data)
 
         self._btn_slm_alignment = getattr(self.panel, "btn_slm_alignment", None)
         if self._btn_slm_alignment is not None:
