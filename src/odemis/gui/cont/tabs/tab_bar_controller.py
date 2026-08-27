@@ -125,6 +125,11 @@ class TabController(object):
         evt_btn = evt.GetEventObject()
         for t in self._tab.choices:
             if evt_btn == t.button:
+                current_tab = self._tab.value
+                if t is not current_tab and not current_tab.query_leave():
+                    t.button.SetToggle(False)
+                    current_tab.button.SetToggle(True)
+                    break
                 self._tab.value = t
                 break
         else:

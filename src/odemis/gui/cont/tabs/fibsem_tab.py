@@ -46,7 +46,7 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENABLED
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
-from odemis.gui.cont.features import CryoFeatureController
+from odemis.gui.cont.features import CryoFeatureController, confirm_discard_pending_feature_position
 from odemis.gui.cont.stream_bar import CryoFIBAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT
@@ -465,6 +465,17 @@ class FibsemTab(Tab):
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
+
+    def query_leave(self) -> bool:
+        """Ask before leaving the tab with an unsaved feature marker position."""
+        feature = self.main_data.currentFeature.value
+        if feature is None:
+            return True
+        return confirm_discard_pending_feature_position(
+            self.main_frame,
+            feature,
+            "switch tabs",
+        )
 
     @classmethod
     def get_display_priority(cls, main_data):

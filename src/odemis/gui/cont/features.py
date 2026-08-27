@@ -41,14 +41,41 @@ from odemis.acq.feature import (
 )
 from odemis.acq.move import Posture
 from odemis.gui import model as guimod
+from odemis.gui.comp.popup import show_message
 from odemis.gui.conf.licences import LICENCE_MILLING_ENABLED
 from odemis.gui.cont.cryo_project import save_project
-from odemis.gui.model import TOOL_FEATURE
+from odemis.gui.model import TOOL_FEATURE, TOOL_NONE
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 
 SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+
+
+def confirm_discard_pending_feature_position(parent: wx.Window,
+                                             feature: CryoFeature,
+                                             action: str) -> bool:
+    """Ask before discarding a feature marker position during manual navigation."""
+    if feature.pending_milling_feature_offset is None:
+        return True
+
+    box = wx.MessageDialog(
+        parent,
+        message=(f"{feature.name.value} has an unsaved position. "
+                 f"Discard it and {action}?"),
+        caption="Unsaved feature position",
+        style=wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING | wx.CENTER,
+    )
+    box.SetYesNoLabels("Discard", "Cancel")
+    try:
+        discard = box.ShowModal() == wx.ID_YES
+    finally:
+        box.Destroy()
+
+    if discard:
+        feature.pending_milling_feature_offset = None
+    return discard
+
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -94,6 +121,7 @@ class CryoFeatureController(object):
         self._panel.btn_create_move_feature.Bind(wx.EVT_BUTTON, self._on_btn_create_move_feature)
         self._panel.btn_delete_feature.Bind(wx.EVT_BUTTON, self._on_btn_delete_feature)
         self._panel.btn_go_to_feature.Bind(wx.EVT_BUTTON, self._on_btn_go_to_feature)
+        self._tab_data_model.tool.subscribe(self._on_tool_change)
 
         # specific controls for FM and FIBSEM modes
         fm_mode = self.acqui_mode is guimod.AcquiMode.FLM
@@ -106,9 +134,33 @@ class CryoFeatureController(object):
             self.pm.current_posture.subscribe(self._on_posture_change)
 
     def _on_btn_create_move_feature(self, _):
-        # As this button is identical to clicking the feature tool,
-        # directly change the tool to feature tool
-        self._tab_data_model.tool.value = TOOL_FEATURE
+        if self._tab_data_model.tool.value == TOOL_FEATURE:
+            self._tab_data_model.tool.value = TOOL_NONE
+        else:
+            self._tab_data_model.tool.value = TOOL_FEATURE
+
+    @call_in_wx_main
+    def _on_tool_change(self, tool: int) -> None:
+        """Confirm Create/Move activation from either UI control."""
+        if tool != TOOL_FEATURE or self._tab_data_model.tool.value != TOOL_FEATURE:
+            return
+
+        feature = self._tab_data_model.main.currentFeature.value
+        if feature is None:
+            return
+
+        had_pending_position = feature.pending_milling_feature_offset is not None
+        if not confirm_discard_pending_feature_position(
+                self._tab.main_frame,
+                feature,
+                "enter Create/Move mode",
+        ):
+            self._tab_data_model.tool.value = TOOL_NONE
+            return
+
+        if had_pending_position:
+            for viewport in self._tab.view_controller.viewports:
+                viewport.canvas.request_drawing_update()
 
     def _on_btn_delete_feature(self, _):
         """
@@ -149,6 +201,18 @@ class CryoFeatureController(object):
             logging.info(f"Currently under {current_posture.value}, moving to feature position is not yet supported for {role}.")
             self._display_go_to_feature_warning()
             return
+
+        if (self.acqui_mode is guimod.AcquiMode.FIBSEM
+                and current_posture == Posture.MILLING
+                and feature.reference_image is None):
+            show_message(
+                self._tab.main_frame,
+                "No FIB reference available",
+                f"No FIB reference image is saved for {feature.name.value}. "
+                "The stage will move to the feature marker instead.",
+                timeout=5.0,
+                level=logging.WARNING,
+            )
 
         stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
         fm_focus_position = feature.fm_focus_position.value
@@ -478,6 +542,16 @@ class CryoFeatureController(object):
             logging.warning("cmb_features selection = -1.")
             return
         selected_feature = self._panel.cmb_features.GetClientData(index)
+        current_feature = self._tab_data_model.main.currentFeature.value
+        if (selected_feature is not current_feature
+                and current_feature is not None
+                and not confirm_discard_pending_feature_position(
+                    self._tab.main_frame,
+                    current_feature,
+                    f"switch to {selected_feature.name.value}",
+                )):
+            self._update_feature_cmb_list()
+            return
         self._tab_data_model.main.currentFeature.value = selected_feature
 
     def _on_cmb_feature_status_change(self):

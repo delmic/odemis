@@ -37,6 +37,7 @@ from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
 from odemis.gui.comp.popup import show_message
+from odemis.gui.cont.features import confirm_discard_pending_feature_position
 from odemis.gui.model import TabName, TOOL_FEATURE, TOOL_NONE, TOOL_FIDUCIAL, TOOL_REGION_OF_INTEREST, TOOL_SURFACE_FIDUCIAL
 from odemis.acq.move import Posture, MicroscopePostureManager
 
@@ -84,8 +85,6 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         self._selected_feature = None
         self._current_feature = None
         self._hover_feature = None
-        # defer the tool reset until mouse-up to avoid changing modes while the canvas is dragging
-        self._cancel_move_on_left_up = False
         self._label = self.add_label("")
 
         self._selected_tool_va = self.tab_data.tool if hasattr(self.tab_data, "tool") else None
@@ -197,6 +196,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
+                if not self._confirm_feature_change(feature):
+                    self.cnvs.cancel_drag()
+                    return
                 logging.info("moving to feature {}".format(feature.name.value))
                 # convert from stage position to view position
                 position_bare = self._get_feature_position_at_view_posture(feature)
@@ -226,29 +228,33 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             v_pos = evt.Position
             feature = self._detect_point_inside_feature(v_pos)
             if self._mode == MODE_EDIT_FEATURES:
-                current_feature = self.tab_data.main.currentFeature.value
-                if feature is current_feature and current_feature is not None:
-                    # move/drag the selected feature
+                if feature is not None:
+                    confirmation_shown = self._feature_change_requires_confirmation(feature)
+                    if not self._confirm_feature_change(feature):
+                        self._finish_interrupted_mouse_gesture()
+                        return
+                    if confirmation_shown:
+                        self.tab_data.main.currentFeature.value = feature
+                        self._finish_interrupted_mouse_gesture()
+                        return
+                    # Select the feature before moving it.
+                    self.tab_data.main.currentFeature.value = feature
                     self._selected_feature = feature
                     DragMixin._on_left_down(self, evt)
-                elif feature is not None:
-                    # Only the currently selected feature can be moved.
-                    if current_feature is None:
-                        warning = (f"No feature is selected, but you are trying to move "
-                                   f"{feature.name.value}. Select {feature.name.value} first.")
-                    else:
-                        warning = (f"{current_feature.name.value} is selected, but you are trying "
-                                   f"to move {feature.name.value}. Select {feature.name.value} first.")
-                    self._cancel_move_on_left_up = True
-                    show_message(
-                        wx.GetApp().main_frame,
-                        "Feature not selected",
-                        warning,
-                        timeout=5.0,
-                        level=logging.WARNING,
-                    )
-                    evt.Skip()
                 else:
+                    current_feature = self.tab_data.main.currentFeature.value
+                    confirmation_shown = (current_feature is not None
+                                          and current_feature.pending_milling_feature_offset is not None)
+                    if (current_feature is not None
+                            and not confirm_discard_pending_feature_position(
+                                wx.GetApp().main_frame,
+                                current_feature,
+                                "create a new feature",
+                            )):
+                        self._finish_interrupted_mouse_gesture()
+                        return
+                    if confirmation_shown:
+                        self._finish_interrupted_mouse_gesture()
                     # create new feature based on the physical position then disable the feature tool
                     pos = self._view_to_stage_pos(v_pos)
                     self.tab_data.add_new_feature(stage_position=pos)
@@ -256,7 +262,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self._selected_tool_va.value = TOOL_NONE
             else:
                 if feature:
+                    confirmation_shown = self._feature_change_requires_confirmation(feature)
+                    if not self._confirm_feature_change(feature):
+                        self._finish_interrupted_mouse_gesture()
+                        return
                     self.tab_data.main.currentFeature.value = feature
+                    if confirmation_shown:
+                        self._finish_interrupted_mouse_gesture()
+                        return
                 evt.Skip()
         else:
             super().on_left_down(evt)
@@ -267,11 +280,6 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         otherwise let the canvas handle the event when the overlay is active.
         """
         if self.active:
-            if self._cancel_move_on_left_up:
-                self._cancel_move_on_left_up = False
-                self._selected_tool_va.value = TOOL_NONE
-                evt.Skip()
-                return
             if self.left_dragging:
                 if self._selected_feature:
                     self._update_selected_feature_position(evt.Position)
@@ -280,6 +288,33 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 evt.Skip()
         else:
             WorldOverlay.on_left_up(self, evt)
+
+    def _confirm_feature_change(self, feature: CryoFeature) -> bool:
+        """Confirm a manual selection change when the current marker was moved."""
+        current_feature = self.tab_data.main.currentFeature.value
+        if current_feature is None or feature is current_feature:
+            return True
+        return confirm_discard_pending_feature_position(
+            wx.GetApp().main_frame,
+            current_feature,
+            f"switch to {feature.name.value}",
+        )
+
+    def _feature_change_requires_confirmation(self, feature: CryoFeature) -> bool:
+        """Return whether selecting the feature will show a confirmation dialog."""
+        current_feature = self.tab_data.main.currentFeature.value
+        return (current_feature is not None
+                and feature is not current_feature
+                and current_feature.pending_milling_feature_offset is not None)
+
+    def _finish_interrupted_mouse_gesture(self) -> None:
+        """Finish a canvas gesture interrupted by a confirmation dialog."""
+        self.clear_drag()
+        self.cnvs.cancel_drag()
+        if self.cnvs.HasCapture():
+            self.cnvs.on_mouse_up()
+        else:
+            self.cnvs.reset_dynamic_cursor()
 
     def _update_selected_feature_position(self, v_pos):
         """
@@ -387,10 +422,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             if feature:
                 self._hover_feature = feature
                 if self._mode == MODE_EDIT_FEATURES:
-                    if feature is self.tab_data.main.currentFeature.value:
-                        self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
-                    else:
-                        self.cnvs.set_dynamic_cursor(wx.CURSOR_NO_ENTRY)
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
                 else:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
             else:
