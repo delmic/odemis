@@ -298,13 +298,13 @@ class CancellableFuture(futures.Future):
 
         self.can_pause = False
         self._is_paused_event = threading.Event()
-        self._no_need_to_pause_event = threading.Event()
-        self._no_need_to_pause_event.set()
+        self._run_allowed_evt = threading.Event()
+        self._run_allowed_evt.set()
 
     @property
     def is_pause_requested(self) -> bool:
         """Return True if a pause has been requested but not yet acknowledged."""
-        return self.can_pause and not self._no_need_to_pause_event.is_set()
+        return not self._run_allowed_evt.is_set()
 
     def cancel(self):
         """Cancel the future if possible.
@@ -354,13 +354,13 @@ class CancellableFuture(futures.Future):
             if self._state in (FINISHED, CANCELLED, CANCELLED_AND_NOTIFIED):
                 return False
             elif self._state in (RUNNING, PENDING):
-                self._no_need_to_pause_event.clear()
+                self._run_allowed_evt.clear()
 
         while not self._is_paused_event.wait(0.1):
             # Block until task is fully paused (wait_if_paused started waiting)
             if self.done():  # done includes finished and canceled
                 return False
-            if self._no_need_to_pause_event.is_set():
+            if self._run_allowed_evt.is_set():
                 # The pause was cancelled by a resume() call, so we cannot pause anymore
                 return False
 
@@ -380,7 +380,7 @@ class CancellableFuture(futures.Future):
         if not self.can_pause:
             return
 
-        self._no_need_to_pause_event.set()
+        self._run_allowed_evt.set()
         # Do NOT clear _is_paused_event here: it is owned by wait_if_paused(),
         # which clears it in its finally block. Clearing it here would race
         # with pause()'s confirmation check, allowing pause() to return True
@@ -403,14 +403,14 @@ class CancellableFuture(futures.Future):
 
         :returns: the duration spent paused in seconds, or 0.0 if not paused.
         """
-        if self._no_need_to_pause_event.is_set():
+        if self._run_allowed_evt.is_set():
             return 0.0
 
         t = time.monotonic()
         self._is_paused_event.set()
 
         try:
-            while not self._no_need_to_pause_event.wait(0.1):
+            while not self._run_allowed_evt.wait(0.1):
                 if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                     raise CancelledError()
                 if self._state == FINISHED:
@@ -557,14 +557,14 @@ class ProgressiveFuture(CancellableFuture):
             elif self._state == RUNNING:
                 if self._is_paused_event.is_set():
                     # Paused: return frozen values without extrapolation
-                    elapsed = max(0.0, self._elapsed_time)
+                    elapsed = self._elapsed_time
                     remaining = max(0.0, self._remaining_time)
                 elif self._last_update_time is not None:
                     since = time.monotonic() - self._last_update_time
                     elapsed = max(0.0, self._elapsed_time + since)
                     remaining = max(0.0, self._remaining_time - since)
                 else:
-                    elapsed = max(0.0, self._elapsed_time)
+                    elapsed = self._elapsed_time
                     remaining = max(0.0, self._remaining_time)
                 return elapsed, remaining
             else:  # FINISHED or CANCELLED
@@ -655,7 +655,7 @@ class ProgressiveFuture(CancellableFuture):
 
         :returns: the duration spent paused in seconds (0 if not paused).
         """
-        if self._no_need_to_pause_event.is_set():
+        if self._run_allowed_evt.is_set():
             return 0.0
 
         # Freeze the time anchor before entering the pause. Hold the condition
