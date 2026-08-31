@@ -32,6 +32,7 @@ from concurrent.futures import CancelledError
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+import cairo
 import wx
 
 from odemis import model
@@ -42,7 +43,11 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
-from odemis.acq.milling.patterns import RectanglePatternParameters
+from odemis.acq.milling.patterns import (
+    MicroexpansionPatternParameters,
+    RectanglePatternParameters,
+    TrenchPatternParameters,
+)
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
@@ -70,6 +75,8 @@ MILLING_COLOURS_CANONICAL = {
 # Step sizes to move the milling patterns horizontally
 MOVE_DELTA_X_SHORT = 1  # px
 MOVE_DELTA_X_LONG = 5  # px
+SPOT_SIZE_CORRECTION_OPACITY = 0.18
+SPOT_SIZE_CORRECTION_DASH = [6, 4]
 
 def _get_milling_colour(task_name: str, idx: int) -> str:
     """Get the colour based on the task name or index"""
@@ -99,14 +106,97 @@ def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
 
     return center_x, center_y
 
+
+class MillingRectangleOverlay(RectangleOverlay):
+    """Rectangle overlay that can show the estimated uncorrected opening."""
+
+    def __init__(self, *args, spot_size_correction: float = 0.0,
+                 show_spot_size_correction: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.spot_size_correction = spot_size_correction
+        self.show_spot_size_correction = show_spot_size_correction
+
+    def _draw_spot_size_correction(self, ctx) -> None:
+        correction = self.spot_size_correction
+        if not self.show_spot_size_correction or correction == 0:
+            return
+
+        points = (self.p_point1, self.p_point2, self.p_point3, self.p_point4)
+        if any(point is None for point in points):
+            return
+
+        xmin = min(point.x for point in points)
+        xmax = max(point.x for point in points)
+        ymin = min(point.y for point in points)
+        ymax = max(point.y for point in points)
+        correction_per_edge = correction / 2
+        estimated_xmin = xmin - correction_per_edge
+        estimated_xmax = xmax + correction_per_edge
+        estimated_ymin = ymin - correction_per_edge
+        estimated_ymax = ymax + correction_per_edge
+
+        displayed = (
+            Vec(xmin, ymax), Vec(xmax, ymax), Vec(xmax, ymin), Vec(xmin, ymin)
+        )
+        estimated = (
+            Vec(estimated_xmin, estimated_ymax),
+            Vec(estimated_xmax, estimated_ymax),
+            Vec(estimated_xmax, estimated_ymin),
+            Vec(estimated_xmin, estimated_ymin),
+        )
+        outer, inner = estimated, displayed
+        offset = self.cnvs.get_half_buffer_size()
+        estimated_buffer_points = [
+            self.cnvs.phys_to_buffer(point, offset) for point in estimated
+        ]
+
+        ctx.save()
+        ctx.new_path()
+        ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+        for rectangle in (outer, inner):
+            buffer_points = [self.cnvs.phys_to_buffer(point, offset) for point in rectangle]
+            ctx.move_to(*buffer_points[0])
+            for point in buffer_points[1:]:
+                ctx.line_to(*point)
+            ctx.close_path()
+        red, green, blue, _ = self.colour
+        ctx.set_source_rgba(red, green, blue, SPOT_SIZE_CORRECTION_OPACITY)
+        ctx.fill()
+
+        # The solid desired outline is drawn below by RectangleOverlay. Draw
+        # the estimated uncorrected opening on the other edge of the shaded band.
+        ctx.new_path()
+        ctx.move_to(*estimated_buffer_points[0])
+        for point in estimated_buffer_points[1:]:
+            ctx.line_to(*point)
+        ctx.close_path()
+        ctx.set_line_width(2)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_dash(SPOT_SIZE_CORRECTION_DASH)
+        ctx.set_source_rgba(*self.colour)
+        ctx.stroke()
+        ctx.restore()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
+        self._draw_spot_size_correction(ctx)
+        super().draw(ctx, shift=shift, scale=scale, line_width=line_width)
+
+
 # TODO: support other shapes
 def rectangle_pattern_to_shape(canvas,
                         ref_img: model.DataArray,
                         pattern: RectanglePatternParameters,
                         colour: str = "#FFFF00",
-                        name: str = None) -> EditableShape:
+                        name: str = None,
+                        show_spot_size_correction: bool = False) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
-    rect = RectangleOverlay(cnvs=canvas, colour = colour, show_selection_points = False)
+    rect = MillingRectangleOverlay(
+        cnvs=canvas,
+        colour=colour,
+        show_selection_points=False,
+        spot_size_correction=pattern.spot_size_correction.value,
+        show_spot_size_correction=show_spot_size_correction,
+    )
     width = pattern.width.value
     height = pattern.height.value
     x, y = pos_to_absolute(pattern.center.value, ref_img) # image coordinates -> physical coordinates
@@ -161,6 +251,7 @@ class MillingTaskController:
         # load the milling tasks
         self.milling_tasks: Dict[str, MillingTaskSettings] = {} # TODO: move to main_data
         self.allow_milling_pattern_move = True
+        self._active_spot_size_pattern = None
 
         # pattern overlay
         self.rectangles_overlay = ShapesOverlay(
@@ -173,6 +264,7 @@ class MillingTaskController:
 
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
+        self._panel.milling_task_chk_list.Bind(wx.EVT_LISTBOX, handler=self._on_milling_task_selected)
 
         self._tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -221,6 +313,7 @@ class MillingTaskController:
             # self._panel.pnl_patterns.Destroy()
             self._panel.pnl_patterns.DestroyChildren()
             self.controls = {}
+        self._active_spot_size_pattern = None
 
         # create the panels
         self._panel.pnl_patterns._panel_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -228,7 +321,9 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        pattern_parameters = ["width", "height", "depth", "spacing"] # TODO: add milling params
+        pattern_parameters = [
+            "width", "height", "depth", "spacing", "spot_size_correction"
+        ] # TODO: add milling params
         # milling params: current, voltage, field of view, mode
         milling_parameters = ["current", "align", "mode"]
 
@@ -260,6 +355,10 @@ class MillingTaskController:
 
                 # VA connector, bind events
                 getattr(parameters, param).subscribe(self._on_patterns)
+                panel.ctrl_dict[param].Bind(
+                    wx.EVT_SET_FOCUS,
+                    lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
+                )
 
             # milling parameters
             for param in milling_parameters:
@@ -278,6 +377,27 @@ class MillingTaskController:
 
                 # VA connector, bind events
                 getattr(milling, param).subscribe(self._on_patterns)
+                activation_events = [wx.EVT_SET_FOCUS]
+                if isinstance(val, model.BooleanVA):
+                    activation_events.append(wx.EVT_CHECKBOX)
+                if isinstance(val, model.StringEnumerated):
+                    activation_events.append(wx.EVT_COMBOBOX)
+                for activation_event in activation_events:
+                    panel.ctrl_dict[param].Bind(
+                        activation_event,
+                        lambda event, pattern=parameters: self._on_pattern_control_interaction(
+                            event, pattern
+                        ),
+                    )
+
+            # Some wx controls, especially OwnerDrawnComboBox, send focus and
+            # mouse events from an internal child window instead of the control.
+            for control in panel.ctrl_dict.values():
+                self._bind_pattern_activation(control, parameters)
+            panel.Bind(
+                wx.EVT_CHILD_FOCUS,
+                lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
+            )
 
             if not task.selected:
                 panel.Hide()
@@ -295,6 +415,25 @@ class MillingTaskController:
         """Called when the shapes are updated"""
         logging.debug("Shapes updated: %s", shapes)
 
+        for task_name in self.selected_tasks.value:
+            task = self.milling_tasks.get(task_name)
+            if task is None:
+                continue
+            for pattern in task.patterns:
+                if not isinstance(pattern, (RectanglePatternParameters,
+                                            TrenchPatternParameters,
+                                            MicroexpansionPatternParameters)):
+                    continue
+                correction = pattern.spot_size_correction.value
+                if correction >= min(pattern.width.value, pattern.height.value):
+                    logging.warning(
+                        "Spot size correction %s m is not smaller than pattern %s dimensions",
+                        correction,
+                        pattern.name.value,
+                    )
+                    self.valid_patterns.value = False
+                    return
+
         # check if any of the points of the shapes are outside the bounding box of the image
         s_bbox = self.acq_cont.stream.getBoundingBox()
         for shape in shapes:
@@ -307,6 +446,30 @@ class MillingTaskController:
 
         # all shapes are valid
         self.valid_patterns.value = True
+
+    def _bind_pattern_activation(self, control: wx.Window, pattern) -> None:
+        """Activate a pattern when its control or an internal child is clicked."""
+        control.Bind(
+            wx.EVT_LEFT_DOWN,
+            lambda evt, active_pattern=pattern: self._on_pattern_control_interaction(
+                evt, active_pattern
+            ),
+        )
+        for child in control.GetChildren():
+            self._bind_pattern_activation(child, pattern)
+
+    def _on_pattern_control_interaction(self, evt, pattern):
+        if self._active_spot_size_pattern is not pattern:
+            self._active_spot_size_pattern = pattern
+            self.draw_milling_tasks()
+        evt.Skip()
+
+    def _on_milling_task_selected(self, evt: wx.CommandEvent):
+        """Show the correction overlay for the highlighted pattern list row."""
+        task = self.milling_tasks.get(evt.GetString())
+        self._active_spot_size_pattern = task.patterns[0] if task and task.patterns else None
+        self.draw_milling_tasks()
+        evt.Skip()
 
     def on_mouse_down(self, evt):
         active_canvas = evt.GetEventObject()
@@ -483,7 +646,10 @@ class MillingTaskController:
                                             ref_img=feature.reference_image,
                                             pattern=pshape,
                                             colour=_get_milling_colour(task_name, i),
-                                            name=name)
+                                            name=name,
+                                            show_spot_size_correction=(
+                                                pattern is self._active_spot_size_pattern
+                                            ))
                     self.rectangles_overlay.add_shape(shape)
 
         # validate the patterns
@@ -615,7 +781,7 @@ class MillingTaskController:
             self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
         if not valid_patterns:
-            txt = "Patterns drawn outside image..."
+            txt = "Invalid milling pattern..."
             self._panel.txt_milling_est_time.SetLabel(txt)
             self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
