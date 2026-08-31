@@ -765,6 +765,8 @@ class ActuatorGUIData(MicroscopyGUIData):
             # Typically for the SPARCv2
             ss_def.update({
                 "mirror_xy": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
+                # To adjust the sample Z near the mirror.
+                "stage": (10e-6, [100e-9, 100e-6], "stage", {"z"}),
             })
         elif main.mirror:
             # SPARC mirror Y usually needs to be 10x bigger than X

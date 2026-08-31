@@ -250,7 +250,7 @@
                         </XRCED>
                       </object>
                       <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
-                        <label>EBEAM BLANKER</label>
+                        <label>ELECTRON PULSER</label>
                         <hidden>1</hidden>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>

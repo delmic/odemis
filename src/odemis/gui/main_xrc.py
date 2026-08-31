@@ -17768,7 +17768,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
-                        <label>EBEAM BLANKER</label>
+                        <label>ELECTRON PULSER</label>
                         <hidden>1</hidden>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
@@ -18818,7 +18818,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         </XRCED>
                       </object>
                       <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
-                        <label>EBEAM BLANKER</label>
+                        <label>ELECTRON PULSER</label>
                         <hidden>1</hidden>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
