@@ -42,11 +42,15 @@ from odemis.acq.feature import (
 )
 from odemis.acq.milling import millmng
 from odemis.acq.milling.millmng import MillingWorkflowTask, run_automated_milling
-from odemis.acq.milling.patterns import RectanglePatternParameters
+from odemis.acq.milling.patterns import (
+    MicroexpansionPatternParameters,
+    RectanglePatternParameters,
+    TrenchPatternParameters,
+)
 from odemis.acq.milling.tasks import MillingTaskSettings
 from odemis.gui.comp.milling import MillingTaskPanel
 from odemis.gui.comp.overlay.base import Vec
-from odemis.gui.comp.overlay.rectangle import RectangleOverlay
+from odemis.gui.comp.overlay.rectangle import MillingRectangleOverlay, RectangleOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape, ShapesOverlay
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.features import save_project
@@ -78,7 +82,6 @@ MILLING_COLOURS_CANONICAL = {
 # Step sizes to move the milling patterns horizontally
 MOVE_DELTA_X_SHORT = 1  # px
 MOVE_DELTA_X_LONG = 5  # px
-
 def _get_milling_colour(task_name: str, idx: int) -> str:
     """Get the colour based on the task name or index"""
     if task_name in MILLING_COLOURS_CANONICAL:
@@ -107,14 +110,22 @@ def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
 
     return center_x, center_y
 
+
 # TODO: support other shapes
 def rectangle_pattern_to_shape(canvas,
                         ref_img: model.DataArray,
                         pattern: RectanglePatternParameters,
                         colour: str = theme.categorical_yellow,
-                        name: str = None) -> EditableShape:
+                        name: str = None,
+                        show_spot_size_correction: bool = False) -> EditableShape:
     """Convert a rectangle pattern to a shape"""
-    rect = RectangleOverlay(cnvs=canvas, colour = colour, show_selection_points = False)
+    rect = MillingRectangleOverlay(
+        cnvs=canvas,
+        colour=colour,
+        show_selection_points=False,
+        spot_size_correction=pattern.spot_size_correction.value,
+        show_spot_size_correction=show_spot_size_correction,
+    )
     width = pattern.width.value
     height = pattern.height.value
     x, y = pos_to_absolute(pattern.center.value, ref_img) # image coordinates -> physical coordinates
@@ -169,6 +180,7 @@ class MillingTaskController:
         # load the milling tasks
         self.milling_tasks: Dict[str, MillingTaskSettings] = {} # TODO: move to main_data
         self.allow_milling_pattern_move = True
+        self._active_spot_size_pattern = None
 
         # pattern overlay
         self.rectangles_overlay = ShapesOverlay(
@@ -181,6 +193,7 @@ class MillingTaskController:
 
         self.selected_tasks = model.ListVA([])  # List of strings, names of the selected milling tasks
         self._panel.milling_task_chk_list.Bind(wx.EVT_CHECKLISTBOX, handler=self._update_selected_tasks)
+        self._panel.milling_task_chk_list.Bind(wx.EVT_LISTBOX, handler=self._on_milling_task_selected)
 
         self._tab_data.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -229,6 +242,7 @@ class MillingTaskController:
             # self._panel.pnl_patterns.Destroy()
             self._panel.pnl_patterns.DestroyChildren()
             self.controls = {}
+        self._active_spot_size_pattern = None
 
         # create the panels
         self._panel.pnl_patterns._panel_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -236,8 +250,9 @@ class MillingTaskController:
 
         # create the setting panels, and connectors
         self.controls: Dict[str, MillingTaskPanel] = {}
-        pattern_parameters = ["width", "height", "depth", "spacing"] # TODO: add milling params
-        # milling params: current, voltage, field of view, mode
+        pattern_parameters = [
+            "width", "height", "depth", "spacing", "spot_size_correction"
+        ]
         milling_parameters = ["current", "align", "mode"]
 
         # Note: always create all the panels, but hide for which the task is not selected.
@@ -268,6 +283,10 @@ class MillingTaskController:
 
                 # VA connector, bind events
                 getattr(parameters, param).subscribe(self._on_patterns)
+                panel.ctrl_dict[param].Bind(
+                    wx.EVT_SET_FOCUS,
+                    lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
+                )
 
             # milling parameters
             for param in milling_parameters:
@@ -286,6 +305,27 @@ class MillingTaskController:
 
                 # VA connector, bind events
                 getattr(milling, param).subscribe(self._on_patterns)
+                activation_events = [wx.EVT_SET_FOCUS]
+                if isinstance(val, model.BooleanVA):
+                    activation_events.append(wx.EVT_CHECKBOX)
+                if isinstance(val, model.StringEnumerated):
+                    activation_events.append(wx.EVT_COMBOBOX)
+                for activation_event in activation_events:
+                    panel.ctrl_dict[param].Bind(
+                        activation_event,
+                        lambda event, pattern=parameters: self._on_pattern_control_interaction(
+                            event, pattern
+                        ),
+                    )
+
+            # Some wx controls, especially OwnerDrawnComboBox, send focus and
+            # mouse events from an internal child window instead of the control.
+            for control in panel.ctrl_dict.values():
+                self._bind_pattern_activation(control, parameters)
+            panel.Bind(
+                wx.EVT_CHILD_FOCUS,
+                lambda evt, pattern=parameters: self._on_pattern_control_interaction(evt, pattern),
+            )
 
             if not task.selected:
                 panel.Hide()
@@ -297,6 +337,35 @@ class MillingTaskController:
         # keeps the previous virtual size until the user triggers a resize
         self._panel.scr_win_right.FitInside()
         self._panel.scr_win_right.SendSizeEvent()
+
+    def _get_invalid_spot_size_correction(self) -> Optional[Tuple[str, str]]:
+        """Return the first checked feature and pattern with an invalid correction."""
+        features = self._tab_data.main.features.value
+        feature_list = self._panel.workflow_features_chk_list
+        for index, feature in enumerate(features):
+            if index >= feature_list.GetCount() or not feature_list.IsChecked(index):
+                continue
+            for task_name, task in feature.milling_tasks.items():
+                if not task.selected:
+                    continue
+                for pattern in task.patterns:
+                    if not isinstance(pattern, (RectanglePatternParameters,
+                                                TrenchPatternParameters,
+                                                MicroexpansionPatternParameters)):
+                        continue
+                    correction = pattern.spot_size_correction.value
+                    if correction >= min(pattern.width.value, pattern.height.value):
+                        return feature.name.value, task_name
+        return None
+
+    def _update_spot_size_validation_message(self) -> None:
+        """Update the spot size correction validation message."""
+        invalid_pattern = self._get_invalid_spot_size_correction()
+        message = (
+            f"Invalid spot size correction: {invalid_pattern[0]}, {invalid_pattern[1]}."
+            if invalid_pattern else ""
+        )
+        self._panel.txt_automated_milling_status.SetLabel(message)
 
     @call_in_wx_main
     def _on_shapes_update(self, shapes):
@@ -315,6 +384,30 @@ class MillingTaskController:
 
         # all shapes are valid
         self.valid_patterns.value = True
+
+    def _bind_pattern_activation(self, control: wx.Window, pattern) -> None:
+        """Activate a pattern when its control or an internal child is clicked."""
+        control.Bind(
+            wx.EVT_LEFT_DOWN,
+            lambda evt, active_pattern=pattern: self._on_pattern_control_interaction(
+                evt, active_pattern
+            ),
+        )
+        for child in control.GetChildren():
+            self._bind_pattern_activation(child, pattern)
+
+    def _on_pattern_control_interaction(self, evt, pattern):
+        if self._active_spot_size_pattern is not pattern:
+            self._active_spot_size_pattern = pattern
+            self.draw_milling_tasks()
+        evt.Skip()
+
+    def _on_milling_task_selected(self, evt: wx.CommandEvent):
+        """Show the correction overlay for the highlighted pattern list row."""
+        task = self.milling_tasks.get(evt.GetString())
+        self._active_spot_size_pattern = task.patterns[0] if task and task.patterns else None
+        self.draw_milling_tasks()
+        evt.Skip()
 
     def on_mouse_down(self, evt):
         active_canvas = evt.GetEventObject()
@@ -446,8 +539,10 @@ class MillingTaskController:
         for task_name, task in self.milling_tasks.items():
             task.selected = task_name in tasks
 
+        self._update_spot_size_validation_message()
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
+        self._update_mill_btn()
 
     def move_milling_tasks(self, pos: Tuple[float, float]):
         """
@@ -512,7 +607,10 @@ class MillingTaskController:
                                             ref_img=feature.reference_image,
                                             pattern=pshape,
                                             colour=_get_milling_colour(task_name, i),
-                                            name=name)
+                                            name=name,
+                                            show_spot_size_correction=(
+                                                pattern is self._active_spot_size_pattern
+                                            ))
                     self.rectangles_overlay.add_shape(shape)
 
         # validate the patterns
@@ -611,6 +709,8 @@ class MillingTaskController:
 
         logging.warning(f"Pattern updated: {dat}")
         self.draw_milling_tasks()
+        self._update_spot_size_validation_message()
+        self._update_mill_btn()
 
     def _cancel_milling_series(self, _):
         """
@@ -634,7 +734,10 @@ class MillingTaskController:
         is_acquiring = self._tab_data.main.is_acquiring.value
         has_tasks = bool(self.selected_tasks.value)
         valid_patterns = self.valid_patterns.value
-        milling_enabled = not is_acquiring and valid_patterns
+        invalid_spot_size_correction = self._get_invalid_spot_size_correction()
+        milling_enabled = (
+            has_tasks and not is_acquiring and valid_patterns and not invalid_spot_size_correction
+        )
         self._panel.btn_run_milling.Enable(milling_enabled)
         self._panel.btn_run_automated_milling.Enable(milling_enabled)
 
@@ -644,7 +747,7 @@ class MillingTaskController:
             self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
         if not valid_patterns:
-            txt = "Patterns drawn outside image..."
+            txt = "Invalid milling pattern..."
             self._panel.txt_milling_est_time.SetLabel(txt)
             self._panel.txt_automated_milling_est_time.SetLabel(txt)
 
@@ -702,6 +805,9 @@ class AutomatedMillingController:
             disabled_txt = f"{f.name.value} is not ready for milling. Please prepare the feature first."
             wx.MessageBox(disabled_txt, "Info", wx.OK | wx.ICON_INFORMATION)
 
+        self._tab.milling_task_controller._update_spot_size_validation_message()
+        self._tab.milling_task_controller._update_mill_btn()
+
     def _update_feature_status(self, feature: CryoFeature):
 
         self._update_features(self._tab_data.main.features.value)
@@ -723,6 +829,9 @@ class AutomatedMillingController:
 
             # subscribe to the feature status, so we can update the list
             f.status.subscribe(self._update_feature_status, init=False)
+
+        self._tab.milling_task_controller._update_spot_size_validation_message()
+        self._tab.milling_task_controller._update_mill_btn()
 
     def _run_automated_milling(self, evt: wx.Event):
 
