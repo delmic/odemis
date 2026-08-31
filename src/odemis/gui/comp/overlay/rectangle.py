@@ -42,6 +42,9 @@ from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.util.conversion import frgba_to_hex, hex_to_frgba, hex_to_frgb
 from odemis.gui.layout import theme
 
+SPOT_SIZE_CORRECTION_OPACITY = 0.18
+SPOT_SIZE_CORRECTION_DASH = [6, 4]
+
 
 class RectangleState:
     def __init__(self, rectangle_overlay) -> None:
@@ -561,3 +564,85 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
                             b_end_pos.y - b_start_pos.y)
                     ctx.rectangle(*rect)
                     ctx.stroke()
+
+
+class MillingRectangleOverlay(RectangleOverlay):
+    """Rectangle overlay that can show the estimated uncorrected opening."""
+
+    def __init__(self, *args, spot_size_correction: float = 0.0,
+                 show_spot_size_correction: bool = False, **kwargs):
+        """Initialize the correction overlay.
+
+        :param spot_size_correction: Total measured opening excess in meters.
+        :param show_spot_size_correction: Whether to show the correction band and dashed outline.
+        """
+        super().__init__(*args, **kwargs)
+        self.spot_size_correction = spot_size_correction
+        self.show_spot_size_correction = show_spot_size_correction
+
+    def _draw_spot_size_correction(self, ctx) -> None:
+        """Draw the correction band and estimated uncorrected opening."""
+        correction = self.spot_size_correction
+        if not self.show_spot_size_correction or correction == 0:
+            return
+
+        points = (self.p_point1, self.p_point2, self.p_point3, self.p_point4)
+        if any(point is None for point in points):
+            return
+
+        xmin = min(point.x for point in points)
+        xmax = max(point.x for point in points)
+        ymin = min(point.y for point in points)
+        ymax = max(point.y for point in points)
+        correction_per_edge = correction / 2
+        estimated_xmin = xmin - correction_per_edge
+        estimated_xmax = xmax + correction_per_edge
+        estimated_ymin = ymin - correction_per_edge
+        estimated_ymax = ymax + correction_per_edge
+
+        displayed = (
+            Vec(xmin, ymax), Vec(xmax, ymax), Vec(xmax, ymin), Vec(xmin, ymin)
+        )
+        estimated = (
+            Vec(estimated_xmin, estimated_ymax),
+            Vec(estimated_xmax, estimated_ymax),
+            Vec(estimated_xmax, estimated_ymin),
+            Vec(estimated_xmin, estimated_ymin),
+        )
+        outer, inner = estimated, displayed
+        offset = self.cnvs.get_half_buffer_size()
+        estimated_buffer_points = [
+            self.cnvs.phys_to_buffer(point, offset) for point in estimated
+        ]
+
+        ctx.save()
+        ctx.new_path()
+        ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+        for rectangle in (outer, inner):
+            buffer_points = [self.cnvs.phys_to_buffer(point, offset) for point in rectangle]
+            ctx.move_to(*buffer_points[0])
+            for point in buffer_points[1:]:
+                ctx.line_to(*point)
+            ctx.close_path()
+        red, green, blue, _ = self.colour
+        ctx.set_source_rgba(red, green, blue, SPOT_SIZE_CORRECTION_OPACITY)
+        ctx.fill()
+
+        # The solid desired outline is drawn below by RectangleOverlay. Draw
+        # the estimated uncorrected opening on the other edge of the shaded band.
+        ctx.new_path()
+        ctx.move_to(*estimated_buffer_points[0])
+        for point in estimated_buffer_points[1:]:
+            ctx.line_to(*point)
+        ctx.close_path()
+        ctx.set_line_width(2)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_dash(SPOT_SIZE_CORRECTION_DASH)
+        ctx.set_source_rgba(*self.colour)
+        ctx.stroke()
+        ctx.restore()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4):
+        """Draw the correction visualization and rectangle overlay."""
+        self._draw_spot_size_correction(ctx)
+        super().draw(ctx, shift=shift, scale=scale, line_width=line_width)
