@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import math
+from enum import Enum
 from typing import List
 
 import numpy
@@ -164,9 +165,11 @@ class LocalizationTab(Tab):
         self.tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_overview_visible)
 
         # Current posture indicator initialization
-        self.bmp_fm_imaging = getBitmap("icon/ico_meteorimaging_green.png")
-        self.bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm_green.png")
-        self.bmp_slm_imaging = getBitmap("icon/ico_slm_imaging_green.png")
+        self.posture_to_bmp = {
+            Posture.FM_IMAGING: getBitmap("icon/ico_meteorimaging_green.png"),
+            Posture.FIB_VIEW_FM: getBitmap("icon/ico_meteor_fib_view_fm_green.png"),
+            Posture.SLM_IMAGING: getBitmap("icon/ico_slm_imaging_green.png")
+        }
 
         # Will create SEM stream with all settings local
         emtvas = set()
@@ -482,10 +485,9 @@ class LocalizationTab(Tab):
         # Chamber tab, and the tab should wait for the move to be complete before
         # actually be enabled.
         if is_acquiring:
-            self._stage.position.unsubscribe(self._on_stage_pos)
+            self.main_data.posture_manager.current_posture.unsubscribe(self._on_current_posture)
         else:
-            self._stage.position.subscribe(self._on_stage_pos, init=True)
-
+            self.main_data.posture_manager.current_posture.subscribe(self._on_current_posture, init=True)
     # role -> tooltip message
     DISABLED_TAB_TOOLTIP = {
         "enzel": "Localization can only be performed in the three beams or SEM imaging modes",
@@ -493,13 +495,12 @@ class LocalizationTab(Tab):
         "mimas": "Localization and milling can only be performed in optical or FIB mode",
     }
 
-    def _on_stage_pos(self, pos):
+    def _on_current_posture(self, posture):
         """
-        Called when the stage is moved, and perform the following actions:
-        - enable the tab if posture is fm imaging or fib-view fm, disable otherwise
+        Called when the posture is changed and perform the following actions:
+        - enable the tab if posture is fm imaging, slm imaging or fib-view fm, disable otherwise
         - set current posture label and bitmap based on current posture
-
-        :param pos: (dict str->float or None) updated position of the stage
+        :param posture: the current posture
         """
         guiutil.enable_tab_on_stage_position(
             self,
@@ -509,21 +510,15 @@ class LocalizationTab(Tab):
         )
         self._acquisition_controller._update_overview_acquisition_button()
         # Update the current posture read-only indicator if needed
-        if self.main_data.posture_manager.at_slm_imaging_posture(pos):
-            self.panel.lbl_current_posture.SetLabel(Posture.SLM_IMAGING.value)
-            self.panel.bmp_current_posture.SetBitmap(self.bmp_slm_imaging)
-        elif self.main_data.posture_manager.at_fib_view_fm_posture(pos):
-            self.panel.lbl_current_posture.SetLabel(Posture.FIB_VIEW_FM.value)
-            self.panel.bmp_current_posture.SetBitmap(self.bmp_fib_view_fm)
-        elif self.main_data.posture_manager.at_fm_imaging_posture(pos):
-            self.panel.lbl_current_posture.SetLabel(Posture.FM_IMAGING.value)
-            self.panel.bmp_current_posture.SetBitmap(self.bmp_fm_imaging)
+        if posture in self._allowed_targets:
+            self.panel.lbl_current_posture.SetLabel(posture.value)
+            self.panel.bmp_current_posture.SetBitmap(self.posture_to_bmp.get(posture))
         else:
-            logging.info(f"Unknown stage position {pos} for localization")
+            logging.info(f"Unknown posture {posture} for localization")
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
-        self._stage.position.unsubscribe(self._on_stage_pos)
+        self._stage.position.unsubscribe(self._on_current_posture)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False

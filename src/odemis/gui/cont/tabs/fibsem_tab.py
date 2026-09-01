@@ -182,8 +182,7 @@ class FibsemTab(Tab):
         self.pm = self.tab_data_model.main.posture_manager
         panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
 
-        # TODO: replace with current_posture?
-        self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
+        self.pm.current_posture.subscribe(self._on_current_posture, init=True)
         self.panel = panel
 
         self._posture_switch_future = model.InstantaneousFuture()
@@ -365,10 +364,10 @@ class FibsemTab(Tab):
         active_canvas.on_left_down(evt)
 
     @call_in_wx_main
-    def _on_stage_pos(self, pos: Dict[str, float]) -> None:
+    def _on_current_posture(self, posture) -> None:
         """
-        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
-        :param pos: updated position of the stage (with rx and rz in radians)
+        Called when the posture is updated, enable the tab if position is in allowed imaging mode, disable otherwise
+        :param posture: the current posture
         """
         guiutil.enable_tab_on_stage_position(
             tab=self,
@@ -377,6 +376,7 @@ class FibsemTab(Tab):
             tooltip="FIBSEM tab is only available at SEM position"
         )
 
+        pos = self.pm.stage.position.value
         # update stage pos label
         rx = math.degrees(pos["rx"])
         rz = math.degrees(pos["rz"])
@@ -481,7 +481,7 @@ class FibsemTab(Tab):
         wx.CallAfter(self._slm_alignment_controller.open_dialog)
 
     def terminate(self):
-        self.main_data.stage.position.unsubscribe(self._on_stage_pos)
+        self.pm.current_posture.unsubscribe(self._on_current_posture)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
