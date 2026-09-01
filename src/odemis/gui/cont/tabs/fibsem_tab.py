@@ -52,7 +52,6 @@ from odemis.gui.cont.stream_bar import CryoFIBAcquiredStreamsController, CryoStr
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
-from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 
 
@@ -376,30 +375,6 @@ class FibsemTab(Tab):
             tooltip="FIBSEM tab is only available at SEM position"
         )
 
-        pos = self.pm.stage.position.value
-        # update stage pos label
-        rx = math.degrees(pos["rx"])
-        rz = math.degrees(pos["rz"])
-        posture = self.pm.get_current_posture(pos)  # Cannot use current_posture as it may be not yet updated
-        pos_name = posture.value
-
-        # TODO: move this to legend.py
-        r = units.readable_str(rz, sig=3)
-        t = units.readable_str(rx, sig=3)
-        txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
-
-        # update the stage position label
-        try:
-            self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
-            self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
-            self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-            ltab = self.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
-            if ltab:
-                ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
-                ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-                ltab.view_controller.viewports[3].bottom_legend.set_stage_pos_label(txt)
-        except Exception as e:
-            logging.warning("Failed to update stage position label: %s", e)
 
         # update the stage position buttons
         if self._posture_switch_future.done():
