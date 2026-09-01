@@ -47,7 +47,6 @@ from odemis.gui.conf.licences import LICENCE_FIBSEM_ENABLED, LICENCE_MILLING_ENA
 from odemis.gui.cont import milling, settings
 from odemis.gui.cont.acquisition.cryo_acq import CryoAcquiController
 from odemis.gui.cont.features import CryoFeatureController
-from odemis.gui.cont.slm_alignment import SLMAlignmentController
 from odemis.gui.cont.stream_bar import CryoFIBAcquiredStreamsController, CryoStreamsController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT
@@ -185,7 +184,6 @@ class FibsemTab(Tab):
         self.panel = panel
 
         self._posture_switch_future = model.InstantaneousFuture()
-        self._slm_alignment_controller = SLMAlignmentController(self.main_frame, main_data)
 
         self._btn_slm_alignment = getattr(self.panel, "btn_slm_alignment", None)
         if self._btn_slm_alignment is not None:
@@ -453,7 +451,7 @@ class FibsemTab(Tab):
 
     def _on_slm_alignment(self, _: wx.Event) -> None:
         """Open the SLM alignment workflow dialog."""
-        wx.CallAfter(self._slm_alignment_controller.open_dialog)
+        wx.CallAfter(self._acquisition_controller.open_slm_alignment_dialog)
 
     def terminate(self):
         self.pm.current_posture.unsubscribe(self._on_current_posture)

@@ -49,8 +49,9 @@ from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.multi_point_correlation import CorrelationPointsController
 from odemis.gui.cont.settings import LocalizationSettingsController, SecomSettingsController
+from odemis.gui.cont.slm_alignment import SLMAlignmentController
 from odemis.gui.cont.stream_bar import StreamBarController
-from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation
+from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq, xrcfr_correlation, xrcfr_slm_alignment
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView, TOOL_ACT_ZOOM_FIT
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
@@ -1419,6 +1420,146 @@ class CorrelationDialog(xrcfr_correlation):
         """Stop the correlation points controller and destroy the dialog"""
         if self._correlation_points_controller:
             self._correlation_points_controller.stop()
+        super().Destroy()
+
+
+class SLMAlignmentDialog(xrcfr_slm_alignment):
+    """Dialog class for SLM alignment, with lifecycle methods owned here."""
+
+    def __init__(self, parent: wx.Window, orig_tab_data: guimod.MicroscopyGUIData) -> None:
+        """Initialize dialog and delegate runtime behavior to its controller."""
+        # super().__init__(parent)
+        # self._main_data = orig_tab_data.main
+        # tab_data = guimod.CryoFIBSEMGUIData(self._main_data)
+        #
+        #
+        # vpv = self._create_views(self.pnl_slm_alignment_grid.viewports)
+        # self.view_controller = viewcont.ViewPortController(tab_data, None, vpv)
+        # self.streambar_controller = StreamBarController(
+        #     tab_data,
+        #     self.pnl_slm_alignment_streams,
+        #     static=True,
+        # )
+        # self._bind_mouse_events()
+        # self.txt_stage_moving.SetLabel("")
+        #
+        # self._slm_alignment_controller = SLMAlignmentController(self)
+        #
+        # self.Bind(wx.EVT_CLOSE, self.on_close)
+
+        super().__init__(parent)
+        self._main_data = orig_tab_data.main
+        self.tab_data = guimod.CryoFIBSEMGUIData(self._main_data)
+
+        self.streambar_controller = StreamBarController(
+            self.tab_data,
+            self.pnl_slm_alignment_streams,
+            static=True,
+            ignore_view=True,
+        )
+
+        # Dialog logic controller
+        self._slm_alignment_controller = SLMAlignmentController(self)
+
+        # If sizing is controlled from overview_stream_acq.py, keep no size logic here.
+        self._bind_mouse_events()
+        self.txt_stage_moving.SetLabel("")
+
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.slm_alignment_controller.initialize()
+
+
+    @property
+    def slm_alignment_controller(self) -> SLMAlignmentController:
+        """Return the SLM alignment dialog controller."""
+        return self._slm_alignment_controller
+
+    def _create_views(self, viewports: List[wx.Window]) -> collections.OrderedDict:
+        """Create the two SLM alignment views for FIB and FM streams."""
+        return collections.OrderedDict([
+            (viewports[0], {
+                "name": "FIB Live",
+                "cls": guimod.MicroscopeView,
+                "stage": self._main_data.stage,
+                "stream_classes": stream.FIBStream,
+            }),
+            (viewports[1], {
+                "name": "FM Live",
+                "cls": guimod.MicroscopeView,
+                "stage": getattr(self._main_data, "align_coincident", None),
+                "stream_classes": stream.FluoStream,
+            }),
+        ])
+
+    def remove_all_streams(self):
+        """
+        Remove the streams we added to the view on creation
+        Must be called in the main GUI thread
+        """
+        # Ensure we don't update the view after the window is destroyed
+        self.streambar_controller.clear()
+        gc.collect()  # To help reclaiming some memory
+
+    def _bind_mouse_events(self) -> None:
+        """Bind viewport mouse events to stage-movement feedback label updates."""
+        self.vp_slm_fib_live.canvas.Bind(
+            wx.EVT_LEFT_DOWN,
+            lambda evt: self._on_canvas_stage_event(evt, "Moves sample stage (FIB view)"),
+        )
+        self.vp_slm_fm_live.canvas.Bind(
+            wx.EVT_LEFT_DOWN,
+            lambda evt: self._on_canvas_stage_event(evt, "Moves SLM alignment stage (FM view)"),
+        )
+        self.vp_slm_fib_live.canvas.Bind(
+            wx.EVT_MOTION,
+            lambda evt: self._on_canvas_drag_event(evt, "Moves sample stage (FIB view)"),
+        )
+        self.vp_slm_fm_live.canvas.Bind(
+            wx.EVT_MOTION,
+            lambda evt: self._on_canvas_drag_event(evt, "Moves SLM alignment stage (FM view)"),
+        )
+
+    def _unbind_mouse_events(self) -> None:
+        """Unbind viewport mouse events during dialog teardown."""
+        for viewport in (self.vp_slm_fib_live, self.vp_slm_fm_live):
+            try:
+                viewport.canvas.Unbind(wx.EVT_LEFT_DOWN)
+                viewport.canvas.Unbind(wx.EVT_MOTION)
+            except RuntimeError:
+                pass
+
+    def _on_canvas_stage_event(self, evt: wx.MouseEvent, label: str) -> None:
+        """Update stage movement feedback for click interactions."""
+        self.txt_stage_moving.SetLabel(label)
+        evt.Skip()
+
+    def _on_canvas_drag_event(self, evt: wx.MouseEvent, label: str) -> None:
+        """Update stage movement feedback while dragging."""
+        if evt.Dragging() and evt.LeftIsDown():
+            self.txt_stage_moving.SetLabel(label)
+        evt.Skip()
+
+    def terminate_listeners(self) -> None:
+        """Disconnect transient listeners before closing."""
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self._unbind_mouse_events()
+        self.remove_all_streams()
+        self.streambar_controller = None
+
+    def on_close(self, evt: wx.Event) -> None:
+        """Close handler for the SLM alignment dialog."""
+        logging.info("Close button clicked, exiting SLM alignment window")
+        while self.slm_alignment_controller.is_processing:
+            time.sleep(0.1)
+            continue
+        self.remove_all_streams()
+        assert self.slm_alignment_controller.is_processing is False
+        self.EndModal(wx.ID_CANCEL)
+
+    def Destroy(self) -> None:
+        """Ensure listeners are terminated before widget destruction."""
+        if self._slm_alignment_controller:
+            self._slm_alignment_controller.stop()
         super().Destroy()
 
 

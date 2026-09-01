@@ -60,7 +60,9 @@ from odemis.gui import model as guimod
 from odemis.gui.conf.licences import ODEMIS_ADVANCED_FLAG, LICENCE_CORRELATION_ENABLED
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.cont.acquisition.overview_stream_acq import (
-    OverviewStreamAcquiController, CorrelationDialogController,
+    OverviewStreamAcquiController,
+    CorrelationDialogController,
+    SLMAlignmentDialogController,
 )
 from odemis.gui.cont.milling import pos_to_relative
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
@@ -97,6 +99,7 @@ class CryoAcquiController(object):
             self._tab_data, self._tab, mode=self.acqui_mode
         )
         self.correlation_dialog_controller = CorrelationDialogController(self._tab_data, self._tab)
+        self.slm_alignment_dialog_controller = SLMAlignmentDialogController(self._tab_data, self._tab)
         self._config = conf.get_acqui_conf()
         # contains the acquisition progressive future for the given streams
         self._acq_future = None
@@ -904,6 +907,10 @@ class CryoAcquiController(object):
                     target = correlation_dict.fib_projected_pois[0]
                     rel_pos = pos_to_relative(target.coordinates.value[:2], feature.reference_image)
                     fibsem_tab.milling_task_controller.move_milling_tasks(rel_pos)
+
+    def open_slm_alignment_dialog(self) -> None:
+        """Open SLM alignment through the acquisition-layer dialog controller."""
+        self.slm_alignment_dialog_controller.open_slm_alignment_dialog()
 
     @call_in_wx_main
     def _on_filename(self, name):

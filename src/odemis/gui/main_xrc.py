@@ -40,6 +40,7 @@ def get_resources():
 
 
 
+
 class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, *args):
@@ -224,6 +225,45 @@ class xrcfr_plugin(wx.Dialog):
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
+
+
+
+
+class xrcfr_slm_alignment(wx.Dialog):
+#!XRCED:begin-block:xrcfr_slm_alignment.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcfr_slm_alignment.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "fr_slm_alignment")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "fr_slm_alignment")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_slm_alignment_left = xrc.XRCCTRL(self, "pnl_slm_alignment_left")
+        self.btn_fine_alignment = xrc.XRCCTRL(self, "btn_fine_alignment")
+        self.txt_stage_moving = xrc.XRCCTRL(self, "txt_stage_moving")
+        self.txt_slm_workflow = xrc.XRCCTRL(self, "txt_slm_workflow")
+        self.pnl_slm_alignment_grid = xrc.XRCCTRL(self, "pnl_slm_alignment_grid")
+        self.vp_slm_fib_live = xrc.XRCCTRL(self, "vp_slm_fib_live")
+        self.vp_slm_fm_live = xrc.XRCCTRL(self, "vp_slm_fm_live")
+        self.scr_win_slm_right = xrc.XRCCTRL(self, "scr_win_slm_right")
+        self.fp_slm_alignment_streams = xrc.XRCCTRL(self, "fp_slm_alignment_streams")
+        self.pnl_slm_alignment_streams = xrc.XRCCTRL(self, "pnl_slm_alignment_streams")
 
 
 
@@ -2955,6 +2995,135 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 
     wx.MemoryFSHandler.AddFile('XRC/dialog_plugin/dialog_plugin_xrc', bytearray(dialog_plugin_xrc.encode('utf-8')))
     __res.Load('memory:XRC/dialog_plugin/dialog_plugin_xrc')
+
+    dialog_slm_alignment_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxDialog" name="fr_slm_alignment">
+    <object class="wxFlexGridSizer">
+      <cols>3</cols>
+      <rows>1</rows>
+      <growablecols>1</growablecols>
+      <growablerows>0</growablerows>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_slm_alignment_left">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <border>10</border>
+              <flag>wxALL|wxEXPAND</flag>
+              <object class="wxButton" name="btn_fine_alignment">
+                <label>Fine Alignment</label>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <border>10</border>
+              <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
+              <object class="wxStaticText" name="txt_stage_moving">
+                <label/>
+                <fg>#DDDDDD</fg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <border>10</border>
+              <flag>wxALL|wxEXPAND</flag>
+              <proportion>1</proportion>
+              <object class="wxTextCtrl" name="txt_slm_workflow">
+                <value>SLM Alignment Workflow:
+1. Locate and move to an empty area
+2. Mill fibucial
+3. Play SLM reflection stream and focus
+4. Move SLM stage and objective to focus the fibucial
+5. Using fine alignment, click on the centre of the fibucial</value>
+                <style>wxTE_MULTILINE|wxTE_READONLY|wxBORDER_SIMPLE</style>
+                <fg>#E5E5E5</fg>
+                <bg>#222222</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <minsize>300,-1</minsize>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_slm_alignment_grid">
+          <object class="LiveViewport" name="vp_slm_fib_live">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_slm_fm_live">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxScrolledWindow" name="scr_win_slm_right">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="FoldPanelBar">
+                <object class="FoldPanelItem" name="fp_slm_alignment_streams">
+                  <object class="StreamBar" name="pnl_slm_alignment_streams">
+                    <size>300,-1</size>
+                    <fg>#7F7F7F</fg>
+                    <bg>#333333</bg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <label>STREAMS</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#555555</bg>
+                </object>
+                <spacing>0</spacing>
+                <leftspacing>0</leftspacing>
+                <rightspacing>0</rightspacing>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>380,-1</size>
+          <minsize>340,-1</minsize>
+          <bg>#333333</bg>
+          <style>wxVSCROLL</style>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <title>SLM Alignment</title>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+    </font>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
+  </object>
+</resource>'''
+
+    wx.MemoryFSHandler.AddFile('XRC/dialog_slm_alignment/dialog_slm_alignment_xrc', bytearray(dialog_slm_alignment_xrc.encode('utf-8')))
+    __res.Load('memory:XRC/dialog_slm_alignment/dialog_slm_alignment_xrc')
 
     frame_main_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
