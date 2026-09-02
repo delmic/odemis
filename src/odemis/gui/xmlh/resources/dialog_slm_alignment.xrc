@@ -70,14 +70,14 @@
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_slm_alignment_grid">
-          <object class="LiveViewport" name="vp_slm_fib_live">
+          <object class="LiveViewport" name="vp_slm_fm_live">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_slm_fm_live">
+          <object class="LiveViewport" name="vp_slm_fib_live">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>

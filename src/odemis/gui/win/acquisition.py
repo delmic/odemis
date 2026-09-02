@@ -1454,7 +1454,7 @@ class SLMAlignmentDialog(xrcfr_slm_alignment):
         self.streambar_controller = StreamBarController(
             self.tab_data,
             self.pnl_slm_alignment_streams,
-            static=True,
+            static=False,
             ignore_view=True,
         )
 
@@ -1477,17 +1477,19 @@ class SLMAlignmentDialog(xrcfr_slm_alignment):
     def _create_views(self, viewports: List[wx.Window]) -> collections.OrderedDict:
         """Create the two SLM alignment views for FIB and FM streams."""
         return collections.OrderedDict([
-            (viewports[0], {
-                "name": "FIB Live",
-                "cls": guimod.MicroscopeView,
-                "stage": self._main_data.stage,
-                "stream_classes": stream.FIBStream,
-            }),
-            (viewports[1], {
+            (viewports[0],
+             {
                 "name": "FM Live",
                 "cls": guimod.MicroscopeView,
                 "stage": getattr(self._main_data, "align_coincident", None),
                 "stream_classes": stream.FluoStream,
+            }),
+            (viewports[1],
+             {
+                "name": "FIB Live",
+                "cls": guimod.MicroscopeView,
+                "stage": self._main_data.stage,
+                "stream_classes": stream.FIBStream,
             }),
         ])
 

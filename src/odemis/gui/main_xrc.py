@@ -259,8 +259,8 @@ class xrcfr_slm_alignment(wx.Dialog):
         self.txt_stage_moving = xrc.XRCCTRL(self, "txt_stage_moving")
         self.txt_slm_workflow = xrc.XRCCTRL(self, "txt_slm_workflow")
         self.pnl_slm_alignment_grid = xrc.XRCCTRL(self, "pnl_slm_alignment_grid")
-        self.vp_slm_fib_live = xrc.XRCCTRL(self, "vp_slm_fib_live")
         self.vp_slm_fm_live = xrc.XRCCTRL(self, "vp_slm_fm_live")
+        self.vp_slm_fib_live = xrc.XRCCTRL(self, "vp_slm_fib_live")
         self.scr_win_slm_right = xrc.XRCCTRL(self, "scr_win_slm_right")
         self.fp_slm_alignment_streams = xrc.XRCCTRL(self, "fp_slm_alignment_streams")
         self.pnl_slm_alignment_streams = xrc.XRCCTRL(self, "pnl_slm_alignment_streams")
@@ -3060,21 +3060,21 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               </object>
             </object>
           </object>
-          <minsize>400,-1</minsize>
+          <minsize>350,-1</minsize>
           <bg>#333333</bg>
         </object>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_slm_alignment_grid">
-          <object class="LiveViewport" name="vp_slm_fib_live">
+          <object class="LiveViewport" name="vp_slm_fm_live">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="LiveViewport" name="vp_slm_fm_live">
+          <object class="LiveViewport" name="vp_slm_fib_live">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
             <XRCED>
