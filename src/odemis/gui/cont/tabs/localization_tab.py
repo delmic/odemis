@@ -167,49 +167,12 @@ class LocalizationTab(Tab):
         self.bmp_fm_imaging = getBitmap("icon/ico_meteorimaging_green.png")
         self.bmp_fib_view_fm = getBitmap("icon/ico_meteor_fib_view_fm_green.png")
 
-        # Will create SEM stream with all settings local
-        emtvas = set()
-        hwemtvas = set()
-
-        # The sem stream is visible for enzel, but not for meteor
-        if self.main_data.role == 'enzel':
-            for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
-                if vaname in ("resolution", "dwellTime", "scale"):
-                    emtvas.add(vaname)
-                else:
-                    hwemtvas.add(vaname)
-
-            # This stream is used both for rendering and acquisition
-            sem_stream = acqstream.SEMStream(
-                "Secondary electrons",
-                main_data.sed,
-                main_data.sed.data,
-                main_data.ebeam,
-                focuser=main_data.ebeam_focus,
-                hwemtvas=hwemtvas,
-                hwdetvas=None,
-                emtvas=emtvas,
-                detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
-            )
-
-            sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
-            sem_stream_cont.stream_panel.show_remove_btn(False)
-
-        # Only enable the tab when the stage is at the right position
-        if self.main_data.role == "enzel":
-            self._stage = self.tab_data_model.main.stage
-            self._allowed_targets = [Posture.THREE_BEAMS, Posture.ALIGNMENT, Posture.SEM_IMAGING]
-        elif self.main_data.role == "meteor":
-            # The stage is in the FM referential, but we care about the stage-bare
-            # in the SEM referential to move between positions
-            self._allowed_targets = [Posture.FM_IMAGING]
-            if Posture.FIB_VIEW_FM in self.main_data.posture_manager.postures:
-                self._allowed_targets.append(Posture.FIB_VIEW_FM)
-            self._stage = self.tab_data_model.main.stage_bare
-        elif self.main_data.role == "mimas":
-            # Only useful near the active positions: milling (FIB) or FLM
-            self._allowed_targets = [Posture.FM_IMAGING, Posture.MILLING]
-            self._stage = self.tab_data_model.main.stage
+        # The stage is in the FM referential, but we care about the stage-bare
+        # in the SEM referential to move between positions
+        self._allowed_targets = [Posture.FM_IMAGING]
+        if Posture.FIB_VIEW_FM in self.main_data.posture_manager.postures:
+            self._allowed_targets.append(Posture.FIB_VIEW_FM)
+        self._stage = self.tab_data_model.main.stage_bare
 
         if len(self._allowed_targets) <= 1:
             self.panel.pnl_current_posture.Hide()
@@ -325,14 +288,12 @@ class LocalizationTab(Tab):
         if bbox[0] is not None:
             self.panel.vp_secom_tl.canvas.fit_to_bbox(bbox)
 
-        # Mimas does not have the overview image in the chamber tab, so don't display it there.
-        if self.main_data.role in ["meteor", "enzel"]:
-            # Display the same acquired data in the chamber tab view
-            chamber_tab = self.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER)
-            chamber_tab.load_overview_streams(streams)
+        # Display the same acquired data in the chamber tab view
+        chamber_tab = self.main_data.getTabByName(TabName.CRYOSECOM_CHAMBER)
+        chamber_tab.load_overview_streams(streams)
 
         # sync overview streams with correlation tab
-        if len(streams) > 0 and self.main_data.role == "meteor":
+        if len(streams) > 0:
             correlation_tab = self.main_data.getTabByName(TabName.METEOR_CORRELATION)
             # Prevent race conditions and recursive triggers
             correlation_tab.correlation_controller._stop_streams_subscriber()
@@ -483,9 +444,7 @@ class LocalizationTab(Tab):
 
     # role -> tooltip message
     DISABLED_TAB_TOOLTIP = {
-        "enzel": "Localization can only be performed in the three beams or SEM imaging modes",
         "meteor": "Localization can only be performed in FM mode",
-        "mimas": "Localization and milling can only be performed in optical or FIB mode",
     }
 
     def _on_stage_pos(self, pos):
@@ -522,10 +481,7 @@ class LocalizationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("enzel", "meteor", "mimas"):
-            return 2
-        else:
-            return None
+        return 2
 
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed

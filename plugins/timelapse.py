@@ -98,7 +98,7 @@ class TimelapsePlugin(Plugin):
         self.numberOfAcquisitions.subscribe(self._update_exp_dur)
 
         # On SECOM/DELPHI, propose to only acquire the SEM at the end
-        if microscope.role in ("secom", "delphi", "enzel"):
+        if microscope.role in ("secom", "delphi"):
             self.vaconf["semOnlyOnLast"]["control_type"] = odemis.gui.CONTROL_CHECK
 
         self._dlg = None
@@ -185,7 +185,7 @@ class TimelapsePlugin(Plugin):
         tab_data = self.main_app.main_data.tab.value.tab_data_model
         if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
-            if isinstance(acq_st, model.VigilantAttribute):  # On ENZEL/METEOR, acquisitionStreams is a ListVA (instead of a set)
+            if isinstance(acq_st, model.VigilantAttribute):  # On METEOR, acquisitionStreams is a ListVA (instead of a set)
                 acq_st = acq_st.value
 
             # Discard the acquisition streams which are not visible

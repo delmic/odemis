@@ -35,7 +35,7 @@ Side utilities for Odemis
 
 Hardware configuration utilities
 ================================
-* ``lksconfig``: (ENZEL) lakeshore temperature controller: change the PID values of the temperature control.
+* ``lksconfig``: lakeshore temperature controller: change the PID values of the temperature control.
 * ``nfterminal``: (SPARC) NewPort NewFocus actuator: Terminal (aka REPL) utility to send command to the device. Used for configuration of some hardware (light tunnel) at installation.
 * ``piconfig``: (SECOM) Physics Instrument actuator: read/write configuration in flash (stored as ``.pi.tsv``).
 * ``piterminal``: (SECOM) Physics Instrument actuator: Terminal (aka REPL) utility to send command to the device. Used for configuration of the IP address at installation.
@@ -44,7 +44,7 @@ Hardware configuration utilities
 * ``saconfig``: (METEOR) SmarAct actuator. Execute special commands needed at installation (change actuator type, referencing mode...).
 * ``shrkconfig``: (SPARC) Andor Shamrock/Kymera spectrographs. Runs calibration commands (used regularly on the SPARC).
 * ``kymera-exchange-turret.sh``: (SPARC) Andor Kymera 328i: Turret exchange utility (with minimal GUI).
-* ``tmcmconfig``: (SPARC/METEOR/ENZEL) Trinamic actuator: Read/write configuration in flash (stored as ``.tmcm.tsv``)
+* ``tmcmconfig``: (SPARC/METEOR) Trinamic actuator: Read/write configuration in flash (stored as ``.tmcm.tsv``)
 * ``odemis-relay``: (SPARC) PMT control unit: Turn off & on power for an external device.
 
 
@@ -59,7 +59,7 @@ Odemis configuration and log management
 Development tools
 =================
 * ``generate_icons.sh``: generate windows icons from the PNG icons.
-* ``getfluodb.py``: downloads the fluorophore database (SECOM/METEOR/ENZEL) – currently the website is broken so fails to download.
+* ``getfluodb.py``: downloads the fluorophore database (SECOM/METEOR) – currently the website is broken so fails to download.
 * ``groom-img.py``: recompresses all PNG files to makes them as small as possible (for XRC files).
 * ``release-odemis``: Releases the current git HEAD as a new version (on github and Ubuntu).
 * ``runtests.sh``: run all the test cases, and generate a report.

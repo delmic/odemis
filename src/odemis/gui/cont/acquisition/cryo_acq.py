@@ -804,7 +804,7 @@ class CryoAcquiController(object):
         else:
             self._zstack_error = None
             # Only use zstack for the optical streams (not SEM), as that's the ones
-            # the user is interested in on the METEOR/ENZEL.
+            # the user is interested in on the METEOR.
             self._zlevels = {s: levels for s in self._acquiStreams.value
                              if isinstance(s, (FluoStream, BrightfieldStream))}
 

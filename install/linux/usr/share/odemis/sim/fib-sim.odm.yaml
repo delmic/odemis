@@ -1,4 +1,4 @@
-# Configuration to simulate a MIMAS system without having any hardware.
+# Configuration to simulate a METEOR system without having any hardware.
 SimFIB: {
     class: Microscope,
     role: sem,
