@@ -40,6 +40,7 @@ ERROR_STATE_FILE = "simcam-hw.error"
 GOFFSET_TO_PIXEL = 0.25  # Conversion factor for grating offset to image pixels.
 PEAK_WIDTH = 2.5  # Width of the simulated spectrograph peak in pixels (before binning).
 
+
 class Camera(model.DigitalCamera):
     '''
     This represent a fake digital camera, which generates as data the image
@@ -429,7 +430,7 @@ class Camera(model.DigitalCamera):
         if self._spectrograph and self._spectrograph.position.value["wavelength"] < 10e-9:
             current_offset = self._spectrograph.position.value["goffset"]
 
-            ccd_center_x = self._img_res[0] / 2  # find the x-coordinate of the center of the ccd
+            ccd_center_x = (self._img_res[0] - 1) / 2  # find the x-coordinate of the center of the ccd
             x0_px = ccd_center_x + current_offset * GOFFSET_TO_PIXEL
             roi_left = center[0] + trans[0] + stage_shift[0] - (res[0] / 2) * binning[0]
 
