@@ -3013,6 +3013,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               <flag>wxALL|wxEXPAND</flag>
               <object class="wxButton" name="btn_fine_alignment">
                 <label>Fine Alignment</label>
+                <font>
+                    <size>12</size>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -3023,6 +3027,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
               <object class="wxStaticText" name="txt_stage_moving">
                 <label/>
+                <font>
+                    <size>12</size>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
                 <fg>#DDDDDD</fg>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -3033,23 +3041,26 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
               <border>10</border>
               <flag>wxALL|wxEXPAND</flag>
               <proportion>1</proportion>
-              <object class="wxTextCtrl" name="txt_slm_workflow">
-                <value>SLM Alignment Workflow:
+              <object class="wxStaticText" name="txt_slm_workflow">
+                <label>SLM Alignment Workflow:
 1. Locate and move to an empty area
 2. Mill fibucial
-3. Play SLM reflection stream and focus
-4. Move SLM stage and objective to focus the fibucial
-5. Using fine alignment, click on the centre of the fibucial</value>
-                <style>wxTE_MULTILINE|wxTE_READONLY|wxBORDER_SIMPLE</style>
-                <fg>#E5E5E5</fg>
-                <bg>#222222</bg>
+3. Play SLM reflection stream, focus on the center of the fibucial
+4. Using fine alignment, click on the center of the fibucial</label>
+<!--                <style>wxTE_MULTILINE|wxTE_READONLY|wxBORDER_SIMPLE</style>-->
+                <font>
+                    <size>12</size>
+                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <fg>#DDDDDD</fg>
+<!--                <bg>#222222</bg>-->
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
             </object>
           </object>
-          <minsize>300,-1</minsize>
+          <minsize>400,-1</minsize>
           <bg>#333333</bg>
         </object>
         <flag>wxEXPAND</flag>
