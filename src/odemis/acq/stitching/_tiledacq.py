@@ -654,23 +654,36 @@ class TiledAcquisitionTask(object):
     def estimateTime(self, remaining=None):
         """
         Estimates duration for acquisition and stitching.
-        :param remaining: (int > 0) The number of remaining tiles
+        :param remaining: (int >= 0) The number of remaining tiles
         :returns: (float) estimated required time
         """
         if remaining is None:
             remaining = self._number_of_tiles
 
-        # After the acquisition of first tile, update the time taken for subsequent tiles based on time taken for
-        # previous tiles
-        if self.average_acquisition_time:
-            return self.average_acquisition_time * remaining
+        # Use observed per-tile time once available, otherwise estimate from stream settings.
+        # Note: average_acquisition_time is measured from wall-clock time and already
+        # includes per-tile movement, so move_time must not be added again in that case.
+        if self.average_acquisition_time is not None:
+            acq_time = self.average_acquisition_time * remaining
+            move_time = 0  # already included in average_acquisition_time
+        else:
+            zlevels_dict = {s: self._zlevels for s in self._streams
+                            if isinstance(s, (FluoStream))}
+            acq_time = acqmng.estimateZStackAcquisitionTime(self._streams, zlevels_dict)
+            acq_time = acq_time * remaining
 
-        zlevels_dict = {s: self._zlevels for s in self._streams
-                        if isinstance(s, (FluoStream))}
-        acq_time = acqmng.estimateZStackAcquisitionTime(self._streams, zlevels_dict)
-        acq_time = acq_time * remaining
+            try:
+                # move_speed is a default speed but not an actual stage speed due to which
+                # extra time is added based on observed time taken to move stage from one tile position to another
+                # remaining - 1: current tile is part of remaining, so no need to move there.
+                # Use max(remaining - 1, 0) to avoid negative move_time when remaining == 0.
+                move_time = max(self._sfov) * max(remaining - 1, 0) / self._move_speed + 0.3 * remaining
+            except ValueError:  # no current streams
+                move_time = 0.5
 
-        # Estimate stitching time based on number of pixels in the overlapping part
+        # Estimate stitching time based on number of pixels in the overlapping part.
+        # Always included (stitch happens once, after all tiles) so it stays in the
+        # estimate until acquisition is fully done.
         stitch_time = 0
         if self._registrar is not None and self._weaver is not None:
             max_pxs = 0
@@ -681,14 +694,6 @@ class TiledAcquisitionTask(object):
                         max_pxs = pxs
 
             stitch_time = (self._number_of_tiles * max_pxs * self._overlap) / STITCH_SPEED
-
-        try:
-            # move_speed is a default speed but not an actual stage speed due to which
-            # extra time is added based on observed time taken to move stage from one tile position to another
-            move_time = max(self._sfov) * (remaining - 1) / self._move_speed + 0.3 * remaining
-            # current tile is part of remaining, so no need to move there
-        except ValueError:  # no current streams
-            move_time = 0.5
 
         logging.info(f"The computed time in seconds for tiled acquisition for {remaining} tiles for move is {move_time},"
                      f" acquisition is {acq_time}")

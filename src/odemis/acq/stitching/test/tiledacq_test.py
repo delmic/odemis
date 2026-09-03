@@ -36,6 +36,7 @@ from odemis.acq import acqmng, stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.move import MicroscopePostureManager, Posture
 from odemis.acq.stitching import (
+    REGISTER_GLOBAL_SHIFT,
     REGISTER_IDENTITY,
     WEAVER_COLLAGE_REVERSE,
     WEAVER_MEAN,
@@ -917,6 +918,40 @@ class TiledAcquisitionTaskTestCase(unittest.TestCase):
         # Empty tile indices
         sorted_indices = tiled_acq_task._sort_tile_indices_zigzag([])
         self.assertListEqual(sorted_indices, [])
+
+    def test_estimate_time_remaining_zero(self):
+        """estimateTime(remaining=0) must not return a negative value."""
+        region = (0.0, 0.0, 14.0e-3, 13.0e-3)
+        mock_stream = mock.Mock(spec=stream.SEMStream)
+        mock_stream.configure_mock(**{"guessFoV.return_value": (0.0021, 0.0018),
+                                      "estimateAcquisitionTime.return_value": 0.1})
+        mock_stream.focuser = None
+        tiled_acq_task = TiledAcquisitionTask(streams=[mock_stream], stage=mock.Mock(spec=model.Actuator),
+                                              region=region, overlap=0.1,
+                                              registrar=None, weaver=None)
+        estimated = tiled_acq_task.estimateTime(remaining=0)
+        self.assertGreaterEqual(estimated, 0,
+                                f"estimateTime(0) returned negative value: {estimated}")
+
+    def test_estimate_time_includes_stitch_time_when_average_acq_time_set(self):
+        """When average_acquisition_time is set (mid-acquisition), estimateTime(0) must
+        still include stitch_time so the progress bar reflects the stitching phase."""
+        region = (0.0, 0.0, 14.0e-3, 13.0e-3)
+        mock_stream = mock.Mock(spec=stream.SEMStream)
+        mock_stream.configure_mock(**{"guessFoV.return_value": (0.0021, 0.0018),
+                                      "estimateAcquisitionTime.return_value": 0.1})
+        mock_stream.focuser = None
+        # Provide raw data so stitch_time can be computed (simulates post-first-tile state)
+        mock_stream.raw = [numpy.zeros((512, 512))]
+
+        tiled_acq_task = TiledAcquisitionTask(streams=[mock_stream], stage=mock.Mock(spec=model.Actuator),
+                                              region=region, overlap=0.1,
+                                              registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN)
+        tiled_acq_task.average_acquisition_time = 0.5  # simulate post-first-tile
+
+        estimated = tiled_acq_task.estimateTime(remaining=0)
+        self.assertGreater(estimated, 0,
+                           "estimateTime(0) must be > 0 when stitching remains (stitch_time must be included)")
 
 
 if __name__ == '__main__':
