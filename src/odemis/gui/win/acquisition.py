@@ -1554,6 +1554,7 @@ class SLMAlignmentDialog(xrcfr_slm_alignment):
         while self.slm_alignment_controller.is_processing:
             time.sleep(0.1)
             continue
+        self.slm_alignment_controller.stop()
         self.remove_all_streams()
         assert self.slm_alignment_controller.is_processing is False
         self.EndModal(wx.ID_CANCEL)

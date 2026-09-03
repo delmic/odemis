@@ -264,6 +264,13 @@ class xrcfr_slm_alignment(wx.Dialog):
         self.scr_win_slm_right = xrc.XRCCTRL(self, "scr_win_slm_right")
         self.fp_slm_alignment_streams = xrc.XRCCTRL(self, "fp_slm_alignment_streams")
         self.pnl_slm_alignment_streams = xrc.XRCCTRL(self, "pnl_slm_alignment_streams")
+        self.fp_slm_alignment_milling = xrc.XRCCTRL(self, "fp_slm_alignment_milling")
+        self.pnl_slm_fiducial_milling = xrc.XRCCTRL(self, "pnl_slm_fiducial_milling")
+        self.txt_slm_milling_hint = xrc.XRCCTRL(self, "txt_slm_milling_hint")
+        self.pnl_slm_milling_task = xrc.XRCCTRL(self, "pnl_slm_milling_task")
+        self.txt_slm_milling_est_time = xrc.XRCCTRL(self, "txt_slm_milling_est_time")
+        self.btn_slm_run_milling = xrc.XRCCTRL(self, "btn_slm_run_milling")
+        self.btn_slm_milling_cancel = xrc.XRCCTRL(self, "btn_slm_milling_cancel")
 
 
 
@@ -3101,6 +3108,66 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                     </XRCED>
                   </object>
                   <label>STREAMS</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#555555</bg>
+                </object>
+                <object class="FoldPanelItem" name="fp_slm_alignment_milling">
+                  <object class="wxPanel" name="pnl_slm_fiducial_milling">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                        <object class="wxStaticText" name="txt_slm_milling_hint">
+                          <label>Fiducial cross pattern is editable in the FIB view.</label>
+                          <fg>#DDDDDD</fg>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                        <object class="wxPanel" name="pnl_slm_milling_task">
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                        <object class="wxStaticText" name="txt_slm_milling_est_time">
+                          <label>Fiducial cross ready</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <object class="wxButton" name="btn_slm_run_milling">
+                          <label>Run Milling</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <border>8</border>
+                        <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
+                        <object class="wxButton" name="btn_slm_milling_cancel">
+                          <label>Cancel Milling</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                    </object>
+                    <bg>#333333</bg>
+                  </object>
+                  <label>MILLING</label>
                   <fg>#1A1A1A</fg>
                   <bg>#555555</bg>
                 </object>

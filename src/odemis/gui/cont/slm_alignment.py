@@ -9,6 +9,7 @@ import wx
 from odemis import model
 from odemis.acq.stream import FIBStream, FluoStream
 from odemis.gui.conf.data import get_local_vas
+from odemis.gui.cont.milling import FibucialMillingTaskController
 from odemis.gui.cont.stream import StreamController
 from typing import Optional
 
@@ -24,6 +25,7 @@ class SLMAlignmentController:
         self._viewports = frame.pnl_slm_alignment_grid.viewports
         self._fib_stream: Optional[FIBStream] = None
         self._slm_stream: Optional[FluoStream] = None
+        self._fiducial_milling_controller: Optional[FibucialMillingTaskController] = None
         self.is_processing = False
         self._panel.btn_fine_alignment.Bind(wx.EVT_BUTTON, self._on_fine_alignment)
         # self._setup_views_and_streams()
@@ -34,6 +36,12 @@ class SLMAlignmentController:
         self._panel.txt_stage_moving.SetLabel("")
         self._panel.btn_fine_alignment.Bind(wx.EVT_BUTTON, self._on_fine_alignment)
         self._setup_views_and_streams()
+        self._fiducial_milling_controller = FibucialMillingTaskController(
+                                            panel=self._panel,
+                                            tab_data=self._tab_data_model,
+                                            fib_stream=self._fib_stream,
+                                            canvas=self._panel.vp_slm_fib_live.canvas,
+            )
         self.is_processing = False
 
 
@@ -114,4 +122,7 @@ class SLMAlignmentController:
     def stop(self) -> None:
         """Stop processing and release runtime listeners and streams."""
         self.is_processing = False
+        if self._fiducial_milling_controller is not None:
+            self._fiducial_milling_controller.stop()
+            self._fiducial_milling_controller = None
         self.stop_streams()
