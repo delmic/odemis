@@ -65,6 +65,10 @@ class Tab(object):
 
         self.panel.Show(show)
 
+    def query_leave(self) -> bool:
+        """Return whether a manual switch away from this tab may continue."""
+        return True
+
     def _connect_22view_event(self):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item (or ensure it's disabled).

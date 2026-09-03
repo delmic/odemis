@@ -29,7 +29,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import odemis.acq.test as acq_test
-from odemis.acq.feature import feature_decoder
+from odemis.acq.feature import CryoFeature, feature_decoder
 from odemis.acq.move import Posture
 from odemis.gui.cont.cryo_project import (
     load_project,
@@ -113,6 +113,20 @@ class TestCryoProject(unittest.TestCase):
         posture_values = {p.value for p in Posture}
         for posture_key in project_data["features"][0]["posture_positions"].keys():
             self.assertIn(posture_key, posture_values)
+
+    def test_milling_feature_offset_roundtrip(self):
+        """The feature/pattern anchor is persisted without changing legacy projects."""
+        feature = CryoFeature("Feature-1", {"x": 0, "y": 0, "z": 0}, {"z": 0})
+        feature.milling_feature_offset.value = (12e-6, -8e-6)
+        main_data = MagicMock()
+        main_data.tab.value.conf.pj_last_path = self.test_dir
+        main_data.features.value = [feature]
+        main_data.overviews.value = []
+
+        save_project(main_data)
+        feature_data = load_project(self.test_dir)["features"][0]
+        self.assertEqual(feature_decoder(feature_data).milling_feature_offset.value,
+                         feature.milling_feature_offset.value)
 
     def test_image_operations(self):
         """Tests that the image operations work properly."""
