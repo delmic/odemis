@@ -50,7 +50,7 @@ from odemis.util import units
 
 class CryoZLocalizationController(object):
     """
-    Controller to handle the Z localization for the ENZEL/METEOR with a stigmator.
+    Controller to handle the Z localization for the METEOR with a stigmator.
     """
 
     def __init__(self, tab_data, panel, tab):

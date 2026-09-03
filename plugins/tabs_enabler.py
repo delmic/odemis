@@ -32,17 +32,13 @@ class TabEnablerPlugin(Plugin):
     def __init__(self, microscope, main_app):
         super().__init__(microscope, main_app)
 
-        alignment_btn = self.main_app.main_frame.btn_tab_align_enzel.IsShown() or \
-                        self.main_app.main_frame.btn_tab_align.IsShown()
+        alignment_btn = self.main_app.main_frame.btn_tab_align.IsShown()
         if alignment_btn:
             self.addMenu("Help/Development/Enable alignment tab", self.enable_alignment_tab)
 
     def enable_alignment_tab(self):
-        # for MIMAS and ENZEL
-        if self.main_app.main_frame.btn_tab_align_enzel.IsShown():
-            alignment_tab = self.main_app.main_frame.btn_tab_align_enzel
         # for SPARC and SECOM
-        elif self.main_app.main_frame.btn_tab_align.IsShown():
+        if self.main_app.main_frame.btn_tab_align.IsShown():
             alignment_tab = self.main_app.main_frame.btn_tab_align
         else:
             raise ValueError("No alignment tab found to enable.")

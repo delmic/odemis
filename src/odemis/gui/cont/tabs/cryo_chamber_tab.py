@@ -67,8 +67,7 @@ except ImportError as e:
 
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
-        """ Chamber view tab for ENZEL, METEOR, and MIMAS"""
-
+        """ Chamber view tab for METEOR"""
         tab_data = guimod.CryoChamberGUIData(main_data)
         super(CryoChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("CHAMBER")
@@ -112,7 +111,7 @@ class CryoChamberTab(Tab):
         # enable meteor calibration
         # For other roles and METEOR without calibration metadata, the menu item is deleted
         # The deletion in handled in gui.cont.menu
-        if self._role == 'meteor' and self.tab_data_model.main.stage_bare.getMetadata().get(model.MD_CALIB, None) is not None:
+        if self.tab_data_model.main.stage_bare.getMetadata().get(model.MD_CALIB, None) is not None:
             main_frame.Bind(wx.EVT_MENU, self._edit_meteor_calibration,
                             id=main_frame.menu_item_edit_meteor_calibration.GetId())
             main_frame.menu_item_edit_meteor_calibration.Enable(True)
@@ -120,108 +119,39 @@ class CryoChamberTab(Tab):
         self._current_posture = Posture.UNKNOWN  # position of the sample (regularly updated)
         self._target_posture = None  # when moving, move POSITION to be reached, otherwise None
 
-        if self._role == 'enzel':
-            # get the stage and its meta data
-            self._stage = self.tab_data_model.main.stage
-            stage_metadata = self._stage.getMetadata()
+        # We use stage-bare, which is in the referential of the SEM chamber.
+        # (While "stage" is in the FLM referential)
+        self._stage = self.tab_data_model.main.stage_bare
 
-            # TODO: this is not anymore the milling angle (rx - ION_BEAM_TO_SAMPLE_ANGLE),
-            # but directly the rx value, so the name of the control should be updated
-            # Define axis connector to link milling angle to UI float ctrl
-            self.milling_connector = AxisConnector('rx', self._stage, panel.ctrl_rx, pos_2_ctrl=self._milling_angle_changed,
-                                                ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
-            # Set the milling angle range according to rx axis range
-            try:
-                rx_range = self._stage.axes['rx'].range
-                panel.ctrl_rx.SetValueRange(*(math.degrees(r) for r in rx_range))
-                # Default value for milling angle, will be used to store the angle value out of milling position
-                rx_value = self._stage.position.value['rx']
-                self.panel.ctrl_rx.Value = readable_str(math.degrees(rx_value), unit="°", sig=3)
-            except KeyError:
-                raise ValueError('The stage is missing an rx axis.')
-            panel.ctrl_rx.Bind(wx.EVT_CHAR, panel.ctrl_rx.on_char)
+        # Fail early when required axes are not found on the focuser positions metadata
+        focuser = self.tab_data_model.main.focus
+        focus_md = focuser.getMetadata()
+        required_axis = {'z'}
+        for fmd_key, fmd_value in focus_md.items():
+            if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
+                raise ValueError(f"Focuser {fmd_key} metadata ({fmd_value}) does not have the required axes {required_axis}.")
 
-            self.position_btns = {Posture.LOADING: self.panel.btn_switch_loading, Posture.THREE_BEAMS: self.panel.btn_switch_imaging,
-                                  Posture.ALIGNMENT: self.panel.btn_switch_align, Posture.COATING: self.panel.btn_switch_coating,
-                                  Posture.SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
-            self._grid_btns = {}
-            self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
-                                self.panel.stage_align_btn_m_aligner_x: ("x", -1),
-                                self.panel.stage_align_btn_p_aligner_y: ("y", 1),
-                                self.panel.stage_align_btn_m_aligner_y: ("y", -1),
-                                self.panel.stage_align_btn_p_aligner_z: ("z", 1),
-                                self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
+        # All the meteor buttons
+        self.position_btns = {
+            Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
+            Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
+            Posture.MILLING: self.panel.btn_switch_milling,
+            Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
+            Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+       }
+        # Remove the ones which are not supported on this system
+        self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
+                              if posture in main_data.posture_manager.postures}
 
-            panel.btn_switch_advanced.Show()
-            panel.pnl_advanced_align.Show()
-
-            # Vigilant attribute connectors for the align slider and show advanced button
-            self._slider_aligner_va_connector = VigilantAttributeConnector(tab_data.stage_align_slider_va,
-                                                                        self.panel.stage_align_slider_aligner,
-                                                                        events=wx.EVT_SCROLL_CHANGED)
-            self._show_advanced_va_connector = VigilantAttributeConnector(tab_data.show_advaned,
-                                                                        self.panel.btn_switch_advanced,
-                                                                        events=wx.EVT_BUTTON,
-                                                                        ctrl_2_va=self._btn_show_advanced_toggled,
-                                                                        va_2_ctrl=self._on_show_advanced)
-
-            # Event binding for move control
-            panel.stage_align_btn_p_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-            panel.stage_align_btn_m_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-            panel.stage_align_btn_p_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-            panel.stage_align_btn_m_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-            panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-            panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-
-        elif self._role == 'meteor':
-            # We use stage-bare, which is in the referential of the SEM chamber.
-            # (While "stage" is in the FLM referential)
-            self._stage = self.tab_data_model.main.stage_bare
-
-            # Fail early when required axes are not found on the focuser positions metadata
-            focuser = self.tab_data_model.main.focus
-            focus_md = focuser.getMetadata()
-            required_axis = {'z'}
-            for fmd_key, fmd_value in focus_md.items():
-                if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
-                    raise ValueError(f"Focuser {fmd_key} metadata ({fmd_value}) does not have the required axes {required_axis}.")
-
-            # All the meteor buttons
-            self.position_btns = {
-                Posture.SEM_IMAGING: self.panel.btn_switch_sem_imaging,
-                Posture.FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                Posture.MILLING: self.panel.btn_switch_milling,
-                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
-                Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-           }
-            # Remove the ones which are not supported on this system
-            self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
-                                  if posture in main_data.posture_manager.postures}
-
-            # Grid buttons (for switching between grids)
-            # For now, hard-coded to 2 grids. Could be extended to be more flexible, once some METEOR
-            # support a different number of grids (see MIMAS or FASTEM).
-            self._grid_btns = {
-                  Posture.GRID_1: self.panel.btn_switch_grid1,
-                  Posture.GRID_2: self.panel.btn_switch_grid2,
-            }
-            # show load project button
-            self.btn_load_project.Show()
-
-        elif self._role == 'mimas':
-            self._stage = self.tab_data_model.main.stage
-
-            self.position_btns = {
-                Posture.LOADING: self.panel.btn_switch_loading_chamber_tab,
-                Posture.COATING: self.panel.btn_switch_coating_chamber_tab,
-                Posture.FM_IMAGING: self.panel.btn_switch_optical_chamber_tab,
-                Posture.MILLING: self.panel.btn_switch_milling_chamber_tab,
-                Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
-            }
-
-            self._grid_btns = {}
-
-            # TODO: add Tilt angle control, like on the ENZEL, but outside the advanced panel
+        # Grid buttons (for switching between grids)
+        # For now, hard-coded to 2 grids. Could be extended to be more flexible, once some METEOR
+        # support a different number of grids (see FASTEM).
+        self._grid_btns = {
+              Posture.GRID_1: self.panel.btn_switch_grid1,
+              Posture.GRID_2: self.panel.btn_switch_grid2,
+        }
+        # show load project button
+        self.btn_load_project.Show()
 
         # start and end position are used for the gauge progress bar
         self._start_pos = self._stage.position.value
@@ -640,96 +570,51 @@ class CryoChamberTab(Tab):
         # Get current movement (including unknown and on the path)
         self._current_posture = self.posture_manager.current_posture.value
         self._enable_position_controls(self._current_posture)
-        if self._role == 'enzel':
-            # Enable stage advanced controls on sem imaging
-            self._enable_advanced_controls(self._current_posture == Posture.SEM_IMAGING)
-        elif self._role == "meteor":
-            self._control_warning_msg(self._current_posture)
-        elif self._role == 'mimas':  # Old mimas, not to be confused with the new mimas (to be replaced)
-            pass
+        self._control_warning_msg(self._current_posture)
 
     def _enable_position_controls(self, current_posture: "Posture"):
         """
         Enable/disable switching position button based on current move
         current_posture: as reported by get_current_posture()
         """
-        if self._role == 'enzel':
-            # Define which button to disable in respect to the current move
-            disable_buttons = {Posture.LOADING: (), Posture.THREE_BEAMS: (), Posture.ALIGNMENT: (), Posture.COATING: (),
-                               Posture.SEM_IMAGING: (), Posture.LOADING_PATH: (Posture.ALIGNMENT, Posture.COATING, Posture.SEM_IMAGING)}
-            for movement, button in self.position_btns.items():
-                if current_posture == Posture.UNKNOWN:
-                    # If at unknown position, only allow going to LOADING position
-                    button.Enable(movement == Posture.LOADING)
-                elif movement in disable_buttons[current_posture]:
-                    button.Disable()
-                else:
-                    button.Enable()
+        # enabling/disabling meteor buttons
+        for button_posture, button in itertools.chain(self.position_btns.items(), self._grid_btns.items()):
+            switch_allowed = self.posture_manager.is_posture_switch_allowed(current_posture, button_posture)
+            button.Enable(switch_allowed)
 
-            # TODO: is it useful to leave the current button in "progress" status when cancelled?
-            # How can this help the user?
-
-            # The move button should turn green only if current move is known and not cancelled
-            if current_posture in self.position_btns and not self._move_cancelled:
-                btn = self.position_btns[current_posture]
-                # btn.icon_on = img.getBitmap(self.btn_toggle_icons[btn][1])
-                btn.SetValue(2)  # Complete
-                self._toggle_switch_buttons(btn)
+            # Hardcoding the tooltip for the disabled FM Milling state here, for lack of a better mechanism.
+            if button_posture == Posture.FIB_VIEW_FM and not switch_allowed:
+                button.SetToolTip(
+                    f"The {Posture.FIB_VIEW_FM} posture can only be reached "
+                    f"from the {Posture.MILLING} posture"
+                )
             else:
-                self._toggle_switch_buttons(currently_pressed=None)
+                button.SetToolTip("")
 
-        elif self._role == 'meteor':
-            # enabling/disabling meteor buttons
-            for button_posture, button in itertools.chain(self.position_btns.items(), self._grid_btns.items()):
-                switch_allowed = self.posture_manager.is_posture_switch_allowed(current_posture, button_posture)
-                button.Enable(switch_allowed)
+        # turn on (green) the current position button green
+        btn = self.position_btns.get(current_posture)
+        self._toggle_switch_buttons(btn)
 
-                # Hardcoding the tooltip for the disabled FM Milling state here, for lack of a better mechanism.
-                if button_posture == Posture.FIB_VIEW_FM and not switch_allowed:
-                    button.SetToolTip(
-                        f"The {Posture.FIB_VIEW_FM} posture can only be reached "
-                        f"from the {Posture.MILLING} posture"
-                    )
-                else:
-                    button.SetToolTip("")
+        # It's a common mistake that the stage.POS_ACTIVE_RANGE is incorrect.
+        # If so, the sample moving will be very odd, as the move is clipped to
+        # the range. So as soon as we reach FM_IMAGING, we check that the
+        # current position is within range, if not, most likely that range is wrong.
+        if current_posture == Posture.FM_IMAGING:
+            imaging_stage = self.tab_data_model.main.stage
+            stage_pos = imaging_stage.position.value
+            imaging_rng = imaging_stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
+            for a, pos in stage_pos.items():
+                if a in imaging_rng:
+                    rng = imaging_rng[a]
+                    if not rng[0] <= pos <= rng[1]:
+                        logging.warning("After moving to FM IMAGING, stage position is %s, outside of POS_ACTIVE_RANGE %s",
+                                        stage_pos, imaging_rng)
+                        break
 
-            # turn on (green) the current position button green
-            btn = self.position_btns.get(current_posture)
-            self._toggle_switch_buttons(btn)
-
-            # It's a common mistake that the stage.POS_ACTIVE_RANGE is incorrect.
-            # If so, the sample moving will be very odd, as the move is clipped to
-            # the range. So as soon as we reach FM_IMAGING, we check that the
-            # current position is within range, if not, most likely that range is wrong.
-            if current_posture == Posture.FM_IMAGING:
-                imaging_stage = self.tab_data_model.main.stage
-                stage_pos = imaging_stage.position.value
-                imaging_rng = imaging_stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
-                for a, pos in stage_pos.items():
-                    if a in imaging_rng:
-                        rng = imaging_rng[a]
-                        if not rng[0] <= pos <= rng[1]:
-                            logging.warning("After moving to FM IMAGING, stage position is %s, outside of POS_ACTIVE_RANGE %s",
-                                            stage_pos, imaging_rng)
-                            break
-
-            # Turn on (green) the Grid button
-            current_grid_label = self.posture_manager.get_current_grid_label()
-            btn = self._grid_btns.get(current_grid_label)
-            self._toggle_grid_buttons(btn)
-
-        elif self._role == 'mimas':  # Old mimas, not to be confused with the new mimas (to be replaced)
-            # enabling/disabling mimas buttons
-            for movement, button in self.position_btns.items():
-                if current_posture == Posture.UNKNOWN:
-                    # If at unknown position, only allow going to LOADING position
-                    button.Enable(movement == Posture.LOADING)
-                else:
-                    button.Enable(True)
-
-            # turn on (green) the current position button green
-            btn = self.position_btns.get(current_posture)
-            self._toggle_switch_buttons(btn)
+        # Turn on (green) the Grid button
+        current_grid_label = self.posture_manager.get_current_grid_label()
+        btn = self._grid_btns.get(current_grid_label)
+        self._toggle_grid_buttons(btn)
 
     def _enable_advanced_controls(self, enable=True):
         """
@@ -824,8 +709,6 @@ class CryoChamberTab(Tab):
             self._toggle_switch_buttons(target_button)
 
         self._show_warning_msg(None)
-        if self._role == 'enzel':
-            self._enable_advanced_controls(False)
         self.panel.btn_cancel.Enable()
 
     @call_in_wx_main
@@ -889,20 +772,12 @@ class CryoChamberTab(Tab):
         # determine the end position for the gauge
         end_pos = self.posture_manager.get_target_position(self._target_posture)
 
-        if self._role == 'enzel':
-            if (
-                current_posture is Posture.LOADING
-                and not self._display_insertion_stick_warning_msg()
-            ):
-                return None
-
-        elif self._role == 'meteor':
-            if (
-                self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
-                and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
-                and not self._display_meteor_pos_warning_msg(end_pos)
-            ):
-                return None
+        if (
+            self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+            and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+            and not self._display_meteor_pos_warning_msg(end_pos)
+        ):
+            return None
 
         self._end_pos = end_pos
         return self.posture_manager.switch_posture(self._target_posture)
@@ -1092,6 +967,4 @@ class CryoChamberTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("enzel", "meteor", "mimas"):
-            return 10
-        return None
+        return 10

@@ -37,8 +37,6 @@ from odemis.gui import conf
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont.fastem_project_tree import FastEMTreeNode, NodeType
 from odemis.gui.model._constants import (
-    FLM_ALIGN,
-    SEM_ALIGN,
     STATE_DISABLED,
     STATE_OFF,
     STATE_ON,
@@ -59,8 +57,6 @@ from odemis.gui.model._constants import (
     VIEW_LAYOUT_DYNAMIC,
     VIEW_LAYOUT_FULLSCREEN,
     VIEW_LAYOUT_ONE,
-    VIEW_LAYOUT_VERTICAL,
-    Z_ALIGN,
 )
 from odemis.model import (
     BooleanVA,
@@ -255,9 +251,9 @@ class CryoGUIData(MicroscopyGUIData):
     Represents an interface for handling cryo microscopes.
     """
     def __init__(self, main):
-        if not main.is_viewer and main.role not in ("enzel", "meteor", "mimas"):
+        if not main.is_viewer and main.role != "meteor":
             raise ValueError(
-                "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
+                "Expected a microscope role of 'meteor' but found it to be %s." % main.role)
         super().__init__(main)
 
         # the streams to correlate among all streams in .streams
@@ -849,14 +845,6 @@ class SecomAlignGUIData(ActuatorGUIData):
 
         # For dichotomic mode
         self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
-
-
-class EnzelAlignGUIData(ActuatorGUIData):
-    def __init__(self, main):
-        ActuatorGUIData.__init__(self, main)
-        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_VERTICAL, choices={VIEW_LAYOUT_VERTICAL})
-        self.step_size = model.FloatContinuous(1e-6, range=(50e-9,50e-6), unit="m")
-        self.align_mode = StringEnumerated(Z_ALIGN, choices=set((Z_ALIGN, SEM_ALIGN, FLM_ALIGN)))
 
 
 class SparcAlignGUIData(ActuatorGUIData):

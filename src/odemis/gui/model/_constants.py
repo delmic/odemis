@@ -94,11 +94,6 @@ TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_PO
 TOOL_AUTO_FOCUS_ON = True
 TOOL_AUTO_FOCUS_OFF = False
 
-# Used for enzel alignment tab
-Z_ALIGN = "Z alignment"
-SEM_ALIGN = "SEM alignment"
-FLM_ALIGN = "FLM alignment"
-
 # Used for fastem
 CALIBRATION_1 = "Calibration 1"
 CALIBRATION_2 = "Calibration 2"
