@@ -565,7 +565,9 @@ class Sparc2AlignTab(Tab):
         if main_data.streak_ccd:
             # Don't show the time range, as it's done by the StreakCamAlignSettingsController
             streak_unit_vas = (get_local_vas(main_data.streak_unit, main_data.hw_settings_config)
-                               -{"timeRange"})
+                               - {"timeRange"})
+            streak_ccd_vas = (get_local_vas(main_data.streak_ccd, main_data.hw_settings_config)
+                              - {"photonCounting", "pcExposureTime", "pcThreshold", "pcIntegrationCounts"})
             ts_stream = acqstream.StreakCamStream(
                                 "Calibration trigger delay for streak camera",
                                 main_data.streak_ccd,
@@ -573,7 +575,7 @@ class Sparc2AlignTab(Tab):
                                 emitter=None,
                                 streak_unit=main_data.streak_unit,
                                 streak_delay=main_data.streak_delay,
-                                detvas=get_local_vas(main_data.streak_ccd, main_data.hw_settings_config),
+                                detvas=streak_ccd_vas,
                                 streak_unit_vas=streak_unit_vas,
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                          model.MD_ROTATION: 0},  # Force the CCD as-is
@@ -1376,6 +1378,10 @@ class Sparc2AlignTab(Tab):
                 self._ts_stream.detMCPGain.value = 0
                 if hasattr(self._ts_stream, "detShutter"):
                     self._ts_stream.detShutter.value = True
+                # It never makes sense to use photon counting for alignment, so the setting is not
+                # shown, and we just need to make sure it is not enabled before starting.
+                if model.hasVA(main.streak_ccd, "photonCounting"):
+                    main.streak_ccd.photonCounting.value = False
 
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
