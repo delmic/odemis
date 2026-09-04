@@ -306,6 +306,23 @@ class ProgressiveFutureConnector(object):
         self._elapsed = elapsed_time
         self._remaining = remaining_time
 
+    def pause(self):
+        """
+        Pause the progress bar and label updates.
+
+        Stops the periodic timer so the display freezes while the acquisition is paused.
+        """
+        self._timer.Stop()
+
+    def resume(self):
+        """
+        Resume the progress bar and label updates after a pause.
+
+        Restarts the periodic timer so the display tracks the future's progress again.
+        """
+        if not self._timer.IsRunning() and self._future is not None:
+            self._timer.Start(250)
+
     @call_in_wx_main
     def _on_done(self, future):
         """ Process the completion of the future """

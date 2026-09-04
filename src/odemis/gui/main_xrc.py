@@ -705,6 +705,7 @@ class xrcpnl_tab_fastem_multi_beam(wx.Panel):
         self.lbl_acq_estimate = xrc.XRCCTRL(self, "lbl_acq_estimate")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.btn_pause = xrc.XRCCTRL(self, "btn_pause")
         self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
 
 
@@ -745,6 +746,7 @@ class xrcpnl_tab_fastem_setup(wx.Panel):
         self.lbl_acq_estimate = xrc.XRCCTRL(self, "lbl_acq_estimate")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.btn_cancel_acq = xrc.XRCCTRL(self, "btn_cancel_acq")
+        self.btn_pause_acq = xrc.XRCCTRL(self, "btn_pause_acq")
         self.btn_acq = xrc.XRCCTRL(self, "btn_acq")
         self.pnl_calib = xrc.XRCCTRL(self, "pnl_calib")
         self.pnl_calib_status = xrc.XRCCTRL(self, "pnl_calib_status")
@@ -9085,6 +9087,20 @@ N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
                               <flag>wxALL</flag>
                               <border>10</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_pause">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Pause</label>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxRIGHT|wxTOP|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
                             <orient>wxHORIZONTAL</orient>
                           </object>
                           <flag>wxEXPAND</flag>
@@ -9400,6 +9416,20 @@ D$T\xf2
                                 </XRCED>
                               </object>
                               <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_pause_acq">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Pause</label>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxRIGHT|wxTOP|wxBOTTOM</flag>
                               <border>10</border>
                             </object>
                             <orient>wxHORIZONTAL</orient>

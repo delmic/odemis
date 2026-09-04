@@ -194,6 +194,20 @@
                               <flag>wxALL</flag>
                               <border>10</border>
                             </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_pause_acq">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Pause</label>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxRIGHT|wxTOP|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
                             <orient>wxHORIZONTAL</orient>
                           </object>
                           <flag>wxEXPAND</flag>

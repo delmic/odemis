@@ -296,6 +296,16 @@ class CancellableFuture(futures.Future):
         # As long as it's None, the future cannot be cancelled while running
         self.task_canceller = None
 
+        self.can_pause = False
+        self._is_paused_event = threading.Event()
+        self._no_need_to_pause_event = threading.Event()
+        self._no_need_to_pause_event.set()
+
+    @property
+    def is_pause_requested(self) -> bool:
+        """Return True if a pause has been requested but not yet acknowledged."""
+        return self.can_pause and not self._no_need_to_pause_event.is_set()
+
     def cancel(self):
         """Cancel the future if possible.
 
@@ -321,6 +331,96 @@ class CancellableFuture(futures.Future):
 
         self._invoke_callbacks()
         return True
+
+    def pause(self) -> bool:
+        """
+        Request the future to pause and block until it is actually paused, or until pausing fails.
+
+        If the future is already cancelled or finished, return False immediately.
+        If the future is still pending, block until it starts running and then block
+        until it is paused. If the future is already running, block until it reaches
+        a pause checkpoint and is paused.
+
+        For ProgressiveFuture instances, progress tracking is frozen while paused:
+        elapsed time does not advance and the estimated remaining time is held constant.
+        Progress tracking resumes automatically once the future is resumed via resume().
+
+        :returns: True if the future was successfully paused, False otherwise.
+        """
+        if not self.can_pause:
+            return False
+
+        with self._condition:
+            if self._state in (FINISHED, CANCELLED, CANCELLED_AND_NOTIFIED):
+                return False
+            elif self._state in (RUNNING, PENDING):
+                self._no_need_to_pause_event.clear()
+
+        while not self._is_paused_event.wait(0.1):
+            # Block until task is fully paused (wait_if_paused started waiting)
+            if self.done():  # done includes finished and canceled
+                return False
+            if self._no_need_to_pause_event.is_set():
+                # The pause was cancelled by a resume() call, so we cannot pause anymore
+                return False
+
+        return True
+
+    def resume(self) -> None:
+        """
+        Resume a paused future.
+
+        If the future is not currently paused, calling this method has no
+        effect and returns immediately. Once resumed, any progress tracking
+        will continue updating as normal.
+
+        Safe to call from any thread, including before the task has started
+        or after it has already finished.
+        """
+        if not self.can_pause:
+            return
+
+        self._no_need_to_pause_event.set()
+        # Do NOT clear _is_paused_event here: it is owned by wait_if_paused(),
+        # which clears it in its finally block. Clearing it here would race
+        # with pause()'s confirmation check, allowing pause() to return True
+        # while the acquisition is already running again.
+
+        return
+
+    def wait_if_paused(self) -> float:
+        """Block if the future is paused, and return once it is resumed or cancelled.
+
+        This method is intended to be called from within the running task at
+        safe checkpoints. If no pause has been requested, it returns immediately.
+
+        While blocked, the internal paused event is set so that external callers
+        waiting on pause() can detect that the task has truly paused. The event
+        is cleared before this method returns, regardless of whether the future
+        was resumed or cancelled.
+
+        Raises CancelledError if the future is cancelled while paused.
+
+        :returns: the duration spent paused in seconds, or 0.0 if not paused.
+        """
+        if self._no_need_to_pause_event.is_set():
+            return 0.0
+
+        t = time.monotonic()
+        self._is_paused_event.set()
+
+        try:
+            while not self._no_need_to_pause_event.wait(0.1):
+                if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
+                    raise CancelledError()
+                if self._state == FINISHED:
+                    # Future completed while we were paused (e.g. due to an
+                    # exception in an outer future). Exit cleanly without raising.
+                    return 0.0
+        finally:
+            self._is_paused_event.clear()
+
+        return time.monotonic() - t
 
     def set_result(self, result):
         """Sets the return value of work associated with the future.
@@ -367,6 +467,23 @@ class CancellableFuture(futures.Future):
         Should only be used by Executor implementations and unit tests.
         """
         self.set_exception_info(exception, None)
+
+    def set_running_or_notify_cancel(self):
+        """
+        :returns: False if the Future was cancelled, True otherwise.
+        """
+        running = futures.Future.set_running_or_notify_cancel(self)
+        if running:
+            try:
+                self.wait_if_paused()  # in case it was paused while pending
+            except CancelledError:
+                # The future was cancelled while we were waiting for resume.
+                # Do not propagate: set_running_or_notify_cancel() must not raise,
+                # and leaking CancelledError here would permanently kill the
+                # executor's worker thread.
+                return False
+
+        return running
 
 
 class ProgressiveFuture(CancellableFuture):
@@ -438,7 +555,11 @@ class ProgressiveFuture(CancellableFuture):
             if self._state == PENDING:
                 return 0.0, max(0.0, self._remaining_time)
             elif self._state == RUNNING:
-                if self._last_update_time is not None:
+                if self._is_paused_event.is_set():
+                    # Paused: return frozen values without extrapolation
+                    elapsed = max(0.0, self._elapsed_time)
+                    remaining = max(0.0, self._remaining_time)
+                elif self._last_update_time is not None:
                     since = time.monotonic() - self._last_update_time
                     elapsed = max(0.0, self._elapsed_time + since)
                     remaining = max(0.0, self._remaining_time - since)
@@ -516,12 +637,47 @@ class ProgressiveFuture(CancellableFuture):
         """
         :returns: False if the Future was cancelled, True otherwise.
         """
-        running = futures.Future.set_running_or_notify_cancel(self)
+        running = CancellableFuture.set_running_or_notify_cancel(self)
         if running:
             # Anchor elapsed to 0 at the moment the task actually starts
             self.set_progress(elapsed_time=0.0)
 
         return running
+
+    def wait_if_paused(self) -> float:
+        """Blocks if the future is paused, freezing progress tracking during the pause.
+
+        Before blocking, the elapsed time accumulated since the last anchor is
+        folded into _elapsed_time and _last_update_time is cleared so that
+        get_progress returns frozen values while paused. After resuming, the
+        anchor is reset to the current wall-clock time so extrapolation
+        continues correctly from where it left off.
+
+        :returns: the duration spent paused in seconds (0 if not paused).
+        """
+        if self._no_need_to_pause_event.is_set():
+            return 0.0
+
+        # Freeze the time anchor before entering the pause. Hold the condition
+        # lock while mutating the progress fields.
+        with self._condition:
+            now = time.monotonic()
+            if self._last_update_time is not None:
+                since = now - self._last_update_time
+                self._elapsed_time += since
+                self._remaining_time = max(0.0, self._remaining_time - since)
+                self._last_update_time = None
+
+        # Push the frozen snapshot so listeners stop extrapolating while the task is blocked
+        self._invoke_upd_callbacks()
+
+        paused_duration = super().wait_if_paused()
+
+        # Re-anchor so extrapolation resumes from the correct point
+        with self._condition:
+            self._last_update_time = time.monotonic()
+
+        return paused_duration
 
 
 class ProgressiveBatchFuture(ProgressiveFuture):
