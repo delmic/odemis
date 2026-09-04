@@ -43,6 +43,11 @@ VOLT_MAX = 10.0  # V
 
 CHANNEL_NUMBERS = {1, 2}  # The 335xx and 336xx always have just 2 channels
 
+# The minimum edge time depends on the hardware & voltage.
+# 33500: 8.4e-9
+# 33600: 2.9e-9 up to 4Vpp and 3.3e-9 above 4Vpp.
+EDGE_MIN_4V = 2.9e-9  # s
+EDGE_MIN_10V = 3.3e-9  # s
 
 class TrueFormError(OSError):
     """
@@ -153,8 +158,21 @@ class TrueForm(model.Emitter):
         delay = 0.0  # s
         self.delay = model.FloatContinuous(delay, range=(-self.period.range[1], self.period.range[1]),
                                            setter=self._set_delay, unit="s")
+
+        # Detect the minimum edge time, depending on the voltage. Picking a too small value is not
+        # much of an issue as it will be clipped, but that can be confusing for the user.
+        edge_min = EDGE_MIN_4V if all(lim[1] - lim[0] <= 4.0 for lim in self._limits) else EDGE_MIN_10V
+        rise_time = edge_min
+        self.riseTime = model.FloatContinuous(rise_time, range=(edge_min, self.period.range[1] / 2),
+                                             setter=self._set_rise_time, unit="s")
+
+        fall_time = edge_min
+        self.fallTime = model.FloatContinuous(fall_time, range=(edge_min, self.period.range[1] / 2),
+                                             setter=self._set_fall_time, unit="s")
+
+        # It's normally safe to set the period, even if off, so immediately set it. Must be after the
+        # VAs are created.
         self._set_period(period)
-        self._set_delay(delay)
 
     def terminate(self):
         if self._accesser:
@@ -193,9 +211,9 @@ class TrueForm(model.Emitter):
 
         return idn
 
-    def _sendCommand(self, cmd):
+    def _sendCommand(self, cmd: bytes) -> None:
         """
-        cmd (str): command to be sent to device
+        :param cmd: command to be sent to device
         """
         self._accesser.sendCmd(cmd)
 
@@ -207,9 +225,10 @@ class TrueForm(model.Emitter):
         response = self._accesser.sendQuery(q)
         return response
 
-    def _checkError(self):
+    def _checkError(self) -> None:
         """
         Check if there is an error on the device
+        :raise TrueFormError: if there is an error on the device
         """
         # Also take the opportunity to detect errors in the communication, and possibly reading old
         # messages
@@ -249,7 +268,7 @@ class TrueForm(model.Emitter):
         except (ValueError, TypeError):
             raise OSError(f"Invalid error message: {ans}")
 
-    def setOutput(self, c: int, p: bool):
+    def setOutput(self, c: int, p: bool) -> None:
         """
         Activate or deactivate the waveform output of the channel
         """
@@ -271,7 +290,7 @@ class TrueForm(model.Emitter):
         response = self._sendQuery(b"syst:lock:req?")
         return response == "1"
 
-    def releaseLock(self):
+    def releaseLock(self) -> None:
         """
         Release the lock of the device. See requestLock() for acquiring a lock.
         """
@@ -286,13 +305,21 @@ class TrueForm(model.Emitter):
         ans = self._sendQuery(b"OUTP%d?" % c)
         return ans in ("1", "ON")  # Typically, the device returns "1" for "ON"
 
-    def setFrequency(self, c: int, f: float):
+    def setFrequency(self, c: int, f: float) -> None:
         """
         :param c: (1 or 2) the channel to set the frequency of.
         :param f: (float > 0) the frequency value in Hertz
+        :raise IndexError: if the frequency is out of bounds. The device will typically clip the value.
         """
         self._sendCommand(b"sour%d:freq %.15e" % (c, f))
-        self._checkError()
+
+        try:
+            self._checkError()
+        except TrueFormError as e:
+            if e.errno in (-221, -222):  # Data adjusted due to other settings or out of range
+                raise IndexError(f"Frequency {f} out of range: {e.strerror}")
+            else:
+                raise
 
     def getFrequency(self, c: int) -> float:
         """
@@ -341,42 +368,87 @@ class TrueForm(model.Emitter):
         self._sendCommand(b"trig%d:del %.15e" % (c, d))
         self._checkError()
 
-    def setPhase(self, c: int, t: float):
+    def setPhase(self, c: int, t: float) -> None:
         """
-        c (1 or 2): the channel to set the delay of.
-        t: phase value in time (s). Can only be between -period and +period
+        :param c: (1 or 2) the channel to set the delay of.
+        :param t: phase value in time (s). Can only be between -period and +period
+        Note: the hardware will reject this command if the current function doesn't support phase (like DC).
         """
         self._sendCommand(b"sour%d:phas %.15e sec" % (c, t))
         self._checkError()
 
     def getPhase(self, c: int) -> float:
         """
-        c (1 or 2): the channel to get the phase of.
+        :param c: (1 or 2) the channel to get the phase of.
         :return: the phase value in degrees (-360 to 360)
         """
         ans = self._sendQuery(b"sour%d:phas?" % c)
         return float(ans)
 
-    def setDutyCycle(self, c: int, dc: float):
+    def setDutyCycle(self, c: int, dc: float) -> None:
         """
-        c (1 or 2): the channel to set the duty cycle of.
-        dc: the duty cycle percentage. between 00.01 and 99.99, or smaller values if the frequency is high
-        :raise: TrueFormError if the duty cycle is out of bounds. The device will
+        Set the duty cycle (of the pulse waveform).
+        :param c: (1 or 2) the channel to set the duty cycle of.
+        :param dc: the duty cycle percentage. between 00.01 and 99.99, or smaller values if the frequency is high
+        :raise: IndexError if the duty cycle is out of bounds. The device will
         typically clip the value to the nearest valid value.
         """
-        self._sendCommand(b"sour%d:func:squ:dcyc %.4f" % (c, dc))
+        # self._sendCommand(b"sour%d:func:squ:dcyc %.4f" % (c, dc))
+        self._sendCommand(b"sour%d:func:puls:dcyc %.4f" % (c, dc))
         try:
             self._checkError()
         except TrueFormError as e:
-            if e.errno == -222:  # Data out of range
+            if e.errno in (-221, -222):  # Data adjusted due to other settings or out of range
                 raise IndexError(f"Duty cycle {dc} out of range: {e.strerror}")
+            else:
+                raise
 
     def getDutyCycle(self, c: int) -> float:
         """
-        c (1 or 2): the channel to get the duty cycle of.
+        :param c: (1 or 2) the channel to get the duty cycle of.
         :return: the duty cycle percentage
         """
-        ans = self._sendQuery(b"sour%d:func:squ:dcyc?" % c)
+        #ans = self._sendQuery(b"sour%d:func:squ:dcyc?" % c)
+        ans = self._sendQuery(b"sour%d:func:puls:dcyc?" % c)
+        return float(ans)
+
+    def setEdgeTime(self, c: int, edge: str, duration: float) -> None:
+        """
+        Only works for pulse waveform. Sets the rise or fall time of the pulse.
+
+        :param c: (1 or 2) the channel to set the edge time of.
+        :param edge: "lead" for rise time, "trail" for fall time
+        :param duration: the edge time in seconds
+        :raise: IndexError if the edge time is out of bounds. The device will
+        typically clip the value to the nearest valid value.
+        """
+        if edge == "lead":
+            self._sendCommand(b"sour%d:func:puls:tran:lead %.15e" % (c, duration))
+        elif edge == "trail":
+            self._sendCommand(b"sour%d:func:puls:tran:tra %.15e" % (c, duration))
+        else:
+            raise ValueError("Incorrect edge: %s given" % (edge,))
+
+        try:
+            self._checkError()
+        except TrueFormError as e:
+            if e.errno in (-221, -222):  # Data adjusted due to other settings or out of range
+                raise IndexError(f"Edge time {edge} @ {duration} out of range: {e.strerror}")
+            else:
+                raise
+
+    def getEdgeTime(self, c: int, edge: str) -> float:
+        """
+        :param c (1 or 2): the channel to get the edge time of.
+        :param edge: "lead" for rise time, "trail" for fall time
+        :return: the edge time in seconds
+        """
+        if edge == "lead":
+            ans = self._sendQuery(b"sour%d:func:puls:tran:lead?" % c)
+        elif edge == "trail":
+            ans = self._sendQuery(b"sour%d:func:puls:tran:tra?" % c)
+        else:
+            raise ValueError("Incorrect edge: %s given" % (edge,))
         return float(ans)
 
     def setTracking(self, c: int, t: str) -> None:
@@ -390,10 +462,10 @@ class TrueForm(model.Emitter):
         self._sendCommand(b"sour%d:trac %s" % (c, t.encode("ascii")))
         self._checkError()
 
-    def setWaveform(self, c: int, f: str):
+    def setWaveform(self, c: int, f: str) -> None:
         """
-        c (1 or 2): the channel to set
-        f (SIN, SQU, RAMP or PULS): the waveform to generate
+        :param c: (1 or 2) the channel to set
+        :param f: (SIN, SQU, RAMP or PULS) the waveform to generate
         """
         if f.upper() not in {"SIN", "SQU", "RAMP", "PULS"}:
             raise ValueError("Incorrect waveform: %s given" % (f,))
@@ -402,13 +474,17 @@ class TrueForm(model.Emitter):
         #  reset some parameters to default values? Would that help?
         #self._sendCommand(b"sour%d:appl:%s" % (c, f.encode("ascii")))
         self._sendCommand(b"sour%d:func %s" % (c, f.encode("ascii")))
+        if f.upper() == "PULS":
+            # Make sure the duty cycle is kept constant (over the pulse width) when changing the
+            # frequency, as we control the duty cycle.
+            self._sendCommand(b"sour%d:func:puls:hold dcyc" % (c,))
         self._checkError()
 
-    def applyDC(self, c: int, volt: float):
+    def applyDC(self, c: int, volt: float) -> None:
         """
         Set the output to a constant (DC) voltage. Automatically turns on the output.
-        c (1 or 2): the channel to set
-        volt: the DC voltage to apply (in V)
+        :param c: (1 or 2) the channel to set
+        :param volt: the DC voltage to apply (in V)
         """
         self._sendCommand(b"sour%d:appl:dc DEF,DEF,%.6f" % (c, volt))
         self._checkError()
@@ -421,7 +497,12 @@ class TrueForm(model.Emitter):
         """
         f = 1 / p  # p is always > 0, as the VA has a range check
 
-        self.setFrequency(self._channel, f)
+        try:
+            self.setFrequency(self._channel, f)
+        except IndexError as ex:
+            logging.warning(f"Updating period to {p}: {ex}")
+            self._update_settings()
+
         # Update the delay (aka phase), to match in terms of time, and stay within the period
         try:
             delay_max = p * 0.99999  # tiny bit less than max, as the device complains if the delay is exactly the period
@@ -452,24 +533,78 @@ class TrueForm(model.Emitter):
         act_d = self.period.value * act_phase / 360
         return act_d
 
+    def _set_rise_time(self, d: float) -> float:
+        if d > self.period.value:
+            logging.info("Clipping rise time to period (%s), got %s" % (self.period.value, d))
+            d = self.period.value
+
+        if not self._is_powered:
+            return d
+
+        try:
+            self.setEdgeTime(self._channel, "lead", d)
+        except IndexError as ex:
+            logging.info(ex)
+            self._update_settings()
+
+        act_d = self.getEdgeTime(self._channel, "lead")
+        return act_d
+
+    def _set_fall_time(self, d: float) -> float:
+        if d > self.period.value:
+            logging.info("Clipping fall time to period (%s), got %s" % (self.period.value, d))
+            d = self.period.value
+
+        if not self._is_powered:
+            return d
+
+        try:
+            self.setEdgeTime(self._channel, "trail", d)
+        except IndexError as ex:
+            logging.info(ex)
+            self._update_settings()
+
+        act_d = self.getEdgeTime(self._channel, "trail")
+        return act_d
+
     def _set_duty_cycle(self, dc: float) -> float:
         if not self._is_powered:
             return dc
 
         duty_cycle = dc * 100
-        exp = None
         try:
             self.setDutyCycle(self._channel, duty_cycle)
-        except (IndexError, TrueFormError) as e:
-            exp = e
+        except IndexError as ex:
+            logging.info(ex)
+            self._update_settings()
 
         act_dc = self.getDutyCycle(self._channel) / 100
-        # In case of error, the value still might have changed, so need to update it
-        if exp:
-            self.dutyCycle._set_value(act_dc)
-            raise exp
-
         return act_dc
+
+    def _update_settings(self):
+        """
+        Read the device settings and update the VAs accordingly.
+        Only works if the power is on.
+        """
+        if not self._is_powered:
+            return
+
+        logging.debug("Reading back settings from the device")
+        try:
+            dc = self.getDutyCycle(self._channel) / 100
+            if dc != self.dutyCycle.value:
+                self.dutyCycle._value = dc
+                self.dutyCycle.notify(dc)
+            rise_time = self.getEdgeTime(self._channel, "lead")
+            if rise_time != self.riseTime.value:
+                self.riseTime._value = rise_time
+                self.riseTime.notify(rise_time)
+            fall_time = self.getEdgeTime(self._channel, "trail")
+            if fall_time != self.fallTime.value:
+                self.fallTime._value = fall_time
+                self.fallTime.notify(fall_time)
+        except Exception as ex:
+            logging.warning("Failed to update settings: %s", ex)
 
     def _set_power(self, p: bool) -> bool:
         if p == self._is_powered:
@@ -500,15 +635,60 @@ class TrueForm(model.Emitter):
         """
         Configure the device to "on" state
         """
-        # Powered on means a square waveform
+        # Note: the order of changing the settings matters. The device will reject some settings
+        # if the waveform is not compatible. The device will also complain when setting the waveform
+        # if some waveform settings are not compatible.
+
+        # Configure the (square) waveform voltages: low = min and high = max
+        for c, lim in enumerate(self._limits, start=1):
+            self.setVoltageMin(c, lim[0])
+            self.setVoltageMax(c, lim[1])
+
+        # It happens that when setting the waveform, some current settings have to be reset,
+        # which the keysight reports as an error, but it's not an issue, as we set all the
+        # settings again afterwards.
+        for i in range(3):
+            try:
+                self.setWaveform(self._channel, "PULS")
+                break
+            except TrueFormError as ex:
+                logging.warning("Failed to set the waveform to pulse, will retry: %s", ex)
+
+        # Reset all the settings by "setting" the VAs to the current values. We need this for 3 reasons:
+        # * if the VAs were changed while the power was off, they couldn't be applied, so we
+        #   need to set them now.
+        # * maybe the user has changed them in the meantime. So we need to put back the expected values.
+        # * it actually might be the first time the device is powered on, so we need to set them all.
+
+        duty_cyle = self.dutyCycle.value
+        period = self.period.value
+        delay = self.delay.value
+        rise_time = self.riseTime.value
+        fall_time = self.fallTime.value
         try:
-            self.setWaveform(self._channel, "SQU")
+            self.dutyCycle.value = duty_cyle
         except TrueFormError as ex:
-            # It happens that when setting the waveform, some current settings have to be reset,
-            # which the keysight reports as an error, but it's not an issue, as we set all the
-            # settings again afterwards. A second error would be a sign of a real issue.
-            logging.warning("Failed to set the waveform to square, will retry: %s", ex)
-            self.setWaveform(self._channel, "SQU")
+            logging.warning("Failed to set the duty cycle to %s after power on: %s", duty_cyle, ex)
+
+        try:
+            self.period.value = period  # also updates .delay, to stay within the period
+        except TrueFormError as ex:
+            logging.warning("Failed to set the period to %s after power on: %s", period, ex)
+
+        try:
+            self.delay.value = delay
+        except TrueFormError as ex:
+            logging.warning("Failed to set the delay to %s after power on: %s", delay, ex)
+
+        try:
+            self.riseTime.value = rise_time
+        except TrueFormError as ex:
+            logging.warning("Failed to set the rise time to %s after power on: %s", rise_time, ex)
+
+        try:
+            self.fallTime.value = fall_time
+        except TrueFormError as ex:
+            logging.warning("Failed to set the fall time to %s after power on: %s", fall_time, ex)
 
         # If required, set the other channel to track the main channel
         for c, t in self._tracking.items():
@@ -521,25 +701,6 @@ class TrueForm(model.Emitter):
                 # as setting the waveform.
                 logging.warning("Failed to set the channel %s to track %s, will retry: %s", t, other_c, ex)
                 self.setTracking(other_c, t)
-
-        # Configure the (square) waveform voltages: low = min and high = max
-        for c, lim in enumerate(self._limits, start=1):
-            self.setVoltageMin(c, lim[0])
-            self.setVoltageMax(c, lim[1])
-
-        # Reset all the settings by "setting" the VAs to the current values. We need this for 3 reasons:
-        # * if the VAs were changed while the power was off, they couldn't be applied, so we
-        #   need to set them now.
-        # * maybe the user has changed them in the meantime. So we need to put back the expected values.
-        # * it actually might be the first time the device is powered on, so we need to set them all.
-        try:
-            self.dutyCycle.value = self.dutyCycle.value
-        except TrueFormError as ex:
-            logging.warning("Failed to set the duty cycle to %s after power on: %s", self.dutyCycle.value, ex)
-        try:
-            self.period.value = self.period.value  # also updates .delay, in a safe way
-        except TrueFormError as ex:
-            logging.warning("Failed to set the period to %s after power on: %s", self.period.value, ex)
 
         # Ends by enabling the output
         self.setOutput(self._channel, True)
@@ -629,7 +790,7 @@ class IPBusAccesser(object):
 
         return ans.rstrip().decode('latin1')
 
-    def sendCmd(self, cmd: bytes):
+    def sendCmd(self, cmd: bytes) -> None:
         # Send the given command to the instrument.
         cmd += b'\n'
         with self._access:
@@ -649,7 +810,9 @@ class OutputStates:
                  waveform: str = "sin",
                  frequency: float = 1e6,
                  duty_cycle: float = 50,
-                 phase: float = 0.0):
+                 phase: float = 0.0,
+                 edge_time_lead: float = 1e-9,
+                 edge_time_trail: float = 1e-9):
         self.output = output
         self.tracking = tracking
         self.voltage_amp = voltage_amp
@@ -660,6 +823,8 @@ class OutputStates:
         self.frequency = frequency
         self.phase = phase
         self.duty_cycle = duty_cycle
+        self.edge_time_lead = edge_time_lead
+        self.edge_time_trail = edge_time_trail
 
 
 class Keysight33622ASimulator:
@@ -798,7 +963,7 @@ class Keysight33622ASimulator:
             channel = int(msg[4])
             voltage_lim_max = float(msg.split()[1])
             self._output_states[channel].voltage_limit_high = voltage_lim_max
-        elif re.match(r"sour[1-2]:func:squ:dcyc ", msg):
+        elif re.match(r"sour[1-2]:func:(squ|puls):dcyc ", msg):
             channel = int(msg[4])
             duty_cycle = float(msg.split()[1])
             # The device only accepts values between 0.01 and 99.99, but to simulate more limited
@@ -808,9 +973,25 @@ class Keysight33622ASimulator:
                 self._error = -222  # Out of range
                 duty_cycle = min(max(20, duty_cycle), 80)
             self._output_states[channel].duty_cycle = duty_cycle
-        elif re.match(r"sour[1-2]:func:squ:dcyc?", msg):
+        elif re.match(r"sour[1-2]:func:(squ|puls):dcyc?", msg):
             channel = int(msg[4])
             self._sendAnswer(b"%+.2E" % (self._output_states[channel].duty_cycle,))
+        elif re.match(r"sour[1-2]:func:puls:hold (dcyc|widt)", msg):
+            pass  # We don't simulate the "hold" command, so just ignore
+        elif re.match(r"sour[1-2]:func:puls:tran:lead ", msg):
+            channel = int(msg[4])
+            duration = float(msg.split()[1])
+            self._output_states[channel].edge_time_lead = duration
+        elif re.match(r"sour[1-2]:func:puls:tran:lead?", msg):
+            channel = int(msg[4])
+            self._sendAnswer(b"%+.15E" % (self._output_states[channel].edge_time_lead,))
+        elif re.match(r"sour[1-2]:func:puls:tran:tra ", msg):
+            channel = int(msg[4])
+            duration = float(msg.split()[1])
+            self._output_states[channel].edge_time_trail = duration
+        elif re.match(r"sour[1-2]:func:puls:tran:tra?", msg):
+            channel = int(msg[4])
+            self._sendAnswer(b"%+.15E" % (self._output_states[channel].edge_time_trail,))
         elif re.match(r"sour[1-2]:phas ", msg):
             channel = int(msg[4])
             args = msg.split()[1:]
