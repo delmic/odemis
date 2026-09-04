@@ -204,15 +204,14 @@ class StreamController(object):
             self.tab_data_model.zPos.subscribe(self._on_z_pos, init=True)
 
         if hasattr(stream, "zIndex") and hasattr(stream, "max_projection"):
-            self.zindex_se = None
+            # Disable the z-index control when MIP is enabled
             for se in self.entries:
                 if se.vigilattr is self.stream.zIndex:
                     self._zindex_se = se
+                    self.stream.max_projection.subscribe(self._on_max_projection)
                     break
-
-            if self.zindex_se is None:
+            else:
                 logging.warning("Stream has zIndex but no corresponding stream entry found.")
-            self.stream.max_projection.subscribe(self._on_max_projection)
 
         # For Temporal Spectrum streams, with a photon counting mode, show/hide the exposure time controls
         if hasattr(stream, "detPhotonCounting"):
@@ -255,6 +254,16 @@ class StreamController(object):
             self.stream.detPhotonCounting.unsubscribe(self._on_photon_counting)
         if hasattr(self.stream, "repetition"):
             self.stream.repetition.unsubscribe(self._onStreamRep)
+        if hasattr(self.stream, "spectrumBandwidth"):
+            self.mean_spec_proj.image.unsubscribe(self._on_new_spec_data)
+            del self.mean_spec_proj  # Make sure the projection is destroyed
+        if hasattr(self.stream, "zIndex"):
+            if hasattr(self.tab_data_model, "zPos"):
+                self.stream.zIndex.unsubscribe(self._on_z_index)
+                self.tab_data_model.zPos.unsubscribe(self._on_z_pos)
+            if hasattr(self.stream, "max_projection"):
+                self.stream.max_projection.unsubscribe(self._on_max_projection)
+                self._zindex_se = None
 
         # Unsubscribe from all the VAs
         # TODO: it seems that in some cases we still receive a call after destruction
@@ -548,8 +557,7 @@ class StreamController(object):
     @call_in_wx_main
     def _on_max_projection(self, val):
         """Disable/enable the z-index control based on the max_projection setting"""
-        if self._zindex_se is not None:
-            self._zindex_se.value_ctrl.Enable(not val)
+        self._zindex_se.value_ctrl.Enable(not val)
 
     @call_in_wx_main
     def _on_photon_counting(self, active: bool) -> None:
