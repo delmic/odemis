@@ -51,7 +51,6 @@ from odemis.gui.cont.stream_bar import CryoFIBAcquiredStreamsController, CryoStr
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TabName, TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
-from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 
 
@@ -181,11 +180,15 @@ class FibsemTab(Tab):
         self.pm = self.tab_data_model.main.posture_manager
         panel.pnl_secom_grid.viewports[1].canvas.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click) # bind the double click event
 
-        # TODO: replace with current_posture?
-        self.pm.stage.position.subscribe(self._on_stage_pos, init=True)
+        self.pm.current_posture.subscribe(self._on_current_posture, init=True)
         self.panel = panel
 
         self._posture_switch_future = model.InstantaneousFuture()
+
+        self._btn_slm_alignment = getattr(self.panel, "btn_slm_alignment", None)
+        if self._btn_slm_alignment is not None:
+            self._btn_slm_alignment.Show(Posture.SLM_IMAGING in self.pm.postures)
+            self._btn_slm_alignment.Bind(wx.EVT_BUTTON, self._on_slm_alignment)
 
         rx = self.pm.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["mill_angle"]
         self.panel.ctrl_milling_angle.SetValue(math.degrees(rx))
@@ -358,47 +361,33 @@ class FibsemTab(Tab):
         active_canvas.on_left_down(evt)
 
     @call_in_wx_main
-    def _on_stage_pos(self, pos: Dict[str, float]) -> None:
+    def _on_current_posture(self, posture) -> None:
         """
-        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
-        :param pos: updated position of the stage (with rx and rz in radians)
+        Called when the posture is updated, enable the tab if position is in allowed imaging mode, disable otherwise
+        :param posture: the current posture
         """
         guiutil.enable_tab_on_stage_position(
             tab=self,
             posture_manager=self.pm,
-            target=[Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING],
+            target=[Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.SLM_IMAGING],
             tooltip="FIBSEM tab is only available at SEM position"
         )
 
-        # update stage pos label
-        rx = math.degrees(pos["rx"])
-        rz = math.degrees(pos["rz"])
-        posture = self.pm.get_current_posture(pos)  # Cannot use current_posture as it may be not yet updated
-        pos_name = posture.value
-
-        # TODO: move this to legend.py
-        r = units.readable_str(rz, sig=3)
-        t = units.readable_str(rx, sig=3)
-        txt = f"Stage R: {r}° T: {t}° [{pos_name}]"
-
-        # update the stage position label
-        try:
-            self.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
-            self.view_controller.viewports[1].bottom_legend.set_stage_pos_label(txt)
-            self.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-            ltab = self.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
-            if ltab:
-                ltab.view_controller.viewports[0].bottom_legend.set_stage_pos_label(txt)
-                ltab.view_controller.viewports[2].bottom_legend.set_stage_pos_label(txt)
-                ltab.view_controller.viewports[3].bottom_legend.set_stage_pos_label(txt)
-        except Exception as e:
-            logging.warning("Failed to update stage position label: %s", e)
 
         # update the stage position buttons
         if self._posture_switch_future.done():
-            self.panel.btn_switch_sem_imaging.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
-            self.panel.btn_switch_milling.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
-            self.panel.ctrl_milling_angle.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING])
+            slm_mode = posture == Posture.SLM_IMAGING
+            self.panel.btn_switch_sem_imaging.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING] and not slm_mode)
+            self.panel.btn_switch_milling.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING] and not slm_mode)
+            self.panel.ctrl_milling_angle.Enable(posture in [Posture.SEM_IMAGING, Posture.MILLING] and not slm_mode)
+
+            slm_tooltip = "Posture changes must be initiated from the Cryo Chamber tab while in SLM mode."
+            self.panel.btn_switch_sem_imaging.SetToolTip(slm_tooltip if slm_mode else "")
+            self.panel.btn_switch_milling.SetToolTip(slm_tooltip if slm_mode else "")
+
+            if self._btn_slm_alignment is not None:
+                self._btn_slm_alignment.Enable(slm_mode)
+                self._btn_slm_alignment.SetToolTip("" if slm_mode else "Enter SLM posture to run alignment")
 
             if posture == Posture.SEM_IMAGING:
                 self.panel.btn_switch_sem_imaging.SetValue(BTN_TOGGLE_COMPLETE)
@@ -460,8 +449,12 @@ class FibsemTab(Tab):
         except Exception:
             logging.exception("Failed to switch posture")
 
+    def _on_slm_alignment(self, _: wx.Event) -> None:
+        """Open the SLM alignment workflow dialog."""
+        wx.CallAfter(self._acquisition_controller.open_slm_alignment_dialog)
+
     def terminate(self):
-        self.main_data.stage.position.unsubscribe(self._on_stage_pos)
+        self.pm.current_posture.unsubscribe(self._on_current_posture)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False

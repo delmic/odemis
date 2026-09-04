@@ -160,6 +160,7 @@ class ViewPort(wx.Panel):
         # Put all together (canvas + legend)
         self.bottom_legend = None
         self.left_legend = None
+        self._current_posture = None
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         if (
@@ -211,6 +212,9 @@ class ViewPort(wx.Panel):
         self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy, source=self)
 
     def _on_destroy(self, evt):
+        if self._current_posture is not None:
+            self._current_posture.unsubscribe(self._on_current_posture)
+            self._current_posture = None
         # Drop references
         self._view = None
         self._tab_data_model = None
@@ -369,6 +373,11 @@ class MicroscopeViewport(ViewPort):
         if model.hasVA(tab_data, "zPos"):
             tab_data.zPos.subscribe(self._on_zPos_change, init=True)
 
+        main_data = getattr(tab_data, "main", None)
+        posture_manager = getattr(main_data, "posture_manager", None)
+        if posture_manager and self.bottom_legend:
+            posture_manager.current_posture.subscribe(self._on_current_posture, init=True)
+
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
@@ -509,6 +518,26 @@ class MicroscopeViewport(ViewPort):
 
     def _on_zPos_change(self, val):
         self.UpdateZposLabel()
+
+    @call_in_wx_main
+    def _on_current_posture(self, posture):
+        if not self.bottom_legend or not self._tab_data_model:
+            return
+
+        posture_manager = getattr(self._tab_data_model.main, "posture_manager", None)
+        if posture_manager is None:
+            return
+
+        pos = posture_manager.stage.position.value
+        if "rx" not in pos or "rz" not in pos:
+            self.bottom_legend.set_stage_pos_label(None)
+            return
+
+        rx = math.degrees(pos["rx"])
+        rz = math.degrees(pos["rz"])
+        r = units.readable_str(rz, sig=3)
+        t = units.readable_str(rx, sig=3)
+        self.bottom_legend.set_stage_pos_label(f"Stage R: {r}° T: {t}° [{posture.value}]")
 
     @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
     def _on_stage_pos_change(self, val):

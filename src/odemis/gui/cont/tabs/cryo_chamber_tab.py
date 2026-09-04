@@ -193,6 +193,7 @@ class CryoChamberTab(Tab):
                 Posture.MILLING: self.panel.btn_switch_milling,
                 Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
                 Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
+                Posture.SLM_IMAGING: self.panel.btn_switch_slm_imaging,
            }
             # Remove the ones which are not supported on this system
             self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
@@ -229,6 +230,7 @@ class CryoChamberTab(Tab):
 
         # Event binding for position control
         for btn in itertools.chain(self.position_btns.values(), self._grid_btns.values()):
+            logging.debug("Binding button: %s", btn.GetName())
             btn.Show()
             btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
 
@@ -898,8 +900,8 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
-                and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+                self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING]
+                and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM, Posture.SLM_IMAGING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
@@ -1015,6 +1017,34 @@ class CryoChamberTab(Tab):
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
+
+        if self._role in ["meteor", "mimas"] and show:
+            already_referenced = getattr(self.posture_manager, "_slm_axes_referenced", False)
+            if (not already_referenced
+                    and Posture.SLM_IMAGING in getattr(self.posture_manager, "postures", ())
+                    and hasattr(self.posture_manager, "_ensure_slm_referenced")):
+                # stage_md = self.tab_data_model.main.stage_bare.getMetadata()
+                # auto_ref = bool(stage_md.get("slm_auto_reference", False))
+                # if auto_ref:
+                #     pm._ensure_slm_referenced()
+                #     self._slm_reference_prompt_done = True
+                # else:
+                msg = (
+                    "SLM axes will be referenced during which it will make large movements. "
+                    "Please ensure the stage is at a safe location. Is it safe to continue?"
+                )
+                box = wx.MessageDialog(
+                    self.main_frame,
+                    message=msg,
+                    caption="Safe for Large Movement",
+                    style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
+                )
+                ans = box.ShowModal()
+                if ans == wx.ID_YES:
+                    self.posture_manager._ensure_slm_referenced()
+                else:
+                    wx.GetApp().ExitMainLoop()
+                    return
 
         # the first time the tab is shown, ask the user to create or load a project
         if self.IsShown() and not self._is_initial_project_ready:

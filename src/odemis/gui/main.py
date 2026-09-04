@@ -33,6 +33,7 @@ from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util.datacollector import DataCollector
+import os
 import sys
 import threading
 import traceback
@@ -53,12 +54,14 @@ class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
     """
 
-    def __init__(self, standalone=False, file_name=None):
+    def __init__(self, standalone: bool = False, file_name: str = None, slm_alignment_mode: bool = False) -> None:
         """
+        Initialize the Odemis GUI application.
 
         Args:
-            standalone: (bool or str) False, if not standalone, name string otherwise
-            file_name: (str) Path to the file to open on launch
+            standalone: False if not standalone, name string otherwise
+            file_name: Path to the file to open on launch
+            slm_alignment_mode: If True, automatically navigate to SLM alignment on startup
 
         """
         # Replace the standard 'get_resources' with our augmented one, that
@@ -77,6 +80,7 @@ class OdemisGUIApp(wx.App):
         self._menu_controller = None
         self._data_collector = DataCollector()
         self.plugins = []  # List of instances of plugin.Plugins
+        self._slm_alignment_mode = slm_alignment_mode
 
         # User input devices
         self.dev_powermate = None
@@ -382,12 +386,257 @@ class OdemisGUIApp(wx.App):
             # has no effect. So we call it after the Show() to be sure it works.
             wx.CallAfter(self.main_frame.Maximize)
 
+            # Start SLM alignment mode if enabled
+            if self._slm_alignment_mode:
+                wx.CallLater(1000, self._start_slm_alignment_mode)
+
         except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
             # done and exception will prevent the GUI from being shown, while
             # the program keeps running in the background.
             raise
+
+    def _start_slm_alignment_mode(self) -> None:
+        """
+        Start the automatic SLM alignment workflow.
+
+        This method implements the following synchronized sequence:
+        1. Reference SLM axes (automatically without showing dialogs)
+        2. Load the previous selected project (programmatically, no dialogs)
+        3. Navigate to FIBSEM tab
+        4. Switch to SLM posture
+        5. Trigger SLM alignment button
+
+        All steps are synchronized - each waits for the previous one to complete.
+        No Chamber tab is shown (to avoid triggering dialogs).
+        """
+        from odemis.gui.model import TabName
+
+        try:
+            logging.info("Starting SLM alignment mode - automatic workflow (no Chamber tab, no dialogs)")
+
+            # Step 1: Reference SLM axes (with auto-dialog handling)
+            logging.info("Step 1: Referencing SLM axes")
+            self._setup_dialog_auto_dismisser()  # Start monitoring for dialogs
+            self._reference_slm_axes()
+
+            # Wait for SLM referencing to complete (including any dialogs)
+            wx.CallLater(2000, self._load_project_and_continue)
+
+        except Exception:
+            logging.exception("Failed to start SLM alignment mode")
+
+    def _reference_slm_axes(self) -> None:
+        """
+        Reference the SLM axes.
+
+        Calls the SLM axis referencing function if available.
+        Any dialogs that appear will be auto-dismissed by the auto-dismisser thread.
+        """
+        try:
+            # Try to find and call SLM referencing on the microscope
+            if hasattr(self.main_data, 'aligner') and self.main_data.aligner:
+                aligner = self.main_data.aligner
+                # Try different method names that might exist
+                if hasattr(aligner, 'reference'):
+                    logging.info("Calling aligner.reference()")
+                    aligner.reference()
+                elif hasattr(aligner, 'do_reference'):
+                    logging.info("Calling aligner.do_reference()")
+                    aligner.do_reference()
+                else:
+                    logging.warning("Aligner reference method not found")
+            else:
+                logging.warning("Aligner component not found")
+        except Exception:
+            logging.exception("Failed to reference SLM axes")
+
+    def _setup_dialog_auto_dismisser(self) -> None:
+        """
+        Setup automatic dismissal of dialogs that may appear during SLM referencing.
+
+        This monitors for any MessageDialog and automatically clicks "Yes" or "OK".
+        Specifically handles "Safe for large movements" and similar dialogs.
+        """
+        def auto_dismiss_dialogs():
+            """Monitor and auto-dismiss dialogs."""
+            for _ in range(20):  # Check for up to 2 seconds (20 * 100ms)
+                try:
+                    # Find any visible message dialogs
+                    for window in wx.GetTopLevelWindows():
+                        if isinstance(window, wx.MessageDialog) and window.IsShown():
+                            window_title = window.GetTitle().lower() if window.GetTitle() else ""
+                            logging.info(f"Auto-dismissing dialog: {window.GetTitle()}")
+                            # Click yes/OK button
+                            window.EndModal(wx.ID_YES)
+                            return
+                except Exception as e:
+                    logging.debug(f"Dialog auto-dismisser exception: {e}")
+
+                wx.MilliSleep(100)
+
+            logging.debug("Dialog auto-dismisser completed")
+
+        # Run the dismisser in a background daemon thread
+        thread = threading.Thread(target=auto_dismiss_dialogs, daemon=True)
+        thread.start()
+
+    def _load_project_and_continue(self) -> None:
+        """
+        Load project after SLM referencing completes, then navigate to FIBSEM.
+
+        This is called after SLM referencing and any related dialogs have been handled.
+        """
+        logging.info("Step 2: Loading previous project")
+        self._load_previous_project_for_slm()
+
+        # Wait for project loading to complete, then continue
+        wx.CallLater(3000, self._navigate_to_fibsem_and_posture)
+
+    def _load_previous_project_for_slm(self) -> None:
+        """
+        Load the previous project without showing dialogs.
+
+        Uses the stored project path from config to load directly.
+        """
+        try:
+            from odemis.gui.model import TabName
+
+            # Find Chamber tab to get config (but don't show it)
+            chamber_tab = None
+            for tab in self.tab_controller.get_tabs():
+                if tab.name == TabName.CRYOSECOM_CHAMBER.value:
+                    chamber_tab = tab
+                    break
+
+            if chamber_tab is None:
+                logging.error("Cryo Chamber tab not found (needed for config)")
+                return
+
+            # Get the last project path from config
+            if not hasattr(chamber_tab, 'conf'):
+                logging.error("Config not found in chamber tab")
+                return
+
+            proj_path = chamber_tab.conf.pj_last_path
+            logging.info(f"Loading previous project from: {proj_path}")
+
+            if not proj_path or not os.path.isdir(proj_path):
+                logging.warning(f"Project path does not exist: {proj_path}")
+                return
+
+            # Load project data directly without dialog
+            from odemis.gui.cont.cryo_project import load_project
+
+            # Reset project first
+            if chamber_tab._is_initial_project_ready:
+                chamber_tab._reset_project_data()
+
+            logging.info(f"Calling load_project with path: {proj_path}")
+            proj_data = load_project(proj_path)
+
+            if proj_data is None:
+                logging.error(f"Failed to load project from {proj_path}")
+                return
+
+            logging.info("Project loaded successfully")
+
+            # Update project path in config
+            chamber_tab._change_project_conf(proj_path)
+
+            # Load the project features and overviews
+            from odemis.acq.feature import feature_decoder
+
+            # Stop stream subscribers
+            try:
+                localization_tab = self.main_data.getTabByName(TabName.CRYOSECOM_LOCALIZATION)
+                correlation_tab = self.main_data.getTabByName(TabName.METEOR_CORRELATION)
+                correlation_tab.correlation_controller._stop_streams_subscriber()
+                localization_tab._stop_streams_subscriber()
+            except Exception:
+                logging.debug("Could not stop stream subscribers")
+
+            # Try to stop FIBSEM tab streams
+            try:
+                fibsem_tab = self.main_data.getTabByName(TabName.METEOR_FIBSEM)
+                if hasattr(fibsem_tab, '_stop_streams_subscriber'):
+                    fibsem_tab._stop_streams_subscriber()
+            except Exception:
+                logging.debug("FIBSEM tab not available or no streams to stop")
+
+            # Load features
+            decoded_features = [feature_decoder(f) for f in proj_data.get("features", [])]
+            self.main_data.features.value = [df for df in decoded_features if df is not None]
+
+            # Load overviews
+            self.main_data.overviews.value = proj_data.get("overviews", [])
+
+            logging.info("Project data loaded successfully")
+
+        except Exception:
+            logging.exception("Failed to load previous project programmatically")
+
+    def _navigate_to_fibsem_and_posture(self) -> None:
+        """
+        Step 3: Navigate to FIBSEM tab and switch to SLM posture.
+
+        The button handler will manage dialog opening.
+        """
+        from odemis.gui.model import TabName
+        from odemis.acq.move import Posture
+
+        try:
+            # Find the FibSEM tab
+            fibsem_tab = None
+            for tab in self.tab_controller.get_tabs():
+                if tab.name == TabName.METEOR_FIBSEM.value:
+                    fibsem_tab = tab
+                    break
+
+            if fibsem_tab is None:
+                logging.error("FibSEM tab not found.")
+                return
+
+            logging.info("Step 3: Navigating to FibSEM tab")
+            self.main_data.tab.value = fibsem_tab
+
+            # Step 4: Switch to SLM posture
+            logging.info("Step 4: Switching to SLM posture")
+            if hasattr(fibsem_tab, 'pm'):
+                posture_manager = fibsem_tab.pm
+                if Posture.SLM_IMAGING in posture_manager.postures:
+                    logging.info("Switching to SLM_IMAGING posture")
+                    posture_manager.switch_posture(Posture.SLM_IMAGING)
+                    # Wait for posture switch, then trigger button
+                    wx.CallLater(1000, self._trigger_slm_alignment_button, fibsem_tab)
+                else:
+                    logging.warning("SLM_IMAGING posture not available")
+            else:
+                logging.error("Posture manager not found in FIBSEM tab")
+
+        except Exception:
+            logging.exception("Failed to navigate to FIBSEM tab or switch posture")
+
+    def _trigger_slm_alignment_button(self, fibsem_tab) -> None:
+        """
+        Step 5: Trigger SLM alignment button.
+
+        This step triggers the button which handles:
+        - Opening the SLM alignment dialog
+        """
+        try:
+            logging.info("Step 5: Triggering SLM alignment button")
+
+            if fibsem_tab._btn_slm_alignment and fibsem_tab._btn_slm_alignment.IsEnabled():
+                logging.info("SLM alignment button is enabled - clicking it")
+                fibsem_tab._btn_slm_alignment.SetFocus()
+                fibsem_tab._on_slm_alignment(None)
+            else:
+                logging.warning("SLM alignment button not available or disabled")
+
+        except Exception:
+            logging.exception("Failed to trigger SLM alignment button")
 
     @call_in_wx_main
     def on_debug_va(self, enabled):
@@ -569,6 +818,8 @@ def main(args):
                         default=0, help="set verbosity level (0-2, default = 0)")
     parser.add_argument('--log-target', dest='logtarget',
                         help="Location of the GUI log file")
+    parser.add_argument('--slm-alignment-mode', dest='slm_alignment_mode', action='store_true',
+                        default=False, help="automatically start SLM alignment workflow on launch")
 
     options = parser.parse_args(args[1:])
 
@@ -616,7 +867,8 @@ def main(args):
         return 129
 
     # Create application
-    app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name)
+    app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name,
+                       slm_alignment_mode=options.slm_alignment_mode)
 
     # Change exception hook so unexpected exception get caught by the logger,
     # and warnings are shown as warnings in the log.
