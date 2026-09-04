@@ -71,6 +71,16 @@ class MillingTaskPanel(wx.Panel):
             "height": {"label": "Height", "accuracy": 2, "unit": "m"},
             "depth": {"label": "Depth", "accuracy": 2, "unit": "m"},
             "spacing": {"label": "Spacing", "accuracy": 2, "unit": "m"},
+            "spot_size_correction": {
+                "label": "Spot size correction",
+                "accuracy": 2,
+                "unit": "m",
+                "key_step_min": 1e-6,
+                "tooltip": "Total measured excess in the milled opening size. The value "
+                           "is subtracted from each dimension sent to the microscope. "
+                           "Solid: desired opening. Dashed: estimated uncorrected opening. "
+                           "Shaded band: measured excess.",
+            },
         }
 
         unsupported_parameters = ["name", "rotation",
@@ -112,7 +122,8 @@ class MillingTaskPanel(wx.Panel):
 
     def _add_value_field(self, label, val, conf, param: str):
         """Add a value field to the panel (label, ctrl)"""
-        lbl_ctrl = self._add_side_label(label)
+        tooltip = conf.pop("tooltip", None)
+        lbl_ctrl = self._add_side_label(label, tooltip=tooltip)
         value_ctrl = self._add_value_ctrl(val, conf)
 
         if value_ctrl is None:
@@ -132,6 +143,8 @@ class MillingTaskPanel(wx.Panel):
 
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        if tooltip:
+            value_ctrl.SetToolTip(tooltip)
         self.num_rows += 1
 
     def _add_value_ctrl(self, val, conf):

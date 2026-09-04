@@ -35,6 +35,7 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
         self.rotation = 0
         self.center = (0, 0)
         self.scan_direction = "TopToBottom"
+        self.spot_size_correction = 0.1e-6
 
         self.pattern = RectanglePatternParameters(
             name=self.name,
@@ -44,6 +45,7 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
             rotation=self.rotation,
             center=self.center,
             scan_direction=self.scan_direction,
+            spot_size_correction=self.spot_size_correction,
         )
 
     def test_assignment(self):
@@ -55,6 +57,8 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.rotation.value, self.rotation)
         self.assertEqual(self.pattern.center.value, self.center)
         self.assertEqual(self.pattern.scan_direction.value, self.scan_direction)
+        with self.assertRaises(IndexError):
+            self.pattern.spot_size_correction.value = -0.1e-6
 
     def test_dict(self):
         # test to_dict
@@ -67,6 +71,7 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
         self.assertEqual(rectangle_pattern_dict["center_x"], 0)
         self.assertEqual(rectangle_pattern_dict["center_y"], 0)
         self.assertEqual(rectangle_pattern_dict["scan_direction"], self.scan_direction)
+        self.assertEqual(rectangle_pattern_dict["spot_size_correction"], self.spot_size_correction)
         self.assertEqual(rectangle_pattern_dict["pattern"], "rectangle")
 
         # test from_dict
@@ -78,6 +83,14 @@ class RectanglePatternParametersTestCase(unittest.TestCase):
         self.assertEqual(rectangle_pattern_from_dict.rotation.value, self.rotation)
         self.assertEqual(rectangle_pattern_from_dict.center.value, self.center)
         self.assertEqual(rectangle_pattern_from_dict.scan_direction.value, self.scan_direction)
+        self.assertEqual(rectangle_pattern_from_dict.spot_size_correction.value,
+                         self.spot_size_correction)
+
+        # Existing task files do not have a spot size correction and must retain the
+        # previous behavior.
+        del rectangle_pattern_dict["spot_size_correction"]
+        rectangle_without_correction = RectanglePatternParameters.from_dict(rectangle_pattern_dict)
+        self.assertEqual(rectangle_without_correction.spot_size_correction.value, 0.0)
 
     def test_generate(self):
         # test generate
@@ -94,6 +107,7 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         self.depth = 10e-6
         self.spacing = 5e-6
         self.center = (0, 0)
+        self.spot_size_correction = 0.1e-6
 
         self.pattern = TrenchPatternParameters(
             name=self.name,
@@ -102,6 +116,7 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
             depth=self.depth,
             spacing=self.spacing,
             center=self.center,
+            spot_size_correction=self.spot_size_correction,
         )
 
     def test_assignment(self):
@@ -112,6 +127,7 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.depth.value, self.depth)
         self.assertEqual(self.pattern.spacing.value, self.spacing)
         self.assertEqual(self.pattern.center.value, self.center)
+        self.assertEqual(self.pattern.spot_size_correction.value, self.spot_size_correction)
 
     def test_dict(self):
         # test to_dict
@@ -123,6 +139,7 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(trench_pattern_dict["spacing"], self.spacing)
         self.assertEqual(trench_pattern_dict["center_x"], 0)
         self.assertEqual(trench_pattern_dict["center_y"], 0)
+        self.assertEqual(trench_pattern_dict["spot_size_correction"], self.spot_size_correction)
         self.assertEqual(trench_pattern_dict["pattern"], "trench")
 
         # test from_dict
@@ -133,6 +150,12 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(trench_pattern_from_dict.depth.value, self.depth)
         self.assertEqual(trench_pattern_from_dict.spacing.value, self.spacing)
         self.assertEqual(trench_pattern_from_dict.center.value, self.center)
+        self.assertEqual(trench_pattern_from_dict.spot_size_correction.value,
+                         self.spot_size_correction)
+
+        del trench_pattern_dict["spot_size_correction"]
+        trench_without_correction = TrenchPatternParameters.from_dict(trench_pattern_dict)
+        self.assertEqual(trench_without_correction.spot_size_correction.value, 0.0)
 
     def test_generate(self):
         # test generate
@@ -145,6 +168,7 @@ class TrenchPatternParametersTestCase(unittest.TestCase):
         self.assertAlmostEqual(patterns[0].rotation.value, 0)
         numpy.testing.assert_array_almost_equal(patterns[0].center.value, (0, (self.spacing + self.height) / 2))
         self.assertEqual(patterns[0].scan_direction.value, "TopToBottom")
+        self.assertEqual(patterns[0].spot_size_correction.value, self.spot_size_correction)
 
         self.assertEqual(patterns[1].name.value, f"{self.name} (Lower)")
         self.assertAlmostEqual(patterns[1].width.value, self.width)
@@ -165,6 +189,7 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.depth = 5e-6
         self.spacing = 20e-6
         self.center = (0, 0)
+        self.spot_size_correction = 0.1e-6
 
         self.pattern = MicroexpansionPatternParameters(
             name=self.name,
@@ -173,6 +198,7 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
             depth=self.depth,
             spacing=self.spacing,
             center=self.center,
+            spot_size_correction=self.spot_size_correction,
         )
 
     def test_assignment(self):
@@ -183,6 +209,7 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(self.pattern.depth.value, self.depth)
         self.assertEqual(self.pattern.spacing.value, self.spacing)
         self.assertEqual(self.pattern.center.value, self.center)
+        self.assertEqual(self.pattern.spot_size_correction.value, self.spot_size_correction)
 
     def test_dict(self):
         # test to_dict
@@ -194,6 +221,8 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(microexpansion_pattern_dict["spacing"], self.spacing)
         self.assertEqual(microexpansion_pattern_dict["center_x"], 0)
         self.assertEqual(microexpansion_pattern_dict["center_y"], 0)
+        self.assertEqual(microexpansion_pattern_dict["spot_size_correction"],
+                         self.spot_size_correction)
         self.assertEqual(microexpansion_pattern_dict["pattern"], "microexpansion")
 
         # test from_dict
@@ -204,6 +233,14 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertEqual(microexpansion_pattern_from_dict.depth.value, self.depth)
         self.assertEqual(microexpansion_pattern_from_dict.spacing.value, self.spacing)
         self.assertEqual(microexpansion_pattern_from_dict.center.value, self.center)
+        self.assertEqual(microexpansion_pattern_from_dict.spot_size_correction.value,
+                         self.spot_size_correction)
+
+        del microexpansion_pattern_dict["spot_size_correction"]
+        microexpansion_without_correction = MicroexpansionPatternParameters.from_dict(
+            microexpansion_pattern_dict
+        )
+        self.assertEqual(microexpansion_without_correction.spot_size_correction.value, 0.0)
 
     def test_generate(self):
         # test generate
@@ -216,6 +253,7 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertAlmostEqual(patterns[0].rotation.value, 0)
         numpy.testing.assert_array_almost_equal(patterns[0].center.value, (-self.spacing, 0))
         self.assertEqual(patterns[0].scan_direction.value, "TopToBottom")
+        self.assertEqual(patterns[0].spot_size_correction.value, self.spot_size_correction)
 
         self.assertEqual(patterns[1].name.value, f"{self.name} (Right)")
         self.assertAlmostEqual(patterns[1].width.value, self.width)

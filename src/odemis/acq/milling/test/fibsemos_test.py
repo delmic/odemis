@@ -19,6 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import unittest
+from unittest import mock
 import numpy
 
 from odemis.acq.milling import fibsemos  # to load the fibsemOS module
@@ -55,7 +56,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(messag
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Create dummy parameter objects to pass into converter functions.
-def create_rectangle_pattern_params():
+def create_rectangle_pattern_params(spot_size_correction=0.0):
     return RectanglePatternParameters(
         name="Rectangle-1",
         width=10e-6,
@@ -64,9 +65,10 @@ def create_rectangle_pattern_params():
         rotation=0,
         center=(100, 150),
         scan_direction="TopToBottom",
+        spot_size_correction=spot_size_correction,
     )
 
-def create_trench_pattern_params():
+def create_trench_pattern_params(spot_size_correction=0.0):
     return TrenchPatternParameters(
         name="Trench-1",
         width=12e-6,
@@ -74,6 +76,7 @@ def create_trench_pattern_params():
         depth=4e-6,
         spacing=3e-6,
         center=(50, 75),
+        spot_size_correction=spot_size_correction,
     )
 
 def create_microexpansion_pattern_params():
@@ -133,6 +136,47 @@ class TestConvertPatterns(unittest.TestCase):
         self.assertAlmostEqual(converted.distance, pattern_param.spacing.value)
         self.assertEqual(converted.point, Point(x=pattern_param.center.value[0],
                                                 y=pattern_param.center.value[1]))
+
+
+class _FakeFibsemPattern:
+    def __init__(self, **kwargs):
+        vars(self).update(kwargs)
+
+
+class _FakePoint:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+
+class TestSpotSizeCorrectionConversion(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.multiple(
+            fibsemos,
+            RectanglePattern=_FakeFibsemPattern,
+            TrenchPattern=_FakeFibsemPattern,
+            Point=_FakePoint,
+            create=True,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_spot_size_correction_changes_sent_dimensions_only(self):
+        correction = 1e-6
+        rectangle_param = create_rectangle_pattern_params(correction)
+        rectangle = fibsemos.convert_pattern_to_fibsemos(rectangle_param)
+        self.assertAlmostEqual(rectangle.width, rectangle_param.width.value - correction)
+        self.assertAlmostEqual(rectangle.height, rectangle_param.height.value - correction)
+        self.assertAlmostEqual(rectangle_param.width.value, 10e-6)
+        self.assertAlmostEqual(rectangle_param.height.value, 15e-6)
+
+    def test_trench_centers_stay_on_displayed_positions(self):
+        correction = 0.1e-6
+        trench_param = create_trench_pattern_params(correction)
+        trench = fibsemos.convert_pattern_to_fibsemos(trench_param)
+        sent_offset = (trench.spacing + trench.upper_trench_height) / 2
+        displayed_offset = (trench_param.spacing.value + trench_param.height.value) / 2
+        self.assertAlmostEqual(sent_offset, displayed_offset)
 
 class TestConvertMillingSettings(unittest.TestCase):
 
