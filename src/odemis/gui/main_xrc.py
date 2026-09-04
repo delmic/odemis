@@ -282,6 +282,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_edit_meteor_calibration = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_edit_meteor_calibration"))
         self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
+        self.menu_item_data_sharing = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_data_sharing"))
         self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.pnl_tabbuttons = xrc.XRCCTRL(self, "pnl_tabbuttons")
@@ -3148,6 +3149,13 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
         </object>
         <object class="wxMenuItem" name="menu_item_bugreport">
           <label>Report a problem...</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_data_sharing">
+          <label>Share Data with Delmic</label>
+          <checkable>1</checkable>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
