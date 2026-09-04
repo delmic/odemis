@@ -44,6 +44,7 @@ from odemis.util.datacollector import (
     S3UploadBackend,
     S3_REGION,
     S3_TEST_BUCKET,
+    _DEFAULT_COLLECTION_PROBABILITY,
     _CREDENTIALS_PATH,
     _BackgroundWorker,
     _WorkItem,
@@ -142,6 +143,15 @@ class TestTemporaryConsentAndProbability(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(str(self._tmp_dir), ignore_errors=True)
 
+    def test_probability_zero_without_consent(self) -> None:
+        """Probability must be zero when consent is undecided or declined."""
+        self._dc._refresh_probability()
+        self.assertEqual(self._dc.probability, 0.0)
+
+        self._cfg.consent = False
+        self._dc._refresh_probability()
+        self.assertEqual(self._dc.probability, 0.0)
+
     def test_set_temporary_consent_enables_consent_with_expiry(self) -> None:
         """set_temporary_consent(1) should set consent=True and consent_date to next local day."""
         expected_day = datetime.now().astimezone().date() + timedelta(days=1)
@@ -167,22 +177,21 @@ class TestTemporaryConsentAndProbability(unittest.TestCase):
         self.assertEqual(len(enqueue_calls), trials,
                          "All events should be enqueued when consent expires within 1 day")
 
-    def test_set_temporary_consent_multiday_uses_default_probability(self) -> None:
-        """record() should sample ~10% when consent_date is more than 1 day away."""
+    def test_set_temporary_consent_multiday_sets_default_probability(self) -> None:
+        """Multiday temporary consent should keep default probability and allow enqueueing."""
         future = date.today() + timedelta(days=30)
         self._cfg.set_consent_with_expiry(future)
+        self._dc._refresh_probability()
+        self.assertEqual(self._dc.probability, _DEFAULT_COLLECTION_PROBABILITY)
 
         enqueue_calls = []
         self._dc._worker.enqueue = lambda item: enqueue_calls.append(item)
 
-        trials = 5000
+        trials = 20
         for i in range(trials):
             self._dc.record("sampled_event", "1.0", {"i": i})
 
-        ratio = len(enqueue_calls) / trials
-        # Allow ±5% around the 10% target.
-        self.assertGreater(ratio, 0.05, f"Sampling ratio {ratio:.2%} too low")
-        self.assertLess(ratio, 0.15, f"Sampling ratio {ratio:.2%} too high")
+        self.assertEqual(len(enqueue_calls), trials)
 
     def test_record_auto_expires_consent_and_skips(self) -> None:
         """record() should set consent=False and skip when consent_date has passed."""

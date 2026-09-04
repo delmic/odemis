@@ -22,7 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import itertools
 import logging
+import math
 import os
+import threading
+from typing import Optional
 
 import wx
 
@@ -33,6 +36,7 @@ from odemis.acq.feature import (
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
     CryoFeature,
+    collect_feature_data,
     get_feature_position_at_posture,
     FIBFMCorrelationData,
     Target,
@@ -48,6 +52,10 @@ from odemis.gui.util.widgets import VigilantAttributeConnector
 
 
 SUPPORTED_POSTURES = [Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+
+# Maximum distance (in metres) within which another feature is considered "nearby"
+# for the feature-deletion data-collection trigger.
+NEARBY_FEATURE_DISTANCE_M = 100e-6
 
 class CryoFeatureController(object):
     """ controller to handle the cryo feature panel elements
@@ -78,6 +86,9 @@ class CryoFeatureController(object):
         self._feature_status_va_connector = None
         self._feature_z_va_connector = None
 
+        # Feature whose status VA we are subscribed to for data-collection triggering.
+        self._feature_for_collection: Optional[CryoFeature] = None
+
         self._tab_data_model.main.features.subscribe(self._on_features_changes, init=True)
         self._tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
 
@@ -104,6 +115,9 @@ class CryoFeatureController(object):
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
             self.pm.current_posture.subscribe(self._on_posture_change)
 
+        # Track previous posture so we can detect FM → SEM/FIB transitions.
+        self._prev_posture = self.pm.get_current_posture()
+
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,
         # directly change the tool to feature tool
@@ -121,6 +135,7 @@ class CryoFeatureController(object):
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()
         if ans == wx.ID_YES:
+            self._maybe_collect_on_delete(current_feature)
             self._tab_data_model.main.features.value.remove(current_feature)
             self._tab_data_model.main.currentFeature.value = None
             if self.acqui_mode is guimod.AcquiMode.FIBSEM:
@@ -244,6 +259,11 @@ class CryoFeatureController(object):
             return
         self._enable_feature_ctrls(True)
 
+        prev = self._prev_posture
+        self._prev_posture = posture
+        if prev == Posture.FM_IMAGING and (posture in (Posture.SEM_IMAGING, Posture.FIB_IMAGING)):
+            self._collect_features_in_thread(self._tab_data_model.main.features.value)
+
     def _enable_feature_ctrls(self, enable: bool):
         """
         Enables/disables the feature controls
@@ -326,6 +346,11 @@ class CryoFeatureController(object):
         if self._feature_z_va_connector:
             self._feature_z_va_connector.disconnect()
 
+        # Unsubscribe status-change data-collection trigger from the previous feature.
+        if self._feature_for_collection is not None:
+            self._feature_for_collection.status.unsubscribe(self._on_feature_status_collection)
+            self._feature_for_collection = None
+
         self._update_feature_cmb_list()
 
         if feature is None:
@@ -392,6 +417,10 @@ class CryoFeatureController(object):
                                                                     ctrl_2_va=self._on_ctrl_feature_z_change,
                                                                     va_2_ctrl=self._on_feature_focus_pos)
 
+        # Subscribe to status changes to trigger data collection (init=False: skip current value).
+        feature.status.subscribe(self._on_feature_status_collection, init=False)
+        self._feature_for_collection = feature
+
     def _on_feature_focus_pos(self, fm_focus_position: dict):
         # Set the feature Z ctrl with the focus position
         self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
@@ -417,6 +446,15 @@ class CryoFeatureController(object):
         """
         self._panel.cmb_feature_status.SetValue(feature_status)
         save_project(self._tab_data_model.main)
+
+    def _on_feature_status_collection(self, _status: str) -> None:
+        """
+        Trigger data collection when the current feature's status changes.
+        :param _status: The new feature status value
+        """
+        feature = self._feature_for_collection
+        if feature is not None and feature.is_collectible:
+            self._collect_features_in_thread([feature])
 
     def _on_cmb_features_change(self, evt):
         """
@@ -449,3 +487,73 @@ class CryoFeatureController(object):
         zpos = self._panel.ctrl_feature_z.GetValue()
 
         return {"z": zpos}
+
+    def _collect_features_in_thread(self, features: list[CryoFeature]) -> None:
+        """
+        Launch collect_feature_data for all features with collect=True in a background thread.
+        :param features: List of features for which to collect data
+        """
+        overview_streams = self._tab_data_model.overviewStreams.value
+        project_dir = self._tab_data_model.conf.pj_last_path
+
+        def _run():
+            for feature in features:
+                if feature.is_collectible:
+                    collect_feature_data(
+                        feature,
+                        overview_streams=overview_streams,
+                        project_dir=project_dir,
+                    )
+
+        t = threading.Thread(target=_run, name="FeatureDataCollectionBulk", daemon=True)
+        t.start()
+
+    def _has_zstack_stream(self, feature: CryoFeature) -> bool:
+        """Return True if the feature has at least one z-stack stream.
+
+        :param feature: The feature to check.
+        :returns: True when a z-stack stream is present, False otherwise.
+        """
+        return any(hasattr(s, "zIndex") for s in feature.streams.value)
+
+    def _has_nearby_feature(self, feature: CryoFeature, distance_m: float = NEARBY_FEATURE_DISTANCE_M) -> bool:
+        """Return True if any other feature is within distance_m of the given feature.
+
+        :param feature: The feature to check proximity for.
+        :param distance_m: Maximum distance in metres to be considered nearby.
+        :returns: True when another feature is within the threshold distance.
+        """
+        # Any posture can be used, using FM Imaging as the current posture can be any posture
+        # Get the sample stage values in the selected posture to calculate the proximity
+        stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
+        feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=Posture.FM_IMAGING)
+        fx, fy, fz = feature_sample_stage["x"], feature_sample_stage["y"], feature_sample_stage["z"]
+
+        for other in self._tab_data_model.main.features.value:
+            if other is feature:
+                continue
+            other_pos = other.get_posture_position(Posture.FM_IMAGING)
+            other_sample_stage = self.pm.to_sample_stage_from_stage_position(other_pos, posture=Posture.FM_IMAGING)
+            ox, oy, oz = other_sample_stage["x"], other_sample_stage["y"], other_sample_stage["z"]
+            dist = math.dist((fx, fy, fz), (ox, oy, oz))
+            if dist <= distance_m:
+                return True
+        return False
+
+    def _maybe_collect_on_delete(self, feature: CryoFeature) -> None:
+        """Trigger data collection before a feature is deleted if eligible.
+
+        Collection is triggered when all three conditions are met:
+        - feature.is_collectible is True
+        - The feature has at least one z-stack stream
+        - No other feature is within 100 µm
+
+        :param feature: The feature about to be deleted.
+        """
+        if not feature.is_collectible:
+            return
+        if not self._has_zstack_stream(feature):
+            return
+        if self._has_nearby_feature(feature):
+            return
+        self._collect_features_in_thread([feature])

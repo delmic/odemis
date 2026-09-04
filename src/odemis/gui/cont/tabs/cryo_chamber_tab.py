@@ -29,6 +29,7 @@ import logging
 import math
 import os.path
 from concurrent.futures import CancelledError
+import random
 
 import wx
 
@@ -56,6 +57,7 @@ from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import LoadProjectFileDialog, ShowChamberFileDialog
 from odemis.model import InstantaneousFuture
 from odemis.util import almost_equal
+from odemis.util.datacollector import get_data_collector
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import create_projectname, guess_pattern
 from odemis.util.units import readable_str
@@ -373,6 +375,16 @@ class CryoChamberTab(Tab):
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
         self.txt_projectpath.Value = os.path.basename(self.conf.pj_last_path)
         self.tab_data_model.main.project_path.value = new_dir
+        # Decide once per project whether features created during this session are
+        # eligible for data collection. Stored as a dynamic attribute — not part
+        # of the formal model — and read by add_new_feature via getattr.
+        probability = get_data_collector().probability
+        self.tab_data_model.main.collect_features = (random.random() < probability)
+        logging.debug(
+            "Project '%s': collect_features=%s",
+            os.path.basename(new_dir),
+            self.tab_data_model.main.collect_features,
+        )
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
     def _create_new_dir(self):
@@ -492,8 +504,18 @@ class CryoChamberTab(Tab):
             logging.info("Fibsem tab does not exists.")
 
         # Load features
-        decoded_features = [feature_decoder(f) for f in proj_data["features"]]
-        self.tab_data_model.main.features.value = [df for df in decoded_features if df is not None]
+        # Immediately mark all as not collectable.
+        # Loaded features were either already collected in a previous session or
+        # were never selected; the new per-project sampling decision (set in
+        # _change_project_conf above) applies only to features created after this.
+        decoded_features = []
+        for feature_raw in proj_data["features"]:
+            feature = feature_decoder(feature_raw)
+            if feature is None:
+                continue
+            feature.collect = False
+            decoded_features.append(feature)
+        self.tab_data_model.main.features.value = decoded_features
 
         # Load overview streams in the Localization and Fibsem tabs
         self.tab_data_model.main.overviews.value = proj_data["overviews"]

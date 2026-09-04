@@ -22,18 +22,21 @@ import logging
 import os
 import random
 import unittest
-
+from unittest.mock import patch
 import numpy
 
 from odemis import model
 from odemis.acq.feature import (
     CryoFeature,
+    _stream_overlaps_position,
+    collect_feature_data,
     load_milling_tasks,
     FEATURE_READY_TO_MILL,
     REFERENCE_IMAGE_FILENAME,
 )
 from odemis.acq.move import Posture
 from odemis.acq.milling import DEFAULT_MILLING_TASKS_PATH
+from odemis.acq.stream import StaticFluoStream
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -89,6 +92,205 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
 
         filename = os.path.join(feature.path, f"{feature.name.value}-{REFERENCE_IMAGE_FILENAME}")
         self.assertTrue(os.path.exists(filename))
+
+
+class TestCollectFlag(unittest.TestCase):
+    """Tests for the CryoFeature.is_collectible flag and its persistence."""
+
+    def test_collect_flag_is_bool(self):
+        """CryoFeature.is_collectible must be False by default."""
+        f = CryoFeature("F", {"x": 0, "y": 0, "z": 0}, {"z": 0})
+        self.assertFalse(f.is_collectible)
+
+
+class TestCollectFeatureData(unittest.TestCase):
+    """Tests for collect_feature_data()."""
+
+    def _make_feature(self, is_collectible: bool = True, pos=None) -> CryoFeature:
+        if pos is None:
+            pos = {"x": 0.0, "y": 0.0, "z": 0.0}
+        return CryoFeature("TestFeature", pos, {"z": 0.0}, is_collectible=is_collectible)
+
+    def _make_fluo_stream(self):
+        """Return a minimal StaticFluoStream with a 2-D DataArray."""
+        arr = numpy.zeros((64, 64), dtype=numpy.uint16)
+        da = model.DataArray(arr, metadata={
+            model.MD_POS: (0.0, 0.0),
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        })
+        return StaticFluoStream("ch0", da)
+
+    def _make_feature_with_stream(self, is_collectible: bool = True) -> CryoFeature:
+        """Return a feature with one FM stream attached."""
+        f = self._make_feature(is_collectible=is_collectible)
+        f.streams.value.append(self._make_fluo_stream())
+        return f
+
+    def test_skips_when_collect_false(self):
+        """collect_feature_data must not call record() when feature.is_collectible is False."""
+        f = self._make_feature(is_collectible=False)
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            collect_feature_data(f)
+            MockDC.return_value.get_consent.assert_not_called()
+
+    def test_skips_when_no_consent(self):
+        """collect_feature_data must not call record() when consent is not granted."""
+        f = self._make_feature_with_stream(is_collectible=True)
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            MockDC.return_value.get_consent.return_value = False
+            collect_feature_data(f)
+            MockDC.return_value.record.assert_not_called()
+
+    def test_no_record_without_images(self):
+        """record() must NOT be called when the feature has no image streams."""
+        f = self._make_feature(is_collectible=True)  # no streams attached
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            collect_feature_data(f)
+            MockDC.return_value.record.assert_not_called()
+
+    def test_sets_collect_false_after_collection(self):
+        """feature.is_collectible must be False after successful collection with images."""
+        f = self._make_feature_with_stream(is_collectible=True)
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            collect_feature_data(f)
+        self.assertFalse(f.is_collectible)
+
+    def test_payload_contains_status_positions_and_image(self):
+        """Payload must contain status, stage_position, fm_focus_position, and at least one image."""
+        f = self._make_feature_with_stream(is_collectible=True)
+        f.status.value = "Active"
+        captured = {}
+
+        def fake_record(event_name, schema_version, payload, **kwargs):
+            captured.update(payload)
+
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            MockDC.return_value.record.side_effect = fake_record
+            collect_feature_data(f)
+
+        self.assertIn("status", captured)
+        self.assertIn("stage_position", captured)
+        self.assertIn("fm_focus_position", captured)
+        image_keys = [k for k in captured if k.startswith(("channel_", "overview_fm_", "overview_sem_"))]
+        self.assertTrue(len(image_keys) >= 1, "Payload must contain at least one image")
+
+    def test_payload_has_no_feature_name(self):
+        """Payload must not contain the feature name string as a key or value."""
+        f = self._make_feature_with_stream(is_collectible=True)
+        f.name.value = "my_secret_feature_name"
+        captured = {}
+
+        def fake_record(event_name, schema_version, payload, **kwargs):
+            captured.update(payload)
+
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            MockDC.return_value.record.side_effect = fake_record
+            collect_feature_data(f)
+
+        self.assertNotIn("my_secret_feature_name", captured)
+        self.assertNotIn("my_secret_feature_name", str(captured.keys()))
+
+    def test_payload_channel_keys_are_generic(self):
+        """Image payload keys must be generic (channel_N), not derived from feature or stream name.
+
+        A StaticFluoStream named 'test_stream' is attached to the feature.
+        After collection the payload key for the image must be 'channel_0',
+        not 'test_stream' or the feature name — ensuring data privacy.
+        """
+        f = self._make_feature_with_stream(is_collectible=True)
+        captured = {}
+
+        def fake_record(event_name, schema_version, payload, **kwargs):
+            captured.update(payload)
+
+        with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+            MockDC.return_value.get_consent.return_value = True
+            MockDC.return_value.record.side_effect = fake_record
+            collect_feature_data(f)
+
+        image_keys = [k for k in captured if k.startswith("channel_")]
+        self.assertTrue(len(image_keys) >= 1, "Expected at least one channel_N key in payload")
+        for k in image_keys:
+            self.assertRegex(k, r"^channel_\d+$")
+
+    def test_collects_on_status_change(self):
+        """Subscribing to feature.status and calling collect_feature_data on change must call record().
+
+        This simulates the controller's _on_feature_status subscriber: when
+        the feature status VA changes, collect_feature_data is invoked and record()
+        is called exactly once (consent granted, images present, is_collectible=True).
+        """
+        f = self._make_feature_with_stream(is_collectible=True)
+        record_calls = []
+
+        def fake_record(event_name, schema_version, payload, **kwargs):
+            record_calls.append((event_name, schema_version))
+
+        def _on_status_changed(_status):
+            if f.is_collectible:
+                collect_feature_data(f)
+
+        f.status.subscribe(_on_status_changed, init=False)
+        try:
+            with patch("odemis.util.datacollector.get_data_collector") as MockDC:
+                MockDC.return_value.get_consent.return_value = True
+                MockDC.return_value.record.side_effect = fake_record
+                f.status.value = FEATURE_READY_TO_MILL
+        finally:
+            f.status.unsubscribe(_on_status_changed)
+
+        self.assertEqual(len(record_calls), 1)
+        self.assertEqual(record_calls[0][0], "feature_collected")
+
+
+class TestStreamHelpers(unittest.TestCase):
+    """Tests for stream_overlaps_position."""
+
+    def _make_static_fluo_stream(self, shape=(64, 64), pos=(0.0, 0.0), pixel_size=(1e-6, 1e-6)):
+        """Return a minimal StaticFluoStream."""
+        from odemis.acq.stream import StaticFluoStream
+        arr = numpy.zeros(shape, dtype=numpy.uint16)
+        da = model.DataArray(arr, metadata={
+            model.MD_POS: pos,
+            model.MD_PIXEL_SIZE: pixel_size,
+        })
+        return StaticFluoStream("test_stream", da)
+
+    def _make_zstack_stream(self, pos=(0.0, 0.0), pixel_size=(1e-6, 1e-6)):
+        """Return a minimal StaticFluoStream that looks like a z-stack (has zIndex)."""
+        s = self._make_static_fluo_stream(pos=pos, pixel_size=pixel_size)
+        s.zIndex = model.IntContinuous(0, (0, 3))
+        return s
+
+    def test_overlaps_centre(self):
+        """Position at the stream centre must overlap."""
+        # 64 x 64 pixels at 1 µm/pixel centred at (0, 0) → bbox ±32 µm.
+        s = self._make_static_fluo_stream()
+        self.assertTrue(_stream_overlaps_position(s, 0.0, 0.0))
+
+    def test_overlaps_edge(self):
+        """Position exactly on the bounding-box edge must still overlap."""
+        s = self._make_static_fluo_stream(pos=(0.0, 0.0), pixel_size=(2e-6, 2e-6))
+        # half-width = 64/2 * 2e-6 = 64e-6 m → right edge at +64e-6
+        self.assertTrue(_stream_overlaps_position(s, 64e-6, 0.0))
+
+    def test_no_overlap_outside(self):
+        """Position clearly outside the bounding box must not overlap."""
+        s = self._make_static_fluo_stream()
+        # bbox is ±32 µm; 100 µm is well outside.
+        self.assertFalse(_stream_overlaps_position(s, 100e-6, 0.0))
+
+    def test_no_overlap_bad_stream(self):
+        """_stream_overlaps_position returns False when getBoundingBox() raises."""
+        from unittest.mock import MagicMock
+        bad_stream = MagicMock()
+        bad_stream.getBoundingBox.side_effect = AttributeError("no bbox")
+        self.assertFalse(_stream_overlaps_position(bad_stream, 0.0, 0.0))
+
 
 if __name__ == "__main__":
     unittest.main()
