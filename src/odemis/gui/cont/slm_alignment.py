@@ -10,7 +10,6 @@ from odemis import model
 from odemis.acq.stream import FIBStream, FluoStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.milling import FibucialMillingTaskController
-from odemis.gui.cont.stream import StreamController
 from typing import Optional
 
 
@@ -36,12 +35,7 @@ class SLMAlignmentController:
         self._panel.txt_stage_moving.SetLabel("")
         self._panel.btn_fine_alignment.Bind(wx.EVT_BUTTON, self._on_fine_alignment)
         self._setup_views_and_streams()
-        self._fiducial_milling_controller = FibucialMillingTaskController(
-                                            panel=self._panel,
-                                            tab_data=self._tab_data_model,
-                                            fib_stream=self._fib_stream,
-                                            canvas=self._panel.vp_slm_fib_live.canvas,
-            )
+        self._fiducial_milling_controller = FibucialMillingTaskController(panel=self._panel, tab= self)
         self.is_processing = False
 
 

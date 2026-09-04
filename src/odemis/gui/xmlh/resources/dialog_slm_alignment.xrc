@@ -114,14 +114,6 @@
                       <object class="sizeritem">
                         <border>8</border>
                         <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
-                        <object class="wxStaticText" name="txt_slm_milling_hint">
-                          <label>Fiducial cross pattern is editable in the FIB view.</label>
-                          <fg>#DDDDDD</fg>
-                        </object>
-                      </object>
-                      <object class="sizeritem">
-                        <border>8</border>
-                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
                         <object class="wxPanel" name="pnl_slm_milling_task">
                           <bg>#333333</bg>
                           <XRCED>

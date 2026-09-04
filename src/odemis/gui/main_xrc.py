@@ -266,7 +266,6 @@ class xrcfr_slm_alignment(wx.Dialog):
         self.pnl_slm_alignment_streams = xrc.XRCCTRL(self, "pnl_slm_alignment_streams")
         self.fp_slm_alignment_milling = xrc.XRCCTRL(self, "fp_slm_alignment_milling")
         self.pnl_slm_fiducial_milling = xrc.XRCCTRL(self, "pnl_slm_fiducial_milling")
-        self.txt_slm_milling_hint = xrc.XRCCTRL(self, "txt_slm_milling_hint")
         self.pnl_slm_milling_task = xrc.XRCCTRL(self, "pnl_slm_milling_task")
         self.txt_slm_milling_est_time = xrc.XRCCTRL(self, "txt_slm_milling_est_time")
         self.btn_slm_run_milling = xrc.XRCCTRL(self, "btn_slm_run_milling")
@@ -3115,14 +3114,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                   <object class="wxPanel" name="pnl_slm_fiducial_milling">
                     <object class="wxBoxSizer">
                       <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <border>8</border>
-                        <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
-                        <object class="wxStaticText" name="txt_slm_milling_hint">
-                          <label>Fiducial cross pattern is editable in the FIB view.</label>
-                          <fg>#DDDDDD</fg>
-                        </object>
-                      </object>
                       <object class="sizeritem">
                         <border>8</border>
                         <flag>wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
