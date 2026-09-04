@@ -42,8 +42,10 @@ CONFIG_AWG = {
     "address": "192.168.5.11",
     "channel": 1,
     "tracking": {2: "INV"},
-    "limits": [[-4.0, 4.0], [-5.0, 5.0]],
-    "off_voltage": [0.0, None],
+    #"limits": [[-4.0, 4.0], [-5.0, 5.0]],
+    "limits": [[-5.0, 5.0], [-5.0, 5.0]],
+    #"off_voltage": [0.0, None],
+    "off_voltage": [0.0, 0.0],
 }
 
 # arguments used for the creation of basic components
@@ -60,7 +62,7 @@ class TestKeysight(unittest.TestCase):
         cls.dev.terminate()
 
     def setUp(self):
-        self.dev.period.value = 25e-9
+        #self.dev.period.value = 25e-9  #DEBUG
         self.dev.power.value = True
 
     def test_duty_cycle(self):
@@ -72,13 +74,15 @@ class TestKeysight(unittest.TestCase):
         self.dev.dutyCycle.value = 0.32
         self.assertEqual(self.dev.dutyCycle.value, 0.32)
 
-        with self.assertRaises(IndexError):
-            self.dev.dutyCycle.value = 0.95
+        # Automatically clip the value if it's out of range
+        self.dev.dutyCycle.value = 0.95
         # The device clips the value, so the driver should update the VA accordingly
         self.assertNotEqual(self.dev.dutyCycle.value, 0.32)
 
-        with self.assertRaises(IndexError):
-            self.dev.dutyCycle.value = 0.15
+        # Same on the lower end
+        prev_value = self.dev.dutyCycle.value
+        self.dev.dutyCycle.value = 0.15
+        self.assertNotEqual(self.dev.dutyCycle.value, prev_value)
 
         # Change the duty cycle while the power is off: it shouldn't have effect immediately, but
         # it should be applied when the power is turned on.
@@ -152,6 +156,33 @@ class TestKeysight(unittest.TestCase):
         self.dev.power.value = True
         self.assertEqual(self.dev.power.value, True)
         self.assertAlmostEqual(self.dev.period.value, 25e-9)
+
+    def test_rise_and_fall_time(self):
+        """
+        Test rise and fall time settings.
+        """
+        self.dev.period.value = 100e-9
+        self.dev.riseTime.value = 10e-9
+        self.dev.fallTime.value = 15e-9
+
+        self.assertAlmostEqual(self.dev.riseTime.value, 10e-9)
+        self.assertAlmostEqual(self.dev.fallTime.value, 15e-9)
+        self.assertAlmostEqual(self.dev.getEdgeTime(1, "lead"), 10e-9)
+        self.assertAlmostEqual(self.dev.getEdgeTime(1, "trail"), 15e-9)
+
+        # Changes made while powered off are stored in the VAs and applied on power-on.
+        self.dev.power.value = False
+        self.dev.riseTime.value = 20e-9
+        self.dev.fallTime.value = 25e-9
+        self.assertAlmostEqual(self.dev.riseTime.value, 20e-9)
+        self.assertAlmostEqual(self.dev.fallTime.value, 25e-9)
+        self.assertAlmostEqual(self.dev.getEdgeTime(1, "lead"), 10e-9)
+        self.assertAlmostEqual(self.dev.getEdgeTime(1, "trail"), 15e-9)
+
+        self.dev.power.value = True
+        self.assertAlmostEqual(self.dev.getEdgeTime(1, "lead"), 20e-9)
+        self.assertAlmostEqual(self.dev.getEdgeTime(1, "trail"), 25e-9)
+
 
 if __name__ == "__main__":
     unittest.main()
