@@ -26,7 +26,6 @@ import re
 import subprocess
 import sys
 import threading
-import time
 from collections.abc import Iterable
 from concurrent.futures import CancelledError
 from typing import Dict, List, Set, Optional
@@ -162,16 +161,43 @@ def notify_to_user(target_user: str, title: str, message: str,
     :param app: application name for the notification. If None, the default will be used (notify-send)
     :param icon: icon for the notification. If None, the default will be used (notify-send)
     :raises: CalledProcessError if the command fails (though, in some cases, the command can fail silently)
+    :raises: PermissionError if the current user cannot send notification to the target user
     """
     # HACK: Gnome Shell notifications handler automatically replaces newlines with spaces. To force
     # the new lines, we replace them by \r.
     message = message.replace("\n", "\r")
-    cmd = [
-        "systemd-run",
-        f"--machine={target_user}@.host",
-        "--user",
-        "notify-send",
-    ]
+    # systemd < v250 doesn't support --user and --machine together, so fallback to a less efficient way
+    # As a proxy to the systemd version, we use the Python version, as each Ubuntu version has a
+    # specific Python and systemd version. This is more efficient than parsing the systemd version from the command line.
+    if sys.version_info < (3, 9):
+        import pwd  # POSIX-only module
+        current_uid = os.geteuid()
+        target_user_id = pwd.getpwnam(target_user).pw_uid
+        if current_uid == 0:
+            # If running as root, we can use systemd-run --uid to run the command as the target user
+            cmd = [
+                "systemd-run",
+                f"--uid={target_user}",
+                f"--setenv=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{target_user_id}/bus",
+                "notify-send",
+            ]
+        elif target_user_id == current_uid:  # Running as the target user => no need to use systemd-run
+            cmd = [
+                "notify-send",
+            ]
+        else:  # Standard user -> another user
+            # "systemd-run --uid" actually doesn't fail, but does request a password... which is
+            # worse because it's blocking. So we raise an error instead.
+            current_user = pwd.getpwuid(current_uid).pw_name
+            raise PermissionError(f"Cannot send notification to user {target_user} from user {current_user}")
+    else:
+        cmd = [
+            "systemd-run",
+            f"--machine={target_user}@.host",
+            "--user",
+            "notify-send",
+        ]
+
     if app:
         cmd.append(f"--app-name={app}")
     if icon:
