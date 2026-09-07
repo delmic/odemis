@@ -1997,12 +1997,28 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
         self._tab_data_model.tool.subscribe(self._on_shape_tool, init=True)
         self._tab_data_model.focussedView.subscribe(self._on_focussed_view)
+        self._tab_data_model.is_acquisition_paused.subscribe(
+            self._on_acquisition_paused, init=True
+        )
 
     def _on_destroy(self, evt):
         if self._tab_data_model:
             self._tab_data_model.tool.unsubscribe(self._on_shape_tool)
             self._tab_data_model.focussedView.unsubscribe(self._on_focussed_view)
+            self._tab_data_model.is_acquisition_paused.unsubscribe(
+                self._on_acquisition_paused
+            )
         super()._on_destroy(evt)
+
+    @call_in_wx_main
+    def _on_acquisition_paused(self, is_paused: bool) -> None:
+        """
+        Restrict shape overlays to selection while an acquisition is paused.
+
+        :param is_paused: Whether the FAST-EM acquisition is paused.
+        """
+        for shape_overlay in self.shapes_overlay:
+            shape_overlay.shape_editing_allowed = not is_paused
 
     @call_in_wx_main
     def _on_shape_tool(self, tool_id):
