@@ -1164,9 +1164,16 @@ class FastEMMultiBeamAcquiController(object):
         self._on_roa_acquisition_done_sub_callback = {}
         self._set_next_project_dwell_time_sub_callback = {}
         self._status_text_callback = {}
+        self._roa_selection_events = {}
+        self._roa_futures = {}
+        self._roa_estimated_times = {}
+        self._roa_windows = {}
 
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
         self._main_data_model.current_sample.subscribe(self._on_current_sample)
+        self.main_tab_data.is_optical_autofocus_running.subscribe(
+            self._on_optical_autofocus_state
+        )
         self.main_tab_data.project_settings_data.subscribe(self._on_update_acquisition_time)
         self.project_roas: Dict[str, Tuple[FastEMROA, NodeWindow]] = {}
         self.check_acquire_button()
@@ -1200,6 +1207,34 @@ class FastEMMultiBeamAcquiController(object):
             window = self.project_tree_ctrl.GetItemWindow(item)
             window.checkbox.Enable(flag)
 
+    def _enable_pending_roa_checkboxes(self, enable: bool) -> None:
+        """
+        Enable checkboxes for ROAs that have not completed.
+
+        :param enable: Whether eligible ROA checkboxes should be enabled.
+        """
+        for item in self.project_tree_ctrl.get_all_items():
+            node = self.project_tree_ctrl.GetPyData(item)
+            window = self.project_tree_ctrl.GetItemWindow(item)
+            future = self._roa_futures.get(node.row.roa) if node.row else None
+            window.checkbox.Enable(bool(enable and future and not future.done()))
+
+    def _get_all_project_roas(self) -> Dict[str, list]:
+        """
+        Return every acquirable ROA in project-tree order.
+
+        :returns: Mapping from project names to ROA and window pairs.
+        """
+        project_roas = {}
+        for item in self.project_tree_ctrl.get_all_items():
+            node = self.project_tree_ctrl.GetPyData(item)
+            if node.type not in (NodeType.SECTION, NodeType.ROA):
+                continue
+            project_name = node.project_node().name
+            window = self.project_tree_ctrl.GetItemWindow(item)
+            project_roas.setdefault(project_name, []).append((node.row.roa, window))
+        return project_roas
+
     def _on_project_tree_node_change(self, evt):
         """
         Handle changes in the project tree node.
@@ -1229,6 +1264,18 @@ class FastEMMultiBeamAcquiController(object):
                     roa.shape.points.subscribe(self._on_update_acquisition_time)
                     self.roa_count += 1
         self.txt_num_roas.SetValue("%s" % self.roa_count)
+        for roa, selection_event in self._roa_selection_events.items():
+            future = self._roa_futures.get(roa)
+            window = self._roa_windows.get(roa)
+            if window is None:
+                continue
+            if window.checkbox.IsChecked():
+                selection_event.set()
+            else:
+                selection_event.clear()
+            if future and not future.running() and not future.done():
+                remaining = self._roa_estimated_times[roa] if selection_event.is_set() else 0.0
+                future.set_progress(remaining_time=remaining)
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
@@ -1242,6 +1289,17 @@ class FastEMMultiBeamAcquiController(object):
     def _on_va_change(self, _):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
+
+    @call_in_wx_main
+    def _on_optical_autofocus_state(self, is_running: bool) -> None:
+        """
+        Prevent resuming or cancelling the acquisition during optical autofocus.
+
+        :param is_running: Whether optical autofocus is running.
+        """
+        if self._is_paused:
+            self.btn_pause.Enable(not is_running)
+            self.btn_cancel.Enable(not is_running)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def check_acquire_button(self):
@@ -1394,6 +1452,11 @@ class FastEMMultiBeamAcquiController(object):
         self._set_next_project_dwell_time_sub_callback.clear()
         self._on_roa_acquisition_done_sub_callback.clear()
         self._status_text_callback.clear()
+        self._roa_selection_events.clear()
+        self._roa_futures.clear()
+        self._roa_estimated_times.clear()
+        self._roa_windows.clear()
+        self.main_tab_data.is_acquisition_paused.value = False
         self._main_data_model.is_acquiring.value = False
 
         if text is not None:
@@ -1417,6 +1480,7 @@ class FastEMMultiBeamAcquiController(object):
         self.btn_cancel.Show()
         self.gauge_acq.Show()
         self.enable_project_tree_ctrl_checkboxes(False)
+        self.main_tab_data.is_acquisition_paused.value = False
         self._show_status_icons(None)
 
         self.gauge_acq.Range = self.roa_count
@@ -1458,7 +1522,8 @@ class FastEMMultiBeamAcquiController(object):
         stop_acq_on_failure = self.chk_stop_acq_on_failure.IsChecked()
 
         total_t = 0
-        project_names = list(self.project_roas.keys())
+        acquisition_roas = self._get_all_project_roas()
+        project_names = list(acquisition_roas.keys())
         self._main_data_model.multibeam.dwellTime.value = (
             self.main_tab_data.project_settings_data.value[project_names[0]][
                 DWELL_TIME_MULTI_BEAM
@@ -1468,10 +1533,15 @@ class FastEMMultiBeamAcquiController(object):
             f"Set multibeam dwell time for {project_names[0]} to {self._main_data_model.multibeam.dwellTime.value}"
         )
         for project_index, project_name in enumerate(project_names):
-            roas = self.project_roas[project_name]
+            roas = acquisition_roas[project_name]
             for idx, roa_window in enumerate(roas):
                 roa = roa_window[0]
                 window = roa_window[1]
+                selection_event = threading.Event()
+                if window.checkbox.IsChecked():
+                    selection_event.set()
+                self._roa_selection_events[roa] = selection_event
+                self._roa_windows[roa] = window
                 window.status_text.SetForegroundColour(theme.text_disabled)
                 window.status_text.SetLabelText("Open")
                 window.Layout()
@@ -1505,7 +1575,9 @@ class FastEMMultiBeamAcquiController(object):
                     acq_dwell_time=self.main_tab_data.project_settings_data.value[
                         project_name
                     ][DWELL_TIME_MULTI_BEAM],
+                    should_acquire=selection_event.is_set,
                 )
+                self._roa_futures[roa] = f
                 # If this is the last ROA in the current project, set the dwell time for the next project
                 # on completion of current project's future
                 if idx == len(roas) - 1 and project_index < len(project_names) - 1:
@@ -1529,11 +1601,13 @@ class FastEMMultiBeamAcquiController(object):
                 f.add_done_callback(roa_sub_callback)
 
                 t = f.remaining_time
-                total_t += t
+                self._roa_estimated_times[roa] = t
+                if selection_event.is_set():
+                    total_t += t
                 self._roa_future_connector.append(
                     ProgressiveFutureConnector(f, window.gauge)
                 )
-                fs[f] = t
+                fs[f] = t if selection_event.is_set() else 0.0
 
         self.acq_future = model.ProgressiveBatchFuture(fs)
         self._fs_connector = ProgressiveFutureConnector(
@@ -1664,6 +1738,8 @@ class FastEMMultiBeamAcquiController(object):
         except Exception:
             update_status("Failed", theme.text_error)
         finally:
+            if self._is_paused:
+                self._enable_pending_roa_checkboxes(True)
             window.Layout()
             window.Refresh()
 
@@ -1676,11 +1752,18 @@ class FastEMMultiBeamAcquiController(object):
             return
 
         if self._is_paused:
+            if self.main_tab_data.is_optical_autofocus_running.value:
+                logging.warning(
+                    "Cannot resume ROA acquisition while optical autofocus is running"
+                )
+                return
             logging.debug("Resuming ROA acquisition")
             if self.acq_future_for_pausing:
                 self.acq_future_for_pausing.resume()
             self._is_paused = False
             self.acq_future_for_pausing = None
+            self.main_tab_data.is_acquisition_paused.value = False
+            self._enable_pending_roa_checkboxes(False)
             self.btn_pause.SetLabel("Pause")
             if self._fs_connector:
                 self._fs_connector.resume()
@@ -1720,6 +1803,8 @@ class FastEMMultiBeamAcquiController(object):
         Reset GUI if pausing failed (e.g., the ROA finished in the meantime).
         """
         self.acq_future_for_pausing = None
+        self.main_tab_data.is_acquisition_paused.value = False
+        self._enable_pending_roa_checkboxes(False)
         self.btn_pause.Enable()
         self.btn_pause.SetLabel("Pause")
         self.btn_cancel.Enable()
@@ -1737,6 +1822,8 @@ class FastEMMultiBeamAcquiController(object):
             return  # Resumed or cancelled in the meantime; nothing to do.
         if self._fs_connector:
             self._fs_connector.pause()
+        self.main_tab_data.is_acquisition_paused.value = True
+        self._enable_pending_roa_checkboxes(True)
         self.btn_pause.SetLabel("Resume")
         self.btn_pause.Enable()
         self.btn_cancel.Enable()
@@ -1755,7 +1842,15 @@ class FastEMMultiBeamAcquiController(object):
             self._reset_acquisition_gui()
             return
 
+        if self.main_tab_data.is_optical_autofocus_running.value:
+            logging.warning(
+                "Cannot cancel ROA acquisition while optical autofocus is running"
+            )
+            return
+
         self.btn_pause.Enable(False)
+        self.main_tab_data.is_acquisition_paused.value = False
+        self._enable_pending_roa_checkboxes(False)
         # If currently paused, resume before cancelling so the task is not stuck in wait_if_paused()
         if self._is_paused and self.acq_future_for_pausing:
             self.acq_future_for_pausing.resume()
