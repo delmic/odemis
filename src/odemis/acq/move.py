@@ -62,6 +62,7 @@ class Posture(str, Enum):
     THREE_BEAMS = "THREE BEAMS"
     FIB_IMAGING = "FIB IMAGING"
     FIB_VIEW_FM = "FIB-VIEW FM"
+    TRENCHING = "TRENCHING"
 
     def __str__(self) -> str:
         """Return the string value of the posture."""
@@ -92,7 +93,12 @@ ZEISS_FIB_COLUMN_TILT = math.radians(54)
 
 # These values might differ per system and would then require a configuration option per system.
 # Hardcoded for now. Note that these values correspond to the milling angle, and not the actual stage tilt.
-MILLING_RANGE = (math.radians(5), math.radians(30))
+MILLING_RANGE = (math.radians(0), math.radians(30))
+# For the trenching angle, on the lower end, allow for ortho view (which is basically FIB Imaging).
+# On the upper end, allow for the max milling angle + 90°.
+TRENCHING_RANGE = (math.radians(90), MILLING_RANGE[1] + math.radians(90))
+# The absolute tolerance for non-linear axes for checking if a position corresponds to a posture.
+POSTURE_ANGLE_ATOL = math.radians(1)
 
 MIN_LENS_WD_FIB_VIEW_FM = 10e-3  # m, minimum working distance of the objective lens to allow FIB-view FM imaging
 
@@ -380,8 +386,10 @@ class MeteorPostureManager(MicroscopePostureManager):
         self.milling_angle = model.FloatContinuous(
             milling_angle, (MILLING_RANGE[0], MILLING_RANGE[1]), unit="rad", setter=self._set_milling_angle
         )
+        # The trenching angle is deviated from the milling angle and should not be directly edited
+        self.trenching_angle = model.FloatVA(milling_angle + math.radians(90), unit="rad", readonly=True)
 
-        # Check if objective is FIB-view FM compatible
+        # Check if objective is FIB-view FM
         self.has_fib_view_fm_objective = False
         try:
             lens = model.getComponent(role='lens')
@@ -392,7 +400,7 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         # current posture va
         self.current_posture = model.VigilantAttribute(Posture.UNKNOWN)
-        self.stage.position.subscribe(self._update_posture, init=True)
+        self.stage.position.subscribe(self._update_posture)
 
         # Supported postures for sample stage (can be extended by the subclass)
         self.postures = (Posture.SEM_IMAGING, Posture.FM_IMAGING)
@@ -404,20 +412,23 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.MILLING: self._transform_from_fm_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_fm_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_fm_to_fib_view_fm,
+                Posture.TRENCHING: self._transform_from_fm_to_trenching,
             },
             Posture.SEM_IMAGING: {
                 Posture.FM_IMAGING: self._transform_from_sem_to_fm,
                 Posture.MILLING: self._transform_from_sem_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_sem_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_sem_to_fib_view_fm,
+                Posture.TRENCHING: self._transform_from_sem_to_trenching,
             },
             Posture.MILLING: {
                 Posture.SEM_IMAGING: self._transform_from_milling_to_sem,
                 Posture.FM_IMAGING: self._transform_from_milling_to_fm,
                 # milling position can be dynamically updated, so we need to support this recalculation
-                Posture.MILLING: self._transform_from_sem_to_milling,
+                Posture.MILLING: self._transform_from_milling_to_milling,
                 Posture.FIB_IMAGING: self._transform_from_milling_to_fib,
                 Posture.FIB_VIEW_FM: self._transform_from_milling_to_fib_view_fm,
+                Posture.TRENCHING: self._transform_from_milling_to_trenching,
             },
             Posture.FIB_IMAGING: {
                 Posture.SEM_IMAGING: self._transform_from_fib_to_sem,
@@ -430,6 +441,15 @@ class MeteorPostureManager(MicroscopePostureManager):
                 Posture.SEM_IMAGING: self._transform_from_fib_view_fm_to_sem,
                 Posture.FM_IMAGING: self._transform_from_fib_view_fm_to_fm,
                 Posture.FIB_IMAGING: self._transform_from_fib_view_fm_to_fib,
+                Posture.TRENCHING: self._transform_from_fib_view_fm_to_trenching,
+            },
+            Posture.TRENCHING: {
+                Posture.FIB_VIEW_FM: self._transform_from_trenching_to_fib_view_fm,
+                Posture.FM_IMAGING: self._transform_from_trenching_to_fm,
+                Posture.MILLING: self._transform_from_trenching_to_milling,
+                Posture.SEM_IMAGING: self._transform_from_trenching_to_sem,
+                # trenching position can be dynamically updated, so we need to support this recalculation
+                Posture.TRENCHING: self._transform_from_trenching_to_trenching,
             },
             Posture.UNKNOWN: {
                 Posture.UNKNOWN: lambda x: x
@@ -469,6 +489,8 @@ class MeteorPostureManager(MicroscopePostureManager):
                 return Posture.FIB_IMAGING
             if self.at_milling_posture(position):
                 return Posture.MILLING
+            if self.at_trenching_posture(position):
+                return Posture.TRENCHING
             return Posture.SEM_IMAGING
         # None of the above -> unknown position
         return Posture.UNKNOWN
@@ -509,79 +531,77 @@ class MeteorPostureManager(MicroscopePostureManager):
         return Posture.GRID_1 if distance_to_grid2 > distance_to_grid1 else Posture.GRID_2
 
     def at_milling_posture(self, pos: Dict[str, float]) -> bool:
-        """Milling posture is not required for all meteor systems, so we need to
-        first check it's available
+        """
+        Check whether the provided position is at the milling posture
         :param pos: the stage position
-        :return: True if the stage is at the milling posture, False if not (or not available)"""
-        stage_md = self.stage.getMetadata()
+        :return: True if the stage is at the milling posture, False if not (or not available)
+        """
+        if Posture.MILLING not in self.postures:
+            return False
+        stage_tilt_range = [self.calculate_stage_tilt(a, posture=Posture.MILLING) for a in MILLING_RANGE]
+        milling_orientation = self.get_posture_orientation(Posture.MILLING)
+        tilt_in_range = isInRange(pos, active_range={"rx": stage_tilt_range}, axes={"rx"})
+        rotation_close = isNearPosition(pos, milling_orientation, axes={"rz"}, atol_rotation=POSTURE_ANGLE_ATOL)
+        return tilt_in_range and rotation_close
 
-        if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            stage_milling = self.get_posture_orientation(Posture.MILLING)
-            if isNearPosition(pos,
-                            stage_milling,
-                            self.rotational_axes,
-                            atol_rotation=math.radians(3)):
-                return True
-        return False
+    def at_trenching_posture(self, pos: Dict[str, float]) -> bool:
+        """
+        Check whether the provided position is at the trenching posture
+        :param pos: the stage position
+        :return: True if the stage is at the trenching posture, False if not (or not available)
+        """
+        if Posture.TRENCHING not in self.postures:
+            return False
+        # Milling angle is trenching angle - 90°
+        stage_tilt_range = [self.calculate_stage_tilt(a - math.radians(90), posture=Posture.TRENCHING)
+                            for a in TRENCHING_RANGE[::-1]]  # Invert range due to 180° stage rotation
+
+        trenching_orientation = self.get_posture_orientation(Posture.TRENCHING)
+        tilt_in_range = isInRange(pos, active_range={"rx": stage_tilt_range}, axes={"rx"})
+        rotation_close = isNearPosition(pos, trenching_orientation, axes={"rz"}, atol_rotation=POSTURE_ANGLE_ATOL)
+        return tilt_in_range and rotation_close
 
     def at_fib_imaging_posture(self, pos: Dict[str, float]) -> bool:
-        """FIB posture is not required for all meteor systems, so we need to
-        first check it's available
+        """
+        Check whether the provided position if at fib imaging posture
         :param pos: the stage position
-        :return: True if the stage is at the fib posture, False if not (or not available)"""
-        stage_md = self.stage.getMetadata()
+        :return: True if the stage is at the fib posture, False if not (or not available)
+        """
+        if Posture.FIB_IMAGING not in self.postures:
+            return False
 
-        if model.MD_FAV_FIB_POS_ACTIVE in stage_md:
-            stage_fib = self.get_posture_orientation(Posture.FIB_IMAGING)
-            if isNearPosition(pos,
-                            stage_fib,
-                            self.rotational_axes,
-                            atol_rotation=math.radians(3)):
-                return True
-        return False
+        fib_orientation = self.get_posture_orientation(Posture.FIB_IMAGING)
+        return isNearPosition(pos, fib_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
 
     def at_fm_imaging_posture(self, pos: Dict[str, float]) -> bool:
         """
-        Check if at fm posture
+        Check whether the provided position is at fm posture
 
         :param pos: the stage position
         :return: True if the stage is at the fm posture
         """
-        stage_md = self.stage.getMetadata()
-
-        if model.MD_FAV_FM_POS_ACTIVE not in stage_md:
+        if Posture.FM_IMAGING not in self.postures:
             return False
-        stage_fm = self.get_posture_orientation(Posture.FM_IMAGING)
-        return isNearPosition(
-            pos,
-            stage_fm,
-            self.rotational_axes,
-            atol_rotation=math.radians(3)
-        )
+        fm_orientation = self.get_posture_orientation(Posture.FM_IMAGING)
+        return isNearPosition(pos, fm_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
 
     def at_fib_view_fm_posture(self, pos: Dict[str, float]) -> bool:
         """
-        Check if at fib-view fm posture
+        Check whether the provided position is at fib-view fm posture
 
         :param pos: the stage position
         :return: True if the stage is at the fib-view fm posture, False if not (or not available)
         """
-        stage_md = self.stage.getMetadata()
-
-        if model.MD_FAV_MILL_POS_ACTIVE not in stage_md:
+        if Posture.FIB_VIEW_FM not in self.postures:
             return False
-        stage_fib_view_fm = self.get_posture_orientation(Posture.FIB_VIEW_FM)
-        return isNearPosition(
-            pos,
-            stage_fib_view_fm,
-            self.rotational_axes,
-            atol_rotation=math.radians(3)
-        )
+        fib_view_fm_orientation = self.get_posture_orientation(Posture.FIB_VIEW_FM)
+        return isNearPosition(pos, fib_view_fm_orientation, self.rotational_axes, atol_rotation=POSTURE_ANGLE_ATOL)
 
     def get_posture_orientation(self, posture: Posture) -> Dict[str, float]:
         """Get the orientation of the stage for the given posture
         :param posture: the posture to get the orientation for
-        :return: a dict with the orientation of the stage for the given posture"""
+        :return: a dict with the orientation of the stage for the given posture
+        """
         stage_md = self.stage.getMetadata()
 
         if posture == Posture.SEM_IMAGING:
@@ -594,11 +614,15 @@ class MeteorPostureManager(MicroscopePostureManager):
             return stage_md[model.MD_FAV_FIB_POS_ACTIVE]
         elif posture == Posture.MILLING:
             md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
-            rx = self.calculate_stage_tilt()
+            rx = self.calculate_stage_tilt(posture=Posture.MILLING)
             return {"rx": rx, "rz": md["rz"]}
         elif posture == Posture.FIB_VIEW_FM:
             md = stage_md[model.MD_FAV_MILL_POS_ACTIVE]
-            rx = self.calculate_stage_tilt(column_tilt=self.fm_column_tilt)
+            rx = self.calculate_stage_tilt(posture=Posture.FIB_VIEW_FM)
+            return {"rx": rx, "rz": md["rz"]}
+        elif posture == Posture.TRENCHING:
+            md = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+            rx = self.calculate_stage_tilt(posture=Posture.TRENCHING)
             return {"rx": rx, "rz": md["rz"]}
         else:
             raise ValueError(f"posture {posture} not supported for orientation retrieval")
@@ -632,6 +656,10 @@ class MeteorPostureManager(MicroscopePostureManager):
             return angle
         rotations = {'mill_angle': angle, 'rz': self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]["rz"]}
         self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: rotations})
+
+        # Also update the trenching angle (since they are coupled for now), if system is capable of trenching.
+        if hasattr(self, "trenching_angle"):
+            self.trenching_angle._set_value(angle + math.radians(90), force_write=True)
         return angle
 
     def _transform_from_fm_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
@@ -859,45 +887,53 @@ class MeteorPostureManager(MicroscopePostureManager):
     def calculate_stage_tilt(
         self,
         milling_angle: Optional[float] = None,
-        column_tilt: Optional[float] = None,
+        posture: Posture = Posture.MILLING,
     ) -> float:
-        """Calculate the stage tilt for a given milling angle and column tilt.
+        """Calculate the stage tilt for a given milling angle and posture.
         :param milling_angle: the milling angle in radians. If None, the current milling angle is used. Default None.
-        :param column_tilt: the column tilt in radians (for FIB, default TFS = 52deg, Tescan = 55deg)
+        :param posture: the posture to use for the transformation.
         :return: the stage tilt in radians
         """
         if milling_angle is None:
             milling_angle = self.milling_angle.value
-        if column_tilt is None:
-            column_tilt = self.fib_column_tilt
 
-        # Equation:
-        # MillingAngle = 90 - ColumnTilt + StageTilt - PreTilt
-        # StageTilt = MillingAngle + PreTilt + ColumnTilt - 90
-
-        # calculate the stage tilt from the milling angle and the pre-tilt
-        stage_tilt = milling_angle + self.pre_tilt + column_tilt - math.radians(90)
+        if posture == Posture.TRENCHING:
+            stage_tilt = self.fib_column_tilt - self.pre_tilt - milling_angle
+        elif posture in [Posture.MILLING, Posture.FIB_VIEW_FM]:
+            if posture == Posture.MILLING:
+                column_tilt = self.fib_column_tilt
+            elif posture == Posture.FIB_VIEW_FM:
+                column_tilt = self.fm_column_tilt
+            stage_tilt = milling_angle + self.pre_tilt + column_tilt - math.radians(90)
+        else:
+            raise ValueError("Provided posture does not depend on milling angle.")
         return stage_tilt
 
     def calculate_milling_angle(
         self,
         stage_tilt: Optional[float] = None,
-        column_tilt: Optional[float] = None,
+        posture: Posture = Posture.MILLING,
     ) -> float:
         """
-        Calculate the milling angle for a given stage tilt and column tilt.
+        Calculate the milling angle for a given stage tilt and posture.
         :param stage_tilt: the stage tilt in radians. If None, the current stage position will be used. Default None.
-        :param column_tilt: the column tilt in radians. If None, the FIB column angle will be used. Default None.
+        :param posture: the posture to use for the transformation.
         :return: the milling angle in radians
         """
         if stage_tilt is None:
             stage_tilt = self.stage.position.value["rx"]
 
-        if column_tilt is None:
-            column_tilt = self.fib_column_tilt
+        if posture == Posture.TRENCHING:
+            milling_angle = self.fib_column_tilt - self.pre_tilt - stage_tilt
+        elif posture in [Posture.MILLING, Posture.FIB_VIEW_FM]:
+            if posture == Posture.MILLING:
+                column_tilt = self.fib_column_tilt
+            elif posture == Posture.FIB_VIEW_FM:
+                column_tilt = self.fm_column_tilt
+            milling_angle = stage_tilt - self.pre_tilt - column_tilt + math.radians(90)
+        else:
+            raise ValueError("Provided posture does not depend on milling angle.")
 
-        # calculate the stage tilt from the milling angle and the pre-tilt
-        milling_angle = stage_tilt - self.pre_tilt - column_tilt + math.radians(90)
         return milling_angle
 
     def to_posture(self, pos: Dict[str, float], posture: Posture) -> Dict[str, float]:
@@ -910,8 +946,9 @@ class MeteorPostureManager(MicroscopePostureManager):
 
         logging.info(f"Position Posture: {position_posture}, Target Posture: {posture}")
 
-        # The milling angle can change, so we should handle the Posture.MILLING --> Posture.MILLING posture switch differently.
-        if posture != Posture.MILLING and position_posture == posture:
+        # For other postures then milling and trenching, when staying in the posture, just return the current position.
+        # For milling and trenching, a changing milling results in a different end position.
+        if posture not in [Posture.MILLING, Posture.TRENCHING] and position_posture == posture:
             return pos
 
         # validate the transformation
@@ -955,7 +992,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
-        # simple chain of fm->sem->milling
         sem_pos = self._transform_from_fm_to_sem(pos)
         return self._transform_from_sem_to_milling(sem_pos)
 
@@ -965,7 +1001,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
-        # simple chain of milling->sem->fm
         sem_pos = self._transform_from_milling_to_sem(pos)
         return self._transform_from_sem_to_fm(sem_pos)
 
@@ -1007,7 +1042,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
-        # simple chain of milling->sem->fib
         sem_pos = self._transform_from_milling_to_sem(pos)
         return self._transform_from_sem_to_fib(sem_pos)
 
@@ -1017,7 +1051,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
-        # simple chain of fib->sem->milling
         sem_pos = self._transform_from_fib_to_sem(pos)
         return self._transform_from_sem_to_milling(sem_pos)
 
@@ -1043,7 +1076,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the current stage position
         :return: (dict str->float) the transformed stage position.
         """
-        # simple chain of fib-view fm->milling->sem
         milling_pos = self._transform_from_fib_view_fm_to_milling(pos)
         return self._transform_from_milling_to_sem(milling_pos)
 
@@ -1053,7 +1085,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the current stage position
         :return: the transformed stage position.
         """
-        # simple chain of fib-view fm->milling->fm
         milling_pos = self._transform_from_fib_view_fm_to_milling(pos)
         return self._transform_from_milling_to_fm(milling_pos)
 
@@ -1063,7 +1094,6 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the current stage position
         :return: the transformed stage position.
         """
-        # simple chain of fm->milling->fib-view fm
         milling_pos = self._transform_from_fm_to_milling(pos)
         return self._transform_from_milling_to_fib_view_fm(milling_pos)
 
@@ -1073,10 +1103,8 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the current stage position
         :return: the transformed stage position.
         """
-        # simple chain of sem->milling->fib-view fm
         milling_pos = self._transform_from_sem_to_milling(pos)
         return self._transform_from_milling_to_fib_view_fm(milling_pos)
-
 
     def _transform_from_fib_to_fib_view_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1084,9 +1112,17 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the current stage position
         :return: the transformed stage position.
         """
-        # simple chain of fib->milling->fib-view fm
         milling_pos = self._transform_from_fib_to_milling(pos)
         return self._transform_from_milling_to_fib_view_fm(milling_pos)
+
+    def _transform_from_fib_view_fm_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from fib-view fm to trenching
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        milling_pos = self._transform_from_fib_view_fm_to_milling(pos)
+        return self._transform_from_milling_to_trenching(milling_pos)
 
     def _transform_from_fib_view_fm_to_fib(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
@@ -1094,9 +1130,88 @@ class MeteorPostureManager(MicroscopePostureManager):
         :param pos: the current stage position
         :return: the transformed stage position.
         """
-        # simple chain of fib-view fm->milling->fib
         milling_pos = self._transform_from_fib_view_fm_to_milling(pos)
         return self._transform_from_milling_to_fib(milling_pos)
+
+    def _transform_from_trenching_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from trenching to sem
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        raise NotImplementedError()
+
+    def _transform_from_sem_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from sem to trenching
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        raise NotImplementedError()
+
+    def _transform_from_milling_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from milling to trenching
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_milling_to_sem(pos)
+        return self._transform_from_sem_to_trenching(sem_pos)
+
+    def _transform_from_fm_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from fm to trenching
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_fm_to_sem(pos)
+        return self._transform_from_sem_to_trenching(sem_pos)
+
+    def _transform_from_trenching_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from trenching to milling
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_trenching_to_sem(pos)
+        return self._transform_from_sem_to_milling(sem_pos)
+
+    def _transform_from_trenching_to_fib_view_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from trenching to fib-view fm
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_trenching_to_sem(pos)
+        return self._transform_from_sem_to_fib_view_fm(sem_pos)
+
+    def _transform_from_trenching_to_fm(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from trenching to fm imaging
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_trenching_to_sem(pos)
+        return self._transform_from_sem_to_fm(sem_pos)
+
+    # Two special methods that are a roundtrip to the original posture, just to utilize updated metadata.
+    def _transform_from_milling_to_milling(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from milling to milling with a different angle
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_milling_to_sem(pos)
+        return self._transform_from_sem_to_milling(sem_pos)
+
+    def _transform_from_trenching_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from trenching to trenching with a different angle
+        :param pos: the current stage position
+        :return: the transformed stage position.
+        """
+        sem_pos = self._transform_from_trenching_to_sem(pos)
+        return self._transform_from_sem_to_trenching(sem_pos)
 
     def is_posture_switch_allowed(self, source_posture: Posture, target_posture: Posture) -> bool:
         """
@@ -1158,6 +1273,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         self._initialise_transformation(axes=["y", "z"], rotation=self.pre_tilt)
         self.create_sample_stage()
+        # Update the posture based on the actual metadata
+        self._update_posture(self.stage.position.value)
 
     def get_target_position(self, target_posture: Posture) -> Dict[str, float]:
         """
@@ -1323,7 +1440,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 raise ValueError(f"Moving from posture {current_posture} to posture {target_posture} is not allowed.")
 
             if current_posture == target_posture:
-                logging.warning(f"Requested move to the same position as current: {target_posture}")
+                logging.warning(f"Requested move to the same posture as current: {target_posture}")
 
             # get the set point position
             current_position = self.stage.position.value
@@ -1500,6 +1617,9 @@ class MeteorTFS3PostureManager(MeteorTFS1PostureManager):
             fixed_fm_sample = self.to_sample_stage_from_stage_position(sem_grid1_pos_fm, posture=Posture.FM_IMAGING)
             fixed_fm_sample = {"z": fixed_fm_sample["z"]}  # Drop x and y, to make clear only z is used
             self.stage.updateMetadata({model.MD_FM_POS_SAMPLE_ACTIVE: fixed_fm_sample})
+
+        # Update the posture based on the actual metadata
+        self._update_posture(self.stage.position.value)
 
     def _transform_from_sem_to_fm(self, pos: Dict[str, float], fix_fm_plane: bool = True) -> Dict[str, float]:
         """
@@ -1700,6 +1820,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "m"], rotation=self.pre_tilt)
         self.create_sample_stage()
+        # Update the posture based on the actual metadata
+        self._update_posture(self.stage.position.value)
 
     def from_sample_stage_to_stage_position(self, pos: Dict[str, float]) -> Dict[str, float]:
         new_pos = super().from_sample_stage_to_stage_position(pos)
@@ -1890,9 +2012,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             # get the current label
             current_posture = self.get_current_posture()
 
-            if current_posture == target_posture:
-                logging.warning(f"Requested move to the same position as current: {target_posture}")
-
             # get the set point position
             target_position = self.get_target_position(target_posture)
 
@@ -2020,6 +2139,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         self.postures = [Posture.SEM_IMAGING, Posture.FM_IMAGING]
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
             self.postures.append(Posture.MILLING)
+            self.postures.append(Posture.TRENCHING)
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md and self.has_fib_view_fm_objective:
             self.postures.append(Posture.FIB_VIEW_FM)
 
@@ -2051,6 +2171,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         """
         tf_id = numpy.eye(3)
         tf_reverse = -tf_id  # The Tescan stage convention is opposite of Odemis so inverse the direction of the XYZ axis.
+        tf_rz_180, _ = get_rotation_transforms(rz=math.pi)
 
         # Compensate for the scan rotation (around Z)
         sr = self._get_scan_rotation()  # Fails if ion-beam and e-beam have different scan rotations
@@ -2076,13 +2197,16 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         tf_sem = tf_reverse @ tf_tilt @ tf_sr
         tf_sem_inv = numpy.linalg.inv(tf_sem)
 
+        tf_fib_im = tf_sem @ tf_rz_180
+        tf_fib_im_inv = numpy.linalg.inv(tf_fib_im)
+
         if model.MD_FAV_MILL_POS_ACTIVE in stage_md:
-            rx_mill = self.calculate_stage_tilt()
+            rx_mill = self.calculate_stage_tilt(posture=Posture.MILLING)
             # Scan rotation and pre-tilt are the same as in SEM imaging, so can reuse tf_sr
             tf_tilt = self._get_tilt_transformation(-pre_tilt, rx_mill)
             tf_mill = tf_reverse @ tf_tilt @ tf_sr
 
-            rx_fib_view_fm = self.calculate_stage_tilt(column_tilt=self.fm_column_tilt)
+            rx_fib_view_fm = self.calculate_stage_tilt(posture=Posture.FIB_VIEW_FM)
 
             tf_tilt = self._get_tilt_transformation(-pre_tilt, rx_fib_view_fm)
             tf_fib_view_fm = tf_reverse @ tf_tilt @ tf_sr
@@ -2101,6 +2225,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             Posture.SEM_IMAGING: tf_sem,
             Posture.MILLING: tf_mill,
             Posture.FIB_VIEW_FM: tf_fib_view_fm,
+            Posture.TRENCHING: tf_fib_im,
             Posture.UNKNOWN: tf_id,
         }
         # From stage-bare to sample-stage
@@ -2109,6 +2234,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             Posture.SEM_IMAGING: tf_sem_inv,
             Posture.MILLING: tf_mill_inv,
             Posture.FIB_VIEW_FM: tf_fib_view_fm_inv,
+            Posture.TRENCHING: tf_fib_im_inv,
             Posture.UNKNOWN: tf_id,
         }
 
@@ -2308,7 +2434,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Define values that are used more than once
         rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
-        rx_mill = self.calculate_stage_tilt()
+        rx_mill = self.calculate_stage_tilt(posture=Posture.MILLING)
         mill_pos_active["rx"] = rx_mill  # update the computed rx based on the milling angle
 
         z_ct = calibrated_values["z_ct"]
@@ -2352,7 +2478,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Define values that are used more than once
         rx_sem = sem_pos_active["rx"]
-        rx_mill = self.calculate_stage_tilt()
+        rx_mill = self.calculate_stage_tilt(posture=Posture.MILLING)
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]
@@ -2459,6 +2585,92 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         }
         return transformed_pos
 
+    def _transform_from_sem_to_trenching(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from sem to trenching.
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
+        stage_md = self.stage.getMetadata()
+        rx_sem = pos["rx"]
+        trenching_orientation = self.get_posture_orientation(Posture.TRENCHING)
+        rx_trenching = trenching_orientation["rx"]
+        rz_trenching = trenching_orientation["rz"]
+
+        calibrated_values = stage_md[model.MD_CALIB]
+        x_0 = calibrated_values["x_0"]
+        y_0 = calibrated_values["y_0"]
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_sem) + b_y * math.sin(rx_sem)
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+        # at the sem position stage tilt
+        sem_reference_pos_x = x_0
+        sem_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_reference_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+        # Calculate the equivalent coordinates of the calibrated position, at the trenching position
+        trenching_reference_pos_x = x_0
+        trenching_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_trenching)) - b_z * math.tan(rx_trenching)
+        trenching_reference_pos_z = 0 - b_y * math.tan(rx_trenching) - b_z * (1 - 1 / math.cos(rx_trenching))
+
+        # Update the angles to the trenching position angles
+        transformed_pos = {
+            "x": trenching_reference_pos_x - (pos["x"] - sem_reference_pos_x),
+            "y": trenching_reference_pos_y - (pos["y"] - sem_reference_pos_y),
+            "z": trenching_reference_pos_z + (pos["z"] - sem_reference_pos_z),
+            "rx": rx_trenching,
+            "rz": rz_trenching,
+        }
+
+        return transformed_pos
+
+    def _transform_from_trenching_to_sem(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the stage position from trenching to sem.
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
+        """
+        if "rx" not in pos:
+            raise ValueError(f"The stage-bare position does not have rx axis. pos={pos}")
+
+        stage_md = self.stage.getMetadata()
+        rx_trenching = pos["rx"]
+        sem_orientation = self.get_posture_orientation(Posture.SEM_IMAGING)
+        rx_sem = sem_orientation["rx"]
+        rz_sem = sem_orientation["rz"]
+
+        calibrated_values = stage_md[model.MD_CALIB]
+        x_0 = calibrated_values["x_0"]
+        y_0 = calibrated_values["y_0"]
+        z_ct = calibrated_values["z_ct"]
+        b_y = calibrated_values["b_y"]
+        b_z = (pos["z"] - z_ct) * math.cos(rx_trenching) + b_y * math.sin(rx_trenching)
+
+        # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position,
+        # at the trenching position stage tilt
+        trenching_reference_pos_x = x_0
+        trenching_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_trenching)) - b_z * math.tan(rx_trenching)
+        trenching_reference_pos_z = 0 - b_y * math.tan(rx_trenching) - b_z * (1 - 1 / math.cos(rx_trenching))
+        # Calculate the equivalent coordinates of the calibrated position, at the sem position
+        sem_reference_pos_x = x_0
+        sem_reference_pos_y = y_0 - b_y * (1 - 1 / math.cos(rx_sem)) - b_z * math.tan(rx_sem)
+        sem_reference_pos_z = 0 - b_y * math.tan(rx_sem) - b_z * (1 - 1 / math.cos(rx_sem))
+
+        # Update the angles to the trenching position angles
+        transformed_pos = {
+            "x": sem_reference_pos_x - (pos["x"] - trenching_reference_pos_x),
+            "y": sem_reference_pos_y - (pos["y"] - trenching_reference_pos_y),
+            "z": sem_reference_pos_z + (pos["z"] - trenching_reference_pos_z),
+            "rx": rx_sem,
+            "rz": rz_sem,
+        }
+
+        return transformed_pos
+
     def _switch_posture(self, future, target_posture):
         try:
             # get the meta data
@@ -2473,9 +2685,6 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             current_posture = self.get_current_posture(current_position)
             if not self.is_posture_switch_allowed(current_posture, target_posture):
                 raise ValueError(f"Moving from posture {current_posture} to posture {target_posture} is not allowed.")
-
-            if current_posture == target_posture:
-                logging.warning(f"Requested move to the same position as current: {target_posture}")
 
             # get the set point position
             target_position = self.get_target_position(target_posture)
@@ -2517,18 +2726,17 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'x'}, target_position)))
                 sub_moves.append((self.stage, filter_dict({'y', 'z'}, target_position)))
 
-            elif target_posture in (Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_VIEW_FM):
+            elif target_posture in (
+                Posture.LOADING,
+                Posture.SEM_IMAGING,
+                Posture.FM_IMAGING,
+                Posture.MILLING,
+                Posture.FIB_VIEW_FM,
+                Posture.TRENCHING,
+            ):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
-
-                if current_posture == Posture.MILLING:
-                    # Store current milling angle, to go back to that same position next time
-                    mill_angle = self.calculate_milling_angle()
-                    mill_pos_active = self.stage.getMetadata()[model.MD_FAV_MILL_POS_ACTIVE]
-                    mill_pos_active["mill_angle"] = mill_angle
-                    self.stage.updateMetadata({model.MD_FAV_MILL_POS_ACTIVE: mill_pos_active})
-                    # TODO: update transformation matrices for milling (at the moment the milling angle is changed)
 
                 # In the Odemis Standard case, which doesn't distinguish between SEM_IMAGING and MILLING,
                 # the user might have changed the tilt/rotation of the stage while in SEM mode,
@@ -2561,10 +2769,9 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
             for component, sub_move in sub_moves:
                 self._run_sub_move(future, component, sub_move)
 
-            # Handle shutter when transitioning to MILLING and SEM imaging positions, coming from FM.
+            # Handle shutter when transitioning to MILLING, SEM imaging and TRENCHING positions, coming from FM.
             # We rely on Tescan's automatic shutter control, that acts when the imaging mode changes.
-            # TODO: later extend for FIB_IMAGING
-            if target_posture in [Posture.MILLING, Posture.SEM_IMAGING] and current_posture == Posture.FM_IMAGING and self.shutter is not None:
+            if target_posture in [Posture.MILLING, Posture.SEM_IMAGING, Posture.TRENCHING] and current_posture == Posture.FM_IMAGING and self.shutter is not None:
                 if self.shutter.value is False:
                     logging.info("Setting shutter to automatic for transition from FM imaging")
                     self.shutter.value = None  # None = automatic
@@ -2622,6 +2829,8 @@ class MeteorJeol1PostureManager(MeteorPostureManager):
         # Automatic conversion to sample-stage axes
         self._initialise_transformation(axes=["y", "z"])
         self.create_sample_stage()
+        # Update the posture based on the actual metadata
+        self._update_posture(self.stage.position.value)
 
     def _update_conversion(self,
                            rotation: float = 0,

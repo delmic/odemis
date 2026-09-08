@@ -193,7 +193,8 @@ class CryoChamberTab(Tab):
                 Posture.MILLING: self.panel.btn_switch_milling,
                 Posture.FIB_VIEW_FM: self.panel.btn_switch_fib_view_fm,
                 Posture.FIB_IMAGING: self.panel.btn_switch_fib_imaging,
-           }
+                Posture.TRENCHING: self.panel.btn_switch_trenching,
+            }
             # Remove the ones which are not supported on this system
             self.position_btns = {posture: btn for posture, btn in self.position_btns.items()
                                   if posture in main_data.posture_manager.postures}
@@ -898,8 +899,23 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_posture in [Posture.FM_IMAGING, Posture.SEM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
-                and current_posture in [Posture.LOADING, Posture.SEM_IMAGING, Posture.FM_IMAGING, Posture.MILLING, Posture.FIB_IMAGING, Posture.FIB_VIEW_FM]
+                self._target_posture in [
+                    Posture.FIB_IMAGING,
+                    Posture.FIB_VIEW_FM,
+                    Posture.FM_IMAGING,
+                    Posture.MILLING,
+                    Posture.SEM_IMAGING,
+                    Posture.TRENCHING,
+                ]
+                and current_posture in [
+                    Posture.FIB_IMAGING,
+                    Posture.FIB_VIEW_FM,
+                    Posture.FM_IMAGING,
+                    Posture.LOADING,
+                    Posture.MILLING,
+                    Posture.SEM_IMAGING,
+                    Posture.TRENCHING,
+                ]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None

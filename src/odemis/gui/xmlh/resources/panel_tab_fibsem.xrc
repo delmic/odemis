@@ -383,8 +383,8 @@
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <orient>wxHORIZONTAL</orient>
+                                <object class="wxGridBagSizer">
+                                  <growablecols>0,1</growablecols>
                                   <object class="sizeritem">
                                     <object class="ProgressRadioButton" name="btn_switch_sem_imaging">
                                       <icon>../../img/icon/ico_sem.png</icon>
@@ -404,7 +404,7 @@
                                     </object>
                                     <flag>wxEXPAND|wxALL</flag>
                                     <border>10</border>
-                                    <option>1</option>
+                                    <cellpos>0,0</cellpos>
                                   </object>
                                   <object class="sizeritem">
                                     <object class="ProgressRadioButton" name="btn_switch_milling">
@@ -425,7 +425,28 @@
                                     </object>
                                     <flag>wxEXPAND|wxALL</flag>
                                     <border>10</border>
-                                    <option>1</option>
+                                    <cellpos>0,1</cellpos>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="ProgressRadioButton" name="btn_switch_trenching">
+                                      <icon>../../img/icon/ico_trenching.png</icon>
+                                      <icon_progress>../../img/icon/ico_trenching_orange.png</icon_progress>
+                                      <icon_on>../../img/icon/ico_trenching_green.png</icon_on>
+                                      <height>48</height>
+                                      <face_colour>def</face_colour>
+                                      <label>TRENCHING</label>
+                                      <fg>#1A1A1A</fg>
+                                      <font>
+                                        <size>11</size>
+                                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                      </font>
+                                      <style>wxALIGN_CENTRE</style>
+                                      <hidden>0</hidden>
+                                      <XRCED><assign_var>1</assign_var></XRCED>
+                                    </object>
+                                    <flag>wxEXPAND|wxALL</flag>
+                                    <border>10</border>
+                                    <cellpos>1,0</cellpos>
                                   </object>
                                 </object>
                                 <flag>wxEXPAND</flag>
@@ -450,6 +471,49 @@
                                   </object>
                                   <object class="sizeritem">
                                     <object class="UnitFloatCtrl" name="ctrl_milling_angle">
+                                      <size>-1,20</size>
+                                      <value>10</value>
+                                      <accuracy>3</accuracy>
+                                      <key_step>0.1</key_step>
+                                      <unit>°</unit>
+                                      <scale>linear</scale>
+                                      <accuracy>2</accuracy>
+                                      <font>
+                                        <size>10</size>
+                                        <encoding>UTF-8</encoding>
+                                      </font>
+                                      <style>wxBORDER_NONE</style>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <orient>wxEXPAND</orient>
+                                    <flag>wxLEFT|wxBOTTOM</flag>
+                                    <border>10</border>
+                                  </object>
+                                  <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <flag>wxALIGN_CENTRE</flag>
+                              </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_trenching_angle">
+                                      <label>Trenching angle</label>
+                                      <fg>#BFBFBF</fg>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                      <font>
+                                        <size>10</size>
+                                        <encoding>UTF-8</encoding>
+                                      </font>
+                                    </object>
+                                    <flag>wxLEFT|wxBOTTOM</flag>
+                                    <border>10</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="UnitFloatCtrl" name="ctrl_trenching_angle">
                                       <size>-1,20</size>
                                       <value>10</value>
                                       <accuracy>3</accuracy>
