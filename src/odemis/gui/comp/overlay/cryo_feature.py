@@ -32,8 +32,8 @@ import odemis.gui.img as guiimg
 import wx
 from odemis import model
 from odemis.acq.feature import (CryoFeature, FEATURE_ACTIVE, FEATURE_DEACTIVE, FEATURE_READY_TO_MILL,
-                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, TargetType, get_feature_position_at_posture,
-                                get_fiducial_colour)
+                                FEATURE_POLISHED, FEATURE_ROUGH_MILLED, FM_POSTURES, TargetType,
+                                resolve_stage_bare_position, get_fiducial_colour)
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import DragMixin, WorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
@@ -170,16 +170,8 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             feature = self._detect_point_inside_feature(v_pos)
             if feature:
                 logging.info("moving to feature {}".format(feature.name.value))
-                # convert from stage position to view position
-                position_bare = self._get_feature_position_at_view_posture(feature)
-                # TODO: move this code into a dedicated method of CryoGUIData, and share it with CryoFeatureController
-                #view_pos = self.pm.to_sample_stage_from_stage_position(position)
-                #self.cnvs.view.moveStageTo((view_pos["x"], view_pos["y"]))
-                self.pm.stage.moveAbs(position_bare)
-                # if fm imaging, move focus too
-                if self.pm.current_posture.value == Posture.FM_IMAGING:
-                    self.tab_data.main.focus.moveAbs(feature.fm_focus_position.value)
                 self.tab_data.main.currentFeature.value = feature
+                self.tab_data.move_to_feature(feature)
             else:
                 # Move to selected point (if normally allowed to move)
                 if CAN_DRAG in self.cnvs.abilities:
@@ -205,8 +197,20 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     DragMixin._on_left_down(self, evt)
                 else:
                     # create new feature based on the physical position then disable the feature tool
-                    pos = self._view_to_stage_pos(v_pos)
-                    self.tab_data.add_new_feature(stage_position=pos)
+                    posture = self.pm.current_posture.value
+                    if posture == Posture.UNKNOWN:
+                        logging.warning("Cannot create a feature while the microscope posture is unknown")
+                    elif posture not in self.pm.postures:
+                        raise ValueError(f"Cannot create a feature at {posture} posture")
+                    else:
+                        feature = self.tab_data.create_feature()
+                        feature.set_stage_bare_position(posture, self._view_to_stage_pos(v_pos))
+                        if posture in FM_POSTURES:
+                            feature.set_focus_position(
+                                posture,
+                                self.tab_data.main.focus.position.value,
+                            )
+                        self.tab_data.add_feature(feature)
 
                     self._selected_tool_va.value = TOOL_NONE
             else:
@@ -246,7 +250,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
             self._selected_feature.stage_position.value = updated_stage_pos
         else:
             self._selected_feature.stage_position.value = stage_position
-            self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
+            self._selected_feature.set_stage_bare_position(self.pm.current_posture.value, stage_position)
             self._update_other_postures()
 
         save_project(self.tab_data.main)
@@ -299,10 +303,12 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         for posture in self.pm.postures:
             if posture != self.pm.current_posture.value:
                 logging.info(f"updating {posture} for {self._selected_feature.name.value}")
-                get_feature_position_at_posture(pm=self.pm,
-                                                feature=self._selected_feature,
-                                                posture=posture,
-                                                recalculate=True)
+                resolve_stage_bare_position(
+                    pm=self.pm,
+                    feature=self._selected_feature,
+                    posture=posture,
+                    recalculate=True,
+                )
 
     def _detect_point_inside_feature(self, v_pos):
         """
@@ -336,7 +342,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 if self._has_saved_milling_reference(self._selected_feature):
                     self._update_milling_feature_offset(self._selected_feature, stage_position)
                 else:
-                    self._selected_feature.set_posture_position(self.pm.current_posture.value, stage_position)
+                    self._selected_feature.set_stage_bare_position(self.pm.current_posture.value, stage_position)
                 self.cnvs.update_drawing()
                 return
             feature = self._detect_point_inside_feature(v_pos)
@@ -449,7 +455,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         if posture == Posture.UNKNOWN:
             raise IndexError("Cannot get feature position at unknown posture")
 
-        return get_feature_position_at_posture(
+        return resolve_stage_bare_position(
             pm=self.pm,
             feature=feature,
             posture=posture,

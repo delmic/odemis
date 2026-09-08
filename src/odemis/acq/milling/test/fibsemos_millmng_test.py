@@ -59,11 +59,7 @@ class TestFibsemOSMillingManager(unittest.TestCase):
         cls.milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
 
         # Minimal feature object expected by FibsemOSMillingTaskManager (reference image is required).
-        cls.feature = CryoFeature(
-            name="TestFeature-1",
-            stage_position={"x": 0.0, "y": 0.0, "z": 0.0, "rx": 0.0, "rz": 0.0},
-            fm_focus_position={"z": 0.0},
-        )
+        cls.feature = CryoFeature(name="TestFeature-1")
         cls.feature.reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
 
     def test_estimate_total_milling_time(self):

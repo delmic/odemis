@@ -34,8 +34,13 @@ import wx
 
 from odemis import model
 from odemis.acq.align import z_localization
-from odemis.acq.align.z_localization import SUPERZ_THRESHOLD
-from odemis.acq.feature import Target, TargetType
+from odemis.acq.feature import (
+    FM_POSTURES,
+    Target,
+    TargetType,
+    resolve_fm_focus_position,
+    resolve_stage_bare_position,
+)
 from odemis.acq.move import Posture
 from odemis.acq.stream import FluoStream
 from odemis.gui import conf
@@ -59,6 +64,8 @@ class CryoZLocalizationController(object):
         self._tab = tab
         self._stigmator = tab_data.main.stigmator
         self._focus = tab_data.main.focus
+        self._acq_posture = Posture.FM_IMAGING
+        self._acq_feature = None
         self._viewports = panel.pnl_secom_grid.viewports
         # Note: there could be some (odd) configurations with a stigmator, but
         # no stigmator calibration (yet). In that case, we should still move the
@@ -137,6 +144,7 @@ class CryoZLocalizationController(object):
 
         # To check that a feature is selected
         tab_data.main.currentFeature.subscribe(self._on_current_feature, init=True)
+        tab_data.main.posture_manager.current_posture.subscribe(self._on_current_feature)
 
         # To disable the button during acquisition
         tab_data.main.is_acquiring.subscribe(self._on_current_feature)
@@ -210,7 +218,7 @@ class CryoZLocalizationController(object):
         # move to target focus position
         logging.info(f"Moving to focus position: {fm_focus_position}, Target: {target.name.value}")
         # move focus only if we are in FM imaging posture
-        if current_posture == Posture.FM_IMAGING:
+        if current_posture in FM_POSTURES:
             self._tab_data.main.focus.moveAbs(fm_focus_position)
 
     def _on_btn_use_current_target_z(self, evt) -> None:
@@ -421,9 +429,14 @@ class CryoZLocalizationController(object):
         # While running the localization method
         # button turns in cancel button
         is_running = not self._acq_future.done()
+        at_fm_imaging = (
+            self._tab_data.main.posture_manager.current_posture.value == Posture.FM_IMAGING
+        )
         # The Locate Z button is enabled when there is a feature and enabled when it is
         # localizing as a Cancel button, provided there is no image is being acquired
-        self._panel.btn_z_localization.Enable(has_feature and ((not is_acquiring) or is_running))
+        self._panel.btn_z_localization.Enable(
+            has_feature and (is_running or (not is_acquiring and at_fm_imaging))
+        )
         # The interface for target control is active when there is a feature and no processes
         # like acquisition or localization are running
         self._enable_target_ctrls(has_feature and (not is_acquiring) and (not is_running))
@@ -488,16 +501,25 @@ class CryoZLocalizationController(object):
         feature = self._tab_data.main.currentFeature.value
         if feature is None:
             raise ValueError("Select a feature first to specify the Z localization in X/Y")
-        if self._tab_data.main.posture_manager.current_posture.value != Posture.FM_IMAGING:
-            raise ValueError("The current posture is not FM imaging, cannot do Z localization")
+        current_posture = self._tab_data.main.posture_manager.current_posture.value
+        if current_posture != Posture.FM_IMAGING:
+            raise ValueError("Z localization is only supported in FM imaging posture")
+        self._acq_posture = current_posture
+        self._acq_feature = feature
 
         feature.superz_stream_name = self._selected_stream.name.value
         # Save the stream name in the config file
-        acq_conf = conf.get_acqui_conf()
         save_project(self._tab_data.main)
 
-        stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
-        pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(stage_pos)
+        stage_pos = resolve_stage_bare_position(
+            self._tab_data.main.posture_manager,
+            feature,
+            current_posture,
+        )
+        pos = self._tab_data.main.posture_manager.to_sample_stage_from_stage_position(
+            stage_pos,
+            posture=current_posture,
+        )
 
         # Disable the GUI and show the progress bar
         self._tab.streambar_controller.pauseStreams()
@@ -511,13 +533,18 @@ class CryoZLocalizationController(object):
         # The angles of stigmatorAngle should come from MD_CALIB, so it's relatively safe
         poi_size = self._tab_data.poi_size.value
         fiducial_size = self._tab_data.fiducial_size.value
-        correlation_data = self._tab_data.main.currentFeature.value.correlation_data
+        correlation_data = feature.correlation_data
+        fm_focus_position = resolve_fm_focus_position(
+            feature,
+            current_posture,
+            self._focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+        )
         pois = [Target(x= pos["x"],y=pos["y"],
-                     z=feature.fm_focus_position.value["z"],
+                     z=fm_focus_position["z"],
                      name="POI-1",
                      index=1,
                      type=TargetType.PointOfInterest,
-                     fm_focus_position=feature.fm_focus_position.value["z"])]
+                     fm_focus_position=fm_focus_position["z"])]
         fiducials = getattr(correlation_data, "fm_fiducials", [])
         self._acq_future = z_localization.measure_z_multi_targets(stigmator=self._stigmator, focus= self._focus,
                                                          stream=s, poi_size=poi_size,
@@ -538,26 +565,48 @@ class CryoZLocalizationController(object):
             self._panel.btn_z_localization.Enable(True)
             self._panel.btn_z_localization.SetLabel(self._localization_btn_label)
             targets = f.result()
-            feature = self._tab_data.main.currentFeature.value
+            feature = self._acq_feature
             correlation_data = feature.correlation_data
             correlation_data.fm_fiducials = []
-            old_focus = feature.fm_focus_position.value["z"]
+            old_focus = feature.get_focus_position(self._acq_posture)["z"]
+            localization_succeeded = False
             for target in targets:
                 if target.type.value == TargetType.Fiducial:
                     correlation_data.fm_fiducials.append(target)
                 elif target.type.value == TargetType.PointOfInterest:
-                    # update feature focus position
-                    feature.fm_focus_position.value = {"z": target.coordinates.value[2]}
                     feature.superz_focused = target.superz_focused
+                    if target.superz_focused:
+                        feature.set_focus_position(
+                            self._acq_posture,
+                            {"z": target.coordinates.value[2]},
+                        )
+                        localization_succeeded = True
+                    else:
+                        target.coordinates.value[2] = old_focus
+
+            save_project(self._tab_data.main)
 
             self._panel.cmb_targets.Clear()
-            self._tab_data.main.targets.value = targets
-            self._tab_data.main.currentTarget.value = targets[0] if targets else None
-            if abs(old_focus - feature.fm_focus_position.value["z"]) <= SUPERZ_THRESHOLD:
-                logging.debug("Feature located at %s + %s m", old_focus,
-                              feature.fm_focus_position.value["z"] - old_focus)
-                self._tab_data.main.focus.moveAbs({"z": feature.fm_focus_position.value["z"]})
-                # Don't wait for it to be complete, the user will notice anyway
+            new_focus = feature.get_focus_position(self._acq_posture)["z"]
+            if feature is self._tab_data.main.currentFeature.value:
+                self._tab_data.main.targets.value = targets
+                self._tab_data.main.currentTarget.value = targets[0] if targets else None
+                current_posture = self._tab_data.main.posture_manager.current_posture.value
+                if current_posture == self._acq_posture:
+                    focus = new_focus if localization_succeeded else old_focus
+                    if localization_succeeded:
+                        logging.debug(
+                            "Feature located at %s + %s m",
+                            old_focus,
+                            new_focus - old_focus,
+                        )
+                    else:
+                        logging.debug(
+                            "Z localization did not converge; restoring focus position %s",
+                            old_focus,
+                        )
+                    self._tab_data.main.focus.moveAbs({"z": focus})
+                    # Don't wait for it to be complete, the user will notice anyway
         except CancelledError:
             logging.debug("Z localization cancelled")
         finally:

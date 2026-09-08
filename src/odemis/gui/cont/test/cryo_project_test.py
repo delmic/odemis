@@ -38,6 +38,7 @@ from odemis.gui.cont.cryo_project import (
     IMG_FILENAME,
     IMG_IN_FILE_IDS,
     PROJECT_NAME,
+    PROJECT_VERSION,
     LEGACY_PROJECT_NAME,
     add_image,
     remove_image,
@@ -86,12 +87,28 @@ class TestCryoProject(unittest.TestCase):
         main_data = MagicMock()
         main_data.tab.value.conf.pj_last_path = project_dir
         main_data.features.value = [feature_decoder(feature) for feature in project_data["features"]]
+        fib_view_focus = {"z": 2.1e-3}
+        main_data.features.value[0].set_focus_position(Posture.FIB_VIEW_FM, fib_view_focus)
+        project_data["features"][0]["posture_positions"][Posture.FIB_VIEW_FM.value] = {
+            "fm_focus": fib_view_focus,
+        }
         main_data.overviews.value = project_data["overviews"]
         save_project(main_data)
         # Check if correctly converted to new project, and if that project file is openable
         reloaded_project_data = read_project_file(project_dir / PROJECT_NAME)
+        self.assertEqual(reloaded_project_data["version"], PROJECT_VERSION)
         self.assertEqual(reloaded_project_data["features"], project_data["features"])
         self.assertEqual(reloaded_project_data["overviews"], project_data["overviews"])
+        self.assertNotIn("fm_focus_position", reloaded_project_data["features"][0])
+        self.assertNotIn("stage_position", reloaded_project_data["features"][0])
+        self.assertIn(
+            "fm_focus",
+            reloaded_project_data["features"][0]["posture_positions"][Posture.FM_IMAGING.value],
+        )
+        self.assertEqual(
+            reloaded_project_data["features"][0]["posture_positions"][Posture.FIB_VIEW_FM.value]["fm_focus"],
+            fib_view_focus,
+        )
         posture_values = {p.value for p in Posture}
         for posture_key in reloaded_project_data["features"][0]["posture_positions"].keys():
             self.assertIn(posture_key, posture_values)
@@ -110,6 +127,12 @@ class TestCryoProject(unittest.TestCase):
         )
         self.assertIn("overviews", project_data)
         self.assertIn(IMG_FILENAME, project_data["overviews"][0])
+        self.assertNotIn("fm_focus_position", project_data["features"][0])
+        self.assertNotIn("stage_position", project_data["features"][0])
+        self.assertIn(
+            "fm_focus",
+            project_data["features"][0]["posture_positions"][Posture.FM_IMAGING.value],
+        )
         posture_values = {p.value for p in Posture}
         for posture_key in project_data["features"][0]["posture_positions"].keys():
             self.assertIn(posture_key, posture_values)

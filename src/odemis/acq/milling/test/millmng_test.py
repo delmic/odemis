@@ -118,12 +118,7 @@ class TestAutomatedMillingManager(unittest.TestCase):
         # create 2 features from positions:
         cls.features = []
         for i, pos in enumerate([pos_sem_grid1, pos_sem_grid2], 1):
-            feature = CryoFeature(
-                name=f"Feature-{i}",
-                stage_position=pos_sem_grid1,
-                fm_focus_position={"z": 1.69e-3}, # not-relevant
-
-            )
+            feature = CryoFeature(name=f"Feature-{i}")
             # set milling tasks
             feature.save_milling_task_data(
                 stage_position=cls.pm.to_posture(pos, Posture.MILLING),
