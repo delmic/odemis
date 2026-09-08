@@ -33,7 +33,11 @@ import wx
 
 from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
-from odemis.gui.win.acquisition import OverviewAcquisitionDialog, CorrelationDialog
+from odemis.gui.win.acquisition import (
+    OverviewAcquisitionDialog,
+    CorrelationDialog,
+    SLMAlignmentDialog,
+)
 from odemis.gui import model as guimod
 
 class OverviewStreamAcquiController(object):
@@ -159,3 +163,53 @@ class CorrelationDialogController:
             streambar_controller.resume()
 
             self.cor_dialog.Destroy()
+
+
+class SLMAlignmentDialogController:
+    """Controller that opens SLM alignment via acquisition UI workflow."""
+
+    def __init__(self, tab_data, tab):
+        """
+        tab_data (MicroscopyGUIData): representation of the microscope GUI.
+        tab: (Tab): tab owning settings and stream controllers.
+        """
+        self._tab_data_model = tab_data
+        self._tab = tab
+        self.slm_dialog = None
+
+    def open_slm_alignment_dialog(self) -> None:
+        """Open the SLM alignment dialog while pausing acquisition controls."""
+        settingsbar_controller = self._tab.settingsbar_controller
+        orig_entries = get_global_settings_entries(settingsbar_controller)
+        for sc in self._tab.streambar_controller.stream_controllers:
+            orig_entries += get_local_settings_entries(sc)
+        orig_settings = preset_as_is(orig_entries)
+        settingsbar_controller.pause()
+        settingsbar_controller.enable(False)
+
+        streambar_controller = self._tab.streambar_controller
+        streambar_controller.pauseStreams()
+        streambar_controller.pause()
+        streambar_controller.enable(False)
+
+        try:
+            self.slm_dialog = SLMAlignmentDialog(self._tab.main_frame, self._tab_data_model)
+            parent_size = [int(v * 0.9) for v in self._tab.main_frame.GetSize()]
+            self.slm_dialog.SetSize(parent_size)
+            self.slm_dialog.Center()
+            self.slm_dialog.ShowModal()
+        except Exception:
+            logging.exception("Failed to open SLM alignment dialog")
+            raise
+        finally:
+            apply_preset(orig_settings)
+
+            settingsbar_controller.enable(True)
+            settingsbar_controller.resume()
+
+            streambar_controller.enable(True)
+            streambar_controller.resume()
+
+            if self.slm_dialog is not None:
+                self.slm_dialog.Destroy()
+

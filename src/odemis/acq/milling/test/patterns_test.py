@@ -18,9 +18,15 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import math
 import unittest
 import numpy
-from odemis.acq.milling.patterns import RectanglePatternParameters, TrenchPatternParameters, MicroexpansionPatternParameters
+from odemis.acq.milling.patterns import (
+    CrossPatternParameters,
+    MicroexpansionPatternParameters,
+    RectanglePatternParameters,
+    TrenchPatternParameters,
+)
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -224,6 +230,64 @@ class MicroexpansionPatternParametersTestCase(unittest.TestCase):
         self.assertAlmostEqual(patterns[1].rotation.value, 0)
         numpy.testing.assert_array_almost_equal(patterns[1].center.value, (self.spacing, 0))
         self.assertEqual(patterns[1].scan_direction.value, "TopToBottom")
+
+
+class CrossPatternParametersTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.name = "FiducialCross-1"
+        self.width = 2e-6
+        self.height = 20e-6
+        self.depth = 1e-6
+        self.rotation = math.pi / 4
+        self.center = (0.0, 0.0)
+
+        self.pattern = CrossPatternParameters(
+            name=self.name,
+            width=self.width,
+            height=self.height,
+            depth=self.depth,
+            rotation=self.rotation,
+            center=self.center,
+        )
+
+    def test_assignment(self):
+        self.assertEqual(self.pattern.name.value, self.name)
+        self.assertEqual(self.pattern.width.value, self.width)
+        self.assertEqual(self.pattern.height.value, self.height)
+        self.assertEqual(self.pattern.depth.value, self.depth)
+        self.assertEqual(self.pattern.rotation.value, self.rotation)
+        self.assertEqual(self.pattern.center.value, self.center)
+
+    def test_dict(self):
+        cross_pattern_dict = self.pattern.to_dict()
+        self.assertEqual(cross_pattern_dict["name"], self.name)
+        self.assertEqual(cross_pattern_dict["width"], self.width)
+        self.assertEqual(cross_pattern_dict["height"], self.height)
+        self.assertEqual(cross_pattern_dict["depth"], self.depth)
+        self.assertEqual(cross_pattern_dict["rotation"], self.rotation)
+        self.assertEqual(cross_pattern_dict["center_x"], 0)
+        self.assertEqual(cross_pattern_dict["center_y"], 0)
+        self.assertEqual(cross_pattern_dict["pattern"], "cross")
+
+        cross_pattern_from_dict = CrossPatternParameters.from_dict(cross_pattern_dict)
+        self.assertEqual(cross_pattern_from_dict.name.value, self.name)
+        self.assertEqual(cross_pattern_from_dict.width.value, self.width)
+        self.assertEqual(cross_pattern_from_dict.height.value, self.height)
+        self.assertEqual(cross_pattern_from_dict.depth.value, self.depth)
+        self.assertEqual(cross_pattern_from_dict.rotation.value, self.rotation)
+        self.assertEqual(cross_pattern_from_dict.center.value, self.center)
+
+    def test_generate(self):
+        patterns = self.pattern.generate()
+        self.assertEqual(len(patterns), 2)
+        self.assertEqual(patterns[0].name.value, f"{self.name} (Arm A)")
+        self.assertAlmostEqual(patterns[0].rotation.value, self.rotation)
+        numpy.testing.assert_array_almost_equal(patterns[0].center.value, self.center)
+
+        self.assertEqual(patterns[1].name.value, f"{self.name} (Arm B)")
+        self.assertAlmostEqual(patterns[1].rotation.value, (self.rotation + math.pi / 2) % (2 * math.pi))
+        numpy.testing.assert_array_almost_equal(patterns[1].center.value, self.center)
 
 
 if __name__ == '__main__':
