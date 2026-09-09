@@ -37,7 +37,34 @@
         # be considered reset (=False)
         di_channels: {14: ["interlockTriggered", False]},
     },
+    children: {
+        actuator: "ND Filter",
+    },
     affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+}
+
+"ND Filter": {
+    role: light-protector,
+    init: {
+        axes: {
+            "rz": {
+                "do": 3,       # Port A, 0-7 -> pin 21-28, GND = pin 29
+                "low": 1.5707963267948966,
+                # filter is active when the pin is high
+                # this is considered as a safe state because if the MCC device is unplugged,
+                # the do pin goes to high given the pull-up resistor
+                "high": 0.0,
+                "unit": "rad",
+                "duration": 0.5,
+                "di": 11,       # Port B, 8-15 -> pin 32-39. GND = pin 31
+                "di_inverted": False,
+                "positions": {
+                    0.0: "on",
+                    1.5707963267948966: "off",
+                },
+            },
+        },
+    },
 }
 
 "Power Control Unit": {
