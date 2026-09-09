@@ -369,6 +369,7 @@ class TestHDF5IO(unittest.TestCase):
         size = (512, 256, 1)
         dtype = numpy.dtype("uint16")
         # list instead of tuple for binning because json only uses lists
+        stage_pos = {"x": 1e-3, "y": -30e-3, "z": 2e-3, "rx": 0.1, "rz": 0.2}
         extra_md = {"Camera" : {'binning' : ((0, 0), "px")}, "¤³ß": {'</Image>': '</Image>'},
                     "Fake component": ("parameter", None)}
         exp_extra_md = json.loads(json.dumps(extra_md))  # slightly different for MD_EXTRA_SETTINGS (tuples are converted to lists)
@@ -384,6 +385,7 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     model.MD_EXTRA_SETTINGS: extra_md,
+                    model.MD_STAGE_POSITION_RAW: stage_pos,
                     }
 
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)
@@ -425,6 +427,9 @@ class TestHDF5IO(unittest.TestCase):
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
 
+        stage_pos_raw = hdf5.convert_to_str(f["Acquisition0/PhysicalData/StagePositionRaw"][0])
+        self.assertEqual(json.loads(stage_pos_raw), stage_pos)
+
         f.close()
 
         # Try reading the metadata using the hdf5 module
@@ -437,6 +442,7 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], metadata[model.MD_ACQ_DATE])
             self.assertEqual(im.metadata[model.MD_EXP_TIME], metadata[model.MD_EXP_TIME])
             self.assertEqual(im.metadata[model.MD_EXTRA_SETTINGS], exp_extra_md)
+            self.assertEqual(im.metadata[model.MD_STAGE_POSITION_RAW], stage_pos)
             self.assertEqual(im.metadata[model.MD_FILENAME], FILENAME)
             self.assertEqual(im.metadata[model.MD_IN_FILE_INDEX], i)
 

@@ -772,6 +772,8 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "InputSlitWidth", model.MD_INPUT_SLIT_WIDTH, converter=float)
         # extra settings
         read_metadata(pdgroup, i, md, "ExtraSettings", model.MD_EXTRA_SETTINGS, converter=json.loads)
+        # raw stage position
+        read_metadata(pdgroup, i, md, "StagePositionRaw", model.MD_STAGE_POSITION_RAW, converter=json.loads)
         # acquisition recipes
         read_metadata(pdgroup, i, md, "AcquisitionRecipes", model.MD_ACQ_RECIPES, converter=convert_to_str)
 
@@ -1087,6 +1089,15 @@ def _add_image_metadata(group, image, mds):
             set_metadata(gp, "ExtraSettings", state, value)
         except Exception as ex:
             logging.warning("Failed to save ExtraSettings metadata, exception: %s", ex)
+
+    stage_positions = [md.get(model.MD_STAGE_POSITION_RAW) for md in mds]
+    if any(stage_positions):
+        try:
+            value = [json.dumps(pos, cls=JsonExtraEncoder) for pos in stage_positions]
+            state = [ST_INVALID if pos is None else ST_REPORTED for pos in stage_positions]
+            set_metadata(gp, "StagePositionRaw", state, value)
+        except Exception as ex:
+            logging.warning("Failed to save StagePositionRaw metadata, exception: %s", ex)
 
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
