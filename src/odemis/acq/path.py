@@ -362,12 +362,6 @@ SECOM_MODES = {
                 }),
             }
 
-# MIMAS modes have a different format: just detector + move target position
-MIMAS_MODES = {
-            'optical': ("ccd", Posture.FM_IMAGING),
-            'fib': ("se-detector", Posture.MILLING),
-            }
-
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
                'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus',
                'streak-focus', 'light-in-align',
@@ -416,15 +410,6 @@ class OpticalPathManager:
     the optical path of a SPARC system to the right position/configuration with
     respect to the mode given.
     """
-
-    def __new__(cls, microscope):
-        # Automatically create the right sub-class based on the microscope role
-        if microscope.role == "mimas":
-            return super().__new__(_MimasOpticalPathManager)
-        # TODO: extend to the other microscope types
-        else:
-            return super().__new__(cls)
-
     def __init__(self, microscope):
         """
         microscope (Microscope): the whole microscope component, thus it can
@@ -1099,68 +1084,3 @@ class OpticalPathManager:
 
         raise TimeoutError("Target temperature (%g C) not reached after %g s" %
                            (comp.targetTemperature.value, timeout))
-
-
-class _MimasOpticalPathManager(OpticalPathManager):
-    """
-    Special class for the MIMAS
-    """
-    def __init__(self, microscope):
-        self.microscope = microscope
-        if microscope.role != "mimas":
-            raise NotImplementedError("Microscope role '%s' unsupported" % (microscope.role,))
-        self._modes = copy.deepcopy(MIMAS_MODES)
-
-        self._chamber_view_own_focus = False  # To keep compatibility with __del__()
-
-        # To keep compatibility with the OpticalPathManager.setAcqQuality
-        self.quality = ACQ_QUALITY_FAST
-
-        # Initialize the information for guessMode()
-        self._role_to_mode = self._compute_role_to_mode(self._modes)
-
-        # keep list of all components, to avoid creating new proxies
-        # every time the mode changes
-        self._cached_components = model.getComponents()
-
-        # will take care of executing setPath asynchronously
-        self._executor = OneTaskExecutor()
-
-        # Controls the stage movement based on the imaging mode
-        self._posture_manager = MicroscopePostureManager(self.microscope)
-
-    def _doSetPath(self, path, detector):
-
-        if isinstance(path, stream.Stream):
-            if detector is not None:
-                raise ValueError("Not possible to specify both a stream, and a detector")
-            try:
-                mode = self.guessMode(path)
-            except LookupError:
-                logging.debug("%s doesn't require optical path change", path)
-                return
-            target = self.getStreamDetector(path)  # target detector
-        else:
-            mode = path
-            if mode not in self._modes:
-                raise ValueError("Mode '%s' does not exist" % (mode,))
-            comp_role = self._modes[mode][0]
-            if detector is None:
-                target = self._getComponent(comp_role)
-            else:
-                target = detector
-
-        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
-
-        mode_position = self._modes[mode][1]
-
-        # Only accept moving if the stage is already within the "Posture.IMAGING" area (which means Posture.FM_IMAGING & Posture.MILLING)
-        # as this means the stage will not move, but only the optical lens.
-        current_pos = self._posture_manager.get_current_posture()
-        if current_pos not in (Posture.IMAGING, Posture.FM_IMAGING, Posture.MILLING):
-            logging.warning("Optical path cannot be changed while in position %s", current_pos.value)
-            return
-
-        f = self._posture_manager.switch_posture(mode_position)
-        f.result()
-        logging.debug("Move to position %s completed", mode_position)

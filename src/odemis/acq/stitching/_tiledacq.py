@@ -1480,8 +1480,6 @@ def get_tiled_bboxes(
     return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
     corresponding to the sample centers.
     """
-    # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
-    # which often supports 2 grids, this should also be possible to use.
     # TODO: ensure that sample centers are converted to same coordinate system as stage position
 
     # Sort the (selected) centers along X, and for centers with the same X, along the Y.

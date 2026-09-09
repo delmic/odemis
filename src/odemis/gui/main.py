@@ -146,7 +146,7 @@ class OdemisGUIApp(wx.App):
 
         if microscope and microscope.role == "mbsem":
             self.main_data = guimodel.FastEMMainGUIData(microscope)
-        elif microscope and microscope.role in ("meteor", "enzel", "mimas"):
+        elif microscope and microscope.role == "meteor":
             self.main_data = guimodel.CryoMainGUIData(microscope)
         else:
             self.main_data = guimodel.MainGUIData(microscope)
@@ -259,7 +259,7 @@ class OdemisGUIApp(wx.App):
                     },
                 ])
 
-            elif self.main_data.role in ("meteor",):  # mimas and enzel are deprecated
+            elif self.main_data.role in ("meteor",):
                 from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
                 from odemis.gui.cont.tabs.cryo_chamber_tab import CryoChamberTab
                 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
@@ -292,19 +292,6 @@ class OdemisGUIApp(wx.App):
                         "button": self.main_frame.btn_tab_fibsem,
                         "panel": main_xrc.xrcpnl_tab_fibsem
                     },
-                    # Currently unused (enzel and mimas are deprecated)
-                    # {
-                    #     "name": "enzel_align",
-                    #     "controller": EnzelAlignTab,
-                    #     "button": self.main_frame.btn_tab_align_enzel,
-                    #     "panel": main_xrc.xrcpnl_tab_enzel_align
-                    # },
-                    # {
-                    #     "name": "mimas_align",
-                    #     "controller": MimasAlignTab,
-                    #     "button": self.main_frame.btn_tab_align_enzel,  # enzel alignment button is fine
-                    #     "panel": main_xrc.xrcpnl_tab_mimas_align
-                    # },
                 ])
 
             elif self.main_data.role == "mbsem":

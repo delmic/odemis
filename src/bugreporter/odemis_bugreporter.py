@@ -78,7 +78,7 @@ TOPIC_IDS = {
     "cl": 10,  # CL solution (SECOM, SPARC...)
     "test": 12,  # for testing only (no one receives these tickets messages!)
     "asia": 13,  # Delmic Asia
-    "cryo": 14,  # Cryo solution (METEOR, ENZEL...)
+    "cryo": 14,  # Cryo solution (METEOR...)
     "fast": 15,  # Fast imaging (FastEM...)
 }
 
@@ -705,7 +705,7 @@ class BugreporterFrame(wx.Frame):
         :return: the most likely topic ID for the current computer
         """
         hostname = os.uname().nodename.lower()
-        if "enzel" in hostname or "meteor" in hostname:
+        if "meteor" in hostname:
             return TOPIC_IDS["cryo"]
         elif "fast" in hostname:
             return TOPIC_IDS["fast"]

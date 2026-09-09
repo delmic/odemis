@@ -66,6 +66,8 @@ magic.odm.yaml
 /doc/develop/gui_cont.pdf
 /doc/develop/stream_view_diag.pdf
 /doc/develop/sys-arch.pdf
+/doc/develop/dataio_uml.pdf
+/doc/develop/module-dependencies.pdf
 
 # This directory contains the database from fluorophores.org
 # To fill it, run ./util/getfluodb.py

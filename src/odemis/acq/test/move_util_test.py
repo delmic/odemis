@@ -46,7 +46,6 @@ class TestGetDifferenceFunction(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Backend can be any of these : Meteor/Enzel/Mimas
         testing.start_backend(METEOR_TFS1_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)

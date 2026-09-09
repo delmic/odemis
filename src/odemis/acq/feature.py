@@ -493,7 +493,7 @@ class CryoFeatureAcquisitionTask(object):
                     levels = generate_zlevels(focuser=self.focus, zrange=(zmin, zmax), zstep=zstep)
 
                     # Only use zstack for the optical streams (not SEM), as that's the ones
-                    # the user is interested in on the METEOR/ENZEL.
+                    # the user is interested in on the METEOR.
                     zlevels = {s: levels for s in self.streams}
                     logging.warning(f"The zlevels for feature {site.name.value} are {zlevels}")
 

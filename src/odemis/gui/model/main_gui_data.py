@@ -189,7 +189,7 @@ class MainGUIData(object):
         self.stage_bare = None # stage in the chamber referential
         self.focus = None  # actuator to change the camera focus
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
-        self.stigmator = None  # actuator to change the optical astigmatism (METEOR/ENZEL)
+        self.stigmator = None  # actuator to change the optical astigmatism (METEOR)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.laser_mirror = None  # the scanner on confocal SECOM
         self.time_correlator = None  # life-time measurement on SECOM-FLIM or SPARC
@@ -211,7 +211,7 @@ class MainGUIData(object):
         self.ebeam_focus = None  # change the e-beam focus
         self.ebeam_blanker = None  # for advanced blanker control (eg, pulsed)
         self.ebeam_gun_exciter = None  # for advanced e-beam control (eg, pulsed)
-        self.fibsem = None  # Optional component to control the FIB/SEM on METEOR/MIMAS
+        self.fibsem = None  # Optional component to control the FIB/SEM on METEOR
         self.sed = None  # secondary electron detector
         self.bsd = None  # backscattered electron detector
         self.ebic = None  # electron beam-induced current detector
@@ -320,20 +320,16 @@ class MainGUIData(object):
 
             # Check for the most known microscope types that the basics are there
             required_roles = []
-            if self.role in ("secom", "delphi", "enzel"):
+            if self.role in ("secom", "delphi"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
-                if self.role in ("secom", "enzel"):
+                if self.role == "secom":
                     required_roles += ["align", "se-detector"]
-                if self.role == "enzel":
-                    required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
                 required_roles += ["light", "focus", "stage-bare"]
                 # add additional roles when fibsem control enabled
                 if self.fibsem:
                     required_roles += ["e-beam", "se-detector", "ebeam-focus",
                                        "ion-beam", "se-detector-ion"]
-            elif self.role == "mimas":
-                required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):
                 # SPARCv1 can also work without a lens
                 required_roles += ["e-beam"]
@@ -379,7 +375,7 @@ class MainGUIData(object):
                 # So the fine alignment dwell time should be at least 0.2 s.
                 self.fineAlignDwellTime.value = 0.5
 
-            if microscope.role in ["meteor", "enzel", "mimas"]:
+            if microscope.role == "meteor":
                 # List VA contains all the CryoFeatures
                 self.features = model.ListVA()
                 self.overviews = model.ListVA()
@@ -420,9 +416,9 @@ class MainGUIData(object):
 
         self.hw_settings_config = get_hw_settings_config(self.role)
 
-        self.posture_manager = None  # Posture manager for the microscope  (on METEOR/MIMAS)
+        self.posture_manager = None  # Posture manager for the microscope  (on METEOR)
 
-        # Used by the MIMAS, but needs to be initialized as empty for the SECOM & cryo microscopes.
+        # Needs to be initialized as empty for the SECOM & cryo microscopes.
         self.sample_centers: Dict[str, Tuple[float, float]] = {}  # sample name -> center position (x, y)
 
         # Set to True to request debug info to be displayed
@@ -534,7 +530,7 @@ class MainGUIData(object):
 
 class CryoMainGUIData(MainGUIData):
     """
-    Data common to all Cryo tabs (METEOR/ENZEL/MIMAS).
+    Data corresponding to METEOR tabs.
     """
     SAMPLE_RADIUS_TEM_GRID = 1.25e-3  # m, standard TEM grid size including the borders
     # Bounding-box relative to the center of a sample, corresponding to usable area

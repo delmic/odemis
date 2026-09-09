@@ -68,7 +68,6 @@ The microscope component can have as role:
  * secom: A SECOMv1 or SECOMv2
  * delphi: a DELPHI
  * meteor: a METEOR
- * enzel: an ENZEL
  * sparc: SPARCv1
  * sparc-simplex: a SPARC without any alignment controls (deprecated)
  * sparc2: SPARCv2
@@ -123,59 +122,6 @@ System:
     :align: center
 
     Schema of a SECOM confocal with fluorescence life-time imaging (FLIM) and the roles of the components
-
-Roles of components found in the ENZEL system:
-----------------------------------------------
-The role of the microscope is *enzel*.
-
-Emitters:
- * e-beam: Electron beam of the SEM to scan the sample.
- * light: Controls the excitation light of the fluorescence microscope.
-
-Actuators:
- * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z. 
- * filter: Emission filter to select a specific wavelength band. It has one axis: band.
- * stigmator: Controls the rotation of the astigmatic lens. It has one axis rz.
-
- * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz).
-   The component has the following metadata:
-
-    #. FAV_POS_DEACTIVE: Loading/unloading position.
-    #. FAV_POS_ACTIVE: Imaging position.
-    #. FAV_POS_COATING: Coating position of the gas injection system (GIS).
-    #. POS_ACTIVE_RANGE: The allowed position range during the FM/SEM imaging.
-    #. FAV_POS_SEM_IMAGING: The position for SEM imaging consisting of 5 axes.
-    #. FAV_POS_ALIGN: The initial position to start the alignment from.
-    #. ION_BEAM_TO_SAMPLE_ANGLE: Angle of the e-beam with the sample when rx = 0.
-
- * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has one metadata:
-  
-    #. FAV_POS_ACTIVE: The latest focus position for optical microscopy.
-
- * align: Alignment actuator. It has 2 axes: x and y. It has three metadata:
-
-    #. FAV_POS_ACTIVE: The position corresponding to alignment.
-    #. FAV_POS_DEACTIVE: The safe position to go such that the stage cannot hit the objective lens.
-    #. FAV_POS_ALIGN: The default position when doing alignment.
-
-Detectors:
- * se-detector: Secondary electron detector of the SEM. 
- * ccd: The main optical pixelated detector.
-
-System:
- * sample-thermostat: Controls the temperature of the sample finely. The metadata are:
-
-    #. SAFE_REL_RANGE: Safe operating temperature range relative to target temperature.
-    #. SAFE_SPEED_RANGE: Safe operating speed range.
-
- * cooler: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
- * lens: Defines the optical parameters (e.g magnification) of the optical path. 
-
-.. figure:: enzel-roles.*
-    :width: 50 %
-    :align: center
-
-    Schema of an ENZEL system and the roles of the components
 
 Roles of components found in the METEOR system:
 -----------------------------------------------

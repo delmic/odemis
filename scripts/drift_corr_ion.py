@@ -9,7 +9,7 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY o
 See the GNU General Public License for more details. You should have received a copy of the GNU General Public License
 along with Odemis. If not, see http://www.gnu.org/licenses/.
 
-This is a script to test the FIB drift correction for MIMAS. The anchor region is chosen for drift estimation after
+This is a script to test the FIB drift correction for METEOR. The anchor region is chosen for drift estimation after
 certain time delay for e.g. 1 minute and the beam is shifted to correct for the drift after estimation.
 
 run as:
@@ -57,7 +57,7 @@ def main(args):
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
-    parser = argparse.ArgumentParser(description="drift correction for MIMAS")
+    parser = argparse.ArgumentParser(description="drift correction for METEOR")
     parser.add_argument("--roi", dest="roi", required=True,
                         help="e-beam ROI positions (ltrb, relative to the SEM "
                              "field of view)")
