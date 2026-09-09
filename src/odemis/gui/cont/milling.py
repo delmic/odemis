@@ -83,7 +83,6 @@ def _get_milling_colour(task_name: str, idx: int) -> str:
 
 def pos_to_relative(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple[float, float]:
     """Convert the position from absolute position to relative position to the centre of image the given stream"""
-    # get the center of the image, center of the pattern
     stream_pos = ref_img.metadata[model.MD_POS]
 
     # get the difference between the two
@@ -94,7 +93,6 @@ def pos_to_relative(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple
 
 def pos_to_absolute(pos: Tuple[float, float], ref_img: model.DataArray) -> Tuple[float, float]:
     """Convert the position from relative to absolute coordinate position"""
-    # get the center of the image, center of the pattern
     stream_pos = ref_img.metadata[model.MD_POS]
 
     # get the difference between the two
@@ -141,20 +139,6 @@ def rectangle_pattern_to_shape(canvas,
 
     return rect
 
-def _point_to_xy(point: Any) -> Tuple[float, float]:
-    """Convert a point-like object to an x/y tuple.
-
-    Accepts both Vec-like objects exposing x/y and indexable 2-item sequences.
-    """
-    if hasattr(point, "x") and hasattr(point, "y"):
-        return float(point.x), float(point.y)
-
-    try:
-        return float(point[0]), float(point[1])
-    except Exception as exc:
-        raise ValueError(f"Unsupported point format: {point!r}") from exc
-
-
 def rectangle_dimensions_from_points(points: List[Any]) -> Tuple[float, float]:
     """Calculate rectangle width/height from ordered corner points.
 
@@ -163,9 +147,9 @@ def rectangle_dimensions_from_points(points: List[Any]) -> Tuple[float, float]:
     if len(points) < 3:
         raise ValueError(f"At least 3 points required, got {len(points)}")
 
-    x1, y1 = _point_to_xy(points[0])
-    x2, y2 = _point_to_xy(points[1])
-    x3, y3 = _point_to_xy(points[2])
+    x1, y1 = points[0]
+    x2, y2 = points[1]
+    x3, y3 = points[2]
 
     width = math.hypot(x2 - x1, y2 - y1)
     height = math.hypot(x3 - x2, y3 - y2)
@@ -186,9 +170,7 @@ class FibucialMillingTaskController:
         self._canvas = panel.vp_slm_fib_live.canvas
         self._editable_shape: Optional[EditableShape] = None
         self._va_connectors: List[VigilantAttributeConnector] = []
-        # self._milling_task_panel: Optional[MillingTaskPanel] = None
         self._updating_shapes = False
-        self._is_edit_dragging = False
         self._mill_future: Optional[model.ProgressiveFuture] = None
 
         self.cross_pattern = CrossPatternParameters(
@@ -210,18 +192,17 @@ class FibucialMillingTaskController:
             cnvs=self._canvas,
             shape_cls=RectangleOverlay,
             shape_creation_allowed=False)
+        # Keep overlay rendering enabled, but disable built-in mouse editing.
+        self.overlay.active.value = False
 
         self._canvas.add_world_overlay(self.overlay)
         self._canvas.Bind(wx.EVT_LEFT_DOWN, self._on_mouse_left_down)
-        self._canvas.Bind(wx.EVT_LEFT_UP, self._on_mouse_left_up)
-        self._canvas.Bind(wx.EVT_MOTION, self._on_mouse_motion)
 
         self._panel.btn_slm_run_milling.Bind(wx.EVT_BUTTON, self._run_milling)
         self._panel.btn_slm_milling_cancel.Bind(wx.EVT_BUTTON, self._cancel_milling)
         self._panel.btn_slm_milling_cancel.Hide()
         self._panel.txt_slm_milling_est_time.SetLabel("fibucial cross ready")
         self._create_milling_task_panel()
-        # self._bind_milling_controls()
         self._panel.Layout()
 
         if hasattr(self._fib_stream, "image"):
@@ -299,137 +280,37 @@ class FibucialMillingTaskController:
             # VA connector, bind events
             getattr(milling, param).subscribe(self._on_patterns)
 
-        # self._milling_task_panel = MillingTaskPanel(
-        #     parent=self._panel.pnl_slm_milling_task,
-        #     task=self.milling_task,
-        # )
-        # self._hide_task_panel_parameter("mode")
-        # self._panel.pnl_slm_milling_task._panel_sizer.Add(self._milling_task_panel, proportion=0, flag=wx.EXPAND)
         self._panel.pnl_slm_milling_task.Layout()
 
-        # force the scrolled parent to recompute its layout, otherwise pnl_patterns
-        # keeps the previous virtual size until the user triggers a resize
-        # self._panel.pnl_slm_milling_task.scr_win_right.FitInside()
-        # self._panel.pnl_slm_milling_task.scr_win_right.SendSizeEvent()
-
-    # def _hide_task_panel_parameter(self, parameter_name: str) -> None:
-    #     """Hide a parameter row in the generated milling panel.
-    #
-    #     :param parameter_name: Name of the parameter key in ctrl_dict.
-    #     """
-
-    #     if self._milling_task_panel is None:
-    #         return
-    #
-    #     ctrl = self._milling_task_panel.ctrl_dict.get(parameter_name)
-    #     if ctrl is None:
-    #         return
-    #
-    #     gb_sizer = self._milling_task_panel.gb_sizer
-    #     item = gb_sizer.GetItem(ctrl)
-    #     if item is None:
-    #         return
-    #
-    #     row = item.GetPos().GetRow()
-    #     label_item = gb_sizer.FindItemAtPosition((row, 0))
-    #     if label_item is not None and label_item.GetWindow() is not None:
-    #         label_item.GetWindow().Hide()
-    #     ctrl.Hide()
-
-    # def _bind_milling_controls(self) -> None:
-    #     """Bind SLM milling controls to fibucial pattern and milling settings."""
-    #     if self._milling_task_panel is None:
-    #         return
-    #
-    #     for control_name, control in self._milling_task_panel.ctrl_dict.items():
-    #         if control_name == "mode":
-    #             continue
-    #
-    #         va = None
-    #         if hasattr(self.cross_pattern, control_name):
-    #             va = getattr(self.cross_pattern, control_name)
-    #         elif hasattr(self.milling_task.milling, control_name):
-    #             va = getattr(self.milling_task.milling, control_name)
-    #
-    #         if va is None:
-    #             logging.warning("Missing SLM milling VA for %s", control_name)
-    #             continue
-    #
-    #         evt = wx.EVT_COMMAND_ENTER
-    #         if isinstance(va, model.BooleanVA):
-    #             evt = wx.EVT_CHECKBOX
-    #         elif isinstance(va, model.StringEnumerated):
-    #             evt = wx.EVT_COMBOBOX
-    #
-    #         if control is None:
-    #             logging.warning("Missing SLM milling control for %s", control_name)
-    #             continue
-    #         connector = VigilantAttributeConnector(
-    #             va,
-    #             control,
-    #             events=evt,
-    #         )
-    #         self._va_connectors.append(connector)
-    #         va.subscribe(self._on_cross_parameters_changed, init=False)
 
     def _on_patterns(self, _value: Any) -> None:
         """Redraw the fibucial cross when numeric controls update model values."""
         if self._updating_shapes:
             return
-        logging.warning(f"Pattern updated: {_value}")
+        logging.warning(f"Fibucial pattern updated")
         self.draw_cross_pattern()
 
-    # def _consume_event(self, evt: wx.Event) -> None:
-    #     """Stop event propagation when fibucial edit interactions are active."""
-    #     try:
-    #         evt.StopPropagation()
-    #     except Exception:
-    #         pass
-
     def _on_mouse_left_down(self, evt: wx.MouseEvent) -> None:
-        """Start shape edit interactions without forwarding to stage drag handlers."""
+        """Handle Ctrl+Shift click to reposition the fibucial cross on live FIB view."""
         active_canvas = evt.GetEventObject()
         logging.debug(f"mouse down event, canvas: {active_canvas}")
 
         if (evt.ShiftDown() and evt.ControlDown()) and self.allow_milling_pattern_move:
             pos = evt.GetPosition()
-            hovered_shape = self.overlay._get_shape(pos)
-            if hovered_shape is None:
+            ref_img = self._get_reference_image()
+            if ref_img is None:
                 return
-            logging.debug(f"Fibucial shape edit started, shape: {hovered_shape}, view pos = {pos}")
-            self._is_edit_dragging = True
-            self._set_editable_shape(hovered_shape)
-            # p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
-            # task = self.milling_task
-            # for pattern in task.patterns:
-            #     pattern.center.value = p_pos
-
-            self.overlay.on_left_down(evt)
+            p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
+            self.cross_pattern.center.value = (
+                p_pos[0] - ref_img.metadata[model.MD_POS][0],
+                p_pos[1] - ref_img.metadata[model.MD_POS][1],
+            )
+            self.draw_cross_pattern()
+            if self._editable_shape is not None:
+                self._editable_shape.selected.value = True
             return
 
         evt.Skip()
-
-    def _on_mouse_left_up(self, evt: wx.MouseEvent) -> None:
-        """Finish shape edit interactions and keep stage handlers suppressed."""
-        active_canvas = evt.GetEventObject()
-        logging.debug(f"mouse down event, canvas: {active_canvas}")
-
-        if not self._is_edit_dragging:
-            evt.Skip()
-            return
-
-        self.overlay.on_left_up(evt)
-        self._is_edit_dragging = False
-        # self._consume_event(evt)
-
-    def _on_mouse_motion(self, evt: wx.MouseEvent) -> None:
-        """Route drag motion to shape editing and prevent stage movement."""
-        if not self._is_edit_dragging:
-            evt.Skip()
-            return
-
-        self.overlay.on_motion(evt)
-        # self._consume_event(evt)
 
     def _get_reference_image(self) -> Optional[model.DataArray]:
         """Get the latest FIB image used as reference for coordinate conversion."""
@@ -437,18 +318,6 @@ class FibucialMillingTaskController:
         if image_va is None:
             return None
         return image_va.value
-
-    def _set_editable_shape(self, shape: Optional[EditableShape]) -> None:
-        """Switch the tracked editable shape and keep callback wiring in one place."""
-        if self._editable_shape is not None:
-            try:
-                self._editable_shape.points.unsubscribe(self._on_shape_points_changed)
-            except Exception:
-                logging.debug("Skipping stale shape callback during cleanup")
-
-        self._editable_shape = shape
-        if self._editable_shape is not None:
-            self._editable_shape.points.subscribe(self._on_shape_points_changed, init=False)
 
     def draw_cross_pattern(self) -> None:
         """Draw the symmetric cross rectangles from the model parameters."""
@@ -458,7 +327,7 @@ class FibucialMillingTaskController:
             return
 
         self._updating_shapes = True
-        self._set_editable_shape(None)
+        self._editable_shape = None
         self.overlay.clear()
         self.overlay.clear_labels()
 
@@ -469,14 +338,15 @@ class FibucialMillingTaskController:
                 ref_img=ref_img,
                 pattern=generated_pattern,
                 colour=MILLING_COLOURS_CANONICAL["Fibucial"],
-                name="fibucial" if idx == 0 else None,
+                name=f"fibucial_{idx}",
                 show_selection_points=False,
             )
             self.overlay.add_shape(shape)
             if idx == 0:
                 editable_shape = shape
 
-        self._set_editable_shape(editable_shape)
+        self._editable_shape = editable_shape
+
         self._updating_shapes = False
         self._canvas.request_drawing_update()
 
@@ -580,11 +450,7 @@ class FibucialMillingTaskController:
 
     def stop(self) -> None:
         """Tear down subscriptions and overlays on dialog close."""
-        self._set_editable_shape(None)
-        # self.cross_pattern.width.unsubscribe(self._on_patterns)
-        # self.cross_pattern.height.unsubscribe(self._on_patterns)
-        # self.cross_pattern.depth.unsubscribe(self._on_patterns)
-        # self.milling_task.milling.current.unsubscribe(self._on_patterns)
+        self._editable_shape = None
         self._va_connectors.clear()
         image_va = getattr(self._fib_stream, "image", None)
         if image_va is not None:
@@ -600,8 +466,7 @@ class FibucialMillingTaskController:
         except Exception:
             pass
         self._canvas.Unbind(wx.EVT_LEFT_DOWN, handler=self._on_mouse_left_down)
-        self._canvas.Unbind(wx.EVT_LEFT_UP, handler=self._on_mouse_left_up)
-        self._canvas.Unbind(wx.EVT_MOTION, handler=self._on_mouse_motion)
+
 
 class MillingTaskController:
     """
