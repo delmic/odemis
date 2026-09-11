@@ -475,6 +475,7 @@ class CryoAcquiController(object):
             current_feature = self._tab_data.main.currentFeature.value
             self._tab._acquired_stream_controller._clear_all_feature_streams_except(current_feature)
             self._refresh_current_feature_data()
+            save_project(self._tab_data.main)
             # Note: Do NOT call gc.collect() here as background threads may be loading
             # feature streams. Garbage collection will run naturally.
         except Exception as e:
@@ -891,15 +892,18 @@ class CryoAcquiController(object):
                     if correlation_dict.fm_pois:
                         # Update feature position according to POI in FM
                         pm = self._tab_data.main.posture_manager
-                        feature_stage_bare = feature.get_posture_position(Posture.FM_IMAGING)
+                        feature_stage_bare = feature.get_stage_bare_position(Posture.FM_IMAGING)
                         poi = correlation_dict.fm_pois[0]
                         poi_coords = poi.coordinates.value
-                        sample_pos = pm.to_sample_stage_from_stage_position(feature_stage_bare, posture=Posture.FM_IMAGING)
+                        sample_pos = pm.to_sample_stage_from_stage_position(
+                            feature_stage_bare,
+                            posture=Posture.FM_IMAGING,
+                        )
                         new_feature_stage_bare = pm.from_sample_stage_to_stage_position({"x":poi_coords[0],
                                                                                     "y":poi_coords[1],
                                                                                     "z":sample_pos["z"]}, posture=Posture.FM_IMAGING)
-                        feature.posture_positions[Posture.FM_IMAGING.value].update(new_feature_stage_bare)
-                        feature.fm_focus_position.value = {"z": poi_coords[2]}
+                        feature.set_stage_bare_position(Posture.FM_IMAGING, new_feature_stage_bare)
+                        feature.set_focus_position(Posture.FM_IMAGING, {"z": poi_coords[2]})
                     # Draw milling position in FIBSEM tab around the projected POI
                     target = correlation_dict.fib_projected_pois[0]
                     rel_pos = pos_to_relative(target.coordinates.value[:2], feature.reference_image)

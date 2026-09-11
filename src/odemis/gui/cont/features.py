@@ -23,17 +23,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import itertools
 import logging
 import os
+from typing import Dict, Optional, Tuple
 
 import wx
 
+from odemis import model
 from odemis.acq.feature import (
     FEATURE_ACTIVE,
     FEATURE_DEACTIVE,
     FEATURE_POLISHED,
     FEATURE_READY_TO_MILL,
     FEATURE_ROUGH_MILLED,
+    FM_POSTURES,
     CryoFeature,
-    get_feature_position_at_posture,
+    resolve_fm_focus_position,
+    resolve_stage_bare_position,
     FIBFMCorrelationData,
     Target,
     TargetType
@@ -76,7 +80,7 @@ class CryoFeatureController(object):
         # features va attributes (name, status..etc) connectors
         self._feature_name_va_connector = None
         self._feature_status_va_connector = None
-        self._feature_z_va_connector = None
+        self._focus_position_feature: Optional[CryoFeature] = None
 
         self._tab_data_model.main.features.subscribe(self._on_features_changes, init=True)
         self._tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes, init=True)
@@ -99,10 +103,11 @@ class CryoFeatureController(object):
         fibsem_mode = self.acqui_mode is guimod.AcquiMode.FIBSEM
         if fm_mode:
             self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
+            self._panel.ctrl_feature_z.Bind(wx.EVT_TEXT_ENTER, self._on_ctrl_feature_z_change)
         if fibsem_mode:
             self._panel.btn_feature_save_position.Bind(wx.EVT_BUTTON, self.save_milling_position)
             self._panel.btn_feature_save_position.Show(LICENCE_MILLING_ENABLED)
-            self.pm.current_posture.subscribe(self._on_posture_change)
+        self.pm.current_posture.subscribe(self._on_posture_change)
 
     def _on_btn_create_move_feature(self, _):
         # As this button is identical to clicking the feature tool,
@@ -132,7 +137,11 @@ class CryoFeatureController(object):
         # Use current focus to set currently selected feature
         feature: CryoFeature = self._tab_data_model.main.currentFeature.value
         if feature:
-            feature.fm_focus_position.value = self._main_data_model.focus.position.value
+            focus_position = self._main_data_model.focus.position.value
+            posture = self._get_focus_posture()
+            if posture is None:
+                return
+            feature.set_focus_position(posture, focus_position)
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -149,18 +158,7 @@ class CryoFeatureController(object):
             self._display_go_to_feature_warning()
             return
 
-        stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
-        fm_focus_position = feature.fm_focus_position.value
-
-        # move to feature position
-        logging.info(f"Moving to position: {stage_position}, focus: {fm_focus_position}, posture: {current_posture}")
-        self.pm.stage.moveAbs(stage_position)
-
-        # if fm imaging, move focus too
-        if current_posture == Posture.FM_IMAGING:
-            self._main_data_model.focus.moveAbs(fm_focus_position)
-
-        return
+        self._tab_data_model.move_to_feature(feature)
 
 
     def _move_to_posture(self, feature: CryoFeature, posture: "Posture", recalculate: bool = False):
@@ -173,10 +171,12 @@ class CryoFeatureController(object):
             return
 
         # get the position at the posture
-        position = get_feature_position_at_posture(pm=self.pm,
-                                                   feature=feature,
-                                                   posture=posture,
-                                                   recalculate=recalculate)
+        position = resolve_stage_bare_position(
+            pm=self.pm,
+            feature=feature,
+            posture=posture,
+            recalculate=recalculate,
+        )
 
         logging.info(f"Moving to {posture} position: {position}")
 
@@ -238,11 +238,32 @@ class CryoFeatureController(object):
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans == wx.ID_OK
 
-    def _on_posture_change(self, posture: int):
+    @call_in_wx_main
+    def _on_posture_change(self, posture: Posture) -> None:
+        """
+        Update the feature controls for the current microscope posture.
+
+        :param posture: The current microscope posture.
+        """
         if posture not in SUPPORTED_POSTURES:
-            logging.warning(f"Invalid posture: {posture}, supported postures are: {SUPPORTED_POSTURES}")
+            logging.debug(f"Unsupported feature posture: {posture}")
             return
-        self._enable_feature_ctrls(True)
+        feature = self._tab_data_model.main.currentFeature.value
+        if self.acqui_mode is guimod.AcquiMode.FIBSEM:
+            self._enable_feature_ctrls(feature is not None)
+        else:
+            focus_enabled = feature is not None and posture in FM_POSTURES
+            self._panel.ctrl_feature_z.Enable(focus_enabled)
+            self._panel.btn_use_current_z.Enable(
+                focus_enabled and self._panel.fp_settings_secom_optical.IsShown()
+            )
+            if focus_enabled:
+                focus_position = resolve_fm_focus_position(
+                    feature,
+                    posture,
+                    self._main_data_model.focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+                )
+                self._panel.ctrl_feature_z.SetValue(focus_position["z"])
 
     def _enable_feature_ctrls(self, enable: bool):
         """
@@ -323,8 +344,9 @@ class CryoFeatureController(object):
         if self._feature_status_va_connector:
             self._feature_status_va_connector.disconnect()
 
-        if self._feature_z_va_connector:
-            self._feature_z_va_connector.disconnect()
+        if self._focus_position_feature is not None:
+            self._focus_position_feature.focus_position_changed.unsubscribe(self._on_focus_position_change)
+            self._focus_position_feature = None
 
         self._update_feature_cmb_list()
 
@@ -360,9 +382,18 @@ class CryoFeatureController(object):
             targets = []
             if self.correlation_target.fm_fiducials:
                 targets.append(self.correlation_target.fm_fiducials)
-            stage_pos = feature.get_posture_position(Posture.FM_IMAGING)
-            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=Posture.FM_IMAGING)
-            feature_focus = feature.fm_focus_position.value
+            focus_posture = self._get_focus_posture() or Posture.FM_IMAGING
+            stage_pos = resolve_stage_bare_position(
+                self.pm,
+                feature,
+                focus_posture,
+            )
+            feature_sample_stage = self.pm.to_sample_stage_from_stage_position(stage_pos, posture=focus_posture)
+            feature_focus = resolve_fm_focus_position(
+                feature,
+                focus_posture,
+                self._main_data_model.focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+            )
 
             poi = Target(x=feature_sample_stage["x"], y=feature_sample_stage["y"],
                          z=feature_focus["z"], name="POI-1", type=TargetType.PointOfInterest,
@@ -383,19 +414,43 @@ class CryoFeatureController(object):
             self._tab_data_model.main.currentTarget.value = None
             self._tab_data_model.main.targets.value = []
 
-        # TODO: check, it seems that sometimes the EVT_TEXT_ENTER is first received
-        # by the VAC, before the widget itself, which prevents getting the right value.
         if self.acqui_mode is guimod.AcquiMode.FLM:
-            self._feature_z_va_connector = VigilantAttributeConnector(feature.fm_focus_position,
-                                                                    self._panel.ctrl_feature_z,
-                                                                    events=wx.EVT_TEXT_ENTER,
-                                                                    ctrl_2_va=self._on_ctrl_feature_z_change,
-                                                                    va_2_ctrl=self._on_feature_focus_pos)
+            feature.focus_position_changed.subscribe(self._on_focus_position_change)
+            self._focus_position_feature = feature
+            focus_posture = self._get_focus_posture()
+            focus_enabled = focus_posture is not None
+            self._panel.ctrl_feature_z.Enable(focus_enabled)
+            self._panel.btn_use_current_z.Enable(
+                focus_enabled and self._panel.fp_settings_secom_optical.IsShown()
+            )
+            if focus_posture is not None:
+                fm_focus_position = resolve_fm_focus_position(
+                    feature,
+                    focus_posture,
+                    self._main_data_model.focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+                )
+                self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
 
-    def _on_feature_focus_pos(self, fm_focus_position: dict):
-        # Set the feature Z ctrl with the focus position
-        self._panel.ctrl_feature_z.SetValue(fm_focus_position["z"])
+    @call_in_wx_main
+    def _on_focus_position_change(self, change: Tuple[Posture, Dict[str, float]]) -> None:
+        """
+        Update the feature Z control after a stored focus position changes.
+
+        :param change: The posture and updated focus position.
+        """
+        posture, position = change
+        if posture == self._get_focus_posture():
+            self._panel.ctrl_feature_z.SetValue(position["z"])
         save_project(self._tab_data_model.main)
+
+    def _get_focus_posture(self) -> Optional[Posture]:
+        """
+        Get the active FM posture.
+
+        :return: The current FM posture, or None outside an FM posture.
+        """
+        posture = self.pm.current_posture.value
+        return posture if posture in FM_POSTURES else None
 
     def _on_feature_name(self, _):
         # Force an update of the list of features
@@ -438,14 +493,17 @@ class CryoFeatureController(object):
         if feature:
             return self._panel.cmb_feature_status.GetValue()
 
-    def _on_ctrl_feature_z_change(self):
+    def _on_ctrl_feature_z_change(self, _) -> None:
         """
-        Get the current feature Z ctrl value to set feature focus position
-        :return: (dict) feature focus position
+        Store the feature focus position entered in the Z control.
+
+        :param _: The control event, which is not used.
         """
         # HACK: sometimes the event is first received by this handler and later
         # by the UnitFloatCtrl. So the value is not yet computed => Force it, just in case.
         self._panel.ctrl_feature_z.on_text_enter(None)
         zpos = self._panel.ctrl_feature_z.GetValue()
-
-        return {"z": zpos}
+        feature = self._tab_data_model.main.currentFeature.value
+        posture = self._get_focus_posture()
+        if feature and posture is not None:
+            feature.set_focus_position(posture, {"z": zpos})

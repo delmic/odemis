@@ -413,7 +413,7 @@ class AutomatedMillingManager(object):
         self._future.set_progress()
 
         # milling position
-        stage_position = feature.get_posture_position(Posture.MILLING)
+        stage_position = feature.get_stage_bare_position(Posture.MILLING)
 
         # move to position
         self._future.running_subf = self.stage.moveAbs(stage_position)

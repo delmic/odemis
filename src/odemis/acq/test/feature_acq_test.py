@@ -31,7 +31,7 @@ from odemis import model
 from odemis.acq.feature import (
     CryoFeature,
     acquire_at_features,
-    get_feature_position_at_posture,
+    resolve_stage_bare_position,
 )
 from odemis.acq.stream import FluoStream
 from odemis.util import testing
@@ -94,10 +94,16 @@ class TestCryoFeatureAcquisitionTask(unittest.TestCase):
         # create some features
         focus_pos = cls.focus.position.value
         cls.features = [
-            CryoFeature('Feature-1', fm_pos_grid1_p1, focus_pos),
-            CryoFeature('Feature-2', fm_pos_grid1_p2, focus_pos),
-            CryoFeature('Feature-3', fm_pos_grid1_p3, focus_pos),
+            CryoFeature('Feature-1'),
+            CryoFeature('Feature-2'),
+            CryoFeature('Feature-3'),
         ]
+        for feature, stage_position in zip(
+            cls.features,
+            (fm_pos_grid1_p1, fm_pos_grid1_p2, fm_pos_grid1_p3),
+        ):
+            feature.set_stage_bare_position(Posture.FM_IMAGING, stage_position)
+            feature.set_focus_position(Posture.FM_IMAGING, focus_pos)
 
         cls.filename = "TEST_ONLY_FEATURE_ACQ.ome.tiff"
         cls.GLOB_PATH = cls.filename.replace(".ome.tiff", "*.ome.tiff")
@@ -179,28 +185,29 @@ class TestCryoFeaturePosturePositions(unittest.TestCase):
         pos.update(self.pm.get_posture_orientation(Posture.SEM_IMAGING))
 
         # set the stage position
-        feature = CryoFeature("Feature-1",
-                              stage_position=pos,
-                              fm_focus_position={"z": 1.69e-3})
+        feature = CryoFeature("Feature-1")
+        feature.set_focus_position(Posture.FM_IMAGING, {"z": 1.69e-3})
 
         # get posture position
-        feature.set_posture_position(posture=Posture.SEM_IMAGING, position=pos)
-        sem_pos = feature.get_posture_position(Posture.SEM_IMAGING)
+        feature.set_stage_bare_position(posture=Posture.SEM_IMAGING, position=pos)
+        sem_pos = feature.get_stage_bare_position(Posture.SEM_IMAGING)
         self.assertTrue(isNearPosition(sem_pos, pos, axes=self.all_axes))
 
         # doesn't exist yet, return None
-        fm_pos = feature.get_posture_position(Posture.FM_IMAGING)
+        fm_pos = feature.get_stage_bare_position(Posture.FM_IMAGING)
         self.assertIsNone(fm_pos)
 
         # convert the stage position to all supported postures
         for posture in self.pm.postures:
 
-            ppos = get_feature_position_at_posture(pm=self.pm,
-                                                  feature=feature,
-                                                  posture=posture)
+            ppos = resolve_stage_bare_position(
+                pm=self.pm,
+                feature=feature,
+                posture=posture,
+            )
 
             self.assertTrue(isNearPosition(ppos,
-                                           feature.get_posture_position(posture),
+                                           feature.get_stage_bare_position(posture),
                                            axes=self.all_axes))
             self.assertEqual(self.pm.get_current_posture(ppos), posture)
 

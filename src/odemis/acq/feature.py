@@ -28,6 +28,7 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable
@@ -67,6 +68,39 @@ FEATURE_ACTIVE, FEATURE_READY_TO_MILL, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, F
 REFERENCE_IMAGE_FILENAME = "Reference-Alignment-FIB.ome.tiff"
 
 USER_MILLING_TASKS_PATH = os.path.expanduser("~/.config/odemis/milling_tasks.yaml")
+
+FM_POSTURES = frozenset((Posture.FM_IMAGING, Posture.FIB_VIEW_FM))
+
+
+@dataclass
+class FeaturePosturePosition:
+    """Positions associated with a feature at a specific microscope posture."""
+
+    stage_bare: Optional[Dict[str, float]] = None
+    fm_focus: Optional[Dict[str, float]] = None
+
+    def to_dict(self) -> Dict[str, Dict[str, float]]:
+        """
+        Convert the posture position to its project-file representation.
+
+        :return: The serialized posture position.
+        """
+        data = {}
+        if self.stage_bare is not None:
+            data["stage_bare"] = self.stage_bare
+        if self.fm_focus is not None:
+            data["fm_focus"] = self.fm_focus
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Dict[str, float]]) -> "FeaturePosturePosition":
+        """
+        Create a posture position from project data.
+
+        :param data: The serialized posture position.
+        :return: The deserialized posture position.
+        """
+        return cls(stage_bare=data.get("stage_bare"), fm_focus=data.get("fm_focus"))
 
 
 # define the target types
@@ -165,23 +199,19 @@ class CryoFeature(object):
     """
     Model class for a cryo interesting feature
     """
-    def __init__(self, name: str,
-                 stage_position: Dict[str, float],
-                 fm_focus_position: Dict[str, float],
-                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None, correlation_data=None):
+    def __init__(self,
+                 name: str,
+                 milling_tasks: Optional[Dict[str, MillingTaskSettings]] = None,
+                 correlation_data=None):
         """
         :param name: (string) the feature name
-        :param stage_position: (dict) the stage position of the feature (stage-bare)
-        :param fm_focus_position: (dict) the focus position of the feature
+        :param milling_tasks: milling task settings indexed by task name
         :param correlation_data: (Dict[str,FIBFMCorrelationData]) Dictionary mapping the feature status to
         FIBFMCorrelationData, where feature status like Active, Rough Milled or polished is the key.
         """
         self.name = model.StringVA(name)
-        # FIXME: The 'position' parameter should eventually contain the SampleStage coordinates and not stage bare from the stage_position!
-        self.position = model.VigilantAttribute(stage_position, unit="m") # sample stage aka "ideal stage", with x, y, z axes
-        self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare, in the first posture found # TODO: drop
-        self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
-        self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
+        self.posture_positions: Dict[Posture, FeaturePosturePosition] = {}
+        self.focus_position_changed = model.VigilantAttribute(None)
 
         if milling_tasks is None:
             # Find the default milling tasks, starting by looking into the config directory, and then
@@ -215,23 +245,48 @@ class CryoFeature(object):
         self.superz_focused: Optional[bool] = None  # True if super z focus has high accuracy, False otherwise,
         # If None, it means that the super z focus was not used.
 
-    def set_posture_position(self, posture: "Posture", position: Dict[str, float]) -> None:
+    def set_stage_bare_position(self, posture: "Posture", position: Dict[str, float]) -> None:
         """
-        Set the stage position for the given posture.
-        :param posture: the posture to set the position for
-        :param position: the position to set
+        Set the stage-bare position for the given posture.
+
+        :param posture: The posture to set the position for.
+        :param position: The stage-bare position to store.
         """
         # TODO: once the stage has access to it, it should check that the position is within the
         # allowed range for the given posture (see SEM_IMAGING_RANGE, FM_IMAGING_RANGE)
-        self.posture_positions[posture.value] = position
+        posture_position = self.posture_positions.setdefault(posture, FeaturePosturePosition())
+        posture_position.stage_bare = dict(position)
 
-    def get_posture_position(self, posture: "Posture") -> Optional[Dict[str, float]]:
+    def get_stage_bare_position(self, posture: "Posture") -> Optional[Dict[str, float]]:
         """
-        Get the stage position for the given posture.
-        :param posture: the posture to get the position for
-        :return: the position for the given posture
+        Get the stage-bare position for the given posture.
+
+        :param posture: The posture to get the position for.
+        :return: The stored position, or None if no position is available.
         """
-        return self.posture_positions.get(posture.value, None)
+        posture_position = self.posture_positions.get(posture)
+        return posture_position.stage_bare if posture_position is not None else None
+
+    def set_focus_position(self, posture: "Posture", position: Dict[str, float]) -> None:
+        """
+        Set the focus position for the given posture.
+
+        :param posture: The posture to set the focus position for.
+        :param position: The focus position to store.
+        """
+        posture_position = self.posture_positions.setdefault(posture, FeaturePosturePosition())
+        posture_position.fm_focus = dict(position)
+        self.focus_position_changed.value = (posture, dict(position))
+
+    def get_focus_position(self, posture: "Posture") -> Optional[Dict[str, float]]:
+        """
+        Get the focus position for the given posture.
+
+        :param posture: The posture to get the focus position for.
+        :return: The stored focus position, or None if no position is available.
+        """
+        posture_position = self.posture_positions.get(posture)
+        return posture_position.fm_focus if posture_position is not None else None
 
     def save_milling_task_data(self,
                                stage_position: Dict[str, float],
@@ -266,13 +321,13 @@ class CryoFeature(object):
         exporter.export(filename, reference_image)
 
         # save the milling position (it can be updated by the user)
-        self.set_posture_position(posture=Posture.MILLING, position=stage_position)
+        self.set_stage_bare_position(posture=Posture.MILLING, position=stage_position)
 
         # set the feature status to ready to mill
         self.status.value = FEATURE_READY_TO_MILL
 
         logging.info(f"Milling tasks: {self.milling_tasks}, path: {self.path}, Reference image: {filename}")
-        logging.info(f"Stage position for milling: {self.get_posture_position(Posture.MILLING)}")
+        logging.info(f"Stage position for milling: {self.get_stage_bare_position(Posture.MILLING)}")
         logging.info(f"Feature {self.name.value} is ready to mill.")
 
 def feature_decoder(feature_raw: Dict) -> CryoFeature:
@@ -288,17 +343,20 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     correlation_data = {}
     if "correlation_data" in feature_raw:
         correlation_data = feature_raw["correlation_data"]
-    stage_position = feature_raw['stage_position']
-    fm_focus_position = feature_raw['fm_focus_position']
     posture_positions = feature_raw.get('posture_positions', {})
     milling_task_json = feature_raw.get('milling_tasks', {})
-    feature = CryoFeature(name=feature_raw['name'],
-                          stage_position=stage_position,
-                          fm_focus_position=fm_focus_position
-                          )
+    decoded_posture_positions = {
+        Posture(posture): FeaturePosturePosition.from_dict(position)
+        for posture, position in posture_positions.items()
+    }
+    feature = CryoFeature(name=feature_raw['name'])
+    for posture, position in decoded_posture_positions.items():
+        if position.stage_bare is not None:
+            feature.set_stage_bare_position(posture, position.stage_bare)
+        if position.fm_focus is not None:
+            feature.set_focus_position(posture, position.fm_focus)
     feature.correlation_data = FIBFMCorrelationData.from_dict(correlation_data) if correlation_data else None
     feature.status.value = feature_raw['status']
-    feature.posture_positions = posture_positions
     feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
     feature.path = feature_raw.get('path', None)
     feature.superz_stream_name = feature_raw.get('superz_stream_name', None)
@@ -319,31 +377,75 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
             logging.warning(f"Reference image for feature {feature.name.value} not found in {filename}")
     return feature
 
-def get_feature_position_at_posture(pm: MicroscopePostureManager,
-                                    feature: CryoFeature,
-                                    posture: "Posture",
-                                    recalculate: bool = False) -> Dict[str, float]:
-    """Get the feature position at the given posture, if it doesn't exist, create it.
-    :param pm: the posture manager
-    :param feature: the feature to get the position for
-    :param posture: the posture to get the position for
-    :param recalculate: if True, force recalculate the position, otherwise use the existing one
-    :return: the position for the given posture"""
+def resolve_stage_bare_position(pm: MicroscopePostureManager,
+                                feature: CryoFeature,
+                                posture: "Posture",
+                                recalculate: bool = False) -> Dict[str, float]:
+    """
+    Resolve the feature's stage-bare position for the given posture.
+
+    A missing position is calculated from another stored posture and cached.
+
+    :param pm: The posture manager used to transform the position.
+    :param feature: The feature whose position is requested.
+    :param posture: The posture to resolve the position for.
+    :param recalculate: Whether to recalculate an existing position.
+    :return: The stage-bare position for the given posture.
+    """
     if posture == Posture.UNKNOWN:
         raise ValueError("Cannot compute position for UNKNOWN posture")
 
-    position = feature.get_posture_position(posture)
+    position = feature.get_stage_bare_position(posture)
 
     # if the position doesn't exist at that posture, create it
     if position is None or recalculate:
         try:
             logging.info(f"Feature position for {feature.name.value} at {posture} posture doesn't exist. Creating it.")
-            position = pm.to_posture(feature.stage_position.value, posture)
-            feature.set_posture_position(posture=posture, position=position)
+            # Use the first stored position from another posture as the known
+            # source for the posture transform. The posture list is small and
+            # next() stops as soon as a suitable position is found.
+            source = next(
+                (
+                    (source_posture, source_position.stage_bare)
+                    for source_posture, source_position in feature.posture_positions.items()
+                    if source_position.stage_bare is not None and source_posture != posture
+                ),
+                None,
+            )
+            if source is None:
+                raise ValueError(
+                    f"Feature {feature.name.value} has no stage position to convert"
+                )
+            source_posture, source_position = source
+            position = pm.to_posture(
+                source_position,
+                posture,
+                source_posture=source_posture,
+            )
+            feature.set_stage_bare_position(posture=posture, position=position)
         except Exception as e:
             logging.error(f"Error while converting feature position to {posture} posture: {e}")
             raise
 
+    return position
+
+def resolve_fm_focus_position(feature: CryoFeature,
+                              posture: "Posture",
+                              fallback_position: Dict[str, float]) -> Dict[str, float]:
+    """
+    Resolve the feature's FM focus position for the given posture.
+
+    A missing position is initialized from the supplied fallback and cached.
+
+    :param feature: The feature whose FM focus position is requested.
+    :param posture: The FM posture to resolve the focus position for.
+    :param fallback_position: The focus position to use when none is stored.
+    :return: The FM focus position for the given posture.
+    """
+    position = feature.get_focus_position(posture)
+    if position is None:
+        feature.set_focus_position(posture, fallback_position)
+        position = feature.get_focus_position(posture)
     return position
 
 def load_feature_streams_from_disk(feature: "CryoFeature") -> None:
@@ -546,20 +648,22 @@ class CryoFeatureAcquisitionTask(object):
             if conf >= self.autofocus_conf_level:
 
                 # update the feature focus position
-                site.fm_focus_position.value = {"z": foc_pos}
+                site.set_focus_position(Posture.FM_IMAGING, {"z": foc_pos})
                 logging.debug(f"auto focus succeeded at {site.name.value} with conf:{conf}. new focus position: {foc_pos}")
             else:
                 # if the confidence is low, restore the previous focus position
-                self._move_focus(site, site.fm_focus_position.value)
-                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {site.fm_focus_position.value}")
+                fm_focus_position = site.get_focus_position(Posture.FM_IMAGING)
+                self._move_focus(site, fm_focus_position)
+                logging.debug(f"auto focus failed due at {site.name.value} with conf:{conf}. restoring focus position {fm_focus_position}")
 
         except TimeoutError as e:
             logging.debug(f"Timed out during autofocus at {site.name.value}. {e}")
             self._future._running_subf.cancel()
 
             # restore the previous focus position
-            self._move_focus(site, site.fm_focus_position.value)
-            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {site.fm_focus_position.value}")
+            fm_focus_position = site.get_focus_position(Posture.FM_IMAGING)
+            self._move_focus(site, fm_focus_position)
+            logging.warning(f"auto focus timed out at {site.name.value}. restoring focus position {fm_focus_position}")
 
     def _move_to_site(self, site: CryoFeature):
         """
@@ -567,8 +671,16 @@ class CryoFeatureAcquisitionTask(object):
         :param site: The site to move to.
         :raises MoveError: if the stage failed to move to the given site.
         """
-        stage_position = get_feature_position_at_posture(pm=self.pm, feature=site, posture=Posture.FM_IMAGING) # stage-bare
-        fm_focus_position = site.fm_focus_position.value
+        stage_position = resolve_stage_bare_position(
+            pm=self.pm,
+            feature=site,
+            posture=Posture.FM_IMAGING,
+        )
+        fm_focus_position = resolve_fm_focus_position(
+            site,
+            Posture.FM_IMAGING,
+            self.focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+        )
         logging.debug(f"For feature {site.name.value} moving the stage to {stage_position}")
         self._future.running_subf = self.stage.moveAbs(stage_position)
 
@@ -646,9 +758,11 @@ class CryoFeatureAcquisitionTask(object):
         for f in self.features:
             if f.status.value == FEATURE_DEACTIVE:
                 continue
-            positions.append(get_feature_position_at_posture(pm=self.pm,
-                                                             feature=f,
-                                                             posture=Posture.FM_IMAGING))
+            positions.append(resolve_stage_bare_position(
+                pm=self.pm,
+                feature=f,
+                posture=Posture.FM_IMAGING,
+            ))
 
         stage_movement_time = 0
         for start, end in zip(positions[0:-1], positions[1:]):

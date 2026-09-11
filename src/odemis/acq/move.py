@@ -900,13 +900,23 @@ class MeteorPostureManager(MicroscopePostureManager):
         milling_angle = stage_tilt - self.pre_tilt - column_tilt + math.radians(90)
         return milling_angle
 
-    def to_posture(self, pos: Dict[str, float], posture: Posture) -> Dict[str, float]:
+    def to_posture(
+        self,
+        pos: Dict[str, float],
+        posture: Posture,
+        source_posture: Optional[Posture] = None,
+    ) -> Dict[str, float]:
         """Convert a stage-bare position to a position in the target posture.
         :param pos: stage position in the stage-bare coordinates
         :param posture: the target posture of the stage
+        :param source_posture: posture of the supplied position. If None, it is inferred from the position.
         :return: stage-bare position in the target posture"""
 
-        position_posture = self.get_current_posture(pos)
+        position_posture = (
+            source_posture
+            if source_posture is not None
+            else self.get_current_posture(pos)
+        )
 
         logging.info(f"Position Posture: {position_posture}, Target Posture: {posture}")
 

@@ -51,7 +51,7 @@ LEGACY_POSTURE_REGISTRY = {
 }
 
 PROJECT_NAME = "project.json"
-PROJECT_VERSION = "1.0"
+PROJECT_VERSION = "2.0"
 LEGACY_PROJECT_NAME = "features.json"
 IMG_FILENAME = "filename"
 IMG_IN_FILE_IDS = "in_file_indices"
@@ -148,6 +148,16 @@ def load_project(project_dir: os.PathLike) -> dict:
                 continue  # already a string key, no migration needed
             new_key = LEGACY_POSTURE_REGISTRY.get(posture_key_int, Posture.UNKNOWN).value
             feature["posture_positions"][new_key] = feature["posture_positions"].pop(posture_key)
+
+        for posture_key, position in feature["posture_positions"].items():
+            if "stage_bare" not in position and "fm_focus" not in position:
+                feature["posture_positions"][posture_key] = {"stage_bare": position}
+
+        fm_focus_position = feature.pop("fm_focus_position", None)
+        if fm_focus_position is not None:
+            fm_position = feature["posture_positions"].setdefault(Posture.FM_IMAGING.value, {})
+            fm_position.setdefault("fm_focus", fm_focus_position)
+        feature.pop("stage_position", None)
     return {"overviews": overviews, "features": features}
 
 
@@ -166,9 +176,10 @@ def serialize_project_data(main_data: "CryoMainGUIData") -> Dict:
         feature_item = {
             'name': feature.name.value,
             'status': feature.status.value,
-            'stage_position': feature.stage_position.value,
-            'fm_focus_position': feature.fm_focus_position.value,
-            'posture_positions': feature.posture_positions,
+            'posture_positions': {
+                posture.value: position.to_dict()
+                for posture, position in feature.posture_positions.items()
+            },
             "milling_tasks": {k: v.to_dict() for k, v in feature.milling_tasks.items()},
             'correlation_data': feature.correlation_data.to_dict() if feature.correlation_data  else {},
             'superz_stream_name': feature.superz_stream_name,

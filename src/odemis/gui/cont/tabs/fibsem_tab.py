@@ -430,10 +430,10 @@ class FibsemTab(Tab):
         logging.debug(f"Updating existing feature positions with the updated milling angle ({math.degrees(milling_angle):.2f}°)")
         # NOTE: use stage_tilt, not milling_angle
         for feature in self.main_data.features.value:
-            milling_position = feature.get_posture_position(Posture.MILLING)
+            milling_position = feature.get_stage_bare_position(Posture.MILLING)
             if milling_position is not None:
                 milling_position["rx"] = stage_tilt
-                feature.set_posture_position(Posture.MILLING, milling_position)
+                feature.set_stage_bare_position(Posture.MILLING, milling_position)
 
         if already_at_milling:
             # Normally this happens automatically when clicking the ProgressRadioButton, but since we are now not

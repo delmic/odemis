@@ -30,7 +30,14 @@ from typing import Dict, Tuple, Optional, List
 
 import odemis.acq.stream as acqstream
 from odemis import model
-from odemis.acq.feature import CryoFeature, get_feature_position_at_posture, Target, TargetType
+from odemis.acq.feature import (
+    FM_POSTURES,
+    CryoFeature,
+    Target,
+    TargetType,
+    resolve_fm_focus_position,
+    resolve_stage_bare_position,
+)
 from odemis.acq.align.z_localization import ensure_stig_calib_format
 from odemis.acq.move import Posture
 from odemis.gui import conf
@@ -266,6 +273,34 @@ class CryoGUIData(MicroscopyGUIData):
         # for export tool
         self.acq_fileinfo = VigilantAttribute(None)  # a FileInfo
 
+    def move_to_feature(self, feature: CryoFeature, posture: Optional[Posture] = None) -> None:
+        """
+        Move the stage and, for an FM posture, the focus to a feature.
+
+        :param feature: The feature to move to.
+        :param posture: The target posture. If omitted, use the current posture.
+        """
+        if posture is None:
+            posture = self.main.posture_manager.get_current_posture()
+
+        stage_position = resolve_stage_bare_position(
+            pm=self.main.posture_manager,
+            feature=feature,
+            posture=posture,
+        )
+        logging.info("Moving to feature %s at %s posture: %s",
+                     feature.name.value, posture, stage_position)
+        self.main.posture_manager.stage.moveAbs(stage_position)
+
+        if posture in FM_POSTURES:
+            focus_position = resolve_fm_focus_position(
+                feature,
+                posture,
+                self.main.focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+            )
+            logging.info("Moving focus to: %s", focus_position)
+            self.main.focus.moveAbs(focus_position)
+
     def add_new_target(self, x: float, y: float, type: TargetType, z: Optional[float] = None) -> Optional[Target]:
         """Targets added when tools in toolbox bar are toggled or when keyboard shortcuts are used.
         :param x: x position of the target
@@ -282,7 +317,14 @@ class CryoGUIData(MicroscopyGUIData):
 
         fm_focus_position = self.main.focus.position.value['z']
         existing_names = [str(f.name.value) for f in self.main.targets.value]
-        z_val = z if z is not None else feature.fm_focus_position.value['z']
+        posture = self.main.posture_manager.get_current_posture()
+        focus_posture = posture if posture in FM_POSTURES else Posture.FM_IMAGING
+        feature_focus_position = resolve_fm_focus_position(
+            feature,
+            focus_posture,
+            self.main.focus.getMetadata()[model.MD_FAV_POS_ACTIVE],
+        )
+        z_val = z if z is not None else feature_focus_position['z']
 
         if type == TargetType.Fiducial:
             t_name = make_unique_name("FM-1", existing_names)
@@ -312,40 +354,32 @@ class CryoGUIData(MicroscopyGUIData):
         self.main.currentTarget.value = target
         return target
 
-    def add_new_feature(self, stage_position: Dict[str, float],
-                        fm_focus_position: Dict[str, float] = None,
-                        f_name: Optional[str] = None) -> CryoFeature:
+    def create_feature(self, name: Optional[str] = None) -> CryoFeature:
         """
-        Create a new feature and add it to the features list
-        :param stage_position: the position of the feature in stage-bare coordinates. The posture is
-        guessed from the position
-        :param f_name: the name of the feature. If None, a unique name is generated.
-        """
-        # set the posture position
-        pm = self.main.posture_manager
-        posture = pm.get_current_posture(stage_position)
+        Create an unregistered feature with a unique name.
 
-        if not f_name:
+        :param name: The feature name. If None, a unique name is generated.
+        :return: The unregistered feature.
+        """
+        if not name:
             existing_names = [f.name.value for f in self.main.features.value]
-            f_name = make_unique_name("Feature-1", existing_names)
-        if fm_focus_position is None:
-            # if the focus position is not provided:
-            # at FM posture: use the current focus position
-            # otherwise: use the active focus position
-            if posture == Posture.FM_IMAGING:
-                fm_focus_position = self.main.focus.position.value
-            else:
-                md = self.main.focus.getMetadata()
-                fm_focus_position = md[model.MD_FAV_POS_ACTIVE]
-        feature = CryoFeature(f_name, stage_position, fm_focus_position)
-        for p in pm.postures: # calculate the position at all postures
-            get_feature_position_at_posture(pm, feature, p)
+            name = make_unique_name("Feature-1", existing_names)
 
-        logging.debug("Adding new feature %s at stage position %s, postures are: %s", f_name, stage_position, feature.posture_positions)
+        return CryoFeature(name)
 
+    def add_feature(self, feature: CryoFeature) -> None:
+        """
+        Register a fully initialized feature.
+
+        :param feature: The feature to register and select.
+        """
+        logging.debug(
+            "Adding feature %s with posture positions: %s",
+            feature.name.value,
+            feature.posture_positions,
+        )
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
-        return feature
 
     # Todo: find the right margin
     ATOL_FEATURE_POS = 0.1e-3  # m
@@ -360,7 +394,11 @@ class CryoGUIData(MicroscopyGUIData):
 
         def dist_to_pos(feature):
             pm = self.main.posture_manager
-            position = get_feature_position_at_posture(pm, feature, pm.current_posture.value)
+            position = resolve_stage_bare_position(
+                pm,
+                feature,
+                pm.current_posture.value,
+            )
             pos = pm.to_sample_stage_from_stage_position(position)
             sample_stages_pos = pm.to_sample_stage_from_stage_position(current_position)
             # Note: we can get the sample stage position direction from: self.stage.position.value
@@ -381,7 +419,18 @@ class CryoGUIData(MicroscopyGUIData):
 
         # No feature nearby => create a new one
         current_position = copy.deepcopy(self.main.stage_bare.position.value)
-        self.add_new_feature(stage_position=current_position)
+        posture = self.main.posture_manager.current_posture.value
+        if posture == Posture.UNKNOWN:
+            logging.warning("Cannot create a feature while the microscope posture is unknown")
+            return
+        if posture not in self.main.posture_manager.postures:
+            raise ValueError(f"Cannot create a feature at {posture} posture")
+
+        feature = self.create_feature()
+        feature.set_stage_bare_position(posture, current_position)
+        if posture in FM_POSTURES:
+            feature.set_focus_position(posture, self.main.focus.position.value)
+        self.add_feature(feature)
         logging.debug(f"No feature found nearby. New feature created at {current_position}.")
 
 

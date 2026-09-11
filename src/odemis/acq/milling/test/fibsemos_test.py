@@ -262,7 +262,7 @@ class TestConvertMillingTasksToMillingStages(unittest.TestCase):
 
 class TestResolveFeatureReferenceImage(unittest.TestCase):
     def test_returns_in_memory_reference_image(self):
-        feature = CryoFeature(name="f1", stage_position={}, fm_focus_position={})
+        feature = CryoFeature(name="f1")
         da = model.DataArray(numpy.zeros((10, 12), dtype=numpy.uint16), metadata={model.MD_DIMS: "YX"})
         feature.reference_image = da
 
@@ -270,7 +270,7 @@ class TestResolveFeatureReferenceImage(unittest.TestCase):
         self.assertIs(out, da)
 
     def test_raises_if_missing_in_memory(self):
-        feature = CryoFeature(name="f1", stage_position={}, fm_focus_position={})
+        feature = CryoFeature(name="f1")
         setattr(feature, "reference_image", None)
 
         with self.assertRaises(ValueError):
