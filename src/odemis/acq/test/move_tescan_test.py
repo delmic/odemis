@@ -315,6 +315,12 @@ class TestMeteorTescan1FibsemMove(move_tfs3_test.TestMeteorTFS3Move):
         time.sleep(0.5)
         testing.assert_pos_almost_equal(sample_stage.position.value, initial_sample_stage_pos, atol=4e-6)
 
+    def test_milling_position_contains_only_stage_axes(self):
+        sem_position = self.pm.get_target_position(Posture.SEM_IMAGING)
+        milling_position = self.pm.to_posture(sem_position, Posture.MILLING)
+
+        self.assertLessEqual(milling_position.keys(), self.stage_bare.axes.keys())
+
     def test_fib_view_fm_movements(self):
         """Test that milling <> fib-view fm switches work as expected"""
         self.stage_bare.moveAbs(self.stage_grid_centers[Posture.GRID_1.value]).result()

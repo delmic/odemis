@@ -166,6 +166,8 @@ class CryoFeatureController(object):
             )
 
         stage_position = get_feature_position_at_posture(pm=self.pm, feature=feature, posture=current_posture)
+        # Older projects may contain posture metadata that is not a movable stage axis.
+        stage_position = {axis: value for axis, value in stage_position.items() if axis in self.pm.stage.axes}
         fm_focus_position = feature.fm_focus_position.value
 
         # move to feature position
