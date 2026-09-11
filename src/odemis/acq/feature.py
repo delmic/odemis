@@ -182,6 +182,10 @@ class CryoFeature(object):
         self.stage_position = model.VigilantAttribute(stage_position, unit="m") # stage-bare, in the first posture found # TODO: drop
         self.fm_focus_position = model.VigilantAttribute(fm_focus_position, unit="m")
         self.posture_positions: Dict[str, Dict[str, float]] = {} # positions for each posture
+        # Position of the feature within the saved FIB reference image, in meters
+        # relative to the image center. The milling posture position remains the
+        # stage position at the center of that image, used by automated milling.
+        self.milling_feature_offset = model.TupleVA(None, unit="m")
 
         if milling_tasks is None:
             # Find the default milling tasks, starting by looking into the config directory, and then
@@ -232,6 +236,24 @@ class CryoFeature(object):
         :return: the position for the given posture
         """
         return self.posture_positions.get(posture.value, None)
+
+    def set_milling_feature_offset(self,
+                                   position: Tuple[float, float],
+                                   move_patterns: bool = True) -> None:
+        """Set the feature position relative to the saved FIB image center.
+
+        :param position: Physical (x, y) offset in meters from the saved FIB
+            reference-image center, expressed in sample-stage axes.
+        :param move_patterns: If True, snap the milling-pattern stack to the
+            feature. Manual pattern movement uses a separate controller path.
+        """
+        position = tuple(position)
+        if move_patterns:
+            for task in self.milling_tasks.values():
+                for pattern in task.patterns:
+                    pattern.center.value = position
+        # Update this last so redraw subscribers see the complete state.
+        self.milling_feature_offset.value = position
 
     def save_milling_task_data(self,
                                stage_position: Dict[str, float],
@@ -300,6 +322,9 @@ def feature_decoder(feature_raw: Dict) -> CryoFeature:
     feature.status.value = feature_raw['status']
     feature.posture_positions = posture_positions
     feature.milling_tasks = {k: MillingTaskSettings.from_dict(v) for k, v in milling_task_json.items()}
+    milling_feature_offset = feature_raw.get('milling_feature_offset')
+    if milling_feature_offset is not None:
+        feature.milling_feature_offset.value = tuple(milling_feature_offset)
     feature.path = feature_raw.get('path', None)
     feature.superz_stream_name = feature_raw.get('superz_stream_name', None)
     feature.superz_focused = feature_raw.get('superz_focused', None)

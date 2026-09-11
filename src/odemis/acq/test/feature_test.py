@@ -65,6 +65,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         self.path = os.path.join(os.getcwd(), feature.name.value)
         reference_image = model.DataArray(numpy.zeros(shape=(1024, 1536)), metadata={})
         milling_tasks = load_milling_tasks(DEFAULT_MILLING_TASKS_PATH)
+        milling_feature_offset = (12e-6, -8e-6)
 
         # randomly remove some milling tasks (to simulate user choice)
         task_name = random.choice(list(milling_tasks.keys()))
@@ -77,10 +78,15 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
             reference_image=reference_image,
             milling_tasks=milling_tasks
         )
+        feature.set_milling_feature_offset(milling_feature_offset)
 
         self.assertEqual(feature.path, self.path)
         self.assertEqual(feature.reference_image.shape, reference_image.shape)
         self.assertEqual(feature.get_posture_position(Posture.MILLING), stage_position)
+        self.assertEqual(feature.milling_feature_offset.value, milling_feature_offset)
+        for task in feature.milling_tasks.values():
+            for pattern in task.patterns:
+                self.assertEqual(pattern.center.value, milling_feature_offset)
         self.assertEqual(feature.status.value, FEATURE_READY_TO_MILL)
         self.assertEqual(set(feature.milling_tasks.keys()), set(milling_tasks.keys()))
 

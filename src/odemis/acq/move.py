@@ -2304,12 +2304,11 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
 
         # Call out calibrated values and stage tilt and rotation angles
         calibrated_values = stage_md[model.MD_CALIB]
-        mill_pos_active = stage_md[model.MD_FAV_MILL_POS_ACTIVE].copy()
+        mill_pos_active = self.get_posture_orientation(Posture.MILLING)
 
         # Define values that are used more than once
         rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
-        rx_mill = self.calculate_stage_tilt()
-        mill_pos_active["rx"] = rx_mill  # update the computed rx based on the milling angle
+        rx_mill = mill_pos_active["rx"]
 
         z_ct = calibrated_values["z_ct"]
         b_y = calibrated_values["b_y"]

@@ -443,13 +443,34 @@ class MillingTaskController:
 
     def move_milling_tasks(self, pos: Tuple[float, float]):
         """
-        Update the position of the milling patterns for the current feature.
-        Also updates the saved positions, and redraws the patterns on the viewport.
+        Update only the milling patterns for the current feature.
+
+        This is the independent Ctrl+Shift+click movement path and must not move
+        the feature marker.
         :param pos: the position to draw the patterns at (in m, as relative coordinates to the center of the ion-beam FoV)
         """
-        for task in self.milling_tasks.values():
+        feature = self._tab_data.main.currentFeature.value
+        if feature is None:
+            logging.warning("Cannot move milling tasks without a selected feature.")
+            return
+
+        for task in feature.milling_tasks.values():
             for pattern in task.patterns:
                 pattern.center.value = pos
+
+        save_project(self._tab_data.main)
+        self.draw_milling_tasks()
+
+    def set_milling_feature_position(self,
+                                     pos: Tuple[float, float],
+                                     move_patterns: bool = True) -> None:
+        """Commit the feature marker and optionally snap patterns around it."""
+        feature = self._tab_data.main.currentFeature.value
+        if feature is None:
+            logging.warning("Cannot position milling feature without a selected feature.")
+            return
+
+        feature.set_milling_feature_offset(pos, move_patterns=move_patterns)
 
         save_project(self._tab_data.main)
         self.draw_milling_tasks()
