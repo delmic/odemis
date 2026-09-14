@@ -502,8 +502,6 @@ class FastEMOverviewAcquiController(object):
             logging.debug("Resuming acquisition")
             self.acq_future.resume()
             self._is_paused = False
-            if self._fs_connector:
-                self._fs_connector.resume()
             self.btn_pause.SetLabel("Pause")
             self._set_status_message("Acquisition resumed.")
         else:
@@ -533,8 +531,6 @@ class FastEMOverviewAcquiController(object):
     @call_in_wx_main
     def _on_pause_failed(self):
         """Reset GUI if pausing failed (e.g., the acquisition finished in the meantime)."""
-        if self._fs_connector:
-            self._fs_connector.resume()
         self.btn_pause.Enable()
         self.btn_pause.SetLabel("Pause")
         self.btn_cancel.Enable()
@@ -545,12 +541,11 @@ class FastEMOverviewAcquiController(object):
     @call_in_wx_main
     def _on_actually_paused(self):
         """Re-enable the relevant buttons once the acquisition is truly paused.
-        Also freezes the progress bar and label by pausing the connector timer.
+        The progress bar and label are automatically frozen while the future
+        reports itself as paused (see ProgressiveFutureConnector).
         """
         if not self._is_paused:
             return  # Resumed or cancelled in the meantime; nothing to do.
-        if self._fs_connector:
-            self._fs_connector.pause()
         self.btn_pause.SetLabel("Resume")
         self.btn_pause.Enable()
         self.btn_cancel.Enable()
@@ -1773,8 +1768,6 @@ class FastEMMultiBeamAcquiController(object):
             self.main_tab_data.is_acquisition_paused.value = False
             self._enable_pending_roa_checkboxes(False)
             self.btn_pause.SetLabel("Pause")
-            if self._fs_connector:
-                self._fs_connector.resume()
         else:
             # Find the currently running ROA sub-future that supports pause
             running_future = next(
@@ -1824,12 +1817,11 @@ class FastEMMultiBeamAcquiController(object):
     def _on_actually_paused(self):
         """
         Re-enable the relevant buttons once the ROA acquisition is truly paused.
-        Also freezes the progress bar and label by pausing the connector timer.
+        The progress bar and label are automatically frozen while the future
+        reports itself as paused (see ProgressiveFutureConnector).
         """
         if not self._is_paused:
             return  # Resumed or cancelled in the meantime; nothing to do.
-        if self._fs_connector:
-            self._fs_connector.pause()
         self.main_tab_data.is_acquisition_paused.value = True
         self._enable_pending_roa_checkboxes(True)
         self.btn_pause.SetLabel("Resume")
