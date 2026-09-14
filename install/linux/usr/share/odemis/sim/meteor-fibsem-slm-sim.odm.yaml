@@ -324,8 +324,8 @@
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 0.069007226, "s": 0.0027454942},  # m, m
-        FAV_POS_DEACTIVE:{"l":0, "s": 0},
+        FAV_POS_ACTIVE: {"l": 122.2e-3, "s": 0},  # m, m
+        FAV_POS_DEACTIVE:{"l":-2.5e-3, "s": 0},
     },
 }
 
@@ -370,7 +370,7 @@
         # To change what the "good" focus position is on the simulator
         # It's needed for not using the initial value, which is at deactive position.
          FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
-         ROTATION: -0.099484,  # [rad] (=-5.7°)
+         ROTATION: 0,  # [rad] (=0°)
     },
 }
 
@@ -443,7 +443,7 @@
             'z': {
                 # -11.5mm is safely parked (FAV_POS_DEACTIVE)
                 # 1.7mm is typically in focus (FAV_POS_ACTIVE)
-                range: [-15.e-3, 5.e-3],
+                range: [-11.e-3, 15.e-3],
                 unit: 'm',
                 channel: 0,
             },
@@ -451,9 +451,9 @@
     },
     metadata: {
         # Loading position to retract lens
-        FAV_POS_DEACTIVE: {'z': -11.5e-3},
+        FAV_POS_DEACTIVE: {'z': -10.5e-3},
         # Initial active position (close from the sample, but not too close, for safety)
-        FAV_POS_ACTIVE: {'z': 1.69e-3}
+        FAV_POS_ACTIVE: {'z': 9.0e-3}
     },
     affects: ["SLM Camera"],
 }
@@ -483,9 +483,11 @@
     },
     init: {
       axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
-      rotation: -0.8034946943806713, # rad , -45°
+        shear: [0, -1], # (0, -1/tan(45°)) 
+        scale: [1.4142135623730951, -1], # (-1/sin(45°), -1)
     },
-}
+    }
+
 
 "SLM Alignment Stage": {
     class: actuator.MultiplexActuator,
@@ -493,19 +495,21 @@
     dependencies: {
         "x": "SLM Lens Arm",
         "y": "Linked LZ",
-        "z": "SLM Optical Focus",
+        "z": "Linked LZ",
     },
     init: {
         axes_map: {
             "x": "s", # direct SLM alignment x
             "y": "x", # linked combination of lens-arm l and objective z
-            "z": "z", # direct objective z
+            "z": "y", # linked combination of lens-arm l and objective z
         },
     },
     affects: ["SLM Camera"],
+#    metadata: {
+#        POS_ACTIVE_RANGE: {"x": [-2.1.e-3, 2.1.e-3], "y": [-30.e-3, 25.e-3], "z": [-11.e-3, 15.e-3]}
+#    },
     metadata: {
-        # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
-        POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-10.e-3, 20.e-3]}
+        POS_ACTIVE_RANGE: {"x": [-2.1e-3, 2.1e-3], "y": [-30.e-3, 25.e-3], "z": [-11.e-3, 15.e-3]}
     },
 }
 
