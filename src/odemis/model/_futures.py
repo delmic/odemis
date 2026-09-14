@@ -296,15 +296,26 @@ class CancellableFuture(futures.Future):
         # As long as it's None, the future cannot be cancelled while running
         self.task_canceller = None
 
-        self.can_pause = False
+        self.can_pause = False  # to be used by the instantiator of the future indicating pausing/resuming is allowed
+
+        # Event that is set when the future is actually paused (ie, blocked in wait_if_paused()). Cleared when the
+        # future is resumed or cancelled.
         self._is_paused_event = threading.Event()
-        self._run_allowed_evt = threading.Event()
-        self._run_allowed_evt.set()
+
+        # Event that is set when the future is allowed to run (ie, not paused). Cleared when pause() is called,
+        # set when resume() is called.
+        self._run_allowed_event = threading.Event()
+        self._run_allowed_event.set()
 
     @property
     def is_pause_requested(self) -> bool:
         """Return True if a pause has been requested but not yet acknowledged."""
-        return not self._run_allowed_evt.is_set()
+        return not self._run_allowed_event.is_set()
+
+    @property
+    def is_paused(self) -> bool:
+        """Return True if the future is currently actually paused, ie, blocked in wait_if_paused()."""
+        return self._is_paused_event.is_set()
 
     def cancel(self):
         """Cancel the future if possible.
@@ -339,7 +350,7 @@ class CancellableFuture(futures.Future):
         If the future is already cancelled or finished, return False immediately.
         If the future is still pending, block until it starts running and then block
         until it is paused. If the future is already running, block until it reaches
-        a pause checkpoint and is paused.
+        a pause checkpoint and is paused or finished/cancelled.
 
         For ProgressiveFuture instances, progress tracking is frozen while paused:
         elapsed time does not advance and the estimated remaining time is held constant.
@@ -354,13 +365,13 @@ class CancellableFuture(futures.Future):
             if self._state in (FINISHED, CANCELLED, CANCELLED_AND_NOTIFIED):
                 return False
             elif self._state in (RUNNING, PENDING):
-                self._run_allowed_evt.clear()
+                self._run_allowed_event.clear()
 
         while not self._is_paused_event.wait(0.1):
             # Block until task is fully paused (wait_if_paused started waiting)
             if self.done():  # done includes finished and canceled
                 return False
-            if self._run_allowed_evt.is_set():
+            if self._run_allowed_event.is_set():
                 # The pause was cancelled by a resume() call, so we cannot pause anymore
                 return False
 
@@ -380,7 +391,7 @@ class CancellableFuture(futures.Future):
         if not self.can_pause:
             return
 
-        self._run_allowed_evt.set()
+        self._run_allowed_event.set()
         # Do NOT clear _is_paused_event here: it is owned by wait_if_paused(),
         # which clears it in its finally block. Clearing it here would race
         # with pause()'s confirmation check, allowing pause() to return True
@@ -403,14 +414,14 @@ class CancellableFuture(futures.Future):
 
         :returns: the duration spent paused in seconds, or 0.0 if not paused.
         """
-        if self._run_allowed_evt.is_set():
+        if self._run_allowed_event.is_set():
             return 0.0
 
         t = time.monotonic()
         self._is_paused_event.set()
 
         try:
-            while not self._run_allowed_evt.wait(0.1):
+            while not self._run_allowed_event.wait(0.1):
                 if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                     raise CancelledError()
                 if self._state == FINISHED:
@@ -655,7 +666,7 @@ class ProgressiveFuture(CancellableFuture):
 
         :returns: the duration spent paused in seconds (0 if not paused).
         """
-        if self._run_allowed_evt.is_set():
+        if self._run_allowed_event.is_set():
             return 0.0
 
         # Freeze the time anchor before entering the pause. Hold the condition
