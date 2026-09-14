@@ -536,9 +536,14 @@ class CryoAcquiController(object):
         """
         Called after exporting the data
         """
+        try:
+            data = future.result()
+        except Exception:
+            logging.exception("Failed to save acquired data to file")
+            self._reset_acquisition_gui(text="Failed to save data (see log panel).", state=ST_FAILED)
+            return
         self._reset_acquisition_gui(state=ST_FINISHED)
         self._update_acquisition_time()
-        data = future.result()
         self._display_acquired_data(data)
 
     def _create_cryo_filename(self, filename: str, acq_type: Optional[str] = None) -> str:

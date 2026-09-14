@@ -1295,7 +1295,22 @@ def assembleZCube(images, zlevels):
         :param images:  (list of DataArray of shape YX) list of z ordered images
         :param zlevels:  (list of float) list of focus positions
         :return: (DataArray of shape ZYX) the data array of the xyz cube
+        :raises ValueError: if images is empty or the images have inconsistent spatial shapes
         """
+        if not images:
+            raise ValueError("Cannot assemble z-cube from an empty image list")
+
+        # Validate that all images have the same spatial (YX) dimensions.
+        # With NumPy < 1.24, numpy.array() silently creates an object-dtype array,
+        # instead of generating the expected 3D array
+        ref_shape = images[0].shape[-2:]
+        for idx, im in enumerate(images[1:], start=1):
+            if im.shape[-2:] != ref_shape:
+                raise ValueError(
+                    "Z-stack image %d has shape %s, inconsistent with first image shape %s"
+                    % (idx, im.shape[-2:], ref_shape)
+                )
+
         # images is a list of 3 dim data arrays.
         # Will fail on purpose if the images contain more than 2 dimensions
         ret = numpy.array([im.reshape(im.shape[-2:]) for im in images])
