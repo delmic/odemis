@@ -836,23 +836,27 @@ class Sparc2AlignTab(Tab):
             main_data.brightlight_ext.power.value = main_data.brightlight_ext.power.range[0]
 
         # Mirror auto-alignment
+        self._support_mirror_auto_align = False
         if sparc_calib_available and main_data.mirror and main_data.stage and main_data.ccd and main_data.ebeam_focus:
             mirror_md = main_data.mirror.getMetadata()
             calib = mirror_md.get(model.MD_CALIB, {})
-            if "auto_align_min_step_size" in calib and "ebeam_working_distance" in calib:
-                # hidden by default in xrc file
-                self.panel.lbl_step_size_z.Show(True)
-                self.panel.slider_stage.Show(True)
-                self.panel.lbl_pz.Show(True)
-                self.panel.btn_p_stage_z.Show(True)
-                self.panel.btn_m_stage_z.Show(True)
-                self.panel.lbl_mz.Show(True)
-                self.panel.btn_auto_align.Show(True)
-                self.panel.gauge_auto_align.Show(True)
-                self.panel.gauge_auto_align.SetRange(100)
-                self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
-                self._mirror_auto_align_future = model.InstantaneousFuture()
-                logging.debug("Mirror auto-alignment enabled.")
+            self._support_mirror_auto_align = ("auto_align_min_step_size" in calib and "ebeam_working_distance" in calib)
+
+        if self._support_mirror_auto_align:
+            # hidden by default in xrc file
+            self.panel.lbl_step_size_z.Show(True)
+            self.panel.slider_stage.Show(True)
+            self.panel.lbl_pz.Show(True)
+            self.panel.btn_p_stage_z.Show(True)
+            self.panel.btn_m_stage_z.Show(True)
+            self.panel.lbl_mz.Show(True)
+            self.panel.btn_auto_align.Show(True)
+            self.panel.gauge_auto_align.Show(True)
+            self.panel.gauge_auto_align.SetRange(100)
+            self.panel.btn_auto_align.Bind(wx.EVT_BUTTON, self._on_btn_auto_align)
+            self._mirror_auto_align_future = model.InstantaneousFuture()
+            logging.debug("Mirror auto-alignment enabled.")
+
 
         slider_ss_map = {}
         btn_actuator_map = {}
@@ -1227,6 +1231,10 @@ class Sparc2AlignTab(Tab):
                 self._mirror_settings_controller.enable(False)
 
             self.panel.pnl_mirror.Show(True)
+            if self._support_mirror_auto_align:
+                self.panel.btn_auto_align.Show(True)
+                self.panel.gauge_auto_align.Show(True)
+
             self.panel.pnl_lens_mover.Show(True)
             self.panel.pnl_lens_mover.Enable(False)  # Will be enabled once the lens is at the correct place
             self.panel.pnl_lens_switch.Show(False)
@@ -1254,6 +1262,10 @@ class Sparc2AlignTab(Tab):
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(True)
+            if self._support_mirror_auto_align:
+                self.panel.btn_auto_align.Show(True)
+                self.panel.gauge_auto_align.Show(True)
+
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
@@ -1507,6 +1519,10 @@ class Sparc2AlignTab(Tab):
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Show(True)
+            # Even if the mirror auto-alignment is supported, we don't support it in Tunnel mode.
+            self.panel.btn_auto_align.Show(False)
+            self.panel.gauge_auto_align.Show(False)
+
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
             self.panel.pnl_focus.Show(False)
