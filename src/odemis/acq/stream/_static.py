@@ -697,7 +697,7 @@ class StaticSpectrumStream(StaticStream):
         # This is for "average spectrum" projection
         # cached list of wavelength for each pixel pos
         wl, unit_bw = spectrum.get_spectrum_range(image)
-        self._wl_px_values = numpy.array(wl, copy=False)  # Force it to be a numpy array
+        self._wl_px_values = numpy.asarray(wl)  # Force it to be a numpy array
         min_bw, max_bw = self._wl_px_values[0], self._wl_px_values[-1]
         cwl = (max_bw + min_bw) / 2
         width = (max_bw - min_bw) / 12
@@ -735,7 +735,7 @@ class StaticSpectrumStream(StaticStream):
 
                 # If time metadata is not found, "px" will be used as unit.
                 tl, unit_t = spectrum.get_time_range(image)
-                self._tl_px_values = numpy.array(tl, copy=False)  # Force it to be a numpy array
+                self._tl_px_values = numpy.asarray(tl)  # Force it to be a numpy array
                 min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
 
                 # Allow to select the time as any value within the range, and the
