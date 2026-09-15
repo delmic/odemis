@@ -315,6 +315,18 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Ratio of the forward sweep duration over the total blanking cycle.",
                 "event": wx.EVT_SCROLL_CHANGED,
             }),
+            ("riseTime", {
+                "tooltip": "Duration of the rising edge.",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "accuracy": 3,
+                "key_step_min": 1e-9,
+            }),
+            ("fallTime", {
+                "tooltip": "Duration of the falling edge.",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "accuracy": 3,
+                "key_step_min": 1e-9,
+            }),
             ("delay", {  # Should be shown on a separate component (ex: streak-delay)
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
