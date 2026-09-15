@@ -203,11 +203,24 @@ def convert_pattern_to_fibsemos(p: MillingPatternParameters) -> 'BasePattern':
     else:
         raise NotImplementedError(f"Conversion not implemented for pattern type: {type(p)}")
 
+
+def _apply_spot_size_correction(dimension: float, correction: float, dimension_name: str) -> float:
+    """Reduce a scan dimension by the measured opening excess."""
+    corrected_dimension = dimension - correction
+    if corrected_dimension <= 0:
+        raise ValueError(
+            f"Spot size correction {correction} m makes the {dimension_name} non-positive "
+            f"({corrected_dimension} m)."
+        )
+    return corrected_dimension
+
+
 def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePattern':
     """Convert an Odemis rectangle pattern to a fibsemOS RectanglePattern."""
+    correction = p.spot_size_correction.value
     return RectanglePattern(
-        width=p.width.value,
-        height=p.height.value,
+        width=_apply_spot_size_correction(p.width.value, correction, "rectangle width"),
+        height=_apply_spot_size_correction(p.height.value, correction, "rectangle height"),
         depth=p.depth.value,
         rotation=p.rotation.value,
         scan_direction=p.scan_direction.value,
@@ -216,20 +229,24 @@ def _convert_rectangle_pattern(p: RectanglePatternParameters) -> 'RectanglePatte
 
 def _convert_trench_pattern(p: TrenchPatternParameters) -> 'TrenchPattern':
     """Convert an Odemis trench pattern to a fibsemOS TrenchPattern."""
+    correction = p.spot_size_correction.value
     return TrenchPattern(
-        width=p.width.value,
-        upper_trench_height=p.height.value,
-        lower_trench_height=p.height.value,
-        spacing=p.spacing.value,
+        width=_apply_spot_size_correction(p.width.value, correction, "trench width"),
+        upper_trench_height=_apply_spot_size_correction(p.height.value, correction, "upper trench height"),
+        lower_trench_height=_apply_spot_size_correction(p.height.value, correction, "lower trench height"),
+        # fibsemOS derives trench centers from height and spacing. Increasing
+        # spacing keeps the smaller sent rectangles centered on the displayed ones.
+        spacing=p.spacing.value + correction,
         depth=p.depth.value,
         point=Point(x=p.center.value[0], y=p.center.value[1])
     )
 
 def _convert_microexpansion_pattern(p: MicroexpansionPatternParameters) -> 'MicroExpansionPattern':
     """Convert an Odemis microexpansion pattern to a fibsemOS MicroExpansionPattern."""
+    correction = p.spot_size_correction.value
     return MicroExpansionPattern(
-        width=p.width.value,
-        height=p.height.value,
+        width=_apply_spot_size_correction(p.width.value, correction, "microexpansion width"),
+        height=_apply_spot_size_correction(p.height.value, correction, "microexpansion height"),
         depth=p.depth.value,
         distance=p.spacing.value,
         point=Point(x=p.center.value[0], y=p.center.value[1])

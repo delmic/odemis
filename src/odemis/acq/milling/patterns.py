@@ -56,7 +56,9 @@ class MillingPatternParameters(ABC):
 class RectanglePatternParameters(MillingPatternParameters):
     """Represents rectangle pattern parameters"""
 
-    def __init__(self, width: float, height: float, depth: float, rotation: float = 0.0, center = (0, 0), scan_direction: str = "TopToBottom", name: str = "Rectangle"):
+    def __init__(self, width: float, height: float, depth: float, rotation: float = 0.0,
+                 center=(0, 0), scan_direction: str = "TopToBottom", name: str = "Rectangle",
+                 spot_size_correction: float = 0.0):
         self.name = model.StringVA(name)
         self.width = model.FloatContinuous(width, unit="m", range=(1e-9, 900e-6))
         self.height = model.FloatContinuous(height, unit="m", range=(1e-9, 900e-6))
@@ -64,6 +66,9 @@ class RectanglePatternParameters(MillingPatternParameters):
         self.rotation = model.FloatContinuous(rotation, unit="rad", range=(0, 2 * math.pi))
         self.center = model.TupleContinuous(center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
         self.scan_direction = model.StringEnumerated(scan_direction, choices=set(["TopToBottom", "BottomToTop", "LeftToRight", "RightToLeft"]))
+        self.spot_size_correction = model.FloatContinuous(
+            spot_size_correction, unit="m", range=(0, 900e-6)
+        )
 
     def to_dict(self) -> dict:
         """Convert the parameters to a json object"""
@@ -75,6 +80,7 @@ class RectanglePatternParameters(MillingPatternParameters):
                 "center_x": self.center.value[0],
                 "center_y": self.center.value[1],
                 "scan_direction": self.scan_direction.value,
+                "spot_size_correction": self.spot_size_correction.value,
                 "pattern": "rectangle"
                 }
 
@@ -87,7 +93,8 @@ class RectanglePatternParameters(MillingPatternParameters):
                                         rotation=data.get("rotation", 0),
                                         center=(data.get("center_x", 0), data.get("center_y", 0)),
                                         scan_direction=data.get("scan_direction", "TopToBottom"),
-                                        name=data.get("name", "Rectangle"))
+                                        name=data.get("name", "Rectangle"),
+                                        spot_size_correction=data.get("spot_size_correction", 0.0))
 
     def __repr__(self) -> str:
         return f"{self.to_dict()}"
@@ -101,13 +108,17 @@ class RectanglePatternParameters(MillingPatternParameters):
 class TrenchPatternParameters(MillingPatternParameters):
     """Represents trench pattern parameters"""
 
-    def __init__(self, width: float, height: float, depth: float, spacing: float, center = (0, 0), name: str = "Trench"):
+    def __init__(self, width: float, height: float, depth: float, spacing: float,
+                 center=(0, 0), name: str = "Trench", spot_size_correction: float = 0.0):
         self.name = model.StringVA(name)
         self.width = model.FloatContinuous(width, unit="m", range=(1e-9, 900e-6))
         self.height = model.FloatContinuous(height, unit="m", range=(1e-9, 900e-6))
         self.depth = model.FloatContinuous(depth, unit="m", range=(1e-9, 100e-6))
         self.spacing = model.FloatContinuous(spacing, unit="m", range=(1e-9, 900e-6))
         self.center = model.TupleContinuous(center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
+        self.spot_size_correction = model.FloatContinuous(
+            spot_size_correction, unit="m", range=(0, 900e-6)
+        )
 
     def to_dict(self) -> dict:
         """Convert the parameters to a json object"""
@@ -118,6 +129,7 @@ class TrenchPatternParameters(MillingPatternParameters):
                 "spacing": self.spacing.value,
                 "center_x": self.center.value[0],
                 "center_y": self.center.value[1],
+                "spot_size_correction": self.spot_size_correction.value,
                 "pattern": "trench"
         }
 
@@ -129,7 +141,8 @@ class TrenchPatternParameters(MillingPatternParameters):
                                         depth=data["depth"],
                                         spacing=data["spacing"],
                                         center=(data.get("center_x", 0), data.get("center_y", 0)),
-                                        name=data.get("name", "Trench"))
+                                        name=data.get("name", "Trench"),
+                                        spot_size_correction=data.get("spot_size_correction", 0.0))
 
     def __repr__(self) -> str:
         return f"{self.to_dict()}"
@@ -141,6 +154,7 @@ class TrenchPatternParameters(MillingPatternParameters):
         height = self.height.value
         depth = self.depth.value
         spacing = self.spacing.value
+        spot_size_correction = self.spot_size_correction.value
         center = self.center.value
 
         # pattern center
@@ -157,6 +171,7 @@ class TrenchPatternParameters(MillingPatternParameters):
                 rotation=0,
                 center = (center_x, upper_center_y), # x, y
                 scan_direction="TopToBottom",
+                spot_size_correction=spot_size_correction,
             ),
             RectanglePatternParameters(
                 name=f"{name} (Lower)",
@@ -166,6 +181,7 @@ class TrenchPatternParameters(MillingPatternParameters):
                 rotation=0,
                 center = (center_x, lower_center_y), # x, y
                 scan_direction="BottomToTop",
+                spot_size_correction=spot_size_correction,
             ),
         ]
 
@@ -175,13 +191,17 @@ class TrenchPatternParameters(MillingPatternParameters):
 class MicroexpansionPatternParameters(MillingPatternParameters):
     """Represents microexpansion pattern parameters"""
 
-    def __init__(self, width: float, height: float, depth: float, spacing: float, center = (0, 0), name: str = "Trench"):
+    def __init__(self, width: float, height: float, depth: float, spacing: float,
+                 center=(0, 0), name: str = "Trench", spot_size_correction: float = 0.0):
         self.name = model.StringVA(name)
         self.width = model.FloatContinuous(width, unit="m", range=(1e-9, 900e-6))
         self.height = model.FloatContinuous(height, unit="m", range=(1e-9, 900e-6))
         self.depth = model.FloatContinuous(depth, unit="m", range=(1e-9, 100e-6))
         self.spacing = model.FloatContinuous(spacing, unit="m", range=(1e-9, 900e-6))
         self.center = model.TupleContinuous(center, unit="m", range=((-1e3, -1e3), (1e3, 1e3)), cls=(int, float))
+        self.spot_size_correction = model.FloatContinuous(
+            spot_size_correction, unit="m", range=(0, 900e-6)
+        )
 
     def to_dict(self) -> dict:
         """Convert the parameters to a json object"""
@@ -192,6 +212,7 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
                 "spacing": self.spacing.value,
                 "center_x": self.center.value[0],
                 "center_y": self.center.value[1],
+                "spot_size_correction": self.spot_size_correction.value,
                 "pattern": "microexpansion"
         }
 
@@ -204,7 +225,8 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
                         depth=data["depth"],
                         spacing=data["spacing"],
                         center=(data.get("center_x", 0), data.get("center_y", 0)),
-                        name=data.get("name", "Microexpansion"))
+                        name=data.get("name", "Microexpansion"),
+                        spot_size_correction=data.get("spot_size_correction", 0.0))
 
     def __repr__(self) -> str:
         return f"{self.to_dict()}"
@@ -216,6 +238,7 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
         height = self.height.value
         depth = self.depth.value
         spacing = self.spacing.value
+        spot_size_correction = self.spot_size_correction.value
         center_x, center_y = self.center.value
 
         patterns = [
@@ -227,6 +250,7 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
                 rotation=0,
                 center = (center_x - spacing, center_y),
                 scan_direction="TopToBottom",
+                spot_size_correction=spot_size_correction,
             ),
             RectanglePatternParameters(
                 name=f"{name} (Right)",
@@ -236,6 +260,7 @@ class MicroexpansionPatternParameters(MillingPatternParameters):
                 rotation=0,
                 center = (center_x + spacing, center_y),
                 scan_direction="TopToBottom",
+                spot_size_correction=spot_size_correction,
             ),
         ]
 
