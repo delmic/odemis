@@ -105,6 +105,8 @@ FIB_NAME_MAP: Dict[str, str] = {
     "DtGetEnabled": "FibDtGetEnabled",
     "GetImageRot": "FibGetImageRot",
     "SetImageRot": "FibSetImageRot",
+    "GetImageShift": "FibGetImgShift",
+    "SetImageShift": "FibSetImgShift",
     # Not possible to control the FIB blanker
     "ScGetBlanker": None,
     "ScSetBlanker": None,
@@ -534,10 +536,11 @@ class SEM(model.HwComponent):
             metadata = dict(self._metadata)
             metadata.update(scanner.getMetadata())
             # If there is an image center set by the sample stage in the posture manager,
-            # make sure to update it with scanner translation.
+            # make sure to update it with scanner translation and beam shift.
             phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            trans = self.pixelToPhy(pxs_pos)
+            shifted_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            updated_phy_pos =  shifted_pos[0] - self.shift.value[0], shifted_pos[1] - self.shift.value[1]
 
             # update changed metadata
             metadata[model.MD_POS] = updated_phy_pos
@@ -688,6 +691,11 @@ class Scanner(model.Emitter):
         # TODO: compute a good depthOfField based on the current hfw
         # self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
         #                                           unit="m", readonly=True)
+
+        shift = self._device_handler.GetImageShift() * 1e-3
+        self.shift = model.TupleContinuous(shift, ((-1e-3, -1e-3), (1e-3, 1e-3)), cls=(int, float), unit="m",
+                                           setter=self._setShift)
+        self.shift.subscribe(self._onShift, init=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
@@ -878,6 +886,26 @@ class Scanner(model.Emitter):
             self.horizontalFoV._value = new_fov
             self.horizontalFoV.notify(new_fov)
 
+    def _setShift(self, value: Tuple[float, float]) -> Tuple[float, float]:
+        """
+        Set the Tescan image shift and return the value accepted by Odemis.
+        """
+        with self.parent._acq_progress_lock:
+            # to mm to comply with Tescan API
+            self._device_handler.SetImageShift(value * 1e3)
+            curr_shift = self._device_handler.GetImageShift() * 1e-3
+        return curr_shift
+
+    def _updateShift(self) -> None:
+        prev_shift = self.shift.value
+
+        with self.parent._acq_progress_lock:
+            new_shift = self._device_handler.GetImageShift() * 1e-3
+
+        if prev_shift != new_shift:
+            self.shift._value = new_shift
+            self.shift.notify(new_shift)
+
     def _setHorizontalFOV(self, value):
         # The requested value can deviate from the actual value, for instance when requesting above the maximum.
         # The value will be automatically clipped to the range of the hardware.
@@ -945,6 +973,9 @@ class Scanner(model.Emitter):
 
     def _onPC(self, current):
         self.updateMetadata({model.MD_BEAM_CURRENT: current})
+
+    def _onShift(self, shift: Tuple[float, float]) -> None:
+        self.updateMetadata({model.MD_BEAM_SHIFT: shift})
 
     def _onRotation(self, rotation):
         self.updateMetadata({model.MD_ROTATION: rotation})
@@ -1167,6 +1198,7 @@ class Scanner(model.Emitter):
 
         rotation_degrees = math.degrees(value)
         self._device_handler.SetImageRot(rotation_degrees)
+        self._updateShift()
         return value
 
     def pixelToPhy(self, px_pos):
@@ -1208,6 +1240,8 @@ class Scanner(model.Emitter):
                     if prev_rotation != new_rotation:
                         self.rotation._value = new_rotation
                         self.rotation.notify(new_rotation)
+
+                    self._updateShift()
 
                     if self._device_handler.device_type == DeviceType.ELECTRON:
                         # if blanker is in auto, don't change its value

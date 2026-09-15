@@ -10,7 +10,6 @@ from odemis import model
 from odemis.acq.stream import FIBStream, FluoStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.milling import FibucialMillingTaskController
-from odemis.gui.cont.stream_bar import SCHED_ALL
 from typing import Optional
 
 
@@ -34,7 +33,6 @@ class SLMAlignmentController:
         self.is_processing = True
         self._panel.txt_stage_moving.SetLabel("")
         self._panel.btn_fine_alignment.Bind(wx.EVT_BUTTON, self._on_fine_alignment)
-        self._panel.streambar_controller.setSchedPolicy(SCHED_ALL)
         self._setup_views_and_streams()
         self._fiducial_milling_controller = FibucialMillingTaskController(panel=self._panel, tab= self)
         self.is_processing = False

@@ -421,6 +421,31 @@ class BaseSEMTest(object):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_rotation, ebeam.rotation.value)
 
+    def test_beam_shift_set_get(self) -> None:
+        """
+        Verify setting beam shift is reflected by both VA and hardware readback.
+        """
+        ebeam = self.scanner
+        original_shift = ebeam.shift.value
+        shift_min, shift_max = ebeam.shift.range
+        target_shift = (
+            shift_min[0] + (shift_max[0] - shift_min[0]) * 0.25,
+            shift_min[1] + (shift_max[1] - shift_min[1]) * 0.25,
+        )
+
+        try:
+            ebeam.shift.value = target_shift
+            time.sleep(1)
+            ebeam._updateShift()
+
+            testing.assert_tuple_almost_equal(ebeam.shift.value, target_shift, delta=1e-7)
+
+            hw_shift = tuple(ebeam._device_handler.GetImageShift() * 1e-3)
+            testing.assert_tuple_almost_equal(hw_shift, target_shift, delta=1e-7)
+        finally:
+            ebeam.shift.value = original_shift
+            time.sleep(1)
+            ebeam._updateShift()
 
     def test_blanker(self):
         """
@@ -953,6 +978,31 @@ class BaseFIBTest(object):
 #        gc.collect()
         pass
 
+    def test_beam_shift_set_get(self) -> None:
+        """
+        Verify setting ion-beam shift is reflected by both VA and hardware readback.
+        """
+        ion_beam = self.scanner
+        original_shift = ion_beam.shift.value
+        shift_min, shift_max = ion_beam.shift.range
+        target_shift = (
+            shift_min[0] + (shift_max[0] - shift_min[0]) * 0.25,
+            shift_min[1] + (shift_max[1] - shift_min[1]) * 0.25,
+        )
+
+        try:
+            ion_beam.shift.value = target_shift
+            time.sleep(1)
+            ion_beam._updateShift()
+
+            testing.assert_tuple_almost_equal(ion_beam.shift.value, target_shift, delta=1e-7)
+
+            hw_shift = tuple(ion_beam._device_handler.GetImageShift() * 1e-3)
+            testing.assert_tuple_almost_equal(hw_shift, target_shift, delta=1e-7)
+        finally:
+            ion_beam.shift.value = original_shift
+            time.sleep(1)
+            ion_beam._updateShift()
 
 class TestFIB(BaseFIBTest, unittest.TestCase):
     """
