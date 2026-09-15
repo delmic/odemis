@@ -269,7 +269,7 @@ class SparcAcquiController(object):
         """
         if tab is None:
             return
-        if tab.name == TabName.SPARC_ACQUI.value and not self._interlockTriggered:
+        if tab.name == TabName.SPARC_ACQUI.value:
             self.set_light_protector_position("off")
         else:
             self.set_light_protector_position("on")
@@ -357,10 +357,6 @@ class SparcAcquiController(object):
                 message = "Laser and e-beam were suspended automatically due to interlock trigger."
             else:
                 message = "Laser was suspended automatically due to interlock trigger."
-
-            if self._main_data_model.light_protector:
-                self.set_light_protector_position("on")
-                message += " Laser protection activated."
         else:
             message = "Laser interlock trigger is reset to normal."
             # Put back the e-beam blanker to its original state, but only if it is (still) forced
@@ -371,11 +367,6 @@ class SparcAcquiController(object):
                     message += " E-beam blanker disabled."
                 elif self._pre_interlock_blanker is None:  # Automatic mode (= blanker active when not acquiring)
                     message += " E-beam blanker set back to automatic mode."
-            if self._main_data_model.light_protector:
-                current_tab = self._main_data_model.tab.value
-                if current_tab is not None and current_tab.name == TabName.SPARC_ACQUI.value:
-                    self.set_light_protector_position("off")
-                    message += " Laser protection reset."
 
         # This function is not running in the main GUI thread.
         # So all GUI functions called bellow must be protected.
