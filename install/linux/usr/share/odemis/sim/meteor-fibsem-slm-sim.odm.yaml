@@ -318,7 +318,7 @@
         address: null, # Simulator
         axes: ["s", "l"],
         # ustepsize: [5.9e-9, 5.9e-9], # m/µstep
-        ustepsize: [100.e-6, 100.e-6],
+        ustepsize: [0.1e-6, 0.1e-6],
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
@@ -484,10 +484,9 @@
     init: {
       axes: [ "l", "z" ], # combines lens-arm l and objective z into linked Y transform
         shear: [0, -1], # (0, -1/tan(45°)) 
-        scale: [1.4142135623730951, -1], # (-1/sin(45°), -1)
+        scale: [-1.4142135623730951, -1], # (-1/sin(45°), -1)
     },
     }
-
 
 "SLM Alignment Stage": {
     class: actuator.MultiplexActuator,
@@ -499,10 +498,11 @@
     },
     init: {
         axes_map: {
-            "x": "s", # direct SLM alignment x
+            "x": "s", # direct mapping (negated via inverted below)
             "y": "x", # linked combination of lens-arm l and objective z
             "z": "y", # linked combination of lens-arm l and objective z
         },
+        inverted: ["x"],  # align.x = -s (negated mapping)
     },
     affects: ["SLM Camera"],
 #    metadata: {
