@@ -734,6 +734,84 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
     def tearDownClass(cls):
         cls.scan_stage.updateMetadata({model.MD_ROTATION_COR: cls.init_rot_cor})
 
+    def test_deselected_roa_is_skipped(self) -> None:
+        """Test that a deselected ROA is skipped before hardware acquisition."""
+        roa = FastEMROA(
+            shape=MockEditableShape(),
+            main_data=self.main_data,
+            overlap=0.0,
+            name="deselected_roa",
+            slice_index=0,
+        )
+        task = fastem.AcquisitionTask(
+            self.scanner,
+            self.multibeam,
+            self.descanner,
+            self.mppc,
+            self.stage,
+            self.scan_stage,
+            self.ccd,
+            self.beamshift,
+            self.lens,
+            self.se_detector,
+            self.ebeam_focus,
+            roa,
+            path=None,
+            username="default",
+            pre_calibrations=None,
+            save_full_cells=False,
+            settings_obs=None,
+            spot_grid_thresh=0.5,
+            blank_beam=True,
+            stop_acq_on_failure=True,
+            future=None,
+            should_acquire=lambda: False,
+        )
+
+        data, exception = task.run()
+
+        self.assertEqual(data, {})
+        self.assertIsInstance(exception, fastem.ROASkipped)
+
+    def test_pause_releases_dataflow_listener(self) -> None:
+        """Test that pausing temporarily releases the MPPC dataflow listener."""
+        task = object.__new__(fastem.AcquisitionTask)
+        task._roa = Mock(field_indices=[(0, 0)])
+        task._detector = Mock()
+        task._detector.frameDuration.value = 0
+        task._scanner = Mock()
+        task._scanner.blanker.value = True
+        task._beamshift = Mock()
+        task._beamshift.shift.value = (0, 0)
+        task._blank_beam = True
+        task._cancelled = False
+        task._fields_remaining = {(0, 0)}
+        task._data_received = Mock()
+        task._data_received.wait.return_value = True
+        task._should_acquire = lambda: True
+        task._calculate_beam_shift_cor_indices = Mock(return_value=set())
+        task.move_stage_to_next_tile = Mock()
+
+        listeners = {task.image_received}
+        dataflow = Mock()
+        dataflow.unsubscribe.side_effect = listeners.remove
+        dataflow.subscribe.side_effect = listeners.add
+
+        task._future = Mock()
+        task._future.is_pause_requested = True
+
+        def wait_if_paused() -> None:
+            """Check that the acquisition listener is absent during the pause."""
+            self.assertNotIn(task.image_received, listeners)
+
+        task._future.wait_if_paused.side_effect = wait_if_paused
+
+        task.acquire_roa(dataflow)
+
+        self.assertIn(task.image_received, listeners)
+        dataflow.unsubscribe.assert_called_once_with(task.image_received)
+        dataflow.subscribe.assert_called_once_with(task.image_received)
+
     def test_get_abs_stage_movement(self):
         """
         Test the correct stage positions are returned for the corner fields of
