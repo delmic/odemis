@@ -856,8 +856,8 @@ class TestMCS2MultiPhase(unittest.TestCase):
         self.dev.terminate()
 
     def test_reference_all_axes(self):
-        """All axes are referenced and end up in the active/zero positions."""
-        f = self.dev.reference()
+        """All axes are referenced and end up in the alignment/zero positions."""
+        f = self.dev.reference(set(self.dev.axes.keys()))
         f.result(timeout=60)
 
         # 1. Assert all axes are marked as referenced
@@ -865,10 +865,10 @@ class TestMCS2MultiPhase(unittest.TestCase):
             self.assertTrue(referenced, f"Axis {a} not referenced")
 
         # 2. Assert final position. Because pos_deactive_after_ref=False,
-        #    X and Z should be at FAV_POS_ACTIVE. Y should be at 0.0 (auto-zeroed).
+        #    X and Z should be at MD_FAV_POS_ALIGN. Y should be at 0.0 (auto-zeroed).
         expected_pos = {
-            "x": MULTI_PHASE_METADATA[model.MD_FAV_POS_ACTIVE]["x"],
-            "z": MULTI_PHASE_METADATA[model.MD_FAV_POS_ACTIVE]["z"],
+            "x": MULTI_PHASE_METADATA[model.MD_FAV_POS_ALIGN]["x"],
+            "z": MULTI_PHASE_METADATA[model.MD_FAV_POS_ALIGN]["z"],
             "y": 0.0
         }
 
@@ -881,7 +881,7 @@ class TestMCS2MultiPhase(unittest.TestCase):
         """Missing AXES_ORDER_REF metadata must raise ValueError."""
         self.dev._metadata.pop(model.MD_AXES_ORDER_REF)
 
-        f = self.dev.reference()
+        f = self.dev.reference(set(self.dev.axes.keys()))
         with self.assertRaises(ValueError) as context:
             f.result(timeout=10)
 
@@ -892,7 +892,7 @@ class TestMCS2MultiPhase(unittest.TestCase):
         # Modify the metadata to cause a mismatch ('y' is missing)
         self.dev._metadata[model.MD_AXES_ORDER_REF] = ["x", "z"]
 
-        f = self.dev.reference()
+        f = self.dev.reference(set(self.dev.axes.keys()))
 
         with self.assertRaises(ValueError) as context:
             f.result(timeout=10)
@@ -902,21 +902,11 @@ class TestMCS2MultiPhase(unittest.TestCase):
             str(context.exception)
         )
 
-    def test_reference_missing_active_pos_metadata(self):
-        """Missing FAV_POS_ACTIVE metadata (needed for phase 2) must raise ValueError."""
-        self.dev._metadata.pop(model.MD_FAV_POS_ACTIVE)
-
-        f = self.dev.reference()
-        with self.assertRaises(ValueError) as context:
-            f.result(timeout=10)
-
-        self.assertIn("Missing FAV_POS_ACTIVE", str(context.exception))
-
     def test_reference_with_deactive_position(self):
         """With pos_deactive_after_ref=True, stage moves sequentially to FAV_POS_DEACTIVE."""
         self.dev._pos_deactive_after_ref = True
 
-        f = self.dev.reference()
+        f = self.dev.reference(set(self.dev.axes.keys()))
         f.result(timeout=60)
 
         # 1. Assert all axes are referenced
@@ -936,12 +926,17 @@ class TestMCS2MultiPhase(unittest.TestCase):
         self.dev._metadata.pop(model.MD_FAV_POS_DEACTIVE)
 
         # It should succeed without throwing an exception
-        f = self.dev.reference()
+        f = self.dev.reference(set(self.dev.axes.keys()))
         f.result(timeout=60)
 
         for a, referenced in self.dev.referenced.value.items():
             self.assertTrue(referenced)
 
+    def test_reference_single_axis(self):
+        """If a single axis is passed, it should use the standard referencing procedure."""
+        f = self.dev.reference({"x"})
+        f.result(timeout=60)
+        self.assertTrue(self.dev.referenced.value["x"])
 
 if __name__ == '__main__':
     unittest.main()

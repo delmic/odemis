@@ -2938,8 +2938,8 @@ class MCS2(model.Actuator):
             Default is "standard". "standard" procedure calls the device referencing procedure.
             "multi-phase" executes a metadata-driven referencing procedure intended for mechanically constrained systems
             (e.g. L-slot geometries). The order of referencing is defined by the 'AXES_ORDER_REF' metadata. Axes listed
-            in 'FAV_POS_ALIGN' are referenced first and moved to their corresponding alignment/good positions. They are
-            then moved to their engaged position specified by 'FAV_POS_ACTIVE' before the remaining axes are referenced.
+            in 'FAV_POS_ALIGN' are referenced first and moved to their corresponding alignment/good positions.
+            Then, the remaining axes are referenced.
             If 'pos_deactive_after_ref' is True, all referenced axes are finally moved to the parking positions defined
             by 'FAV_POS_DEACTIVE'. Failed references are retried automatically until all axes are referenced or the
             retry limit is reached.
@@ -3655,21 +3655,30 @@ class MCS2(model.Actuator):
         return f
 
     @isasync
-    def _reference_multi_phase(self, _=None) -> model.CancellableFuture:
+    def _reference_multi_phase(self, axes: Set[str]) -> model.CancellableFuture:
         """
         Asynchronous entry point to execute the multi-phase referencing sequence.
+        Replaces the standard 'reference' method when the device is configured to use the multi-phase procedure.
 
-        This method automatically collects all mapped axes, verifies their states,
-        and submits the '_do_reference_multi_phase' operation to the background executor.
-        No arguments are required, as axis handling is derived entirely from the
-        device metadata properties ('AXES_ORDER_REF', etc.).
-
-        :return: A CancellableFuture object tracking the state of the background operation.
+        :param axes: either all the axes of the device, in which case the multi-phase referencing
+        will be executed, or a single axis, in which case the standard referencing procedure will be
+        used.
+        :return: A CancellableFuture object tracking the state of the referencing procedure running
+        in background.
         """
-        axes = set(self.axes.keys())
+        self._checkReference(axes)
+        all_axes = set(self.axes.keys())
 
         f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._do_reference_multi_phase, f, axes)
+        # The multi-phase referencing only works if all the axes are passed.
+        # For debugging, it is helpful to be able to reference an individual axis, so we allow that as well.
+        # But this cannot be done if there is only one axis.
+        if len(all_axes) > 1 and len(axes) == 1:
+            logging.info("Running standard referencing procedure because single axis %s was passed", axes)
+            # Note: _pos_deactive_after_ref will not be applied, because a single axis is referenced
+            f = self._executor.submitf(f, self._doReference, f, axes)
+        else:
+            f = self._executor.submitf(f, self._do_reference_multi_phase, f, axes)
         return f
 
     def _doReference(self, future, axes):
@@ -3771,7 +3780,7 @@ class MCS2(model.Actuator):
 
                 channel = self._axis_map[a]
                 self.referenced._value[a] = False
-                logging.info("Referencing %s axis %s (Attempt %d)", reference_lbl, a, attempt + 1)
+                logging.info("Referencing %s axis %s (attempt %d)", reference_lbl, a, attempt + 1)
                 self.Reference(channel)
 
                 try:
@@ -3780,6 +3789,7 @@ class MCS2(model.Actuator):
                     raise
                 except Exception as e:
                     logging.debug("Axis %s failed to reference: %s", a, e)
+                    continue
 
                 is_referenced = self._is_channel_referenced(channel)
                 self.referenced._value[a] = is_referenced
@@ -3792,7 +3802,11 @@ class MCS2(model.Actuator):
                         self._checkMoveAbs(target)
                         if future._must_stop.is_set():
                             raise CancelledError()
-                        self._doMoveAbs(future, self._applyInversion(target))
+                        try:
+                            self._doMoveAbs(future, self._applyInversion(target))
+                        except (model.HwError, TimeoutError) as ex:
+                            logging.warning("Failed to move %s to position %s (%s), will retry", a, target[a], ex)
+                            continue
                     unreferenced.remove(a)
                     logging.info("Axis %s successfully referenced.", a)
                 else:
@@ -3810,15 +3824,13 @@ class MCS2(model.Actuator):
         The sequence is strictly controlled by device metadata and executes as follows:
 
         - Phase 1 (Corner Alignment): Identifies axes designated in 'FAV_POS_ALIGN'.
-          References them safely using a retry loop, parking them in the "corner" of
-          the L-slot to maximize physical clearance.
+          References them safely using a retry loop, and move them to FAV_POS_ALIGN.
+          This position should be a specific position where all axes can be referenced.
 
-        - Phase 2 (Engaged Referencing): Sequentially moves the already-referenced
-          Phase 1 axes to their active working positions ('FAV_POS_ACTIVE'),
-          then references any remaining axes.
+        - Phase 2 (Engaged Referencing): References any remaining axes.
 
-        - Phase 3 (Deactivation): If configured, sequentially retracts all axes
-          to their safe parking positions ('FAV_POS_DEACTIVE').
+        - Phase 3 (Deactivation): If configured with pos_deactive_after_ref, sequentially retracts
+          all axes to their safe parking positions ('FAV_POS_DEACTIVE').
 
         Note: All multi-axis movements in this function are explicitly executed
         sequentially (one-by-one). Concurrent movements are avoided to prevent
@@ -3843,10 +3855,6 @@ class MCS2(model.Actuator):
                                      "axes. Order: %s, Axes: %s" % (ordered_axes, axes))
 
                 align_pos = self._metadata.get(model.MD_FAV_POS_ALIGN, {})
-                active_pos = self._metadata.get(model.MD_FAV_POS_ACTIVE, None)
-
-                if active_pos is None:
-                    raise ValueError("Missing FAV_POS_ACTIVE metadata for referencing.")
 
                 # Split axes into Phase 1 (L-slot axes needing alignment/good position) and
                 # Phase 2 (post-alignment axes)
@@ -3854,29 +3862,13 @@ class MCS2(model.Actuator):
                 phase2_axes = [a for a in ordered_axes if a not in align_pos]
 
                 # PHASE 1: Reference L-slot axes and move to alignment/good positions
-                self._reference_with_retry(future, phase1_axes, post_ref_positions=align_pos, reference_lbl="Phase 1")
+                logging.debug("Multi-phase referencing phase 1, using axes: %s", phase1_axes)
+                self._reference_with_retry(future, phase1_axes, post_ref_positions=align_pos, reference_lbl="phase 1")
 
-                # PHASE 2: Move to Active/Engaged position and reference remaining
+                # PHASE 2: reference remaining axes
                 if phase2_axes:
-                    # Move already-referenced axes to their active (engaged) position to clear the way
-                    pre_phase2_target = {}
-                    for a in self.axes:
-                        # Find axes not in phase 2, perfectly referenced, and possessing an active position
-                        if a not in phase2_axes and self.referenced._value[a] and a in active_pos:
-                            pre_phase2_target[a] = active_pos[a]
-
-                    if pre_phase2_target:
-                        logging.info("Moving referenced axes to engaged position %s sequentially before Phase 2", pre_phase2_target)
-                        # Move sequentially (one by one) to prevent diagonal movement from crashing in the L-slot
-                        for a in ordered_axes:
-                            if a in pre_phase2_target:
-                                single_target = {a: pre_phase2_target[a]}
-                                self._checkMoveAbs(single_target)
-                                if future._must_stop.is_set():
-                                    raise CancelledError()
-                                self._doMoveAbs(future, self._applyInversion(single_target))
-
-                    self._reference_with_retry(future, phase2_axes, reference_lbl="Phase 2")
+                    logging.debug("Multi-phase referencing phase 2, using axes: %s", phase2_axes)
+                    self._reference_with_retry(future, phase2_axes, reference_lbl="phase 2")
 
                 # PHASE 3: Move to Safe/Deactive position (if requested)
                 all_axes_referenced = all(self.referenced._value[a] for a in self.axes)
@@ -3887,7 +3879,7 @@ class MCS2(model.Actuator):
                     except KeyError:
                         logging.warning("Cannot move to deactive position. Missing FAV_POS_DEACTIVE")
                     else:
-                        logging.info("Moving axes sequentially to deactivated position %s after referencing", deactive_pos)
+                        logging.info("Multi-phase referencing phase 3, moving axes sequentially to: %s", deactive_pos)
                         # Ensure we step through the sequence one at a time.
                         for a in ordered_axes:
                             if a in deactive_pos:
