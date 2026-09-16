@@ -36,11 +36,6 @@
     role: e-beam,
     init: {},
     affects: ["EBeam Detector"],
-    properties: {
-      # Set scan rotation to 180°, which is the standard, to ensure the camera
-      # rotation is matching.
-      rotation: 3.141592653589,  # rad, 180°
-    },
 }
 
 "EBeam Detector": {
@@ -146,6 +141,9 @@
         FAV_SEM_POS_ACTIVE: {"rx": 0.698132, "rz": 1.815142}, # 40° tilt, 104° rotation
         # To compute the tilt angle: tilt = MillingAngle + PreTilt (40°) + ColumnTilt (55°) - 90
         FAV_MILL_POS_ACTIVE: { "mill_angle": 0.174532925, "rz": 1.815142 }, # Milling angle = 10°, 104° rotation
+        # The value of the SEM imaging scan rotation, enforced when switching to MILLING & SEM IMAGING postures, and
+        # used to derive and enforce the scan rotation for the other postures.
+        SEM_IMAGING_SCAN_ROTATION: 3.141592653589,  # rad, 180°
     },
 }
 
