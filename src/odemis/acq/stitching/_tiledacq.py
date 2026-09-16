@@ -54,6 +54,7 @@ from odemis.acq.stream import (
     CLStream,
     EMStream,
     FluoStream,
+    MonochromatorSettingsStream,
     MultipleDetectorStream,
     SpectrumStream,
     Stream,
@@ -597,7 +598,7 @@ class TiledAcquisitionTask(object):
             for st in s.streams:
                 # For the EMStream of a SPARC MDStream, it's just one pixel per
                 # repetition (excepted in case  of fuzzing, but let's be optimistic)
-                if isinstance(st, (EMStream, CLStream)):
+                if isinstance(st, (EMStream, CLStream, MonochromatorSettingsStream)):
                     px += 1
                 else:
                     px += self._estimateStreamPixels(st)
