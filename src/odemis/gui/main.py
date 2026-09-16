@@ -264,6 +264,10 @@ class OdemisGUIApp(wx.App):
                 from odemis.gui.cont.tabs.cryo_chamber_tab import CryoChamberTab
                 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
                 from odemis.gui.cont.tabs.fibsem_tab import FibsemTab
+                from odemis.gui.layout import (
+                    PnlTabCryosecomChamber,
+                    PnlTabLocalization,
+                )
 
                 from odemis.gui.cont import features
 
@@ -278,13 +282,13 @@ class OdemisGUIApp(wx.App):
                         "name": TabName.CRYOSECOM_CHAMBER.value,
                         "controller": CryoChamberTab,
                         "button": self.main_frame.btn_tab_cryosecom_chamber,
-                        "panel": main_xrc.xrcpnl_tab_cryosecom_chamber
+                        "panel": PnlTabCryosecomChamber
                     },
                     {
                         "name": TabName.CRYOSECOM_LOCALIZATION.value,
                         "controller": LocalizationTab,
                         "button": self.main_frame.btn_tab_localization,
-                        "panel": main_xrc.xrcpnl_tab_localization
+                        "panel": PnlTabLocalization
                     },
                     {
                         "name": TabName.METEOR_FIBSEM.value,
