@@ -159,7 +159,7 @@ class PnlTabCryosecomChamber(wx.Panel):
             panel,
             label="New Project",
             height=24,
-            text_colour=self._theme.button_text,
+            text_colour="#ffffff",
             face_colour="blue",
             font_size=self._theme.font_size_prominent_button,
         )
@@ -174,7 +174,7 @@ class PnlTabCryosecomChamber(wx.Panel):
             panel,
             label="Load Project",
             height=24,
-            text_colour=self._theme.button_text,
+            text_colour="#ffffff",
             face_colour="blue",
             font_size=self._theme.font_size_prominent_button,
         )
