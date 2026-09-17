@@ -30,6 +30,7 @@ from odemis.gui.win.thoughts import show_important_thought_dialog
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
+from odemis.gui.layout import MainFrame
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util.datacollector import DataCollector
@@ -151,7 +152,7 @@ class OdemisGUIApp(wx.App):
         else:
             self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
-        self.main_frame = main_xrc.xrcfr_main(None)
+        self.main_frame = MainFrame(None)
 
         self.init_gui()
 
